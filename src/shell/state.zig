@@ -409,6 +409,7 @@ pub const ShellState = struct {
     variables: std.StringHashMapUnmanaged(Variable) = .empty,
     functions: std.StringHashMapUnmanaged(command_plan.FunctionDefinition) = .empty,
     aliases: std.StringHashMapUnmanaged(Alias) = .empty,
+    abbreviations: std.StringHashMapUnmanaged([]const u8) = .empty,
     traps: std.StringHashMapUnmanaged(Trap) = .empty,
     positionals: std.ArrayList([]const u8) = .empty,
     options: ShellOptions = .{},
@@ -457,6 +458,13 @@ pub const ShellState = struct {
         }
         self.aliases.deinit(self.allocator);
 
+        var abbreviations = self.abbreviations.iterator();
+        while (abbreviations.next()) |entry| {
+            self.allocator.free(entry.key_ptr.*);
+            self.allocator.free(entry.value_ptr.*);
+        }
+        self.abbreviations.deinit(self.allocator);
+
         var traps = self.traps.iterator();
         while (traps.next()) |entry| {
             self.allocator.free(entry.key_ptr.*);
@@ -501,6 +509,9 @@ pub const ShellState = struct {
 
         var aliases = self.aliases.iterator();
         while (aliases.next()) |entry| try cloned.setAlias(entry.key_ptr.*, entry.value_ptr.value);
+
+        var abbreviations = self.abbreviations.iterator();
+        while (abbreviations.next()) |entry| try cloned.setAbbreviation(entry.key_ptr.*, entry.value_ptr.*);
 
         var traps = self.traps.iterator();
         while (traps.next()) |entry| try cloned.setTrap(entry.key_ptr.*, entry.value_ptr.action);
@@ -700,6 +711,41 @@ pub const ShellState = struct {
         }
         self.aliases.clearRetainingCapacity();
         self.validate();
+    }
+
+    pub fn getAbbreviation(self: ShellState, name: []const u8) ?[]const u8 {
+        assertValidVariableName(name);
+        return self.abbreviations.get(name);
+    }
+
+    pub fn setAbbreviation(self: *ShellState, name: []const u8, value: []const u8) !void {
+        assertValidVariableName(name);
+
+        const owned_name = try self.allocator.dupe(u8, name);
+        errdefer self.allocator.free(owned_name);
+        const owned_value = try self.allocator.dupe(u8, value);
+        errdefer self.allocator.free(owned_value);
+
+        const result = try self.abbreviations.getOrPut(self.allocator, owned_name);
+        if (result.found_existing) {
+            self.allocator.free(owned_name);
+            self.allocator.free(result.value_ptr.*);
+        }
+
+        result.value_ptr.* = owned_value;
+        self.validate();
+    }
+
+    pub fn unsetAbbreviation(self: *ShellState, name: []const u8) bool {
+        assertValidVariableName(name);
+        if (self.abbreviations.fetchRemove(name)) |entry| {
+            self.allocator.free(entry.key);
+            self.allocator.free(entry.value);
+            self.validate();
+            return true;
+        }
+        self.validate();
+        return false;
     }
 
     pub fn getTrap(self: ShellState, name: []const u8) ?Trap {
@@ -1041,6 +1087,11 @@ pub const ShellState = struct {
         }
         var aliases = self.aliases.iterator();
         while (aliases.next()) |entry| assertValidAliasName(entry.key_ptr.*);
+        var abbreviations = self.abbreviations.iterator();
+        while (abbreviations.next()) |entry| {
+            assertValidVariableName(entry.key_ptr.*);
+            std.debug.assert(std.mem.indexOfScalar(u8, entry.value_ptr.*, 0) == null);
+        }
         var traps = self.traps.iterator();
         while (traps.next()) |entry| {
             assertValidTrapName(entry.key_ptr.*);

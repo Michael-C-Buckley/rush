@@ -1371,12 +1371,12 @@ const CompletionScriptLoader = struct {
             if (!loaded_manifest) {
                 if (try xdgDataHomeCompletionPath(self.allocator, env_view, command)) |script_path| {
                     defer self.allocator.free(script_path);
-                    sourceOptionalConfig(self.allocator, io, executor, script_path, arg_zero) catch {};
+                    sourceOptionalCompletionScript(self.allocator, io, executor, script_path, arg_zero) catch {};
                 }
             }
         } else if (try xdgDataHomeCompletionPath(self.allocator, env_view, command)) |path| {
             defer self.allocator.free(path);
-            sourceOptionalConfig(self.allocator, io, executor, path, arg_zero) catch {};
+            sourceOptionalCompletionScript(self.allocator, io, executor, path, arg_zero) catch {};
         }
         if (try xdgConfigCompletionManifestPath(self.allocator, env_view, command)) |path| {
             defer self.allocator.free(path);
@@ -1384,12 +1384,12 @@ const CompletionScriptLoader = struct {
             if (!loaded_manifest) {
                 if (try xdgConfigCompletionPath(self.allocator, env_view, command)) |script_path| {
                     defer self.allocator.free(script_path);
-                    sourceOptionalConfig(self.allocator, io, executor, script_path, arg_zero) catch {};
+                    sourceOptionalCompletionScript(self.allocator, io, executor, script_path, arg_zero) catch {};
                 }
             }
         } else if (try xdgConfigCompletionPath(self.allocator, env_view, command)) |path| {
             defer self.allocator.free(path);
-            sourceOptionalConfig(self.allocator, io, executor, path, arg_zero) catch {};
+            sourceOptionalCompletionScript(self.allocator, io, executor, path, arg_zero) catch {};
         }
     }
 
@@ -1412,7 +1412,7 @@ const CompletionScriptLoader = struct {
 
             const path = try completionPathInDir(self.allocator, dir, command);
             defer self.allocator.free(path);
-            sourceOptionalConfig(self.allocator, io, executor, path, arg_zero) catch {};
+            sourceOptionalCompletionScript(self.allocator, io, executor, path, arg_zero) catch {};
         }
     }
 };
@@ -4089,7 +4089,7 @@ fn completionDebugOutput(allocator: std.mem.Allocator, io: std.Io, environ_map: 
     try executor.importEnvironment(environ_map);
     try executor.initializeShellVariables(io);
     executor.arg_zero = "rush";
-    try loadInteractiveConfig(allocator, io, &executor, .{});
+    try loadCompletionConfigIntoExecutor(allocator, io, &executor, environ_map);
 
     var history = History.init(allocator);
     defer history.deinit();
@@ -4386,7 +4386,7 @@ fn completionDebugJsonOutput(allocator: std.mem.Allocator, io: std.Io, environ_m
     try executor.importEnvironment(environ_map);
     try executor.initializeShellVariables(io);
     executor.arg_zero = "rush";
-    try loadInteractiveConfig(allocator, io, &executor, .{});
+    try loadCompletionConfigIntoExecutor(allocator, io, &executor, environ_map);
 
     var history = History.init(allocator);
     defer history.deinit();
@@ -6472,8 +6472,8 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
     try executor.importEnvironment(environ_map);
     executor.arg_zero = options.arg_zero;
     try syncInteractiveExecutorFromShell(executor, interactive_shell);
-    try InteractiveConfigService.initInteractive(allocator, io, executor, &interactive_shell, options.arg_zero).load(options);
-    try syncInteractiveShellSemanticFromExecutor(&interactive_shell, io, executor.*);
+    try loadInteractiveConfig(allocator, io, &interactive_shell.semantic_state, options);
+    try syncInteractiveExecutorFromShell(executor, interactive_shell);
     if (interactivePendingExit(&interactive_shell)) |status| return status;
     var completion_executor = exec.Executor.init(allocator);
     defer completion_executor.deinit();
@@ -7034,7 +7034,14 @@ fn runOldCommandStringWithEnvironment(allocator: std.mem.Allocator, io: std.Io, 
     executor.shell_options = legacyShellOptions(startup_shell_options, .{});
     if (positionals.len != 0) try executor.global_positionals.set(allocator, positionals);
     if (interactive_options) |startup_options| {
-        try loadInteractiveConfig(allocator, io, &executor, startup_options);
+        var config_state = shell.ShellState.init(allocator);
+        defer config_state.deinit();
+        var empty_env = std.process.Environ.Map.init(allocator);
+        defer empty_env.deinit();
+        const config_env = environ_map orelse &empty_env;
+        try initializeSemanticInteractiveStartupState(allocator, io, &config_state, config_env, positionals, startup_shell_options);
+        try loadInteractiveConfig(allocator, io, &config_state, startup_options);
+        try syncExecutorFromSemanticInteractiveState(&executor, config_state);
         if (executor.pending_exit) |status| return emptyCommandResult(allocator, status);
     }
 
@@ -7164,6 +7171,126 @@ fn runSemanticAliasTimingCommandString(allocator: std.mem.Allocator, io: std.Io,
     return .{ .output = .{ .allocator = allocator, .status = status, .stdout = try stdout.toOwnedSlice(allocator), .stderr = try stderr.toOwnedSlice(allocator) } };
 }
 
+fn runSemanticShellStateScript(allocator: std.mem.Allocator, io: std.Io, shell_state: *shell.ShellState, script: []const u8, source_path: []const u8, arg_zero: []const u8, features: compat.Features, external_stdio: runtime.ExternalStdio) !CommandResult {
+    shell_state.validate();
+    std.debug.assert(shell_state.scope == .current_shell);
+    std.debug.assert(arg_zero.len != 0);
+    std.debug.assert(source_path.len != 0);
+    if (script.len == 0) return emptyCommandResult(allocator, shell_state.last_status);
+
+    const invocation = shell.InvocationContext.init(.{ .features = features, .arg_zero = arg_zero, .source = .script_file, .interactive = true });
+    var semantic_execution = if (semanticScriptNeedsAliasTiming(script))
+        try runSemanticAliasTimingShellStateScript(allocator, io, shell_state, script, invocation, external_stdio)
+    else
+        try runSemanticShellStateScriptWithoutAliasTiming(allocator, io, shell_state, script, invocation, external_stdio);
+    switch (semantic_execution) {
+        .output => |output| {
+            semantic_execution = undefined;
+            return output;
+        },
+        .unsupported => |message| {
+            semantic_execution = undefined;
+            defer allocator.free(message);
+            return unsupportedSemanticCommandResult(allocator, message);
+        },
+    }
+}
+
+fn runSemanticShellStateScriptWithoutAliasTiming(allocator: std.mem.Allocator, io: std.Io, shell_state: *shell.ShellState, script: []const u8, invocation: shell.InvocationContext, external_stdio: runtime.ExternalStdio) !SemanticInvocationExecution {
+    shell_state.validate();
+    invocation.validate();
+
+    var parsed = try parser.parse(allocator, script, .{ .features = invocation.features.withStrictDiagnostics() });
+    defer parsed.deinit();
+    if (parsed.diagnostics.len != 0) return .{ .output = try parseDiagnosticsResult(allocator, script, parsed.diagnostics) };
+
+    var program = try ir.lowerSimpleCommands(allocator, parsed);
+    defer program.deinit();
+    if (try semanticPreflightUnsupported(allocator, program, invocation.features, false)) |message| return semanticUnsupported(allocator, message);
+
+    var adapter = runtime.PosixAdapter.init(io);
+    var evaluator = shell.eval.Evaluator.initWithRuntimePorts(allocator, runtime.posixPorts(&adapter));
+    evaluator.features = invocation.features;
+    evaluator.arg_zero = invocation.arg_zero;
+    evaluator.io = io;
+    evaluator.read_stdin_from_fd = true;
+    evaluator.external_stdio = external_stdio;
+    var parser_resolver = shell.ParserTrapActionResolver.init(&evaluator);
+    parser_resolver.features = invocation.features;
+    parser_resolver.arg_zero = invocation.arg_zero;
+    const resolver = parser_resolver.resolver();
+    const eval_context = invocation.evalContext(.current_shell);
+
+    return runSemanticLoweredProgram(allocator, script, program, &evaluator, shell_state, eval_context, resolver, null, 0, false);
+}
+
+fn runSemanticAliasTimingShellStateScript(allocator: std.mem.Allocator, io: std.Io, shell_state: *shell.ShellState, script: []const u8, invocation: shell.InvocationContext, external_stdio: runtime.ExternalStdio) !SemanticInvocationExecution {
+    shell_state.validate();
+    invocation.validate();
+
+    var adapter = runtime.PosixAdapter.init(io);
+    var evaluator = shell.eval.Evaluator.initWithRuntimePorts(allocator, runtime.posixPorts(&adapter));
+    evaluator.features = invocation.features;
+    evaluator.arg_zero = invocation.arg_zero;
+    evaluator.io = io;
+    evaluator.read_stdin_from_fd = true;
+    evaluator.external_stdio = external_stdio;
+    var parser_resolver = shell.ParserTrapActionResolver.init(&evaluator);
+    parser_resolver.features = invocation.features;
+    parser_resolver.arg_zero = invocation.arg_zero;
+    const resolver = parser_resolver.resolver();
+    const eval_context = invocation.evalContext(.current_shell);
+
+    var stdout: std.ArrayList(u8) = .empty;
+    errdefer stdout.deinit(allocator);
+    var stderr: std.ArrayList(u8) = .empty;
+    errdefer stderr.deinit(allocator);
+    var status = shell_state.last_status;
+    var start = skipSemanticChunkSeparators(script, 0);
+    while (start < script.len) {
+        var end = extendSemanticHereDocChunk(script, start, semanticLineEnd(script, start));
+        while (true) {
+            const source = std.mem.trim(u8, script[start..end], " \t\r\n;");
+            if (source.len == 0) break;
+            const aliased = try semanticExpandAliases(allocator, source, invocation.features, shell_state);
+            defer allocator.free(aliased);
+            var parsed = try parser.parse(allocator, aliased, .{ .features = invocation.features.withStrictDiagnostics() });
+            defer parsed.deinit();
+            if (parsed.diagnostics.len == 0) {
+                var program = try ir.lowerSimpleCommands(allocator, parsed);
+                defer program.deinit();
+                if (try semanticPreflightUnsupported(allocator, program, invocation.features, false)) |message| return semanticUnsupported(allocator, message);
+                var alias_snapshot = shell_state.clone(allocator) catch |err| switch (err) {
+                    error.OutOfMemory => return error.OutOfMemory,
+                    error.ReadonlyVariable => unreachable,
+                };
+                defer alias_snapshot.deinit();
+                parser_resolver.alias_state = &alias_snapshot;
+                var execution = try runSemanticLoweredProgram(allocator, aliased, program, &evaluator, shell_state, eval_context, resolver, null, 0, false);
+                defer execution.deinit(allocator);
+                switch (execution) {
+                    .unsupported => |message| return semanticUnsupported(allocator, message),
+                    .output => |output| {
+                        try stdout.appendSlice(allocator, output.stdout);
+                        try stderr.appendSlice(allocator, output.stderr);
+                        status = output.status;
+                    },
+                }
+                parser_resolver.alias_state = null;
+                break;
+            }
+            if (!parsed.incomplete or end >= script.len) return .{ .output = try parseDiagnosticsResult(allocator, source, parsed.diagnostics) };
+            end = extendSemanticHereDocChunk(script, start, semanticLineEnd(script, end));
+        }
+        start = skipSemanticChunkSeparators(script, end);
+    }
+
+    const out = try stdout.toOwnedSlice(allocator);
+    errdefer allocator.free(out);
+    const err = try stderr.toOwnedSlice(allocator);
+    return .{ .output = .{ .allocator = allocator, .status = status, .stdout = out, .stderr = err } };
+}
+
 fn runInteractiveScript(allocator: std.mem.Allocator, io: std.Io, executor: *exec.Executor, interactive_shell: *InteractiveShell, script: []const u8, options: exec.ExecuteOptions) !CommandResult {
     std.debug.assert(options.interactive);
     std.debug.assert(executor.execution_depth == 0);
@@ -7282,6 +7409,10 @@ fn runSemanticLoweredProgram(allocator: std.mem.Allocator, script: []const u8, p
         try accumulated_stderr.appendSlice(allocator, command_outcome.stderr.items);
         status = command_outcome.status;
         control_flow = command_outcome.control_flow;
+        switch (control_flow) {
+            .exit, .fatal => |exit_status| shell_state.setPendingExit(exit_status),
+            .normal, .break_loop, .continue_loop, .return_from_scope => {},
+        }
 
         const outcome_target = command_outcome.state_delta.target;
         if (outcome_target.allowsShellStateCommit() and shell_state.acceptsExecutionTarget(outcome_target)) {
@@ -7635,6 +7766,8 @@ fn initializeSemanticInteractiveStateFromExecutor(allocator: std.mem.Allocator, 
     }
 
     try shell_state.replacePositionals(executor.global_positionals.params);
+    var abbreviations = executor.abbreviations.iterator();
+    while (abbreviations.next()) |entry| try shell_state.setAbbreviation(entry.key_ptr.*, entry.value_ptr.*);
     shell_state.validate();
     return null;
 }
@@ -7666,6 +7799,15 @@ fn syncExecutorFromSemanticInteractiveState(executor: *exec.Executor, shell_stat
     }
     for (removals.items) |name| executor.unsetEnv(name);
 
+    removals.clearRetainingCapacity();
+    var executor_abbreviations = executor.abbreviations.iterator();
+    while (executor_abbreviations.next()) |entry| {
+        const name = entry.key_ptr.*;
+        if (shell_state.abbreviations.contains(name)) continue;
+        try removals.append(executor.allocator, name);
+    }
+    for (removals.items) |name| _ = executor.unsetAbbreviation(name);
+
     var semantic_variables = shell_state.variables.iterator();
     while (semantic_variables.next()) |entry| {
         const name = entry.key_ptr.*;
@@ -7678,6 +7820,9 @@ fn syncExecutorFromSemanticInteractiveState(executor: *exec.Executor, shell_stat
         if (variable.exported) try executor.setExported(name);
         if (variable.readonly) try executor.setReadonly(name);
     }
+
+    var semantic_abbreviations = shell_state.abbreviations.iterator();
+    while (semantic_abbreviations.next()) |entry| try executor.setAbbreviation(entry.key_ptr.*, entry.value_ptr.*);
 
     executor.shell_options = legacyShellOptions(shell_state.options, executor.shell_options.shopt);
     try executor.global_positionals.set(executor.allocator, shell_state.positionals.items);
@@ -8168,18 +8313,14 @@ fn scriptDiagnosticsResult(allocator: std.mem.Allocator, executor: *exec.Executo
 const InteractiveConfigService = struct {
     allocator: std.mem.Allocator,
     io: std.Io,
-    executor: ?*exec.Executor = null,
-    interactive_shell: ?*InteractiveShell = null,
+    shell_state: *shell.ShellState,
     arg_zero: []const u8 = "rush",
+    features: compat.Features = .{},
 
-    fn init(allocator: std.mem.Allocator, io: std.Io, executor: *exec.Executor, arg_zero: []const u8) InteractiveConfigService {
-        return .{ .allocator = allocator, .io = io, .executor = executor, .arg_zero = arg_zero };
-    }
-
-    fn initInteractive(allocator: std.mem.Allocator, io: std.Io, executor: *exec.Executor, interactive_shell: *InteractiveShell, arg_zero: []const u8) InteractiveConfigService {
-        std.debug.assert(interactive_shell.semantic_enabled);
-        interactive_shell.semantic_state.validate();
-        return .{ .allocator = allocator, .io = io, .executor = executor, .interactive_shell = interactive_shell, .arg_zero = arg_zero };
+    fn init(allocator: std.mem.Allocator, io: std.Io, shell_state: *shell.ShellState, arg_zero: []const u8, features: compat.Features) InteractiveConfigService {
+        shell_state.validate();
+        std.debug.assert(shell_state.scope == .current_shell);
+        return .{ .allocator = allocator, .io = io, .shell_state = shell_state, .arg_zero = arg_zero, .features = features };
     }
 
     fn load(self: InteractiveConfigService, options: InteractiveOptions) !void {
@@ -8232,10 +8373,7 @@ const InteractiveConfigService = struct {
     }
 
     fn sourceScript(self: InteractiveConfigService, contents: []const u8, source_path: []const u8) !void {
-        var result = if (self.interactive_shell) |interactive_shell|
-            try runInteractiveScript(self.allocator, self.io, self.executor.?, interactive_shell, contents, .{ .io = self.io, .allow_external = true, .external_stdio = .capture, .interactive = true, .arg_zero = self.arg_zero, .source_path = source_path })
-        else
-            try runScriptWithExecutor(self.allocator, self.executor.?, contents, .{ .io = self.io, .allow_external = true, .arg_zero = self.arg_zero, .source_path = source_path });
+        var result = try runSemanticShellStateScript(self.allocator, self.io, self.shell_state, contents, source_path, self.arg_zero, self.features, .capture);
         defer result.deinit();
         if (result.stdout.len != 0) try writeAll(self.io, .stdout, result.stdout);
         if (result.stderr.len != 0) try writeAll(self.io, .stderr, result.stderr);
@@ -8250,18 +8388,7 @@ const InteractiveConfigService = struct {
     }
 
     fn userStartupPath(self: InteractiveConfigService, file_name: []const u8) !?[]const u8 {
-        if (self.interactive_shell) |interactive_shell| return userStartupPathForShellState(self.allocator, interactive_shell.semantic_state, file_name);
-        return userStartupPathForExecutor(self.allocator, self.executor.?.*, file_name);
-    }
-
-    fn userStartupPathForExecutor(allocator: std.mem.Allocator, executor: exec.Executor, file_name: []const u8) !?[]const u8 {
-        if (executor.getEnv("XDG_CONFIG_HOME")) |xdg_config_home| {
-            if (xdg_config_home.len != 0) return try std.fs.path.join(allocator, &.{ xdg_config_home, "rush", file_name });
-        }
-        if (executor.getEnv("HOME")) |home| {
-            if (home.len != 0) return try std.fs.path.join(allocator, &.{ home, ".config", "rush", file_name });
-        }
-        return null;
+        return userStartupPathForShellState(self.allocator, self.shell_state.*, file_name);
     }
 
     fn userStartupPathForShellState(allocator: std.mem.Allocator, shell_state: shell.ShellState, file_name: []const u8) !?[]const u8 {
@@ -8276,45 +8403,78 @@ const InteractiveConfigService = struct {
     }
 
     fn getEnv(self: InteractiveConfigService, name: []const u8) ?[]const u8 {
-        if (self.interactive_shell) |interactive_shell| {
-            interactive_shell.semantic_state.validate();
-            return if (interactive_shell.semantic_state.getVariable(name)) |variable| variable.value else null;
-        }
-        return self.executor.?.getEnv(name);
+        self.shell_state.validate();
+        return if (self.shell_state.getVariable(name)) |variable| variable.value else null;
     }
 
     fn pendingExit(self: InteractiveConfigService) ?shell.ExitStatus {
-        if (self.interactive_shell) |interactive_shell| {
-            interactive_shell.semantic_state.validate();
-            return interactive_shell.semantic_state.pending_exit;
-        }
-        return self.executor.?.pending_exit;
+        self.shell_state.validate();
+        return self.shell_state.pending_exit;
     }
 
     fn expandParametersScalar(self: InteractiveConfigService, text: []const u8, features: compat.Features) ![]const u8 {
-        if (self.interactive_shell) |interactive_shell| {
-            interactive_shell.semantic_state.validate();
-            var adapter = runtime.PosixAdapter.init(self.io);
-            var expansion = shell.ShellExpansion.init(self.allocator, .{
-                .shell_state = &interactive_shell.semantic_state,
-                .eval_context = shell.EvalContext.init(.{ .target = .current_shell, .source = .interactive, .interactive = true }),
-                .fs_port = runtime.posixPorts(&adapter).fs,
-                .features = features,
-                .arg_zero = self.arg_zero,
-            });
-            defer expansion.deinit();
-            return expansion.expandParametersScalar(text);
-        }
-        return self.executor.?.expandParametersScalar(self.allocator, text, .{ .io = self.io, .allow_external = true, .features = features, .arg_zero = self.arg_zero });
+        self.shell_state.validate();
+        var adapter = runtime.PosixAdapter.init(self.io);
+        var expansion = shell.ShellExpansion.init(self.allocator, .{
+            .shell_state = self.shell_state,
+            .eval_context = shell.EvalContext.init(.{ .target = .current_shell, .source = .interactive, .interactive = true }),
+            .fs_port = runtime.posixPorts(&adapter).fs,
+            .features = features,
+            .arg_zero = self.arg_zero,
+        });
+        defer expansion.deinit();
+        return expansion.expandParametersScalar(text);
     }
 };
 
-fn loadInteractiveConfig(allocator: std.mem.Allocator, io: std.Io, executor: *exec.Executor, options: InteractiveOptions) !void {
-    try InteractiveConfigService.init(allocator, io, executor, options.arg_zero).load(options);
+fn loadInteractiveConfig(allocator: std.mem.Allocator, io: std.Io, shell_state: *shell.ShellState, options: InteractiveOptions) !void {
+    try InteractiveConfigService.init(allocator, io, shell_state, options.arg_zero, options.features).load(options);
 }
 
-fn sourceOptionalConfig(allocator: std.mem.Allocator, io: std.Io, executor: *exec.Executor, path: []const u8, arg_zero: []const u8) !void {
-    try InteractiveConfigService.init(allocator, io, executor, arg_zero).sourceOptional(path);
+fn loadInteractiveConfigIntoExecutor(allocator: std.mem.Allocator, io: std.Io, executor: *exec.Executor, environ_map: *const std.process.Environ.Map, options: InteractiveOptions, shell_options: shell.ShellOptions) !void {
+    std.debug.assert(executor.execution_depth == 0);
+    var startup_shell_options = shell_options;
+    setInteractiveStartupShellOptions(&startup_shell_options, options.monitor_option_explicit, stdinIsTty(io));
+    var shell_state = shell.ShellState.init(allocator);
+    defer shell_state.deinit();
+    try initializeSemanticInteractiveStartupState(allocator, io, &shell_state, environ_map, options.positionals, startup_shell_options);
+    try loadInteractiveConfig(allocator, io, &shell_state, options);
+    try syncExecutorFromSemanticInteractiveState(executor, shell_state);
+}
+
+fn loadCompletionConfigIntoExecutor(allocator: std.mem.Allocator, io: std.Io, executor: *exec.Executor, environ_map: *const std.process.Environ.Map) !void {
+    _ = environ_map;
+    std.debug.assert(executor.execution_depth == 0);
+    var embedded = try runScriptWithExecutor(allocator, executor, embedded_config, .{ .io = io, .allow_external = true, .arg_zero = executor.arg_zero, .source_path = embedded_config_path });
+    defer embedded.deinit();
+    if (embedded.stdout.len != 0) try writeAll(io, .stdout, embedded.stdout);
+    if (embedded.stderr.len != 0) try writeAll(io, .stderr, embedded.stderr);
+
+    if (try userConfigPath(allocator, executor.*)) |path| {
+        defer allocator.free(path);
+        try sourceOptionalCompletionScript(allocator, io, executor, path, executor.arg_zero);
+    }
+}
+
+fn sourceOptionalConfig(allocator: std.mem.Allocator, io: std.Io, shell_state: *shell.ShellState, path: []const u8, arg_zero: []const u8) !void {
+    try InteractiveConfigService.init(allocator, io, shell_state, arg_zero, .{}).sourceOptional(path);
+}
+
+fn sourceOptionalCompletionScript(allocator: std.mem.Allocator, io: std.Io, executor: *exec.Executor, path: []const u8, arg_zero: []const u8) !void {
+    std.debug.assert(executor.execution_depth == 0);
+    const contents = std.Io.Dir.cwd().readFileAlloc(io, path, allocator, .limited(1024 * 1024)) catch |err| switch (err) {
+        error.FileNotFound => return,
+        else => {
+            try writeOptionalConfigReadWarning(io, path, err);
+            return;
+        },
+    };
+    defer allocator.free(contents);
+
+    var result = try runScriptWithExecutor(allocator, executor, contents, .{ .io = io, .allow_external = true, .arg_zero = arg_zero, .source_path = path });
+    defer result.deinit();
+    if (result.stdout.len != 0) try writeAll(io, .stdout, result.stdout);
+    if (result.stderr.len != 0) try writeAll(io, .stderr, result.stderr);
 }
 
 fn writeOptionalConfigReadWarning(io: std.Io, path: []const u8, err: anyerror) !void {
@@ -8333,20 +8493,30 @@ fn configReadErrorMessage(err: anyerror) []const u8 {
     };
 }
 
-fn sourceConfigScript(allocator: std.mem.Allocator, io: std.Io, executor: *exec.Executor, contents: []const u8, source_path: []const u8, arg_zero: []const u8) !void {
-    try InteractiveConfigService.init(allocator, io, executor, arg_zero).sourceScript(contents, source_path);
+fn sourceConfigScript(allocator: std.mem.Allocator, io: std.Io, shell_state: *shell.ShellState, contents: []const u8, source_path: []const u8, arg_zero: []const u8) !void {
+    try InteractiveConfigService.init(allocator, io, shell_state, arg_zero, .{}).sourceScript(contents, source_path);
 }
 
 fn userConfigPath(allocator: std.mem.Allocator, executor: exec.Executor) !?[]const u8 {
-    return InteractiveConfigService.userStartupPathForExecutor(allocator, executor, "config.rush");
+    return userStartupPathForExecutor(allocator, executor, "config.rush");
 }
 
 fn userProfilePath(allocator: std.mem.Allocator, executor: exec.Executor) !?[]const u8 {
-    return InteractiveConfigService.userStartupPathForExecutor(allocator, executor, "profile.rush");
+    return userStartupPathForExecutor(allocator, executor, "profile.rush");
 }
 
 fn userStartupPath(allocator: std.mem.Allocator, executor: exec.Executor, file_name: []const u8) !?[]const u8 {
-    return InteractiveConfigService.userStartupPathForExecutor(allocator, executor, file_name);
+    return userStartupPathForExecutor(allocator, executor, file_name);
+}
+
+fn userStartupPathForExecutor(allocator: std.mem.Allocator, executor: exec.Executor, file_name: []const u8) !?[]const u8 {
+    if (executor.getEnv("XDG_CONFIG_HOME")) |xdg_config_home| {
+        if (xdg_config_home.len != 0) return try std.fs.path.join(allocator, &.{ xdg_config_home, "rush", file_name });
+    }
+    if (executor.getEnv("HOME")) |home| {
+        if (home.len != 0) return try std.fs.path.join(allocator, &.{ home, ".config", "rush", file_name });
+    }
+    return null;
 }
 
 fn isLoginArgZero(arg_zero: []const u8) bool {
@@ -8988,7 +9158,7 @@ test "completion application tolerates manifest path providers with mixed replac
     var loader = CompletionScriptLoader.init(std.testing.allocator);
     defer loader.deinit();
     try loader.ensureLoaded(std.testing.io, &executor, "tool", "rush");
-    try sourceOptionalConfig(std.testing.allocator, std.testing.io, &executor, root ++ "/rush/completions/tool.rush", "rush");
+    try sourceOptionalCompletionScript(std.testing.allocator, std.testing.io, &executor, root ++ "/rush/completions/tool.rush", "rush");
 
     const source = "tool " ++ root ++ "/src/mai";
     const candidates = try executor.collectCompletionsForInput(source, source.len, .{ .io = std.testing.io });
@@ -11799,10 +11969,11 @@ test "interactive config service sources simple config through semantic ShellSta
     const executor = &interactive_executor;
     try syncInteractiveExecutorFromShell(executor, interactive_shell);
 
-    try InteractiveConfigService.initInteractive(std.testing.allocator, std.testing.io, executor, &interactive_shell, "rush").sourceScript(
+    try sourceConfigScript(std.testing.allocator, std.testing.io, &interactive_shell.semantic_state,
         \\RUSH_SEMANTIC_CONFIG=loaded
         \\RUSH_SEMANTIC_CONFIG_SECOND=ok
-    , "semantic-config-test.rush");
+    , "semantic-config-test.rush", "rush");
+    try syncInteractiveExecutorFromShell(executor, interactive_shell);
 
     try std.testing.expectEqualStrings("loaded", interactive_shell.semantic_state.getVariable("RUSH_SEMANTIC_CONFIG").?.value);
     try std.testing.expectEqualStrings("ok", interactive_shell.semantic_state.getVariable("RUSH_SEMANTIC_CONFIG_SECOND").?.value);
@@ -12849,15 +13020,15 @@ test "interactive startup initializes prompt variables and sources ENV" {
     try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = env_path, .data = "ENV_LOADED=ok\nPS1='env> '\n" });
     defer std.Io.Dir.cwd().deleteFile(std.testing.io, env_path) catch {};
 
-    var executor = exec.Executor.init(std.testing.allocator);
-    defer executor.deinit();
-    try executor.setEnv("ENV", env_path);
+    var shell_state = shell.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    try shell_state.putVariable("ENV", env_path, .{ .exported = true });
 
-    try loadInteractiveConfig(std.testing.allocator, std.testing.io, &executor, .{ .arg_zero = "rush" });
-    try std.testing.expectEqualStrings("ok", executor.getEnv("ENV_LOADED").?);
+    try loadInteractiveConfig(std.testing.allocator, std.testing.io, &shell_state, .{ .arg_zero = "rush" });
+    try std.testing.expectEqualStrings("ok", shell_state.getVariable("ENV_LOADED").?.value);
     // Embedded default config provides PS2; $ENV overrides the embedded PS1 default.
-    try std.testing.expectEqualStrings("> ", executor.getEnv("PS2").?);
-    try std.testing.expectEqualStrings("env> ", executor.getEnv("PS1").?);
+    try std.testing.expectEqualStrings("> ", shell_state.getVariable("PS2").?.value);
+    try std.testing.expectEqualStrings("env> ", shell_state.getVariable("PS1").?.value);
 }
 
 test "interactive startup parameter-expands ENV pathname from HOME" {
@@ -12870,13 +13041,13 @@ test "interactive startup parameter-expands ENV pathname from HOME" {
     const env_value = try std.fmt.allocPrint(std.testing.allocator, "$HOME/{s}", .{env_path});
     defer std.testing.allocator.free(env_value);
 
-    var executor = exec.Executor.init(std.testing.allocator);
-    defer executor.deinit();
-    try executor.setEnv("HOME", cwd);
-    try executor.setEnv("ENV", env_value);
+    var shell_state = shell.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    try shell_state.putVariable("HOME", cwd, .{ .exported = true });
+    try shell_state.putVariable("ENV", env_value, .{ .exported = true });
 
-    try loadInteractiveConfig(std.testing.allocator, std.testing.io, &executor, .{ .arg_zero = "rush" });
-    try std.testing.expectEqualStrings("ok", executor.getEnv("HOME_ENV_LOADED").?);
+    try loadInteractiveConfig(std.testing.allocator, std.testing.io, &shell_state, .{ .arg_zero = "rush" });
+    try std.testing.expectEqualStrings("ok", shell_state.getVariable("HOME_ENV_LOADED").?.value);
 }
 
 test "interactive startup enables monitor by default for tty stdin" {
@@ -12920,7 +13091,7 @@ test "interactive startup enables monitor by default for tty stdin" {
     try std.testing.expectEqualStrings("", explicit_disabled.stderr);
 }
 
-fn loadInteractiveConfigCapturingStderr(allocator: std.mem.Allocator, executor: *exec.Executor, stderr_path: []const u8) ![]u8 {
+fn loadInteractiveConfigCapturingStderr(allocator: std.mem.Allocator, shell_state: *shell.ShellState, stderr_path: []const u8) ![]u8 {
     var stderr_file = try std.Io.Dir.cwd().createFile(std.testing.io, stderr_path, .{ .truncate = true });
     var stderr_file_open = true;
     defer if (stderr_file_open) stderr_file.close(std.testing.io);
@@ -12929,7 +13100,7 @@ fn loadInteractiveConfigCapturingStderr(allocator: std.mem.Allocator, executor: 
     var stderr_guard_active = true;
     defer if (stderr_guard_active) stderr_guard.restore();
 
-    try loadInteractiveConfig(allocator, std.testing.io, executor, .{ .arg_zero = "rush" });
+    try loadInteractiveConfig(allocator, std.testing.io, shell_state, .{ .arg_zero = "rush" });
 
     stderr_guard.restore();
     stderr_guard_active = false;
@@ -12945,15 +13116,15 @@ test "interactive startup warns and skips user config path directory" {
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     try std.Io.Dir.cwd().createDirPath(std.testing.io, root ++ "/rush/config.rush");
 
-    var executor = exec.Executor.init(std.testing.allocator);
-    defer executor.deinit();
-    try executor.setEnv("XDG_CONFIG_HOME", root);
+    var shell_state = shell.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    try shell_state.putVariable("XDG_CONFIG_HOME", root, .{ .exported = true });
 
-    const stderr = try loadInteractiveConfigCapturingStderr(std.testing.allocator, &executor, root ++ "/stderr");
+    const stderr = try loadInteractiveConfigCapturingStderr(std.testing.allocator, &shell_state, root ++ "/stderr");
     defer std.testing.allocator.free(stderr);
 
     try std.testing.expectEqualStrings("rush: warning: cannot read " ++ root ++ "/rush/config.rush: is a directory; skipping\n", stderr);
-    try std.testing.expectEqualStrings("> ", executor.getEnv("PS2").?);
+    try std.testing.expectEqualStrings("> ", shell_state.getVariable("PS2").?.value);
 }
 
 test "interactive startup warns and skips unreadable user config" {
@@ -12979,16 +13150,16 @@ test "interactive startup warns and skips unreadable user config" {
     };
     if (!denied) return error.SkipZigTest;
 
-    var executor = exec.Executor.init(std.testing.allocator);
-    defer executor.deinit();
-    try executor.setEnv("XDG_CONFIG_HOME", root);
+    var shell_state = shell.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    try shell_state.putVariable("XDG_CONFIG_HOME", root, .{ .exported = true });
 
-    const stderr = try loadInteractiveConfigCapturingStderr(std.testing.allocator, &executor, root ++ "/stderr");
+    const stderr = try loadInteractiveConfigCapturingStderr(std.testing.allocator, &shell_state, root ++ "/stderr");
     defer std.testing.allocator.free(stderr);
 
     try std.testing.expectEqualStrings("rush: warning: cannot read " ++ config_path ++ ": permission denied; skipping\n", stderr);
-    try std.testing.expect(executor.getEnv("CONFIG_LOADED") == null);
-    try std.testing.expectEqualStrings("> ", executor.getEnv("PS2").?);
+    try std.testing.expect(shell_state.getVariable("CONFIG_LOADED") == null);
+    try std.testing.expectEqualStrings("> ", shell_state.getVariable("PS2").?.value);
 }
 
 test "interactive command string invocation sources ENV before script" {
@@ -13130,13 +13301,13 @@ test "interactive command string invocation parameter-expands ENV_DIR before scr
 }
 
 test "embedded default config sets prompt defaults without clobbering inherited values" {
-    var executor = exec.Executor.init(std.testing.allocator);
-    defer executor.deinit();
-    try executor.setEnv("PS1", "inherited> ");
+    var shell_state = shell.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    try shell_state.putVariable("PS1", "inherited> ", .{});
 
-    try loadInteractiveConfig(std.testing.allocator, std.testing.io, &executor, .{ .arg_zero = "rush" });
-    try std.testing.expectEqualStrings("inherited> ", executor.getEnv("PS1").?);
-    try std.testing.expectEqualStrings("> ", executor.getEnv("PS2").?);
+    try loadInteractiveConfig(std.testing.allocator, std.testing.io, &shell_state, .{ .arg_zero = "rush" });
+    try std.testing.expectEqualStrings("inherited> ", shell_state.getVariable("PS1").?.value);
+    try std.testing.expectEqualStrings("> ", shell_state.getVariable("PS2").?.value);
 }
 
 test "embedded config default prompt renders cwd and dollar sign" {

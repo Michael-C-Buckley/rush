@@ -4746,7 +4746,7 @@ pub const Executor = struct {
         return copy;
     }
 
-    fn setAbbreviation(self: *Executor, name: []const u8, value: []const u8) !void {
+    pub fn setAbbreviation(self: *Executor, name: []const u8, value: []const u8) !void {
         const owned_name = try self.allocator.dupe(u8, name);
         errdefer self.allocator.free(owned_name);
         const owned_value = try self.allocator.dupe(u8, value);
@@ -4761,7 +4761,7 @@ pub const Executor = struct {
         }
     }
 
-    fn unsetAbbreviation(self: *Executor, name: []const u8) bool {
+    pub fn unsetAbbreviation(self: *Executor, name: []const u8) bool {
         if (self.abbreviations.fetchRemove(name)) |entry| {
             self.allocator.free(entry.key);
             self.allocator.free(entry.value);

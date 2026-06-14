@@ -74,7 +74,7 @@ pub const Builtin = struct {
             .output => std.debug.assert(std.mem.eql(u8, self.name, "echo") or std.mem.eql(u8, self.name, "printf") or std.mem.eql(u8, self.name, "env") or std.mem.eql(u8, self.name, "pwd") or std.mem.eql(u8, self.name, "prompt") or std.mem.eql(u8, self.name, "command")),
             .predicate => std.debug.assert(std.mem.eql(u8, self.name, "test") or std.mem.eql(u8, self.name, "[")),
             .declaration => std.debug.assert(std.mem.eql(u8, self.name, "export") or std.mem.eql(u8, self.name, "readonly") or std.mem.eql(u8, self.name, "unset")),
-            .shell_state => std.debug.assert(std.mem.eql(u8, self.name, ".") or std.mem.eql(u8, self.name, "eval") or std.mem.eql(u8, self.name, "set") or std.mem.eql(u8, self.name, "shift") or std.mem.eql(u8, self.name, "alias") or std.mem.eql(u8, self.name, "unalias") or std.mem.eql(u8, self.name, "trap") or std.mem.eql(u8, self.name, "local") or std.mem.eql(u8, self.name, "read") or std.mem.eql(u8, self.name, "cd")),
+            .shell_state => std.debug.assert(std.mem.eql(u8, self.name, ".") or std.mem.eql(u8, self.name, "eval") or std.mem.eql(u8, self.name, "set") or std.mem.eql(u8, self.name, "shift") or std.mem.eql(u8, self.name, "alias") or std.mem.eql(u8, self.name, "unalias") or std.mem.eql(u8, self.name, "trap") or std.mem.eql(u8, self.name, "local") or std.mem.eql(u8, self.name, "read") or std.mem.eql(u8, self.name, "cd") or std.mem.eql(u8, self.name, "abbr") or std.mem.eql(u8, self.name, "exec")),
             .job_control => std.debug.assert(std.mem.eql(u8, self.name, "jobs") or std.mem.eql(u8, self.name, "fg") or std.mem.eql(u8, self.name, "bg")),
             .control_flow => std.debug.assert(std.mem.eql(u8, self.name, "break") or std.mem.eql(u8, self.name, "continue") or std.mem.eql(u8, self.name, "exit") or std.mem.eql(u8, self.name, "return")),
         }
@@ -87,7 +87,7 @@ pub const default_builtins = [_]Builtin{
     Builtin.initWithSemantics("break", .special, .control_flow),
     Builtin.initWithSemantics("continue", .special, .control_flow),
     Builtin.initWithSemantics("eval", .special, .shell_state),
-    Builtin.init("exec", .special),
+    Builtin.initWithSemantics("exec", .special, .shell_state),
     Builtin.initWithSemantics("exit", .special, .control_flow),
     Builtin.initWithSemantics("export", .special, .declaration),
     Builtin.initWithSemantics("readonly", .special, .declaration),
@@ -99,7 +99,7 @@ pub const default_builtins = [_]Builtin{
     Builtin.initWithSemantics("unset", .special, .declaration),
 
     Builtin.initWithSemantics("[", .regular, .predicate),
-    Builtin.init("abbr", .regular),
+    Builtin.initWithSemantics("abbr", .regular, .shell_state),
     Builtin.initWithSemantics("alias", .regular, .shell_state),
     Builtin.initWithSemantics("bg", .regular, .job_control),
     Builtin.initWithSemantics("cd", .regular, .shell_state),

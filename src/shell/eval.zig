@@ -3264,6 +3264,7 @@ fn appendFunctionFrameDelta(before: state.ShellState, after: state.ShellState, f
 
     try appendOptionDiff(before.options, after.options, state_delta);
     try appendAliasDiff(before, after, state_delta);
+    try appendAbbreviationDiff(before, after, state_delta);
     try appendTrapDiff(before, after, state_delta);
     if (!std.mem.eql(u8, before.logical_cwd, after.logical_cwd) and after.logical_cwd.len != 0) try state_delta.setLogicalCwd(after.logical_cwd);
     for (after.background_jobs.items) |job| {
@@ -3311,6 +3312,7 @@ fn appendShellStateDiff(before: state.ShellState, after: state.ShellState, state
 
     try appendOptionDiff(before.options, after.options, state_delta);
     try appendAliasDiff(before, after, state_delta);
+    try appendAbbreviationDiff(before, after, state_delta);
     try appendTrapDiff(before, after, state_delta);
     if (!positionalsEqual(before.positionals.items, after.positionals.items)) try state_delta.replacePositionals(after.positionals.items);
     if (!std.mem.eql(u8, before.logical_cwd, after.logical_cwd) and after.logical_cwd.len != 0) try state_delta.setLogicalCwd(after.logical_cwd);
@@ -3364,6 +3366,23 @@ fn appendAliasDiff(before: state.ShellState, after: state.ShellState, state_delt
     var before_aliases = before.aliases.iterator();
     while (before_aliases.next()) |entry| {
         if (!after.aliases.contains(entry.key_ptr.*)) try state_delta.unsetAlias(entry.key_ptr.*);
+    }
+}
+
+fn appendAbbreviationDiff(before: state.ShellState, after: state.ShellState, state_delta: *delta.StateDelta) !void {
+    var after_abbreviations = after.abbreviations.iterator();
+    while (after_abbreviations.next()) |entry| {
+        const name = entry.key_ptr.*;
+        const value = entry.value_ptr.*;
+        if (before.getAbbreviation(name)) |previous| {
+            if (std.mem.eql(u8, previous, value)) continue;
+        }
+        try state_delta.setAbbreviation(name, value);
+    }
+
+    var before_abbreviations = before.abbreviations.iterator();
+    while (before_abbreviations.next()) |entry| {
+        if (!after.abbreviations.contains(entry.key_ptr.*)) try state_delta.unsetAbbreviation(entry.key_ptr.*);
     }
 }
 
@@ -3821,6 +3840,7 @@ fn evaluateBuiltin(evaluator: *Evaluator, shell_state: state.ShellState, eval_co
     if (std.mem.eql(u8, definition.name, "false")) return normalEvaluation(1);
     if (std.mem.eql(u8, definition.name, "break")) return evaluateLoopControl(eval_context, plan.argv, .break_loop, buffers);
     if (std.mem.eql(u8, definition.name, "continue")) return evaluateLoopControl(eval_context, plan.argv, .continue_loop, buffers);
+    if (std.mem.eql(u8, definition.name, "exec")) return evaluateExec(plan.argv, buffers);
     if (std.mem.eql(u8, definition.name, "exit")) return evaluateExit(shell_state, plan.argv, buffers);
     if (std.mem.eql(u8, definition.name, "return")) return evaluateReturn(shell_state, eval_context, plan.argv, buffers);
     if (std.mem.eql(u8, definition.name, "echo")) return normalEvaluation(try evaluateEcho(evaluator.allocator, plan.argv, &buffers.stdout));
@@ -3837,6 +3857,7 @@ fn evaluateBuiltin(evaluator: *Evaluator, shell_state: state.ShellState, eval_co
     if (std.mem.eql(u8, definition.name, "unset")) return normalEvaluation(try evaluateUnset(shell_state, plan.argv, state_delta, buffers));
     if (std.mem.eql(u8, definition.name, "set")) return normalEvaluation(try evaluateSet(shell_state, eval_context, plan.argv, state_delta, buffers));
     if (std.mem.eql(u8, definition.name, "shift")) return normalEvaluation(try evaluateShift(shell_state, plan.argv, state_delta, buffers));
+    if (std.mem.eql(u8, definition.name, "abbr")) return normalEvaluation(try evaluateAbbr(shell_state, plan.argv, state_delta, buffers));
     if (std.mem.eql(u8, definition.name, "alias")) return normalEvaluation(try evaluateAlias(shell_state, plan.argv, state_delta, buffers));
     if (std.mem.eql(u8, definition.name, "unalias")) return normalEvaluation(try evaluateUnalias(shell_state, plan.argv, state_delta, buffers));
     if (std.mem.eql(u8, definition.name, "trap")) return normalEvaluation(try evaluateTrap(evaluator.allocator, shell_state, plan.argv, state_delta, buffers));
@@ -4028,6 +4049,14 @@ fn evaluateExit(shell_state: state.ShellState, argv: []const []const u8, buffers
         };
     } else shell_state.last_status;
     return .{ .status = status, .control_flow = .{ .exit = status } };
+}
+
+fn evaluateExec(argv: []const []const u8, buffers: *EvaluationBuffers) !SimpleEvalResult {
+    std.debug.assert(argv.len != 0);
+    std.debug.assert(std.mem.eql(u8, argv[0], "exec"));
+    if (argv.len == 1) return normalEvaluation(0);
+    if (argv.len > 1 and std.mem.startsWith(u8, argv[1], "-")) return normalEvaluation(try builtinUsageError(buffers, "exec", "unsupported option"));
+    return .{ .status = 127, .control_flow = .{ .exit = 127 } };
 }
 
 fn evaluateLocal(evaluator: *Evaluator, shell_state: state.ShellState, eval_context: context.EvalContext, plan: command_plan.CommandPlan, state_delta: *delta.StateDelta, buffers: *EvaluationBuffers) !outcome.ExitStatus {
@@ -4777,6 +4806,47 @@ fn evaluateAlias(shell_state: state.ShellState, argv: []const []const u8, state_
         }
     }
     return 0;
+}
+
+fn evaluateAbbr(shell_state: state.ShellState, argv: []const []const u8, state_delta: *delta.StateDelta, buffers: *EvaluationBuffers) !outcome.ExitStatus {
+    std.debug.assert(argv.len != 0);
+    std.debug.assert(std.mem.eql(u8, argv[0], "abbr"));
+
+    if (argv.len == 1 or (argv.len == 2 and std.mem.eql(u8, argv[1], "--list"))) return listAbbreviations(shell_state, state_delta.*, buffers);
+    if (argv.len >= 2 and std.mem.eql(u8, argv[1], "--erase")) {
+        if (argv.len != 3) return builtinUsageError(buffers, "abbr", "usage: abbr --erase NAME");
+        if (!isShellName(argv[2])) return builtinUsageError(buffers, "abbr", "invalid abbreviation name");
+        if (lookupAbbreviationValue(shell_state, state_delta.*, argv[2]) == null) return builtinStatusError(buffers, 1, "abbr", "not found");
+        try state_delta.unsetAbbreviation(argv[2]);
+        return 0;
+    }
+    if (argv.len >= 2 and std.mem.startsWith(u8, argv[1], "--")) return builtinUsageError(buffers, "abbr", "unsupported option");
+    if (argv.len != 3) return builtinUsageError(buffers, "abbr", "usage: abbr NAME EXPANSION");
+    if (!isShellName(argv[1])) return builtinUsageError(buffers, "abbr", "invalid abbreviation name");
+    try state_delta.setAbbreviation(argv[1], argv[2]);
+    return 0;
+}
+
+fn listAbbreviations(shell_state: state.ShellState, state_delta: delta.StateDelta, buffers: *EvaluationBuffers) !outcome.ExitStatus {
+    var names: std.ArrayList([]const u8) = .empty;
+    defer names.deinit(buffers.allocator);
+    var iterator = shell_state.abbreviations.iterator();
+    while (iterator.next()) |entry| try appendUniqueString(&names, buffers.allocator, entry.key_ptr.*);
+    for (state_delta.abbreviation_sets.items) |mutation| try appendUniqueString(&names, buffers.allocator, mutation.name);
+    std.mem.sort([]const u8, names.items, {}, lessThanString);
+    for (names.items) |name| {
+        const value = lookupAbbreviationValue(shell_state, state_delta, name) orelse continue;
+        try buffers.stdout.print(buffers.allocator, "abbr {s} ", .{name});
+        try appendShellSingleQuoted(buffers.allocator, &buffers.stdout, value);
+        try buffers.stdout.append(buffers.allocator, '\n');
+    }
+    return 0;
+}
+
+fn lookupAbbreviationValue(shell_state: state.ShellState, state_delta: delta.StateDelta, name: []const u8) ?[]const u8 {
+    for (state_delta.abbreviation_unsets.items) |unset| if (std.mem.eql(u8, unset, name)) return null;
+    for (state_delta.abbreviation_sets.items) |mutation| if (std.mem.eql(u8, mutation.name, name)) return mutation.value;
+    return shell_state.getAbbreviation(name);
 }
 
 fn evaluateUnalias(shell_state: state.ShellState, argv: []const []const u8, state_delta: *delta.StateDelta, buffers: *EvaluationBuffers) !outcome.ExitStatus {
@@ -6238,6 +6308,8 @@ fn assertCommandDeltaCompatible(plan: command_plan.CommandPlan, state_delta: del
             std.debug.assert(state_delta.alias_sets.items.len == 0);
             std.debug.assert(state_delta.alias_unsets.items.len == 0);
             std.debug.assert(!state_delta.clear_aliases);
+            std.debug.assert(state_delta.abbreviation_sets.items.len == 0);
+            std.debug.assert(state_delta.abbreviation_unsets.items.len == 0);
             std.debug.assert(state_delta.trap_mutations.items.len == 0);
             std.debug.assert(state_delta.pending_trap_enqueues.items.len == 0);
             std.debug.assert(state_delta.pending_trap_consume_count == 0);
@@ -6276,6 +6348,8 @@ fn assertCommandDeltaCompatible(plan: command_plan.CommandPlan, state_delta: del
     std.debug.assert(state_delta.alias_sets.items.len == 0);
     std.debug.assert(state_delta.alias_unsets.items.len == 0);
     std.debug.assert(!state_delta.clear_aliases);
+    std.debug.assert(state_delta.abbreviation_sets.items.len == 0);
+    std.debug.assert(state_delta.abbreviation_unsets.items.len == 0);
     std.debug.assert(state_delta.trap_mutations.items.len == 0);
     std.debug.assert(state_delta.pending_trap_enqueues.items.len == 0);
     std.debug.assert(state_delta.pending_trap_consume_count == 0);
