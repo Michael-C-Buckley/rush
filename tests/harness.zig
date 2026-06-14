@@ -78,6 +78,42 @@ const RunResult = struct {
     }
 };
 
+const Progress = struct {
+    root_node: std.Progress.Node,
+    completed_cases: usize = 0,
+
+    fn init(io: std.Io, case_count: usize) Progress {
+        return .{ .root_node = std.Progress.start(io, .{
+            .root_name = "Conformance",
+            .initial_delay_ns = .fromMilliseconds(0),
+            .estimated_total_items = case_count,
+        }) };
+    }
+
+    fn deinit(self: Progress) void {
+        self.root_node.end();
+    }
+
+    fn startFile(self: Progress, path: []const u8, suite_name: []const u8, case_count: usize) std.Progress.Node {
+        const name = if (suite_name.len == 0) std.fs.path.stem(path) else suite_name;
+        return self.root_node.start(name, case_count);
+    }
+
+    fn finishFile(self: Progress, file_node: std.Progress.Node) void {
+        file_node.end();
+        self.root_node.setCompletedItems(self.completed_cases);
+    }
+
+    fn startCase(_: Progress, file_node: std.Progress.Node, case_name: []const u8) std.Progress.Node {
+        return file_node.start(case_name, 0);
+    }
+
+    fn completeCase(self: *Progress) void {
+        self.completed_cases += 1;
+        self.root_node.setCompletedItems(self.completed_cases);
+    }
+};
+
 pub fn main(init: std.process.Init) !u8 {
     const allocator = init.gpa;
     const args = try init.minimal.args.toSlice(init.arena.allocator());
@@ -109,7 +145,11 @@ pub fn main(init: std.process.Init) !u8 {
     }
 
     var failures: usize = 0;
-    for (config.files) |path| failures += try runSuiteFile(allocator, init.io, config, path);
+    const case_count = try countCases(allocator, init.io, config);
+    var progress = Progress.init(init.io, case_count);
+    errdefer progress.deinit();
+    for (config.files) |path| failures += try runSuiteFile(allocator, init.io, config, path, &progress);
+    progress.deinit();
 
     if (failures != 0) {
         std.debug.print("conformance: {d} failure(s)\n", .{failures});
@@ -209,7 +249,30 @@ fn stringLessThan(_: void, lhs: []const u8, rhs: []const u8) bool {
     return std.mem.lessThan(u8, lhs, rhs);
 }
 
-fn runSuiteFile(allocator: std.mem.Allocator, io: std.Io, config: Config, path: []const u8) !usize {
+fn countCases(allocator: std.mem.Allocator, io: std.Io, config: Config) !usize {
+    var case_count: usize = 0;
+    for (config.files) |path| {
+        const source = try std.Io.Dir.cwd().readFileAlloc(io, path, allocator, .unlimited);
+        defer allocator.free(source);
+        const source_z = try allocator.dupeZ(u8, source);
+        defer allocator.free(source_z);
+
+        var arena = std.heap.ArenaAllocator.init(allocator);
+        defer arena.deinit();
+        const suite = try std.zon.parse.fromSliceAlloc(Suite, arena.allocator(), source_z, null, .{});
+        std.debug.assert(suite.mode == config.mode);
+        case_count += suite.cases.len;
+    }
+    return case_count;
+}
+
+fn runSuiteFile(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    config: Config,
+    path: []const u8,
+    progress: *Progress,
+) !usize {
     const source = try std.Io.Dir.cwd().readFileAlloc(io, path, allocator, .unlimited);
     defer allocator.free(source);
     const source_z = try allocator.dupeZ(u8, source);
@@ -219,13 +282,26 @@ fn runSuiteFile(allocator: std.mem.Allocator, io: std.Io, config: Config, path: 
     defer arena.deinit();
     const suite = try std.zon.parse.fromSliceAlloc(Suite, arena.allocator(), source_z, null, .{});
     std.debug.assert(suite.mode == config.mode);
+    const file_node = progress.startFile(path, suite.name, suite.cases.len);
+    defer progress.finishFile(file_node);
 
     var temp_root = try createTempRoot(allocator, io);
     defer temp_root.deinit(allocator, io);
 
     var failures: usize = 0;
     for (suite.cases, 0..) |case, case_index| {
-        failures += try runCase(allocator, io, config, path, suite.name, &temp_root, case, case_index);
+        failures += try runCase(
+            allocator,
+            io,
+            config,
+            path,
+            file_node,
+            suite.name,
+            &temp_root,
+            case,
+            case_index,
+            progress,
+        );
     }
     return failures;
 }
@@ -268,16 +344,21 @@ fn runCase(
     io: std.Io,
     config: Config,
     path: []const u8,
+    file_node: std.Progress.Node,
     suite_name: []const u8,
     temp_root: *TempRoot,
     case: Case,
     case_index: usize,
+    progress: *Progress,
 ) !usize {
     var failures: usize = 0;
 
+    const case_node = progress.startCase(file_node, case.name);
+    defer case_node.end();
     const target = try runTarget(allocator, io, temp_root, case_index, config, case.script);
     defer target.deinit(allocator);
     failures += reportMismatch(path, suite_name, case, targetName(config), target);
+    progress.completeCase();
 
     return failures;
 }
