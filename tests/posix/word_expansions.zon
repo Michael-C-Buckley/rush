@@ -634,6 +634,115 @@
             .status = 0,
         },
         .{
+            .name = "arithmetic expansion uses arithmetic precedence and grouping",
+            .script =
+            \\printf '%s\n' "$((1 + 2 * 3))" "$(((1 + 2) * 3))"
+            ,
+            .stdout =
+            \\7
+            \\9
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "arithmetic expansion recognizes decimal octal and hexadecimal constants",
+            .script =
+            \\printf '%s:%s:%s\n' "$((10))" "$((010))" "$((0x10))"
+            ,
+            .stdout =
+            \\10:8:16
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "arithmetic expansion reads valid integer variables with or without parameter expansion",
+            .script =
+            \\n=5
+            \\printf '%s:%s\n' "$((n))" "$(($n))"
+            ,
+            .stdout =
+            \\5:5
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "arithmetic expansion expands parameters and commands before evaluation",
+            .script =
+            \\x='1 + 2'
+            \\printf '%s\n' "$(($x * 3))" "$(( $(printf '%s' '2 + 3') * 4 ))"
+            ,
+            .stdout =
+            \\7
+            \\14
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "arithmetic expansion variable assignments persist",
+            .script =
+            \\x=4
+            \\printf '%s:%s\n' "$((x = x + 3))" "$x"
+            \\printf '%s:%s\n' "$((x += 5))" "$x"
+            ,
+            .stdout =
+            \\7:7
+            \\12:12
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "arithmetic expansion evaluates required operators",
+            .script =
+            \\printf '%s:%s:%s:%s\n' "$((7 / 2))" "$((7 % 2))" "$((3 > 2))" "$((0 || 5))"
+            \\printf '%s:%s:%s:%s\n' "$((6 & 3))" "$((6 | 1))" "$((6 ^ 3))" "$((1 << 4))"
+            \\printf '%s:%s\n' "$((0 ? 1 : 7))" "$((1 ? 8 : 9))"
+            ,
+            .stdout =
+            \\3:1:1:1
+            \\2:7:5:16
+            \\7:8
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "arithmetic expansion short-circuits unevaluated operands",
+            .script =
+            \\printf '%s:%s\n' "$((0 && (1 / 0)))" "$((1 || (1 / 0)))"
+            ,
+            .stdout =
+            \\0:1
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "invalid arithmetic expansion fails with a diagnostic",
+            .script =
+            \\printf 'before\n'
+            \\printf '%s\n' "$((1 + ))"
+            \\printf 'after\n'
+            ,
+            .stdout =
+            \\before
+            \\
+            ,
+            .stderr_match = .nonempty,
+            .status_match = .nonzero,
+        },
+        .{
             .name = "field splitting applies to unquoted parameter expansion",
             .script =
             \\x=' a  b '
