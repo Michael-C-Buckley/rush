@@ -596,15 +596,15 @@ pub fn runReplInput(allocator: std.mem.Allocator, io: std.Io, input: []const u8)
 }
 
 pub fn runScript(allocator: std.mem.Allocator, io: std.Io, script: []const u8) !CommandResult {
-    return runScriptWithOptions(allocator, io, script, .{ .io = io, .allow_external = true });
+    return runner.runScript(allocator, io, script);
 }
 
 pub fn runScriptWithOptions(allocator: std.mem.Allocator, io: std.Io, script: []const u8, options: RunOptions) !CommandResult {
-    return runScriptWithEnvironment(allocator, io, script, options, null);
+    return runner.runScriptWithOptions(allocator, io, script, options);
 }
 
 pub fn runScriptWithEnvironment(allocator: std.mem.Allocator, io: std.Io, script: []const u8, options: RunOptions, environ_map: ?*const std.process.Environ.Map) !CommandResult {
-    return runCommandStringWithEnvironment(allocator, io, script, options, environ_map, &.{}, null, .{});
+    return runner.runScriptWithEnvironment(allocator, io, script, options, environ_map);
 }
 
 fn runShellInvocationWithEnvironment(allocator: std.mem.Allocator, io: std.Io, invocation: ShellInvocation, environ_map: ?*const std.process.Environ.Map, external_stdio: runtime.ExternalStdio, login_shell: bool) !CommandResult {
@@ -689,7 +689,6 @@ fn stderrIsTty(io: std.Io) bool {
 }
 
 fn runCommandStringWithEnvironment(allocator: std.mem.Allocator, io: std.Io, script: []const u8, options: RunOptions, environ_map: ?*const std.process.Environ.Map, positionals: []const []const u8, interactive_options: ?InteractiveOptions, shell_options: shell.ShellOptions) !CommandResult {
-    const semantic_invocation = runner.invocationContext(options);
     if (interactive_options) |startup_options| {
         var interactive_run_options = options;
         interactive_run_options.interactive = true;
@@ -712,21 +711,7 @@ fn runCommandStringWithEnvironment(allocator: std.mem.Allocator, io: std.Io, scr
         if (interactivePendingExit(&interactive_shell)) |status| return runner.empty(allocator, status);
         return runInteractiveScript(allocator, io, &interactive_shell, script, interactive_run_options);
     }
-    if (semantic_invocation.interactive or !options.allow_external) {
-        return runner.unsupported(allocator, "non-interactive command strings must run through the semantic executor");
-    }
-    var semantic_execution = try runSemanticCommandString(allocator, io, script, semantic_invocation, options.external_stdio, environ_map, positionals, shell_options);
-    switch (semantic_execution) {
-        .output => |output| {
-            semantic_execution = undefined;
-            return output;
-        },
-        .unsupported => |message| {
-            semantic_execution = undefined;
-            defer allocator.free(message);
-            return runner.unsupported(allocator, message);
-        },
-    }
+    return runner.runCommandStringWithEnvironment(allocator, io, script, options, environ_map, positionals, shell_options);
 }
 
 const SemanticInvocationExecution = runner.SemanticInvocationExecution;

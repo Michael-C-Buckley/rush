@@ -94,6 +94,37 @@ fn readStandardInputScript(allocator: std.mem.Allocator, io: std.Io) ![]u8 {
     return reader.interface.allocRemaining(allocator, .unlimited);
 }
 
+pub fn runScript(allocator: std.mem.Allocator, io: std.Io, script: []const u8) !CommandResult {
+    return runScriptWithOptions(allocator, io, script, .{ .io = io, .allow_external = true });
+}
+
+pub fn runScriptWithOptions(allocator: std.mem.Allocator, io: std.Io, script: []const u8, options: Options) !CommandResult {
+    return runScriptWithEnvironment(allocator, io, script, options, null);
+}
+
+pub fn runScriptWithEnvironment(allocator: std.mem.Allocator, io: std.Io, script: []const u8, options: Options, environ_map: ?*const std.process.Environ.Map) !CommandResult {
+    return runCommandStringWithEnvironment(allocator, io, script, options, environ_map, &.{}, .{});
+}
+
+pub fn runCommandStringWithEnvironment(allocator: std.mem.Allocator, io: std.Io, script: []const u8, options: Options, environ_map: ?*const std.process.Environ.Map, positionals: []const []const u8, shell_options: shell.ShellOptions) !CommandResult {
+    const invocation = invocationContext(options);
+    if (invocation.interactive or !options.allow_external) {
+        return unsupported(allocator, "non-interactive command strings must run through the semantic executor");
+    }
+    var execution = try runSemanticCommandString(allocator, io, script, invocation, options.external_stdio, environ_map, positionals, shell_options);
+    switch (execution) {
+        .output => |output| {
+            execution = undefined;
+            return output;
+        },
+        .unsupported => |message| {
+            execution = undefined;
+            defer allocator.free(message);
+            return unsupported(allocator, message);
+        },
+    }
+}
+
 pub const SemanticInvocationExecution = union(enum) {
     output: CommandResult,
     unsupported: []const u8,
