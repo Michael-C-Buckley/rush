@@ -1,0 +1,94 @@
+.{
+    .name = "2.10 Shell Grammar",
+    .mode = .posix,
+    .cases = .{
+        .{
+            .name = "newlines separate complete commands",
+            .script =
+            \\
+            \\printf 'one\n'
+            \\
+            \\printf 'two\n'
+            \\
+            ,
+            .stdout =
+            \\one
+            \\two
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "reserved words accept linebreaks in compound commands",
+            .script =
+            \\if
+            \\    true
+            \\then
+            \\    printf 'if\n'
+            \\else
+            \\    printf 'else\n'
+            \\fi
+            \\while
+            \\    false
+            \\do
+            \\    printf 'loop\n'
+            \\done
+            ,
+            .stdout =
+            \\if
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "function definition permits linebreak before body",
+            .script =
+            \\f()
+            \\{
+            \\    printf 'function\n'
+            \\}
+            \\f
+            ,
+            .stdout =
+            \\function
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "for clause without in iterates positional parameters",
+            .script =
+            \\set -- a 'b c'
+            \\for name
+            \\do
+            \\    printf '<%s>\n' "$name"
+            \\done
+            ,
+            .stdout =
+            \\<a>
+            \\<b c>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "case list permits final item without terminator",
+            .script =
+            \\case x in
+            \\    y) printf 'bad\n' ;;
+            \\    x) printf 'match\n'
+            \\esac
+            ,
+            .stdout =
+            \\match
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+    },
+}
