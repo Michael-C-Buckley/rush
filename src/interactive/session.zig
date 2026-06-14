@@ -198,30 +198,6 @@ fn interactivePendingExit(interactive_shell: *const Shell) ?shell.ExitStatus {
     return interactive_shell.semantic_state.pending_exit;
 }
 
-fn shellStateHasStoppedJobs(shell_state: shell.ShellState) bool {
-    shell_state.validate();
-    std.debug.assert(shell_state.scope == .current_shell);
-    for (shell_state.background_jobs.items) |job| {
-        job.validate();
-        if (job.state == .stopped) return true;
-    }
-    return false;
-}
-
-fn shouldWarnBeforeExitWithStoppedJobs(shell_state: *shell.ShellState) bool {
-    shell_state.validate();
-    std.debug.assert(shell_state.scope == .current_shell);
-    if (!shellStateHasStoppedJobs(shell_state.*)) {
-        shell_state.warned_stopped_jobs_on_exit = false;
-        shell_state.validate();
-        return false;
-    }
-    if (shell_state.warned_stopped_jobs_on_exit) return false;
-    shell_state.warned_stopped_jobs_on_exit = true;
-    shell_state.validate();
-    return true;
-}
-
 pub const Options = startup.Options;
 
 pub const Shell = struct {
@@ -473,7 +449,7 @@ pub fn run(
 
         const input = command.items;
         if (std.mem.eql(u8, input, "exit")) {
-            if (shouldWarnBeforeExitWithStoppedJobs(&interactive_shell.semantic_state)) {
+            if (interactive_shell.semantic_state.shouldWarnBeforeExitWithStoppedJobs()) {
                 try terminal.finishSemanticCommand(0);
                 try writeAll(io, .stderr, stopped_jobs_exit_warning);
                 continue;
@@ -627,15 +603,8 @@ pub fn runCommandStringWithEnvironment(
 }
 
 fn syncSemanticTerminalSize(shell_state: *shell.ShellState, terminal: editor_driver.TerminalSession) !void {
-    shell_state.validate();
-    std.debug.assert(shell_state.scope == .current_shell);
     const winsize = terminal.currentWinsize();
-    var rows_buffer: [32]u8 = undefined;
-    var cols_buffer: [32]u8 = undefined;
-    const rows = try std.fmt.bufPrint(&rows_buffer, "{d}", .{winsize.rows});
-    const cols = try std.fmt.bufPrint(&cols_buffer, "{d}", .{winsize.cols});
-    try shell_state.putVariable("LINES", rows, .{ .exported = true });
-    try shell_state.putVariable("COLUMNS", cols, .{ .exported = true });
+    try shell_state.setInteractiveTerminalSize(winsize.rows, winsize.cols);
 }
 
 pub fn runInteractiveInterruptTrap(
@@ -647,8 +616,7 @@ pub fn runInteractiveInterruptTrap(
 ) !?runner.CommandResult {
     shell_state.validate();
     std.debug.assert(shell_state.scope == .current_shell);
-    if (shell_state.trapDisposition(.INT) != .caught) return null;
-    try shell_state.appendPendingTrap(.INT);
+    if (!try shell_state.requestInteractiveInterruptTrap()) return null;
     return executeInteractivePendingTraps(allocator, io, shell_state, arg_zero, features);
 }
 

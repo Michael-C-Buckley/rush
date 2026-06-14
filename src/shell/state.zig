@@ -835,6 +835,14 @@ pub const ShellState = struct {
         self.validate();
     }
 
+    pub fn requestInteractiveInterruptTrap(self: *ShellState) !bool {
+        self.validate();
+        std.debug.assert(self.scope == .current_shell);
+        if (self.trapDisposition(.INT) != .caught) return false;
+        try self.appendPendingTrap(.INT);
+        return true;
+    }
+
     pub fn consumePendingTraps(self: *ShellState, count: usize) void {
         std.debug.assert(count <= self.pending_traps.items.len);
         var consumed: usize = 0;
@@ -871,6 +879,34 @@ pub const ShellState = struct {
         self.validate();
         self.pending_exit = null;
         self.validate();
+    }
+
+    pub fn setInteractiveTerminalSize(self: *ShellState, rows_value: u16, cols_value: u16) !void {
+        self.validate();
+        std.debug.assert(self.scope == .current_shell);
+        std.debug.assert(rows_value != 0);
+        std.debug.assert(cols_value != 0);
+
+        var rows_buffer: [32]u8 = undefined;
+        var cols_buffer: [32]u8 = undefined;
+        const rows = try std.fmt.bufPrint(&rows_buffer, "{d}", .{rows_value});
+        const cols = try std.fmt.bufPrint(&cols_buffer, "{d}", .{cols_value});
+        try self.putVariable("LINES", rows, .{ .exported = true });
+        try self.putVariable("COLUMNS", cols, .{ .exported = true });
+    }
+
+    pub fn shouldWarnBeforeExitWithStoppedJobs(self: *ShellState) bool {
+        self.validate();
+        std.debug.assert(self.scope == .current_shell);
+        if (!self.hasStoppedJobs()) {
+            self.warned_stopped_jobs_on_exit = false;
+            self.validate();
+            return false;
+        }
+        if (self.warned_stopped_jobs_on_exit) return false;
+        self.warned_stopped_jobs_on_exit = true;
+        self.validate();
+        return true;
     }
 
     pub fn replacePositionals(self: *ShellState, args: []const []const u8) !void {
@@ -1073,6 +1109,16 @@ pub const ShellState = struct {
     fn clearPendingJobNotifications(self: *ShellState) void {
         for (self.pending_job_notifications.items) |*notification| notification.deinit(self.allocator);
         self.pending_job_notifications.clearRetainingCapacity();
+    }
+
+    fn hasStoppedJobs(self: ShellState) bool {
+        self.validate();
+        std.debug.assert(self.scope == .current_shell);
+        for (self.background_jobs.items) |job| {
+            job.validate();
+            if (job.state == .stopped) return true;
+        }
+        return false;
     }
 
     fn selectCurrentJob(self: *ShellState, id: usize) void {
@@ -1314,4 +1360,55 @@ test "ShellState models trap dispositions pending queue and execution guard" {
     try std.testing.expectEqual(@as(?ExitStatus, 143), shell_state.pending_exit);
     shell_state.clearPendingExit();
     try std.testing.expectEqual(@as(?ExitStatus, null), shell_state.pending_exit);
+}
+
+test "ShellState owns interactive terminal interrupt and stopped-job policies" {
+    var shell_state = ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+
+    try shell_state.setInteractiveTerminalSize(40, 120);
+    try std.testing.expectEqualStrings("40", shell_state.getVariable("LINES").?.value);
+    try std.testing.expectEqualStrings("120", shell_state.getVariable("COLUMNS").?.value);
+
+    try std.testing.expect(!try shell_state.requestInteractiveInterruptTrap());
+    try shell_state.setTrapForSignal(.INT, "echo int");
+    try std.testing.expect(try shell_state.requestInteractiveInterruptTrap());
+    try std.testing.expectEqual(TrapSignal.INT, shell_state.nextPendingTrap().?);
+
+    try std.testing.expect(!shell_state.shouldWarnBeforeExitWithStoppedJobs());
+
+    const owned_command = try std.testing.allocator.dupe(u8, "stopped job");
+    const child: std.process.Child = .{
+        .id = 123,
+        .thread_handle = {},
+        .stdin = null,
+        .stdout = null,
+        .stderr = null,
+        .request_resource_usage_statistics = false,
+    };
+    var job: BackgroundJob = .{
+        .id = 1,
+        .pid = 123,
+        .command = owned_command,
+        .state = .stopped,
+        .status = 146,
+        .stop_signal = 18,
+    };
+    var job_owned = true;
+    errdefer if (job_owned) job.deinit(std.testing.allocator);
+    try job.appendProcess(std.testing.allocator, .{
+        .stage_index = 0,
+        .child = runtime_process.ChildProcess.init(child),
+        .status = 146,
+        .stop_signal = 18,
+    });
+    try shell_state.appendBackgroundJob(job);
+    job.deinit(std.testing.allocator);
+    job_owned = false;
+
+    try std.testing.expect(shell_state.shouldWarnBeforeExitWithStoppedJobs());
+    try std.testing.expect(!shell_state.shouldWarnBeforeExitWithStoppedJobs());
+    shell_state.removeBackgroundJobById(1);
+    try std.testing.expect(!shell_state.shouldWarnBeforeExitWithStoppedJobs());
+    try std.testing.expect(!shell_state.warned_stopped_jobs_on_exit);
 }
