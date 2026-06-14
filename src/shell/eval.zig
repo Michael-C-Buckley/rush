@@ -5634,10 +5634,11 @@ fn evaluateExit(
     if (argv.len > 2) return normalEvaluation(try builtinUsageError(buffers, "exit", "too many arguments"));
     const status: outcome.ExitStatus = if (argv.len == 2) blk: {
         const operand = std.mem.trim(u8, argv[1], &std.ascii.whitespace);
-        break :blk std.fmt.parseInt(outcome.ExitStatus, operand, 10) catch {
+        const parsed = std.fmt.parseInt(u64, operand, 10) catch {
             _ = try builtinUsageError(buffers, "exit", "numeric argument required");
             return .{ .status = 2, .control_flow = .{ .exit = 2 } };
         };
+        break :blk @truncate(parsed);
     } else shell_state.last_status;
     return .{ .status = status, .control_flow = .{ .exit = status } };
 }
