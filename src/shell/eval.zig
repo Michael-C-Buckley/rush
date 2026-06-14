@@ -889,6 +889,7 @@ const TrapActionLowerer = struct {
             return err;
         };
         expanded.command.validate();
+        expanded.command.last_command_substitution_status = command_substitutions.context.last_status;
         const lookup = try self.lookupSnapshot(expanded.command);
         const plan_without_redirections = command_plan.classifyExpandedSimpleCommand(.{
             .command = expanded.command,
@@ -3434,8 +3435,8 @@ fn evaluateSimpleCommand(
     buffers: *EvaluationBuffers,
 ) EvalError!SimpleEvalResult {
     return switch (plan.classification) {
-        .empty => normalEvaluation(0),
-        .assignment_only => normalEvaluation(0),
+        .empty => normalEvaluation(statusForCommandWithoutName(plan)),
+        .assignment_only => normalEvaluation(statusForCommandWithoutName(plan)),
         .function_definition => |definition| evaluateFunctionDefinition(definition, state_delta),
         .special_builtin => |definition| evaluateBuiltin(
             evaluator,
@@ -3473,6 +3474,12 @@ fn evaluateSimpleCommand(
             buffers,
         ),
     };
+}
+
+fn statusForCommandWithoutName(plan: command_plan.CommandPlan) outcome.ExitStatus {
+    plan.validate();
+    std.debug.assert(plan.argv.len == 0);
+    return plan.last_command_substitution_status orelse 0;
 }
 
 fn normalEvaluation(status: outcome.ExitStatus) SimpleEvalResult {
@@ -8564,6 +8571,29 @@ test "semantic evaluator preserves assignment commit behavior around simple buil
     try std.testing.expectEqualStrings("\n", regular_outcome.stdout.items);
     try regular_outcome.commitDelta(&shell_state, .current_shell);
     try std.testing.expectEqual(@as(?state.Variable, null), shell_state.getVariable("TEMP"));
+}
+
+test "semantic evaluator uses command substitution status for assignment-only commands" {
+    var shell_state = state.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    var evaluator = Evaluator.init(std.testing.allocator);
+    var input = EvaluationInput.empty();
+    var buffers = EvaluationBuffers.init(std.testing.allocator, &input);
+    defer buffers.deinit();
+
+    const result = try evaluateStatementListSource(
+        &evaluator,
+        &shell_state,
+        context.EvalContext.forTarget(.current_shell),
+        "x=$(exit 7)",
+        &buffers,
+    );
+
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 7), result.status);
+    try std.testing.expectEqual(@as(state.ExitStatus, 7), shell_state.last_status);
+    try std.testing.expectEqualStrings("", buffers.stdout.items);
+    try std.testing.expectEqualStrings("", buffers.stderr.items);
+    try std.testing.expectEqualStrings("", shell_state.getVariable("x").?.value);
 }
 
 test "semantic evaluator models declaration stateful builtins as StateDelta mutations" {

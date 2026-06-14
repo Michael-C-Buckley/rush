@@ -1,0 +1,63 @@
+.{
+    .name = "2.9.2 Pipelines",
+    .mode = .posix,
+    .cases = .{
+        .{
+            .name = "pipe connects stdout to next command stdin",
+            .script =
+            \\printf '%s\n' hello | cat
+            ,
+            .stdout =
+            \\hello
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "pipeline status is status of rightmost command when rightmost succeeds",
+            .script =
+            \\false | true
+            ,
+            .stdout = "",
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "pipeline status is status of rightmost command when rightmost fails",
+            .script =
+            \\true | false
+            ,
+            .stdout = "",
+            .stderr = "",
+            .status = 1,
+        },
+        .{
+            .name = "bang negates successful pipeline status",
+            .script =
+            \\! true
+            ,
+            .stdout = "",
+            .stderr = "",
+            .status = 1,
+        },
+        .{
+            .name = "bang negates failing pipeline status",
+            .script =
+            \\! false
+            ,
+            .stdout = "",
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "bang negates rightmost command status in multi-command pipeline",
+            .script =
+            \\! true | false
+            ,
+            .stdout = "",
+            .stderr = "",
+            .status = 0,
+        },
+    },
+}

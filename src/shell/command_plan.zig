@@ -505,6 +505,7 @@ pub const ExpandedSimpleCommand = struct {
     assignments: []const Assignment = &.{},
     argv: []const []const u8 = &.{},
     redirections: redirection_plan.RedirectionPlan = .{},
+    last_command_substitution_status: ?state.ExitStatus = null,
 
     pub fn validate(self: ExpandedSimpleCommand) void {
         for (self.assignments) |assignment| assignment.validate();
@@ -576,6 +577,7 @@ pub const CommandPlan = struct {
     assignments: []const Assignment = &.{},
     argv: []const []const u8 = &.{},
     redirections: redirection_plan.RedirectionPlan = .{},
+    last_command_substitution_status: ?state.ExitStatus = null,
     classification: Classification,
 
     pub fn classify(request: PlanRequest) CommandPlan {
@@ -601,6 +603,7 @@ pub const CommandPlan = struct {
             .assignments = command.assignments,
             .argv = command.argv,
             .redirections = command.redirections,
+            .last_command_substitution_status = command.last_command_substitution_status,
             .classification = classification,
         };
         plan.validate();
@@ -819,6 +822,7 @@ fn cloneCommandPlan(allocator: std.mem.Allocator, plan: CommandPlan) std.mem.All
         .assignments = assignments,
         .argv = argv,
         .redirections = redirections,
+        .last_command_substitution_status = plan.last_command_substitution_status,
         .classification = classification,
     };
     owned.validate();

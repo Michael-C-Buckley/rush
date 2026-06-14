@@ -37,6 +37,15 @@
             .status = 0,
         },
         .{
+            .name = "assignment-only command with command substitution uses substitution status",
+            .script =
+            \\x=$(exit 7)
+            ,
+            .stdout = "",
+            .stderr = "",
+            .status = 7,
+        },
+        .{
             .name = "temporary assignment does not affect regular utility arguments or shell state",
             .script =
             \\x=outer

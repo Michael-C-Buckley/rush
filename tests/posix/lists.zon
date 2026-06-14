@@ -1,0 +1,90 @@
+.{
+    .name = "2.9.3 Lists",
+    .mode = .posix,
+    .cases = .{
+        .{
+            .name = "AND list executes next command after zero status",
+            .script =
+            \\true && printf '%s\n' ok
+            ,
+            .stdout =
+            \\ok
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "AND list skips next command after nonzero status",
+            .script =
+            \\false && printf '%s\n' bad
+            ,
+            .stdout = "",
+            .stderr = "",
+            .status = 1,
+        },
+        .{
+            .name = "OR list executes next command after nonzero status",
+            .script =
+            \\false || printf '%s\n' ok
+            ,
+            .stdout =
+            \\ok
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "OR list skips next command after zero status",
+            .script =
+            \\true || printf '%s\n' bad
+            ,
+            .stdout = "",
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "AND-OR lists are left-associative with equal precedence after false",
+            .script =
+            \\false && printf '%s\n' foo || printf '%s\n' bar
+            ,
+            .stdout =
+            \\bar
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "AND-OR lists are left-associative with equal precedence after true",
+            .script =
+            \\true || printf '%s\n' foo && printf '%s\n' bar
+            ,
+            .stdout =
+            \\bar
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "sequential list status is last executed pipeline status when last succeeds",
+            .script =
+            \\false; true
+            ,
+            .stdout = "",
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "sequential list status is last executed pipeline status when last fails",
+            .script =
+            \\true; false
+            ,
+            .stdout = "",
+            .stderr = "",
+            .status = 1,
+        },
+    },
+}
