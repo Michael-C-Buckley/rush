@@ -1018,6 +1018,121 @@
             .status = 0,
         },
         .{
+            .name = "pathname expansion is disabled by set minus f",
+            .script =
+            \\: >a.txt
+            \\: >b.txt
+            \\set -f
+            \\printf '<%s>\n' *.txt
+            ,
+            .stdout =
+            \\<*.txt>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "pathname expansion applies after field splitting",
+            .script =
+            \\: >x.c
+            \\: >y.h
+            \\patterns='*.c *.h'
+            \\set -- $patterns
+            \\printf '<%s>\n' "$#" "$@"
+            ,
+            .stdout =
+            \\<2>
+            \\<x.c>
+            \\<y.h>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "pathname expansion applies to unquoted pattern characters from parameter expansion",
+            .script =
+            \\: >a.txt
+            \\: >b.txt
+            \\pattern='*.txt'
+            \\printf '<%s>\n' $pattern
+            ,
+            .stdout =
+            \\<a.txt>
+            \\<b.txt>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "pathname expansion matches question mark and bracket expressions",
+            .script =
+            \\: >a.txt
+            \\: >b.txt
+            \\: >aa.txt
+            \\: >ab.txt
+            \\: >ac.txt
+            \\printf '<%s>\n' ?.txt a[ab].txt
+            ,
+            .stdout =
+            \\<a.txt>
+            \\<b.txt>
+            \\<aa.txt>
+            \\<ab.txt>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "pathname expansion requires slash to be matched explicitly",
+            .script =
+            \\: >root.txt
+            \\mkdir dir
+            \\: >dir/file.txt
+            \\printf '<%s>\n' *.txt */*.txt
+            ,
+            .stdout =
+            \\<root.txt>
+            \\<dir/file.txt>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "pathname expansion does not match leading period implicitly",
+            .script =
+            \\: >a.txt
+            \\: >.hidden.txt
+            \\printf '<%s>\n' *.txt .*.txt
+            ,
+            .stdout =
+            \\<a.txt>
+            \\<.hidden.txt>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "pathname expansion leaves quoted pattern characters literal",
+            .script =
+            \\: >a.txt
+            \\printf '<%s>\n' '*' "*.txt" \*.txt
+            ,
+            .stdout =
+            \\<*>
+            \\<*.txt>
+            \\<*.txt>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "pathname expansion does not apply to assignment values",
             .script =
             \\: >a.txt
