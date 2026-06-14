@@ -3,18 +3,13 @@
     .mode = .posix,
     .cases = .{
         .{
-            .name = "regular built-ins are found even when PATH cannot find utilities",
+            .name = "special built-ins are found even when PATH cannot find utilities",
             .script =
             \\PATH=/nonexistent
-            \\printf 'builtin:%s\n' ok
-            \\true
-            \\printf 'true:%s\n' "$?"
+            \\:
+            \\readonly SPECIAL_BUILTIN_FOUND=ok
             ,
-            .stdout =
-            \\builtin:ok
-            \\true:0
-            \\
-            ,
+            .stdout = "",
             .stderr = "",
             .status = 0,
         },

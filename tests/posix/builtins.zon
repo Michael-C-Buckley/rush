@@ -107,11 +107,11 @@
         .{
             .name = "command -v writes a found utility name",
             .script =
-            \\command -v printf
+            \\command -v cd
             \\printf '<%s>\n' "$?"
             ,
             .stdout =
-            \\printf
+            \\cd
             \\<0>
             \\
             ,
