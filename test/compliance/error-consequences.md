@@ -1,6 +1,6 @@
 # POSIX shell error consequence submatrix
 
-This submatrix tracks Rush behavior for POSIX shell errors separately from normal behavior coverage. It is intentionally narrower than `POSIX_AUDIT.md` and is meant to guide negative corpus growth and implementation tasks such as special-builtin error consequences.
+This submatrix tracks Rush behavior for POSIX shell errors separately from normal behavior coverage. It is meant to guide negative corpus growth and implementation tasks such as special-builtin error consequences.
 
 ## Status legend
 

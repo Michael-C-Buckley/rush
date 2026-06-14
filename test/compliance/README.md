@@ -1,6 +1,6 @@
 # POSIX shell compliance manifest
 
-`posix-shell.tsv` is the machine-readable source of truth for Rush POSIX shell compliance tracking. It complements `POSIX_AUDIT.md`: the audit explains the current state in prose, while this manifest is intended for metrics, dashboards, and follow-up task planning.
+`posix-shell.tsv` is the machine-readable source of truth for Rush POSIX shell compliance tracking. It is intended for metrics, dashboards, and follow-up task planning.
 
 ## Schema
 

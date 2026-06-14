@@ -8,10 +8,8 @@ are planning evidence rather than certification.
 ## Current focus
 
 - POSIX shell execution, expansion, redirection, job-control, and builtin
-  coverage tracked in [`POSIX_AUDIT.md`](POSIX_AUDIT.md) and
-  [`test/compliance/posix-shell.tsv`](test/compliance/posix-shell.tsv).
-- Incremental Bash-compatible features tracked separately in
-  [`BASH_COMPAT.md`](BASH_COMPAT.md); Rush defaults to POSIX-facing behavior.
+  coverage tracked in [`test/compliance/posix-shell.tsv`](test/compliance/posix-shell.tsv).
+- Incremental Bash-compatible features; Rush defaults to POSIX-facing behavior.
 - A terminal line editor with history search, emacs/vi editing modes, styled
   diagnostics, and a rebuilt interactive shell on top of `shell/` and
   `runtime/`.
@@ -74,7 +72,7 @@ zig build cross-check                  # native tests plus compile-only targets
 ```
 
 The POSIX differential corpus uses `dash` and/or `bash --posix` when they are
-available; see [`POSIX_COMPARISON_SHELLS.md`](POSIX_COMPARISON_SHELLS.md).
+available.
 
 ## Configuration
 
