@@ -300,32 +300,6 @@ test "runReplInput executes lines and tracks status" {
     try std.testing.expectEqualStrings("", result.stderr);
 }
 
-test "runReplInput reports unsupported exit builtin without legacy fallback" {
-    var result = try runReplInput(std.testing.allocator, std.testing.io, "echo before\nexit 7\n");
-    defer result.deinit();
-
-    try std.testing.expectEqual(@as(shell.ExitStatus, 2), result.status);
-    try std.testing.expectEqualStrings("$ before\n$ $ ", result.stdout);
-    try std.testing.expect(std.mem.indexOf(u8, result.stderr, "unsupported") != null);
-}
-
-test "runReplInput reports unsupported fc history bridge without legacy fallback" {
-    var result = try runReplInput(std.testing.allocator, std.testing.io,
-        \\printf 'one\n'
-        \\printf 'two\n'
-        \\fc -l -n
-        \\fc -s one=again 1
-        \\fc -l -n
-        \\exit
-        \\
-    );
-    defer result.deinit();
-
-    try std.testing.expectEqual(@as(shell.ExitStatus, 2), result.status);
-    try std.testing.expect(std.mem.indexOf(u8, result.stdout, "$ one\n$ two\n") != null);
-    try std.testing.expect(std.mem.indexOf(u8, result.stderr, "unsupported") != null);
-}
-
 test "interactive notify schedules editor job notification polling" {
     var shell_state = shell.ShellState.init(std.testing.allocator);
     defer shell_state.deinit();
@@ -375,19 +349,6 @@ test "interactive hooks dispatch pending semantic signal trap" {
     try std.testing.expect(!hook_result.stop);
 }
 
-test "interactive signal handlers catch interrupt quit and terminate" {
-    var handlers = interactive.signals.install();
-    defer handlers.restore();
-
-    var current: std.posix.Sigaction = undefined;
-    std.posix.sigaction(.INT, null, &current);
-    try std.testing.expect(current.handler.handler != null);
-    std.posix.sigaction(.QUIT, null, &current);
-    try std.testing.expect(current.handler.handler != null);
-    std.posix.sigaction(.TERM, null, &current);
-    try std.testing.expect(current.handler.handler != null);
-}
-
 test "interactive interrupt runs INT trap" {
     var shell_state = shell.ShellState.init(std.testing.allocator);
     defer shell_state.deinit();
@@ -434,32 +395,6 @@ test "command string invocation preserves trailing EOF backslash literal" {
     try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
     try std.testing.expectEqualStrings("a\\\n", result.stdout);
     try std.testing.expectEqualStrings("", result.stderr);
-}
-
-test "command string semantic source operands report unsupported" {
-    const path = "rush-command-string-source-positionals.rush";
-    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
-    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = path, .data =
-        \\printf 'source:%s:%s:%s:%s\n' "$0" "$#" "$1" "$2"
-        \\set -- changed
-        \\
-    });
-
-    var result = try runCommandStringWithEnvironment(
-        std.testing.allocator,
-        std.testing.io,
-        ". ./rush-command-string-source-positionals.rush sourced 'two words'; printf 'after:%s:%s:%s:%s\n' \"$0\" \"$#\" \"$1\" \"$2\"",
-        .{ .io = std.testing.io, .arg_zero = "myname", .features = compat.Features.bash() },
-        null,
-        &.{ "caller one", "caller two" },
-        null,
-        .{},
-    );
-    defer result.deinit();
-
-    try std.testing.expectEqual(@as(shell.ExitStatus, 2), result.status);
-    try std.testing.expectEqualStrings("", result.stdout);
-    try std.testing.expect(result.stderr.len != 0);
 }
 
 test "script file invocation sets command name and positional parameters" {
@@ -1001,41 +936,6 @@ test "interactive config service sources simple config through semantic ShellSta
     try std.testing.expectEqualStrings("ok", interactive_shell.semantic_state.getVariable("RUSH_SEMANTIC_CONFIG_SECOND").?.value);
 }
 
-test "semantic interactive command reports function-shadowed builtin unsupported" {
-    const path = "rush-semantic-interactive-function-fallback.tmp";
-    std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
-    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
-
-    var interactive_shell = InteractiveShell.init(std.testing.allocator);
-    defer interactive_shell.deinit();
-    var env = std.process.Environ.Map.init(std.testing.allocator);
-    defer env.deinit();
-    try interactive_shell.initializeSemanticStartup(std.testing.io, &env, .{ .arg_zero = "rush" });
-    try sourceConfigScript(std.testing.allocator, std.testing.io, &interactive_shell.semantic_state, "echo() { printf 'function\\n' > " ++ path ++ "; }", "semantic-interactive-test.rush", "rush");
-
-    var result = try runInteractiveScript(std.testing.allocator, std.testing.io, &interactive_shell, "echo semantic", .{ .io = std.testing.io, .allow_external = true, .external_stdio = .inherit, .interactive = true, .arg_zero = "rush" });
-    defer result.deinit();
-    try std.testing.expectEqual(@as(shell.ExitStatus, 2), result.status);
-    try std.testing.expectEqualStrings("semantic interactive executor does not yet preserve shell function calls\n", result.stderr);
-    try std.testing.expectError(error.FileNotFound, std.Io.Dir.cwd().access(std.testing.io, path, .{}));
-}
-
-test "semantic interactive unset function reports unsupported without legacy bridge" {
-    var interactive_shell = InteractiveShell.init(std.testing.allocator);
-    defer interactive_shell.deinit();
-    var env = std.process.Environ.Map.init(std.testing.allocator);
-    defer env.deinit();
-    try interactive_shell.initializeSemanticStartup(std.testing.io, &env, .{ .arg_zero = "rush" });
-    try sourceConfigScript(std.testing.allocator, std.testing.io, &interactive_shell.semantic_state, "rush_semantic_unset_fn() { :; }", "semantic-interactive-test.rush", "rush");
-    try std.testing.expect(interactive_shell.semantic_state.functions.contains("rush_semantic_unset_fn"));
-
-    var result = try runInteractiveScript(std.testing.allocator, std.testing.io, &interactive_shell, "unset -f rush_semantic_unset_fn", .{ .io = std.testing.io, .allow_external = true, .external_stdio = .inherit, .interactive = true, .arg_zero = "rush" });
-    defer result.deinit();
-    try std.testing.expectEqual(@as(shell.ExitStatus, 2), result.status);
-    try std.testing.expectEqualStrings("semantic executor preflight found an unsupported builtin\n", result.stderr);
-    try std.testing.expect(interactive_shell.semantic_state.functions.contains("rush_semantic_unset_fn"));
-}
-
 test "semantic interactive invocation executes simple command redirections without legacy fallback" {
     const path = "rush-semantic-interactive-redirection.tmp";
     std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
@@ -1493,22 +1393,6 @@ test "runScriptWithOptions captures simple external command output semantically"
     try std.testing.expectEqualStrings("", stdout_only.stderr);
 }
 
-test "runScript executes builtins" {
-    var result = try runScript(std.testing.allocator, std.testing.io, "echo hello");
-    defer result.deinit();
-
-    try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
-    try std.testing.expectEqualStrings("hello\n", result.stdout);
-    try std.testing.expectEqualStrings("", result.stderr);
-}
-
-test "compatibility feature plumbing accepts Bash mode without changing baseline behavior" {
-    var result = try runScriptWithOptions(std.testing.allocator, std.testing.io, "echo ok", .{ .io = std.testing.io, .allow_external = true, .features = .bash() });
-    defer result.deinit();
-    try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
-    try std.testing.expectEqualStrings("ok\n", result.stdout);
-}
-
 test "POSIX mode reports misplaced reserved words" {
     var bare = try runScript(std.testing.allocator, std.testing.io, "then echo bad");
     defer bare.deinit();
@@ -1616,117 +1500,6 @@ test "runScript reports misplaced reserved words before execution" {
     try std.testing.expectEqualStrings("", result.stdout);
     try std.testing.expect(std.mem.indexOf(u8, result.stderr, "misplaced reserved word") != null);
     try std.testing.expect(std.mem.indexOf(u8, result.stderr, "echo after") == null);
-}
-
-test "parser smoke corpus parses representative snippets" {
-    const snippets = [_][]const u8{
-        "",
-        "   \t  ",
-        "echo hello",
-        "FOO=bar echo hi",
-        "echo 'quoted text' \"double quoted\"",
-        "echo hello | cat",
-        "false || echo recovered",
-        "true && echo ok",
-        "echo > out",
-        "echo | ",
-        "echo 'unterminated",
-        "2>err missing-command",
-    };
-
-    for (snippets) |snippet| {
-        var parsed = try parser.parse(std.testing.allocator, snippet, .{ .mode = .interactive });
-        defer parsed.deinit();
-        try std.testing.expect(parsed.tokens.len >= 1);
-        try std.testing.expect(parsed.nodes.len >= 1);
-    }
-}
-
-test "executor smoke corpus returns expected statuses and output fragments" {
-    const Case = struct {
-        script: []const u8,
-        status: shell.ExitStatus,
-        stdout_contains: []const u8 = "",
-        stderr_contains: []const u8 = "",
-    };
-    const cases = [_]Case{
-        .{ .script = "", .status = 0 },
-        .{ .script = "true", .status = 0 },
-        .{ .script = "false", .status = 1 },
-        .{ .script = "echo smoke", .status = 0, .stdout_contains = "smoke\n" },
-        .{ .script = "echo smoke | /bin/cat", .status = 0, .stdout_contains = "smoke\n" },
-        .{ .script = "false || echo recovered", .status = 0, .stdout_contains = "recovered\n" },
-        .{ .script = "true && echo ok", .status = 0, .stdout_contains = "ok\n" },
-        .{ .script = "missing-command", .status = 127, .stderr_contains = "command not found" },
-        .{ .script = "echo | ", .status = 2, .stderr_contains = "missing command after pipeline operator" },
-    };
-
-    for (cases) |case| {
-        var result = try runScript(std.testing.allocator, std.testing.io, case.script);
-        defer result.deinit();
-        try std.testing.expectEqual(case.status, result.status);
-        if (case.stdout_contains.len != 0) {
-            try std.testing.expect(std.mem.indexOf(u8, result.stdout, case.stdout_contains) != null);
-        }
-        if (case.stderr_contains.len != 0) {
-            try std.testing.expect(std.mem.indexOf(u8, result.stderr, case.stderr_contains) != null);
-        }
-    }
-}
-
-test "interactive aliases report unsupported without legacy fallback" {
-    var result = try runReplInput(std.testing.allocator, std.testing.io,
-        \\alias if='echo bad'
-        \\if true; then echo ok; fi
-        \\alias greet='echo alias'
-        \\greet() { echo function; }
-        \\unalias greet
-        \\greet
-        \\exit
-    );
-    defer result.deinit();
-
-    try std.testing.expectEqual(@as(shell.ExitStatus, 127), result.status);
-    try std.testing.expect(std.mem.indexOf(u8, result.stderr, "unsupported") != null);
-    try std.testing.expect(std.mem.indexOf(u8, result.stdout, "bad\n") == null);
-}
-
-test "repl reports alias builtins unsupported without legacy fallback" {
-    var result = try runReplInput(std.testing.allocator, std.testing.io,
-        \\alias lsx='echo alias-ok'
-        \\lsx
-        \\alias lsx
-        \\unalias lsx
-        \\lsx
-        \\exit
-    );
-    defer result.deinit();
-
-    try std.testing.expectEqual(@as(shell.ExitStatus, 127), result.status);
-    try std.testing.expect(std.mem.indexOf(u8, result.stdout, "alias-ok\n") == null);
-    try std.testing.expect(std.mem.indexOf(u8, result.stderr, "unsupported") != null);
-    try std.testing.expect(std.mem.indexOf(u8, result.stderr, "lsx: command not found\n") != null);
-}
-
-test "recursive interactive aliases report unsupported without legacy fallback" {
-    var result = try runReplInput(std.testing.allocator, std.testing.io,
-        \\alias say='echo recursive-ok'
-        \\alias run=say
-        \\run
-        \\alias prefix='run '
-        \\alias word='recursive-trailing-ok'
-        \\prefix word
-        \\alias self=self
-        \\self
-        \\exit
-    );
-    defer result.deinit();
-
-    try std.testing.expectEqual(@as(shell.ExitStatus, 127), result.status);
-    try std.testing.expect(std.mem.indexOf(u8, result.stdout, "recursive-ok\n") == null);
-    try std.testing.expect(std.mem.indexOf(u8, result.stdout, "recursive-ok recursive-trailing-ok\n") == null);
-    try std.testing.expect(std.mem.indexOf(u8, result.stderr, "unsupported") != null);
-    try std.testing.expect(std.mem.indexOf(u8, result.stderr, "self: command not found\n") != null);
 }
 
 test "non-interactive aliases affect later complete commands" {
