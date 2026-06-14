@@ -1,0 +1,48 @@
+.{
+    .name = "2.9.1.4 Command Search and Execution",
+    .mode = .posix,
+    .cases = .{
+        .{
+            .name = "regular built-ins are found even when PATH cannot find utilities",
+            .script =
+            \\PATH=/nonexistent
+            \\printf 'builtin:%s\n' ok
+            \\true
+            \\printf 'true:%s\n' "$?"
+            ,
+            .stdout =
+            \\builtin:ok
+            \\true:0
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "functions are found before regular built-ins",
+            .script =
+            \\printf() { echo function; }
+            \\printf ignored
+            ,
+            .stdout =
+            \\function
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "command search failure sets status 127 and execution continues",
+            .script =
+            \\no_such_posix_command_for_rush 2>/dev/null
+            \\printf '<%s>\n' "$?"
+            ,
+            .stdout =
+            \\<127>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+    },
+}

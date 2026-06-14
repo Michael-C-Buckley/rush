@@ -1,0 +1,71 @@
+.{
+    .name = "2.15 Special Built-In Utilities",
+    .mode = .posix,
+    .cases = .{
+        .{
+            .name = "colon ignores arguments and returns zero",
+            .script =
+            \\: ignored arguments
+            \\printf '<%s>\n' "$?"
+            ,
+            .stdout =
+            \\<0>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "eval constructs and executes a command from its arguments",
+            .script =
+            \\eval 'printf "<%s>\\n" eval-ok'
+            ,
+            .stdout =
+            \\<eval-ok>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "eval returns the status of the constructed command",
+            .script =
+            \\eval 'false'
+            \\printf '<%s>\n' "$?"
+            ,
+            .stdout =
+            \\<1>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "readonly assigns a variable value",
+            .script =
+            \\readonly ro=value
+            \\printf '<%s>\n' "$ro"
+            ,
+            .stdout =
+            \\<value>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "unset removes a shell variable",
+            .script =
+            \\x=set
+            \\unset x
+            \\printf '<%s>\n' "${x-unset}"
+            ,
+            .stdout =
+            \\<unset>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+    },
+}
