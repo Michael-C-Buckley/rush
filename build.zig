@@ -76,6 +76,9 @@ pub fn build(b: *std.Build) void {
     });
     test_step.dependOn(&b.addRunArtifact(exe_tests).step);
 
+    const conformance_step = b.step("conformance", "Run shell conformance tests");
+    addConformanceTests(b, target, optimize, exe, conformance_step);
+
     const fuzz_step = b.step("fuzz", "Run all fuzz targets (combine with --fuzz to actually fuzz)");
     addFuzzTarget(b, fuzz_step, target, .{
         .step_name = "fuzz-parser",
@@ -97,6 +100,7 @@ pub fn build(b: *std.Build) void {
     lint_step.dependOn(ziglint.addLint(b, ziglint_dep, &.{
         b.path("build.zig"),
         b.path("src"),
+        b.path("tests"),
     }));
 }
 
@@ -139,6 +143,32 @@ fn addCompileChecks(
         });
         compile_check_step.dependOn(&check.step);
     }
+}
+
+fn addConformanceTests(
+    b: *std.Build,
+    target: std.Build.ResolvedTarget,
+    optimize: std.builtin.OptimizeMode,
+    rush: *std.Build.Step.Compile,
+    conformance_step: *std.Build.Step,
+) void {
+    const harness = b.addExecutable(.{
+        .name = "rush-conformance-harness",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tests/harness.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
+    });
+
+    const run_posix = b.addRunArtifact(harness);
+    run_posix.addArg("--rush");
+    run_posix.addArtifactArg(rush);
+    run_posix.addArg("--mode");
+    run_posix.addArg("posix");
+    run_posix.addFileArg(b.path("tests/posix/smoke.zon"));
+
+    conformance_step.dependOn(&run_posix.step);
 }
 
 fn createRushRootModule(

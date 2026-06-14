@@ -18,10 +18,10 @@ pub const event_loop = @import("event_loop.zig");
 
 const usage =
     \\usage: rush [--login]
-    \\       rush [-i] [--posix-strict] [set-options]
-    \\       rush [-i] [--posix-strict] [set-options] -c SCRIPT [NAME [ARGS...]]
-    \\       rush [-i] [--posix-strict] [set-options] -s [ARGS...]
-    \\       rush [-i] [--posix-strict] [set-options] SCRIPT_FILE [ARGS...]
+    \\       rush [-i] [--posix] [set-options]
+    \\       rush [-i] [--posix] [set-options] -c SCRIPT [NAME [ARGS...]]
+    \\       rush [-i] [--posix] [set-options] -s [ARGS...]
+    \\       rush [-i] [--posix] [set-options] SCRIPT_FILE [ARGS...]
     \\       rush --help
     \\
 ;

@@ -49,16 +49,16 @@ CLI forms currently supported:
 
 ```text
 rush [--login]
-rush [-i] [--posix-strict] [set-options] -c SCRIPT [NAME [ARGS...]]
-rush [-i] [--posix-strict] [set-options] -s [ARGS...]
-rush [-i] [--posix-strict] [set-options] SCRIPT_FILE [ARGS...]
+rush [-i] [--posix] [set-options] -c SCRIPT [NAME [ARGS...]]
+rush [-i] [--posix] [set-options] -s [ARGS...]
+rush [-i] [--posix] [set-options] SCRIPT_FILE [ARGS...]
 rush --help
 ```
 
-`--posix-strict` enables stricter POSIX syntax diagnostics for non-interactive
-execution. There is not currently a user-facing Bash-mode CLI flag; Bash-mode
-compatibility is exercised through the implementation's compatibility feature
-plumbing and tests.
+`--posix` selects POSIX mode with stricter syntax diagnostics for
+non-interactive execution. There is not currently a user-facing Bash-mode CLI
+flag; Bash-mode compatibility is exercised through the implementation's
+compatibility feature plumbing and tests.
 
 ## Test and validation
 

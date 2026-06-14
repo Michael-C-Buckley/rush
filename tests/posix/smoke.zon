@@ -1,0 +1,17 @@
+.{
+    .mode = .posix,
+    .cases = .{
+        .{
+            .name = "printf writes stdout",
+            .script =
+            \\printf '%s\n' hello
+            ,
+            .stdout =
+            \\hello
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+    },
+}

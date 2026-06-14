@@ -42,7 +42,7 @@ pub fn parse(args: []const []const u8) ?ShellInvocation {
             index += 1;
             break;
         }
-        if (std.mem.eql(u8, arg, "--posix-strict")) {
+        if (std.mem.eql(u8, arg, "--posix")) {
             features = .strictPosix();
             index += 1;
             continue;
@@ -149,10 +149,10 @@ test "command string invocation accepts interactive flag before -c" {
     try std.testing.expect(!invocation.features.strict_diagnostics);
 }
 
-test "command string invocation accepts posix strict with interactive flag before -c" {
+test "command string invocation accepts posix mode with interactive flag before -c" {
     const cases = [_][]const []const u8{
-        &.{ "rush", "--posix-strict", "-i", "-c", "echo positional", "name", "one" },
-        &.{ "rush", "-i", "--posix-strict", "-c", "echo positional", "name", "one" },
+        &.{ "rush", "--posix", "-i", "-c", "echo positional", "name", "one" },
+        &.{ "rush", "-i", "--posix", "-c", "echo positional", "name", "one" },
     };
 
     for (cases) |args| {
@@ -162,6 +162,7 @@ test "command string invocation accepts posix strict with interactive flag befor
         try std.testing.expectEqual(@as(usize, 1), invocation.positionals.len);
         try std.testing.expectEqualStrings("one", invocation.positionals[0]);
         try std.testing.expect(invocation.interactive);
+        try std.testing.expectEqual(compat.Mode.posix, invocation.features.mode);
         try std.testing.expect(invocation.features.strict_diagnostics);
     }
 }
@@ -233,7 +234,7 @@ test "standard input invocation continues option parsing after -s" {
 
 test "script file invocation accepts options before script operand" {
     const invocation = parse(
-        &.{ "rush", "--posix-strict", "-eu", "-o", "pipefail", "script.rush", "-o", "nounset" },
+        &.{ "rush", "--posix", "-eu", "-o", "pipefail", "script.rush", "-o", "nounset" },
     ) orelse return error.ExpectedInvocation;
 
     try std.testing.expectEqual(Kind.script_file, invocation.kind);
@@ -280,7 +281,7 @@ test "login shell detection follows argv0 dash convention" {
 }
 
 test "standard input invocation is the default when only invocation options are present" {
-    const invocation = parse(&.{ "rush", "--posix-strict", "-u" }) orelse return error.ExpectedInvocation;
+    const invocation = parse(&.{ "rush", "--posix", "-u" }) orelse return error.ExpectedInvocation;
 
     try std.testing.expectEqual(Kind.standard_input, invocation.kind);
     try std.testing.expectEqualStrings("-", invocation.source);
@@ -305,7 +306,7 @@ test "standard input invocation uses interactive editor when terminal rules requ
     try std.testing.expect(shouldRunInteractiveStandardInput(forced, true, false));
     try std.testing.expect(!shouldRunInteractiveStandardInput(forced, false, true));
 
-    const implicit = parse(&.{ "rush", "--posix-strict", "-u" }) orelse return error.ExpectedInvocation;
+    const implicit = parse(&.{ "rush", "--posix", "-u" }) orelse return error.ExpectedInvocation;
     try std.testing.expect(shouldRunInteractiveStandardInput(implicit, true, true));
     try std.testing.expect(!shouldRunInteractiveStandardInput(implicit, true, false));
 
