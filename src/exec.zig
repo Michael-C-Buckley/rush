@@ -332,114 +332,6 @@ pub const PromptBuilder = struct {
     }
 };
 
-pub const CompletionBuilder = struct {
-    candidates: std.ArrayList(completion.Candidate) = .empty,
-    owned: std.ArrayList([]const u8) = .empty,
-    owned_option_exclusions: std.ArrayList([]const completion.OptionExclusion) = .empty,
-
-    pub fn deinit(self: *CompletionBuilder, allocator: std.mem.Allocator) void {
-        for (self.owned_option_exclusions.items) |excludes| allocator.free(excludes);
-        self.owned_option_exclusions.deinit(allocator);
-        for (self.candidates.items) |candidate| {
-            if (candidate.option) |option| if (option.spellings.len != 0) allocator.free(option.spellings);
-        }
-        for (self.owned.items) |value| allocator.free(value);
-        self.owned.deinit(allocator);
-        self.candidates.deinit(allocator);
-        self.* = undefined;
-    }
-
-    pub fn appendCandidate(self: *CompletionBuilder, allocator: std.mem.Allocator, candidate: completion.Candidate) !void {
-        var owned_candidate = candidate;
-        owned_candidate.value = try self.dupeField(allocator, candidate.value);
-        if (candidate.display) |display| owned_candidate.display = try self.dupeField(allocator, display);
-        if (candidate.insert) |insert| owned_candidate.insert = try self.dupeField(allocator, insert);
-        if (candidate.description) |description| owned_candidate.description = try self.dupeField(allocator, description);
-        if (candidate.tag) |tag| owned_candidate.tag = try self.dupeField(allocator, tag);
-        if (candidate.suffix) |suffix| owned_candidate.suffix = try self.dupeField(allocator, suffix);
-        if (candidate.option) |option| {
-            const spellings = try allocator.alloc([]const u8, option.spellings.len);
-            errdefer allocator.free(spellings);
-            for (option.spellings, 0..) |spelling, spelling_index| {
-                spellings[spelling_index] = try self.dupeField(allocator, spelling);
-            }
-            owned_candidate.option = .{
-                .long = if (option.long) |long| try self.dupeField(allocator, long) else null,
-                .short = if (option.short) |short| try self.dupeField(allocator, short) else null,
-                .spellings = spellings,
-                .argument = if (option.argument) |argument| try self.dupeField(allocator, argument) else null,
-                .exclusive_group = if (option.exclusive_group) |group| try self.dupeField(allocator, group) else null,
-                .excludes = try self.dupeOptionExclusions(allocator, option.excludes),
-                .repeatable = option.repeatable,
-                .terminates_options = option.terminates_options,
-                .no_space = option.no_space,
-                .inherit = option.inherit,
-            };
-        }
-        try self.candidates.append(allocator, owned_candidate);
-    }
-
-    pub fn applyValueSegmentSuffix(self: *CompletionBuilder, allocator: std.mem.Allocator, start: usize, segment: ?CompletionValueSegment) !void {
-        var suffix_buffer: [1]u8 = undefined;
-        const suffix = completionValueSegmentRemovableSuffix(segment, &suffix_buffer) orelse return;
-        for (self.candidates.items[start..]) |*candidate| {
-            if (candidate.kind == .directory or candidate.suffix != null) continue;
-            candidate.suffix = try self.dupeField(allocator, suffix);
-            candidate.removable_suffix = true;
-            candidate.append_space = false;
-        }
-    }
-
-    fn applyOwnedRuleProviderMetadata(self: *CompletionBuilder, allocator: std.mem.Allocator, candidate: *completion.Candidate, rule: completion.Rule) !void {
-        if (candidate.tag == null) {
-            if (rule.tag) |tag| candidate.tag = try self.dupeField(allocator, tag);
-        }
-        if (candidate.provider_order == null) candidate.provider_order = rule.provider_order;
-    }
-
-    pub fn appendCandidateIfMissing(self: *CompletionBuilder, allocator: std.mem.Allocator, candidate: completion.Candidate) !void {
-        if (self.containsCandidate(candidate)) return;
-        try self.appendCandidate(allocator, candidate);
-    }
-
-    fn containsCandidate(self: CompletionBuilder, candidate: completion.Candidate) bool {
-        for (self.candidates.items) |existing| {
-            if (completionCandidateIdentityMatches(existing, candidate)) return true;
-        }
-        return false;
-    }
-
-    fn dupeField(self: *CompletionBuilder, allocator: std.mem.Allocator, value: []const u8) ![]const u8 {
-        const owned = try allocator.dupe(u8, value);
-        errdefer allocator.free(owned);
-        try self.owned.append(allocator, owned);
-        return owned;
-    }
-
-    fn dupeOptionExclusions(self: *CompletionBuilder, allocator: std.mem.Allocator, excludes: []const completion.OptionExclusion) ![]const completion.OptionExclusion {
-        if (excludes.len == 0) return &.{};
-        const owned = try allocator.alloc(completion.OptionExclusion, excludes.len);
-        errdefer allocator.free(owned);
-        for (excludes, 0..) |exclusion, index| {
-            owned[index] = .{
-                .kind = exclusion.kind,
-                .selector = if (exclusion.selector) |selector| try self.dupeField(allocator, selector) else null,
-            };
-        }
-        try self.owned_option_exclusions.append(allocator, owned);
-        return owned;
-    }
-
-    pub fn finish(self: *CompletionBuilder, allocator: std.mem.Allocator) ![]completion.Candidate {
-        const candidates = try self.candidates.toOwnedSlice(allocator);
-        completion.sortCandidates(candidates);
-        self.owned_option_exclusions.deinit(allocator);
-        self.owned.deinit(allocator);
-        self.* = undefined;
-        return candidates;
-    }
-};
-
 pub const CompletionEvalContext = completion.EvalContext;
 pub const CompletionOptionValue = completion.OptionValue;
 pub const CompletionParsedOption = completion.ParsedOption;
@@ -448,22 +340,6 @@ pub const CompletionOptionSuppressionReason = completion.OptionSuppressionReason
 pub const CompletionOptionSuppression = completion.OptionSuppression;
 pub const CompletionValuePosition = completion.ValuePosition;
 pub const CompletionValueSegment = completion.ValueSegment;
-
-fn completionValueSegmentRemovableSuffix(segment: ?CompletionValueSegment, buffer: *[1]u8) ?[]const u8 {
-    const active = segment orelse return null;
-    if (active.position != .item) return null;
-    const separator = active.list_separator orelse return null;
-    buffer[0] = separator;
-    return buffer[0..];
-}
-
-fn applyCandidateValueSegmentSuffix(candidate: *completion.Candidate, segment: ?CompletionValueSegment, buffer: *[1]u8) void {
-    if (candidate.kind == .directory or candidate.suffix != null) return;
-    const suffix = completionValueSegmentRemovableSuffix(segment, buffer) orelse return;
-    candidate.suffix = suffix;
-    candidate.removable_suffix = true;
-    candidate.append_space = false;
-}
 
 pub const CompletionSemanticPosition = completion.SemanticPosition;
 pub const CompletionSemanticContext = completion.SemanticContext;
@@ -526,7 +402,7 @@ const test_operators = [_][]const u8{ "!", "(", ")", "-b", "-c", "-d", "-e", "-f
 
 fn appendRootCommandCandidate(
     allocator: std.mem.Allocator,
-    builder: *CompletionBuilder,
+    builder: *completion.Builder,
     seen: *std.StringHashMapUnmanaged(void),
     name: []const u8,
     kind: completion.Kind,
@@ -1540,15 +1416,6 @@ fn completionEvalContextWithValueGrammar(context: CompletionEvalContext, grammar
     return segmented;
 }
 
-// Completion candidates are deduplicated by the edit they would apply:
-// replacement span plus inserted value. The first source wins so metadata stays
-// deterministic across static and dynamic structured rules.
-fn completionCandidateIdentityMatches(a: completion.Candidate, b: completion.Candidate) bool {
-    return a.replace_start == b.replace_start and
-        a.replace_end == b.replace_end and
-        std.mem.eql(u8, a.value, b.value);
-}
-
 fn completionCommandPath(allocator: std.mem.Allocator, context: CompletionSemanticContext) ![]const u8 {
     if (context.root.len == 0) return allocator.alloc(u8, 0);
     var path: std.ArrayList(u8) = .empty;
@@ -1816,8 +1683,8 @@ pub const CompletionVariantProbeState = completion.VariantProbeState;
 
 const CompletionSession = struct {
     state: completion.State,
-    builder: ?CompletionBuilder = null,
-    builder_ref: ?*CompletionBuilder = null,
+    builder: ?completion.Builder = null,
+    builder_ref: ?*completion.Builder = null,
     context: ?CompletionEvalContext = null,
 
     fn init(allocator: std.mem.Allocator) CompletionSession {
@@ -1830,7 +1697,7 @@ const CompletionSession = struct {
         self.* = undefined;
     }
 
-    fn activeBuilder(self: *CompletionSession) ?*CompletionBuilder {
+    fn activeBuilder(self: *CompletionSession) ?*completion.Builder {
         if (self.builder_ref) |builder| return builder;
         if (self.builder) |*builder| return builder;
         return null;
@@ -2586,7 +2453,7 @@ pub const Executor = struct {
         return self.completion_session.state.last_context;
     }
 
-    fn activeCompletionBuilder(self: *Executor) ?*CompletionBuilder {
+    fn activeCompletionBuilder(self: *Executor) ?*completion.Builder {
         return self.completion_session.activeBuilder();
     }
 
@@ -2696,7 +2563,7 @@ pub const Executor = struct {
             return candidates;
         }
 
-        var builder: CompletionBuilder = .{};
+        var builder: completion.Builder = .{};
         errdefer builder.deinit(self.allocator);
         for (candidates) |candidate| try builder.appendCandidateIfMissing(self.allocator, candidate);
         try self.appendBuiltinCompletionCandidates(&builder, semantic, options);
@@ -2722,7 +2589,7 @@ pub const Executor = struct {
     }
 
     fn collectParameterCompletions(self: *Executor, context: CompletionEvalContext) ![]completion.Candidate {
-        var builder: CompletionBuilder = .{};
+        var builder: completion.Builder = .{};
         errdefer builder.deinit(self.allocator);
         var iter = self.env.iterator();
         while (iter.next()) |entry| {
@@ -3174,7 +3041,7 @@ pub const Executor = struct {
             }
         }
 
-        var deduplicated: CompletionBuilder = .{};
+        var deduplicated: completion.Builder = .{};
         errdefer deduplicated.deinit(self.allocator);
         for (builder.candidates.items) |candidate| try deduplicated.appendCandidateIfMissing(self.allocator, candidate);
         builder.deinit(self.allocator);
@@ -3196,7 +3063,7 @@ pub const Executor = struct {
 
     fn collectRootCommandCompletions(self: *Executor, context: CompletionEvalContext, options: ExecuteOptions) ![]completion.Candidate {
         self.completion_session.state.last_context = context;
-        var builder: CompletionBuilder = .{};
+        var builder: completion.Builder = .{};
         errdefer builder.deinit(self.allocator);
         var seen: std.StringHashMapUnmanaged(void) = .empty;
         defer deinitSeenCompletionNames(self.allocator, &seen);
@@ -3233,7 +3100,7 @@ pub const Executor = struct {
         return builder.finish(self.allocator);
     }
 
-    fn appendStructuredCompletionCandidates(self: *Executor, builder: *CompletionBuilder, context: CompletionSemanticContext) !void {
+    fn appendStructuredCompletionCandidates(self: *Executor, builder: *completion.Builder, context: CompletionSemanticContext) !void {
         if (try self.appendActiveShortOptionClusterCandidates(builder, context)) return;
 
         for (self.completion_session.state.rules.items) |rule| {
@@ -3277,7 +3144,7 @@ pub const Executor = struct {
         return completionRuleValueCount(rule) == 0;
     }
 
-    fn appendActiveShortOptionClusterCandidates(self: *Executor, builder: *CompletionBuilder, context: CompletionSemanticContext) !bool {
+    fn appendActiveShortOptionClusterCandidates(self: *Executor, builder: *completion.Builder, context: CompletionSemanticContext) !bool {
         if (context.position != .option) return false;
         if (!isShortOptionCluster(context.prefix)) return false;
         if (findCompletionOption(self.completion_session.state.rules.items, context.root, context.path, context.prefix) != null) return false;
@@ -3311,7 +3178,7 @@ pub const Executor = struct {
         return true;
     }
 
-    fn appendBuiltinCompletionCandidates(self: *Executor, builder: *CompletionBuilder, context: CompletionSemanticContext, options: ExecuteOptions) !void {
+    fn appendBuiltinCompletionCandidates(self: *Executor, builder: *completion.Builder, context: CompletionSemanticContext, options: ExecuteOptions) !void {
         if (context.position == .option_value) {
             if (std.mem.eql(u8, context.root, "set") and context.option_value != null and (std.mem.eql(u8, context.option_value.?.spelling, "-o") or std.mem.eql(u8, context.option_value.?.spelling, "+o"))) {
                 try self.appendSetOptionNameCandidates(builder, context);
@@ -3351,7 +3218,7 @@ pub const Executor = struct {
         }
     }
 
-    fn appendBuiltinOptionCandidates(self: *Executor, builder: *CompletionBuilder, context: CompletionSemanticContext) !void {
+    fn appendBuiltinOptionCandidates(self: *Executor, builder: *completion.Builder, context: CompletionSemanticContext) !void {
         if (std.mem.eql(u8, context.root, "command")) return appendStaticValueCandidates(self, builder, context, &.{ "-p", "-v", "-V", "--" }, .option, true);
         if (std.mem.eql(u8, context.root, "cd") or std.mem.eql(u8, context.root, "pwd")) return appendStaticValueCandidates(self, builder, context, &.{ "-L", "-P", "--" }, .option, true);
         if (std.mem.eql(u8, context.root, "read")) return appendStaticValueCandidates(self, builder, context, &.{ "-r", "--" }, .option, true);
@@ -3367,22 +3234,22 @@ pub const Executor = struct {
         if (std.mem.eql(u8, context.root, "printf") or std.mem.eql(u8, context.root, "wait")) return appendStaticValueCandidates(self, builder, context, &.{"--"}, .option, true);
     }
 
-    fn appendVariableCandidates(self: *Executor, builder: *CompletionBuilder, context: CompletionSemanticContext) !void {
+    fn appendVariableCandidates(self: *Executor, builder: *completion.Builder, context: CompletionSemanticContext) !void {
         var iter = self.env.iterator();
         while (iter.next()) |entry| try appendCompletionValue(self, builder, context, entry.key_ptr.*, .variable, true);
     }
 
-    fn appendFunctionCandidates(self: *Executor, builder: *CompletionBuilder, context: CompletionSemanticContext) !void {
+    fn appendFunctionCandidates(self: *Executor, builder: *completion.Builder, context: CompletionSemanticContext) !void {
         var iter = self.functions.iterator();
         while (iter.next()) |entry| try appendCompletionValue(self, builder, context, entry.key_ptr.*, .function, true);
     }
 
-    fn appendAliasCandidates(self: *Executor, builder: *CompletionBuilder, context: CompletionSemanticContext) !void {
+    fn appendAliasCandidates(self: *Executor, builder: *completion.Builder, context: CompletionSemanticContext) !void {
         var iter = self.aliases.iterator();
         while (iter.next()) |entry| try appendCompletionValue(self, builder, context, entry.key_ptr.*, .command, true);
     }
 
-    fn appendJobCandidates(self: *Executor, builder: *CompletionBuilder, context: CompletionSemanticContext) !void {
+    fn appendJobCandidates(self: *Executor, builder: *completion.Builder, context: CompletionSemanticContext) !void {
         self.refreshBackgroundJobs();
         if (self.current_job_id != null) try appendCompletionValue(self, builder, context, "%+", .plain, true);
         if (self.previous_job_id != null) try appendCompletionValue(self, builder, context, "%-", .plain, true);
@@ -3393,7 +3260,7 @@ pub const Executor = struct {
         }
     }
 
-    fn appendJobPidCandidates(self: *Executor, builder: *CompletionBuilder, context: CompletionSemanticContext) !void {
+    fn appendJobPidCandidates(self: *Executor, builder: *completion.Builder, context: CompletionSemanticContext) !void {
         self.refreshBackgroundJobs();
         for (self.background_jobs.items) |job| {
             const pid = try std.fmt.allocPrint(self.allocator, "{d}", .{job.pid});
@@ -3402,15 +3269,15 @@ pub const Executor = struct {
         }
     }
 
-    fn appendSignalCandidates(self: *Executor, builder: *CompletionBuilder, context: CompletionSemanticContext) !void {
+    fn appendSignalCandidates(self: *Executor, builder: *completion.Builder, context: CompletionSemanticContext) !void {
         try appendStaticValueCandidates(self, builder, context, &signal_names, .plain, true);
     }
 
-    fn appendSetOptionNameCandidates(self: *Executor, builder: *CompletionBuilder, context: CompletionSemanticContext) !void {
+    fn appendSetOptionNameCandidates(self: *Executor, builder: *completion.Builder, context: CompletionSemanticContext) !void {
         try appendStaticValueCandidates(self, builder, context, &set_option_names, .plain, true);
     }
 
-    fn appendCommandNameCandidates(self: *Executor, builder: *CompletionBuilder, context: CompletionSemanticContext, options: ExecuteOptions) !void {
+    fn appendCommandNameCandidates(self: *Executor, builder: *completion.Builder, context: CompletionSemanticContext, options: ExecuteOptions) !void {
         var seen: std.StringHashMapUnmanaged(void) = .empty;
         defer deinitSeenCompletionNames(self.allocator, &seen);
         for (builtin_names) |name| try appendSeenCommandCandidate(self, builder, &seen, context, name, .builtin, "builtin");
@@ -3421,7 +3288,7 @@ pub const Executor = struct {
         if (options.io) |io| try self.appendExecutableCommandCandidates(builder, &seen, context, io);
     }
 
-    fn appendExecutableCommandCandidates(self: *Executor, builder: *CompletionBuilder, seen: *std.StringHashMapUnmanaged(void), context: CompletionSemanticContext, io: std.Io) !void {
+    fn appendExecutableCommandCandidates(self: *Executor, builder: *completion.Builder, seen: *std.StringHashMapUnmanaged(void), context: CompletionSemanticContext, io: std.Io) !void {
         const path = self.getEnv("PATH") orelse return;
         var path_iter = std.mem.splitScalar(u8, path, ':');
         while (path_iter.next()) |path_dir| {
@@ -3436,7 +3303,7 @@ pub const Executor = struct {
         }
     }
 
-    fn appendSeenCommandCandidate(self: *Executor, builder: *CompletionBuilder, seen: *std.StringHashMapUnmanaged(void), context: CompletionSemanticContext, value: []const u8, kind: completion.Kind, description: []const u8) !void {
+    fn appendSeenCommandCandidate(self: *Executor, builder: *completion.Builder, seen: *std.StringHashMapUnmanaged(void), context: CompletionSemanticContext, value: []const u8, kind: completion.Kind, description: []const u8) !void {
         if (completion.fuzzyMatchRank(value, context.prefix) == null) return;
         if (seen.contains(value)) return;
         const seen_value = try self.allocator.dupe(u8, value);
@@ -3445,21 +3312,21 @@ pub const Executor = struct {
         try builder.appendCandidateIfMissing(self.allocator, .{ .value = value, .kind = kind, .description = description, .replace_start = context.replace_start, .replace_end = context.replace_end });
     }
 
-    fn appendStaticValueCandidates(self: *Executor, builder: *CompletionBuilder, context: CompletionSemanticContext, values: []const []const u8, kind: completion.Kind, append_space: bool) !void {
+    fn appendStaticValueCandidates(self: *Executor, builder: *completion.Builder, context: CompletionSemanticContext, values: []const []const u8, kind: completion.Kind, append_space: bool) !void {
         for (values) |value| try appendCompletionValue(self, builder, context, value, kind, append_space);
     }
 
-    fn appendCompletionValue(self: *Executor, builder: *CompletionBuilder, context: CompletionSemanticContext, value: []const u8, kind: completion.Kind, append_space: bool) !void {
+    fn appendCompletionValue(self: *Executor, builder: *completion.Builder, context: CompletionSemanticContext, value: []const u8, kind: completion.Kind, append_space: bool) !void {
         if (completion.fuzzyMatchRank(value, context.prefix) == null) return;
         var candidate: completion.Candidate = .{ .value = value, .kind = kind, .replace_start = context.replace_start, .replace_end = context.replace_end, .append_space = append_space };
         var suffix_buffer: [1]u8 = undefined;
-        applyCandidateValueSegmentSuffix(&candidate, context.value_segment, &suffix_buffer);
+        completion.applyValueSegmentSuffix(&candidate, context.value_segment, &suffix_buffer);
         try builder.appendCandidateIfMissing(self.allocator, candidate);
     }
 
     fn appendStructuredCompletionCandidate(
         self: *Executor,
-        builder: *CompletionBuilder,
+        builder: *completion.Builder,
         value: []const u8,
         description: ?[]const u8,
         kind: completion.Kind,
@@ -3478,11 +3345,11 @@ pub const Executor = struct {
             .append_space = append_space,
         };
         var suffix_buffer: [1]u8 = undefined;
-        applyCandidateValueSegmentSuffix(&candidate, context.value_segment, &suffix_buffer);
+        completion.applyValueSegmentSuffix(&candidate, context.value_segment, &suffix_buffer);
         try builder.appendCandidateIfMissing(self.allocator, candidate);
     }
 
-    fn appendDynamicStructuredCompletionCandidates(self: *Executor, builder: *CompletionBuilder, context: CompletionEvalContext, semantic: CompletionSemanticContext, options: ExecuteOptions) !void {
+    fn appendDynamicStructuredCompletionCandidates(self: *Executor, builder: *completion.Builder, context: CompletionEvalContext, semantic: CompletionSemanticContext, options: ExecuteOptions) !void {
         for (self.completion_session.state.rules.items) |rule| {
             if (rule.argument.rest_command_line) continue;
             if (!completionDynamicRuleMatches(rule, semantic)) continue;
@@ -3507,7 +3374,7 @@ pub const Executor = struct {
                         var provider_candidate = candidate;
                         applyRuleProviderMetadata(&provider_candidate, rule);
                         var suffix_buffer: [1]u8 = undefined;
-                        applyCandidateValueSegmentSuffix(&provider_candidate, provider_context.value_segment, &suffix_buffer);
+                        completion.applyValueSegmentSuffix(&provider_candidate, provider_context.value_segment, &suffix_buffer);
                         try builder.appendCandidateIfMissing(self.allocator, provider_candidate);
                     }
                 },
@@ -3522,7 +3389,7 @@ pub const Executor = struct {
         }
     }
 
-    fn appendStaticProviderCompletionCandidates(self: *Executor, builder: *CompletionBuilder, values: []const completion.StaticProviderValue, context: CompletionEvalContext, rule: completion.Rule) !void {
+    fn appendStaticProviderCompletionCandidates(self: *Executor, builder: *completion.Builder, values: []const completion.StaticProviderValue, context: CompletionEvalContext, rule: completion.Rule) !void {
         self.completion_session.state.last_context = context;
         const kind: completion.Kind = switch (rule.kind) {
             .dynamic_subcommands => .subcommand,
@@ -3543,7 +3410,7 @@ pub const Executor = struct {
                 .provider_order = rule.provider_order,
             };
             var suffix_buffer: [1]u8 = undefined;
-            applyCandidateValueSegmentSuffix(&candidate, context.value_segment, &suffix_buffer);
+            completion.applyValueSegmentSuffix(&candidate, context.value_segment, &suffix_buffer);
             if (completion.candidateFuzzyMatchRank(candidate, context.prefix) == null) continue;
             try builder.appendCandidateIfMissing(self.allocator, candidate);
         }
@@ -3554,7 +3421,7 @@ pub const Executor = struct {
         if (candidate.provider_order == null) candidate.provider_order = rule.provider_order;
     }
 
-    fn appendBuiltinProviderCompletionCandidates(self: *Executor, builder: *CompletionBuilder, provider_kind: completion.ProviderKind, context: CompletionEvalContext, options: ExecuteOptions) !void {
+    fn appendBuiltinProviderCompletionCandidates(self: *Executor, builder: *completion.Builder, provider_kind: completion.ProviderKind, context: CompletionEvalContext, options: ExecuteOptions) !void {
         self.completion_session.state.last_context = context;
         switch (provider_kind) {
             .function, .static_enum => {},
@@ -3599,7 +3466,7 @@ pub const Executor = struct {
         }
     }
 
-    fn appendDefaultCompletionCandidates(self: *Executor, builder: *CompletionBuilder, context: CompletionSemanticContext, options: ExecuteOptions) !void {
+    fn appendDefaultCompletionCandidates(self: *Executor, builder: *completion.Builder, context: CompletionSemanticContext, options: ExecuteOptions) !void {
         if (builder.candidates.items.len != 0 and context.position != .redirect_target) return;
         if ((context.position == .subcommand or context.position == .argument) and completionExcludesOperands(context) != null) return;
         const io = options.io orelse return;
@@ -12383,7 +12250,7 @@ fn completionEvalRuleAppliesToPath(rule: completion.Rule, command_path: []const 
     return true;
 }
 
-fn builtinCompletionCandidates(self: *Executor, builder: *CompletionBuilder, command: ir.SimpleCommand, stdin: []const u8) !CommandResult {
+fn builtinCompletionCandidates(self: *Executor, builder: *completion.Builder, command: ir.SimpleCommand, stdin: []const u8) !CommandResult {
     var candidate: completion.Candidate = .{ .value = "", .replace_start = 0, .replace_end = 0 };
     var index: usize = 2;
     while (index < command.argv.len) {
@@ -12420,7 +12287,7 @@ fn builtinCompletionCandidates(self: *Executor, builder: *CompletionBuilder, com
     return emptyResult(self.allocator, 0);
 }
 
-fn builtinCompletionOption(self: *Executor, builder: *CompletionBuilder, command: ir.SimpleCommand) !CommandResult {
+fn builtinCompletionOption(self: *Executor, builder: *completion.Builder, command: ir.SimpleCommand) !CommandResult {
     var option: completion.Option = .{};
     var description: ?[]const u8 = null;
     var index: usize = 2;
@@ -12611,7 +12478,7 @@ fn completionPrefixOption(self: *Executor, command: ir.SimpleCommand, start: usi
     return context.prefix;
 }
 
-fn builtinCompletionFiles(self: *Executor, builder: *CompletionBuilder, command: ir.SimpleCommand, options: ExecuteOptions, directories_only: bool) !CommandResult {
+fn builtinCompletionFiles(self: *Executor, builder: *completion.Builder, command: ir.SimpleCommand, options: ExecuteOptions, directories_only: bool) !CommandResult {
     const io = options.io orelse return error.MissingIoForBuiltin;
     var append_slash = false;
     var extension: ?[]const u8 = null;
@@ -12641,7 +12508,7 @@ fn builtinCompletionFiles(self: *Executor, builder: *CompletionBuilder, command:
     return emptyResult(self.allocator, 0);
 }
 
-fn appendPathCandidates(self: *Executor, builder: *CompletionBuilder, io: std.Io, prefix: []const u8, replace_start: usize, replace_end: usize, extension: ?[]const u8, directories_only: bool, append_slash: bool) !void {
+fn appendPathCandidates(self: *Executor, builder: *completion.Builder, io: std.Io, prefix: []const u8, replace_start: usize, replace_end: usize, extension: ?[]const u8, directories_only: bool, append_slash: bool) !void {
     _ = append_slash;
     const split = try splitCompletionPathPrefix(self.allocator, prefix);
     defer split.deinit(self.allocator);
@@ -12701,7 +12568,7 @@ fn splitCompletionPathPrefix(allocator: std.mem.Allocator, prefix: []const u8) !
     return .{ .directory = decoded_directory, .raw_display_prefix_len = display_prefix.len, .base = base };
 }
 
-fn builtinCompletionVariables(self: *Executor, builder: *CompletionBuilder, command: ir.SimpleCommand) !CommandResult {
+fn builtinCompletionVariables(self: *Executor, builder: *completion.Builder, command: ir.SimpleCommand) !CommandResult {
     const prefix = completionPrefixOption(self, command, 2) catch |err| switch (err) {
         error.MissingCompletionPrefix => return errorResult(self.allocator, 2, "completion", "missing prefix"),
         error.UnsupportedCompletionOption => return errorResult(self.allocator, 2, "completion", "unsupported helper option"),
@@ -12716,7 +12583,7 @@ fn builtinCompletionVariables(self: *Executor, builder: *CompletionBuilder, comm
     return emptyResult(self.allocator, 0);
 }
 
-fn builtinCompletionExecutables(self: *Executor, builder: *CompletionBuilder, command: ir.SimpleCommand, options: ExecuteOptions) !CommandResult {
+fn builtinCompletionExecutables(self: *Executor, builder: *completion.Builder, command: ir.SimpleCommand, options: ExecuteOptions) !CommandResult {
     const io = options.io orelse return error.MissingIoForBuiltin;
     const prefix = completionPrefixOption(self, command, 2) catch |err| switch (err) {
         error.MissingCompletionPrefix => return errorResult(self.allocator, 2, "completion", "missing prefix"),
@@ -26091,7 +25958,7 @@ test "structured completion rules emit subcommand and option candidates" {
 }
 
 test "completion candidates sort non-options before grouped options" {
-    var builder: CompletionBuilder = .{};
+    var builder: completion.Builder = .{};
     try builder.appendCandidate(std.testing.allocator, .{ .value = "--zeta", .kind = .option, .option = .{ .long = "zeta" }, .replace_start = 0, .replace_end = 0 });
     try builder.appendCandidate(std.testing.allocator, .{ .value = "-v", .kind = .option, .option = .{ .short = "v" }, .replace_start = 0, .replace_end = 0 });
     try builder.appendCandidate(std.testing.allocator, .{ .value = "status", .kind = .subcommand, .replace_start = 0, .replace_end = 0 });

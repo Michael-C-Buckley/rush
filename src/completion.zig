@@ -217,6 +217,139 @@ pub const OptionExclusion = struct {
     selector: ?[]const u8 = null,
 };
 
+pub const Builder = struct {
+    candidates: std.ArrayList(Candidate) = .empty,
+    owned: std.ArrayList([]const u8) = .empty,
+    owned_option_exclusions: std.ArrayList([]const OptionExclusion) = .empty,
+
+    pub fn deinit(self: *Builder, allocator: std.mem.Allocator) void {
+        for (self.owned_option_exclusions.items) |excludes| allocator.free(excludes);
+        self.owned_option_exclusions.deinit(allocator);
+        for (self.candidates.items) |candidate| {
+            if (candidate.option) |option| if (option.spellings.len != 0) allocator.free(option.spellings);
+        }
+        for (self.owned.items) |value| allocator.free(value);
+        self.owned.deinit(allocator);
+        self.candidates.deinit(allocator);
+        self.* = undefined;
+    }
+
+    pub fn appendCandidate(self: *Builder, allocator: std.mem.Allocator, candidate: Candidate) !void {
+        var owned_candidate = candidate;
+        owned_candidate.value = try self.dupeField(allocator, candidate.value);
+        if (candidate.display) |display| owned_candidate.display = try self.dupeField(allocator, display);
+        if (candidate.insert) |insert| owned_candidate.insert = try self.dupeField(allocator, insert);
+        if (candidate.description) |description| owned_candidate.description = try self.dupeField(allocator, description);
+        if (candidate.tag) |tag| owned_candidate.tag = try self.dupeField(allocator, tag);
+        if (candidate.suffix) |suffix| owned_candidate.suffix = try self.dupeField(allocator, suffix);
+        if (candidate.option) |option| {
+            const spellings = try allocator.alloc([]const u8, option.spellings.len);
+            errdefer allocator.free(spellings);
+            for (option.spellings, 0..) |spelling, spelling_index| {
+                spellings[spelling_index] = try self.dupeField(allocator, spelling);
+            }
+            owned_candidate.option = .{
+                .long = if (option.long) |long| try self.dupeField(allocator, long) else null,
+                .short = if (option.short) |short| try self.dupeField(allocator, short) else null,
+                .spellings = spellings,
+                .argument = if (option.argument) |argument| try self.dupeField(allocator, argument) else null,
+                .exclusive_group = if (option.exclusive_group) |group| try self.dupeField(allocator, group) else null,
+                .excludes = try self.dupeOptionExclusions(allocator, option.excludes),
+                .repeatable = option.repeatable,
+                .terminates_options = option.terminates_options,
+                .no_space = option.no_space,
+                .inherit = option.inherit,
+            };
+        }
+        try self.candidates.append(allocator, owned_candidate);
+    }
+
+    pub fn applyValueSegmentSuffix(self: *Builder, allocator: std.mem.Allocator, start: usize, segment: ?ValueSegment) !void {
+        var suffix_buffer: [1]u8 = undefined;
+        const suffix = valueSegmentRemovableSuffix(segment, &suffix_buffer) orelse return;
+        for (self.candidates.items[start..]) |*candidate| {
+            if (candidate.kind == .directory or candidate.suffix != null) continue;
+            candidate.suffix = try self.dupeField(allocator, suffix);
+            candidate.removable_suffix = true;
+            candidate.append_space = false;
+        }
+    }
+
+    pub fn applyOwnedRuleProviderMetadata(self: *Builder, allocator: std.mem.Allocator, candidate: *Candidate, rule: Rule) !void {
+        if (candidate.tag == null) {
+            if (rule.tag) |tag| candidate.tag = try self.dupeField(allocator, tag);
+        }
+        if (candidate.provider_order == null) candidate.provider_order = rule.provider_order;
+    }
+
+    pub fn appendCandidateIfMissing(self: *Builder, allocator: std.mem.Allocator, candidate: Candidate) !void {
+        if (self.containsCandidate(candidate)) return;
+        try self.appendCandidate(allocator, candidate);
+    }
+
+    fn containsCandidate(self: Builder, candidate: Candidate) bool {
+        for (self.candidates.items) |existing| {
+            if (candidateIdentityMatches(existing, candidate)) return true;
+        }
+        return false;
+    }
+
+    fn dupeField(self: *Builder, allocator: std.mem.Allocator, value: []const u8) ![]const u8 {
+        const owned = try allocator.dupe(u8, value);
+        errdefer allocator.free(owned);
+        try self.owned.append(allocator, owned);
+        return owned;
+    }
+
+    fn dupeOptionExclusions(self: *Builder, allocator: std.mem.Allocator, excludes: []const OptionExclusion) ![]const OptionExclusion {
+        if (excludes.len == 0) return &.{};
+        const owned = try allocator.alloc(OptionExclusion, excludes.len);
+        errdefer allocator.free(owned);
+        for (excludes, 0..) |exclusion, index| {
+            owned[index] = .{
+                .kind = exclusion.kind,
+                .selector = if (exclusion.selector) |selector| try self.dupeField(allocator, selector) else null,
+            };
+        }
+        try self.owned_option_exclusions.append(allocator, owned);
+        return owned;
+    }
+
+    pub fn finish(self: *Builder, allocator: std.mem.Allocator) ![]Candidate {
+        const candidates = try self.candidates.toOwnedSlice(allocator);
+        sortCandidates(candidates);
+        self.owned_option_exclusions.deinit(allocator);
+        self.owned.deinit(allocator);
+        self.* = undefined;
+        return candidates;
+    }
+};
+
+fn valueSegmentRemovableSuffix(segment: ?ValueSegment, buffer: *[1]u8) ?[]const u8 {
+    const active = segment orelse return null;
+    if (active.position != .item) return null;
+    const separator = active.list_separator orelse return null;
+    buffer[0] = separator;
+    return buffer[0..];
+}
+
+pub fn applyValueSegmentSuffix(candidate: *Candidate, segment: ?ValueSegment, buffer: *[1]u8) void {
+    if (candidate.kind == .directory or candidate.suffix != null) return;
+    const suffix = valueSegmentRemovableSuffix(segment, buffer) orelse return;
+    candidate.suffix = suffix;
+    candidate.removable_suffix = true;
+    candidate.append_space = false;
+}
+
+// Completion candidates are deduplicated by the edit they would apply:
+// replacement span plus inserted value. The first source wins so metadata stays
+// deterministic across static and dynamic structured rules.
+fn candidateIdentityMatches(a: Candidate, b: Candidate) bool {
+    return a.replace_start == b.replace_start and
+        a.replace_end == b.replace_end and
+        std.mem.eql(u8, a.value, b.value);
+}
+
 pub const Argument = struct {
     state: ?[]const u8 = null,
     index: ?usize = null,
