@@ -1,0 +1,58 @@
+.{
+    .name = "2.4 Reserved Words",
+    .mode = .posix,
+    .cases = .{
+        .{
+            .name = "reserved words can be used as assignment variable names",
+            .script =
+            \\if=ok
+            \\then=word
+            \\printf '<%s>\n' "$if" "$then"
+            ,
+            .stdout =
+            \\<ok>
+            \\<word>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "reserved words are ordinary words after a command name",
+            .script =
+            \\printf '<%s>\n' if then else fi do done case esac while until for
+            ,
+            .stdout =
+            \\<if>
+            \\<then>
+            \\<else>
+            \\<fi>
+            \\<do>
+            \\<done>
+            \\<case>
+            \\<esac>
+            \\<while>
+            \\<until>
+            \\<for>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "unquoted reserved words are recognized in grammar positions",
+            .script =
+            \\if true
+            \\then
+            \\    printf '%s\n' yes
+            \\fi
+            ,
+            .stdout =
+            \\yes
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+    },
+}
