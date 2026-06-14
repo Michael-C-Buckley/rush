@@ -165,6 +165,35 @@
             .status = 0,
         },
         .{
+            .name = "redirection-only command does not redirect later commands",
+            .script =
+            \\printf '%s\n' old >out
+            \\>out
+            \\printf '%s\n' stdout
+            \\cat out
+            ,
+            .stdout =
+            \\stdout
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "redirection-only command uses last substitution status",
+            .script =
+            \\>out $(exit 7)
+            \\printf '<%s>\n' "$?"
+            \\cat out
+            ,
+            .stdout =
+            \\<7>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "regular utility redirection expands before assignment is applied",
             .script =
             \\x=old

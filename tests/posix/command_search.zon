@@ -44,5 +44,82 @@
             .stderr = "",
             .status = 0,
         },
+        .{
+            .name = "PATH search continues past non-executable candidates",
+            .script =
+            \\mkdir d1 d2
+            \\printf '%s\n' ignored >d1/cmd
+            \\chmod 644 d1/cmd
+            \\printf '%s\n' '#!/bin/sh' 'printf "found\n"' >d2/cmd
+            \\chmod 755 d2/cmd
+            \\PATH=./d1:./d2 cmd
+            ,
+            .stdout =
+            \\found
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "PATH search found non-executable command sets status 126",
+            .script =
+            \\mkdir d
+            \\printf '%s\n' ignored >d/cmd
+            \\chmod 644 d/cmd
+            \\PATH=./d cmd 2>/dev/null
+            \\printf '<%s>\n' "$?"
+            ,
+            .stdout =
+            \\<126>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "slash command name bypasses functions and PATH search",
+            .script =
+            \\printf '%s\n' '#!/bin/sh' 'printf "external\n"' >cmd
+            \\chmod 755 cmd
+            \\cmd() { printf '%s\n' function; }
+            \\PATH=/nonexistent ./cmd
+            ,
+            .stdout =
+            \\external
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "slash executable text file falls back to shell execution",
+            .script =
+            \\printf '%s\n' 'printf "script:%s:%s\n" "$0" "$1"' >script
+            \\chmod 755 script
+            \\./script arg
+            ,
+            .stdout =
+            \\script:./script:arg
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "PATH executable text file falls back to shell execution",
+            .script =
+            \\mkdir d
+            \\printf '%s\n' 'printf "script:%s:%s\n" "$0" "$1"' >d/myscript
+            \\chmod 755 d/myscript
+            \\PATH=./d:$PATH myscript arg
+            ,
+            .stdout =
+            \\script:./d/myscript:arg
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
     },
 }
