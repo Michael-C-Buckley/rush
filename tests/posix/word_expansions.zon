@@ -178,6 +178,182 @@
             .status = 0,
         },
         .{
+            .name = "unbraced parameter expansion uses the longest valid name",
+            .script =
+            \\foo=abc
+            \\foox=long
+            \\unset foo_suffix
+            \\printf '<%s>\n' "$foo_suffix" "${foo}_suffix" "$foox" "${foo}x"
+            ,
+            .stdout =
+            \\<>
+            \\<abc_suffix>
+            \\<long>
+            \\<abcx>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "braced positional parameter expansion supports multiple digits",
+            .script =
+            \\set -- one two three four five six seven eight nine ten
+            \\printf '<%s>\n' $1 $10 ${10}
+            ,
+            .stdout =
+            \\<one>
+            \\<one0>
+            \\<ten>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "special parameters expose count status and option flags",
+            .script =
+            \\set -- 'a b' '' c
+            \\false
+            \\st=$?
+            \\set -f
+            \\case "$#:$st:$-" in 3:1:*f*) printf 'special\n';; *) printf 'bad\n';; esac
+            ,
+            .stdout =
+            \\special
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "quoted at expands positional parameters as separate fields",
+            .script =
+            \\set -- 'a b' '' c
+            \\for x in "$@"; do printf '<%s>\n' "$x"; done
+            ,
+            .stdout =
+            \\<a b>
+            \\<>
+            \\<c>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "quoted star joins positional parameters with the first IFS character",
+            .script =
+            \\IFS=,
+            \\set -- 'a b' '' c
+            \\printf '<%s>\n' "$*"
+            ,
+            .stdout =
+            \\<a b,,c>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "dollar and zero special parameters are non-empty",
+            .script =
+            \\case $$:$0 in *[!0123456789]*:*) printf 'pid0\n';; *:*[!/]*) printf 'pid0\n';; *) printf 'bad\n';; esac
+            ,
+            .stdout =
+            \\pid0
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "bang special parameter expands to the most recent background process id",
+            .script =
+            \\: &
+            \\p=$!
+            \\case $p in *[!0123456789]*|'') printf 'bad\n';; *) printf 'background\n';; esac
+            ,
+            .stdout =
+            \\background
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "parameter expansion evaluates nested default words when needed",
+            .script =
+            \\unset x y
+            \\y=inner
+            \\printf '<%s>\n' "${x:-${y:-fallback}}"
+            ,
+            .stdout =
+            \\<inner>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "parameter expansion does not evaluate unused default words",
+            .script =
+            \\x=value
+            \\unset marker
+            \\printf '<%s>\n' "${x:-$(printf side >marker)}"
+            \\test ! -e marker && printf 'lazy\n'
+            ,
+            .stdout =
+            \\<value>
+            \\lazy
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "parameter expansion evaluates default words when used",
+            .script =
+            \\unset x
+            \\printf '<%s>\n' "${x:-$(printf fallback)}"
+            ,
+            .stdout =
+            \\<fallback>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "parameter pattern removal supports bracket expressions",
+            .script =
+            \\x=abc123def
+            \\printf '<%s>\n' "${x%%[0-9]*}" "${x##*[0-9]}"
+            ,
+            .stdout =
+            \\<abc>
+            \\<def>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "quotes inside parameter patterns can quote pattern characters",
+            .script =
+            \\x='a*b'
+            \\printf '<%s>\n' "${x#\"a*\"}" "${x#'a*'}" "${x#a*}"
+            ,
+            .stdout =
+            \\<a*b>
+            \\<b>
+            \\<*b>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "tilde expansion applies at the start of an unquoted word",
             .script =
             \\set -- ~ ~/subdir
