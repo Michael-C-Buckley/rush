@@ -70,7 +70,6 @@ pub fn build(b: *std.Build) void {
             },
         }),
         .filters = test_filters,
-        .test_runner = .{ .path = b.path("test/support/timing_test_runner.zig"), .mode = .simple },
     });
     exe_tests.root_module.addOptions("build_config", build_config);
     exe_tests.root_module.addAnonymousImport("default_config", .{ .root_source_file = b.path("share/rush/config.rush") });
