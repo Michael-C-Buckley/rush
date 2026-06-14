@@ -166,7 +166,6 @@ fn addConformanceTests(
     run_posix.addArtifactArg(rush);
     run_posix.addArg("--mode");
     run_posix.addArg("posix");
-    run_posix.addFileArg(b.path("tests/posix/smoke.zon"));
 
     conformance_step.dependOn(&run_posix.step);
 }

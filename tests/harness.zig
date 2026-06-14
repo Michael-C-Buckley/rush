@@ -7,6 +7,7 @@ const Mode = enum {
 };
 
 const Suite = struct {
+    name: []const u8,
     mode: Mode = .posix,
     cases: []const Case,
 };
@@ -22,8 +23,19 @@ const Case = struct {
 const Config = struct {
     rush_path: ?[]const u8,
     shell: ?[]const u8,
+    shell_args: []const []const u8,
     mode: Mode,
     files: []const []const u8,
+};
+
+const DiscoveredFiles = struct {
+    files: std.ArrayList([]const u8) = .empty,
+
+    fn deinit(self: *DiscoveredFiles, allocator: std.mem.Allocator) void {
+        for (self.files.items) |file| allocator.free(file);
+        self.files.deinit(allocator);
+        self.* = undefined;
+    }
 };
 
 const TempRoot = struct {
@@ -57,20 +69,32 @@ const RunResult = struct {
 pub fn main(init: std.process.Init) !u8 {
     const allocator = init.gpa;
     const args = try init.minimal.args.toSlice(init.arena.allocator());
-    const parsed_config = parseArgs(args) orelse {
+    const parsed_config = (try parseArgs(allocator, args)) orelse {
         try writeUsage(init.io);
         return 2;
     };
+    defer allocator.free(parsed_config.shell_args);
     const rush_path = if (parsed_config.rush_path) |path| try resolvePath(allocator, init.io, path) else null;
     defer if (rush_path) |path| allocator.free(path);
     const shell = if (parsed_config.shell) |path| try resolveCommandPath(allocator, init.io, path) else null;
     defer if (shell) |path| allocator.free(path);
+    var discovered_files: DiscoveredFiles = .{};
+    defer discovered_files.deinit(allocator);
+    const files = if (parsed_config.files.len == 0) files: {
+        try discoverSuiteFiles(allocator, init.io, parsed_config.mode, &discovered_files);
+        break :files discovered_files.files.items;
+    } else parsed_config.files;
     const config: Config = .{
         .rush_path = rush_path,
         .shell = shell,
+        .shell_args = parsed_config.shell_args,
         .mode = parsed_config.mode,
-        .files = parsed_config.files,
+        .files = files,
     };
+    if (config.files.len == 0) {
+        std.debug.print("conformance: no suite files found\n", .{});
+        return 2;
+    }
 
     var failures: usize = 0;
     for (config.files) |path| failures += try runSuiteFile(allocator, init.io, config, path);
@@ -83,10 +107,12 @@ pub fn main(init: std.process.Init) !u8 {
     return 0;
 }
 
-fn parseArgs(args: []const []const u8) ?Config {
+fn parseArgs(allocator: std.mem.Allocator, args: []const []const u8) !?Config {
     if (args.len < 4) return null;
     var rush_path: ?[]const u8 = null;
     var shell: ?[]const u8 = null;
+    var shell_args: std.ArrayList([]const u8) = .empty;
+    defer shell_args.deinit(allocator);
     var mode: ?Mode = null;
     var index: usize = 1;
     while (index < args.len) {
@@ -99,6 +125,10 @@ fn parseArgs(args: []const []const u8) ?Config {
             index += 1;
             if (index >= args.len) return null;
             shell = args[index];
+        } else if (std.mem.eql(u8, arg, "--shell-arg")) {
+            index += 1;
+            if (index >= args.len) return null;
+            try shell_args.append(allocator, args[index]);
         } else if (std.mem.eql(u8, arg, "--mode")) {
             index += 1;
             if (index >= args.len) return null;
@@ -110,12 +140,13 @@ fn parseArgs(args: []const []const u8) ?Config {
         }
         index += 1;
     }
-    if (index >= args.len) return null;
     if ((rush_path == null) == (shell == null)) return null;
+    const parsed_mode = mode orelse return null;
     return .{
         .rush_path = rush_path,
         .shell = shell,
-        .mode = mode orelse return null,
+        .shell_args = try shell_args.toOwnedSlice(allocator),
+        .mode = parsed_mode,
         .files = args[index..],
     };
 }
@@ -135,6 +166,37 @@ fn resolveCommandPath(allocator: std.mem.Allocator, io: std.Io, path: []const u8
     return resolvePath(allocator, io, path);
 }
 
+fn discoverSuiteFiles(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    mode: Mode,
+    discovered_files: *DiscoveredFiles,
+) !void {
+    const dir_path = suiteDir(mode);
+    var dir = try std.Io.Dir.cwd().openDir(io, dir_path, .{ .iterate = true });
+    defer dir.close(io);
+
+    var iterator = dir.iterate();
+    while (try iterator.next(io)) |entry| {
+        if (!std.mem.endsWith(u8, entry.name, ".zon")) continue;
+        const file_path = try std.fmt.allocPrint(allocator, "{s}/{s}", .{ dir_path, entry.name });
+        errdefer allocator.free(file_path);
+        try discovered_files.files.append(allocator, file_path);
+    }
+
+    std.mem.sort([]const u8, discovered_files.files.items, {}, stringLessThan);
+}
+
+fn suiteDir(mode: Mode) []const u8 {
+    return switch (mode) {
+        .posix => "tests/posix",
+    };
+}
+
+fn stringLessThan(_: void, lhs: []const u8, rhs: []const u8) bool {
+    return std.mem.lessThan(u8, lhs, rhs);
+}
+
 fn runSuiteFile(allocator: std.mem.Allocator, io: std.Io, config: Config, path: []const u8) !usize {
     const source = try std.Io.Dir.cwd().readFileAlloc(io, path, allocator, .unlimited);
     defer allocator.free(source);
@@ -151,7 +213,7 @@ fn runSuiteFile(allocator: std.mem.Allocator, io: std.Io, config: Config, path: 
 
     var failures: usize = 0;
     for (suite.cases, 0..) |case, case_index| {
-        failures += try runCase(allocator, io, config, path, &temp_root, case, case_index);
+        failures += try runCase(allocator, io, config, path, suite.name, &temp_root, case, case_index);
     }
     return failures;
 }
@@ -194,6 +256,7 @@ fn runCase(
     io: std.Io,
     config: Config,
     path: []const u8,
+    suite_name: []const u8,
     temp_root: *TempRoot,
     case: Case,
     case_index: usize,
@@ -202,7 +265,7 @@ fn runCase(
 
     const target = try runTarget(allocator, io, temp_root, case_index, config, case.script);
     defer target.deinit(allocator);
-    failures += reportMismatch(path, case, targetName(config), target);
+    failures += reportMismatch(path, suite_name, case, targetName(config), target);
 
     return failures;
 }
@@ -222,7 +285,7 @@ fn runTarget(
     if (config.shell) |shell| {
         var sub_path_buffer: [64]u8 = undefined;
         const sub_path = try std.fmt.bufPrint(&sub_path_buffer, "case-{d}-shell", .{case_index});
-        return runGenericShell(allocator, io, temp_root, sub_path, shell, script);
+        return runGenericShell(allocator, io, temp_root, sub_path, shell, config.shell_args, script);
     }
     return runRush(allocator, io, temp_root, case_index, config, script);
 }
@@ -252,13 +315,19 @@ fn runGenericShell(
     temp_root: *TempRoot,
     sub_path: []const u8,
     shell: []const u8,
+    shell_args: []const []const u8,
     script: []const u8,
 ) !RunResult {
     var cwd = try temp_root.dir.createDirPathOpen(io, sub_path, .{});
     defer cwd.close(io);
 
-    const argv = [_][]const u8{ shell, "-c", script };
-    return runCommand(allocator, io, cwd, &argv);
+    var argv: std.ArrayList([]const u8) = .empty;
+    defer argv.deinit(allocator);
+    try argv.append(allocator, shell);
+    try argv.appendSlice(allocator, shell_args);
+    try argv.append(allocator, "-c");
+    try argv.append(allocator, script);
+    return runCommand(allocator, io, cwd, argv.items);
 }
 
 fn runCommand(allocator: std.mem.Allocator, io: std.Io, cwd: std.Io.Dir, argv: []const []const u8) !RunResult {
@@ -287,21 +356,27 @@ fn signalStatus(signal: u32) u8 {
     return if (value <= std.math.maxInt(u8)) @intCast(value) else std.math.maxInt(u8);
 }
 
-fn reportMismatch(path: []const u8, case: Case, shell_name: []const u8, actual: RunResult) usize {
+fn reportMismatch(
+    path: []const u8,
+    suite_name: []const u8,
+    case: Case,
+    shell_name: []const u8,
+    actual: RunResult,
+) usize {
     var failed = false;
     if (!std.mem.eql(u8, actual.stdout, case.stdout)) {
         failed = true;
-        printBytesMismatch(path, case.name, shell_name, "stdout", case.stdout, actual.stdout);
+        printBytesMismatch(path, suite_name, case.name, shell_name, "stdout", case.stdout, actual.stdout);
     }
     if (!std.mem.eql(u8, actual.stderr, case.stderr)) {
         failed = true;
-        printBytesMismatch(path, case.name, shell_name, "stderr", case.stderr, actual.stderr);
+        printBytesMismatch(path, suite_name, case.name, shell_name, "stderr", case.stderr, actual.stderr);
     }
     if (actual.status != case.status) {
         failed = true;
         std.debug.print(
-            "{s}: {s}: {s}: status mismatch: expected {d}, got {d}\n",
-            .{ path, case.name, shell_name, case.status, actual.status },
+            "{s}: {s}: {s}: {s}: status mismatch: expected {d}, got {d}\n",
+            .{ path, suite_name, case.name, shell_name, case.status, actual.status },
         );
     }
     return if (failed) 1 else 0;
@@ -309,6 +384,7 @@ fn reportMismatch(path: []const u8, case: Case, shell_name: []const u8, actual: 
 
 fn printBytesMismatch(
     path: []const u8,
+    suite_name: []const u8,
     case_name: []const u8,
     shell_name: []const u8,
     stream: []const u8,
@@ -316,14 +392,14 @@ fn printBytesMismatch(
     actual: []const u8,
 ) void {
     std.debug.print(
-        "{s}: {s}: {s}: {s} mismatch\nexpected:\n{s}\nactual:\n{s}\n",
-        .{ path, case_name, shell_name, stream, expected, actual },
+        "{s}: {s}: {s}: {s}: {s} mismatch\nexpected:\n{s}\nactual:\n{s}\n",
+        .{ path, suite_name, case_name, shell_name, stream, expected, actual },
     );
 }
 
 fn writeUsage(io: std.Io) !void {
     const usage =
-        \\usage: conformance-harness (--rush PATH | --shell SHELL) --mode posix FILE...
+        \\usage: conformance-harness (--rush PATH | --shell SHELL [--shell-arg ARG...]) --mode posix [FILE...]
         \\
     ;
     var buffer: [256]u8 = undefined;

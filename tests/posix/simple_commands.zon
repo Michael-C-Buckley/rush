@@ -1,0 +1,82 @@
+.{
+    .name = "2.9.1 Simple Commands",
+    .mode = .posix,
+    .cases = .{
+        .{
+            .name = "printf writes stdout",
+            .script =
+            \\printf '%s\n' hello
+            ,
+            .stdout =
+            \\hello
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "assignment-only command affects current environment",
+            .script =
+            \\x=hello
+            \\printf '%s\n' "$x"
+            ,
+            .stdout =
+            \\hello
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "assignment-only command exits successfully",
+            .script =
+            \\x=hello
+            ,
+            .stdout = "",
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "temporary assignment does not affect regular utility arguments or shell state",
+            .script =
+            \\x=outer
+            \\x=inner printf '%s\n' "$x"
+            \\printf '%s\n' "$x"
+            ,
+            .stdout =
+            \\outer
+            \\outer
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "temporary assignment before special builtin persists",
+            .script =
+            \\x=outer
+            \\x=inner :
+            \\printf '%s\n' "$x"
+            ,
+            .stdout =
+            \\inner
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "redirection can precede command word",
+            .script =
+            \\>out printf '%s\n' hello
+            \\cat out
+            ,
+            .stdout =
+            \\hello
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+    },
+}
