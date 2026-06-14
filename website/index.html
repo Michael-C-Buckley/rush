@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>rush — rockorager's user-friendly shell</title>
+  <title>rush — experimental POSIX-facing shell</title>
   <style>
     :root {
       color-scheme: light dark;
@@ -58,28 +58,41 @@
 <body>
   <h1 id="rush"><a href="#rush">rush</a></h1>
 
-  <p>Rush is Bash with better UX.</p>
+  <p>Rush is an experimental, POSIX-facing shell with Bash compatibility and interactive UX improvements.</p>
 
-  <p>Use the shell language you already know. Spend less time fighting the prompt.</p>
+  <p>It is early software: the implementation moves quickly, APIs may change, and POSIX compatibility is a work in progress rather than a certification claim.</p>
 
   <pre><span class="prompt">$</span> <span class="cmd">rush</span>
-<span class="comment"># bash-compatible syntax, friendlier interface</span></pre>
+<span class="comment"># familiar shell language, friendlier interactive editor</span></pre>
 
   <h2 id="start-here"><a href="#start-here">Start here</a></h2>
 
   <p>Current focus:</p>
 
   <ul>
-    <li>Bash compatibility</li>
-    <li>better interactive UX</li>
-    <li>POSIX shell behavior</li>
+    <li>POSIX shell execution, expansion, redirection, job-control, and builtins.</li>
+    <li>Incremental Bash-compatible features; Rush defaults to POSIX-facing behavior.</li>
+    <li>A terminal line editor with history search, emacs/vi editing modes, styled diagnostics, and modern terminal protocol support.</li>
   </ul>
 
-  <h2 id="install"><a href="#install">Install</a></h2>
+  <p>Rush targets POSIX-like systems first: Linux, macOS, and BSDs.</p>
+
+  <h2 id="install"><a href="#install">Build and install</a></h2>
+
+  <p>Rush currently requires Zig 0.16. Zig fetches the declared dependencies from <code>build.zig.zon</code>.</p>
 
   <pre><span class="cmd">git</span> clone https://github.com/rockorager/rush
 <span class="cmd">cd</span> rush
-<span class="cmd">zig</span> build <span class="opt">-Doptimize=ReleaseSafe</span> <span class="opt">--prefix</span> <span class="var">$HOME</span>/.local</pre>
+<span class="cmd">zig</span> build
+<span class="cmd">zig</span> build install <span class="opt">--prefix</span> <span class="str">"<span class="var">$HOME</span>/.local"</span> <span class="opt">-Doptimize=ReleaseSafe</span></pre>
+
+  <h2 id="run"><a href="#run">Run</a></h2>
+
+  <pre><span class="cmd">zig</span> build run
+<span class="cmd">zig</span> build run <span class="opt">--</span> <span class="opt">--posix</span> <span class="opt">-c</span> <span class="str">'echo hello'</span>
+./zig-out/bin/rush <span class="opt">--help</span></pre>
+
+  <p><code>--posix</code> selects POSIX mode with stricter syntax diagnostics for non-interactive execution. There is not currently a user-facing Bash-mode CLI flag.</p>
 
   <h2 id="docs"><a href="#docs">Docs</a></h2>
 
@@ -96,7 +109,7 @@
 
   <h2 id="status"><a href="#status">Status</a></h2>
 
-  <p>Early software. Expect missing features.</p>
+  <p>Early software. Expect missing features, behavior changes, and incomplete POSIX/Bash compatibility.</p>
 
   <h2 id="license"><a href="#license">License</a></h2>
 
