@@ -729,10 +729,37 @@
             .status = 0,
         },
         .{
+            .name = "arithmetic expansion removes quote characters before evaluation",
+            .script =
+            \\printf '%s\n' "$(( "1" + 2 ))"
+            ,
+            .stdout =
+            \\3
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "invalid arithmetic expansion fails with a diagnostic",
             .script =
             \\printf 'before\n'
             \\printf '%s\n' "$((1 + ))"
+            \\printf 'after\n'
+            ,
+            .stdout =
+            \\before
+            \\
+            ,
+            .stderr_match = .nonempty,
+            .status_match = .nonzero,
+        },
+        .{
+            .name = "arithmetic expansion fails when variable contents are not an integer constant",
+            .script =
+            \\printf 'before\n'
+            \\x=abc
+            \\printf '%s\n' "$((x))"
             \\printf 'after\n'
             ,
             .stdout =

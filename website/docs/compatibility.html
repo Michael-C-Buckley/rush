@@ -91,6 +91,16 @@
 
   <p>POSIX parameter assignment through <code>:=</code> assigns only shell variables; positional parameters cannot be assigned this way. Rush reports the error and does not print <code>after</code>. This matches dash, ksh93, and yash. Bash 3.2 and Bash 5.3 in POSIX mode report the error but continue executing the script. zsh 5.9 in <code>sh</code> emulation assigns the positional parameter and continues.</p>
 
+  <h3 id="non-integer-arithmetic-variables"><a href="#non-integer-arithmetic-variables">Non-integer variables in arithmetic expansion</a></h3>
+
+  <p>Rush treats a variable whose contents are not a valid integer constant as an arithmetic expansion error when the variable is used as an arithmetic operand.</p>
+
+  <pre>x=abc
+<span class="cmd">printf</span> <span class="str">'%s\n'</span> <span class="str">"$((x))"</span>
+<span class="cmd">printf</span> <span class="str">'after\n'</span></pre>
+
+  <p>POSIX requires arithmetic expansion to fail with a diagnostic when the contents of a shell variable used in the expression are not recognized by the shell. Rush reports the error and does not print <code>after</code>. This matches dash and ksh93. Bash 3.2 and Bash 5.3 in POSIX mode instead expand this case to <code>0</code> and continue executing the script.</p>
+
   <h2 id="bash"><a href="#bash">Bash</a></h2>
 
   <h3 id="bash-3-2"><a href="#bash-3-2">Bash 3.2</a></h3>
