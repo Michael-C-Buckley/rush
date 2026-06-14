@@ -41,10 +41,14 @@ pub const Pipeline = struct {
     async_after: bool = false,
 };
 
+pub const IfBranch = struct {
+    condition: []const u8,
+    body: []const u8,
+};
+
 pub const IfCommand = struct {
     span: parser.Span,
-    condition: []const u8,
-    then_body: []const u8,
+    branches: []const IfBranch,
     else_body: ?[]const u8 = null,
     redirections: []Redirection,
 };
@@ -1228,57 +1232,53 @@ fn lowerLoopCommand(allocator: std.mem.Allocator, parsed: parser.ParseResult, no
 
 fn lowerIfCommand(allocator: std.mem.Allocator, parsed: parser.ParseResult, node: parser.Node) !IfCommand {
     std.debug.assert(node.kind == .if_command);
-    var condition_node: ?parser.Node = null;
-    var then_node: ?parser.Node = null;
-    var else_token: ?usize = null;
-    var fi_token: ?usize = null;
-    var list_index: usize = 0;
+    var list_sources: std.ArrayList([]const u8) = .empty;
+    defer list_sources.deinit(allocator);
+    var has_else_clause = false;
 
     for (parsed.nodeChildren(node)) |child| switch (child) {
         .node => |node_id| {
             const child_node = parsed.nodes[node_id.index()];
             if (child_node.kind != .list) continue;
-            if (list_index == 0) {
-                condition_node = child_node;
-            } else if (list_index == 1) {
-                then_node = child_node;
-            }
-            list_index += 1;
+            try list_sources.append(allocator, spanSlice(parsed, child_node.token_start, child_node.token_end));
         },
         .token => |token_id| {
             const token_index = token_id.index();
             const token = parsed.tokens[token_index];
             if (token.kind != .word) continue;
             const lexeme = token.lexeme(parsed.source);
-            if (fi_token == null and std.mem.eql(u8, lexeme, "fi")) {
-                fi_token = token_index;
-            } else if (else_token == null and (std.mem.eql(u8, lexeme, "else") or std.mem.eql(u8, lexeme, "elif"))) {
-                else_token = token_index;
-            }
+            if (std.mem.eql(u8, lexeme, "else")) has_else_clause = true;
         },
     };
 
-    const fi_index = fi_token orelse node.token_end;
-    const else_body = if (else_token) |else_index| blk: {
-        if (std.mem.eql(u8, parsed.tokens[else_index].lexeme(parsed.source), "elif")) {
-            break :blk spanSlice(parsed, else_index, fi_index);
-        }
-        break :blk spanSlice(parsed, @min(else_index + 1, node.token_end), fi_index);
-    } else null;
+    const branch_source_count = if (has_else_clause and list_sources.items.len != 0)
+        list_sources.items.len - 1
+    else
+        list_sources.items.len;
+    const branch_count = branch_source_count / 2;
+    const branches = try allocator.alloc(IfBranch, branch_count);
+    errdefer allocator.free(branches);
+    for (branches, 0..) |*branch, index| {
+        branch.* = .{
+            .condition = list_sources.items[index * 2],
+            .body = list_sources.items[index * 2 + 1],
+        };
+    }
+    const else_body = if (has_else_clause and list_sources.items.len != 0)
+        list_sources.items[list_sources.items.len - 1]
+    else
+        null;
 
     var redirections = try lowerCompoundRedirections(allocator, parsed, node);
     errdefer {
         for (redirections.items) |redirection| freeRedirection(allocator, redirection);
         redirections.deinit(allocator);
+        allocator.free(branches);
     }
 
     return .{
         .span = node.span,
-        .condition = if (condition_node) |condition|
-            spanSlice(parsed, condition.token_start, condition.token_end)
-        else
-            "",
-        .then_body = if (then_node) |then_body| spanSlice(parsed, then_body.token_start, then_body.token_end) else "",
+        .branches = branches,
         .else_body = else_body,
         .redirections = try redirections.toOwnedSlice(allocator),
     };
@@ -1723,6 +1723,7 @@ fn freeCaseCommand(allocator: std.mem.Allocator, command: CaseCommand) void {
 }
 
 fn freeIfCommand(allocator: std.mem.Allocator, command: IfCommand) void {
+    allocator.free(command.branches);
     for (command.redirections) |redirection| freeRedirection(allocator, redirection);
     allocator.free(command.redirections);
 }

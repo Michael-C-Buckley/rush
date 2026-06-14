@@ -748,16 +748,20 @@ const TrapActionLowerer = struct {
     ) !TrapActionBodyPayload {
         const redirections = try self.lowerRedirections(command.redirections, .regular_command);
         if (redirections == .failure) return .{ .failure = redirections.failure };
-        const condition_result = try self.lowerStatementListSource(command.condition, target);
-        const condition = switch (condition_result) {
-            .failure => |trap_failure| return .{ .failure = trap_failure },
-            .list => |list| list,
-        };
-        const then_result = try self.lowerStatementListSource(command.then_body, target);
-        const then_body = switch (then_result) {
-            .failure => |trap_failure| return .{ .failure = trap_failure },
-            .list => |list| list,
-        };
+        const branches = try self.allocator.alloc(command_plan.IfBranch, command.branches.len);
+        for (command.branches, 0..) |source_branch, branch_index| {
+            const condition_result = try self.lowerStatementListSource(source_branch.condition, target);
+            const condition = switch (condition_result) {
+                .failure => |trap_failure| return .{ .failure = trap_failure },
+                .list => |list| list,
+            };
+            const body_result = try self.lowerStatementListSource(source_branch.body, target);
+            const body = switch (body_result) {
+                .failure => |trap_failure| return .{ .failure = trap_failure },
+                .list => |list| list,
+            };
+            branches[branch_index] = .{ .condition = condition, .body = body };
+        }
         var else_body: command_plan.StatementList = .{};
         if (command.else_body) |source| {
             const lowered_else = try self.lowerStatementListSource(source, target);
@@ -766,8 +770,6 @@ const TrapActionLowerer = struct {
                 .list => |list| list,
             };
         }
-        const branches = try self.allocator.alloc(command_plan.IfBranch, 1);
-        branches[0] = .{ .condition = condition, .body = then_body };
         const plan: command_plan.CompoundCommandPlan = .{
             .target = target,
             .redirections = redirections.plan,

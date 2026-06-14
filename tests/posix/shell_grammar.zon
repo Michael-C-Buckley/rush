@@ -43,6 +43,24 @@
             .status = 0,
         },
         .{
+            .name = "elif clauses select the first successful branch",
+            .script =
+            \\if false; then
+            \\    printf 'bad\n'
+            \\elif true; then
+            \\    printf 'elif\n'
+            \\else
+            \\    printf 'else\n'
+            \\fi
+            ,
+            .stdout =
+            \\elif
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "function definition permits linebreak before body",
             .script =
             \\f()
@@ -53,6 +71,22 @@
             ,
             .stdout =
             \\function
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "for clause with in iterates listed words",
+            .script =
+            \\for name in a 'b c'
+            \\do
+            \\    printf '<%s>\n' "$name"
+            \\done
+            ,
+            .stdout =
+            \\<a>
+            \\<b c>
             \\
             ,
             .stderr = "",
@@ -70,6 +104,21 @@
             .stdout =
             \\<a>
             \\<b c>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "case patterns can be separated by vertical bars",
+            .script =
+            \\case b in
+            \\    a|b) printf 'match\n' ;;
+            \\    *) printf 'bad\n' ;;
+            \\esac
+            ,
+            .stdout =
+            \\match
             \\
             ,
             .stderr = "",
