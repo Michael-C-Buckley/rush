@@ -1,0 +1,155 @@
+.{
+    .name = "2.9.4 Compound Commands",
+    .mode = .posix,
+    .cases = .{
+        .{
+            .name = "subshell exit status is compound-list status and assignments do not persist",
+            .script =
+            \\x=outer
+            \\( x=inner; false )
+            \\status=$?
+            \\printf '%s:%s\n' "$x" "$status"
+            ,
+            .stdout =
+            \\outer:1
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "brace group exit status is compound-list status and assignments persist",
+            .script =
+            \\x=outer
+            \\{ x=inner; false; }
+            \\status=$?
+            \\printf '%s:%s\n' "$x" "$status"
+            ,
+            .stdout =
+            \\inner:1
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "for command status is last body status when items are present",
+            .script =
+            \\for x in a b
+            \\do
+            \\    printf '%s\n' "$x"
+            \\    false
+            \\done
+            ,
+            .stdout =
+            \\a
+            \\b
+            \\
+            ,
+            .stderr = "",
+            .status = 1,
+        },
+        .{
+            .name = "for command status is zero when there are no items",
+            .script =
+            \\for x in
+            \\do
+            \\    false
+            \\done
+            ,
+            .stdout = "",
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "case command status is matched clause status",
+            .script =
+            \\case b in
+            \\    a) printf '%s\n' bad ;;
+            \\    b) printf '%s\n' ok; false ;;
+            \\esac
+            ,
+            .stdout =
+            \\ok
+            \\
+            ,
+            .stderr = "",
+            .status = 1,
+        },
+        .{
+            .name = "case command status is zero when no pattern matches",
+            .script =
+            \\case z in
+            \\    a) false ;;
+            \\esac
+            ,
+            .stdout = "",
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "if command status is selected then body status",
+            .script =
+            \\if true
+            \\then
+            \\    false
+            \\else
+            \\    true
+            \\fi
+            ,
+            .stdout = "",
+            .stderr = "",
+            .status = 1,
+        },
+        .{
+            .name = "if command status is selected else body status",
+            .script =
+            \\if false
+            \\then
+            \\    true
+            \\else
+            \\    false
+            \\fi
+            ,
+            .stdout = "",
+            .stderr = "",
+            .status = 1,
+        },
+        .{
+            .name = "if command status is zero when no body is selected",
+            .script =
+            \\if false
+            \\then
+            \\    false
+            \\fi
+            ,
+            .stdout = "",
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "while command status is zero when the body never runs",
+            .script =
+            \\while false
+            \\do
+            \\    false
+            \\done
+            ,
+            .stdout = "",
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "until command status is zero when the body never runs",
+            .script =
+            \\until true
+            \\do
+            \\    false
+            \\done
+            ,
+            .stdout = "",
+            .stderr = "",
+            .status = 0,
+        },
+    },
+}

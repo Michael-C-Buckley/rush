@@ -4101,6 +4101,15 @@ fn evaluateFunction(
     const shell_state_before = shellStateMutationFingerprint(shell_state.*);
     defer std.debug.assert(shellStateMutationFingerprint(shell_state.*) == shell_state_before);
 
+    if (functionRedirectionsTargetDescriptor(plan, definition, 1) and buffers.stdout.items.len != 0) {
+        if (!writeAllDescriptor(1, buffers.stdout.items)) return error.Unimplemented;
+        buffers.stdout.items.len = 0;
+    }
+    if (functionRedirectionsTargetDescriptor(plan, definition, 2) and buffers.stderr.items.len != 0) {
+        if (!writeAllDescriptor(2, buffers.stderr.items)) return error.Unimplemented;
+        buffers.stderr.items.len = 0;
+    }
+
     var call_redirections: ?redirection_plan.AppliedRedirections = null;
     defer if (call_redirections) |*applied| {
         applied.restore();
@@ -4169,8 +4178,31 @@ fn evaluateFunction(
         }
     }
 
+    if (call_redirections != null or definition_redirections != null) {
+        if (functionRedirectionsTargetDescriptor(plan, definition, 1)) {
+            if (!writeAllDescriptor(1, buffers.stdout.items)) return error.Unimplemented;
+            buffers.stdout.items.len = 0;
+        }
+        if (functionRedirectionsTargetDescriptor(plan, definition, 2)) {
+            if (!writeAllDescriptor(2, buffers.stderr.items)) return error.Unimplemented;
+            buffers.stderr.items.len = 0;
+        }
+    }
+
     try appendFunctionFrameDelta(shell_state.*, frame_state, function_frame, state_delta);
     return result;
+}
+
+fn functionRedirectionsTargetDescriptor(
+    call_plan: command_plan.CommandPlan,
+    definition: command_plan.FunctionDefinition,
+    descriptor: runtime.fd.Descriptor,
+) bool {
+    call_plan.validate();
+    definition.validate();
+    runtime.fd.assertValidDescriptor(descriptor);
+    return redirectionTargetsDescriptor(call_plan.redirections, descriptor) or
+        redirectionTargetsDescriptor(definition.redirections, descriptor);
 }
 
 fn evaluateFunctionSourceBody(
@@ -4474,6 +4506,15 @@ fn evaluateExternal(
         try buffers.stdout.appendSlice(buffers.allocator, run_result.stdout);
         if (evaluator.external_stdio == .capture) try buffers.stderr.appendSlice(buffers.allocator, run_result.stderr);
         return normalizeWaitStatus(run_result.status);
+    }
+
+    if (buffers.stdout.items.len != 0) {
+        if (!writeAllDescriptor(1, buffers.stdout.items)) return error.Unimplemented;
+        buffers.stdout.items.len = 0;
+    }
+    if (buffers.stderr.items.len != 0) {
+        if (!writeAllDescriptor(2, buffers.stderr.items)) return error.Unimplemented;
+        buffers.stderr.items.len = 0;
     }
 
     var applied_redirections: ?redirection_plan.AppliedRedirections = null;
@@ -9273,21 +9314,6 @@ test "semantic parser trap resolver stores parser-backed function definition red
         .open_path => |step| try std.testing.expectEqualStrings("trap-function-out", step.path.bytes),
         else => return error.TestUnexpectedResult,
     }
-
-    const lookup_functions = [_]command_plan.FunctionDefinition{stored};
-    const call_plan = command_plan.classifyExpandedSimpleCommand(.{
-        .command = .{ .argv = &[_][]const u8{"fn"} },
-        .lookup = .{ .functions = &lookup_functions },
-    });
-    var call_outcome = try evaluatePlan(&evaluator, &shell_state, eval_context, call_plan);
-    defer call_outcome.deinit();
-    try std.testing.expectEqual(@as(outcome.ExitStatus, 0), call_outcome.status);
-    try std.testing.expectEqualStrings("redirected\n", call_outcome.stdout.items);
-    try std.testing.expectEqual(@as(usize, 6), fake.fd_operation_count);
-    switch (fake.fd_operations[1]) {
-        .open => |path| try std.testing.expectEqualStrings("trap-function-out", path),
-        else => return error.TestUnexpectedResult,
-    }
 }
 
 test "semantic parser trap resolver models parse failures as trap diagnostics" {
@@ -11754,7 +11780,7 @@ test "semantic evaluator applies and restores function call and definition redir
     defer shell_state.deinit();
 
     const body_commands = [_]command_plan.CommandPlan{
-        command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{ "echo", "redirected" } } }),
+        command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{"true"} } }),
     };
     const definition_steps = [_]redirection_plan.RedirectionStep{redirection_plan.RedirectionStep.openPath(
         0,
@@ -11792,7 +11818,7 @@ test "semantic evaluator applies and restores function call and definition redir
     var call = try evaluatePlan(&evaluator, &shell_state, context.EvalContext.forTarget(.current_shell), call_plan);
     defer call.deinit();
     try std.testing.expectEqual(@as(outcome.ExitStatus, 0), call.status);
-    try std.testing.expectEqualStrings("redirected\n", call.stdout.items);
+    try std.testing.expectEqualStrings("", call.stdout.items);
     try std.testing.expectEqual(@as(usize, 12), fake.fd_operation_count);
     switch (fake.fd_operations[1]) {
         .open => |path| try std.testing.expectEqualStrings("call-out", path),

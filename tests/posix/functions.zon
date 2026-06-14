@@ -1,0 +1,73 @@
+.{
+    .name = "2.9.5 Function Definition Command",
+    .mode = .posix,
+    .cases = .{
+        .{
+            .name = "function definition status is zero when declared successfully",
+            .script =
+            \\foo() { false; }
+            \\printf '%s\n' "$?"
+            ,
+            .stdout =
+            \\0
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "function invocation status is last command status",
+            .script =
+            \\foo() { true; false; }
+            \\foo
+            ,
+            .stdout = "",
+            .stderr = "",
+            .status = 1,
+        },
+        .{
+            .name = "function operands temporarily replace positional parameters",
+            .script =
+            \\set -- outer
+            \\foo() { printf '%s:%s\n' "$1" "$#"; }
+            \\foo inner extra
+            \\printf '%s:%s\n' "$1" "$#"
+            ,
+            .stdout =
+            \\inner:2
+            \\outer:1
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "function definition redirections are applied when the function is invoked",
+            .script =
+            \\foo() { printf '%s\n' call; } >out
+            \\printf '%s\n' before
+            \\foo
+            \\printf '%s\n' after
+            \\cat out
+            ,
+            .stdout =
+            \\before
+            \\after
+            \\call
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "return completes the current function with the requested status",
+            .script =
+            \\foo() { return 7; printf '%s\n' bad; }
+            \\foo
+            ,
+            .stdout = "",
+            .stderr = "",
+            .status = 7,
+        },
+    },
+}

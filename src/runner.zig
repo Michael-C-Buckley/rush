@@ -668,6 +668,9 @@ fn runSemanticLoweredProgram(
             return semanticUnsupported(allocator, message);
         }
         const body_failed = semanticBodyIsFailure(body);
+        if (evaluator.external_stdio == .inherit and semanticBodyUsesInheritedExternal(body)) {
+            try flushAccumulatedOutput(&accumulated_stdout, &accumulated_stderr);
+        }
 
         var command_outcome = if (statement.async_after) blk: {
             var background_plan = (try semanticBackgroundPipelinePlan(allocator, body)) orelse
@@ -1247,6 +1250,47 @@ fn semanticBodyIsFailure(body: shell.TrapActionBody) bool {
         .owned => |owned| owned.body == .failure,
         .simple, .compound, .pipeline => false,
     };
+}
+
+fn semanticBodyUsesInheritedExternal(body: shell.TrapActionBody) bool {
+    body.validate();
+    return switch (body) {
+        .simple => |plan| semanticCommandUsesInheritedExternal(plan),
+        .pipeline => false,
+        .owned => |owned| switch (owned.body) {
+            .simple => |plan| semanticCommandUsesInheritedExternal(plan),
+            .pipeline => false,
+            .compound, .failure => false,
+        },
+        .compound, .failure => false,
+    };
+}
+
+fn semanticCommandUsesInheritedExternal(plan: shell.CommandPlan) bool {
+    plan.validate();
+    return plan.class() == .external;
+}
+
+fn flushAccumulatedOutput(stdout: *std.ArrayList(u8), stderr: *std.ArrayList(u8)) !void {
+    if (stdout.items.len != 0) {
+        if (!writeAllDescriptor(1, stdout.items)) return error.Unimplemented;
+        stdout.items.len = 0;
+    }
+    if (stderr.items.len != 0) {
+        if (!writeAllDescriptor(2, stderr.items)) return error.Unimplemented;
+        stderr.items.len = 0;
+    }
+}
+
+fn writeAllDescriptor(descriptor: runtime.fd.Descriptor, bytes: []const u8) bool {
+    runtime.fd.assertValidDescriptor(descriptor);
+    var index: usize = 0;
+    while (index < bytes.len) {
+        const written = std.c.write(descriptor, bytes[index..].ptr, bytes.len - index);
+        if (written <= 0) return false;
+        index += @intCast(written);
+    }
+    return true;
 }
 
 fn semanticPipelineUnsupportedMessage(plan: shell.PipelinePlan, legacy_fallback_gates: bool) ?[]const u8 {
