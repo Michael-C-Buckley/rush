@@ -4389,6 +4389,58 @@ pub const Executor = struct {
         try self.copyStateFromWithOptions(other, .{});
     }
 
+    pub fn copyCompletionStateFrom(self: *Executor, other: *const Executor) !void {
+        std.debug.assert(self.execution_depth == 0);
+        std.debug.assert(other.execution_depth == 0);
+        std.debug.assert(self.env.count() == 0);
+        std.debug.assert(self.functions.count() == 0);
+        std.debug.assert(self.completions.rules.items.len == 0);
+        std.debug.assert(self.open_fds.count() == 0);
+
+        self.shell_options = other.shell_options;
+        self.arg_zero = other.arg_zero;
+        self.last_status_text = other.last_status_text;
+        self.last_status_text_len = other.last_status_text_len;
+        self.lineno_text = other.lineno_text;
+        self.lineno_text_len = other.lineno_text_len;
+        self.last_command_duration_text = other.last_command_duration_text;
+        self.last_command_duration_text_len = other.last_command_duration_text_len;
+        self.pid_text = other.pid_text;
+        self.pid_text_len = other.pid_text_len;
+        self.last_background_pid_text = other.last_background_pid_text;
+        self.last_background_pid_text_len = other.last_background_pid_text_len;
+        self.completion_context = other.completion_context;
+        self.completion_builder_ref = other.completion_builder_ref;
+        self.completions.last_context = other.completions.last_context;
+        self.command_history = other.command_history;
+        self.process_state_isolated = other.process_state_isolated;
+        self.rlimit_overrides = other.rlimit_overrides;
+
+        var env_iter = other.env.iterator();
+        while (env_iter.next()) |entry| try self.setEnv(entry.key_ptr.*, entry.value_ptr.*);
+        var exported_iter = other.exported.iterator();
+        while (exported_iter.next()) |entry| try self.setExported(entry.key_ptr.*);
+        var readonly_iter = other.readonly.iterator();
+        while (readonly_iter.next()) |entry| try self.setReadonly(entry.key_ptr.*);
+        var function_iter = other.functions.iterator();
+        while (function_iter.next()) |entry| try self.setFunction(entry.key_ptr.*, entry.value_ptr.body, entry.value_ptr.redirections);
+        var alias_iter = other.aliases.iterator();
+        while (alias_iter.next()) |entry| try self.setAlias(entry.key_ptr.*, entry.value_ptr.*);
+        self.alias_generation = other.alias_generation;
+        var command_hash_iter = other.command_hash.iterator();
+        while (command_hash_iter.next()) |entry| try self.rememberCommandHash(entry.key_ptr.*, entry.value_ptr.*);
+        var abbr_iter = other.abbreviations.iterator();
+        while (abbr_iter.next()) |entry| try self.setAbbreviation(entry.key_ptr.*, entry.value_ptr.*);
+        var array_iter = other.arrays.iterator();
+        while (array_iter.next()) |entry| {
+            for (entry.value_ptr.values.items, 0..) |value, index| {
+                try self.setArrayElement(entry.key_ptr.*, index, value);
+            }
+        }
+        try self.global_positionals.set(self.allocator, other.global_positionals.params);
+        try self.completions.copyFrom(&other.completions);
+    }
+
     const CopyStateOptions = struct {
         completions: bool = true,
     };

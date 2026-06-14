@@ -3625,6 +3625,36 @@ fn manifestBoolDefault(value: ?std.json.Value, default: bool) bool {
 
 fn completeInteractiveLine(context: *anyopaque, allocator: std.mem.Allocator, io: std.Io, source: []const u8, cursor: usize) !completion_model.Application {
     const completion_context: *InteractiveCompletionContext = @ptrCast(@alignCast(context));
+    if (completion_context.semantic_state) |semantic_state| {
+        var adapter = runtime.PosixAdapter.init(io);
+        const ports = runtime.posixPorts(&adapter);
+        return completeInteractiveLineFromShellState(completion_context, allocator, io, semantic_state, ports, source, cursor);
+    }
+    return completeInteractiveLineFromExecutor(completion_context, allocator, io, source, cursor);
+}
+
+fn completeInteractiveLineFromShellState(
+    completion_context: *InteractiveCompletionContext,
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    shell_state: *const shell.ShellState,
+    ports: runtime.Ports,
+    source: []const u8,
+    cursor: usize,
+) !completion_model.Application {
+    shell_state.validate();
+    std.debug.assert(shell_state.scope == .current_shell);
+    std.debug.assert(ports.signal != null);
+
+    // Dynamic providers still execute on the completion executor, but this is
+    // now a completion-owned executor synchronized from ShellState instead of
+    // the interactive shell's legacy executor field.
+    try syncExecutorFromSemanticInteractiveState(completion_context.executor, shell_state.*);
+    return completeInteractiveLineFromExecutor(completion_context, allocator, io, source, cursor);
+}
+
+fn completeInteractiveLineFromExecutor(context: *InteractiveCompletionContext, allocator: std.mem.Allocator, io: std.Io, source: []const u8, cursor: usize) !completion_model.Application {
+    const completion_context = context;
     const eval_context = try exec.completionEvalContextForInput(allocator, source, cursor);
     if (eval_context.position != .command) {
         try completion_context.loader.ensureLoaded(completion_context.io, completion_context.executor, eval_context.command, completion_context.arg_zero);
@@ -6395,6 +6425,9 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
     try interactive_shell.initializeSemanticStartup(io, environ_map, options);
     try InteractiveConfigService.initInteractive(allocator, io, &interactive_shell, options.arg_zero).load(options);
     if (executor.pending_exit) |status| return status;
+    var completion_executor = exec.Executor.init(allocator);
+    defer completion_executor.deinit();
+    try completion_executor.copyCompletionStateFrom(executor);
     var prompt_service: InteractivePromptService = .{ .executor = executor, .semantic_state = if (interactive_shell.semantic_enabled) &interactive_shell.semantic_state else null, .arg_zero = options.arg_zero, .features = options.features };
     var terminal = try editor_driver.TerminalSession.init(allocator, io);
     defer terminal.deinit();
@@ -6447,7 +6480,7 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
         defer if (title.owned) allocator.free(title.text);
         try terminal.reportWindowTitle(title.text);
         completion_loader.semantic_state = if (interactive_shell.semantic_enabled) &interactive_shell.semantic_state else null;
-        var completion_context: InteractiveCompletionContext = .{ .executor = executor, .semantic_state = if (interactive_shell.semantic_enabled) &interactive_shell.semantic_state else null, .history = &history, .cache = &completion_cache, .loader = &completion_loader, .io = io, .cwd = cwd, .arg_zero = options.arg_zero, .features = options.features };
+        var completion_context: InteractiveCompletionContext = .{ .executor = &completion_executor, .semantic_state = if (interactive_shell.semantic_enabled) &interactive_shell.semantic_state else null, .history = &history, .cache = &completion_cache, .loader = &completion_loader, .io = io, .cwd = cwd, .arg_zero = options.arg_zero, .features = options.features };
         const ui_theme = prompt_service.theme();
         const read_options: editor_driver.ReadLineOptions = .{
             .prompt = prompt,
@@ -10076,6 +10109,51 @@ test "interactive completion uses semantic executor path for commands variables 
     const path_completions = try executor.collectCompletionsForInput("cat rush-complete", "cat rush-complete".len, .{ .io = std.testing.io });
     defer executor.freeCompletions(path_completions);
     try std.testing.expect(hasCompletionCandidate(path_completions, path));
+}
+
+test "interactive completion syncs provider executor from ShellState" {
+    var setup_executor = exec.Executor.init(std.testing.allocator);
+    defer setup_executor.deinit();
+    var setup = try runScriptWithExecutor(std.testing.allocator, &setup_executor,
+        \\__rush_complete_variables() { completion variables; }
+        \\complete echo --argument --function __rush_complete_variables
+    , .{ .io = std.testing.io });
+    defer setup.deinit();
+    try std.testing.expectEqual(@as(shell.ExitStatus, 0), setup.status);
+
+    var completion_executor = exec.Executor.init(std.testing.allocator);
+    defer completion_executor.deinit();
+    try completion_executor.copyCompletionStateFrom(&setup_executor);
+    try completion_executor.setEnv("RUSH_LEGACY_COMPLETION_VAR", "stale");
+
+    var shell_state = shell.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    try shell_state.putVariable("RUSH_COMPLETION_VAR", "semantic", .{});
+    shell_state.validate();
+
+    var history = History.init(std.testing.allocator);
+    defer history.deinit();
+    var cache = CompletionCache.init(std.testing.allocator);
+    defer cache.deinit();
+    var loader = CompletionScriptLoader.init(std.testing.allocator);
+    defer loader.deinit();
+    var context: InteractiveCompletionContext = .{
+        .executor = &completion_executor,
+        .semantic_state = &shell_state,
+        .history = &history,
+        .cache = &cache,
+        .loader = &loader,
+        .io = std.testing.io,
+    };
+
+    const application = try completeInteractiveLine(&context, std.testing.allocator, std.testing.io, "echo RUSH", "echo RUSH".len);
+    defer application.deinit(std.testing.allocator);
+    switch (application) {
+        .edit => |edit| try std.testing.expectEqualStrings("RUSH_COMPLETION_VAR", edit.replacement),
+        .ambiguous => |candidates| try std.testing.expect(hasCompletionCandidate(candidates, "RUSH_COMPLETION_VAR")),
+        else => return error.ExpectedCompletionEdit,
+    }
+    try std.testing.expect(completion_executor.getEnv("RUSH_LEGACY_COMPLETION_VAR") == null);
 }
 
 test "vi pathname expansions use implicit star and directory marks" {
