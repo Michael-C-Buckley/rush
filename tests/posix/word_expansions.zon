@@ -16,6 +16,23 @@
             .status = 0,
         },
         .{
+            .name = "parameter expansion default distinguishes unset from null",
+            .script =
+            \\unset missing
+            \\x=
+            \\printf '<%s>\n' "${x-word}" "${x:-word}" "${missing-word}" "${missing:-word}"
+            ,
+            .stdout =
+            \\<>
+            \\<word>
+            \\<word>
+            \\<word>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "parameter expansion assigns default value",
             .script =
             \\unset x
@@ -23,6 +40,24 @@
             ,
             .stdout =
             \\<fallback>:<fallback>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "parameter expansion assignment distinguishes unset from null",
+            .script =
+            \\unset x y
+            \\x=
+            \\printf '<%s>:<%s>\n' "${x=word}" "$x"
+            \\printf '<%s>:<%s>\n' "${x:=word}" "$x"
+            \\printf '<%s>:<%s>\n' "${y=word}" "$y"
+            ,
+            .stdout =
+            \\<>:<>
+            \\<word>:<word>
+            \\<word>:<word>
             \\
             ,
             .stderr = "",
@@ -38,6 +73,26 @@
             ,
             .stdout =
             \\<>
+            \\<alt>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "parameter expansion alternate distinguishes set null from unset",
+            .script =
+            \\unset missing
+            \\x=
+            \\y=value
+            \\printf '<%s>\n' "${x+alt}" "${x:+alt}" "${missing+alt}" "${missing:+alt}" "${y+alt}" "${y:+alt}"
+            ,
+            .stdout =
+            \\<alt>
+            \\<>
+            \\<>
+            \\<>
+            \\<alt>
             \\<alt>
             \\
             ,
@@ -116,6 +171,18 @@
             .status = 0,
         },
         .{
+            .name = "command substitution nests inside double quotes",
+            .script =
+            \\printf '<%s>\n' "$(printf '[%s]' "$(printf inner)")"
+            ,
+            .stdout =
+            \\<[inner]>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "arithmetic expansion evaluates expressions after parameter expansion",
             .script =
             \\n=5
@@ -144,6 +211,24 @@
             .status = 0,
         },
         .{
+            .name = "field splitting with non-whitespace IFS preserves empty fields between delimiters",
+            .script =
+            \\IFS=:
+            \\x='a::b:'
+            \\set -- $x
+            \\printf '<%s>\n' "$#" "$@"
+            ,
+            .stdout =
+            \\<3>
+            \\<a>
+            \\<>
+            \\<b>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "empty IFS disables splitting but removes empty unquoted expansion fields",
             .script =
             \\IFS=
@@ -161,6 +246,21 @@
             .status = 0,
         },
         .{
+            .name = "unquoted at undergoes field splitting and removes empty fields",
+            .script =
+            \\set -- 'a b' '' c
+            \\printf '<%s>\n' $@
+            ,
+            .stdout =
+            \\<a>
+            \\<b>
+            \\<c>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "pathname expansion expands matching fields in sorted order",
             .script =
             \\: >b.txt
@@ -170,6 +270,32 @@
             .stdout =
             \\a.txt
             \\b.txt
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "pathname expansion leaves non-matching patterns unchanged",
+            .script =
+            \\printf '<%s>\n' no-match-*.zzz
+            ,
+            .stdout =
+            \\<no-match-*.zzz>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "pathname expansion does not apply to assignment values",
+            .script =
+            \\: >a.txt
+            \\value=*.txt
+            \\printf '<%s>\n' "$value"
+            ,
+            .stdout =
+            \\<*.txt>
             \\
             ,
             .stderr = "",
