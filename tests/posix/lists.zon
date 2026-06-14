@@ -214,6 +214,45 @@
             .status = 1,
         },
         .{
+            .name = "wait without operands waits all known asynchronous lists and returns zero",
+            .script =
+            \\false & true & wait
+            ,
+            .stdout = "",
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "wait with multiple operands returns status of last operand",
+            .script =
+            \\false & first=$!
+            \\true & second=$!
+            \\wait "$second" "$first"
+            ,
+            .stdout = "",
+            .stderr = "",
+            .status = 1,
+        },
+        .{
+            .name = "wait supports job id operand for asynchronous list",
+            .script =
+            \\false & wait %1
+            ,
+            .stdout = "",
+            .stderr = "",
+            .status = 1,
+        },
+        .{
+            .name = "wait treats unknown process id as status 127",
+            .script =
+            \\wait 999999
+            ,
+            .stdout = "",
+            .stderr = "",
+            .stderr_match = .any,
+            .status = 127,
+        },
+        .{
             .name = "asynchronous list executes in a subshell environment",
             .script =
             \\value=parent

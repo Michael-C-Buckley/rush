@@ -24,6 +24,7 @@ const Case = struct {
 
 const BytesExpectation = enum {
     exact,
+    any,
     nonempty,
 };
 
@@ -484,6 +485,7 @@ fn reportMismatch(
 fn bytesMatch(actual: []const u8, expected: []const u8, expectation: BytesExpectation) bool {
     return switch (expectation) {
         .exact => std.mem.eql(u8, actual, expected),
+        .any => true,
         .nonempty => actual.len != 0,
     };
 }
