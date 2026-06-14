@@ -133,6 +133,77 @@
             .status = 1,
         },
         .{
+            .name = "pipefail status is zero when all pipeline commands succeed",
+            .script =
+            \\set -o pipefail
+            \\true | true
+            ,
+            .stdout = "",
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "pipefail status is the rightmost nonzero command status",
+            .script =
+            \\set -o pipefail
+            \\sh -c 'exit 3' | sh -c 'exit 7' | true
+            ,
+            .stdout = "",
+            .stderr = "",
+            .status = 7,
+        },
+        .{
+            .name = "pipefail status observes earlier failures when the rightmost command succeeds",
+            .script =
+            \\set -o pipefail
+            \\false | true
+            ,
+            .stdout = "",
+            .stderr = "",
+            .status = 1,
+        },
+        .{
+            .name = "bang with pipefail succeeds when any pipeline command fails",
+            .script =
+            \\set -o pipefail
+            \\! false | true
+            ,
+            .stdout = "",
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "bang with pipefail fails when all pipeline commands succeed",
+            .script =
+            \\set -o pipefail
+            \\! true | true
+            ,
+            .stdout = "",
+            .stderr = "",
+            .status = 1,
+        },
+        .{
+            .name = "pipeline status uses pipefail setting from pipeline start",
+            .script =
+            \\set +o pipefail
+            \\false | set -o pipefail
+            ,
+            .stdout = "",
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "disabling pipefail restores rightmost command status",
+            .script =
+            \\set -o pipefail
+            \\set +o pipefail
+            \\false | true
+            ,
+            .stdout = "",
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "bang is ordinary data when not at the start of a pipeline",
             .script =
             \\printf '<%s>\n' !
