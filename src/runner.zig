@@ -2411,6 +2411,36 @@ test "production shell execution handles pipeline function call" {
     try std.testing.expectEqualStrings("status:0 value:\n", result.stdout);
     try std.testing.expectEqualStrings("", result.stderr);
 }
+
+test "production shell execution applies pipeline redirections after pipe setup" {
+    const left_path = "rush-pipeline-left-redirection.tmp";
+    const right_path = "rush-pipeline-right-redirection.tmp";
+    std.Io.Dir.cwd().deleteFile(std.testing.io, left_path) catch |err| switch (err) {
+        error.FileNotFound => {},
+        else => return err,
+    };
+    std.Io.Dir.cwd().deleteFile(std.testing.io, right_path) catch |err| switch (err) {
+        error.FileNotFound => {},
+        else => return err,
+    };
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, left_path) catch {};
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, right_path) catch {};
+
+    var result = try runScript(std.testing.allocator, std.testing.io,
+        \\printf 'left\n' >rush-pipeline-left-redirection.tmp | /bin/cat
+        \\printf 'left-file='
+        \\/bin/cat rush-pipeline-left-redirection.tmp
+        \\printf 'right\n' | /bin/cat >rush-pipeline-right-redirection.tmp
+        \\printf 'right-file='
+        \\/bin/cat rush-pipeline-right-redirection.tmp
+    );
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("left-file=left\nright-file=right\n", result.stdout);
+    try std.testing.expectEqualStrings("", result.stderr);
+}
+
 test "runScript reports misplaced reserved words before execution" {
     var result = try runScript(std.testing.allocator, std.testing.io,
         \\echo before

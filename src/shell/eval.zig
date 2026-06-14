@@ -4864,8 +4864,16 @@ fn runExternalWithPipelineInput(
     };
     defer run_result.deinit();
 
-    try buffers.stdout.appendSlice(buffers.allocator, run_result.stdout);
-    try buffers.stderr.appendSlice(buffers.allocator, run_result.stderr);
+    if (redirectionTargetsDescriptor(plan.redirections, 1)) {
+        if (!writeAllDescriptor(1, run_result.stdout)) return error.Unimplemented;
+    } else {
+        try buffers.stdout.appendSlice(buffers.allocator, run_result.stdout);
+    }
+    if (redirectionTargetsDescriptor(plan.redirections, 2)) {
+        if (!writeAllDescriptor(2, run_result.stderr)) return error.Unimplemented;
+    } else {
+        try buffers.stderr.appendSlice(buffers.allocator, run_result.stderr);
+    }
     return normalizeWaitStatus(run_result.status);
 }
 
