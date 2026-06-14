@@ -1701,6 +1701,7 @@ fn evaluatePlanWithInput(
         applied.deinit();
     };
     if (hasRedirections(plan) and here_doc_input == null and plan.class() != .external and plan.class() != .function) {
+        try flushBuffersForRedirectionTargets(&buffers, plan.redirections);
         const fd_port = evaluator.fd_port orelse return error.Unimplemented;
         const apply_result = try plan.redirections.apply(evaluator.allocator, fd_port);
         switch (apply_result) {
@@ -1756,6 +1757,21 @@ fn evaluatePlanWithInput(
     try appendBuiltinDiagnostic(&command_outcome, plan, result.status);
     command_outcome.validateForContext(eval_context);
     return command_outcome;
+}
+
+fn flushBuffersForRedirectionTargets(
+    buffers: *EvaluationBuffers,
+    redirections: redirection_plan.RedirectionPlan,
+) EvalError!void {
+    redirections.validate();
+    if (redirectionTargetsDescriptor(redirections, 1) and buffers.stdout.items.len != 0) {
+        if (!writeAllDescriptor(1, buffers.stdout.items)) return error.Unimplemented;
+        buffers.stdout.items.len = 0;
+    }
+    if (redirectionTargetsDescriptor(redirections, 2) and buffers.stderr.items.len != 0) {
+        if (!writeAllDescriptor(2, buffers.stderr.items)) return error.Unimplemented;
+        buffers.stderr.items.len = 0;
+    }
 }
 
 pub fn evaluateCompoundPlan(
@@ -3597,6 +3613,7 @@ fn evaluateStatementList(
     if (list.commands.len != 0) {
         for (list.commands) |child_plan| {
             child_plan.validate();
+            try flushBuffersForRedirectionTargets(buffers, child_plan.redirections);
             var child_outcome = try evaluatePlanWithInput(
                 evaluator,
                 shell_state,
@@ -3632,6 +3649,7 @@ fn evaluateStatementList(
             }
         }
 
+        try flushBuffersForStatementRedirections(buffers, entry.plan);
         var child_outcome = try evaluateStatementPlan(evaluator, shell_state, child_context, entry.plan, buffers.stdin);
         defer child_outcome.deinit();
 
@@ -3642,6 +3660,18 @@ fn evaluateStatementList(
         if (child_outcome.control_flow != .normal) break;
     }
     return result;
+}
+
+fn flushBuffersForStatementRedirections(
+    buffers: *EvaluationBuffers,
+    plan: command_plan.StatementPlan,
+) EvalError!void {
+    plan.validate();
+    switch (plan) {
+        .simple => |simple| try flushBuffersForRedirectionTargets(buffers, simple.redirections),
+        .compound => |compound| try flushBuffersForRedirectionTargets(buffers, compound.redirections),
+        .pipeline => {},
+    }
 }
 
 fn evaluateStatementPlan(
@@ -4485,6 +4515,29 @@ fn evaluateExternal(
 
     const argv = try externalArgv(evaluator.allocator, plan, resolution);
     defer evaluator.allocator.free(argv);
+
+    if (semanticHereDocInput(plan.redirections)) |stdin| {
+        var run_result = process_port.run(.{
+            .allocator = evaluator.allocator,
+            .argv = argv,
+            .environment = &environment,
+            .stdin = stdin,
+        }) catch |err| switch (err) {
+            error.OutOfMemory => return error.OutOfMemory,
+            else => |run_err| {
+                const failure = runFailure(run_err);
+                try buffers.addBuiltinDiagnostic(plan.argv[0], failure.message);
+                return failure.status;
+            },
+        };
+        defer run_result.deinit();
+
+        try buffers.stdout.appendSlice(buffers.allocator, run_result.stdout);
+        if (evaluator.external_stdio == .capture or evaluator.external_stdio == .inherit) {
+            try buffers.stderr.appendSlice(buffers.allocator, run_result.stderr);
+        }
+        return normalizeWaitStatus(run_result.status);
+    }
 
     if (!hasRedirections(plan) and
         (evaluator.external_stdio == .capture or evaluator.external_stdio == .capture_stdout))
@@ -9170,6 +9223,40 @@ test "semantic parser trap resolver lowers redirection operators for trap action
             try std.testing.expectEqualStrings("semantic\n", step.data.bytes);
         },
         else => return error.ExpectedHereDocRedirection,
+    }
+}
+
+test "semantic parser trap resolver preserves compound redirection io number" {
+    var shell_state = state.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+
+    var evaluator = Evaluator.init(std.testing.allocator);
+    var parser_resolver = ParserTrapActionResolver.init(&evaluator);
+    const eval_context = context.EvalContext.forTarget(.current_shell);
+
+    var body = (try parser_resolver.resolver().resolve(
+        std.testing.allocator,
+        "{ echo out; } >both 2>&1",
+        .TERM,
+        eval_context,
+        &shell_state,
+    )) orelse return error.ExpectedSemanticBody;
+    defer body.deinit();
+
+    const plan = switch (body) {
+        .owned => |owned| switch (owned.body) {
+            .compound => |compound| compound,
+            else => return error.ExpectedCompoundPlan,
+        },
+        else => return error.ExpectedOwnedSemanticBody,
+    };
+    try std.testing.expectEqual(@as(usize, 2), plan.redirections.steps.len);
+    switch (plan.redirections.steps[1].effect) {
+        .duplicate => |step| {
+            try std.testing.expectEqual(@as(runtime.fd.Descriptor, 2), step.target);
+            try std.testing.expectEqual(@as(runtime.fd.Descriptor, 1), step.source);
+        },
+        else => return error.ExpectedDuplicateOutput,
     }
 }
 

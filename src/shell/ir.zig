@@ -936,7 +936,12 @@ fn lowerCompoundRedirections(
         },
         .token => {},
     };
+    std.mem.sort(Redirection, redirections.items, {}, redirectionBefore);
     return redirections;
+}
+
+fn redirectionBefore(_: void, left: Redirection, right: Redirection) bool {
+    return left.span.start < right.span.start;
 }
 
 fn lowerBashTestCommand(allocator: std.mem.Allocator, parsed: parser.ParseResult, node: parser.Node) !BashTestCommand {
@@ -1811,6 +1816,23 @@ test "lower simple command assignments argv and redirections" {
     try std.testing.expectEqual(parser.TokenKind.greater, command.redirections[0].operator);
     try std.testing.expectEqualStrings("2", command.redirections[0].io_number.?.text);
     try std.testing.expectEqualStrings("out", command.redirections[0].target.?.text);
+}
+
+test "lower compound command redirection preserves io number" {
+    var parsed = try parser.parse(std.testing.allocator, "{ echo out; } >both 2>&1", .{});
+    defer parsed.deinit();
+
+    var program = try lowerSimpleCommands(std.testing.allocator, parsed);
+    defer program.deinit();
+
+    try std.testing.expectEqual(@as(usize, 1), program.brace_groups.len);
+    const group = program.brace_groups[0];
+    try std.testing.expectEqual(@as(usize, 2), group.redirections.len);
+    try std.testing.expectEqual(parser.TokenKind.greater, group.redirections[0].operator);
+    try std.testing.expect(group.redirections[0].io_number == null);
+    try std.testing.expectEqual(parser.TokenKind.greater_and, group.redirections[1].operator);
+    try std.testing.expectEqualStrings("2", group.redirections[1].io_number.?.text);
+    try std.testing.expectEqualStrings("1", group.redirections[1].target.?.text);
 }
 
 test "lower preserves POSIX pipeline negation" {

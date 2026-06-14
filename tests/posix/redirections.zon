@@ -1,0 +1,106 @@
+.{
+    .name = "2.7 Redirection",
+    .mode = .posix,
+    .cases = .{
+        .{
+            .name = "output redirection creates and truncates the target file",
+            .script =
+            \\printf '%s\n' old >out
+            \\printf '%s\n' new >out
+            \\cat out
+            ,
+            .stdout =
+            \\new
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "append redirection appends to the target file",
+            .script =
+            \\printf '%s\n' first >out
+            \\printf '%s\n' second >>out
+            \\cat out
+            ,
+            .stdout =
+            \\first
+            \\second
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "input redirection supplies standard input",
+            .script =
+            \\printf '%s\n' input >in
+            \\cat <in
+            ,
+            .stdout =
+            \\input
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "redirections are evaluated left to right when stdout is redirected before stderr duplication",
+            .script =
+            \\{ printf '%s\n' out; printf '%s\n' err >&2; } >both 2>&1
+            \\cat both
+            ,
+            .stdout =
+            \\out
+            \\err
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "redirections are evaluated left to right when stderr is duplicated before stdout redirect",
+            .script =
+            \\{ printf '%s\n' out; printf '%s\n' err >&2; } 2>&1 >out
+            \\cat out
+            ,
+            .stdout =
+            \\err
+            \\out
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "here document body expands when delimiter is unquoted",
+            .script =
+            \\x=value
+            \\cat <<EOF
+            \\<$x>
+            \\EOF
+            ,
+            .stdout =
+            \\<value>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "here document body does not expand when delimiter is quoted",
+            .script =
+            \\x=value
+            \\cat <<'EOF'
+            \\<$x>
+            \\EOF
+            ,
+            .stdout =
+            \\<$x>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+    },
+}
