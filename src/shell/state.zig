@@ -249,28 +249,6 @@ pub const BackgroundJobProcess = struct {
     }
 };
 
-pub const EventHook = struct {
-    function: []const u8,
-
-    pub fn validate(self: EventHook) void {
-        assertValidVariableName(self.function);
-    }
-};
-
-pub const IntervalHook = struct {
-    name: []const u8,
-    function: []const u8,
-    interval_ms: u64,
-    last_run_ms: u64 = 0,
-
-    pub fn validate(self: IntervalHook) void {
-        std.debug.assert(self.name.len != 0);
-        std.debug.assert(std.mem.indexOfScalar(u8, self.name, 0) == null);
-        assertValidVariableName(self.function);
-        std.debug.assert(self.interval_ms != 0);
-    }
-};
-
 pub const BackgroundJob = struct {
     id: usize,
     pid: runtime_process.ProcessId,
@@ -441,9 +419,6 @@ pub const ShellState = struct {
     pending_traps: std.ArrayList(TrapSignal) = .empty,
     trap_execution: TrapExecution = .idle,
     pending_exit: ?ExitStatus = null,
-    event_hooks: std.StringHashMapUnmanaged(std.ArrayList(EventHook)) = .empty,
-    interval_hooks: std.ArrayList(IntervalHook) = .empty,
-    pending_variable_hooks: std.ArrayList([]const u8) = .empty,
     background_jobs: std.ArrayList(BackgroundJob) = .empty,
     pending_job_notifications: std.ArrayList(BackgroundJobNotification) = .empty,
     warned_stopped_jobs_on_exit: bool = false,
@@ -502,20 +477,6 @@ pub const ShellState = struct {
         if (self.logical_cwd.len != 0) self.allocator.free(self.logical_cwd);
         self.last_pipeline_statuses.deinit(self.allocator);
         self.pending_traps.deinit(self.allocator);
-        var event_hooks = self.event_hooks.iterator();
-        while (event_hooks.next()) |entry| {
-            self.allocator.free(entry.key_ptr.*);
-            for (entry.value_ptr.items) |hook| self.allocator.free(hook.function);
-            entry.value_ptr.deinit(self.allocator);
-        }
-        self.event_hooks.deinit(self.allocator);
-        for (self.interval_hooks.items) |hook| {
-            self.allocator.free(hook.name);
-            self.allocator.free(hook.function);
-        }
-        self.interval_hooks.deinit(self.allocator);
-        for (self.pending_variable_hooks.items) |name| self.allocator.free(name);
-        self.pending_variable_hooks.deinit(self.allocator);
         self.clearBackgroundJobs();
         self.background_jobs.deinit(self.allocator);
         self.clearPendingJobNotifications();
@@ -559,11 +520,6 @@ pub const ShellState = struct {
         if (self.logical_cwd.len != 0) try cloned.setLogicalCwd(self.logical_cwd);
         try cloned.last_pipeline_statuses.appendSlice(allocator, self.last_pipeline_statuses.items);
         try cloned.pending_traps.appendSlice(allocator, self.pending_traps.items);
-        var event_hooks = self.event_hooks.iterator();
-        while (event_hooks.next()) |entry| {
-            for (entry.value_ptr.items) |hook| try cloned.addEventHook(entry.key_ptr.*, hook.function);
-        }
-        for (self.interval_hooks.items) |hook| try cloned.addIntervalHook(hook.name, hook.interval_ms, hook.function);
         for (self.background_jobs.items) |job| try cloned.appendBackgroundJobCopy(job);
         cloned.next_job_id = self.next_job_id;
         cloned.current_job_id = self.current_job_id;
@@ -634,7 +590,6 @@ pub const ShellState = struct {
             });
         }
 
-        self.queueVariableHook(name);
         self.validate();
     }
 
@@ -660,7 +615,6 @@ pub const ShellState = struct {
             try self.variables.put(self.allocator, owned_name, .{ .value = owned_value });
         }
 
-        self.queueVariableHook(name);
         self.validate();
     }
 
@@ -696,7 +650,6 @@ pub const ShellState = struct {
         if (self.variables.fetchRemove(name)) |entry| {
             self.allocator.free(entry.key);
             self.allocator.free(entry.value.value);
-            self.queueVariableHook(name);
         }
 
         self.validate();
@@ -735,58 +688,6 @@ pub const ShellState = struct {
             self.allocator.free(entry.key);
             freeFunctionDefinition(self.allocator, entry.value);
         }
-        self.validate();
-    }
-
-    pub fn addEventHook(self: *ShellState, event: []const u8, function: []const u8) !void {
-        assertValidEventName(event);
-        assertValidVariableName(function);
-        const owned_event = try self.allocator.dupe(u8, event);
-        errdefer self.allocator.free(owned_event);
-        const owned_function = try self.allocator.dupe(u8, function);
-        errdefer self.allocator.free(owned_function);
-        const result = try self.event_hooks.getOrPut(self.allocator, owned_event);
-        if (result.found_existing) {
-            self.allocator.free(owned_event);
-        } else {
-            result.value_ptr.* = .empty;
-        }
-        try result.value_ptr.append(self.allocator, .{ .function = owned_function });
-        self.validate();
-    }
-
-    pub fn addIntervalHook(self: *ShellState, name: []const u8, interval_ms: u64, function: []const u8) !void {
-        std.debug.assert(name.len != 0);
-        std.debug.assert(std.mem.indexOfScalar(u8, name, 0) == null);
-        std.debug.assert(interval_ms != 0);
-        assertValidVariableName(function);
-        for (self.interval_hooks.items) |*hook| {
-            if (std.mem.eql(u8, hook.name, name)) {
-                self.allocator.free(hook.function);
-                hook.function = try self.allocator.dupe(u8, function);
-                hook.interval_ms = interval_ms;
-                hook.last_run_ms = 0;
-                self.validate();
-                return;
-            }
-        }
-        const owned_name = try self.allocator.dupe(u8, name);
-        errdefer self.allocator.free(owned_name);
-        const owned_function = try self.allocator.dupe(u8, function);
-        errdefer self.allocator.free(owned_function);
-        try self.interval_hooks.append(self.allocator, .{ .name = owned_name, .function = owned_function, .interval_ms = interval_ms });
-        self.validate();
-    }
-
-    pub fn queueVariableHook(self: *ShellState, name: []const u8) void {
-        assertValidVariableName(name);
-        if (!self.event_hooks.contains("variable")) return;
-        self.pending_variable_hooks.append(self.allocator, self.allocator.dupe(u8, name) catch return) catch return;
-    }
-
-    pub fn clearPendingVariableHooks(self: *ShellState) void {
-        for (self.pending_variable_hooks.items) |name| self.allocator.free(name);
-        self.pending_variable_hooks.clearRetainingCapacity();
         self.validate();
     }
 
@@ -1222,13 +1123,6 @@ pub const ShellState = struct {
             entry.value_ptr.validate();
         }
         for (self.pending_traps.items) |signal| signal.validate();
-        var event_hooks = self.event_hooks.iterator();
-        while (event_hooks.next()) |entry| {
-            assertValidEventName(entry.key_ptr.*);
-            for (entry.value_ptr.items) |hook| hook.validate();
-        }
-        for (self.interval_hooks.items) |hook| hook.validate();
-        for (self.pending_variable_hooks.items) |name| assertValidVariableName(name);
         for (self.background_jobs.items) |job| {
             job.validate();
             std.debug.assert(job.id < self.next_job_id);
@@ -1241,13 +1135,6 @@ pub const ShellState = struct {
         if (self.logical_cwd.len != 0) assertValidLogicalCwd(self.logical_cwd);
     }
 };
-
-pub fn assertValidEventName(name: []const u8) void {
-    std.debug.assert(std.mem.eql(u8, name, "prompt") or
-        std.mem.eql(u8, name, "preexec") or
-        std.mem.eql(u8, name, "postexec") or
-        std.mem.eql(u8, name, "variable"));
-}
 
 pub fn assertValidVariableName(name: []const u8) void {
     std.debug.assert(name.len != 0);

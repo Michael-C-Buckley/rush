@@ -31,42 +31,6 @@ ls() {
 abbr ll 'ls -lh'
 abbr la 'ls -lAh'
 
-# Default editor theme. If terminal color reports are unavailable, leave
-# Rush's built-in base-theme styles in place. Once the full 0-7 palette is
-# reported, derive softer colors from the user's actual terminal theme.
-rush_style() {
-  if test -z "${rush_color_foreground-}" || \
-     test -z "${rush_color_background-}" || \
-     test -z "${rush_color_black-}" || \
-     test -z "${rush_color_red-}" || \
-     test -z "${rush_color_green-}" || \
-     test -z "${rush_color_yellow-}" || \
-     test -z "${rush_color_blue-}" || \
-     test -z "${rush_color_magenta-}" || \
-     test -z "${rush_color_cyan-}" || \
-     test -z "${rush_color_white-}"; then
-    return 0
-  fi
-
-  rush_style_completion_directory="fg=$(color blend "$rush_color_blue" "$rush_color_foreground" 12)"
-  rush_style_completion_option="fg=$(color blend "$rush_color_green" "$rush_color_foreground" 12)"
-  rush_style_completion_variable="fg=$(color blend "$rush_color_magenta" "$rush_color_foreground" 10)"
-  rush_style_completion_function="fg=$(color blend "$rush_color_cyan" "$rush_color_foreground" 10)"
-  rush_style_completion_file="fg=$rush_color_foreground"
-  rush_style_completion_description="fg=$(color blend "$rush_color_foreground" "$rush_color_background" 58),dim"
-  rush_style_history_match="fg=$(color blend "$rush_color_yellow" "$rush_color_foreground" 12),bold"
-  rush_style_autosuggestion="fg=$(color blend "$rush_color_foreground" "$rush_color_background" 65),dim"
-  rush_style_diagnostic_error="ul=curly,ul_color=$rush_color_red"
-
-  if test "$rush_color_scheme" = light; then
-    rush_style_completion_selected="bg=$(color blend "$rush_color_background" "$rush_color_blue" 20)"
-    rush_style_completion_flash="fg=$(color blend "$rush_color_foreground" "$rush_color_background" 15),bg=$(color blend "$rush_color_background" "$rush_color_foreground" 12)"
-  else
-    rush_style_completion_selected="bg=$(color blend "$rush_color_background" "$rush_color_blue" 38)"
-    rush_style_completion_flash="fg=$(color blend "$rush_color_foreground" "$rush_color_background" 15),bg=$(color blend "$rush_color_background" "$rush_color_foreground" 12)"
-  fi
-}
-
 # Colorized grep and diff, probed and cached like ls; --color=auto
 # only emits color when stdout is a terminal.
 grep() {
@@ -96,51 +60,5 @@ diff() {
     command diff "$@"
   else
     command diff "$rush_diff_color_opt" "$@"
-  fi
-}
-
-# Git portion of the default prompt: branch, a • marker when the
-# worktree is dirty, and arrows with commit counts against the
-# upstream. Runs in a hidden async refresh so git never blocks
-# the prompt.
-rush_prompt_git() {
-  branch="$(git branch --show-current 2>/dev/null)"
-  if test -z "$branch"; then
-    branch="$(git rev-parse --short HEAD 2>/dev/null)"
-    test -n "$branch" || return 0
-  fi
-
-  marker=''
-  test -z "$(git status --porcelain 2>/dev/null)" || marker='•'
-
-  arrows=''
-  counts="$(git rev-list --left-right --count '@{upstream}...HEAD' 2>/dev/null)"
-  if test -n "$counts"; then
-    # rev-list prints "<behind> <ahead>" relative to the upstream.
-    set -- $counts
-    test "$2" -gt 0 2>/dev/null && arrows="$arrows ↑$2"
-    test "$1" -gt 0 2>/dev/null && arrows="$arrows ↓$1"
-  fi
-
-  printf '%s%s%s' "$branch" "$marker" "$arrows"
-}
-
-# Default interactive prompt; redefine rush_prompt in user config to
-# replace it.
-rush_prompt() {
-  rush_prompt_last_status="$?"
-
-  prompt segment --fg blue "$(prompt_pwd)"
-
-  rush_prompt_git_info="$(prompt_async git --ttl 2000 -- rush_prompt_git)"
-  if test -n "$rush_prompt_git_info"; then
-    prompt text ' '
-    prompt segment --fg yellow "$rush_prompt_git_info"
-  fi
-
-  if test "$rush_prompt_last_status" = 0; then
-    prompt text ' $ '
-  else
-    prompt segment --fg red ' $ '
   fi
 }
