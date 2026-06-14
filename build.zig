@@ -151,8 +151,8 @@ const FuzzTargetOptions = struct {
     description: []const u8,
     root_source_file: []const u8,
     filter: []const u8,
-    source_module_name: ?[]const u8 = null,
-    source_module_root: ?[]const u8 = null,
+    source_module_name: []const u8,
+    source_module_root: []const u8,
     link_libc: bool = false,
 };
 
@@ -219,15 +219,12 @@ fn addFuzzTarget(b: *std.Build, umbrella: *std.Build.Step, target: std.Build.Res
         }),
         .filters = &.{options.filter},
     });
-    if (options.source_module_name) |name| {
-        const root = options.source_module_root orelse @panic("fuzz source module root missing");
-        tests.root_module.addImport(name, b.createModule(.{
-            .root_source_file = b.path(root),
-            .target = target,
-            .optimize = fuzz_optimize,
-            .link_libc = options.link_libc,
-        }));
-    }
+    tests.root_module.addImport(options.source_module_name, b.createModule(.{
+        .root_source_file = b.path(options.source_module_root),
+        .target = target,
+        .optimize = fuzz_optimize,
+        .link_libc = options.link_libc,
+    }));
     const run = b.addRunArtifact(tests);
     const step = b.step(options.step_name, options.description);
     step.dependOn(&run.step);
