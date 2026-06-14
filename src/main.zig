@@ -608,31 +608,10 @@ pub fn runScriptWithEnvironment(allocator: std.mem.Allocator, io: std.Io, script
 }
 
 fn runShellInvocationWithEnvironment(allocator: std.mem.Allocator, io: std.Io, invocation: ShellInvocation, environ_map: ?*const std.process.Environ.Map, external_stdio: runtime.ExternalStdio, login_shell: bool) !CommandResult {
-    var owned_script: ?[]const u8 = null;
-    defer if (owned_script) |script| allocator.free(script);
-
-    var options: RunOptions = .{
-        .io = io,
-        .allow_external = true,
-        .features = invocation.features,
-        .external_stdio = external_stdio,
-        .arg_zero = invocation.arg_zero,
-    };
-    const script = switch (invocation.kind) {
-        .command_string => invocation.source,
-        .script_file => script: {
-            owned_script = try std.Io.Dir.cwd().readFileAlloc(io, invocation.source, allocator, .unlimited);
-            options.source_path = invocation.source;
-            break :script owned_script.?;
-        },
-        .standard_input => script: {
-            owned_script = try readStandardInputScript(allocator, io);
-            options.stdin_script_file = std.Io.File.stdin();
-            break :script owned_script.?;
-        },
-    };
+    var loaded_script = try runner.loadInvocationScript(allocator, io, invocation, external_stdio);
+    defer loaded_script.deinit();
     const interactive_options: ?InteractiveOptions = if (invocation.interactive) .{ .arg_zero = invocation.arg_zero, .login = login_shell, .features = invocation.features, .shell_options = invocation.shell_options, .monitor_option_explicit = invocation.monitor_option_explicit, .positionals = invocation.positionals } else null;
-    return runCommandStringWithEnvironment(allocator, io, script, options, environ_map, invocation.positionals, interactive_options, invocation.shell_options);
+    return runCommandStringWithEnvironment(allocator, io, loaded_script.script, loaded_script.options, environ_map, invocation.positionals, interactive_options, invocation.shell_options);
 }
 
 const StdinGuard = struct {
@@ -699,12 +678,6 @@ fn writeFileAll(file: std.Io.File, bytes: []const u8) !void {
     var writer = file.writer(std.testing.io, &buffer);
     try writer.interface.writeAll(bytes);
     try writer.interface.flush();
-}
-
-fn readStandardInputScript(allocator: std.mem.Allocator, io: std.Io) ![]u8 {
-    var buffer: [4096]u8 = undefined;
-    var reader = std.Io.File.stdin().reader(io, &buffer);
-    return reader.interface.allocRemaining(allocator, .unlimited);
 }
 
 fn stdinIsTty(io: std.Io) bool {

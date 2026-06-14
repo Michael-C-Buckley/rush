@@ -3,6 +3,7 @@
 const std = @import("std");
 
 const compat = @import("compat.zig");
+const cli_invocation = @import("invocation.zig");
 const parser = @import("parser.zig");
 const runtime = @import("runtime.zig");
 const shell = @import("shell.zig");
@@ -34,6 +35,62 @@ pub fn inputSource(options: Options) shell.InputSource {
     if (options.source_path != null) return .script_file;
     if (options.stdin_script_file != null) return .standard_input;
     return .command_string;
+}
+
+pub const LoadedInvocationScript = struct {
+    allocator: std.mem.Allocator,
+    script: []const u8,
+    options: Options,
+    owns_script: bool,
+
+    pub fn deinit(self: *LoadedInvocationScript) void {
+        if (self.owns_script) self.allocator.free(self.script);
+        self.* = undefined;
+    }
+};
+
+pub fn loadInvocationScript(allocator: std.mem.Allocator, io: std.Io, invocation: cli_invocation.ShellInvocation, external_stdio: runtime.ExternalStdio) !LoadedInvocationScript {
+    var options: Options = .{
+        .io = io,
+        .allow_external = true,
+        .features = invocation.features,
+        .external_stdio = external_stdio,
+        .arg_zero = invocation.arg_zero,
+    };
+    switch (invocation.kind) {
+        .command_string => return .{
+            .allocator = allocator,
+            .script = invocation.source,
+            .options = options,
+            .owns_script = false,
+        },
+        .script_file => {
+            const script = try std.Io.Dir.cwd().readFileAlloc(io, invocation.source, allocator, .unlimited);
+            options.source_path = invocation.source;
+            return .{
+                .allocator = allocator,
+                .script = script,
+                .options = options,
+                .owns_script = true,
+            };
+        },
+        .standard_input => {
+            const script = try readStandardInputScript(allocator, io);
+            options.stdin_script_file = std.Io.File.stdin();
+            return .{
+                .allocator = allocator,
+                .script = script,
+                .options = options,
+                .owns_script = true,
+            };
+        },
+    }
+}
+
+fn readStandardInputScript(allocator: std.mem.Allocator, io: std.Io) ![]u8 {
+    var buffer: [4096]u8 = undefined;
+    var reader = std.Io.File.stdin().reader(io, &buffer);
+    return reader.interface.allocRemaining(allocator, .unlimited);
 }
 
 pub const CommandResult = struct {
