@@ -1,0 +1,178 @@
+.{
+    .name = "2.6 Word Expansions",
+    .mode = .posix,
+    .cases = .{
+        .{
+            .name = "parameter expansion uses default value without assigning",
+            .script =
+            \\unset x
+            \\printf '<%s>:<%s>\n' "${x:-fallback}" "${x-unset}"
+            ,
+            .stdout =
+            \\<fallback>:<unset>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "parameter expansion assigns default value",
+            .script =
+            \\unset x
+            \\printf '<%s>:<%s>\n' "${x:=fallback}" "$x"
+            ,
+            .stdout =
+            \\<fallback>:<fallback>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "parameter expansion uses alternate value only when set and non-null",
+            .script =
+            \\unset x
+            \\printf '<%s>\n' "${x:+bad}"
+            \\x=value
+            \\printf '<%s>\n' "${x:+alt}"
+            ,
+            .stdout =
+            \\<>
+            \\<alt>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "parameter expansion reports string length",
+            .script =
+            \\x=abcdef
+            \\printf '%s\n' "${#x}"
+            ,
+            .stdout =
+            \\6
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "parameter expansion removes shortest and longest suffix patterns",
+            .script =
+            \\x=posix/src/std
+            \\printf '%s\n' "${x%/*}" "${x%%/*}"
+            ,
+            .stdout =
+            \\posix/src
+            \\posix
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "parameter expansion removes shortest and longest prefix patterns",
+            .script =
+            \\x=/one/two/three
+            \\printf '%s\n' "${x#*/}" "${x##*/}"
+            ,
+            .stdout =
+            \\one/two/three
+            \\three
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "command substitution trims trailing newlines but preserves interior newlines",
+            .script =
+            \\x=$(printf 'a\n\nb\n\n')
+            \\printf '<%s>\n' "$x"
+            ,
+            .stdout =
+            \\<a
+            \\
+            \\b>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "arithmetic expansion evaluates expressions after parameter expansion",
+            .script =
+            \\n=5
+            \\printf '%s\n' "$((n * 2 + 1))"
+            ,
+            .stdout =
+            \\11
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "field splitting applies to unquoted parameter expansion",
+            .script =
+            \\x=' a  b '
+            \\set -- $x
+            \\printf '<%s>\n' "$@"
+            ,
+            .stdout =
+            \\<a>
+            \\<b>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "empty IFS disables splitting but removes empty unquoted expansion fields",
+            .script =
+            \\IFS=
+            \\x='a b'
+            \\empty=
+            \\set -- $x $empty quoted
+            \\printf '<%s>\n' "$@"
+            ,
+            .stdout =
+            \\<a b>
+            \\<quoted>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "pathname expansion expands matching fields in sorted order",
+            .script =
+            \\: >b.txt
+            \\: >a.txt
+            \\printf '%s\n' *.txt
+            ,
+            .stdout =
+            \\a.txt
+            \\b.txt
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "quote removal preserves quoted spaces as argument data",
+            .script =
+            \\printf '<%s>\n' "a b" 'c d' e\ f
+            ,
+            .stdout =
+            \\<a b>
+            \\<c d>
+            \\<e f>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+    },
+}
