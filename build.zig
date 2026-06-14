@@ -77,23 +77,24 @@ pub fn build(b: *std.Build) void {
     linkSqlite(b, exe_tests.root_module, use_system_sqlite);
     test_step.dependOn(&b.addRunArtifact(exe_tests).step);
 
-    // Fuzzing entry point: `zig build fuzz --fuzz` (continuous; add --webui)
-    // or `zig build fuzz --fuzz=N` for a bounded run. Uses a dedicated root
-    // module containing only the parser so coverage totals measure parser
-    // code, not the whole shell.
-    const fuzz_step = b.step("fuzz", "Run fuzz tests (combine with --fuzz to actually fuzz)");
-    const fuzz_tests = b.addTest(.{
-        .root_module = b.createModule(.{
-            .root_source_file = b.path("src/fuzz_root.zig"),
-            .target = target,
-            .optimize = optimize,
-        }),
-        .filters = &.{"fuzz parser"},
-        // Patched copy of the default runner; Zig 0.16.0's bundled runner
-        // fails to compile under --fuzz (see the file's doc comment).
-        .test_runner = .{ .path = b.path("test/support/fuzz_test_runner.zig"), .mode = .server },
+    const fuzz_step = b.step("fuzz", "Run all fuzz targets (combine with --fuzz to actually fuzz)");
+    addFuzzTarget(b, fuzz_step, target, optimize, .{
+        .step_name = "fuzz-parser",
+        .description = "Run parser fuzz target",
+        .root_source_file = "src/fuzz/parser.zig",
+        .filter = "fuzz parser",
+        .source_module_name = "rush-parser",
+        .source_module_root = "src/parser.zig",
     });
-    fuzz_step.dependOn(&b.addRunArtifact(fuzz_tests).step);
+    addFuzzTarget(b, fuzz_step, target, optimize, .{
+        .step_name = "fuzz-shell",
+        .description = "Run shell semantic fuzz targets",
+        .root_source_file = "src/fuzz/shell.zig",
+        .filter = "fuzz shell",
+        .source_module_name = "rush-shell",
+        .source_module_root = "src/shell.zig",
+        .link_libc = true,
+    });
 
     const check_step = b.step("check", "Run unit tests and repository validation checks");
     check_step.dependOn(test_step);
@@ -257,6 +258,44 @@ pub fn build(b: *std.Build) void {
     compliance_report.step.dependOn(&exe.step);
     compliance_report.step.dependOn(fmt_step);
     compliance_step.dependOn(&compliance_report.step);
+}
+
+const FuzzTargetOptions = struct {
+    step_name: []const u8,
+    description: []const u8,
+    root_source_file: []const u8,
+    filter: []const u8,
+    source_module_name: ?[]const u8 = null,
+    source_module_root: ?[]const u8 = null,
+    link_libc: bool = false,
+};
+
+fn addFuzzTarget(b: *std.Build, umbrella: *std.Build.Step, target: std.Build.ResolvedTarget, optimize: std.builtin.OptimizeMode, options: FuzzTargetOptions) void {
+    const tests = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path(options.root_source_file),
+            .target = target,
+            .optimize = optimize,
+            .link_libc = options.link_libc,
+        }),
+        .filters = &.{options.filter},
+        // Patched copy of the default runner; Zig 0.16.0's bundled runner
+        // fails to compile under --fuzz (see the file's doc comment).
+        .test_runner = .{ .path = b.path("test/support/fuzz_test_runner.zig"), .mode = .server },
+    });
+    if (options.source_module_name) |name| {
+        const root = options.source_module_root orelse @panic("fuzz source module root missing");
+        tests.root_module.addImport(name, b.createModule(.{
+            .root_source_file = b.path(root),
+            .target = target,
+            .optimize = optimize,
+            .link_libc = options.link_libc,
+        }));
+    }
+    const run = b.addRunArtifact(tests);
+    const step = b.step(options.step_name, options.description);
+    step.dependOn(&run.step);
+    umbrella.dependOn(&run.step);
 }
 
 fn linkSqlite(b: *std.Build, module: *std.Build.Module, use_system_sqlite: bool) void {

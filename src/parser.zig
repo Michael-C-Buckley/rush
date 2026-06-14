@@ -5333,9 +5333,9 @@ test "parser harness preserves source-length spans" {
     });
 }
 
-// Fuzzing: run with `zig build fuzz --fuzz` (continuous, add --webui for the
-// interface) or `zig build fuzz --fuzz=10000` for a bounded run. Under plain
-// `zig build test` the corpus entries below run as regression inputs.
+// Fuzzing: run parser coverage-guided fuzzing with `zig build fuzz-parser --fuzz`
+// (continuous, add --webui for the interface) or `zig build fuzz-parser --fuzz=10000`
+// for a bounded run. Plain `zig build test` does not run fuzz targets.
 
 /// Encodes a shell source string as Smith input for `fuzzParser`: a u64 zero
 /// selecting raw mode in `fuzzSource`, then the u32 little-endian length
@@ -5636,9 +5636,8 @@ fn checkParseInvariants(result: ParseResult, source_len: usize) !void {
     }
 }
 
-/// Seed inputs for the parser fuzzer, also run as regression inputs under
-/// plain `zig build test`. Keep this exercising every NodeKind and TokenKind;
-/// the "fuzz corpus exercises every node and token kind" test enforces it.
+/// Seed inputs for the parser fuzzer. Keep this broad enough to cover parser
+/// node and token shapes, but keep fuzz-only checks in `src/fuzz/parser.zig`.
 const fuzz_corpus_sources = [_][]const u8{
     "echo hello | grep h && ls; (cd /tmp; pwd) &",
     "true || echo fallback",
@@ -5665,51 +5664,3 @@ pub const fuzz_corpus_entries = blk: {
     for (fuzz_corpus_sources, &out) |source, *entry| entry.* = fuzzCorpusEntry(source);
     break :blk out;
 };
-
-test "fuzz parser" {
-    for (fuzz_corpus_entries) |entry| {
-        var smith: std.testing.Smith = .{ .in = entry };
-        try fuzzParser({}, &smith);
-    }
-}
-
-test "fuzz corpus entry encoding selects raw mode and round-trips the source" {
-    var smith: std.testing.Smith = .{ .in = fuzzCorpusEntry("cat <<EOF\nhello\nEOF") };
-    var buf: [fuzz_buf_len]u8 = undefined;
-    const source = fuzzSource(&smith, &buf);
-    try std.testing.expectEqualStrings("cat <<EOF\nhello\nEOF", source);
-}
-
-test "fuzz corpus exercises every node and token kind" {
-    var nodes_seen: std.EnumSet(NodeKind) = .initEmpty();
-    var tokens_seen: std.EnumSet(TokenKind) = .initEmpty();
-
-    const feature_sets = [_]compat.Features{ .posix(), .bash() };
-    for (fuzz_corpus_sources) |source| {
-        for (feature_sets) |features| {
-            var result = try parse(std.testing.allocator, source, .{ .features = features });
-            defer result.deinit();
-            for (result.nodes) |node| nodes_seen.insert(node.kind);
-            for (result.tokens) |token| tokens_seen.insert(token.kind);
-        }
-    }
-
-    // The lexer never emits .invalid; it exists for highlight consumers.
-    tokens_seen.insert(.invalid);
-    // No code path constructs a parse_error node; errors surface as
-    // diagnostics. Remove this exemption if the parser grows error nodes.
-    nodes_seen.insert(.parse_error);
-
-    var failed = false;
-    var missing_nodes = nodes_seen.complement().iterator();
-    while (missing_nodes.next()) |kind| {
-        std.debug.print("fuzz corpus never produces NodeKind.{t}\n", .{kind});
-        failed = true;
-    }
-    var missing_tokens = tokens_seen.complement().iterator();
-    while (missing_tokens.next()) |kind| {
-        std.debug.print("fuzz corpus never produces TokenKind.{t}\n", .{kind});
-        failed = true;
-    }
-    try std.testing.expect(!failed);
-}
