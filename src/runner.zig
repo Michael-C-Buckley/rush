@@ -3,7 +3,6 @@
 const std = @import("std");
 
 const cli_invocation = @import("invocation.zig");
-const editor_driver = @import("editor.zig").driver;
 const runtime = @import("runtime.zig");
 const shell = @import("shell.zig");
 const compat = shell.compat;
@@ -1094,16 +1093,20 @@ fn runInvocationForTest(allocator: std.mem.Allocator, io: std.Io, invocation: cl
 }
 
 fn runInvocationWithPipeStdin(invocation: cli_invocation.ShellInvocation, stdin: []const u8) !CommandResult {
-    var pipe = try editor_driver.makePipe(std.testing.io);
-    defer pipe.read.close(std.testing.io);
-    var write_open = true;
-    defer if (write_open) pipe.write.close(std.testing.io);
+    var adapter = runtime.posix.Adapter.init(std.testing.io);
+    const pipe = try adapter.fdPort().pipe(.{});
+    const read_file: std.Io.File = .{ .handle = pipe.read, .flags = .{ .nonblocking = false } };
+    const write_file: std.Io.File = .{ .handle = pipe.write, .flags = .{ .nonblocking = false } };
 
-    try writeFileAll(pipe.write, stdin);
-    pipe.write.close(std.testing.io);
+    defer read_file.close(std.testing.io);
+    var write_open = true;
+    defer if (write_open) write_file.close(std.testing.io);
+
+    try writeFileAll(write_file, stdin);
+    write_file.close(std.testing.io);
     write_open = false;
 
-    var guard = try StdinGuard.replaceWith(pipe.read);
+    var guard = try StdinGuard.replaceWith(read_file);
     defer guard.restore();
     return runInvocationForTest(std.testing.allocator, std.testing.io, invocation, null, .capture, false);
 }
