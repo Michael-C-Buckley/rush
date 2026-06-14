@@ -14,7 +14,7 @@ const outcome = @import("outcome.zig");
 const runtime = @import("../runtime.zig");
 const state = @import("state.zig");
 
-const shell_option_flags_max = 10;
+pub const shell_option_flags_max = 10;
 
 pub const ExpansionErrorKind = enum {
     nounset_parameter,
@@ -382,7 +382,7 @@ fn appendDiagnostic(opaque_context: ?*anyopaque, name: []const u8, message: []co
     try self.diagnostics.append(self.allocator, .{ .message = diagnostic });
 }
 
-fn shellOptionFlags(options: state.ShellOptions, buffer: *[shell_option_flags_max]u8) []const u8 {
+pub fn shellOptionFlags(options: state.ShellOptions, buffer: *[shell_option_flags_max]u8) []const u8 {
     var len: usize = 0;
     if (options.allexport) appendFlag(buffer, &len, 'a');
     if (options.notify) appendFlag(buffer, &len, 'b');

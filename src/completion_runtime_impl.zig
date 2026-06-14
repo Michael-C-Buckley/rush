@@ -9,6 +9,8 @@ const history_module = @import("history.zig");
 const ir = @import("ir.zig");
 const parser = @import("parser.zig");
 const runtime = @import("runtime.zig");
+const shell_builtin = @import("shell/builtin.zig");
+const shell_expand = @import("shell/expand.zig");
 const shell_state = @import("shell/state.zig");
 const vaxis = @import("vaxis");
 const zeit = @import("zeit");
@@ -187,51 +189,10 @@ fn legacyShellOptions(options: shell_state.ShellOptions, shopt: ShoptOptions) Sh
     };
 }
 
-const shell_option_flags_max = 10;
+const shell_option_flags_max = shell_expand.shell_option_flags_max;
 
 fn shellOptionFlags(options: ShellOptions, buffer: *[shell_option_flags_max]u8) []const u8 {
-    var len: usize = 0;
-    if (options.allexport) {
-        buffer[len] = 'a';
-        len += 1;
-    }
-    if (options.notify) {
-        buffer[len] = 'b';
-        len += 1;
-    }
-    if (options.errexit) {
-        buffer[len] = 'e';
-        len += 1;
-    }
-    if (options.monitor) {
-        buffer[len] = 'm';
-        len += 1;
-    }
-    if (options.noclobber) {
-        buffer[len] = 'C';
-        len += 1;
-    }
-    if (options.noglob) {
-        buffer[len] = 'f';
-        len += 1;
-    }
-    if (options.noexec) {
-        buffer[len] = 'n';
-        len += 1;
-    }
-    if (options.nounset) {
-        buffer[len] = 'u';
-        len += 1;
-    }
-    if (options.verbose) {
-        buffer[len] = 'v';
-        len += 1;
-    }
-    if (options.xtrace) {
-        buffer[len] = 'x';
-        len += 1;
-    }
-    return buffer[0..len];
+    return shell_expand.shellOptionFlags(semanticShellOptions(options), buffer);
 }
 
 fn applyShellOptionShort(options: *ShellOptions, spelling: []const u8) bool {
@@ -348,52 +309,6 @@ pub const CompletionDiagnosticSeverity = completion.DiagnosticSeverity;
 pub const CompletionDiagnosticKind = completion.DiagnosticKind;
 pub const CompletionDiagnostic = completion.Diagnostic;
 pub const CompletionProviderDiagnostic = completion.ProviderDiagnostic;
-
-const builtin_names = [_][]const u8{
-    ".",
-    ":",
-    "alias",
-    "bg",
-    "break",
-    "color",
-    "true",
-    "false",
-    "echo",
-    "command",
-    "complete",
-    "continue",
-    "cd",
-    "printf",
-    "pwd",
-    "read",
-    "readonly",
-    "return",
-    "shift",
-    "export",
-    "getopts",
-    "hash",
-    "fc",
-    "fg",
-    "jobs",
-    "local",
-    "unset",
-    "env",
-    "eval",
-    "exec",
-    "exit",
-    "set",
-    "shopt",
-    "source",
-    "test",
-    "times",
-    "trap",
-    "type",
-    "ulimit",
-    "umask",
-    "unalias",
-    "wait",
-    "[",
-};
 
 const set_options = [_][]const u8{ "-a", "+a", "-b", "+b", "-e", "+e", "-f", "+f", "-h", "+h", "-m", "+m", "-n", "+n", "-u", "+u", "-x", "+x", "-v", "+v", "-C", "+C", "-o", "+o", "--" };
 const set_option_names = [_][]const u8{ "allexport", "emacs", "errexit", "ignoreeof", "monitor", "noglob", "noclobber", "noexec", "nolog", "notify", "nounset", "pipefail", "vi", "verbose", "xtrace" };
@@ -3023,8 +2938,8 @@ pub const Executor = struct {
             try appendRootCommandCandidate(self.allocator, &builder, &seen, entry.key_ptr.*, .function, "function", context);
         }
 
-        for (builtin_names) |name| {
-            try appendRootCommandCandidate(self.allocator, &builder, &seen, name, .builtin, "builtin", context);
+        for (shell_builtin.default_registry) |definition| {
+            try appendRootCommandCandidate(self.allocator, &builder, &seen, definition.name, .builtin, "builtin", context);
         }
 
         if (options.io) |io| {
@@ -3225,7 +3140,9 @@ pub const Executor = struct {
     fn appendCommandNameCandidates(self: *Executor, builder: *completion.Builder, context: CompletionSemanticContext, options: ExecuteOptions) !void {
         var seen: std.StringHashMapUnmanaged(void) = .empty;
         defer deinitSeenCompletionNames(self.allocator, &seen);
-        for (builtin_names) |name| try appendSeenCommandCandidate(self, builder, &seen, context, name, .builtin, "builtin");
+        for (shell_builtin.default_registry) |definition| {
+            try appendSeenCommandCandidate(self, builder, &seen, context, definition.name, .builtin, "builtin");
+        }
         var function_iter = self.functions.iterator();
         while (function_iter.next()) |entry| try appendSeenCommandCandidate(self, builder, &seen, context, entry.key_ptr.*, .function, "function");
         var alias_iter = self.aliases.iterator();
@@ -11225,21 +11142,7 @@ fn isPipelineFollowedByAndOrListOp(pipelines: []const ir.Pipeline, index: usize)
 const BuiltinFn = *const fn (*Executor, ir.SimpleCommand, []const u8, ExecuteOptions) anyerror!CommandResult;
 
 fn isSpecialBuiltin(name: []const u8) bool {
-    return std.mem.eql(u8, name, ":") or
-        std.mem.eql(u8, name, ".") or
-        std.mem.eql(u8, name, "break") or
-        std.mem.eql(u8, name, "continue") or
-        std.mem.eql(u8, name, "eval") or
-        std.mem.eql(u8, name, "exec") or
-        std.mem.eql(u8, name, "exit") or
-        std.mem.eql(u8, name, "export") or
-        std.mem.eql(u8, name, "readonly") or
-        std.mem.eql(u8, name, "return") or
-        std.mem.eql(u8, name, "set") or
-        std.mem.eql(u8, name, "shift") or
-        std.mem.eql(u8, name, "times") or
-        std.mem.eql(u8, name, "trap") or
-        std.mem.eql(u8, name, "unset");
+    return shell_builtin.isSpecialBuiltin(name);
 }
 
 fn specialBuiltinPropertiesApply(options: ExecuteOptions, name: []const u8) bool {
@@ -27502,6 +27405,15 @@ test "root command completion includes builtin commands" {
     try expectCandidate(candidates, "exec", .builtin);
     try expectCandidate(candidates, "exit", .builtin);
     try expectCandidate(candidates, "export", .builtin);
+}
+
+test "legacy builtin dispatch covers semantic builtin registry" {
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    for (shell_builtin.default_registry) |definition| {
+        try std.testing.expect(builtinForName(executor, definition.name) != null);
+    }
 }
 
 test "builtin completion offers options for normal user-facing builtins" {
