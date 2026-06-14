@@ -1160,5 +1160,104 @@
             .stderr = "",
             .status = 0,
         },
+        .{
+            .name = "quote removal removes unquoted backslashes preserving escaped literals",
+            .script = "printf '<%s>\\n' a\\ b c\\$d e\\`f g\\\\h\n",
+            .stdout =
+            \\<a b>
+            \\<c$d>
+            \\<e`f>
+            \\<g\h>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "quote removal removes single and double quote delimiters",
+            .script =
+            \\printf '<%s>\n' 'single quoted' "double quoted" "a'b" 'c"d'
+            ,
+            .stdout =
+            \\<single quoted>
+            \\<double quoted>
+            \\<a'b>
+            \\<c"d>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "backslash newline is removed before tokenization",
+            .script = "printf '<%s>\\n' foo\\\nbar\n",
+            .stdout =
+            \\<foobar>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "quote removal preserves explicit null arguments",
+            .script =
+            \\empty=
+            \\printf '<%s>\n' "" '' "$empty"
+            ,
+            .stdout =
+            \\<>
+            \\<>
+            \\<>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "quote characters from expansion results are not removed",
+            .script =
+            \\x='"a b"'
+            \\printf '<%s>\n' $x "$x"
+            ,
+            .stdout =
+            \\<"a>
+            \\<b">
+            \\<"a b">
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "quote removal happens after field splitting and pathname expansion",
+            .script =
+            \\: >a.txt
+            \\pattern='*.txt'
+            \\printf '<%s>\n' $pattern "$pattern" \*.txt
+            ,
+            .stdout =
+            \\<a.txt>
+            \\<*.txt>
+            \\<*.txt>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "quote removal preserves quoted expansion results as single fields",
+            .script =
+            \\printf '<%s>\n' "$(printf 'a b')" $(printf 'a b') "$((1 + 2)) $((3 + 4))"
+            ,
+            .stdout =
+            \\<a b>
+            \\<a>
+            \\<b>
+            \\<3 7>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
     },
 }
