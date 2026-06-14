@@ -8,6 +8,8 @@ const std = @import("std");
 
 const fd = @import("../runtime/fd.zig");
 
+pub const runtime_fd = fd;
+
 pub const Ownership = enum {
     borrowed,
     owned_by_plan,

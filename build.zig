@@ -86,11 +86,31 @@ pub fn build(b: *std.Build) void {
         .source_module_name = "rush-parser",
         .source_module_root = "src/parser.zig",
     });
-    addFuzzTarget(b, fuzz_step, target, optimize, .{
-        .step_name = "fuzz-shell",
-        .description = "Run shell semantic fuzz targets",
+    const shell_fuzz_step = b.step("fuzz-shell", "Run all shell semantic fuzz targets");
+    fuzz_step.dependOn(shell_fuzz_step);
+    addFuzzTarget(b, shell_fuzz_step, target, optimize, .{
+        .step_name = "fuzz-shell-delta",
+        .description = "Run shell semantic StateDelta fuzz target",
         .root_source_file = "src/fuzz/shell.zig",
-        .filter = "fuzz shell",
+        .filter = "fuzz shell delta commit and discard",
+        .source_module_name = "rush-shell",
+        .source_module_root = "src/shell.zig",
+        .link_libc = true,
+    });
+    addFuzzTarget(b, shell_fuzz_step, target, optimize, .{
+        .step_name = "fuzz-shell-consequence",
+        .description = "Run shell consequence policy fuzz target",
+        .root_source_file = "src/fuzz/shell.zig",
+        .filter = "fuzz shell consequence policy",
+        .source_module_name = "rush-shell",
+        .source_module_root = "src/shell.zig",
+        .link_libc = true,
+    });
+    addFuzzTarget(b, shell_fuzz_step, target, optimize, .{
+        .step_name = "fuzz-shell-redirection",
+        .description = "Run shell redirection rollback fuzz target",
+        .root_source_file = "src/fuzz/shell.zig",
+        .filter = "fuzz shell redirection rollback",
         .source_module_name = "rush-shell",
         .source_module_root = "src/shell.zig",
         .link_libc = true,

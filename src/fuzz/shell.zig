@@ -8,6 +8,10 @@ const std = @import("std");
 
 pub const shell = @import("rush-shell");
 
+const consequence = shell.consequence;
+const redirection_plan = shell.redirection_plan;
+const fd = redirection_plan.runtime_fd;
+
 const variable_names = [_][]const u8{ "A", "B", "C", "PATH", "rush_var" };
 const variable_values = [_][]const u8{ "", "0", "one", "two words", "*.zig", "$literal" };
 const alias_names = [_][]const u8{ "ll", "g", "x-y", "run!" };
@@ -26,6 +30,19 @@ const shell_options = [_]shell.ShellOption{
     .verbose,
     .xtrace,
 };
+const shell_error_kinds = [_]consequence.ShellErrorKind{
+    .redirection_error,
+    .readonly_assignment,
+    .expansion_error,
+    .evaluation_error,
+    .special_builtin_failure,
+};
+
+const redirection_max_prefix_steps = 4;
+const redirection_target_count = 5;
+const redirection_source_base = 5;
+const redirection_table_len = 64;
+const closed_duplicate_source: fd.Descriptor = 30;
 
 const VariableAction = enum {
     keep,
@@ -60,6 +77,14 @@ test "fuzz shell delta commit and discard" {
     try std.testing.fuzz({}, fuzzShellDelta, .{});
 }
 
+test "fuzz shell consequence policy" {
+    try std.testing.fuzz({}, fuzzShellConsequencePolicy, .{});
+}
+
+test "fuzz shell redirection rollback" {
+    try std.testing.fuzz({}, fuzzShellRedirectionRollback, .{});
+}
+
 fn fuzzShellDelta(_: void, smith: *std.testing.Smith) anyerror!void {
     var initial = shell.ShellState.init(std.testing.allocator);
     defer initial.deinit();
@@ -84,6 +109,130 @@ fn fuzzShellDelta(_: void, smith: *std.testing.Smith) anyerror!void {
     try applyPlanToExpected(&expected, plan);
 
     try expectShellStatesEqual(expected, initial);
+}
+
+fn fuzzShellConsequencePolicy(_: void, smith: *std.testing.Smith) anyerror!void {
+    var options: shell.ShellOptions = .{};
+    options.set(.errexit, smith.boolWeighted(1, 1));
+
+    const eval_context = shell.EvalContext.init(.{
+        .target = .current_shell,
+        .interactive = smith.boolWeighted(1, 1),
+        .errexit_ignored = smith.boolWeighted(1, 2),
+    });
+
+    const raw_status = smith.value(shell.ExitStatus);
+    const nonzero_status: shell.ExitStatus = if (raw_status == 0) 1 else raw_status;
+
+    switch (smith.index(3)) {
+        0 => {
+            const decision = consequence.decideForStatus(options, eval_context, raw_status);
+            decision.validate(eval_context);
+            const expected_errexit = raw_status != 0 and options.enabled(.errexit) and eval_context.observesErrexit();
+            if (expected_errexit) {
+                try std.testing.expectEqual(consequence.ErrorConsequence.errexit_exit, decision.consequence);
+                try std.testing.expectEqual(shell.ControlFlow{ .exit = raw_status }, decision.control_flow);
+                try std.testing.expectEqual(consequence.ShellErrorKind.nonzero_status, decision.kind.?);
+            } else {
+                try std.testing.expectEqual(consequence.ErrorConsequence.normal_outcome, decision.consequence);
+                try std.testing.expectEqual(shell.ControlFlow.normal, decision.control_flow);
+                try std.testing.expectEqual(if (raw_status == 0) @as(?consequence.ShellErrorKind, null) else .nonzero_status, decision.kind);
+            }
+        },
+        1 => {
+            const kind = shell_error_kinds[smith.index(shell_error_kinds.len)];
+            const decision = consequence.decideForShellError(options, eval_context, kind, nonzero_status);
+            decision.validate(eval_context);
+            try std.testing.expectEqual(kind, decision.kind.?);
+            try std.testing.expectEqual(nonzero_status, decision.status);
+
+            if (shellErrorIsFatal(kind, eval_context)) {
+                try std.testing.expectEqual(consequence.ErrorConsequence.fatal_shell_error, decision.consequence);
+                try std.testing.expectEqual(shell.ControlFlow{ .fatal = nonzero_status }, decision.control_flow);
+            } else if (options.enabled(.errexit) and eval_context.observesErrexit()) {
+                try std.testing.expectEqual(consequence.ErrorConsequence.errexit_exit, decision.consequence);
+                try std.testing.expectEqual(shell.ControlFlow{ .exit = nonzero_status }, decision.control_flow);
+            } else {
+                try std.testing.expectEqual(consequence.ErrorConsequence.normal_outcome, decision.consequence);
+                try std.testing.expectEqual(shell.ControlFlow.normal, decision.control_flow);
+            }
+        },
+        2 => {
+            const failure_consequence: redirection_plan.FailureConsequence = if (smith.boolWeighted(1, 1)) .command_failure else .fatal_shell_error;
+            const status = consequence.statusForRedirectionFailure(failure_consequence);
+            const decision = consequence.decideForRedirectionFailure(options, eval_context, failure_consequence, status);
+            decision.validate(eval_context);
+            try std.testing.expectEqual(status, decision.status);
+            try std.testing.expectEqual(consequence.ShellErrorKind.redirection_error, decision.kind.?);
+
+            if (failure_consequence == .fatal_shell_error) {
+                try std.testing.expectEqual(consequence.ErrorConsequence.fatal_shell_error, decision.consequence);
+                try std.testing.expectEqual(shell.ControlFlow{ .fatal = status }, decision.control_flow);
+            } else if (options.enabled(.errexit) and eval_context.observesErrexit()) {
+                try std.testing.expectEqual(consequence.ErrorConsequence.errexit_exit, decision.consequence);
+                try std.testing.expectEqual(shell.ControlFlow{ .exit = status }, decision.control_flow);
+            } else {
+                try std.testing.expectEqual(consequence.ErrorConsequence.normal_outcome, decision.consequence);
+                try std.testing.expectEqual(shell.ControlFlow.normal, decision.control_flow);
+            }
+        },
+        else => unreachable,
+    }
+}
+
+fn fuzzShellRedirectionRollback(_: void, smith: *std.testing.Smith) anyerror!void {
+    const prefix_len = smith.index(redirection_max_prefix_steps + 1);
+    const failure_mode = smith.index(3);
+
+    var steps: [redirection_max_prefix_steps + 1]redirection_plan.RedirectionStep = undefined;
+    var rollbacks: [redirection_max_prefix_steps + 1]redirection_plan.RestorationStep = undefined;
+    for (0..prefix_len) |index| {
+        steps[index] = generatedRedirectionStep(smith, index);
+        rollbacks[index] = .{ .ordinal = index, .target = steps[index].target() };
+    }
+
+    const step_count = switch (failure_mode) {
+        0 => prefix_len,
+        1 => blk: {
+            steps[prefix_len] = redirection_plan.RedirectionStep.openPath(prefix_len, generatedTarget(smith), "missing", .{ .access = .read_only });
+            rollbacks[prefix_len] = .{ .ordinal = prefix_len, .target = steps[prefix_len].target() };
+            break :blk prefix_len + 1;
+        },
+        2 => blk: {
+            steps[prefix_len] = redirection_plan.RedirectionStep.duplicate(prefix_len, generatedTarget(smith), closed_duplicate_source);
+            rollbacks[prefix_len] = .{ .ordinal = prefix_len, .target = steps[prefix_len].target() };
+            break :blk prefix_len + 1;
+        },
+        else => unreachable,
+    };
+
+    const plan: redirection_plan.RedirectionPlan = .{
+        .steps = steps[0..step_count],
+        .rollback_steps = rollbacks[0..step_count],
+    };
+    plan.validate();
+
+    var fake: FuzzFdRuntime = .{};
+    const initial_table = fake.table;
+    const result = try plan.apply(std.testing.allocator, fake.port());
+
+    switch (result) {
+        .applied => |applied_value| {
+            var applied = applied_value;
+            defer applied.deinit();
+            if (failure_mode != 0) {
+                applied.restore();
+                return error.ExpectedRedirectionFailure;
+            }
+            applied.restore();
+            try std.testing.expectEqualSlices(?u16, &initial_table, &fake.table);
+        },
+        .failure => |failure| {
+            if (failure_mode == 0) return error.UnexpectedRedirectionFailure;
+            try std.testing.expectEqual(prefix_len, failure.step_index);
+            try std.testing.expectEqualSlices(?u16, &initial_table, &fake.table);
+        },
+    }
 }
 
 fn populateInitialState(smith: *std.testing.Smith, shell_state: *shell.ShellState) !void {
@@ -191,6 +340,141 @@ fn applyPlanToExpected(shell_state: *shell.ShellState, plan: DeltaPlan) !void {
 
     if (plan.last_status) |status| shell_state.last_status = status;
     shell_state.validate();
+}
+
+fn shellErrorIsFatal(kind: consequence.ShellErrorKind, eval_context: shell.EvalContext) bool {
+    if (eval_context.interactive) return false;
+    return switch (kind) {
+        .nonzero_status, .redirection_error => false,
+        .readonly_assignment,
+        .expansion_error,
+        .evaluation_error,
+        .special_builtin_failure,
+        => true,
+    };
+}
+
+fn generatedRedirectionStep(smith: *std.testing.Smith, ordinal: usize) redirection_plan.RedirectionStep {
+    const target = generatedTarget(smith);
+    return switch (smith.index(3)) {
+        0 => redirection_plan.RedirectionStep.openPath(ordinal, target, generatedPath(smith), .{ .access = .write_only, .create = true, .truncate = true }),
+        1 => redirection_plan.RedirectionStep.duplicate(ordinal, target, generatedSource(smith)),
+        2 => redirection_plan.RedirectionStep.close(ordinal, target),
+        else => unreachable,
+    };
+}
+
+fn generatedTarget(smith: *std.testing.Smith) fd.Descriptor {
+    return @intCast(smith.index(redirection_target_count));
+}
+
+fn generatedSource(smith: *std.testing.Smith) fd.Descriptor {
+    return @intCast(redirection_source_base + smith.index(redirection_target_count));
+}
+
+fn generatedPath(smith: *std.testing.Smith) []const u8 {
+    return switch (smith.index(4)) {
+        0 => "out-a",
+        1 => "out-b",
+        2 => "out-c",
+        3 => "out-d",
+        else => unreachable,
+    };
+}
+
+const FuzzFdRuntime = struct {
+    table: [redirection_table_len]?u16 = initFdTable(),
+    next_descriptor: fd.Descriptor = 10,
+    next_identity: u16 = 100,
+
+    fn port(self: *FuzzFdRuntime) fd.Port {
+        return .{
+            .context = self,
+            .open_fn = open,
+            .close_fn = close,
+            .duplicate_fn = duplicate,
+            .duplicate_to_fn = duplicateTo,
+            .pipe_fn = pipe,
+            .is_tty_fn = isTty,
+        };
+    }
+
+    fn identity(self: FuzzFdRuntime, descriptor: fd.Descriptor) ?u16 {
+        if (descriptor < 0 or descriptor >= self.table.len) return null;
+        return self.table[@intCast(descriptor)];
+    }
+
+    fn setIdentity(self: *FuzzFdRuntime, descriptor: fd.Descriptor, identity_value: ?u16) void {
+        std.debug.assert(descriptor >= 0 and descriptor < self.table.len);
+        self.table[@intCast(descriptor)] = identity_value;
+    }
+
+    fn allocateDescriptor(self: *FuzzFdRuntime, identity_value: u16) fd.Descriptor {
+        const descriptor = self.next_descriptor;
+        self.next_descriptor += 1;
+        self.setIdentity(descriptor, identity_value);
+        return descriptor;
+    }
+
+    fn allocateIdentity(self: *FuzzFdRuntime) u16 {
+        const identity_value = self.next_identity;
+        self.next_identity += 1;
+        return identity_value;
+    }
+
+    fn fromContext(context: *anyopaque) *FuzzFdRuntime {
+        return @ptrCast(@alignCast(context));
+    }
+
+    fn open(context: *anyopaque, request: fd.OpenRequest) fd.OpenError!fd.OpenResult {
+        const self = fromContext(context);
+        request.validate();
+        if (std.mem.eql(u8, request.path, "missing")) return error.FileNotFound;
+        return .{ .descriptor = self.allocateDescriptor(self.allocateIdentity()) };
+    }
+
+    fn close(context: *anyopaque, request: fd.CloseRequest) fd.CloseError!void {
+        const self = fromContext(context);
+        request.validate();
+        if (self.identity(request.descriptor) == null) return error.BadFileDescriptor;
+        self.setIdentity(request.descriptor, null);
+    }
+
+    fn duplicate(context: *anyopaque, request: fd.DuplicateRequest) fd.DuplicateError!fd.DuplicateResult {
+        const self = fromContext(context);
+        request.validate();
+        const identity_value = self.identity(request.descriptor) orelse return error.BadFileDescriptor;
+        return .{ .descriptor = self.allocateDescriptor(identity_value) };
+    }
+
+    fn duplicateTo(context: *anyopaque, request: fd.DuplicateToRequest) fd.DuplicateError!void {
+        const self = fromContext(context);
+        request.validate();
+        const identity_value = self.identity(request.source) orelse return error.BadFileDescriptor;
+        self.setIdentity(request.target, identity_value);
+    }
+
+    fn pipe(context: *anyopaque, request: fd.PipeRequest) fd.PipeError!fd.PipeResult {
+        const self = fromContext(context);
+        request.validate();
+        return .{
+            .read = self.allocateDescriptor(self.allocateIdentity()),
+            .write = self.allocateDescriptor(self.allocateIdentity()),
+        };
+    }
+
+    fn isTty(context: *anyopaque, request: fd.IsTtyRequest) fd.IsTtyError!fd.IsTtyResult {
+        const self = fromContext(context);
+        request.validate();
+        _ = self;
+        return .{ .is_tty = false };
+    }
+};
+
+fn initFdTable() [redirection_table_len]?u16 {
+    var table = [_]?u16{null} ** redirection_table_len;
+    for (0..10) |descriptor| table[descriptor] = @intCast(descriptor + 1);
+    return table;
 }
 
 fn expectShellStatesEqual(expected: shell.ShellState, actual: shell.ShellState) !void {
