@@ -93,7 +93,7 @@ fn semanticClassAcceptsName(semantic_class: BuiltinSemanticClass, name: []const 
             "abbr",
             "exec",
         }),
-        .job_control => matchesName(name, &.{ "jobs", "fg", "bg" }),
+        .job_control => matchesName(name, &.{ "jobs", "fg", "bg", "wait" }),
         .control_flow => matchesName(name, &.{ "break", "continue", "exit", "return" }),
     };
 }
@@ -151,7 +151,7 @@ pub const default_builtins = [_]Builtin{
     Builtin.init("ulimit", .regular),
     Builtin.init("umask", .regular),
     Builtin.initWithSemantics("unalias", .regular, .shell_state),
-    Builtin.init("wait", .regular),
+    Builtin.initWithSemantics("wait", .regular, .job_control),
 };
 
 pub const default_registry: []const Builtin = &default_builtins;
