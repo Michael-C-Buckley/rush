@@ -470,6 +470,157 @@
             .status = 0,
         },
         .{
+            .name = "command substitution removes all trailing newlines",
+            .script =
+            \\x=$(printf 'a\n\n\n')
+            \\printf '<%s>\n' "$x"
+            ,
+            .stdout =
+            \\<a>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "unquoted command substitution output is field split after newline preservation",
+            .script =
+            \\set -- $(printf 'a\nb\n')
+            \\printf '<%s>\n' "$@"
+            ,
+            .stdout =
+            \\<a>
+            \\<b>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "unquoted empty command substitution produces no field",
+            .script =
+            \\set -- before $(printf '') after
+            \\printf '<%s>\n' "$@"
+            ,
+            .stdout =
+            \\<before>
+            \\<after>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "quoted empty command substitution preserves an empty field",
+            .script =
+            \\set -- before "$(printf '')" after
+            \\printf '<%s>\n' "$@"
+            ,
+            .stdout =
+            \\<before>
+            \\<>
+            \\<after>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "backquote command substitution output is split when unquoted",
+            .script =
+            \\printf '<%s>\n' `printf 'a b'`
+            ,
+            .stdout =
+            \\<a>
+            \\<b>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "backquote command substitution preserves spaces when quoted",
+            .script =
+            \\printf '<%s>\n' "`printf 'a b'`"
+            ,
+            .stdout =
+            \\<a b>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "backquote command substitution supports escaped nested backquotes",
+            .script =
+            \\printf '<%s>\n' "`printf '[%s]' \`printf inner\``"
+            ,
+            .stdout =
+            \\<[inner]>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "backquote command substitution removes escaped newline from the command text",
+            .script = "printf '<%s>\n' `printf a\\\nb`\n",
+            .stdout =
+            \\<ab>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "backquote command substitution can quote dollar for the inner command",
+            .script = "x=outer\nprintf '<%s>\\n' \"`x=inner; printf \\\\$x`\"\n",
+            .stdout =
+            \\<$x>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "dollar command substitution parses quoted closing parentheses",
+            .script =
+            \\printf '<%s>\n' "$(printf 'a ) b')"
+            ,
+            .stdout =
+            \\<a ) b>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "dollar command substitution parses case pattern closing parentheses",
+            .script =
+            \\printf '<%s>\n' "$(case x in x) printf case ;; esac)"
+            ,
+            .stdout =
+            \\<case>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "command substitution runs in an isolated shell environment",
+            .script =
+            \\x=parent
+            \\y=$(x=child; printf '%s' "$x")
+            \\printf '<%s>:<%s>\n' "$x" "$y"
+            ,
+            .stdout =
+            \\<parent>:<child>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "arithmetic expansion evaluates expressions after parameter expansion",
             .script =
             \\n=5
