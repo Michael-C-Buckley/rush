@@ -22498,11 +22498,11 @@ test "executor implements set shell option baseline" {
 
     var noexec_executor = Executor.init(std.testing.allocator);
     defer noexec_executor.deinit();
-    var noexec = try noexec_executor.executeScriptSlice("set -n\necho bad\n", .{});
-    defer noexec.deinit();
-    try std.testing.expectEqual(@as(ExitStatus, 0), noexec.status);
-    try std.testing.expectEqualStrings("", noexec.stdout);
-    try std.testing.expectEqualStrings("", noexec.stderr);
+    var no_execute = try noexec_executor.executeScriptSlice("set -n\necho bad\n", .{});
+    defer no_execute.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), no_execute.status);
+    try std.testing.expectEqualStrings("", no_execute.stdout);
+    try std.testing.expectEqualStrings("", no_execute.stderr);
     try std.testing.expect(noexec_executor.shell_options.noexec);
     var option_flags_buffer: [shell_option_flags_max]u8 = undefined;
     try std.testing.expectEqualStrings("n", shellOptionFlags(noexec_executor.shell_options, &option_flags_buffer));
@@ -22521,9 +22521,9 @@ test "executor implements set shell option baseline" {
 
     var interactive_noexec_executor = Executor.init(std.testing.allocator);
     defer interactive_noexec_executor.deinit();
-    var interactive_noexec = try interactive_noexec_executor.executeScriptSlice("set -n\necho interactive\n", .{ .interactive = true });
-    defer interactive_noexec.deinit();
-    try std.testing.expectEqualStrings("interactive\n", interactive_noexec.stdout);
+    var interactive_no_execute = try interactive_noexec_executor.executeScriptSlice("set -n\necho interactive\n", .{ .interactive = true });
+    defer interactive_no_execute.deinit();
+    try std.testing.expectEqualStrings("interactive\n", interactive_no_execute.stdout);
     try std.testing.expect(!interactive_noexec_executor.shell_options.noexec);
 
     var disable_lowered = try parseAndLower(std.testing.allocator, "set +o pipefail; false | true");

@@ -1,12 +1,12 @@
-//! Completion runtime bridge.
+//! Completion runtime.
 //!
-//! This module is the app-facing owner for completion query state while the
-//! legacy executor still hosts dynamic provider execution internals.
+//! This module is the app-facing owner for completion query state and dynamic
+//! provider/prompt execution services.
 
 const std = @import("std");
 const compat = @import("compat.zig");
 const completion = @import("completion.zig");
-const executor_impl = @import("exec\x2ezig");
+const executor_impl = @import("completion_runtime_impl.zig");
 const ir = @import("ir.zig");
 const runtime = @import("runtime.zig");
 const shell = @import("shell.zig");
