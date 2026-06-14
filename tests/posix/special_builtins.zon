@@ -67,6 +67,17 @@
             .status = 0,
         },
         .{
+            .name = "assignment to readonly variable exits nonzero",
+            .script =
+            \\readonly ro=value
+            \\ro=other
+            \\printf 'bad\n'
+            ,
+            .stdout = "",
+            .stderr_match = .nonempty,
+            .status_match = .nonzero,
+        },
+        .{
             .name = "unset succeeds for an unset variable name",
             .script =
             \\unset missing

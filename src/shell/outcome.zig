@@ -204,6 +204,8 @@ pub fn readonlyVariableFailure(
     const message = try std.fmt.allocPrint(allocator, "{s}: readonly variable", .{name});
     errdefer allocator.free(message);
     try command_outcome.diagnostics.append(allocator, .{ .message = message });
+    try command_outcome.appendStderr(message);
+    try command_outcome.appendStderr("\n");
 
     return command_outcome;
 }
