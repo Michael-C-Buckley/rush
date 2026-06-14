@@ -6343,38 +6343,22 @@ const InteractiveOptions = struct {
 
 const InteractiveShell = struct {
     allocator: std.mem.Allocator,
-    executor: exec.Executor,
     semantic_state: shell.ShellState,
     semantic_enabled: bool = false,
 
     fn init(allocator: std.mem.Allocator) InteractiveShell {
         return .{
             .allocator = allocator,
-            .executor = exec.Executor.init(allocator),
             .semantic_state = shell.ShellState.init(allocator),
         };
     }
 
     fn deinit(self: *InteractiveShell) void {
         self.semantic_state.deinit();
-        self.executor.deinit();
         self.* = undefined;
     }
 
-    fn syncSemanticFromExecutor(self: *InteractiveShell, io: std.Io) !void {
-        std.debug.assert(self.executor.execution_depth == 0);
-        self.semantic_state.deinit();
-        self.semantic_state = shell.ShellState.init(self.allocator);
-        self.semantic_enabled = false;
-        if (try initializeSemanticInteractiveStateFromExecutor(self.allocator, io, &self.semantic_state, self.executor)) |message| {
-            std.debug.assert(message.len != 0);
-            return;
-        }
-        self.semantic_enabled = true;
-    }
-
     fn initializeSemanticStartup(self: *InteractiveShell, io: std.Io, environ_map: *const std.process.Environ.Map, options: InteractiveOptions) !void {
-        std.debug.assert(self.executor.execution_depth == 0);
         self.semantic_state.deinit();
         self.semantic_state = shell.ShellState.init(self.allocator);
         self.semantic_enabled = false;
@@ -6383,17 +6367,25 @@ const InteractiveShell = struct {
         setInteractiveStartupShellOptions(&startup_shell_options, options.monitor_option_explicit, stdinIsTty(io));
         try initializeSemanticInteractiveStartupState(self.allocator, io, &self.semantic_state, environ_map, options.positionals, startup_shell_options);
         self.semantic_enabled = true;
-
-        try self.executor.importEnvironment(environ_map);
-        self.executor.arg_zero = options.arg_zero;
-        try self.syncExecutorFromSemantic();
-    }
-
-    fn syncExecutorFromSemantic(self: *InteractiveShell) !void {
-        if (!self.semantic_enabled) return;
-        try syncExecutorFromSemanticInteractiveState(&self.executor, self.semantic_state);
     }
 };
+
+fn syncInteractiveShellSemanticFromExecutor(interactive_shell: *InteractiveShell, io: std.Io, executor: exec.Executor) !void {
+    std.debug.assert(executor.execution_depth == 0);
+    interactive_shell.semantic_state.deinit();
+    interactive_shell.semantic_state = shell.ShellState.init(interactive_shell.allocator);
+    interactive_shell.semantic_enabled = false;
+    if (try initializeSemanticInteractiveStateFromExecutor(interactive_shell.allocator, io, &interactive_shell.semantic_state, executor)) |message| {
+        std.debug.assert(message.len != 0);
+        return;
+    }
+    interactive_shell.semantic_enabled = true;
+}
+
+fn syncInteractiveExecutorFromShell(executor: *exec.Executor, interactive_shell: InteractiveShell) !void {
+    if (!interactive_shell.semantic_enabled) return;
+    try syncExecutorFromSemanticInteractiveState(executor, interactive_shell.semantic_state);
+}
 
 fn setInteractiveStartupShellOptions(shell_options: *shell.ShellOptions, monitor_option_explicit: bool, stdin_is_tty: bool) void {
     if (stdin_is_tty and !monitor_option_explicit) shell_options.monitor = true;
@@ -6420,10 +6412,16 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
     var last_status: shell.ExitStatus = 0;
     var interactive_shell = InteractiveShell.init(allocator);
     defer interactive_shell.deinit();
-    const executor = &interactive_shell.executor;
+    var interactive_executor = exec.Executor.init(allocator);
+    defer interactive_executor.deinit();
+    const executor = &interactive_executor;
     history_service.attachFc(executor);
     try interactive_shell.initializeSemanticStartup(io, environ_map, options);
-    try InteractiveConfigService.initInteractive(allocator, io, &interactive_shell, options.arg_zero).load(options);
+    try executor.importEnvironment(environ_map);
+    executor.arg_zero = options.arg_zero;
+    try syncInteractiveExecutorFromShell(executor, interactive_shell);
+    try InteractiveConfigService.initInteractive(allocator, io, executor, &interactive_shell, options.arg_zero).load(options);
+    try syncInteractiveExecutorFromShell(executor, interactive_shell);
     if (executor.pending_exit) |status| return status;
     var completion_executor = exec.Executor.init(allocator);
     defer completion_executor.deinit();
@@ -6459,10 +6457,10 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
         defer allocator.free(notifications);
         try writeAll(io, .stderr, notifications);
         try prompt_service.runPendingVariableHooks(io);
-        try interactive_shell.syncSemanticFromExecutor(io);
+        try syncInteractiveShellSemanticFromExecutor(&interactive_shell, io, executor.*);
         prompt_service.semantic_state = if (interactive_shell.semantic_enabled) &interactive_shell.semantic_state else null;
         try prompt_service.runEventHooks(io, "prompt", &.{});
-        try interactive_shell.syncSemanticFromExecutor(io);
+        try syncInteractiveShellSemanticFromExecutor(&interactive_shell, io, executor.*);
         prompt_service.semantic_state = if (interactive_shell.semantic_enabled) &interactive_shell.semantic_state else null;
         if (executor.pending_exit) |status| {
             last_status = status;
@@ -6637,8 +6635,8 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
             const command_started_at = unixTimestamp(io);
             const command_started = monotonicTimestamp(io);
             try prompt_service.runEventHooks(io, "preexec", &.{input});
-            try interactive_shell.syncSemanticFromExecutor(io);
-            var result = try runInteractiveScript(allocator, io, &interactive_shell, input, .{ .io = io, .allow_external = true, .features = options.features, .external_stdio = .inherit, .interactive = true, .arg_zero = options.arg_zero });
+            try syncInteractiveShellSemanticFromExecutor(&interactive_shell, io, executor.*);
+            var result = try runInteractiveScript(allocator, io, executor, &interactive_shell, input, .{ .io = io, .allow_external = true, .features = options.features, .external_stdio = .inherit, .interactive = true, .arg_zero = options.arg_zero });
             const command_duration_ms = durationMillis(command_started, monotonicTimestamp(io));
             defer result.deinit();
             try writeAll(io, .stdout, result.stdout);
@@ -6650,7 +6648,7 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
             var status_buffer: [3]u8 = undefined;
             const status_text = try std.fmt.bufPrint(&status_buffer, "{d}", .{result.status});
             try prompt_service.runEventHooks(io, "postexec", &.{ input, status_text });
-            try interactive_shell.syncSemanticFromExecutor(io);
+            try syncInteractiveShellSemanticFromExecutor(&interactive_shell, io, executor.*);
             try terminal.finishSemanticCommand(result.status);
             completion_cache.clear();
             if (executor.pending_exit) |status| {
@@ -6762,7 +6760,9 @@ pub fn runReplInput(allocator: std.mem.Allocator, io: std.Io, input: []const u8)
     var last_status: shell.ExitStatus = 0;
     var interactive_shell = InteractiveShell.init(allocator);
     defer interactive_shell.deinit();
-    const executor = &interactive_shell.executor;
+    var interactive_executor = exec.Executor.init(allocator);
+    defer interactive_executor.deinit();
+    const executor = &interactive_executor;
     history_service.attachFc(executor);
     var prompt_service: InteractivePromptService = .{ .executor = executor };
     {
@@ -6778,7 +6778,7 @@ pub fn runReplInput(allocator: std.mem.Allocator, io: std.Io, input: []const u8)
         var result = try runScriptWithExecutor(allocator, executor, "unset -f rush_prompt", .{ .io = io, .allow_external = true, .arg_zero = "rush" });
         defer result.deinit();
     }
-    try interactive_shell.syncSemanticFromExecutor(io);
+    try syncInteractiveShellSemanticFromExecutor(&interactive_shell, io, executor.*);
     prompt_service.semantic_state = if (interactive_shell.semantic_enabled) &interactive_shell.semantic_state else null;
 
     var lines = std.mem.splitScalar(u8, input, '\n');
@@ -6800,13 +6800,13 @@ pub fn runReplInput(allocator: std.mem.Allocator, io: std.Io, input: []const u8)
         if (line.len == 0) continue;
 
         const command_started_at = unixTimestamp(io);
-        var result = try runInteractiveScript(allocator, io, &interactive_shell, line, .{ .io = io, .allow_external = true, .interactive = true, .arg_zero = "rush" });
+        var result = try runInteractiveScript(allocator, io, executor, &interactive_shell, line, .{ .io = io, .allow_external = true, .interactive = true, .arg_zero = "rush" });
         defer result.deinit();
         try stdout.appendSlice(allocator, result.stdout);
         try stderr.appendSlice(allocator, result.stderr);
         last_status = result.status;
         if (!history_service.consumeSuppressNextAppend(executor)) try history_service.addCommand(io, line, result.status, command_started_at, 0);
-        try interactive_shell.syncSemanticFromExecutor(io);
+        try syncInteractiveShellSemanticFromExecutor(&interactive_shell, io, executor.*);
         prompt_service.semantic_state = if (interactive_shell.semantic_enabled) &interactive_shell.semantic_state else null;
         if (executor.pending_exit) |status| {
             last_status = status;
@@ -7110,16 +7110,16 @@ fn runSemanticAliasTimingCommandString(allocator: std.mem.Allocator, io: std.Io,
     return .{ .output = .{ .allocator = allocator, .status = status, .stdout = try stdout.toOwnedSlice(allocator), .stderr = try stderr.toOwnedSlice(allocator) } };
 }
 
-fn runInteractiveScript(allocator: std.mem.Allocator, io: std.Io, interactive_shell: *InteractiveShell, script: []const u8, options: exec.ExecuteOptions) !CommandResult {
+fn runInteractiveScript(allocator: std.mem.Allocator, io: std.Io, executor: *exec.Executor, interactive_shell: *InteractiveShell, script: []const u8, options: exec.ExecuteOptions) !CommandResult {
     std.debug.assert(options.interactive);
-    std.debug.assert(interactive_shell.executor.execution_depth == 0);
+    std.debug.assert(executor.execution_depth == 0);
     if (interactive_shell.semantic_enabled) {
-        var semantic_execution = try runSemanticInteractiveCommandString(allocator, io, interactive_shell, script, semanticInvocationFromExecuteOptions(options), options.external_stdio);
+        var semantic_execution = try runSemanticInteractiveCommandString(allocator, io, executor, interactive_shell, script, semanticInvocationFromExecuteOptions(options), options.external_stdio);
         switch (semantic_execution) {
             .output => |output| {
                 semantic_execution = undefined;
-                std.debug.assert(interactive_shell.executor.pending_exit == null);
-                try interactive_shell.syncExecutorFromSemantic();
+                std.debug.assert(executor.pending_exit == null);
+                try syncInteractiveExecutorFromShell(executor, interactive_shell.*);
                 return output;
             },
             .unsupported => |message| {
@@ -7133,10 +7133,9 @@ fn runInteractiveScript(allocator: std.mem.Allocator, io: std.Io, interactive_sh
     return unsupportedSemanticCommandResult(allocator, "semantic interactive executor is disabled while legacy interactive services are active");
 }
 
-fn runSemanticInteractiveCommandString(allocator: std.mem.Allocator, io: std.Io, interactive_shell: *InteractiveShell, script: []const u8, invocation: shell.InvocationContext, external_stdio: runtime.ExternalStdio) !SemanticInvocationExecution {
+fn runSemanticInteractiveCommandString(allocator: std.mem.Allocator, io: std.Io, executor: *const exec.Executor, interactive_shell: *InteractiveShell, script: []const u8, invocation: shell.InvocationContext, external_stdio: runtime.ExternalStdio) !SemanticInvocationExecution {
     assertSemanticInteractiveOptions(script, invocation);
 
-    const executor = &interactive_shell.executor;
     const shell_state = &interactive_shell.semantic_state;
     std.debug.assert(interactive_shell.semantic_enabled);
     shell_state.validate();
@@ -8123,10 +8122,10 @@ const InteractiveConfigService = struct {
         return .{ .allocator = allocator, .io = io, .executor = executor, .arg_zero = arg_zero };
     }
 
-    fn initInteractive(allocator: std.mem.Allocator, io: std.Io, interactive_shell: *InteractiveShell, arg_zero: []const u8) InteractiveConfigService {
+    fn initInteractive(allocator: std.mem.Allocator, io: std.Io, executor: *exec.Executor, interactive_shell: *InteractiveShell, arg_zero: []const u8) InteractiveConfigService {
         std.debug.assert(interactive_shell.semantic_enabled);
         interactive_shell.semantic_state.validate();
-        return .{ .allocator = allocator, .io = io, .interactive_shell = interactive_shell, .arg_zero = arg_zero };
+        return .{ .allocator = allocator, .io = io, .executor = executor, .interactive_shell = interactive_shell, .arg_zero = arg_zero };
     }
 
     fn load(self: InteractiveConfigService, options: InteractiveOptions) !void {
@@ -8180,7 +8179,7 @@ const InteractiveConfigService = struct {
 
     fn sourceScript(self: InteractiveConfigService, contents: []const u8, source_path: []const u8) !void {
         var result = if (self.interactive_shell) |interactive_shell|
-            try runInteractiveScript(self.allocator, self.io, interactive_shell, contents, .{ .io = self.io, .allow_external = true, .external_stdio = .capture, .interactive = true, .arg_zero = self.arg_zero, .source_path = source_path })
+            try runInteractiveScript(self.allocator, self.io, self.executor.?, interactive_shell, contents, .{ .io = self.io, .allow_external = true, .external_stdio = .capture, .interactive = true, .arg_zero = self.arg_zero, .source_path = source_path })
         else
             try runScriptWithExecutor(self.allocator, self.executor.?, contents, .{ .io = self.io, .allow_external = true, .arg_zero = self.arg_zero, .source_path = source_path });
         defer result.deinit();
@@ -11608,19 +11607,21 @@ test "runScriptWithEnvironment imports initial shell variables" {
 test "semantic interactive command updates executor status for later commands" {
     var interactive_shell = InteractiveShell.init(std.testing.allocator);
     defer interactive_shell.deinit();
-    const executor = &interactive_shell.executor;
+    var interactive_executor = exec.Executor.init(std.testing.allocator);
+    defer interactive_executor.deinit();
+    const executor = &interactive_executor;
     try executor.initializeShellVariables(std.testing.io);
     executor.arg_zero = "rush";
-    try interactive_shell.syncSemanticFromExecutor(std.testing.io);
+    try syncInteractiveShellSemanticFromExecutor(&interactive_shell, std.testing.io, executor.*);
 
-    var false_result = try runInteractiveScript(std.testing.allocator, std.testing.io, &interactive_shell, "false", .{ .io = std.testing.io, .allow_external = true, .external_stdio = .inherit, .interactive = true, .arg_zero = "rush" });
+    var false_result = try runInteractiveScript(std.testing.allocator, std.testing.io, executor, &interactive_shell, "false", .{ .io = std.testing.io, .allow_external = true, .external_stdio = .inherit, .interactive = true, .arg_zero = "rush" });
     defer false_result.deinit();
     try std.testing.expectEqual(@as(shell.ExitStatus, 1), false_result.status);
     try std.testing.expectEqualStrings("", false_result.stdout);
     try std.testing.expectEqualStrings("", false_result.stderr);
     try std.testing.expectEqualStrings("1", executor.last_status_text[0..executor.last_status_text_len]);
 
-    var status_result = try runInteractiveScript(std.testing.allocator, std.testing.io, &interactive_shell, "echo $?", .{ .io = std.testing.io, .allow_external = true, .external_stdio = .inherit, .interactive = true, .arg_zero = "rush" });
+    var status_result = try runInteractiveScript(std.testing.allocator, std.testing.io, executor, &interactive_shell, "echo $?", .{ .io = std.testing.io, .allow_external = true, .external_stdio = .inherit, .interactive = true, .arg_zero = "rush" });
     defer status_result.deinit();
     try std.testing.expectEqual(@as(shell.ExitStatus, 0), status_result.status);
     try std.testing.expectEqualStrings("1\n", status_result.stdout);
@@ -11630,21 +11631,23 @@ test "semantic interactive command updates executor status for later commands" {
 test "semantic interactive shell state persists variable mutations without legacy execution" {
     var interactive_shell = InteractiveShell.init(std.testing.allocator);
     defer interactive_shell.deinit();
-    const executor = &interactive_shell.executor;
+    var interactive_executor = exec.Executor.init(std.testing.allocator);
+    defer interactive_executor.deinit();
+    const executor = &interactive_executor;
     try executor.initializeShellVariables(std.testing.io);
     executor.arg_zero = "rush";
-    try interactive_shell.syncSemanticFromExecutor(std.testing.io);
+    try syncInteractiveShellSemanticFromExecutor(&interactive_shell, std.testing.io, executor.*);
 
-    var assign = try runSemanticInteractiveCommandString(std.testing.allocator, std.testing.io, &interactive_shell, "RUSH_INTERACTIVE_SEMANTIC=state", shell.InvocationContext.init(.{ .interactive = true, .arg_zero = "rush" }), .inherit);
+    var assign = try runSemanticInteractiveCommandString(std.testing.allocator, std.testing.io, executor, &interactive_shell, "RUSH_INTERACTIVE_SEMANTIC=state", shell.InvocationContext.init(.{ .interactive = true, .arg_zero = "rush" }), .inherit);
     defer assign.deinit(std.testing.allocator);
     switch (assign) {
         .output => |output| try std.testing.expectEqual(@as(shell.ExitStatus, 0), output.status),
         .unsupported => return error.ExpectedSemanticOutput,
     }
-    try interactive_shell.syncExecutorFromSemantic();
+    try syncInteractiveExecutorFromShell(executor, interactive_shell);
     try std.testing.expectEqualStrings("state", executor.getEnv("RUSH_INTERACTIVE_SEMANTIC").?);
 
-    var readback = try runInteractiveScript(std.testing.allocator, std.testing.io, &interactive_shell, "printf '%s\n' \"$RUSH_INTERACTIVE_SEMANTIC\"", .{ .io = std.testing.io, .allow_external = true, .external_stdio = .inherit, .interactive = true, .arg_zero = "rush" });
+    var readback = try runInteractiveScript(std.testing.allocator, std.testing.io, executor, &interactive_shell, "printf '%s\n' \"$RUSH_INTERACTIVE_SEMANTIC\"", .{ .io = std.testing.io, .allow_external = true, .external_stdio = .inherit, .interactive = true, .arg_zero = "rush" });
     defer readback.deinit();
     try std.testing.expectEqual(@as(shell.ExitStatus, 0), readback.status);
     try std.testing.expectEqualStrings("state\n", readback.stdout);
@@ -11654,39 +11657,43 @@ test "semantic interactive shell state persists variable mutations without legac
 test "semantic interactive assignment-bearing commands preserve assignment lifetime without legacy fallback" {
     var interactive_shell = InteractiveShell.init(std.testing.allocator);
     defer interactive_shell.deinit();
-    const executor = &interactive_shell.executor;
+    var interactive_executor = exec.Executor.init(std.testing.allocator);
+    defer interactive_executor.deinit();
+    const executor = &interactive_executor;
     try executor.initializeShellVariables(std.testing.io);
     executor.arg_zero = "rush";
-    try interactive_shell.syncSemanticFromExecutor(std.testing.io);
+    try syncInteractiveShellSemanticFromExecutor(&interactive_shell, std.testing.io, executor.*);
 
-    var temporary = try runSemanticInteractiveCommandString(std.testing.allocator, std.testing.io, &interactive_shell, "RUSH_INTERACTIVE_TEMPORARY=discarded true", shell.InvocationContext.init(.{ .interactive = true, .arg_zero = "rush" }), .inherit);
+    var temporary = try runSemanticInteractiveCommandString(std.testing.allocator, std.testing.io, executor, &interactive_shell, "RUSH_INTERACTIVE_TEMPORARY=discarded true", shell.InvocationContext.init(.{ .interactive = true, .arg_zero = "rush" }), .inherit);
     defer temporary.deinit(std.testing.allocator);
     switch (temporary) {
         .output => |output| try std.testing.expectEqual(@as(shell.ExitStatus, 0), output.status),
         .unsupported => return error.ExpectedSemanticOutput,
     }
-    try interactive_shell.syncExecutorFromSemantic();
+    try syncInteractiveExecutorFromShell(executor, interactive_shell);
     try std.testing.expectEqual(@as(?[]const u8, null), executor.getEnv("RUSH_INTERACTIVE_TEMPORARY"));
 
-    var persistent = try runSemanticInteractiveCommandString(std.testing.allocator, std.testing.io, &interactive_shell, "RUSH_INTERACTIVE_SPECIAL=persistent :", shell.InvocationContext.init(.{ .interactive = true, .arg_zero = "rush" }), .inherit);
+    var persistent = try runSemanticInteractiveCommandString(std.testing.allocator, std.testing.io, executor, &interactive_shell, "RUSH_INTERACTIVE_SPECIAL=persistent :", shell.InvocationContext.init(.{ .interactive = true, .arg_zero = "rush" }), .inherit);
     defer persistent.deinit(std.testing.allocator);
     switch (persistent) {
         .output => |output| try std.testing.expectEqual(@as(shell.ExitStatus, 0), output.status),
         .unsupported => return error.ExpectedSemanticOutput,
     }
-    try interactive_shell.syncExecutorFromSemantic();
+    try syncInteractiveExecutorFromShell(executor, interactive_shell);
     try std.testing.expectEqualStrings("persistent", executor.getEnv("RUSH_INTERACTIVE_SPECIAL").?);
 }
 
 test "semantic interactive external commands run through runtime ports without legacy fallback" {
     var interactive_shell = InteractiveShell.init(std.testing.allocator);
     defer interactive_shell.deinit();
-    const executor = &interactive_shell.executor;
+    var interactive_executor = exec.Executor.init(std.testing.allocator);
+    defer interactive_executor.deinit();
+    const executor = &interactive_executor;
     try executor.initializeShellVariables(std.testing.io);
     executor.arg_zero = "rush";
-    try interactive_shell.syncSemanticFromExecutor(std.testing.io);
+    try syncInteractiveShellSemanticFromExecutor(&interactive_shell, std.testing.io, executor.*);
 
-    var external = try runSemanticInteractiveCommandString(std.testing.allocator, std.testing.io, &interactive_shell, "/usr/bin/printf 'semantic-external\\n'", shell.InvocationContext.init(.{ .interactive = true, .arg_zero = "rush" }), .capture);
+    var external = try runSemanticInteractiveCommandString(std.testing.allocator, std.testing.io, executor, &interactive_shell, "/usr/bin/printf 'semantic-external\\n'", shell.InvocationContext.init(.{ .interactive = true, .arg_zero = "rush" }), .capture);
     defer external.deinit(std.testing.allocator);
     switch (external) {
         .unsupported => return error.ExpectedSemanticExecution,
@@ -11711,6 +11718,12 @@ test "semantic interactive startup initializes ShellState without executor shell
         .positionals = &.{ "one", "two" },
         .shell_options = .{ .ignoreeof = true },
     });
+    var interactive_executor = exec.Executor.init(std.testing.allocator);
+    defer interactive_executor.deinit();
+    const executor = &interactive_executor;
+    try executor.importEnvironment(&env);
+    executor.arg_zero = "rush";
+    try syncInteractiveExecutorFromShell(executor, interactive_shell);
 
     try std.testing.expect(interactive_shell.semantic_enabled);
     try std.testing.expectEqualStrings("present", interactive_shell.semantic_state.getVariable("RUSH_INTERACTIVE_IMPORTED").?.value);
@@ -11721,7 +11734,7 @@ test "semantic interactive startup initializes ShellState without executor shell
     try std.testing.expectEqual(@as(usize, 2), interactive_shell.semantic_state.positionals.items.len);
     try std.testing.expectEqualStrings("one", interactive_shell.semantic_state.positionals.items[0]);
     try std.testing.expectEqualStrings("two", interactive_shell.semantic_state.positionals.items[1]);
-    try std.testing.expectEqualStrings("present", interactive_shell.executor.getEnv("RUSH_INTERACTIVE_IMPORTED").?);
+    try std.testing.expectEqualStrings("present", executor.getEnv("RUSH_INTERACTIVE_IMPORTED").?);
 }
 
 test "interactive config service sources simple config through semantic ShellState" {
@@ -11731,15 +11744,19 @@ test "interactive config service sources simple config through semantic ShellSta
     var interactive_shell = InteractiveShell.init(std.testing.allocator);
     defer interactive_shell.deinit();
     try interactive_shell.initializeSemanticStartup(std.testing.io, &env, .{ .arg_zero = "rush" });
+    var interactive_executor = exec.Executor.init(std.testing.allocator);
+    defer interactive_executor.deinit();
+    const executor = &interactive_executor;
+    try syncInteractiveExecutorFromShell(executor, interactive_shell);
 
-    try InteractiveConfigService.initInteractive(std.testing.allocator, std.testing.io, &interactive_shell, "rush").sourceScript(
+    try InteractiveConfigService.initInteractive(std.testing.allocator, std.testing.io, executor, &interactive_shell, "rush").sourceScript(
         \\RUSH_SEMANTIC_CONFIG=loaded
         \\RUSH_SEMANTIC_CONFIG_SECOND=ok
     , "semantic-config-test.rush");
 
     try std.testing.expectEqualStrings("loaded", interactive_shell.semantic_state.getVariable("RUSH_SEMANTIC_CONFIG").?.value);
     try std.testing.expectEqualStrings("ok", interactive_shell.semantic_state.getVariable("RUSH_SEMANTIC_CONFIG_SECOND").?.value);
-    try std.testing.expectEqualStrings("loaded", interactive_shell.executor.getEnv("RUSH_SEMANTIC_CONFIG").?);
+    try std.testing.expectEqualStrings("loaded", executor.getEnv("RUSH_SEMANTIC_CONFIG").?);
 }
 
 test "semantic interactive command reports function-shadowed builtin unsupported" {
@@ -11749,16 +11766,18 @@ test "semantic interactive command reports function-shadowed builtin unsupported
 
     var interactive_shell = InteractiveShell.init(std.testing.allocator);
     defer interactive_shell.deinit();
-    const executor = &interactive_shell.executor;
+    var interactive_executor = exec.Executor.init(std.testing.allocator);
+    defer interactive_executor.deinit();
+    const executor = &interactive_executor;
     try executor.initializeShellVariables(std.testing.io);
     executor.arg_zero = "rush";
 
     var define = try runScriptWithExecutor(std.testing.allocator, executor, "echo() { printf 'function\\n' > " ++ path ++ "; }", .{ .io = std.testing.io, .allow_external = true, .arg_zero = "rush" });
     defer define.deinit();
     try std.testing.expectEqual(@as(shell.ExitStatus, 0), define.status);
-    try interactive_shell.syncSemanticFromExecutor(std.testing.io);
+    try syncInteractiveShellSemanticFromExecutor(&interactive_shell, std.testing.io, executor.*);
 
-    var result = try runInteractiveScript(std.testing.allocator, std.testing.io, &interactive_shell, "echo semantic", .{ .io = std.testing.io, .allow_external = true, .external_stdio = .inherit, .interactive = true, .arg_zero = "rush" });
+    var result = try runInteractiveScript(std.testing.allocator, std.testing.io, executor, &interactive_shell, "echo semantic", .{ .io = std.testing.io, .allow_external = true, .external_stdio = .inherit, .interactive = true, .arg_zero = "rush" });
     defer result.deinit();
     try std.testing.expectEqual(@as(shell.ExitStatus, 2), result.status);
     try std.testing.expectEqualStrings("semantic interactive executor does not yet preserve shell function calls\n", result.stderr);
@@ -11768,7 +11787,9 @@ test "semantic interactive command reports function-shadowed builtin unsupported
 test "semantic interactive unset function reports unsupported without legacy bridge" {
     var interactive_shell = InteractiveShell.init(std.testing.allocator);
     defer interactive_shell.deinit();
-    const executor = &interactive_shell.executor;
+    var interactive_executor = exec.Executor.init(std.testing.allocator);
+    defer interactive_executor.deinit();
+    const executor = &interactive_executor;
     try executor.initializeShellVariables(std.testing.io);
     executor.arg_zero = "rush";
 
@@ -11776,9 +11797,9 @@ test "semantic interactive unset function reports unsupported without legacy bri
     defer define.deinit();
     try std.testing.expectEqual(@as(shell.ExitStatus, 0), define.status);
     try std.testing.expect(executor.functions.contains("rush_semantic_unset_fn"));
-    try interactive_shell.syncSemanticFromExecutor(std.testing.io);
+    try syncInteractiveShellSemanticFromExecutor(&interactive_shell, std.testing.io, executor.*);
 
-    var result = try runInteractiveScript(std.testing.allocator, std.testing.io, &interactive_shell, "unset -f rush_semantic_unset_fn", .{ .io = std.testing.io, .allow_external = true, .external_stdio = .inherit, .interactive = true, .arg_zero = "rush" });
+    var result = try runInteractiveScript(std.testing.allocator, std.testing.io, executor, &interactive_shell, "unset -f rush_semantic_unset_fn", .{ .io = std.testing.io, .allow_external = true, .external_stdio = .inherit, .interactive = true, .arg_zero = "rush" });
     defer result.deinit();
     try std.testing.expectEqual(@as(shell.ExitStatus, 2), result.status);
     try std.testing.expectEqualStrings("semantic executor preflight found an unsupported builtin\n", result.stderr);
@@ -11792,12 +11813,14 @@ test "semantic interactive invocation executes simple command redirections witho
 
     var interactive_shell = InteractiveShell.init(std.testing.allocator);
     defer interactive_shell.deinit();
-    const executor = &interactive_shell.executor;
+    var interactive_executor = exec.Executor.init(std.testing.allocator);
+    defer interactive_executor.deinit();
+    const executor = &interactive_executor;
     try executor.initializeShellVariables(std.testing.io);
     executor.arg_zero = "rush";
-    try interactive_shell.syncSemanticFromExecutor(std.testing.io);
+    try syncInteractiveShellSemanticFromExecutor(&interactive_shell, std.testing.io, executor.*);
 
-    var semantic = try runSemanticInteractiveCommandString(std.testing.allocator, std.testing.io, &interactive_shell, "echo before > " ++ path ++ "; echo redirected >> " ++ path, shell.InvocationContext.init(.{ .interactive = true, .arg_zero = "rush" }), .inherit);
+    var semantic = try runSemanticInteractiveCommandString(std.testing.allocator, std.testing.io, executor, &interactive_shell, "echo before > " ++ path ++ "; echo redirected >> " ++ path, shell.InvocationContext.init(.{ .interactive = true, .arg_zero = "rush" }), .inherit);
     defer semantic.deinit(std.testing.allocator);
     switch (semantic) {
         .unsupported => return error.ExpectedSemanticExecution,
