@@ -41,6 +41,19 @@
             .status = 0,
         },
         .{
+            .name = "eval with no arguments returns zero",
+            .script =
+            \\eval
+            \\printf '<%s>\n' "$?"
+            ,
+            .stdout =
+            \\<0>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "readonly assigns a variable value",
             .script =
             \\readonly ro=value
@@ -48,6 +61,57 @@
             ,
             .stdout =
             \\<value>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "unset succeeds for an unset variable name",
+            .script =
+            \\unset missing
+            \\printf '<%s>\n' "$?"
+            ,
+            .stdout =
+            \\<0>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "break exits the nearest enclosing loop",
+            .script =
+            \\for value in a b c
+            \\do
+            \\    printf '<%s>\n' "$value"
+            \\    break
+            \\done
+            ,
+            .stdout =
+            \\<a>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "continue starts the next loop iteration",
+            .script =
+            \\i=0
+            \\while true
+            \\do
+            \\    i=$((i + 1))
+            \\    if [ "$i" -lt 3 ]
+            \\    then
+            \\        continue
+            \\    fi
+            \\    printf '<%s>\n' "$i"
+            \\    break
+            \\done
+            ,
+            .stdout =
+            \\<3>
             \\
             ,
             .stderr = "",

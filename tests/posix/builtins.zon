@@ -48,6 +48,35 @@
             .status = 0,
         },
         .{
+            .name = "read assigns remaining fields to the last variable",
+            .script =
+            \\printf 'a b c\n' | { read first rest; printf '<%s>:<%s>\n' "$first" "$rest"; }
+            ,
+            .stdout =
+            \\<a>:<b c>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "read returns nonzero at end of file",
+            .script =
+            \\if read eof < /dev/null
+            \\then
+            \\    printf 'bad\n'
+            \\else
+            \\    printf 'eof\n'
+            \\fi
+            ,
+            .stdout =
+            \\eof
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "pwd output can be redirected",
             .script =
             \\pwd >out
