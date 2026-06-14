@@ -3386,7 +3386,7 @@ fn evaluateTrapActionBody(
         .simple => |plan| evaluatePlan(evaluator, shell_state, eval_context.withTarget(plan.target), plan),
         .compound => |plan| evaluateCompoundPlan(evaluator, shell_state, eval_context.withTarget(plan.target), plan),
         .pipeline => |plan| evaluatePipelinePlan(evaluator, shell_state, eval_context, plan),
-        .failure => |failure| trapActionFailureOutcome(evaluator.allocator, eval_context, failure),
+        .failure => |failure| trapActionFailureOutcome(evaluator.allocator, eval_context, failure, shell_state.*),
         .owned => |owned| evaluateTrapActionBodyPayload(evaluator, shell_state, eval_context, owned.body),
     };
 }
@@ -3405,7 +3405,7 @@ fn evaluateTrapActionBodyPayload(
         .simple => |plan| evaluatePlan(evaluator, shell_state, eval_context.withTarget(plan.target), plan),
         .compound => |plan| evaluateCompoundPlan(evaluator, shell_state, eval_context.withTarget(plan.target), plan),
         .pipeline => |plan| evaluatePipelinePlan(evaluator, shell_state, eval_context, plan),
-        .failure => |failure| trapActionFailureOutcome(evaluator.allocator, eval_context, failure),
+        .failure => |failure| trapActionFailureOutcome(evaluator.allocator, eval_context, failure, shell_state.*),
     };
 }
 
@@ -3413,14 +3413,20 @@ pub fn trapActionFailureOutcome(
     allocator: std.mem.Allocator,
     eval_context: context.EvalContext,
     failure: TrapActionFailure,
+    shell_state: state.ShellState,
 ) EvalError!outcome.CommandOutcome {
     eval_context.validate();
     failure.validate();
+    shell_state.validate();
     var state_delta = delta.StateDelta.init(allocator, eval_context.target);
     errdefer state_delta.deinit();
     state_delta.setLastStatus(failure.status);
     const control_flow: outcome.ControlFlow = switch (failure.kind) {
-        .parse_error, .lowering_error, .expansion_error, .unsupported_shape => .normal,
+        .expansion_error => if (eval_context.interactive or shell_state.trap_execution != .idle)
+            .normal
+        else
+            .{ .exit = failure.status },
+        .parse_error, .lowering_error, .unsupported_shape => .normal,
     };
     var command_outcome = outcome.CommandOutcome.withControlFlow(allocator, failure.status, state_delta, control_flow);
     errdefer command_outcome.deinit();
@@ -4125,9 +4131,9 @@ fn evaluateTrapActionBodyWithInput(
                 input,
             ),
             .pipeline => |plan| evaluatePipelinePlan(evaluator, shell_state, eval_context, plan),
-            .failure => |failure| trapActionFailureOutcome(evaluator.allocator, eval_context, failure),
+            .failure => |failure| trapActionFailureOutcome(evaluator.allocator, eval_context, failure, shell_state.*),
         },
-        .failure => |failure| trapActionFailureOutcome(evaluator.allocator, eval_context, failure),
+        .failure => |failure| trapActionFailureOutcome(evaluator.allocator, eval_context, failure, shell_state.*),
     };
 }
 

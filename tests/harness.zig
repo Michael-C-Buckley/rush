@@ -17,7 +17,19 @@ const Case = struct {
     script: []const u8,
     stdout: []const u8 = "",
     stderr: []const u8 = "",
+    stderr_match: BytesExpectation = .exact,
     status: u8 = 0,
+    status_match: StatusExpectation = .exact,
+};
+
+const BytesExpectation = enum {
+    exact,
+    nonempty,
+};
+
+const StatusExpectation = enum {
+    exact,
+    nonzero,
 };
 
 const Config = struct {
@@ -368,18 +380,38 @@ fn reportMismatch(
         failed = true;
         printBytesMismatch(path, suite_name, case.name, shell_name, "stdout", case.stdout, actual.stdout);
     }
-    if (!std.mem.eql(u8, actual.stderr, case.stderr)) {
+    if (!bytesMatch(actual.stderr, case.stderr, case.stderr_match)) {
         failed = true;
         printBytesMismatch(path, suite_name, case.name, shell_name, "stderr", case.stderr, actual.stderr);
     }
-    if (actual.status != case.status) {
+    if (!statusMatches(actual.status, case.status, case.status_match)) {
         failed = true;
-        std.debug.print(
-            "{s}: {s}: {s}: {s}: status mismatch: expected {d}, got {d}\n",
-            .{ path, suite_name, case.name, shell_name, case.status, actual.status },
-        );
+        switch (case.status_match) {
+            .exact => std.debug.print(
+                "{s}: {s}: {s}: {s}: status mismatch: expected {d}, got {d}\n",
+                .{ path, suite_name, case.name, shell_name, case.status, actual.status },
+            ),
+            .nonzero => std.debug.print(
+                "{s}: {s}: {s}: {s}: status mismatch: expected nonzero, got {d}\n",
+                .{ path, suite_name, case.name, shell_name, actual.status },
+            ),
+        }
     }
     return if (failed) 1 else 0;
+}
+
+fn bytesMatch(actual: []const u8, expected: []const u8, expectation: BytesExpectation) bool {
+    return switch (expectation) {
+        .exact => std.mem.eql(u8, actual, expected),
+        .nonempty => actual.len != 0,
+    };
+}
+
+fn statusMatches(actual: u8, expected: u8, expectation: StatusExpectation) bool {
+    return switch (expectation) {
+        .exact => actual == expected,
+        .nonzero => actual != 0,
+    };
 }
 
 fn printBytesMismatch(

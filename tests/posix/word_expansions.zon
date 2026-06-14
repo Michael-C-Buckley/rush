@@ -100,6 +100,28 @@
             .status = 0,
         },
         .{
+            .name = "parameter expansion question mark errors for unset parameters",
+            .script =
+            \\unset missing
+            \\printf '%s\n' ${missing?'need it'}
+            \\printf 'bad\n'
+            ,
+            .stdout = "",
+            .stderr_match = .nonempty,
+            .status_match = .nonzero,
+        },
+        .{
+            .name = "parameter expansion colon question mark errors for null parameters",
+            .script =
+            \\x=
+            \\printf '%s\n' ${x:?'need it'}
+            \\printf 'bad\n'
+            ,
+            .stdout = "",
+            .stderr_match = .nonempty,
+            .status_match = .nonzero,
+        },
+        .{
             .name = "parameter expansion reports string length",
             .script =
             \\x=abcdef

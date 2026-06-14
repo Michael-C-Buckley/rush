@@ -1411,9 +1411,19 @@ fn evaluateSemanticComparisonBody(
                 plan,
             ),
             .pipeline => |plan| shell.eval.evaluatePipelinePlan(evaluator, shell_state, eval_context, plan),
-            .failure => |failure| shell.eval.trapActionFailureOutcome(evaluator.allocator, eval_context, failure),
+            .failure => |failure| shell.eval.trapActionFailureOutcome(
+                evaluator.allocator,
+                eval_context,
+                failure,
+                shell_state.*,
+            ),
         },
-        .failure => |failure| shell.eval.trapActionFailureOutcome(evaluator.allocator, eval_context, failure),
+        .failure => |failure| shell.eval.trapActionFailureOutcome(
+            evaluator.allocator,
+            eval_context,
+            failure,
+            shell_state.*,
+        ),
     };
 }
 
