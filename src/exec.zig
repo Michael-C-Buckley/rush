@@ -2252,46 +2252,6 @@ pub const Executor = struct {
         return self.functions.contains(name);
     }
 
-    pub fn registerCompletionRule(self: *Executor, rule: completion.Rule) !void {
-        try self.completion_session.state.registerRule(rule);
-    }
-
-    pub fn completionGeneration(self: Executor) u64 {
-        return self.completion_session.state.generation;
-    }
-
-    pub fn completionRules(self: Executor) []const completion.Rule {
-        return self.completion_session.state.rules.items;
-    }
-
-    pub fn completionProviderDiagnostics(self: Executor) []const CompletionProviderDiagnostic {
-        return self.completion_session.state.provider_diagnostics.items;
-    }
-
-    pub fn registerCompletionManifestCommandState(self: *Executor, state: CompletionManifestCommandState) !void {
-        try self.completion_session.state.registerManifestCommandState(state);
-    }
-
-    pub fn completionManifestCommandState(self: Executor, command: []const u8) ?CompletionManifestCommandState {
-        return self.completion_session.state.manifestCommandState(command);
-    }
-
-    pub fn registerCompletionVariantProbe(self: *Executor, command: []const u8, args: []const []const u8, patterns: []const CompletionVariantPattern) !void {
-        try self.completion_session.state.registerVariantProbe(command, args, patterns);
-    }
-
-    pub fn completionVariantProbeState(self: Executor, command: []const u8) ?CompletionVariantProbeState {
-        return self.completion_session.state.variantProbeState(command);
-    }
-
-    pub fn setCompletionVariantProbeMock(self: *Executor, command: []const u8, output: []const u8) !void {
-        try self.completion_session.state.setVariantProbeMock(command, output);
-    }
-
-    pub fn completionVariantProbeCount(self: Executor, command: []const u8) usize {
-        return self.completion_session.state.variantProbeCount(command);
-    }
-
     pub fn hasBuiltin(self: Executor, name: []const u8) bool {
         return builtinForName(self, name) != null;
     }
@@ -2449,24 +2409,8 @@ pub const Executor = struct {
         _ = try self.sourceCompletionScript(io, path, options, true);
     }
 
-    pub fn lastCompletionContext(self: Executor) ?CompletionEvalContext {
-        return self.completion_session.state.last_context;
-    }
-
     fn activeCompletionBuilder(self: *Executor) ?*completion.Builder {
         return self.completion_session.activeBuilder();
-    }
-
-    pub fn lastCompletionTracePath(self: Executor) ?[]const []const u8 {
-        return self.completion_session.state.last_trace_path;
-    }
-
-    pub fn lastCompletionSemantic(self: Executor) ?CompletionSemanticContext {
-        return self.completion_session.state.last_semantic;
-    }
-
-    pub fn lastCompletionPrecommandDepthLimited(self: Executor) bool {
-        return self.completion_session.state.last_precommand_depth_limited;
     }
 
     fn clearLastCompletionTrace(self: *Executor) void {
@@ -11996,7 +11940,7 @@ fn builtinComplete(self: *Executor, command: ir.SimpleCommand, stdin: []const u8
         if (rule.kind == .dynamic_subcommands or rule.kind == .dynamic_options or rule.kind == .dynamic_argument or rule.kind == .dynamic_option_value) {
             if (rule.value == null) return errorResult(self.allocator, 2, "complete", "missing function name");
         }
-        try self.registerCompletionRule(rule);
+        try self.completion_session.state.registerRule(rule);
     } else {
         if (function_name != null) return errorResult(self.allocator, 2, "complete", "--function requires --subcommands, --options, --argument, or --option-value");
         return errorResult(self.allocator, 2, "complete", "missing completion rule");
@@ -26092,7 +26036,7 @@ test "dynamic completion provider failures are diagnostic and discard candidates
     defer executor.freeCompletions(candidates);
     try expectNoCandidate(candidates, "stale");
 
-    const diagnostics = executor.completionProviderDiagnostics();
+    const diagnostics = executor.completion_session.state.providerDiagnostics();
     try std.testing.expectEqual(@as(usize, 1), diagnostics.len);
     try std.testing.expectEqualStrings("__rush_complete_failing", diagnostics[0].function);
     try std.testing.expectEqual(@as(?ExitStatus, 1), diagnostics[0].status);
@@ -26175,7 +26119,7 @@ test "dynamic completion cancellation terminates provider external command" {
     thread.join();
     if (worker.err) |err| return err;
     try std.testing.expectEqual(@as(usize, 0), token.activeChildCount());
-    try std.testing.expectEqual(@as(usize, 1), executor.completionProviderDiagnostics().len);
+    try std.testing.expectEqual(@as(usize, 1), executor.completion_session.state.providerDiagnostics().len);
 }
 
 test "structured completion keeps parent options available in subcommand contexts" {
@@ -26634,7 +26578,7 @@ test "argument state providers handle fixed sequences and skip option values" {
     defer executor.freeCompletions(name_candidates);
     const nginx = findCandidate(name_candidates, "nginx") orelse return error.MissingCompletionCandidate;
     try std.testing.expectEqualStrings("name:1", nginx.description.?);
-    const context = executor.lastCompletionContext() orelse return error.MissingCompletionContext;
+    const context = executor.completion_session.state.lastContext() orelse return error.MissingCompletionContext;
     try std.testing.expectEqual(@as(usize, 1), context.argument_index);
     try std.testing.expectEqualStrings("name", context.argument_state.?);
 }
@@ -27173,7 +27117,7 @@ test "completion detects detached long option value slots" {
     try std.testing.expectEqualStrings("--author", candidates[0].description.?);
     try std.testing.expectEqual(@as(usize, "git --author ".len), candidates[0].replace_start);
     try std.testing.expectEqual(@as(usize, source.len), candidates[0].replace_end);
-    const context = executor.lastCompletionContext() orelse return error.MissingCompletionContext;
+    const context = executor.completion_session.state.lastContext() orelse return error.MissingCompletionContext;
     try std.testing.expectEqualStrings("t", context.prefix);
     try std.testing.expectEqualStrings("author", context.option_value.?.name);
     try std.testing.expectEqualStrings("--author", context.option_value.?.spelling);
@@ -27206,7 +27150,7 @@ test "completion detects attached long option value slots" {
     try std.testing.expectEqualStrings("t", candidates[0].description.?);
     try std.testing.expectEqual(@as(usize, "git --author=".len), candidates[0].replace_start);
     try std.testing.expectEqual(@as(usize, source.len), candidates[0].replace_end);
-    const context = executor.lastCompletionContext() orelse return error.MissingCompletionContext;
+    const context = executor.completion_session.state.lastContext() orelse return error.MissingCompletionContext;
     try std.testing.expectEqualStrings("t", context.prefix);
     try std.testing.expectEqualStrings("--author", context.option_value.?.spelling);
 }

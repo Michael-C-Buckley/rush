@@ -898,6 +898,10 @@ pub const State = struct {
         return self.provider_diagnostics.items;
     }
 
+    pub fn lastContext(self: State) ?EvalContext {
+        return self.last_context;
+    }
+
     pub fn registerManifestCommandState(self: *State, state: ManifestCommandState) !void {
         const owned: ManifestCommandState = .{
             .command = try self.allocator.dupe(u8, state.command),

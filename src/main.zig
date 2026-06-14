@@ -1640,7 +1640,7 @@ fn loadCompletionManifestWithPath(allocator: std.mem.Allocator, executor: *exec.
     const root_name = try manifestCommandPrimaryName(command_object);
     const platform = completionManifestCurrentPlatform();
     const platform_allowed = manifestPlatformsAllowCurrent(command_object.get("platforms"));
-    try executor.registerCompletionManifestCommandState(.{
+    try executor.completion_session.state.registerManifestCommandState(.{
         .command = root_name,
         .manifest_path = source_path,
         .manifest_version = version,
@@ -1785,7 +1785,7 @@ fn registerCompletionManifestVariantProbe(allocator: std.mem.Allocator, executor
         const pattern = manifestString(entry.value_ptr.*) orelse continue;
         try patterns.append(allocator, .{ .name = entry.key_ptr.*, .pattern = pattern });
     }
-    try executor.registerCompletionVariantProbe(root, args.items, patterns.items);
+    try executor.completion_session.state.registerVariantProbe(root, args.items, patterns.items);
 }
 
 fn appendCompletionManifestProviders(allocator: std.mem.Allocator, providers: *std.ArrayList(CompletionManifestProviderBinding), providers_value: std.json.Value) !void {
@@ -1886,13 +1886,13 @@ fn loadCompletionManifestSubcommandNames(executor: *exec.Executor, root: []const
     const description = manifestString(command.get("description"));
     const name_value = command.get("name") orelse return error.CompletionManifestCommandMissingName;
     switch (name_value) {
-        .string => |name| try executor.registerCompletionRule(.{ .root = root, .path = parent_path, .kind = .subcommand, .value = name, .description = description, .source = source, .variant = variant, .disabled = disabled }),
+        .string => |name| try executor.completion_session.state.registerRule(.{ .root = root, .path = parent_path, .kind = .subcommand, .value = name, .description = description, .source = source, .variant = variant, .disabled = disabled }),
         .array => |names| for (names.items) |item| {
             const name = switch (item) {
                 .string => |value| value,
                 else => return error.CompletionManifestCommandNameMustBeString,
             };
-            try executor.registerCompletionRule(.{ .root = root, .path = parent_path, .kind = .subcommand, .value = name, .description = description, .source = source, .variant = variant, .disabled = disabled });
+            try executor.completion_session.state.registerRule(.{ .root = root, .path = parent_path, .kind = .subcommand, .value = name, .description = description, .source = source, .variant = variant, .disabled = disabled });
         },
         else => return error.CompletionManifestCommandNameMustBeString,
     }
@@ -1906,7 +1906,7 @@ fn loadCompletionManifestSubcommandNames(executor: *exec.Executor, root: []const
                 .string => |value| value,
                 else => continue,
             };
-            try executor.registerCompletionRule(.{ .root = root, .path = parent_path, .kind = .subcommand, .value = alias, .description = description, .source = source, .variant = variant, .disabled = disabled });
+            try executor.completion_session.state.registerRule(.{ .root = root, .path = parent_path, .kind = .subcommand, .value = alias, .description = description, .source = source, .variant = variant, .disabled = disabled });
         }
     }
 }
@@ -1993,7 +1993,7 @@ fn loadCompletionManifestOptions(executor: *exec.Executor, root: []const u8, pat
             }
         }
         if (rule.option.long == null and rule.option.short == null and rule.option.spellings.len == 0) return error.CompletionManifestOptionMissingSpelling;
-        try executor.registerCompletionRule(rule);
+        try executor.completion_session.state.registerRule(rule);
         if (option.get("value")) |value| try loadCompletionManifestOptionValueProvider(executor, root, path, rule, value, providers, source, variant, disabled);
     }
 }
@@ -2061,14 +2061,14 @@ fn loadCompletionManifestArguments(executor: *exec.Executor, root: []const u8, p
             if (index >= 0) argument.index = @intCast(index);
         }
         if (state.get("after")) |after| argument.after_state = manifestConditionPreviousState(after);
-        if (state.get("when")) |condition| argument.when_condition = try compileCompletionManifestArgumentCondition(executor.allocator, condition, root, path, executor.completionRules());
+        if (state.get("when")) |condition| argument.when_condition = try compileCompletionManifestArgumentCondition(executor.allocator, condition, root, path, executor.completion_session.state.rulesSlice());
         defer completion_model.freeArgumentCondition(executor.allocator, argument.when_condition);
-        if (state.get("after")) |condition| argument.after_condition = try compileCompletionManifestArgumentCondition(executor.allocator, condition, root, path, executor.completionRules());
+        if (state.get("after")) |condition| argument.after_condition = try compileCompletionManifestArgumentCondition(executor.allocator, condition, root, path, executor.completion_session.state.rulesSlice());
         defer completion_model.freeArgumentCondition(executor.allocator, argument.after_condition);
-        if (state.get("until")) |condition| argument.until_condition = try compileCompletionManifestArgumentCondition(executor.allocator, condition, root, path, executor.completionRules());
+        if (state.get("until")) |condition| argument.until_condition = try compileCompletionManifestArgumentCondition(executor.allocator, condition, root, path, executor.completion_session.state.rulesSlice());
         defer completion_model.freeArgumentCondition(executor.allocator, argument.until_condition);
         if (argument.rest_command_line) {
-            try executor.registerCompletionRule(.{ .root = root, .path = path, .kind = .dynamic_argument, .argument = argument, .description = manifestString(state.get("description")), .source = source, .variant = variant, .disabled = disabled });
+            try executor.completion_session.state.registerRule(.{ .root = root, .path = path, .kind = .dynamic_argument, .argument = argument, .description = manifestString(state.get("description")), .source = source, .variant = variant, .disabled = disabled });
             continue;
         }
         const provider_ref = state.get("provider") orelse continue;
@@ -2269,7 +2269,7 @@ fn registerCompletionManifestProviderRule(
     if (provider.static_values) |values| {
         for (values.items) |value| try static_values.append(executor.allocator, try manifestStaticProviderValue(value));
     }
-    try executor.registerCompletionRule(.{
+    try executor.completion_session.state.registerRule(.{
         .root = root,
         .path = path,
         .kind = kind,
@@ -3659,7 +3659,7 @@ fn completeInteractiveLineFromExecutor(context: *InteractiveCompletionContext, a
     if (eval_context.position != .command) {
         try completion_context.loader.ensureLoaded(completion_context.io, completion_context.executor, eval_context.command, completion_context.arg_zero);
     }
-    const generation = completion_context.executor.completionGeneration();
+    const generation = completion_context.executor.completion_session.state.generationValue();
     const matcher_policy = completion_model.MatcherPolicy.engineDefault();
     if (completion_context.cache.get(source, cursor, completion_context.cwd, generation)) |cached| {
         try completion_context.cache.startRefresh(completion_context.executor, completion_context.history, completion_context.io, source, cursor, completion_context.cwd, generation);
@@ -3676,7 +3676,7 @@ fn completeInteractiveLineFromExecutor(context: *InteractiveCompletionContext, a
     });
     defer completion_context.executor.freeCompletions(candidates);
     try rankCompletionCandidates(allocator, candidates, completion_context.history.*, completion_context.cwd, source, matcher_policy);
-    try completion_context.cache.put(source, cursor, completion_context.cwd, completion_context.executor.completionGeneration(), candidates);
+    try completion_context.cache.put(source, cursor, completion_context.cwd, completion_context.executor.completion_session.state.generationValue(), candidates);
     return completion_model.applyCandidatesForInputWithPolicy(allocator, source, candidates, matcher_policy);
 }
 
@@ -4065,8 +4065,8 @@ fn completionDebugOutput(allocator: std.mem.Allocator, io: std.Io, environ_map: 
         .arg_zero = "rush",
     });
     defer executor.freeCompletions(candidates);
-    const trace_semantic = executor.lastCompletionSemantic() orelse semantic;
-    var effective_context = executor.lastCompletionContext() orelse context;
+    const trace_semantic = executor.completion_session.state.lastSemantic() orelse semantic;
+    var effective_context = executor.completion_session.state.lastContext() orelse context;
     effective_context.command_path = semantic_path;
     effective_context.argument_index = semantic.argument_index;
     effective_context.argument_state = semantic.argument_state;
@@ -4178,7 +4178,7 @@ fn completionDebugOutput(allocator: std.mem.Allocator, io: std.Io, environ_map: 
     try writeCompletionOperandsText(&out.writer, semantic.operands, "    ");
     try writeCompletionManifestTraceText(allocator, io, &out.writer, executor, source, trace_semantic, candidates);
     try out.writer.print("rules:\n", .{});
-    for (executor.completionRules()) |rule| {
+    for (executor.completion_session.state.rulesSlice()) |rule| {
         if (!debugCompletionRuleMatches(rule, semantic)) continue;
         try out.writer.print("  - kind: {s}\n    source: {s}\n    root: {s}\n    path:", .{
             @tagName(rule.kind),
@@ -4221,7 +4221,7 @@ fn completionDebugOutput(allocator: std.mem.Allocator, io: std.Io, environ_map: 
         }
     }
     try out.writer.print("suppressed-options:\n", .{});
-    for (executor.completionRules()) |rule| {
+    for (executor.completion_session.state.rulesSlice()) |rule| {
         if (!debugCompletionRuleMatches(rule, semantic)) continue;
         if (rule.kind != .option) continue;
         const suppression = exec.completionOptionSuppressionForOption(semantic, rule.option) orelse continue;
@@ -4270,7 +4270,7 @@ fn completionDebugOutput(allocator: std.mem.Allocator, io: std.Io, environ_map: 
         }
     }
     try out.writer.print("provider-diagnostics:\n", .{});
-    for (executor.completionProviderDiagnostics()) |diagnostic| {
+    for (executor.completion_session.state.providerDiagnostics()) |diagnostic| {
         try out.writer.print("  - function: {s}\n    command: {s}\n", .{ diagnostic.function, diagnostic.command });
         if (diagnostic.status) |status| try out.writer.print("    status: {d}\n", .{status});
         if (diagnostic.err) |err| try out.writer.print("    error: {s}\n", .{err});
@@ -4362,9 +4362,9 @@ fn completionDebugJsonOutput(allocator: std.mem.Allocator, io: std.Io, environ_m
         .arg_zero = "rush",
     });
     defer executor.freeCompletions(candidates);
-    const trace_semantic = executor.lastCompletionSemantic() orelse semantic;
-    const trace_path = executor.lastCompletionTracePath();
-    var effective_context = executor.lastCompletionContext() orelse context;
+    const trace_semantic = executor.completion_session.state.lastSemantic() orelse semantic;
+    const trace_path = executor.completion_session.state.lastTracePath();
+    var effective_context = executor.completion_session.state.lastContext() orelse context;
     effective_context.command_path = semantic_path;
     effective_context.argument_index = semantic.argument_index;
     effective_context.argument_state = semantic.argument_state;
@@ -4393,22 +4393,22 @@ fn completionDebugJsonOutput(allocator: std.mem.Allocator, io: std.Io, environ_m
     try json.objectField("semantic");
     try writeCompletionSemanticContextJson(&json, semantic, semantic_path);
     try json.objectField("manifest");
-    try writeCompletionManifestTraceJson(allocator, io, &json, executor, source, trace_semantic, trace_path, executor.lastCompletionPrecommandDepthLimited(), candidates);
+    try writeCompletionManifestTraceJson(allocator, io, &json, executor, source, trace_semantic, trace_path, executor.completion_session.state.lastPrecommandDepthLimited(), candidates);
     try json.objectField("matchedRules");
     try json.beginArray();
-    for (executor.completionRules()) |rule| {
+    for (executor.completion_session.state.rulesSlice()) |rule| {
         if (!debugCompletionRuleMatches(rule, semantic)) continue;
         try writeCompletionRuleJson(&json, rule);
     }
     try json.endArray();
     try json.objectField("suppressedOptions");
-    try writeCompletionSuppressedOptionsJson(&json, executor.completionRules(), semantic);
+    try writeCompletionSuppressedOptionsJson(&json, executor.completion_session.state.rulesSlice(), semantic);
     try json.objectField("candidates");
     try json.beginArray();
     for (candidates) |candidate| try writeCompletionCandidateJson(allocator, &json, history, cwd, source, candidate, matcher_policy);
     try json.endArray();
     try json.objectField("providerDiagnostics");
-    try writeCompletionProviderDiagnosticsJson(&json, executor.completionProviderDiagnostics());
+    try writeCompletionProviderDiagnosticsJson(&json, executor.completion_session.state.providerDiagnostics());
     try json.objectField("application");
     try writeCompletionApplicationJson(&json, application);
     try json.endObject();
@@ -4910,9 +4910,9 @@ const ManifestCompletionTrace = struct {
 };
 
 fn writeCompletionManifestTraceText(allocator: std.mem.Allocator, io: std.Io, writer: *std.Io.Writer, executor: exec.Executor, source: []const u8, semantic: completion_model.SemanticContext, candidates: []const completion_model.Candidate) !void {
-    const manifest_source = primaryManifestRuleSource(executor.completionRules(), semantic);
-    const manifest_state = executor.completionManifestCommandState(semantic.root);
-    const variant_state = executor.completionVariantProbeState(semantic.root);
+    const manifest_source = primaryManifestRuleSource(executor.completion_session.state.rulesSlice(), semantic);
+    const manifest_state = executor.completion_session.state.manifestCommandState(semantic.root);
+    const variant_state = executor.completion_session.state.variantProbeState(semantic.root);
     const loaded = manifest_source != null or manifest_state != null;
 
     try writer.print("manifest:\n  loaded: {}\n", .{loaded});
@@ -5264,9 +5264,9 @@ fn manifestFallbackReason(loaded: bool, provider_count: usize, candidates: []con
 }
 
 fn writeCompletionManifestTraceJson(allocator: std.mem.Allocator, io: std.Io, json: *std.json.Stringify, executor: exec.Executor, source: []const u8, semantic: completion_model.SemanticContext, trace_path: ?[]const []const u8, precommand_depth_limited: bool, candidates: []const completion_model.Candidate) !void {
-    const manifest_source = primaryManifestRuleSource(executor.completionRules(), semantic);
-    const manifest_state = executor.completionManifestCommandState(semantic.root);
-    const variant_state = executor.completionVariantProbeState(semantic.root);
+    const manifest_source = primaryManifestRuleSource(executor.completion_session.state.rulesSlice(), semantic);
+    const manifest_state = executor.completion_session.state.manifestCommandState(semantic.root);
+    const variant_state = executor.completion_session.state.variantProbeState(semantic.root);
     const loaded = manifest_source != null or manifest_state != null;
 
     try json.beginObject();
@@ -8751,7 +8751,7 @@ test "completion scripts lazy-load from XDG data home" {
 
     try loader.ensureLoaded(std.testing.io, &executor, "tool", "rush");
 
-    const rules = executor.completionRules();
+    const rules = executor.completion_session.state.rulesSlice();
     try std.testing.expectEqual(@as(usize, 1), rules.len);
     try std.testing.expectEqualStrings("tool", rules[0].root);
     try std.testing.expectEqual(completion_model.RuleKind.dynamic_subcommands, rules[0].kind);
@@ -8797,7 +8797,7 @@ test "completion manifests lazy-load static subcommands and options" {
 
     try loader.ensureLoaded(std.testing.io, &executor, "tool", "rush");
 
-    const rules = executor.completionRules();
+    const rules = executor.completion_session.state.rulesSlice();
     try std.testing.expectEqual(@as(usize, 5), rules.len);
     try std.testing.expectEqualStrings("tool", rules[0].root);
     try std.testing.expectEqual(completion_model.RuleKind.option, rules[0].kind);
@@ -9150,7 +9150,7 @@ test "completion manifest multi-value options select each provider and preserve 
     defer executor.freeCompletions(output_candidates);
     try expectCompletionCandidate(output_candidates, "HDMI-1");
     try expectNoCompletionCandidate(output_candidates, "1920x1080");
-    var context = executor.lastCompletionContext() orelse return error.MissingCompletionContext;
+    var context = executor.completion_session.state.lastContext() orelse return error.MissingCompletionContext;
     try std.testing.expectEqual(@as(usize, 0), context.option_value.?.value_index);
 
     const mode_source = "displayctl --mode HDMI-1 current,19";
@@ -9159,20 +9159,20 @@ test "completion manifest multi-value options select each provider and preserve 
     const mode = findCompletionCandidate(mode_candidates, "1920x1080") orelse return error.MissingCompletionCandidate;
     try std.testing.expectEqual(@as(usize, "displayctl --mode HDMI-1 current,".len), mode.replace_start);
     try expectNoCompletionCandidate(mode_candidates, "HDMI-1");
-    context = executor.lastCompletionContext() orelse return error.MissingCompletionContext;
+    context = executor.completion_session.state.lastContext() orelse return error.MissingCompletionContext;
     try std.testing.expectEqual(@as(usize, 1), context.option_value.?.value_index);
 
     const attached_mode_candidates = try executor.collectCompletionsForInput("displayctl --mode=HDMI-1 25", "displayctl --mode=HDMI-1 25".len, .{ .io = std.testing.io });
     defer executor.freeCompletions(attached_mode_candidates);
     try expectCompletionCandidate(attached_mode_candidates, "2560x1440");
-    context = executor.lastCompletionContext() orelse return error.MissingCompletionContext;
+    context = executor.completion_session.state.lastContext() orelse return error.MissingCompletionContext;
     try std.testing.expectEqual(@as(usize, 1), context.option_value.?.value_index);
 
     const target_source = "displayctl --mode HDMI-1 1920x1080 target";
     const target_candidates = try executor.collectCompletionsForInput(target_source, target_source.len, .{ .io = std.testing.io });
     defer executor.freeCompletions(target_candidates);
     try expectCompletionCandidate(target_candidates, "target-a");
-    context = executor.lastCompletionContext() orelse return error.MissingCompletionContext;
+    context = executor.completion_session.state.lastContext() orelse return error.MissingCompletionContext;
     try std.testing.expectEqual(@as(usize, 0), context.argument_index);
     try std.testing.expectEqualStrings("target", context.argument_state.?);
 }
@@ -9428,20 +9428,20 @@ test "completion manifest variants select lazily and cache probe result" {
     var executor = exec.Executor.init(std.testing.allocator);
     defer executor.deinit();
     try loadCompletionManifest(std.testing.allocator, &executor, manifest);
-    try std.testing.expectEqual(@as(usize, 4), executor.completionRules().len);
-    try executor.setCompletionVariantProbeMock("lslike", "ls (GNU coreutils) 9.5\n");
+    try std.testing.expectEqual(@as(usize, 4), executor.completion_session.state.rulesSlice().len);
+    try executor.completion_session.state.setVariantProbeMock("lslike", "ls (GNU coreutils) 9.5\n");
 
     const first = try executor.collectCompletionsForInput("lslike --", "lslike --".len, .{ .io = std.testing.io });
     defer executor.freeCompletions(first);
     try expectCompletionCandidate(first, "--base");
     try expectCompletionCandidate(first, "--color");
     try expectNoCompletionCandidate(first, "--classify");
-    try std.testing.expectEqual(@as(usize, 1), executor.completionVariantProbeCount("lslike"));
+    try std.testing.expectEqual(@as(usize, 1), executor.completion_session.state.variantProbeCount("lslike"));
 
     const second = try executor.collectCompletionsForInput("lslike --", "lslike --".len, .{ .io = std.testing.io });
     defer executor.freeCompletions(second);
     try expectCompletionCandidate(second, "--color");
-    try std.testing.expectEqual(@as(usize, 1), executor.completionVariantProbeCount("lslike"));
+    try std.testing.expectEqual(@as(usize, 1), executor.completion_session.state.variantProbeCount("lslike"));
 }
 
 test "completion manifest variant probe fallback and platform-gated option" {
@@ -9465,7 +9465,7 @@ test "completion manifest variant probe fallback and platform-gated option" {
     var executor = exec.Executor.init(std.testing.allocator);
     defer executor.deinit();
     try loadCompletionManifest(std.testing.allocator, &executor, manifest);
-    try executor.setCompletionVariantProbeMock("lslike", "BSD ls\n");
+    try executor.completion_session.state.setVariantProbeMock("lslike", "BSD ls\n");
 
     const long_candidates = try executor.collectCompletionsForInput("lslike --", "lslike --".len, .{ .io = std.testing.io });
     defer executor.freeCompletions(long_candidates);
@@ -9496,15 +9496,15 @@ test "completion manifest variant probe skips shell function shadow" {
     );
     var function_result = try executor.executeScriptSlice("shadowtool() { :; }", .{});
     defer function_result.deinit();
-    try executor.setCompletionVariantProbeMock("shadowtool", "GNU\n");
+    try executor.completion_session.state.setVariantProbeMock("shadowtool", "GNU\n");
 
     const candidates = try executor.collectCompletionsForInput("shadowtool --", "shadowtool --".len, .{ .io = std.testing.io });
     defer executor.freeCompletions(candidates);
     try expectCompletionCandidate(candidates, "--base");
     try expectNoCompletionCandidate(candidates, "--color");
     try expectNoCompletionCandidate(candidates, "--classify");
-    try std.testing.expectEqual(@as(usize, 0), executor.completionVariantProbeCount("shadowtool"));
-    const probe = executor.completionVariantProbeState("shadowtool") orelse return error.MissingCompletionVariantProbe;
+    try std.testing.expectEqual(@as(usize, 0), executor.completion_session.state.variantProbeCount("shadowtool"));
+    const probe = executor.completion_session.state.variantProbeState("shadowtool") orelse return error.MissingCompletionVariantProbe;
     try std.testing.expect(probe.skipped_shadow);
 }
 
@@ -9527,8 +9527,8 @@ test "completion manifest command platform gate skips registration" {
     var executor = exec.Executor.init(std.testing.allocator);
     defer executor.deinit();
     try loadCompletionManifest(std.testing.allocator, &executor, manifest);
-    try std.testing.expectEqual(@as(usize, 0), executor.completionRules().len);
-    const state = executor.completionManifestCommandState("onlyelsewhere") orelse return error.MissingCompletionManifestState;
+    try std.testing.expectEqual(@as(usize, 0), executor.completion_session.state.rulesSlice().len);
+    const state = executor.completion_session.state.manifestCommandState("onlyelsewhere") orelse return error.MissingCompletionManifestState;
     try std.testing.expect(!state.platform_allowed);
 }
 
@@ -9577,7 +9577,7 @@ test "completion manifest precommand rest re-enters command completion" {
     });
     defer executor.freeCompletions(nested_candidates);
     _ = findCompletionCandidate(nested_candidates, "--staged") orelse return error.MissingCompletionCandidate;
-    const trace_path = executor.lastCompletionTracePath() orelse return error.MissingCompletionTracePath;
+    const trace_path = executor.completion_session.state.lastTracePath() orelse return error.MissingCompletionTracePath;
     try std.testing.expectEqual(@as(usize, 4), trace_path.len);
     try std.testing.expectEqualStrings("sudo", trace_path[0]);
     try std.testing.expectEqualStrings("sudo", trace_path[1]);
@@ -9604,7 +9604,7 @@ test "completion manifest precommand recursion is bounded" {
     const candidates = try executor.collectCompletionsForInput(source, source.len, .{ .io = std.testing.io });
     defer executor.freeCompletions(candidates);
     try std.testing.expectEqual(@as(usize, 0), candidates.len);
-    try std.testing.expect(executor.lastCompletionPrecommandDepthLimited());
+    try std.testing.expect(executor.completion_session.state.lastPrecommandDepthLimited());
 }
 
 test "completion manifest function providers lazy-load provider-only companions" {
@@ -9648,7 +9648,7 @@ test "completion manifest function providers lazy-load provider-only companions"
     defer loader.deinit();
     try loader.ensureLoaded(std.testing.io, &executor, "tool", "rush");
 
-    const loaded_rules = executor.completionRules().len;
+    const loaded_rules = executor.completion_session.state.rulesSlice().len;
     try std.testing.expect(!executor.hasFunction("__rush_complete_tool_targets"));
     try std.testing.expect(executor.getEnv("RUSH_MANIFEST_COMPANION_LOADED") == null);
 
@@ -9663,7 +9663,7 @@ test "completion manifest function providers lazy-load provider-only companions"
     try expectCompletionCandidate(argument_candidates, "target-one");
     try std.testing.expect(executor.hasFunction("__rush_complete_tool_targets"));
     try std.testing.expectEqualStrings("yes", executor.getEnv("RUSH_MANIFEST_COMPANION_LOADED").?);
-    try std.testing.expectEqual(loaded_rules, executor.completionRules().len);
+    try std.testing.expectEqual(loaded_rules, executor.completion_session.state.rulesSlice().len);
 
     const companion_static_candidates = try executor.collectCompletionsForInput("tool companion", "tool companion".len, .{ .io = std.testing.io });
     defer executor.freeCompletions(companion_static_candidates);
@@ -9990,7 +9990,7 @@ test "completion manifest semantic validation rejects unsupported versions befor
         \\  }
         \\}
     ));
-    try std.testing.expectEqual(@as(usize, 0), executor.completionRules().len);
+    try std.testing.expectEqual(@as(usize, 0), executor.completion_session.state.rulesSlice().len);
 }
 
 test "completion manifest semantic validation rejects duplicates before compiling rules" {
@@ -10009,7 +10009,7 @@ test "completion manifest semantic validation rejects duplicates before compilin
         \\  }
         \\}
     ));
-    try std.testing.expectEqual(@as(usize, 0), executor.completionRules().len);
+    try std.testing.expectEqual(@as(usize, 0), executor.completion_session.state.rulesSlice().len);
 }
 
 fn expectCompletionManifestDiagnostic(diagnostics: CompletionManifestDiagnostics, severity: CompletionManifestDiagnosticSeverity, needle: []const u8) !void {
@@ -10067,12 +10067,12 @@ test "completion cache refresh updates entries in background" {
     var cache = CompletionCache.init(std.testing.allocator);
     defer cache.deinit();
     var stale = [_]completion_model.Candidate{.{ .value = "stale", .replace_start = 4, .replace_end = 5 }};
-    try cache.put("git f", 5, "/tmp/project", executor.completionGeneration(), &stale);
+    try cache.put("git f", 5, "/tmp/project", executor.completion_session.state.generationValue(), &stale);
 
-    try cache.startRefresh(&executor, &history, std.testing.io, "git f", 5, "/tmp/project", executor.completionGeneration());
+    try cache.startRefresh(&executor, &history, std.testing.io, "git f", 5, "/tmp/project", executor.completion_session.state.generationValue());
     cache.waitForRefresh();
 
-    const cached = cache.get("git f", 5, "/tmp/project", executor.completionGeneration()) orelse return error.MissingCompletionCacheEntry;
+    const cached = cache.get("git f", 5, "/tmp/project", executor.completion_session.state.generationValue()) orelse return error.MissingCompletionCacheEntry;
     try std.testing.expectEqual(@as(usize, 1), cached.len);
     try std.testing.expectEqualStrings("fresh", cached[0].value);
 }
