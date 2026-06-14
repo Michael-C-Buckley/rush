@@ -1045,7 +1045,7 @@ const TrapActionLowerer = struct {
     };
 
     const ExpandedFieldsLowering = union(enum) {
-        fields: expand.ExpansionResult,
+        fields: redirection_plan.ExpandedFields,
         failure: TrapActionFailure,
     };
 
@@ -1128,7 +1128,7 @@ const TrapActionLowerer = struct {
         return .{ .spec = .{
             .descriptor = descriptor,
             .operator = operator,
-            .operand = .{ .fields = .{ .fields = fields.fields } },
+            .operand = .{ .fields = fields },
         } };
     }
 
@@ -1147,24 +1147,31 @@ const TrapActionLowerer = struct {
         target: context.ExecutionTarget,
     ) !ExpandedFieldsLowering {
         const expansion_target = self.expansionTarget(target);
+        const expansion_eval_context = self.eval_context.withTarget(expansion_target);
         var process_id_buffer: [32]u8 = undefined;
         var last_background_pid_buffer: [32]u8 = undefined;
+        var command_substitutions: TrapActionExpansionCommandSubstitutions = .{};
+        command_substitutions.init(self, expansion_eval_context);
+        defer command_substitutions.deinit();
         var expansion = shell_expand.ShellExpansion.init(self.allocator, .{
             .shell_state = self.shell_state,
-            .eval_context = self.eval_context.withTarget(expansion_target),
+            .eval_context = expansion_eval_context,
             .fs_port = self.owner.evaluator.fs_port,
             .features = self.owner.features,
+            .command_substitution = command_substitutions.commandSubstitution(),
             .arg_zero = self.owner.arg_zero,
             .process_id = self.processIdText(&process_id_buffer),
             .last_background_pid = self.lastBackgroundPidText(&last_background_pid_buffer),
         });
         defer expansion.deinit();
-        const fields = expansion.expandWordFields(raw) catch |err| {
+        const field = expansion.expandWordScalar(raw) catch |err| {
             if (expansion.classifyError(err)) |expansion_failure|
                 return .{ .failure = try self.expansionFailure(expansion_failure) };
             return err;
         };
-        return .{ .fields = fields };
+        const fields = try self.allocator.alloc([]const u8, 1);
+        fields[0] = field;
+        return .{ .fields = .{ .fields = fields, .ownership = .owned_by_plan } };
     }
 
     fn expandHereDocForRedirection(
@@ -4875,12 +4882,16 @@ fn hasRedirections(plan: command_plan.CommandPlan) bool {
 
 fn semanticHereDocInput(plan: redirection_plan.RedirectionPlan) ?[]const u8 {
     plan.validate();
-    if (plan.steps.len != 1) return null;
-    const step = plan.steps[0];
-    return switch (step.effect) {
-        .here_doc => |here_doc| if (here_doc.target == 0) here_doc.data.bytes else null,
-        .open_path, .duplicate, .close => null,
-    };
+    var input: ?[]const u8 = null;
+    for (plan.steps) |step| {
+        switch (step.effect) {
+            .here_doc => |here_doc| {
+                if (here_doc.target == 0) input = here_doc.data.bytes;
+            },
+            .open_path, .duplicate, .close => return null,
+        }
+    }
+    return input;
 }
 
 fn redirectionTargetsDescriptor(plan: redirection_plan.RedirectionPlan, descriptor: runtime.fd.Descriptor) bool {
@@ -9630,12 +9641,11 @@ test "semantic parser trap resolver reports redirection expansion failures as tr
     try std.testing.expectEqual(@as(state.ExitStatus, 41), shell_state.last_status);
 }
 
-test "semantic parser trap resolver reports ambiguous redirects as trap diagnostics" {
+test "semantic parser trap resolver reports bad descriptor redirects as trap diagnostics" {
     var shell_state = state.ShellState.init(std.testing.allocator);
     defer shell_state.deinit();
-    try shell_state.putVariable("REDIRECT_TARGET", "one two", .{});
     shell_state.last_status = 42;
-    try shell_state.setTrapForSignal(.TERM, ": > $REDIRECT_TARGET");
+    try shell_state.setTrapForSignal(.TERM, ": 1>&bad");
     try shell_state.appendPendingTrap(.TERM);
 
     var evaluator = Evaluator.init(std.testing.allocator);
@@ -9653,9 +9663,9 @@ test "semantic parser trap resolver reports ambiguous redirects as trap diagnost
     try std.testing.expect(std.mem.indexOf(
         u8,
         trap_outcome.diagnostics.items[0].message,
-        "ambiguous redirect",
+        "bad file descriptor",
     ) != null);
-    try std.testing.expect(std.mem.indexOf(u8, trap_outcome.stderr.items, "ambiguous redirect") != null);
+    try std.testing.expect(std.mem.indexOf(u8, trap_outcome.stderr.items, "bad file descriptor") != null);
     try trap_outcome.commitDelta(&shell_state, .current_shell);
     try std.testing.expectEqual(@as(state.ExitStatus, 42), shell_state.last_status);
 }
