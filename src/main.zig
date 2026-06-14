@@ -1,8 +1,6 @@
 //! Application entry point.
 
 const std = @import("std");
-const build_options = @import("builtin");
-const build_config = @import("build_config");
 
 extern "c" fn close(fd: c_int) c_int;
 extern "c" fn dup(fd: c_int) c_int;
@@ -32,15 +30,6 @@ const usage =
     \\       rush --help
     \\
 ;
-
-const system_profile_path = build_config.sysconfdir ++ "/rush/profile.rush";
-const system_config_path = build_config.sysconfdir ++ "/rush/config.rush";
-const embedded_config = @embedFile("default_config");
-const embedded_config_path = "embedded:config.rush";
-const omitted_newline_marker = "\x1b[2m⏎\x1b[22m\r\n";
-const ignoreeof_message = "Use \"exit\" to leave the shell.\r\n";
-const stopped_jobs_exit_warning = "You have stopped jobs.\n";
-const immediate_notify_poll_ms = 50;
 
 pub const CommandResult = runner.CommandResult;
 const RunOptions = runner.Options;
@@ -112,487 +101,54 @@ pub fn main(init: std.process.Init) !u8 {
     return result.status;
 }
 
-fn unixTimestamp(io: std.Io) i64 {
-    return std.Io.Clock.real.now(io).toSeconds();
-}
-
-fn monotonicTimestamp(io: std.Io) std.Io.Clock.Timestamp {
-    return std.Io.Clock.Timestamp.now(io, .awake);
-}
-
-fn durationMillis(start: std.Io.Clock.Timestamp, end: std.Io.Clock.Timestamp) i64 {
-    return @max(start.durationTo(end).raw.toMilliseconds(), 0);
-}
-
-const InteractiveContext = struct {
-    semantic_state: *shell.ShellState,
-    arg_zero: []const u8 = "rush",
-    features: compat.Features = .{},
-};
-
-fn runInteractiveIntervalHooks(context: *anyopaque, allocator: std.mem.Allocator, io: std.Io) !editor_driver.HookResult {
-    const interactive_context: *InteractiveContext = @ptrCast(@alignCast(context));
-    var output: std.ArrayList(u8) = .empty;
-    errdefer output.deinit(allocator);
-    var should_refresh_prompt = false;
-
-    const semantic_state = interactive_context.semantic_state;
-    if (try executeInteractivePendingTraps(allocator, io, semantic_state, interactive_context.arg_zero, interactive_context.features)) |trap_result| {
-        var result = trap_result;
-        defer result.deinit();
-        try output.appendSlice(allocator, result.stdout);
-        try output.appendSlice(allocator, result.stderr);
-        should_refresh_prompt = true;
-    }
-
-    if (semantic_state.options.notify) {
-        const notifications = try drainInteractiveSemanticJobNotifications(allocator, io, semantic_state);
-        defer allocator.free(notifications);
-        try output.appendSlice(allocator, notifications);
-    }
-
-    return .{
-        .output = try output.toOwnedSlice(allocator),
-        .refresh_prompt = should_refresh_prompt,
-        .stop = semantic_state.pending_exit != null,
-    };
-}
-
-fn nextInteractiveIntervalMs(context: *anyopaque, io: std.Io) !?u64 {
-    _ = io;
-    const interactive_context: *InteractiveContext = @ptrCast(@alignCast(context));
-    if (shellStateWantsImmediateJobNotificationPoll(interactive_context.semantic_state)) {
-        return immediate_notify_poll_ms;
-    }
-    return null;
-}
-
-fn drainInteractiveSemanticJobNotifications(allocator: std.mem.Allocator, io: std.Io, shell_state: *shell.ShellState) ![]const u8 {
-    shell_state.validate();
-    std.debug.assert(shell_state.scope == .current_shell);
-
-    var adapter = runtime.PosixAdapter.init(io);
-    var evaluator = shell.eval.Evaluator.initWithRuntimePorts(allocator, runtime.posixPorts(&adapter));
-    evaluator.io = io;
-    const eval_context = shell.EvalContext.init(.{ .target = .current_shell, .source = .interactive, .interactive = true });
-    var outcome = try shell.eval.drainJobNotifications(&evaluator, shell_state, eval_context);
-    defer outcome.deinit();
-    try outcome.commitDelta(shell_state, .current_shell);
-    const output = try outcome.stdout.toOwnedSlice(allocator);
-    outcome.stdout = .empty;
-    shell_state.validate();
-    return output;
-}
-
-fn executeInteractivePendingTraps(allocator: std.mem.Allocator, io: std.Io, shell_state: *shell.ShellState, arg_zero: []const u8, features: compat.Features) !?CommandResult {
-    shell_state.validate();
-    std.debug.assert(shell_state.scope == .current_shell);
-    std.debug.assert(arg_zero.len != 0);
-
-    var adapter = runtime.PosixAdapter.init(io);
-    var evaluator = shell.eval.Evaluator.initWithRuntimePorts(allocator, runtime.posixPorts(&adapter));
-    evaluator.io = io;
-    evaluator.features = features;
-    evaluator.arg_zero = arg_zero;
-    evaluator.external_stdio = .inherit;
-    const eval_context = shell.EvalContext.init(.{ .target = .current_shell, .source = .interactive, .interactive = true });
-
-    if (try shell.eval.observeRuntimeSignal(&evaluator, shell_state, eval_context)) |observed| {
-        var observation = observed;
-        defer observation.deinit();
-        try observation.command_outcome.commitDelta(shell_state, .current_shell);
-    }
-
-    var resolver = shell.eval.ParserTrapActionResolver.init(&evaluator);
-    resolver.features = features;
-    resolver.arg_zero = arg_zero;
-    var trap_outcome = (try shell.eval.executePendingTraps(&evaluator, shell_state, eval_context, resolver.resolver())) orelse return null;
-    defer trap_outcome.deinit();
-
-    const stdout = try trap_outcome.stdout.toOwnedSlice(allocator);
-    errdefer allocator.free(stdout);
-    const stderr = try trap_outcome.stderr.toOwnedSlice(allocator);
-    errdefer allocator.free(stderr);
-    try trap_outcome.commitDelta(shell_state, .current_shell);
-    shell_state.validate();
-    return .{ .allocator = allocator, .status = trap_outcome.status, .stdout = stdout, .stderr = stderr };
-}
-
-fn shellStateWantsImmediateJobNotificationPoll(shell_state: *const shell.ShellState) bool {
-    shell_state.validate();
-    std.debug.assert(shell_state.scope == .current_shell);
-    if (!shell_state.options.notify) return false;
-    if (shell_state.pending_job_notifications.items.len != 0) return true;
-    for (shell_state.background_jobs.items) |job| {
-        job.validate();
-        if (job.state != .done or job.notified_state != job.state) return true;
-    }
-    return false;
-}
-
-fn interactivePendingExit(interactive_shell: *const InteractiveShell) ?shell.ExitStatus {
-    if (!interactive_shell.semantic_enabled) return null;
-    interactive_shell.semantic_state.validate();
-    std.debug.assert(interactive_shell.semantic_state.scope == .current_shell);
-    return interactive_shell.semantic_state.pending_exit;
-}
-
-fn shellStateHasStoppedJobs(shell_state: shell.ShellState) bool {
-    shell_state.validate();
-    std.debug.assert(shell_state.scope == .current_shell);
-    for (shell_state.background_jobs.items) |job| {
-        job.validate();
-        if (job.state == .stopped) return true;
-    }
-    return false;
-}
-
-fn shouldWarnBeforeExitWithStoppedJobs(shell_state: *shell.ShellState) bool {
-    shell_state.validate();
-    std.debug.assert(shell_state.scope == .current_shell);
-    if (!shellStateHasStoppedJobs(shell_state.*)) {
-        shell_state.warned_stopped_jobs_on_exit = false;
-        shell_state.validate();
-        return false;
-    }
-    if (shell_state.warned_stopped_jobs_on_exit) return false;
-    shell_state.warned_stopped_jobs_on_exit = true;
-    shell_state.validate();
-    return true;
-}
-
-const InteractiveOptions = struct {
-    arg_zero: []const u8 = "rush",
-    login: bool = false,
-    features: compat.Features = .{},
-    shell_options: shell.ShellOptions = .{},
-    monitor_option_explicit: bool = false,
-    positionals: []const []const u8 = &.{},
-};
-
-const InteractiveShell = struct {
-    allocator: std.mem.Allocator,
-    semantic_state: shell.ShellState,
-    semantic_enabled: bool = false,
-
-    fn init(allocator: std.mem.Allocator) InteractiveShell {
-        return .{
-            .allocator = allocator,
-            .semantic_state = shell.ShellState.init(allocator),
-        };
-    }
-
-    fn deinit(self: *InteractiveShell) void {
-        self.semantic_state.deinit();
-        self.* = undefined;
-    }
-
-    fn initializeSemanticStartup(self: *InteractiveShell, io: std.Io, environ_map: *const std.process.Environ.Map, options: InteractiveOptions) !void {
-        self.semantic_state.deinit();
-        self.semantic_state = shell.ShellState.init(self.allocator);
-        self.semantic_enabled = false;
-
-        var startup_shell_options = options.shell_options;
-        setInteractiveStartupShellOptions(&startup_shell_options, options.monitor_option_explicit, stdinIsTty(io));
-        try shell.startup.initializeInteractiveState(self.allocator, io, &self.semantic_state, environ_map, options.positionals, startup_shell_options);
-        self.semantic_enabled = true;
-    }
-};
-
-fn setInteractiveStartupShellOptions(shell_options: *shell.ShellOptions, monitor_option_explicit: bool, stdin_is_tty: bool) void {
-    if (stdin_is_tty and !monitor_option_explicit) shell_options.monitor = true;
-    shell_options.noexec = false;
-}
+const InteractiveOptions = interactive.startup.Options;
+const InteractiveShell = interactive.session.Shell;
+const InteractiveContext = interactive.session.Context;
+const SemanticInvocationExecution = runner.SemanticInvocationExecution;
+const immediate_notify_poll_ms = interactive.session.immediate_notify_poll_ms;
+const runInteractiveIntervalHooks = interactive.session.runInteractiveIntervalHooks;
+const nextInteractiveIntervalMs = interactive.session.nextInteractiveIntervalMs;
+const runInteractiveInterruptTrap = interactive.session.runInteractiveInterruptTrap;
 
 pub fn runInteractive(allocator: std.mem.Allocator, io: std.Io, environ_map: *const std.process.Environ.Map, options: InteractiveOptions) !u8 {
-    var signal_handlers = interactive.signals.install();
-    defer signal_handlers.restore();
-
-    var command_history = history.History.init(allocator);
-    defer command_history.deinit();
-    var history_service = history.InteractiveHistoryService.init(&command_history);
-    const active_session_id = try history.sessionId(allocator, io);
-    defer allocator.free(active_session_id);
-    command_history.session_id = active_session_id;
-    const history_path = try history.defaultPath(allocator, environ_map);
-    defer if (history_path) |path| allocator.free(path);
-    if (history_path) |path| command_history.load(io, path) catch {};
-    defer if (history_path) |path| command_history.save(io, path) catch {};
-    const terminal_hostname = try history.localHostname(allocator);
-    defer allocator.free(terminal_hostname);
-
-    var last_status: shell.ExitStatus = 0;
-    var interactive_shell = InteractiveShell.init(allocator);
-    defer interactive_shell.deinit();
-    try interactive_shell.initializeSemanticStartup(io, environ_map, options);
-    try loadInteractiveConfig(allocator, io, &interactive_shell.semantic_state, options);
-    if (interactivePendingExit(&interactive_shell)) |status| return status;
-    var terminal = try editor_driver.TerminalSession.init(allocator, io);
-    defer terminal.deinit();
-    runtime.signal.setWakeFd(terminal.trapSignalWakeFd());
-    defer runtime.signal.clearWakeFd(terminal.trapSignalWakeFd());
-    if (interactive_shell.semantic_enabled) try syncSemanticTerminalSize(&interactive_shell.semantic_state, terminal);
-
-    repl_loop: while (true) {
-        if (interactivePendingExit(&interactive_shell)) |status| {
-            last_status = status;
-            break;
-        }
-        terminal.refreshWinsize();
-        if (interactive_shell.semantic_enabled) try syncSemanticTerminalSize(&interactive_shell.semantic_state, terminal);
-        const notifications = if (interactive_shell.semantic_enabled)
-            try drainInteractiveSemanticJobNotifications(allocator, io, &interactive_shell.semantic_state)
-        else
-            try allocator.dupe(u8, "");
-        defer allocator.free(notifications);
-        try writeAll(io, .stderr, notifications);
-        if (interactivePendingExit(&interactive_shell)) |status| {
-            last_status = status;
-            break;
-        }
-        const prompt = try interactive.prompt.renderStatic(allocator, &interactive_shell.semantic_state);
-        defer allocator.free(prompt);
-        var cwd_buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
-        const cwd_len = std.Io.Dir.cwd().realPath(io, &cwd_buffer) catch 0;
-        const physical_cwd = cwd_buffer[0..cwd_len];
-        const cwd = if (interactive.prompt.getEnv(&interactive_shell.semantic_state, "PWD")) |pwd| if (pwd.len != 0) pwd else physical_cwd else physical_cwd;
-        command_history.current_cwd = physical_cwd;
-        try terminal.reportCurrentDirectory(cwd, terminal_hostname);
-        const title = try interactive.input.titlePath(allocator, cwd, interactive.prompt.getEnv(&interactive_shell.semantic_state, "HOME"));
-        defer if (title.owned) allocator.free(title.text);
-        try terminal.reportWindowTitle(title.text);
-        var interactive_context: InteractiveContext = .{ .semantic_state = &interactive_shell.semantic_state, .arg_zero = options.arg_zero, .features = options.features };
-        const read_options: editor_driver.ReadLineOptions = .{
-            .prompt = prompt,
-            .editing_mode = interactive.input.editingMode(interactive_shell.semantic_state.options),
-            .hook_context = &interactive_context,
-            .run_hooks = runInteractiveIntervalHooks,
-            .next_hook_interval_ms = nextInteractiveIntervalMs,
-            .history = history_service.lineEditorView(io),
-            .external_editor_command = interactive.prompt.externalEditorCommand(&interactive_shell.semantic_state),
-            .external_editor_tmpdir = interactive.prompt.externalEditorTmpdir(&interactive_shell.semantic_state),
-        };
-        const read_result = try terminal.readLine(read_options);
-        if (interactive_shell.semantic_enabled) try syncSemanticTerminalSize(&interactive_shell.semantic_state, terminal);
-        const line = switch (read_result) {
-            .submitted => |line| line,
-            .canceled => {
-                if (try runInteractiveInterruptTrap(allocator, io, &interactive_shell.semantic_state, options.arg_zero, options.features)) |result| {
-                    var trap_result = result;
-                    defer trap_result.deinit();
-                    try terminal.leaveEditorMode();
-                    var editor_mode_left = true;
-                    defer if (editor_mode_left) terminal.enterEditorMode() catch {};
-
-                    try writeAll(io, .stdout, trap_result.stdout);
-                    try writeAll(io, .stderr, trap_result.stderr);
-                    if (interactive.input.outputNeedsNewlineMarker(trap_result.stdout, trap_result.stderr)) try writeAll(io, .stderr, omitted_newline_marker);
-                    last_status = trap_result.status;
-                    try terminal.finishSemanticCommand(trap_result.status);
-                    if (interactivePendingExit(&interactive_shell)) |status| {
-                        last_status = status;
-                        editor_mode_left = false;
-                        break;
-                    }
-
-                    try terminal.enterEditorMode();
-                    editor_mode_left = false;
-                }
-                continue;
-            },
-            .interrupted => {
-                if (interactivePendingExit(&interactive_shell)) |status| {
-                    last_status = status;
-                    break;
-                }
-                continue;
-            },
-            .eof => {
-                if (!interactive_shell.semantic_state.options.ignoreeof) break;
-                try writeAll(io, .stderr, ignoreeof_message);
-                continue;
-            },
-        };
-        defer allocator.free(line);
-
-        var command: std.ArrayList(u8) = .empty;
-        defer command.deinit(allocator);
-        try command.appendSlice(allocator, line);
-
-        while (try interactive.input.needsContinuation(allocator, command.items, options.features)) {
-            var continuation_options = read_options;
-            continuation_options.prompt = interactive.prompt.text(&interactive_shell.semantic_state, "PS2", "> ");
-            continuation_options.diagnostic_context = null;
-            continuation_options.diagnose = null;
-            const continuation_read_result = try terminal.readLine(continuation_options);
-            if (interactive_shell.semantic_enabled) try syncSemanticTerminalSize(&interactive_shell.semantic_state, terminal);
-            const continuation_line = switch (continuation_read_result) {
-                .submitted => |continuation_line| continuation_line,
-                .canceled => {
-                    if (try runInteractiveInterruptTrap(allocator, io, &interactive_shell.semantic_state, options.arg_zero, options.features)) |result| {
-                        var trap_result = result;
-                        defer trap_result.deinit();
-                        try terminal.leaveEditorMode();
-                        var editor_mode_left = true;
-                        defer if (editor_mode_left) terminal.enterEditorMode() catch {};
-
-                        try writeAll(io, .stdout, trap_result.stdout);
-                        try writeAll(io, .stderr, trap_result.stderr);
-                        if (interactive.input.outputNeedsNewlineMarker(trap_result.stdout, trap_result.stderr)) try writeAll(io, .stderr, omitted_newline_marker);
-                        last_status = trap_result.status;
-                        try terminal.finishSemanticCommand(trap_result.status);
-                        if (interactivePendingExit(&interactive_shell)) |status| {
-                            last_status = status;
-                            editor_mode_left = false;
-                            break :repl_loop;
-                        }
-
-                        try terminal.enterEditorMode();
-                        editor_mode_left = false;
-                    }
-                    continue :repl_loop;
-                },
-                .interrupted => {
-                    if (interactivePendingExit(&interactive_shell)) |status| {
-                        last_status = status;
-                        break :repl_loop;
-                    }
-                    continue :repl_loop;
-                },
-                .eof => {
-                    try terminal.finishSemanticCommand(2);
-                    last_status = 2;
-                    continue :repl_loop;
-                },
-            };
-            defer allocator.free(continuation_line);
-            try command.append(allocator, '\n');
-            try command.appendSlice(allocator, continuation_line);
-        }
-
-        const input = command.items;
-        if (std.mem.eql(u8, input, "exit")) {
-            if (shouldWarnBeforeExitWithStoppedJobs(&interactive_shell.semantic_state)) {
-                try terminal.finishSemanticCommand(0);
-                try writeAll(io, .stderr, stopped_jobs_exit_warning);
-                continue;
-            }
-            try terminal.finishSemanticCommand(0);
-            break;
-        }
-        if (input.len == 0) {
-            try terminal.finishSemanticCommand(0);
-            continue;
-        }
-
-        {
-            try terminal.leaveEditorMode();
-            var editor_mode_left = true;
-            defer if (editor_mode_left) terminal.enterEditorMode() catch {};
-
-            const command_started_at = unixTimestamp(io);
-            const command_started = monotonicTimestamp(io);
-            var result = try runInteractiveScript(allocator, io, &interactive_shell, input, .{ .io = io, .allow_external = true, .features = options.features, .external_stdio = .inherit, .interactive = true, .arg_zero = options.arg_zero });
-            const command_duration_ms = durationMillis(command_started, monotonicTimestamp(io));
-            defer result.deinit();
-            try writeAll(io, .stdout, result.stdout);
-            try writeAll(io, .stderr, result.stderr);
-            if (interactive.input.outputNeedsNewlineMarker(result.stdout, result.stderr)) try writeAll(io, .stderr, omitted_newline_marker);
-            last_status = result.status;
-            if (!history_service.consumeSuppressNextAppend()) try history_service.addCommand(io, input, result.status, command_started_at, command_duration_ms);
-            try terminal.finishSemanticCommand(result.status);
-            if (interactivePendingExit(&interactive_shell)) |status| {
-                last_status = status;
-                editor_mode_left = false;
-                break;
-            }
-
-            try terminal.enterEditorMode();
-            editor_mode_left = false;
-        }
-    }
-
-    return last_status;
-}
-
-fn syncSemanticTerminalSize(shell_state: *shell.ShellState, terminal: editor_driver.TerminalSession) !void {
-    shell_state.validate();
-    std.debug.assert(shell_state.scope == .current_shell);
-    const winsize = terminal.currentWinsize();
-    var rows_buffer: [32]u8 = undefined;
-    var cols_buffer: [32]u8 = undefined;
-    const rows = try std.fmt.bufPrint(&rows_buffer, "{d}", .{winsize.rows});
-    const cols = try std.fmt.bufPrint(&cols_buffer, "{d}", .{winsize.cols});
-    try shell_state.putVariable("LINES", rows, .{ .exported = true });
-    try shell_state.putVariable("COLUMNS", cols, .{ .exported = true });
-}
-
-fn runInteractiveInterruptTrap(allocator: std.mem.Allocator, io: std.Io, shell_state: *shell.ShellState, arg_zero: []const u8, features: compat.Features) !?CommandResult {
-    shell_state.validate();
-    std.debug.assert(shell_state.scope == .current_shell);
-    if (shell_state.trapDisposition(.INT) != .caught) return null;
-    try shell_state.appendPendingTrap(.INT);
-    return executeInteractivePendingTraps(allocator, io, shell_state, arg_zero, features);
+    return interactive.session.run(allocator, io, environ_map, options);
 }
 
 pub fn runReplInput(allocator: std.mem.Allocator, io: std.Io, input: []const u8) !CommandResult {
-    var stdout: std.ArrayList(u8) = .empty;
-    errdefer stdout.deinit(allocator);
-    var stderr: std.ArrayList(u8) = .empty;
-    errdefer stderr.deinit(allocator);
-    var command_history = history.History.init(allocator);
-    defer command_history.deinit();
-    var history_service = history.InteractiveHistoryService.init(&command_history);
-    var last_status: shell.ExitStatus = 0;
-    var interactive_shell = InteractiveShell.init(allocator);
-    defer interactive_shell.deinit();
-    var empty_env = std.process.Environ.Map.init(allocator);
-    defer empty_env.deinit();
-    try interactive_shell.initializeSemanticStartup(io, &empty_env, .{});
-    {
-        var result = try runner.runShellStateScript(allocator, io, &interactive_shell.semantic_state, embedded_config, embedded_config_path, "rush", .{}, .capture);
-        defer result.deinit();
-        try stdout.appendSlice(allocator, result.stdout);
-        try stderr.appendSlice(allocator, result.stderr);
-    }
+    return interactive.session.runReplInput(allocator, io, input);
+}
 
-    var lines = std.mem.splitScalar(u8, input, '\n');
-    while (lines.next()) |line| {
-        if (interactivePendingExit(&interactive_shell)) |status| {
-            last_status = status;
-            break;
-        }
-        const notifications = if (interactive_shell.semantic_enabled)
-            try drainInteractiveSemanticJobNotifications(allocator, io, &interactive_shell.semantic_state)
-        else
-            try allocator.dupe(u8, "");
-        try stderr.appendSlice(allocator, notifications);
-        allocator.free(notifications);
-        const prompt = try interactive.prompt.renderStatic(allocator, &interactive_shell.semantic_state);
-        try stdout.appendSlice(allocator, prompt);
-        allocator.free(prompt);
-        if (std.mem.eql(u8, line, "exit")) break;
-        if (line.len == 0) continue;
-
-        const command_started_at = unixTimestamp(io);
-        var result = try runInteractiveScript(allocator, io, &interactive_shell, line, .{ .io = io, .allow_external = true, .interactive = true, .arg_zero = "rush" });
-        defer result.deinit();
-        try stdout.appendSlice(allocator, result.stdout);
-        try stderr.appendSlice(allocator, result.stderr);
-        last_status = result.status;
-        if (!history_service.consumeSuppressNextAppend()) try history_service.addCommand(io, line, result.status, command_started_at, 0);
-        if (interactivePendingExit(&interactive_shell)) |status| {
-            last_status = status;
-            break;
+fn runInteractiveScript(allocator: std.mem.Allocator, io: std.Io, interactive_shell: *InteractiveShell, script: []const u8, options: RunOptions) !CommandResult {
+    std.debug.assert(options.interactive);
+    if (interactive_shell.semantic_enabled) {
+        var semantic_execution = try runSemanticInteractiveCommandString(allocator, io, interactive_shell, script, runner.invocationContext(options), options.external_stdio);
+        switch (semantic_execution) {
+            .output => |output| {
+                semantic_execution = undefined;
+                return output;
+            },
+            .unsupported => |message| {
+                semantic_execution = undefined;
+                defer allocator.free(message);
+                return runner.unsupported(allocator, message);
+            },
         }
     }
 
-    return .{
-        .allocator = allocator,
-        .status = last_status,
-        .stdout = try stdout.toOwnedSlice(allocator),
-        .stderr = try stderr.toOwnedSlice(allocator),
-    };
+    return runner.unsupported(allocator, "semantic interactive executor is disabled while legacy interactive services are active");
+}
+
+fn runSemanticInteractiveCommandString(allocator: std.mem.Allocator, io: std.Io, interactive_shell: *InteractiveShell, script: []const u8, invocation: shell.InvocationContext, external_stdio: runtime.ExternalStdio) !SemanticInvocationExecution {
+    std.debug.assert(interactive_shell.semantic_enabled);
+    return runner.runInteractiveCommandString(allocator, io, &interactive_shell.semantic_state, script, invocation, external_stdio);
+}
+
+fn loadInteractiveConfig(allocator: std.mem.Allocator, io: std.Io, shell_state: *shell.ShellState, options: InteractiveOptions) !void {
+    try interactive.startup.loadConfig(allocator, io, shell_state, options);
+}
+
+fn sourceConfigScript(allocator: std.mem.Allocator, io: std.Io, shell_state: *shell.ShellState, contents: []const u8, source_path: []const u8, arg_zero: []const u8) !void {
+    try interactive.startup.sourceConfigScript(allocator, io, shell_state, contents, source_path, arg_zero);
 }
 
 pub fn runScript(allocator: std.mem.Allocator, io: std.Io, script: []const u8) !CommandResult {
@@ -610,7 +166,14 @@ pub fn runScriptWithEnvironment(allocator: std.mem.Allocator, io: std.Io, script
 fn runShellInvocationWithEnvironment(allocator: std.mem.Allocator, io: std.Io, invocation: ShellInvocation, environ_map: ?*const std.process.Environ.Map, external_stdio: runtime.ExternalStdio, login_shell: bool) !CommandResult {
     var loaded_script = try runner.loadInvocationScript(allocator, io, invocation, external_stdio);
     defer loaded_script.deinit();
-    const interactive_options: ?InteractiveOptions = if (invocation.interactive) .{ .arg_zero = invocation.arg_zero, .login = login_shell, .features = invocation.features, .shell_options = invocation.shell_options, .monitor_option_explicit = invocation.monitor_option_explicit, .positionals = invocation.positionals } else null;
+    const interactive_options: ?InteractiveOptions = if (invocation.interactive) .{
+        .arg_zero = invocation.arg_zero,
+        .login = login_shell,
+        .features = invocation.features,
+        .shell_options = invocation.shell_options,
+        .monitor_option_explicit = invocation.monitor_option_explicit,
+        .positionals = invocation.positionals,
+    } else null;
     return runCommandStringWithEnvironment(allocator, io, loaded_script.script, loaded_script.options, environ_map, invocation.positionals, interactive_options, invocation.shell_options);
 }
 
@@ -690,204 +253,13 @@ fn stderrIsTty(io: std.Io) bool {
 
 fn runCommandStringWithEnvironment(allocator: std.mem.Allocator, io: std.Io, script: []const u8, options: RunOptions, environ_map: ?*const std.process.Environ.Map, positionals: []const []const u8, interactive_options: ?InteractiveOptions, shell_options: shell.ShellOptions) !CommandResult {
     if (interactive_options) |startup_options| {
-        var interactive_run_options = options;
-        interactive_run_options.interactive = true;
-        var interactive_shell = InteractiveShell.init(allocator);
-        defer interactive_shell.deinit();
-        var empty_env = std.process.Environ.Map.init(allocator);
-        defer empty_env.deinit();
-        const startup_env = environ_map orelse &empty_env;
-        var startup_shell_options = shell_options;
-        setInteractiveStartupShellOptions(&startup_shell_options, startup_options.monitor_option_explicit, stdinIsTty(io));
-        try interactive_shell.initializeSemanticStartup(io, startup_env, .{
-            .arg_zero = startup_options.arg_zero,
-            .login = startup_options.login,
-            .features = startup_options.features,
-            .shell_options = startup_shell_options,
-            .monitor_option_explicit = startup_options.monitor_option_explicit,
-            .positionals = positionals,
-        });
-        try loadInteractiveConfig(allocator, io, &interactive_shell.semantic_state, startup_options);
-        if (interactivePendingExit(&interactive_shell)) |status| return runner.empty(allocator, status);
-        return runInteractiveScript(allocator, io, &interactive_shell, script, interactive_run_options);
+        return interactive.session.runCommandStringWithEnvironment(allocator, io, script, options, environ_map, positionals, startup_options, shell_options);
     }
     return runner.runCommandStringWithEnvironment(allocator, io, script, options, environ_map, positionals, shell_options);
 }
 
-const SemanticInvocationExecution = runner.SemanticInvocationExecution;
-
 fn runSemanticCommandString(allocator: std.mem.Allocator, io: std.Io, script: []const u8, invocation: shell.InvocationContext, external_stdio: runtime.ExternalStdio, environ_map: ?*const std.process.Environ.Map, positionals: []const []const u8, shell_options: shell.ShellOptions) !SemanticInvocationExecution {
     return runner.runSemanticCommandString(allocator, io, script, invocation, external_stdio, environ_map, positionals, shell_options);
-}
-
-fn runInteractiveScript(allocator: std.mem.Allocator, io: std.Io, interactive_shell: *InteractiveShell, script: []const u8, options: RunOptions) !CommandResult {
-    std.debug.assert(options.interactive);
-    if (interactive_shell.semantic_enabled) {
-        var semantic_execution = try runSemanticInteractiveCommandString(allocator, io, interactive_shell, script, runner.invocationContext(options), options.external_stdio);
-        switch (semantic_execution) {
-            .output => |output| {
-                semantic_execution = undefined;
-                return output;
-            },
-            .unsupported => |message| {
-                semantic_execution = undefined;
-                defer allocator.free(message);
-                return runner.unsupported(allocator, message);
-            },
-        }
-    }
-
-    return runner.unsupported(allocator, "semantic interactive executor is disabled while legacy interactive services are active");
-}
-
-fn runSemanticInteractiveCommandString(allocator: std.mem.Allocator, io: std.Io, interactive_shell: *InteractiveShell, script: []const u8, invocation: shell.InvocationContext, external_stdio: runtime.ExternalStdio) !SemanticInvocationExecution {
-    std.debug.assert(interactive_shell.semantic_enabled);
-    return runner.runInteractiveCommandString(allocator, io, &interactive_shell.semantic_state, script, invocation, external_stdio);
-}
-
-const InteractiveConfigService = struct {
-    allocator: std.mem.Allocator,
-    io: std.Io,
-    shell_state: *shell.ShellState,
-    arg_zero: []const u8 = "rush",
-    features: compat.Features = .{},
-
-    fn init(allocator: std.mem.Allocator, io: std.Io, shell_state: *shell.ShellState, arg_zero: []const u8, features: compat.Features) InteractiveConfigService {
-        shell_state.validate();
-        std.debug.assert(shell_state.scope == .current_shell);
-        return .{ .allocator = allocator, .io = io, .shell_state = shell_state, .arg_zero = arg_zero, .features = features };
-    }
-
-    fn load(self: InteractiveConfigService, options: InteractiveOptions) !void {
-        try self.sourceScript(embedded_config, embedded_config_path);
-        if (self.pendingExit() != null) return;
-
-        if (self.getEnv("ENV")) |env_path| {
-            if (env_path.len != 0) {
-                const expanded_env_path = try self.expandParametersScalar(env_path, options.features);
-                defer self.allocator.free(expanded_env_path);
-                if (expanded_env_path.len != 0) {
-                    try self.sourceOptional(expanded_env_path);
-                    if (self.pendingExit() != null) return;
-                }
-            }
-        }
-
-        if (options.login) {
-            try self.sourceOptional(system_profile_path);
-            if (self.pendingExit() != null) return;
-            const user_profile_path = try self.userStartupPath("profile.rush");
-            defer if (user_profile_path) |path| self.allocator.free(path);
-            if (user_profile_path) |path| {
-                try self.sourceOptional(path);
-                if (self.pendingExit() != null) return;
-            }
-        }
-
-        try self.sourceOptional(system_config_path);
-        if (self.pendingExit() != null) return;
-        const user_path = try self.userStartupPath("config.rush");
-        defer if (user_path) |path| self.allocator.free(path);
-        if (user_path) |path| {
-            try self.sourceOptional(path);
-            if (self.pendingExit() != null) return;
-        }
-    }
-
-    fn sourceOptional(self: InteractiveConfigService, path: []const u8) !void {
-        const contents = std.Io.Dir.cwd().readFileAlloc(self.io, path, self.allocator, .limited(1024 * 1024)) catch |err| switch (err) {
-            error.FileNotFound => return,
-            else => {
-                try writeOptionalConfigReadWarning(self.io, path, err);
-                return;
-            },
-        };
-        defer self.allocator.free(contents);
-
-        try self.sourceScript(contents, path);
-    }
-
-    fn sourceScript(self: InteractiveConfigService, contents: []const u8, source_path: []const u8) !void {
-        var result = try runner.runShellStateScript(self.allocator, self.io, self.shell_state, contents, source_path, self.arg_zero, self.features, .capture);
-        defer result.deinit();
-        if (result.stdout.len != 0) try writeAll(self.io, .stdout, result.stdout);
-        if (result.stderr.len != 0) try writeAll(self.io, .stderr, result.stderr);
-    }
-
-    fn userConfigPath(self: InteractiveConfigService) !?[]const u8 {
-        return self.userStartupPath("config.rush");
-    }
-
-    fn userProfilePath(self: InteractiveConfigService) !?[]const u8 {
-        return self.userStartupPath("profile.rush");
-    }
-
-    fn userStartupPath(self: InteractiveConfigService, file_name: []const u8) !?[]const u8 {
-        return userStartupPathForShellState(self.allocator, self.shell_state.*, file_name);
-    }
-
-    fn userStartupPathForShellState(allocator: std.mem.Allocator, shell_state: shell.ShellState, file_name: []const u8) !?[]const u8 {
-        shell_state.validate();
-        if (shell_state.getVariable("XDG_CONFIG_HOME")) |xdg_config_home| {
-            if (xdg_config_home.value.len != 0) return try std.fs.path.join(allocator, &.{ xdg_config_home.value, "rush", file_name });
-        }
-        if (shell_state.getVariable("HOME")) |home| {
-            if (home.value.len != 0) return try std.fs.path.join(allocator, &.{ home.value, ".config", "rush", file_name });
-        }
-        return null;
-    }
-
-    fn getEnv(self: InteractiveConfigService, name: []const u8) ?[]const u8 {
-        self.shell_state.validate();
-        return if (self.shell_state.getVariable(name)) |variable| variable.value else null;
-    }
-
-    fn pendingExit(self: InteractiveConfigService) ?shell.ExitStatus {
-        self.shell_state.validate();
-        return self.shell_state.pending_exit;
-    }
-
-    fn expandParametersScalar(self: InteractiveConfigService, text: []const u8, features: compat.Features) ![]const u8 {
-        self.shell_state.validate();
-        var adapter = runtime.PosixAdapter.init(self.io);
-        var expansion = shell.ShellExpansion.init(self.allocator, .{
-            .shell_state = self.shell_state,
-            .eval_context = shell.EvalContext.init(.{ .target = .current_shell, .source = .interactive, .interactive = true }),
-            .fs_port = runtime.posixPorts(&adapter).fs,
-            .features = features,
-            .arg_zero = self.arg_zero,
-        });
-        defer expansion.deinit();
-        return expansion.expandParametersScalar(text);
-    }
-};
-
-fn loadInteractiveConfig(allocator: std.mem.Allocator, io: std.Io, shell_state: *shell.ShellState, options: InteractiveOptions) !void {
-    try InteractiveConfigService.init(allocator, io, shell_state, options.arg_zero, options.features).load(options);
-}
-
-fn sourceOptionalConfig(allocator: std.mem.Allocator, io: std.Io, shell_state: *shell.ShellState, path: []const u8, arg_zero: []const u8) !void {
-    try InteractiveConfigService.init(allocator, io, shell_state, arg_zero, .{}).sourceOptional(path);
-}
-
-fn writeOptionalConfigReadWarning(io: std.Io, path: []const u8, err: anyerror) !void {
-    var buffer: [4096]u8 = undefined;
-    var writer = std.Io.File.stderr().writer(io, &buffer);
-    defer writer.interface.flush() catch {};
-    try writer.interface.print("rush: warning: cannot read {s}: {s}; skipping\n", .{ path, configReadErrorMessage(err) });
-}
-
-fn configReadErrorMessage(err: anyerror) []const u8 {
-    return switch (err) {
-        error.AccessDenied, error.PermissionDenied => "permission denied",
-        error.IsDir => "is a directory",
-        error.NotDir => "not a directory",
-        else => @errorName(err),
-    };
-}
-
-fn sourceConfigScript(allocator: std.mem.Allocator, io: std.Io, shell_state: *shell.ShellState, contents: []const u8, source_path: []const u8, arg_zero: []const u8) !void {
-    try InteractiveConfigService.init(allocator, io, shell_state, arg_zero, .{}).sourceScript(contents, source_path);
 }
 
 const OutputStream = enum { stdout, stderr };
