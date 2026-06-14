@@ -1,0 +1,45 @@
+.{
+    .name = "2.8 Exit Status and Errors",
+    .mode = .posix,
+    .cases = .{
+        .{
+            .name = "exit with no operand returns the previous command status",
+            .script =
+            \\false
+            \\exit
+            ,
+            .stdout = "",
+            .stderr = "",
+            .status = 1,
+        },
+        .{
+            .name = "exit with an unsigned decimal operand returns that status",
+            .script =
+            \\exit 7
+            ,
+            .stdout = "",
+            .stderr = "",
+            .status = 7,
+        },
+        .{
+            .name = "command search failure exits with status 127",
+            .script =
+            \\no_such_posix_command_for_rush 2>/dev/null
+            ,
+            .stdout = "",
+            .stderr = "",
+            .status = 127,
+        },
+        .{
+            .name = "non-executable command found by pathname exits with status 126",
+            .script =
+            \\printf '%s\n' 'echo should-not-run' >plain-file
+            \\chmod 644 plain-file
+            \\./plain-file 2>/dev/null
+            ,
+            .stdout = "",
+            .stderr = "",
+            .status = 126,
+        },
+    },
+}

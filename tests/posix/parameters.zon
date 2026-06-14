@@ -1,0 +1,73 @@
+.{
+    .name = "2.5 Parameters and Variables",
+    .mode = .posix,
+    .cases = .{
+        .{
+            .name = "set assigns positional parameters and updates the count",
+            .script =
+            \\set -- a 'b c' ''
+            \\printf '<%s>\n' "$#" "$1" "$2" "$3"
+            ,
+            .stdout =
+            \\<3>
+            \\<a>
+            \\<b c>
+            \\<>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "double-quoted at expands positional parameters as separate fields",
+            .script =
+            \\set -- a 'b c' ''
+            \\printf '<%s>\n' "$@"
+            \\set --
+            \\printf '<%s>\n' "$@" end
+            ,
+            .stdout =
+            \\<a>
+            \\<b c>
+            \\<>
+            \\<end>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "double-quoted star joins positional parameters with the first IFS byte",
+            .script =
+            \\set -- a 'b c' d
+            \\IFS=:
+            \\printf '<%s>\n' "$*"
+            \\IFS=
+            \\printf '<%s>\n' "$*"
+            ,
+            .stdout =
+            \\<a:b c:d>
+            \\<ab cd>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "question mark expands to the most recent pipeline status",
+            .script =
+            \\false
+            \\printf '<%s>\n' "$?"
+            \\true
+            \\printf '<%s>\n' "$?"
+            ,
+            .stdout =
+            \\<1>
+            \\<0>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+    },
+}

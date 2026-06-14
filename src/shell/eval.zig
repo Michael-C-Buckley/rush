@@ -4597,6 +4597,7 @@ fn evaluateExternal(
         else => |spawn_err| {
             const failure = spawnFailure(spawn_err);
             try buffers.addBuiltinDiagnostic(plan.argv[0], failure.message);
+            try flushBuffersForRedirectionTargets(buffers, plan.redirections);
             return failure.status;
         },
     }).child;
@@ -4670,6 +4671,7 @@ fn runExternalWithPipelineInput(
         else => |run_err| {
             const failure = runFailure(run_err);
             try buffers.addBuiltinDiagnostic(plan.argv[0], failure.message);
+            try flushBuffersForRedirectionTargets(buffers, plan.redirections);
             return failure.status;
         },
     };
