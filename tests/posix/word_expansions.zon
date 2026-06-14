@@ -785,6 +785,37 @@
             .status = 0,
         },
         .{
+            .name = "field splitting uses default delimiters when IFS is unset",
+            .script = "unset IFS\nx='a b\tc\nd'\nset -- $x\nprintf '<%s>\\n' \"$#\" \"$@\"\n",
+            .stdout =
+            \\<4>
+            \\<a>
+            \\<b>
+            \\<c>
+            \\<d>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "field splitting with IFS whitespace ignores leading trailing and repeated delimiters",
+            .script =
+            \\IFS=' '
+            \\x='  a  b  '
+            \\set -- $x
+            \\printf '<%s>\n' "$#" "$@"
+            ,
+            .stdout =
+            \\<2>
+            \\<a>
+            \\<b>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "field splitting with non-whitespace IFS preserves empty fields between delimiters",
             .script =
             \\IFS=:
@@ -803,6 +834,44 @@
             .status = 0,
         },
         .{
+            .name = "field splitting with non-whitespace IFS preserves leading and adjacent empty fields",
+            .script =
+            \\IFS=:
+            \\x=':a::b:'
+            \\set -- $x
+            \\printf '<%s>\n' "$#" "$@"
+            ,
+            .stdout =
+            \\<4>
+            \\<>
+            \\<a>
+            \\<>
+            \\<b>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "field splitting with mixed IFS trims adjacent IFS whitespace around non-whitespace delimiters",
+            .script =
+            \\IFS=': '
+            \\x=' a : b:: c :'
+            \\set -- $x
+            \\printf '<%s>\n' "$#" "$@"
+            ,
+            .stdout =
+            \\<4>
+            \\<a>
+            \\<b>
+            \\<>
+            \\<c>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "empty IFS disables splitting but removes empty unquoted expansion fields",
             .script =
             \\IFS=
@@ -814,6 +883,93 @@
             .stdout =
             \\<a b>
             \\<quoted>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "empty IFS disables splitting after command and arithmetic expansion",
+            .script =
+            \\IFS=
+            \\x='a b'
+            \\set -- $x $(printf 'c d') $((1 + 2))
+            \\printf '<%s>\n' "$#" "$@"
+            ,
+            .stdout =
+            \\<3>
+            \\<a b>
+            \\<c d>
+            \\<3>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "field splitting removes implicit nulls and preserves explicit quoted nulls",
+            .script =
+            \\unset IFS
+            \\empty=
+            \\set -- $empty "" "$empty" a${empty}b ${empty}x x${empty}
+            \\printf '<%s>\n' "$#" "$@"
+            ,
+            .stdout =
+            \\<5>
+            \\<>
+            \\<>
+            \\<ab>
+            \\<x>
+            \\<x>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "field splitting applies only to expansion results within a word",
+            .script =
+            \\IFS=,
+            \\x='a,b'
+            \\set -- pre${x}post
+            \\printf '<%s>\n' "$#" "$@"
+            ,
+            .stdout =
+            \\<2>
+            \\<prea>
+            \\<bpost>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "field splitting applies after command substitution and arithmetic expansion",
+            .script = "unset IFS\nset -- $(printf 'a b\\nc') $((1 + 2))x\nprintf '<%s>\\n' \"$#\" \"$@\"\n",
+            .stdout =
+            \\<4>
+            \\<a>
+            \\<b>
+            \\<c>
+            \\<3x>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "field splitting does not apply inside double quotes",
+            .script =
+            \\unset IFS
+            \\x='a b'
+            \\set -- "$x" "$(printf 'c d')" "$((1 + 2)) $((3 + 4))"
+            \\printf '<%s>\n' "$#" "$@"
+            ,
+            .stdout =
+            \\<3>
+            \\<a b>
+            \\<c d>
+            \\<3 7>
             \\
             ,
             .stderr = "",
