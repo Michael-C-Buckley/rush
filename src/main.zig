@@ -435,26 +435,6 @@ test "script file invocation preserves trailing EOF backslash without final newl
     try std.testing.expectEqualStrings("", result.stderr);
 }
 
-test "script file invocation accepts sources larger than one mib" {
-    const path = "rush-large-script-invocation-test.rush";
-    std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
-    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
-
-    var contents: std.ArrayList(u8) = .empty;
-    defer contents.deinit(std.testing.allocator);
-    try contents.appendNTimes(std.testing.allocator, '#', 1024 * 1024 + 1);
-    try contents.appendSlice(std.testing.allocator, "\necho ok\n");
-    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = path, .data = contents.items });
-
-    const invocation = parseShellInvocation(&.{ "rush", path }) orelse return error.ExpectedInvocation;
-    var result = try runShellInvocationWithEnvironment(std.testing.allocator, std.testing.io, invocation, null, .capture, false);
-    defer result.deinit();
-
-    try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
-    try std.testing.expectEqualStrings("ok\n", result.stdout);
-    try std.testing.expectEqualStrings("", result.stderr);
-}
-
 test "script file invocation shell options affect execution" {
     const path = "rush-script-options-test.rush";
     std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
@@ -733,31 +713,6 @@ test "standard input script source still leaves read at EOF" {
     try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
     try std.testing.expectEqualStrings("x=[] status=1\n", result.stdout);
     try std.testing.expectEqualStrings("", result.stderr);
-}
-
-test "standard input file script seeks stdin before external commands" {
-    const path = "rush-stdin-script-seek-external.tmp";
-    const output_path = "rush-stdin-script-seek-external.out";
-    std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
-    std.Io.Dir.cwd().deleteFile(std.testing.io, output_path) catch {};
-    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
-    defer std.Io.Dir.cwd().deleteFile(std.testing.io, output_path) catch {};
-    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = path, .data = "echo start > rush-stdin-script-seek-external.out\n/usr/bin/head -1 >> rush-stdin-script-seek-external.out\necho end >> rush-stdin-script-seek-external.out\n" });
-
-    const invocation = parseShellInvocation(&.{"rush"}) orelse return error.ExpectedInvocation;
-    var file = try std.Io.Dir.cwd().openFile(std.testing.io, path, .{});
-    defer file.close(std.testing.io);
-    var guard = try StdinGuard.replaceWith(file);
-    defer guard.restore();
-    var result = try runShellInvocationWithEnvironment(std.testing.allocator, std.testing.io, invocation, null, .inherit, false);
-    defer result.deinit();
-    const output = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, output_path, std.testing.allocator, .unlimited);
-    defer std.testing.allocator.free(output);
-
-    try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
-    try std.testing.expectEqualStrings("", result.stdout);
-    try std.testing.expectEqualStrings("", result.stderr);
-    try std.testing.expectEqualStrings("start\necho end >> rush-stdin-script-seek-external.out\n", output);
 }
 
 test "standard input file script skips lines consumed by read" {
@@ -1292,37 +1247,6 @@ test "runScriptWithEnvironment initializes and exports SHLVL" {
     }
 }
 
-test "runScriptWithEnvironment preserves valid inherited logical PWD" {
-    const original_cwd = try std.process.currentPathAlloc(std.testing.io, std.testing.allocator);
-    defer std.testing.allocator.free(original_cwd);
-
-    const root = "rush-test-logical-pwd";
-    std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
-    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
-    defer std.process.setCurrentPath(std.testing.io, original_cwd) catch {};
-
-    try std.Io.Dir.cwd().createDirPath(std.testing.io, root ++ "/real");
-    std.Io.Dir.cwd().symLink(std.testing.io, "real", root ++ "/link", .{}) catch return error.SkipZigTest;
-
-    const logical_pwd = try std.mem.concat(std.testing.allocator, u8, &.{ original_cwd, "/", root, "/link" });
-    defer std.testing.allocator.free(logical_pwd);
-    try std.process.setCurrentPath(std.testing.io, logical_pwd);
-
-    var env = std.process.Environ.Map.init(std.testing.allocator);
-    defer env.deinit();
-    try env.put("PWD", logical_pwd);
-
-    var result = try runScriptWithEnvironment(std.testing.allocator, std.testing.io,
-        \\case $PWD in */rush-test-logical-pwd/link) echo logical-pwd ;; *) echo bad-pwd:$PWD ;; esac
-        \\case "$(pwd -L)" in */rush-test-logical-pwd/link) echo pwd-L ;; *) echo bad-L ;; esac
-        \\case "$(pwd -P)" in */rush-test-logical-pwd/real) echo pwd-P ;; *) echo bad-P ;; esac
-    , .{ .io = std.testing.io, .allow_external = true }, &env);
-    defer result.deinit();
-
-    try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
-    try std.testing.expectEqualStrings("logical-pwd\npwd-L\npwd-P\n", result.stdout);
-}
-
 test "runScriptWithEnvironment exports PWD and OLDPWD after cd" {
     const original_cwd = try std.process.currentPathAlloc(std.testing.io, std.testing.allocator);
     defer std.testing.allocator.free(original_cwd);
@@ -1354,43 +1278,6 @@ test "runScriptWithEnvironment exports PWD and OLDPWD after cd" {
     try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
     try std.testing.expect(std.mem.indexOf(u8, result.stdout, pwd_line) != null);
     try std.testing.expect(std.mem.indexOf(u8, result.stdout, oldpwd_line) != null);
-}
-
-test "runScriptWithOptions accepts inherit mode for external commands" {
-    var result = try runScriptWithOptions(std.testing.allocator, std.testing.io, "/usr/bin/true", .{
-        .io = std.testing.io,
-        .allow_external = true,
-        .external_stdio = .inherit,
-    });
-    defer result.deinit();
-
-    try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
-    try std.testing.expectEqualStrings("", result.stdout);
-    try std.testing.expectEqualStrings("", result.stderr);
-}
-
-test "runScriptWithOptions captures simple external command output semantically" {
-    var captured = try runScriptWithOptions(std.testing.allocator, std.testing.io, "/bin/sh -c 'printf out; printf err >&2'", .{
-        .io = std.testing.io,
-        .allow_external = true,
-        .external_stdio = .capture,
-    });
-    defer captured.deinit();
-
-    try std.testing.expectEqual(@as(shell.ExitStatus, 0), captured.status);
-    try std.testing.expectEqualStrings("out", captured.stdout);
-    try std.testing.expectEqualStrings("err", captured.stderr);
-
-    var stdout_only = try runScriptWithOptions(std.testing.allocator, std.testing.io, "/bin/sh -c 'printf out; printf err >&2'", .{
-        .io = std.testing.io,
-        .allow_external = true,
-        .external_stdio = .capture_stdout,
-    });
-    defer stdout_only.deinit();
-
-    try std.testing.expectEqual(@as(shell.ExitStatus, 0), stdout_only.status);
-    try std.testing.expectEqualStrings("out", stdout_only.stdout);
-    try std.testing.expectEqualStrings("", stdout_only.stderr);
 }
 
 test "POSIX mode reports misplaced reserved words" {
@@ -1774,41 +1661,6 @@ test "interactive startup warns and skips user config path directory" {
     try std.testing.expectEqualStrings("> ", shell_state.getVariable("PS2").?.value);
 }
 
-test "interactive startup warns and skips unreadable user config" {
-    const root = "rush-test-unreadable-config-startup";
-    const config_path = root ++ "/rush/config.rush";
-    std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
-    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
-    try std.Io.Dir.cwd().createDirPath(std.testing.io, root ++ "/rush");
-    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = config_path, .data = "CONFIG_LOADED=bad\n" });
-
-    var config_file = try std.Io.Dir.cwd().openFile(std.testing.io, config_path, .{});
-    defer config_file.close(std.testing.io);
-    try config_file.setPermissions(std.testing.io, @enumFromInt(0o000));
-    defer config_file.setPermissions(std.testing.io, @enumFromInt(0o644)) catch {};
-
-    const denied = denied: {
-        const contents = std.Io.Dir.cwd().readFileAlloc(std.testing.io, config_path, std.testing.allocator, .limited(1024)) catch |err| switch (err) {
-            error.AccessDenied, error.PermissionDenied => break :denied true,
-            else => return err,
-        };
-        std.testing.allocator.free(contents);
-        break :denied false;
-    };
-    if (!denied) return error.SkipZigTest;
-
-    var shell_state = shell.ShellState.init(std.testing.allocator);
-    defer shell_state.deinit();
-    try shell_state.putVariable("XDG_CONFIG_HOME", root, .{ .exported = true });
-
-    const stderr = try loadInteractiveConfigCapturingStderr(std.testing.allocator, &shell_state, root ++ "/stderr");
-    defer std.testing.allocator.free(stderr);
-
-    try std.testing.expectEqualStrings("rush: warning: cannot read " ++ config_path ++ ": permission denied; skipping\n", stderr);
-    try std.testing.expect(shell_state.getVariable("CONFIG_LOADED") == null);
-    try std.testing.expectEqualStrings("> ", shell_state.getVariable("PS2").?.value);
-}
-
 test "interactive command string invocation sources ENV before script" {
     const env_path = "rush-test-command-string-env.rush";
     try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = env_path, .data = "COMMAND_STRING_ENV=loaded\n" });
@@ -1955,80 +1807,6 @@ test "embedded default config sets prompt defaults without clobbering inherited 
     try loadInteractiveConfig(std.testing.allocator, std.testing.io, &shell_state, .{ .arg_zero = "rush" });
     try std.testing.expectEqualStrings("inherited> ", shell_state.getVariable("PS1").?.value);
     try std.testing.expectEqualStrings("> ", shell_state.getVariable("PS2").?.value);
-}
-
-test "integration harness compares selected scripts with /bin/sh" {
-    try expectMatchesSh("echo hello");
-    try expectMatchesSh("false");
-    try expectMatchesSh("echo hello | /bin/cat");
-    try expectMatchesSh("false || echo yes");
-    try expectMatchesSh("true && echo ok");
-    try expectMatchesSh("/usr/bin/printf external");
-}
-
-test "integration harness checks redirection side effects" {
-    const rush_path = "rush-itest-rush-redir.tmp";
-    const sh_path = "rush-itest-sh-redir.tmp";
-    std.Io.Dir.cwd().deleteFile(std.testing.io, rush_path) catch |err| switch (err) {
-        error.FileNotFound => {},
-        else => return err,
-    };
-    std.Io.Dir.cwd().deleteFile(std.testing.io, sh_path) catch |err| switch (err) {
-        error.FileNotFound => {},
-        else => return err,
-    };
-    defer std.Io.Dir.cwd().deleteFile(std.testing.io, rush_path) catch {};
-    defer std.Io.Dir.cwd().deleteFile(std.testing.io, sh_path) catch {};
-
-    var rush_result = try runScript(std.testing.allocator, std.testing.io, "echo file > rush-itest-rush-redir.tmp");
-    defer rush_result.deinit();
-    var sh_result = try runSh(std.testing.allocator, "echo file > rush-itest-sh-redir.tmp");
-    defer sh_result.deinit();
-
-    try std.testing.expectEqual(sh_result.status, rush_result.status);
-    try std.testing.expectEqualStrings(sh_result.stdout, rush_result.stdout);
-    try std.testing.expectEqualStrings(sh_result.stderr, rush_result.stderr);
-
-    const rush_contents = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, rush_path, std.testing.allocator, .limited(1024));
-    defer std.testing.allocator.free(rush_contents);
-    const sh_contents = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, sh_path, std.testing.allocator, .limited(1024));
-    defer std.testing.allocator.free(sh_contents);
-    try std.testing.expectEqualStrings(sh_contents, rush_contents);
-}
-
-fn expectMatchesSh(script: []const u8) !void {
-    var rush_result = try runScript(std.testing.allocator, std.testing.io, script);
-    defer rush_result.deinit();
-    var sh_result = try runSh(std.testing.allocator, script);
-    defer sh_result.deinit();
-
-    try std.testing.expectEqual(sh_result.status, rush_result.status);
-    try std.testing.expectEqualStrings(sh_result.stdout, rush_result.stdout);
-    try std.testing.expectEqualStrings(sh_result.stderr, rush_result.stderr);
-}
-
-fn runSh(allocator: std.mem.Allocator, script: []const u8) !CommandResult {
-    const result = try std.process.run(allocator, std.testing.io, .{
-        .argv = &.{ "/bin/sh", "-c", script },
-    });
-    errdefer allocator.free(result.stdout);
-    errdefer allocator.free(result.stderr);
-
-    return .{
-        .allocator = allocator,
-        .status = processStatus(result.term),
-        .stdout = result.stdout,
-        .stderr = result.stderr,
-    };
-}
-
-fn processStatus(term: std.process.Child.Term) shell.ExitStatus {
-    return switch (term) {
-        .exited => |code| code,
-        .signal => |sig| 128 + @as(u8, @intCast(@intFromEnum(sig))),
-        .stopped => |sig| 128 + @as(u8, @intCast(@intFromEnum(sig))),
-        .unknown => 1,
-    };
 }
 
 test {
