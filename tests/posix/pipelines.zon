@@ -15,6 +15,61 @@
             .status = 0,
         },
         .{
+            .name = "pipeline connects multiple commands left to right",
+            .script =
+            \\printf '%s\n' one two | sed -n '2p' | cat
+            ,
+            .stdout =
+            \\two
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "pipeline connects stdout but leaves stderr independent",
+            .script =
+            \\{ printf 'out\n'; printf 'err\n' >&2; } | cat
+            ,
+            .stdout =
+            \\out
+            \\
+            ,
+            .stderr =
+            \\err
+            \\
+            ,
+            .status = 0,
+        },
+        .{
+            .name = "left command redirection overrides pipeline stdout",
+            .script =
+            \\printf 'left\n' >left.out | cat
+            \\printf 'file='
+            \\cat left.out
+            ,
+            .stdout =
+            \\file=left
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "right command redirection overrides pipeline stdout",
+            .script =
+            \\printf 'right\n' | cat >right.out
+            \\printf 'file='
+            \\cat right.out
+            ,
+            .stdout =
+            \\file=right
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "pipeline status is status of rightmost command when rightmost succeeds",
             .script =
             \\false | true
@@ -31,6 +86,15 @@
             .stdout = "",
             .stderr = "",
             .status = 1,
+        },
+        .{
+            .name = "pipeline status preserves non-one rightmost status",
+            .script =
+            \\true | sh -c 'exit 7'
+            ,
+            .stdout = "",
+            .stderr = "",
+            .status = 7,
         },
         .{
             .name = "bang negates successful pipeline status",
@@ -56,6 +120,41 @@
             \\! true | false
             ,
             .stdout = "",
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "bang negates the rightmost status even when an earlier command fails",
+            .script =
+            \\! false | true
+            ,
+            .stdout = "",
+            .stderr = "",
+            .status = 1,
+        },
+        .{
+            .name = "bang is ordinary data when not at the start of a pipeline",
+            .script =
+            \\printf '<%s>\n' !
+            ,
+            .stdout =
+            \\<!>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "bang in a command path is not pipeline negation",
+            .script =
+            \\printf '%s\n' '#!/bin/sh' 'printf bangcmd\\n' >'!cmd'
+            \\chmod +x '!cmd'
+            \\./!cmd
+            ,
+            .stdout =
+            \\bangcmd
+            \\
+            ,
             .stderr = "",
             .status = 0,
         },
