@@ -638,6 +638,32 @@ pub const ShellState = struct {
         self.validate();
     }
 
+    pub fn putRushStateVariable(self: *ShellState, name: []const u8, value: []const u8) !void {
+        assertValidVariableName(name);
+        std.debug.assert(std.mem.startsWith(u8, name, "rush_"));
+
+        if (self.variables.getEntry(name)) |entry| {
+            const previous = entry.value_ptr.*;
+            const owned_value = try self.allocator.dupe(u8, value);
+            self.allocator.free(previous.value);
+            entry.value_ptr.* = .{
+                .value = owned_value,
+                .exported = previous.exported,
+                .readonly = previous.readonly,
+            };
+        } else {
+            const owned_name = try self.allocator.dupe(u8, name);
+            errdefer self.allocator.free(owned_name);
+            const owned_value = try self.allocator.dupe(u8, value);
+            errdefer self.allocator.free(owned_value);
+
+            try self.variables.put(self.allocator, owned_name, .{ .value = owned_value });
+        }
+
+        self.queueVariableHook(name);
+        self.validate();
+    }
+
     pub fn setVariableExported(self: *ShellState, name: []const u8, enabled: bool) !void {
         assertValidVariableName(name);
 
@@ -711,7 +737,6 @@ pub const ShellState = struct {
         }
         self.validate();
     }
-
 
     pub fn addEventHook(self: *ShellState, event: []const u8, function: []const u8) !void {
         assertValidEventName(event);
