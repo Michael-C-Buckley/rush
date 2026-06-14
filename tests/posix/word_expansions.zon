@@ -178,15 +178,89 @@
             .status = 0,
         },
         .{
-            .name = "tilde expansion applies at the start of a word and after assignment colon",
+            .name = "tilde expansion applies at the start of an unquoted word",
             .script =
-            \\HOME=/tmp/posix-home
-            \\PATH=~/bin:/usr/bin
-            \\printf '<%s>\n' ~ "$PATH"
+            \\set -- ~ ~/subdir
+            \\home=$1
+            \\case $2 in "$home/subdir") printf 'start\n';; *) printf 'bad\n';; esac
             ,
             .stdout =
-            \\</tmp/posix-home>
-            \\</tmp/posix-home/bin:/usr/bin>
+            \\start
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "tilde expansion is suppressed by quoting",
+            .script =
+            \\printf '<%s>\n' '~' "~" \~
+            ,
+            .stdout =
+            \\<~>
+            \\<~>
+            \\<~>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "tilde expansion does not apply after other word characters",
+            .script =
+            \\printf '<%s>\n' x~ x~/subdir
+            ,
+            .stdout =
+            \\<x~>
+            \\<x~/subdir>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "tilde expansion applies after equals and colon in assignment words",
+            .script =
+            \\home=~
+            \\value=~/bin:~:/usr:~/sbin
+            \\case $value in "$home/bin:$home:/usr:$home/sbin") printf 'assignment\n';; *) printf 'bad\n';; esac
+            ,
+            .stdout =
+            \\assignment
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "quoted tilde is literal in assignment words",
+            .script =
+            \\single='~'
+            \\double="~"
+            \\escaped=\~
+            \\printf '<%s>\n' "$single" "$double" "$escaped"
+            ,
+            .stdout =
+            \\<~>
+            \\<~>
+            \\<~>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "tilde is literal inside assignment fields except after colon",
+            .script =
+            \\home=~
+            \\literal=a~
+            \\colon=/prefix:~
+            \\printf '<%s>\n' "$literal"
+            \\case $colon in "/prefix:$home") printf 'colon\n';; *) printf 'bad\n';; esac
+            ,
+            .stdout =
+            \\<a~>
+            \\colon
             \\
             ,
             .stderr = "",
