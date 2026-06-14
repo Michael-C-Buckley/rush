@@ -24,6 +24,28 @@
             .status = 1,
         },
         .{
+            .name = "AND list status is last executed command when final command fails",
+            .script =
+            \\true && false
+            ,
+            .stdout = "",
+            .stderr = "",
+            .status = 1,
+        },
+        .{
+            .name = "AND list expands commands only when they are executed",
+            .script =
+            \\false && : >marker
+            \\test ! -e marker && printf 'not-created\n'
+            ,
+            .stdout =
+            \\not-created
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "OR list executes next command after nonzero status",
             .script =
             \\false || printf '%s\n' ok
@@ -41,6 +63,28 @@
             \\true || printf '%s\n' bad
             ,
             .stdout = "",
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "OR list status is last executed command when final command fails",
+            .script =
+            \\false || false
+            ,
+            .stdout = "",
+            .stderr = "",
+            .status = 1,
+        },
+        .{
+            .name = "OR list expands commands only when they are executed",
+            .script =
+            \\true || : >marker
+            \\test ! -e marker && printf 'not-created\n'
+            ,
+            .stdout =
+            \\not-created
+            \\
+            ,
             .stderr = "",
             .status = 0,
         },
@@ -69,6 +113,30 @@
             .status = 0,
         },
         .{
+            .name = "equal precedence lets OR result feed following AND",
+            .script =
+            \\false || true && printf '%s\n' ok
+            ,
+            .stdout =
+            \\ok
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "equal precedence lets AND result feed following OR",
+            .script =
+            \\true && false || printf '%s\n' ok
+            ,
+            .stdout =
+            \\ok
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "sequential list status is last executed pipeline status when last succeeds",
             .script =
             \\false; true
@@ -85,6 +153,114 @@
             .stdout = "",
             .stderr = "",
             .status = 1,
+        },
+        .{
+            .name = "semicolon separator executes AND-OR lists in order",
+            .script =
+            \\printf '%s\n' first; printf '%s\n' second
+            ,
+            .stdout =
+            \\first
+            \\second
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "newline separator executes AND-OR lists in order",
+            .script =
+            \\printf '%s\n' first
+            \\printf '%s\n' second
+            ,
+            .stdout =
+            \\first
+            \\second
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "newline terminator preserves preceding list status",
+            .script =
+            \\false
+            \\
+            ,
+            .stdout = "",
+            .stderr = "",
+            .status = 1,
+        },
+        .{
+            .name = "asynchronous list has zero status without waiting for command result",
+            .script =
+            \\false & printf '%s\n' "$?"
+            ,
+            .stdout =
+            \\0
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "asynchronous list records process id for wait",
+            .script =
+            \\false & pid=$!
+            \\wait "$pid"
+            ,
+            .stdout = "",
+            .stderr = "",
+            .status = 1,
+        },
+        .{
+            .name = "asynchronous list executes in a subshell environment",
+            .script =
+            \\value=parent
+            \\value=child & wait "$!"
+            \\printf '%s\n' "$value"
+            ,
+            .stdout =
+            \\parent
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "asynchronous list explicit stdin redirection overrides initial null input",
+            .script =
+            \\printf 'data\n' >input
+            \\read value <input & pid=$!
+            \\wait "$pid"
+            ,
+            .stdout = "",
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "bang pipeline status participates in AND list",
+            .script =
+            \\! false && printf '%s\n' ok
+            ,
+            .stdout =
+            \\ok
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "bang pipeline status participates in OR list",
+            .script =
+            \\! true || printf '%s\n' ok
+            ,
+            .stdout =
+            \\ok
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
         },
     },
 }
