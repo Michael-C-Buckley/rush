@@ -247,7 +247,28 @@ pub fn build(b: *std.Build) void {
     check_step.dependOn(&install_completion_manifest_check.step);
 
     const cross_check_step = b.step("cross-check", "Run native tests and compile-check Linux/macOS/BSD targets");
-    const cross_check = b.addSystemCommand(&.{ "sh", "scripts/check-cross-targets.sh" });
+    const cross_check = b.addSystemCommand(&.{
+        "sh",
+        "-c",
+        \\set -eu
+        \\zig=$1
+        \\"$zig" build test --summary all
+        \\for target in \
+        \\  x86_64-linux-gnu \
+        \\  aarch64-linux-gnu \
+        \\  x86_64-macos \
+        \\  aarch64-macos \
+        \\  x86_64-freebsd \
+        \\  x86_64-openbsd \
+        \\  x86_64-netbsd
+        \\do
+        \\  echo "compile-check $target"
+        \\  "$zig" build compile-test -Dtarget="$target" --summary none
+        \\done
+        ,
+        "sh",
+    });
+    cross_check.addArg(b.graph.zig_exe);
     cross_check.step.dependOn(fmt_step);
     cross_check_step.dependOn(&cross_check.step);
 
