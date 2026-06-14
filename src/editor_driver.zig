@@ -24,14 +24,17 @@ const completion_progress_delay_ms = 500;
 
 const ResizeSignalFd = struct {
     var value: std.atomic.Value(std.posix.fd_t) = .init(invalid_fd);
+    var pending: std.atomic.Value(bool) = .init(false);
 };
 
 const ChildSignalFd = struct {
     var value: std.atomic.Value(std.posix.fd_t) = .init(invalid_fd);
+    var pending: std.atomic.Value(bool) = .init(false);
 };
 
 const InterruptSignalFd = struct {
     var value: std.atomic.Value(std.posix.fd_t) = .init(invalid_fd);
+    var pending: std.atomic.Value(bool) = .init(false);
 };
 
 pub const DriverEvent = union(enum) {
@@ -544,7 +547,6 @@ pub const TerminalSession = struct {
     io: std.Io,
     tty_buffer: []u8,
     tty: vaxis.tty.PosixTty,
-    wake: Pipe,
     prompt_redraw: Pipe,
     completion_wake: Pipe,
     trap_signal: Pipe,
@@ -552,7 +554,6 @@ pub const TerminalSession = struct {
     child_signal: ChildSignalSource,
     interrupt_signal: InterruptSignalSource,
     loop: event_loop.EventLoop,
-    reader: OneShotReader,
     terminal_parser: TerminalParser,
     renderer: line_editor.FrameRenderer = .{},
     completion: CompletionController,
@@ -568,8 +569,6 @@ pub const TerminalSession = struct {
         var tty = try initPosixTtyPreserveInput(io, tty_buffer);
         errdefer deinitPosixTtyPreserveInput(tty);
 
-        var wake = try makePipe(io);
-        errdefer wake.close(io);
         var prompt_redraw = try makePipe(io);
         errdefer prompt_redraw.close(io);
         try setNonBlocking(prompt_redraw.read.handle);
@@ -590,7 +589,7 @@ pub const TerminalSession = struct {
         errdefer interrupt_signal.deinitUnregistered(io);
         var loop = try event_loop.EventLoop.init();
         errdefer loop.deinit();
-        try loop.addReadFd(wake.read.handle, .tty_input);
+        try loop.addReadFd(tty.fd.handle, .tty_input);
         try loop.addReadFd(prompt_redraw.read.handle, .prompt_redraw);
         try loop.addReadFd(completion_wake.read.handle, .completion_result);
         try loop.addReadFd(trap_signal.read.handle, .trap_signal);
@@ -598,10 +597,6 @@ pub const TerminalSession = struct {
         try loop.addReadFd(child_signal.readFd(), .child_signal);
         try loop.addReadFd(interrupt_signal.readFd(), .interrupt_signal);
 
-        const read_fd = try rawDup(tty.fd.handle);
-        const read_file: std.Io.File = .{ .handle = read_fd, .flags = .{ .nonblocking = false } };
-        var reader = try OneShotReader.init(allocator, io, read_file, wake.write);
-        errdefer reader.deinit();
         const winsize = tty.getWinsize() catch vaxis.Winsize{ .rows = 24, .cols = 80, .x_pixel = 0, .y_pixel = 0 };
 
         const self: TerminalSession = .{
@@ -609,7 +604,6 @@ pub const TerminalSession = struct {
             .io = io,
             .tty_buffer = tty_buffer,
             .tty = tty,
-            .wake = wake,
             .prompt_redraw = prompt_redraw,
             .completion_wake = completion_wake,
             .trap_signal = trap_signal,
@@ -617,7 +611,6 @@ pub const TerminalSession = struct {
             .child_signal = child_signal,
             .interrupt_signal = interrupt_signal,
             .loop = loop,
-            .reader = reader,
             .terminal_parser = .init(allocator),
             .completion = .init(allocator),
             .winsize = winsize,
@@ -632,7 +625,6 @@ pub const TerminalSession = struct {
         self.completion.deinit();
         self.terminal_parser.deinit();
         self.renderer.deinit(self.allocator);
-        self.reader.deinit();
         self.interrupt_signal.deinit(self.io, &self.loop);
         self.child_signal.deinit(self.io, &self.loop);
         self.resize.deinit(self.io, &self.loop);
@@ -640,7 +632,6 @@ pub const TerminalSession = struct {
         self.trap_signal.close(self.io);
         self.completion_wake.close(self.io);
         self.prompt_redraw.close(self.io);
-        self.wake.read.close(self.io);
         deinitPosixTtyPreserveInput(self.tty);
         self.allocator.free(self.tty_buffer);
         self.* = undefined;
@@ -710,7 +701,6 @@ pub const TerminalSession = struct {
     }
 
     pub fn readLine(self: *TerminalSession, options: ReadLineOptions) !ReadLineResult {
-        if (self.reader.thread == null) try self.reader.start();
         if (!self.query_batch_sent) {
             try self.capabilities.sendInitialQueries(&self.tty);
             self.query_batch_sent = true;
@@ -726,7 +716,6 @@ pub const TerminalSession = struct {
 
         try writeTtyAll(&self.tty, semanticCommandStart);
         try renderSession(self.allocator, self.io, &self.tty, &self.renderer, &session, self.capabilities, self.winsize, read_options);
-        self.reader.arm();
         var next_prompt_refresh_ms: ?u64 = if (read_options.prompt_refresh_interval_ms) |interval_ms| nowMs(self.io) + interval_ms else null;
         var next_completion_flash_clear_ms: ?u64 = null;
         var next_hook_interval_ms = try nextHookIntervalDeadlineMs(read_options, self.io);
@@ -891,7 +880,6 @@ pub const TerminalSession = struct {
                         try renderSession(self.allocator, self.io, &self.tty, &self.renderer, &session, self.capabilities, self.winsize, read_options);
                         if (rendered_completion_flash) next_completion_flash_clear_ms = nowMs(self.io) + completion_flash_ms;
                     }
-                    self.reader.arm();
                 }
             }
 
@@ -905,7 +893,6 @@ pub const TerminalSession = struct {
                     } else {
                         session.resumeEditingAfterExternalEditor();
                         try renderSession(self.allocator, self.io, &self.tty, &self.renderer, &session, self.capabilities, self.winsize, read_options);
-                        self.reader.arm();
                         continue :read_loop;
                     }
                     continue :read_loop;
@@ -1017,9 +1004,9 @@ pub const TerminalSession = struct {
     }
 
     fn processTtyInput(self: *TerminalSession) !void {
-        var wake_buffer: [32]u8 = undefined;
-        _ = try rawRead(self.wake.read.handle, &wake_buffer);
-        const bytes = try self.reader.takeReady();
+        var buffer: [read_chunk_size]u8 = undefined;
+        const n = try rawRead(self.tty.fd.handle, &buffer);
+        const bytes = buffer[0..n];
         const old_len = self.events.items.len;
         try self.terminal_parser.feed(bytes, &self.events);
         for (self.events.items[old_len..]) |event| {
@@ -1361,6 +1348,7 @@ const ResizeSignalSource = struct {
         try setNonBlocking(pipe.read.handle);
         try setNonBlocking(pipe.write.handle);
 
+        ResizeSignalFd.pending.store(false, .release);
         ResizeSignalFd.value.store(pipe.write.handle, .release);
         const action: std.posix.Sigaction = .{
             .handler = .{ .handler = resizeSignalHandler },
@@ -1378,12 +1366,12 @@ const ResizeSignalSource = struct {
 
     fn drain(self: *ResizeSignalSource) void {
         const pipe = self.pipe orelse return;
-        var buffer: [64]u8 = undefined;
-        _ = rawRead(pipe.read.handle, &buffer) catch {};
+        drainPendingSignalPipe(pipe.read.handle, &ResizeSignalFd.pending);
     }
 
     fn disable(self: *ResizeSignalSource, io: std.Io, loop: *event_loop.EventLoop) !void {
         ResizeSignalFd.value.store(invalid_fd, .release);
+        ResizeSignalFd.pending.store(false, .release);
         if (self.previous) |previous| {
             std.posix.sigaction(.WINCH, &previous, null);
             self.previous = null;
@@ -1402,6 +1390,7 @@ const ResizeSignalSource = struct {
 
     fn deinitUnregistered(self: *ResizeSignalSource, io: std.Io) void {
         ResizeSignalFd.value.store(invalid_fd, .release);
+        ResizeSignalFd.pending.store(false, .release);
         if (self.previous) |previous| std.posix.sigaction(.WINCH, &previous, null);
         if (self.pipe) |*pipe| pipe.close(io);
         self.* = undefined;
@@ -1411,6 +1400,7 @@ const ResizeSignalSource = struct {
 fn resizeSignalHandler(_: std.posix.SIG) callconv(.c) void {
     const fd = ResizeSignalFd.value.load(.acquire);
     if (fd == invalid_fd) return;
+    if (ResizeSignalFd.pending.swap(true, .acq_rel)) return;
     _ = std.c.write(fd, "r", 1);
 }
 
@@ -1424,6 +1414,7 @@ const ChildSignalSource = struct {
         try setNonBlocking(pipe.read.handle);
         try setNonBlocking(pipe.write.handle);
 
+        ChildSignalFd.pending.store(false, .release);
         ChildSignalFd.value.store(pipe.write.handle, .release);
         const action: std.posix.Sigaction = .{
             .handler = .{ .handler = childSignalHandler },
@@ -1441,12 +1432,12 @@ const ChildSignalSource = struct {
 
     fn drain(self: *ChildSignalSource) void {
         const pipe = self.pipe orelse return;
-        var buffer: [64]u8 = undefined;
-        _ = rawRead(pipe.read.handle, &buffer) catch {};
+        drainPendingSignalPipe(pipe.read.handle, &ChildSignalFd.pending);
     }
 
     fn deinit(self: *ChildSignalSource, io: std.Io, loop: *event_loop.EventLoop) void {
         ChildSignalFd.value.store(invalid_fd, .release);
+        ChildSignalFd.pending.store(false, .release);
         if (self.previous) |previous| {
             std.posix.sigaction(.CHLD, &previous, null);
             self.previous = null;
@@ -1461,6 +1452,7 @@ const ChildSignalSource = struct {
 
     fn deinitUnregistered(self: *ChildSignalSource, io: std.Io) void {
         ChildSignalFd.value.store(invalid_fd, .release);
+        ChildSignalFd.pending.store(false, .release);
         if (self.previous) |previous| std.posix.sigaction(.CHLD, &previous, null);
         if (self.pipe) |*pipe| pipe.close(io);
         self.* = undefined;
@@ -1470,6 +1462,7 @@ const ChildSignalSource = struct {
 fn childSignalHandler(_: std.posix.SIG) callconv(.c) void {
     const fd = ChildSignalFd.value.load(.acquire);
     if (fd == invalid_fd) return;
+    if (ChildSignalFd.pending.swap(true, .acq_rel)) return;
     _ = std.c.write(fd, "c", 1);
 }
 
@@ -1483,6 +1476,7 @@ const InterruptSignalSource = struct {
         try setNonBlocking(pipe.read.handle);
         try setNonBlocking(pipe.write.handle);
 
+        InterruptSignalFd.pending.store(false, .release);
         InterruptSignalFd.value.store(pipe.write.handle, .release);
         const action: std.posix.Sigaction = .{
             .handler = .{ .handler = interruptSignalHandler },
@@ -1500,12 +1494,12 @@ const InterruptSignalSource = struct {
 
     fn drain(self: *InterruptSignalSource) void {
         const pipe = self.pipe orelse return;
-        var buffer: [64]u8 = undefined;
-        _ = rawRead(pipe.read.handle, &buffer) catch {};
+        drainPendingSignalPipe(pipe.read.handle, &InterruptSignalFd.pending);
     }
 
     fn deinit(self: *InterruptSignalSource, io: std.Io, loop: *event_loop.EventLoop) void {
         InterruptSignalFd.value.store(invalid_fd, .release);
+        InterruptSignalFd.pending.store(false, .release);
         if (self.previous) |previous| {
             std.posix.sigaction(.INT, &previous, null);
             self.previous = null;
@@ -1520,6 +1514,7 @@ const InterruptSignalSource = struct {
 
     fn deinitUnregistered(self: *InterruptSignalSource, io: std.Io) void {
         InterruptSignalFd.value.store(invalid_fd, .release);
+        InterruptSignalFd.pending.store(false, .release);
         if (self.previous) |previous| std.posix.sigaction(.INT, &previous, null);
         if (self.pipe) |*pipe| pipe.close(io);
         self.* = undefined;
@@ -1529,7 +1524,22 @@ const InterruptSignalSource = struct {
 fn interruptSignalHandler(_: std.posix.SIG) callconv(.c) void {
     const fd = InterruptSignalFd.value.load(.acquire);
     if (fd == invalid_fd) return;
+    if (InterruptSignalFd.pending.swap(true, .acq_rel)) return;
     _ = std.c.write(fd, "i", 1);
+}
+
+fn drainPendingSignalPipe(fd: std.posix.fd_t, pending: *std.atomic.Value(bool)) void {
+    var buffer: [64]u8 = undefined;
+    while (true) {
+        // Clear before draining so a concurrent handler either writes a new
+        // wake byte or is observed by the load below and consumed in this pass.
+        pending.store(false, .release);
+        while (true) {
+            const n = rawRead(fd, &buffer) catch break;
+            if (n == 0) break;
+        }
+        if (!pending.load(.acquire)) return;
+    }
 }
 
 pub fn makePipe(io: std.Io) !Pipe {
@@ -1570,153 +1580,6 @@ pub fn makePipe(io: std.Io) !Pipe {
         .write = .{ .handle = fds[1], .flags = .{ .nonblocking = false } },
     };
 }
-
-pub const OneShotReader = struct {
-    const State = enum {
-        idle,
-        armed,
-        reading,
-        ready,
-        stopping,
-        stopped,
-    };
-
-    allocator: std.mem.Allocator,
-    io: std.Io,
-    mutex: std.Io.Mutex = .init,
-    cond: std.Io.Condition = .init,
-    state: State = .idle,
-    read_file: ?std.Io.File,
-    wake_write: ?std.Io.File,
-    bytes: std.ArrayList(u8) = .empty,
-    err: ?anyerror = null,
-    thread: ?std.Thread = null,
-
-    pub fn init(allocator: std.mem.Allocator, io: std.Io, read_file: std.Io.File, wake_write: std.Io.File) !OneShotReader {
-        var self: OneShotReader = .{
-            .allocator = allocator,
-            .io = io,
-            .read_file = read_file,
-            .wake_write = wake_write,
-        };
-        errdefer self.deinit();
-        try self.bytes.ensureTotalCapacity(allocator, read_chunk_size);
-        return self;
-    }
-
-    pub fn start(self: *OneShotReader) !void {
-        if (self.thread != null) return error.ReaderAlreadyStarted;
-        self.thread = try std.Thread.spawn(.{}, readThreadMain, .{self});
-    }
-
-    pub fn deinit(self: *OneShotReader) void {
-        self.stop();
-        self.bytes.deinit(self.allocator);
-        self.* = undefined;
-    }
-
-    /// Ensure a read is pending. A no-op when a read is already armed,
-    /// in flight, or has produced data that has not been taken yet, so
-    /// callers woken by unrelated events can arm unconditionally.
-    pub fn arm(self: *OneShotReader) void {
-        self.mutex.lockUncancelable(self.io);
-        defer self.mutex.unlock(self.io);
-        if (self.state != .idle) return;
-        self.bytes.clearRetainingCapacity();
-        self.err = null;
-        self.state = .armed;
-        self.cond.signal(self.io);
-    }
-
-    pub fn takeReady(self: *OneShotReader) ![]const u8 {
-        self.mutex.lockUncancelable(self.io);
-        defer self.mutex.unlock(self.io);
-        if (self.state != .ready) return error.ReadNotReady;
-        self.state = .idle;
-        if (self.err) |err| return err;
-        return self.bytes.items;
-    }
-
-    pub fn stop(self: *OneShotReader) void {
-        self.mutex.lockUncancelable(self.io);
-        switch (self.state) {
-            .stopped => {
-                self.mutex.unlock(self.io);
-                return;
-            },
-            else => self.state = .stopping,
-        }
-        if (self.read_file) |file| {
-            file.close(self.io);
-            self.read_file = null;
-        }
-        self.cond.signal(self.io);
-        self.mutex.unlock(self.io);
-
-        if (self.thread) |thread| {
-            thread.join();
-            self.thread = null;
-        }
-        if (self.wake_write) |file| {
-            file.close(self.io);
-            self.wake_write = null;
-        }
-    }
-
-    fn readThreadMain(self: *OneShotReader) void {
-        while (self.waitUntilArmed()) {
-            const read_file = self.currentReadFile() orelse break;
-            const result = self.readOnce(read_file);
-            self.publishRead(result);
-        }
-        self.mutex.lockUncancelable(self.io);
-        self.state = .stopped;
-        self.mutex.unlock(self.io);
-    }
-
-    fn waitUntilArmed(self: *OneShotReader) bool {
-        self.mutex.lockUncancelable(self.io);
-        defer self.mutex.unlock(self.io);
-        while (self.state == .idle or self.state == .ready) self.cond.waitUncancelable(self.io, &self.mutex);
-        if (self.state == .stopping or self.state == .stopped) return false;
-        self.state = .reading;
-        return true;
-    }
-
-    fn currentReadFile(self: *OneShotReader) ?std.Io.File {
-        self.mutex.lockUncancelable(self.io);
-        defer self.mutex.unlock(self.io);
-        return self.read_file;
-    }
-
-    fn readOnce(self: *OneShotReader, file: std.Io.File) anyerror!usize {
-        self.bytes.clearRetainingCapacity();
-        const buffer = self.bytes.addManyAsSliceAssumeCapacity(read_chunk_size);
-        const n = rawRead(file.handle, buffer) catch |err| {
-            self.bytes.shrinkRetainingCapacity(0);
-            return err;
-        };
-        self.bytes.shrinkRetainingCapacity(n);
-        return n;
-    }
-
-    fn publishRead(self: *OneShotReader, result: anyerror!usize) void {
-        self.mutex.lockUncancelable(self.io);
-        if (self.state != .stopping) {
-            _ = result catch |err| {
-                self.err = err;
-            };
-            self.state = .ready;
-        }
-        self.mutex.unlock(self.io);
-        self.wake();
-    }
-
-    fn wake(self: *OneShotReader) void {
-        const file = self.wake_write orelse return;
-        rawWriteAll(file.handle, "x") catch {};
-    }
-};
 
 fn rawRead(fd: std.posix.fd_t, buffer: []u8) !usize {
     while (true) {
@@ -1767,28 +1630,6 @@ fn rawWrite(fd: std.posix.fd_t, bytes: []const u8) !usize {
     }
 }
 
-fn rawDup(fd: std.posix.fd_t) !std.posix.fd_t {
-    if (builtin.os.tag == .linux and !builtin.link_libc) {
-        const rc = std.os.linux.dup(fd);
-        switch (std.os.linux.errno(rc)) {
-            .SUCCESS => return @intCast(rc),
-            .BADF => return error.BadFileDescriptor,
-            .MFILE => return error.ProcessFdQuotaExceeded,
-            else => return error.Unexpected,
-        }
-    }
-    while (true) {
-        const rc = std.c.dup(fd);
-        switch (std.c.errno(rc)) {
-            .SUCCESS => return @intCast(rc),
-            .BADF => return error.BadFileDescriptor,
-            .INTR => continue,
-            .MFILE => return error.ProcessFdQuotaExceeded,
-            else => return error.Unexpected,
-        }
-    }
-}
-
 fn closeFd(io: std.Io, fd: std.posix.fd_t) void {
     const file: std.Io.File = .{ .handle = fd, .flags = .{ .nonblocking = false } };
     file.close(io);
@@ -1821,11 +1662,6 @@ fn setNonBlocking(fd: std.posix.fd_t) !void {
     }
 }
 
-fn readAllFromFile(io: std.Io, file: std.Io.File, buffer: []u8) !usize {
-    _ = io;
-    return rawRead(file.handle, buffer);
-}
-
 test "child signal source reports SIGCHLD through event loop" {
     var source = try ChildSignalSource.init(std.testing.io);
     var loop = try event_loop.EventLoop.init();
@@ -1856,6 +1692,23 @@ test "interrupt signal source reports SIGINT through event loop" {
     try std.testing.expectEqual(@as(usize, 1), ready.len);
     try std.testing.expectEqual(event_loop.Source.interrupt_signal, ready[0].source);
     source.drain();
+}
+
+test "interrupt signal source coalesces repeated pending signals" {
+    var source = try InterruptSignalSource.init(std.testing.io);
+    defer source.deinitUnregistered(std.testing.io);
+
+    interruptSignalHandler(.INT);
+    interruptSignalHandler(.INT);
+
+    var buffer: [8]u8 = undefined;
+    const first = try rawRead(source.readFd(), &buffer);
+    try std.testing.expectEqual(@as(usize, 1), first);
+
+    InterruptSignalFd.pending.store(false, .release);
+    interruptSignalHandler(.INT);
+    const second = try rawRead(source.readFd(), &buffer);
+    try std.testing.expectEqual(@as(usize, 1), second);
 }
 
 test "terminal parser emits text keys" {
@@ -2249,44 +2102,4 @@ test "terminal parser emits in-band resize events" {
     try std.testing.expectEqual(@as(usize, 1), events.items.len);
     try std.testing.expectEqual(@as(u16, 30), events.items[0].resize.rows);
     try std.testing.expectEqual(@as(u16, 120), events.items[0].resize.cols);
-}
-
-test "one-shot reader reads only after it is armed" {
-    var input = try makePipe(std.testing.io);
-    defer input.write.close(std.testing.io);
-    var wake = try makePipe(std.testing.io);
-    defer wake.read.close(std.testing.io);
-
-    var reader = try OneShotReader.init(std.testing.allocator, std.testing.io, input.read, wake.write);
-    defer reader.deinit();
-    try reader.start();
-
-    reader.arm();
-    try rawWriteAll(input.write.handle, "abc");
-
-    var wake_buffer: [8]u8 = undefined;
-    const wake_n = try readAllFromFile(std.testing.io, wake.read, &wake_buffer);
-    try std.testing.expectEqual(@as(usize, 1), wake_n);
-
-    const bytes = try reader.takeReady();
-    try std.testing.expectEqualStrings("abc", bytes);
-}
-
-test "one-shot reader treats overlapping arms as no-ops" {
-    var input = try makePipe(std.testing.io);
-    defer input.write.close(std.testing.io);
-    var wake = try makePipe(std.testing.io);
-    defer wake.read.close(std.testing.io);
-
-    var reader = try OneShotReader.init(std.testing.allocator, std.testing.io, input.read, wake.write);
-    defer reader.deinit();
-    try reader.start();
-
-    reader.arm();
-    reader.arm();
-    try rawWriteAll(input.write.handle, "x");
-    var wake_buffer: [8]u8 = undefined;
-    _ = try readAllFromFile(std.testing.io, wake.read, &wake_buffer);
-    const bytes = try reader.takeReady();
-    try std.testing.expectEqualStrings("x", bytes);
 }
