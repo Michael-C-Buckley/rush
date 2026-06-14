@@ -2,7 +2,7 @@
 
 const std = @import("std");
 
-const compat = @import("../compat.zig");
+const compat = @import("../shell/compat.zig");
 const editor_driver = @import("../editor_driver.zig");
 const history = @import("../history.zig");
 const runner = @import("../runner.zig");

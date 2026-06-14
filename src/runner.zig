@@ -2,12 +2,12 @@
 
 const std = @import("std");
 
-const compat = @import("compat.zig");
 const cli_invocation = @import("invocation.zig");
-const ir = @import("ir.zig");
-const parser = @import("parser.zig");
 const runtime = @import("runtime.zig");
 const shell = @import("shell.zig");
+const compat = shell.compat;
+const parser = shell.parser;
+const ir = shell.ir;
 
 pub const Options = struct {
     io: ?std.Io = null,

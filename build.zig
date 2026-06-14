@@ -84,7 +84,7 @@ pub fn build(b: *std.Build) void {
         .root_source_file = "src/fuzz/parser.zig",
         .filter = "fuzz parser",
         .source_module_name = "rush-parser",
-        .source_module_root = "src/parser.zig",
+        .source_module_root = "src/shell/parser.zig",
     });
     const shell_fuzz_step = b.step("fuzz-shell", "Run all shell semantic fuzz targets");
     fuzz_step.dependOn(shell_fuzz_step);

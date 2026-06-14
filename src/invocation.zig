@@ -2,8 +2,8 @@
 
 const std = @import("std");
 
-const compat = @import("compat.zig");
 const shell = @import("shell.zig");
+const compat = shell.compat;
 
 pub const Kind = enum { command_string, script_file, standard_input };
 

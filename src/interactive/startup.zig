@@ -3,7 +3,7 @@
 const std = @import("std");
 const build_config = @import("build_config");
 
-const compat = @import("../compat.zig");
+const compat = @import("../shell/compat.zig");
 const runner = @import("../runner.zig");
 const runtime = @import("../runtime.zig");
 const shell = @import("../shell.zig");

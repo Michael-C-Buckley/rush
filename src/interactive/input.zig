@@ -2,9 +2,9 @@
 
 const std = @import("std");
 
-const compat = @import("../compat.zig");
+const compat = @import("../shell/compat.zig");
 const line_editor = @import("../line_editor.zig");
-const parser = @import("../parser.zig");
+const parser = @import("../shell/parser.zig");
 const shell = @import("../shell.zig");
 
 pub fn renderHighlighted(allocator: std.mem.Allocator, source: []const u8) ![]const u8 {

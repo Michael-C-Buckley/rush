@@ -7,10 +7,10 @@ extern "c" fn dup(fd: c_int) c_int;
 extern "c" fn dup2(oldfd: c_int, newfd: c_int) c_int;
 extern "c" fn openpty(amaster: *c_int, aslave: *c_int, name: ?[*:0]u8, termp: ?*const std.posix.termios, winp: ?*const anyopaque) c_int;
 
-pub const compat = @import("compat.zig");
-pub const parser = @import("parser.zig");
-pub const expand = @import("expand.zig");
-pub const ir = @import("ir.zig");
+pub const compat = @import("shell/compat.zig");
+pub const parser = @import("shell/parser.zig");
+pub const expand = @import("shell/expand.zig");
+pub const ir = @import("shell/ir.zig");
 pub const history = @import("history.zig");
 pub const cli_invocation = @import("invocation.zig");
 pub const interactive = @import("interactive.zig");

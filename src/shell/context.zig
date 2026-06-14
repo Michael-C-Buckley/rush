@@ -5,7 +5,7 @@
 //! POSIX adapter objects.
 
 const std = @import("std");
-const compat = @import("../compat.zig");
+const compat = @import("compat.zig");
 
 pub const ExecutionTarget = enum {
     current_shell,

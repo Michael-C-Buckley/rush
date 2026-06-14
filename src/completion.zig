@@ -1,8 +1,8 @@
 //! Structured completion model and pure application logic.
 
 const std = @import("std");
-const ir = @import("ir.zig");
-const parser = @import("parser.zig");
+const ir = @import("shell/ir.zig");
+const parser = @import("shell/parser.zig");
 
 pub const ScriptLoaderOptions = struct {
     io: ?std.Io = null,
