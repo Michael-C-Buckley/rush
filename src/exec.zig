@@ -50,6 +50,7 @@ pub const ExecuteOptions = struct {
     alias_timing_chunks: bool = true,
     top_level_parse_diagnostics: bool = false,
     completion_provider_only: bool = false,
+    completion_function_sink: ?*completion.State = null,
     stdin_script_file: ?std.Io.File = null,
     stdin_script_source_offset: usize = 0,
     completion_loader: ?*const fn (*anyopaque, *Executor, []const u8, completion.ScriptLoaderOptions) anyerror!void = null,
@@ -2398,6 +2399,7 @@ pub const Executor = struct {
         var source_options = options;
         source_options.allow_external = true;
         source_options.completion_provider_only = provider_only;
+        source_options.completion_function_sink = &self.completion_session.state;
         var result = self.executeScriptSlice(contents, source_options) catch return true;
         defer result.deinit();
         return true;
@@ -2908,20 +2910,19 @@ pub const Executor = struct {
         if (companion_path) |path| {
             if (options.io) |io| try self.ensureCompletionCompanionLoaded(io, path, options);
         }
-        if (self.functions.get(function) == null) {
+        const registered_function = self.completion_session.state.providerFunction(function) orelse {
             try self.appendCompletionProviderDiagnostic(function, command, null, error.CompletionProviderFunctionNotFound, "");
             return self.allocator.alloc(completion.Candidate, 0);
-        }
+        };
 
         var provider = Executor.init(self.allocator);
         defer provider.deinit();
-        try provider.copyStateFromWithOptions(self, .{ .completions = false });
+        try provider.seedCompletionProviderExecutor(self);
         std.debug.assert(provider.activeCompletionBuilder() == null);
         std.debug.assert(provider.completion_session.context == null);
         defer provider.cleanupCompletionProviderBackgroundJobs(options.io);
 
-        const stored_function_value = provider.functions.getPtr(function) orelse return self.allocator.alloc(completion.Candidate, 0);
-        var function_value = try provider.cloneFunctionValue(stored_function_value);
+        var function_value = try provider.functionValueFromParts(registered_function.body, registered_function.redirections);
         defer function_value.deinit(provider.allocator);
         provider.completion_session.builder = .{};
         if (provider.completion_session.builder) |*builder| provider.completion_session.builder_ref = builder;
@@ -4213,13 +4214,64 @@ pub const Executor = struct {
         return emptyResult(self.allocator, if (matched) 0 else 1);
     }
 
-    fn executeFunctionDefinition(self: *Executor, definition: ir.FunctionDefinition) !CommandResult {
+    fn executeFunctionDefinition(self: *Executor, definition: ir.FunctionDefinition, options: ExecuteOptions) !CommandResult {
         try self.setFunction(definition.name, definition.body, definition.redirections);
+        try self.completion_session.state.registerProviderFunction(definition.name, definition.body, definition.redirections);
+        if (options.completion_function_sink) |sink| {
+            if (sink != &self.completion_session.state) try sink.registerProviderFunction(definition.name, definition.body, definition.redirections);
+        }
         return emptyResult(self.allocator, 0);
     }
 
     pub fn copyStateFrom(self: *Executor, other: *const Executor) !void {
         try self.copyStateFromWithOptions(other, .{});
+    }
+
+    fn seedCompletionProviderExecutor(self: *Executor, source: *Executor) !void {
+        std.debug.assert(self.execution_depth == 0);
+        std.debug.assert(self.env.count() == 0);
+        std.debug.assert(self.functions.count() == 0);
+        std.debug.assert(self.completion_session.builder == null);
+        std.debug.assert(self.completion_session.builder_ref == null);
+        std.debug.assert(self.completion_session.context == null);
+
+        self.shell_options = source.shell_options;
+        self.arg_zero = source.arg_zero;
+        self.last_status_text = source.last_status_text;
+        self.last_status_text_len = source.last_status_text_len;
+        self.lineno_text = source.lineno_text;
+        self.lineno_text_len = source.lineno_text_len;
+        self.last_command_duration_text = source.last_command_duration_text;
+        self.last_command_duration_text_len = source.last_command_duration_text_len;
+        self.pid_text = source.pid_text;
+        self.pid_text_len = source.pid_text_len;
+        self.last_background_pid_text = source.last_background_pid_text;
+        self.last_background_pid_text_len = source.last_background_pid_text_len;
+        self.command_history = source.command_history;
+        self.process_state_isolated = true;
+        self.rlimit_overrides = source.rlimit_overrides;
+
+        var env_iter = source.env.iterator();
+        while (env_iter.next()) |entry| try self.setEnv(entry.key_ptr.*, entry.value_ptr.*);
+        var exported_iter = source.exported.iterator();
+        while (exported_iter.next()) |entry| try self.setExported(entry.key_ptr.*);
+        var readonly_iter = source.readonly.iterator();
+        while (readonly_iter.next()) |entry| try self.setReadonly(entry.key_ptr.*);
+        var array_iter = source.arrays.iterator();
+        while (array_iter.next()) |entry| {
+            for (entry.value_ptr.values.items, 0..) |value, index| {
+                if (entry.value_ptr.set.items[index]) try self.setArrayElement(entry.key_ptr.*, index, value);
+            }
+        }
+        var alias_iter = source.aliases.iterator();
+        while (alias_iter.next()) |entry| try self.setAlias(entry.key_ptr.*, entry.value_ptr.*);
+        self.alias_generation = source.alias_generation;
+        var abbr_iter = source.abbreviations.iterator();
+        while (abbr_iter.next()) |entry| try self.setAbbreviation(entry.key_ptr.*, entry.value_ptr.*);
+        try self.global_positionals.set(self.allocator, source.global_positionals.params);
+
+        var function_iter = source.completion_session.state.provider_functions.iterator();
+        while (function_iter.next()) |entry| try self.setFunction(entry.key_ptr.*, entry.value_ptr.body, entry.value_ptr.redirections);
     }
 
     pub fn copyCompletionStateFrom(self: *Executor, other: *const Executor) !void {
@@ -5676,7 +5728,7 @@ pub const Executor = struct {
             .loop_command => try self.executeLoopCommand(program.loop_commands[statement.index], options),
             .for_command => try self.executeForCommand(program.for_commands[statement.index], options),
             .case_command => try self.executeCaseCommand(program.case_commands[statement.index], options),
-            .function_definition => try self.executeFunctionDefinition(program.function_definitions[statement.index]),
+            .function_definition => try self.executeFunctionDefinition(program.function_definitions[statement.index], options),
             .bash_test_command => try self.executeBashTestCommand(program.bash_test_commands[statement.index], options),
             .brace_group => try self.executeBraceGroup(program.brace_groups[statement.index], options),
             .subshell => try self.executeSubshell(program.subshells[statement.index], options),
@@ -11939,6 +11991,7 @@ fn builtinComplete(self: *Executor, command: ir.SimpleCommand, stdin: []const u8
         if ((rule.argument.after_state != null or rule.argument.after_value != null) and rule.argument.state == null) return errorResult(self.allocator, 2, "complete", "argument transitions require --state");
         if (rule.kind == .dynamic_subcommands or rule.kind == .dynamic_options or rule.kind == .dynamic_argument or rule.kind == .dynamic_option_value) {
             if (rule.value == null) return errorResult(self.allocator, 2, "complete", "missing function name");
+            if (self.functions.get(rule.value.?)) |function| try self.completion_session.state.registerProviderFunction(rule.value.?, function.body, function.redirections);
         }
         try self.completion_session.state.registerRule(rule);
     } else {

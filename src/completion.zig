@@ -1,6 +1,7 @@
 //! Structured completion model and pure application logic.
 
 const std = @import("std");
+const ir = @import("ir.zig");
 const parser = @import("parser.zig");
 
 pub const ScriptLoaderOptions = struct {
@@ -725,6 +726,11 @@ pub const ProviderDiagnostic = struct {
     stderr: []const u8 = "",
 };
 
+pub const ProviderFunction = struct {
+    body: []const u8,
+    redirections: []const ir.Redirection = &.{},
+};
+
 pub const VariantPattern = struct {
     name: []const u8,
     pattern: []const u8,
@@ -754,6 +760,7 @@ pub const State = struct {
     rules: std.ArrayList(Rule) = .empty,
     generation: u64 = 0,
     provider_diagnostics: std.ArrayList(ProviderDiagnostic) = .empty,
+    provider_functions: std.StringHashMapUnmanaged(ProviderFunction) = .empty,
     manifest_commands: std.ArrayList(ManifestCommandState) = .empty,
     variant_probes: std.ArrayList(VariantProbeState) = .empty,
     variant_probe_mocks: std.StringHashMapUnmanaged([]const u8) = .empty,
@@ -774,6 +781,12 @@ pub const State = struct {
         self.rules.deinit(self.allocator);
         self.clearProviderDiagnostics();
         self.provider_diagnostics.deinit(self.allocator);
+        var provider_function_iter = self.provider_functions.iterator();
+        while (provider_function_iter.next()) |entry| {
+            self.allocator.free(entry.key_ptr.*);
+            freeProviderFunction(self.allocator, entry.value_ptr.*);
+        }
+        self.provider_functions.deinit(self.allocator);
         for (self.manifest_commands.items) |state| freeManifestCommandState(self.allocator, state);
         self.manifest_commands.deinit(self.allocator);
         for (self.variant_probes.items) |state| freeVariantProbeState(self.allocator, state);
@@ -799,6 +812,8 @@ pub const State = struct {
 
     pub fn copyFrom(self: *State, other: *const State) !void {
         for (other.rules.items) |rule| try self.registerRule(rule);
+        var provider_function_iter = other.provider_functions.iterator();
+        while (provider_function_iter.next()) |entry| try self.registerProviderFunction(entry.key_ptr.*, entry.value_ptr.*.body, entry.value_ptr.*.redirections);
         for (other.manifest_commands.items) |state| try self.registerManifestCommandState(state);
         for (other.variant_probes.items) |probe| {
             try self.registerVariantProbe(probe.command, probe.args, probe.patterns);
@@ -896,6 +911,27 @@ pub const State = struct {
 
     pub fn providerDiagnostics(self: State) []const ProviderDiagnostic {
         return self.provider_diagnostics.items;
+    }
+
+    pub fn registerProviderFunction(self: *State, name: []const u8, body: []const u8, redirections: []const ir.Redirection) !void {
+        std.debug.assert(name.len != 0);
+        const owned_name = try self.allocator.dupe(u8, name);
+        errdefer self.allocator.free(owned_name);
+        const owned_function: ProviderFunction = .{
+            .body = try self.allocator.dupe(u8, body),
+            .redirections = try cloneProviderFunctionRedirections(self.allocator, redirections),
+        };
+        errdefer freeProviderFunction(self.allocator, owned_function);
+        const result = try self.provider_functions.getOrPut(self.allocator, owned_name);
+        if (result.found_existing) {
+            self.allocator.free(owned_name);
+            freeProviderFunction(self.allocator, result.value_ptr.*);
+        }
+        result.value_ptr.* = owned_function;
+    }
+
+    pub fn providerFunction(self: State, name: []const u8) ?ProviderFunction {
+        return self.provider_functions.get(name);
     }
 
     pub fn lastContext(self: State) ?EvalContext {
@@ -1839,6 +1875,45 @@ fn freeStaticProviderValue(allocator: std.mem.Allocator, value: StaticProviderVa
     if (value.description) |description| allocator.free(description);
     if (value.tag) |tag| allocator.free(tag);
     if (value.suffix) |suffix| allocator.free(suffix);
+}
+
+fn freeProviderFunction(allocator: std.mem.Allocator, function: ProviderFunction) void {
+    allocator.free(function.body);
+    for (function.redirections) |redirection| {
+        if (redirection.io_number) |word| freeProviderFunctionWord(allocator, word);
+        if (redirection.target) |word| freeProviderFunctionWord(allocator, word);
+        if (redirection.here_doc) |text| allocator.free(text);
+    }
+    allocator.free(function.redirections);
+}
+
+fn freeProviderFunctionWord(allocator: std.mem.Allocator, word: ir.WordRef) void {
+    allocator.free(word.raw);
+    allocator.free(word.text);
+}
+
+fn cloneProviderFunctionRedirections(allocator: std.mem.Allocator, redirections: []const ir.Redirection) ![]ir.Redirection {
+    const cloned = try allocator.alloc(ir.Redirection, redirections.len);
+    errdefer allocator.free(cloned);
+    for (redirections, 0..) |redirection, index| {
+        cloned[index] = .{
+            .span = redirection.span,
+            .operator = redirection.operator,
+            .io_number = if (redirection.io_number) |word| try cloneProviderFunctionWord(allocator, word) else null,
+            .target = if (redirection.target) |word| try cloneProviderFunctionWord(allocator, word) else null,
+            .here_doc = if (redirection.here_doc) |text| try allocator.dupe(u8, text) else null,
+            .here_doc_quoted = redirection.here_doc_quoted,
+        };
+    }
+    return cloned;
+}
+
+fn cloneProviderFunctionWord(allocator: std.mem.Allocator, word: ir.WordRef) !ir.WordRef {
+    return .{
+        .span = word.span,
+        .raw = try allocator.dupe(u8, word.raw),
+        .text = try allocator.dupe(u8, word.text),
+    };
 }
 
 fn freeOptionValueConditions(allocator: std.mem.Allocator, conditions: []const OptionValueCondition) void {
