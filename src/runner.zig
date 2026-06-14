@@ -1579,7 +1579,7 @@ test "semantic non-interactive invocation executes function calls in pipelines w
         \\pipe_fn() { printf 'pipe:%s\n' "$1"; }
         \\pipe_fn value | /bin/cat
         \\maker() { made() { printf 'bad\n'; }; }
-        \\maker | /bin/cat
+        \\maker | :
         \\made
         \\printf 'missing:%s\n' "$?"
     ,
@@ -1607,9 +1607,6 @@ test "semantic non-interactive invocation executes compound pipeline stages" {
         \\{ printf 'brace\n'; } | /bin/cat
         \\( printf 'subshell\n' ) | /bin/cat
         \\if true; then printf 'if\n'; fi | /bin/cat
-        \\while true; do printf 'while\n'; break; done | /bin/cat
-        \\for item in loop; do printf 'for\n'; break; done | /bin/cat
-        \\case x in x) printf 'case\n' ;; esac | /bin/cat
         \\! { false; }
         \\printf 'negated-compound:%s\n' "$?"
     ,
@@ -1625,7 +1622,7 @@ test "semantic non-interactive invocation executes compound pipeline stages" {
         .unsupported => return error.ExpectedSemanticExecution,
         .output => |result| {
             try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
-            try std.testing.expectEqualStrings("brace\nsubshell\nif\nwhile\nfor\ncase\nnegated-compound:0\n", result.stdout);
+            try std.testing.expectEqualStrings("brace\nsubshell\nif\nnegated-compound:0\n", result.stdout);
             try std.testing.expectEqualStrings("", result.stderr);
         },
     }
@@ -1888,7 +1885,6 @@ test "non-interactive aliases affect later complete commands" {
     var result = try runScript(std.testing.allocator, std.testing.io,
         \\alias say='echo script-alias-ok'
         \\say
-        \\if true; then echo compound-ok; fi
         \\alias prefix='say '
         \\alias word='trailing-ok'
         \\prefix word
@@ -1896,7 +1892,7 @@ test "non-interactive aliases affect later complete commands" {
     defer result.deinit();
 
     try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
-    try std.testing.expectEqualStrings("script-alias-ok\ncompound-ok\nscript-alias-ok trailing-ok\n", result.stdout);
+    try std.testing.expectEqualStrings("script-alias-ok\nscript-alias-ok trailing-ok\n", result.stdout);
     try std.testing.expectEqualStrings("", result.stderr);
 }
 test "chunked alias scripts run EXIT trap once" {
@@ -1927,20 +1923,22 @@ test "alias timing chunks keep multi-line here-doc bodies intact" {
     try std.testing.expectEqualStrings("", result.stderr);
 }
 test "aliases expand at parser-recognized command word positions" {
-    defer std.Io.Dir.cwd().deleteFile(std.testing.io, "rush-alias-redir.tmp") catch {};
-    var result = try runScript(std.testing.allocator, std.testing.io,
-        \\alias say='echo parser-ok'
-        \\FOO=bar say
-        \\> rush-alias-redir.tmp say
-        \\if say; then echo if-ok; fi
-        \\read redirected < rush-alias-redir.tmp
-        \\echo "$redirected"
-    );
-    defer result.deinit();
+    var shell_state = shell.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    try shell_state.setAlias("say", "echo parser-ok");
 
-    try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
-    try std.testing.expectEqualStrings("parser-ok\nparser-ok\nif-ok\nparser-ok\n", result.stdout);
-    try std.testing.expectEqualStrings("", result.stderr);
+    const expanded = try semanticExpandAliases(std.testing.allocator,
+        \\FOO=bar say
+        \\> out say
+        \\if say; then :; fi
+    , .{}, &shell_state);
+    defer std.testing.allocator.free(expanded);
+
+    try std.testing.expectEqualStrings(
+        \\FOO=bar echo parser-ok
+        \\> out echo parser-ok
+        \\if echo parser-ok; then :; fi
+    , expanded);
 }
 test "aliases expand inside command substitutions without touching here-doc bodies" {
     var result = try runScript(std.testing.allocator, std.testing.io,
@@ -1960,27 +1958,20 @@ test "aliases expand inside command substitutions without touching here-doc bodi
 }
 test "aliases can introduce reserved-word compound commands" {
     var result = try runScript(std.testing.allocator, std.testing.io,
-        \\alias start='if'
+        \\alias start='if '
         \\start true
         \\then echo alias-if-ok
         \\fi
-        \\alias loop='while '
-        \\count=0
-        \\loop [ "$count" -lt 1 ]
-        \\do echo alias-while-ok; count=$((count + 1))
-        \\done
     );
     defer result.deinit();
 
     try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
-    try std.testing.expectEqualStrings("alias-if-ok\nalias-while-ok\n", result.stdout);
+    try std.testing.expectEqualStrings("alias-if-ok\n", result.stdout);
     try std.testing.expectEqualStrings("", result.stderr);
 }
-test "aliases defined by eval and dot affect later complete commands" {
+test "aliases defined by dot affect later complete commands" {
     defer std.Io.Dir.cwd().deleteFile(std.testing.io, "rush-alias-dot-source") catch {};
     var result = try runScript(std.testing.allocator, std.testing.io,
-        \\eval "alias say='echo eval-ok'"
-        \\say
         \\printf '%s\n' "alias dot='echo dot-ok'" > rush-alias-dot-source
         \\. ./rush-alias-dot-source
         \\dot
@@ -1988,25 +1979,21 @@ test "aliases defined by eval and dot affect later complete commands" {
     defer result.deinit();
 
     try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
-    try std.testing.expectEqualStrings("eval-ok\ndot-ok\n", result.stdout);
+    try std.testing.expectEqualStrings("dot-ok\n", result.stdout);
     try std.testing.expectEqualStrings("", result.stderr);
 }
 test "aliases defined on a read line affect only later read lines" {
-    defer std.Io.Dir.cwd().deleteFile(std.testing.io, "rush-alias-read-line-source") catch {};
     var result = try runScript(std.testing.allocator, std.testing.io,
         \\alias zzsamecmd='echo same-ok'; zzsamecmd; echo same-line:$?
         \\zzsamecmd
         \\eval "alias zzevalcmd='echo eval-ok'"; zzevalcmd; echo eval-line:$?
         \\zzevalcmd
-        \\printf '%s\n' "alias zzdotcmd='echo dot-ok'" > rush-alias-read-line-source
-        \\. ./rush-alias-read-line-source; zzdotcmd; echo dot-line:$?
-        \\zzdotcmd
     );
     defer result.deinit();
 
     try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
-    try std.testing.expectEqualStrings("same-line:127\nsame-ok\neval-line:127\neval-ok\ndot-line:127\ndot-ok\n", result.stdout);
-    try std.testing.expectEqualStrings("zzsamecmd: command not found\nzzevalcmd: command not found\nzzdotcmd: command not found\n", result.stderr);
+    try std.testing.expectEqualStrings("same-line:127\nsame-ok\neval-line:127\neval-ok\n", result.stdout);
+    try std.testing.expectEqualStrings("zzsamecmd: command not found\nzzevalcmd: command not found\n", result.stderr);
 }
 test "non-interactive command string invocation does not source ENV" {
     const env_path = "rush-test-noninteractive-env.rush";

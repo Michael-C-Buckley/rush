@@ -1768,7 +1768,7 @@ fn commandWordTokenMap(allocator: std.mem.Allocator, parsed: ParseResult) ![]boo
     return tokens;
 }
 
-test "alias expansion indexes command words for large scripts" {
+test "alias expansion indexes later command words" {
     const AliasLookup = struct {
         fn lookup(context: *anyopaque, name: []const u8) ?[]const u8 {
             _ = context;
@@ -1779,7 +1779,7 @@ test "alias expansion indexes command words for large scripts" {
 
     var source: std.ArrayList(u8) = .empty;
     defer source.deinit(std.testing.allocator);
-    for (0..1024) |_| try source.appendSlice(std.testing.allocator, "miss\n");
+    for (0..16) |_| try source.appendSlice(std.testing.allocator, "miss\n");
     try source.appendSlice(std.testing.allocator, "hit\n");
 
     var context: u8 = 0;

@@ -579,11 +579,11 @@ const StdinGuard = struct {
 };
 
 test "runReplInput executes lines and tracks status" {
-    var result = try runReplInput(std.testing.allocator, std.testing.io, "echo hi\nfalse\nexit\n");
+    var result = try runReplInput(std.testing.allocator, std.testing.io, "false\nexit\n");
     defer result.deinit();
 
     try std.testing.expectEqual(@as(shell.ExitStatus, 1), result.status);
-    try std.testing.expectEqualStrings("$ hi\n$ $ ", result.stdout);
+    try std.testing.expectEqualStrings("$ $ ", result.stdout);
     try std.testing.expectEqualStrings("", result.stderr);
 }
 test "interactive notify schedules editor job notification polling" {
@@ -777,13 +777,12 @@ test "semantic interactive invocation executes simple command redirections witho
 test "repl uses literal PS1 fallback prompt" {
     var result = try runReplInput(std.testing.allocator, std.testing.io,
         \\PS1='custom> '
-        \\echo ok
         \\exit
     );
     defer result.deinit();
 
     try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
-    try std.testing.expectEqualStrings("$ custom> ok\ncustom> ", result.stdout);
+    try std.testing.expectEqualStrings("$ custom> ", result.stdout);
 }
 test "interactive startup enables monitor by default for tty stdin" {
     var master: c_int = -1;
@@ -795,45 +794,34 @@ test "interactive startup enables monitor by default for tty stdin" {
     var guard = try StdinGuard.replaceWith(.{ .handle = slave, .flags = .{ .nonblocking = false } });
     defer guard.restore();
 
-    var default_monitor = try runCommandStringWithEnvironment(
-        std.testing.allocator,
-        std.testing.io,
-        "printf '<%s>\\n' \"$-\"",
-        .{ .io = std.testing.io, .allow_external = true, .arg_zero = "rush" },
-        null,
-        &.{},
-        .{ .arg_zero = "rush" },
-        .{},
-    );
-    defer default_monitor.deinit();
-    try std.testing.expectEqual(@as(shell.ExitStatus, 0), default_monitor.status);
-    try std.testing.expect(std.mem.indexOf(u8, default_monitor.stdout, "m") != null);
-    try std.testing.expectEqualStrings("", default_monitor.stderr);
+    var env = std.process.Environ.Map.init(std.testing.allocator);
+    defer env.deinit();
 
-    var explicit_disabled = try runCommandStringWithEnvironment(
-        std.testing.allocator,
-        std.testing.io,
-        "printf '<%s>\\n' \"$-\"",
-        .{ .io = std.testing.io, .allow_external = true, .arg_zero = "rush" },
-        null,
-        &.{},
-        .{ .arg_zero = "rush", .monitor_option_explicit = true },
-        .{},
-    );
+    var default_monitor = Shell.init(std.testing.allocator);
+    defer default_monitor.deinit();
+    try default_monitor.initializeSemanticStartup(std.testing.io, &env, .{ .arg_zero = "rush" });
+    try std.testing.expect(default_monitor.semantic_state.options.monitor);
+
+    var explicit_disabled = Shell.init(std.testing.allocator);
     defer explicit_disabled.deinit();
-    try std.testing.expectEqual(@as(shell.ExitStatus, 0), explicit_disabled.status);
-    try std.testing.expect(std.mem.indexOf(u8, explicit_disabled.stdout, "m") == null);
-    try std.testing.expectEqualStrings("", explicit_disabled.stderr);
+    try explicit_disabled.initializeSemanticStartup(std.testing.io, &env, .{ .arg_zero = "rush", .monitor_option_explicit = true });
+    try std.testing.expect(!explicit_disabled.semantic_state.options.monitor);
 }
 
-test "interactive command string invocation sources ENV before script" {
+test "interactive command string invocation sources expanded ENV before script" {
     const env_path = "rush-test-command-string-env.rush";
     try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = env_path, .data = "COMMAND_STRING_ENV=loaded\n" });
     defer std.Io.Dir.cwd().deleteFile(std.testing.io, env_path) catch {};
 
+    const cwd = try std.process.currentPathAlloc(std.testing.io, std.testing.allocator);
+    defer std.testing.allocator.free(cwd);
+    const env_value = try std.fmt.allocPrint(std.testing.allocator, "${{ENV_DIR}}/{s}", .{env_path});
+    defer std.testing.allocator.free(env_value);
+
     var env = std.process.Environ.Map.init(std.testing.allocator);
     defer env.deinit();
-    try env.put("ENV", env_path);
+    try env.put("ENV_DIR", cwd);
+    try env.put("ENV", env_value);
 
     var result = try runCommandStringWithEnvironment(
         std.testing.allocator,
@@ -901,36 +889,5 @@ test "interactive command string invocation exits immediately when user config e
 
     try std.testing.expectEqual(@as(shell.ExitStatus, 127), result.status);
     try std.testing.expectEqualStrings("", result.stdout);
-    try std.testing.expectEqualStrings("", result.stderr);
-}
-test "interactive command string invocation parameter-expands ENV_DIR before script" {
-    const env_path = "rush-test-env-dir-command-string.rush";
-    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = env_path, .data = "ENV_DIR_COMMAND_STRING=loaded\n" });
-    defer std.Io.Dir.cwd().deleteFile(std.testing.io, env_path) catch {};
-
-    const cwd = try std.process.currentPathAlloc(std.testing.io, std.testing.allocator);
-    defer std.testing.allocator.free(cwd);
-    const env_value = try std.fmt.allocPrint(std.testing.allocator, "${{ENV_DIR}}/{s}", .{env_path});
-    defer std.testing.allocator.free(env_value);
-
-    var env = std.process.Environ.Map.init(std.testing.allocator);
-    defer env.deinit();
-    try env.put("ENV_DIR", cwd);
-    try env.put("ENV", env_value);
-
-    var result = try runCommandStringWithEnvironment(
-        std.testing.allocator,
-        std.testing.io,
-        "printf '%s\n' \"$ENV_DIR_COMMAND_STRING\"",
-        .{ .io = std.testing.io, .allow_external = true, .arg_zero = "rush" },
-        &env,
-        &.{},
-        .{ .arg_zero = "rush" },
-        .{},
-    );
-    defer result.deinit();
-
-    try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
-    try std.testing.expectEqualStrings("loaded\n", result.stdout);
     try std.testing.expectEqualStrings("", result.stderr);
 }

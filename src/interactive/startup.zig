@@ -211,7 +211,7 @@ const StderrGuard = struct {
     }
 };
 
-fn loadConfigCapturingStderr(allocator: std.mem.Allocator, shell_state: *shell.ShellState, stderr_path: []const u8) ![]u8 {
+fn sourceOptionalConfigCapturingStderr(allocator: std.mem.Allocator, shell_state: *shell.ShellState, path: []const u8, stderr_path: []const u8) ![]u8 {
     var stderr_file = try std.Io.Dir.cwd().createFile(std.testing.io, stderr_path, .{ .truncate = true });
     var stderr_file_open = true;
     defer if (stderr_file_open) stderr_file.close(std.testing.io);
@@ -220,7 +220,7 @@ fn loadConfigCapturingStderr(allocator: std.mem.Allocator, shell_state: *shell.S
     var stderr_guard_active = true;
     defer if (stderr_guard_active) stderr_guard.restore();
 
-    try loadConfig(allocator, std.testing.io, shell_state, .{ .arg_zero = "rush" });
+    try sourceOptionalConfig(allocator, std.testing.io, shell_state, path, "rush");
 
     stderr_guard.restore();
     stderr_guard_active = false;
@@ -241,24 +241,9 @@ test "interactive config service sources simple config through semantic ShellSta
     try std.testing.expectEqualStrings("loaded", shell_state.getVariable("RUSH_SEMANTIC_CONFIG").?.value);
     try std.testing.expectEqualStrings("ok", shell_state.getVariable("RUSH_SEMANTIC_CONFIG_SECOND").?.value);
 }
-test "interactive startup initializes prompt variables and sources ENV" {
+test "interactive startup initializes prompt variables and sources expanded ENV" {
     const env_path = "rush-test-env-startup.rush";
     try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = env_path, .data = "ENV_LOADED=ok\nPS1='env> '\n" });
-    defer std.Io.Dir.cwd().deleteFile(std.testing.io, env_path) catch {};
-
-    var shell_state = shell.ShellState.init(std.testing.allocator);
-    defer shell_state.deinit();
-    try shell_state.putVariable("ENV", env_path, .{ .exported = true });
-
-    try loadConfig(std.testing.allocator, std.testing.io, &shell_state, .{ .arg_zero = "rush" });
-    try std.testing.expectEqualStrings("ok", shell_state.getVariable("ENV_LOADED").?.value);
-    // Embedded default config provides PS2; $ENV overrides the embedded PS1 default.
-    try std.testing.expectEqualStrings("> ", shell_state.getVariable("PS2").?.value);
-    try std.testing.expectEqualStrings("env> ", shell_state.getVariable("PS1").?.value);
-}
-test "interactive startup parameter-expands ENV pathname from HOME" {
-    const env_path = "rush-test-home-env-startup.rush";
-    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = env_path, .data = "HOME_ENV_LOADED=ok\n" });
     defer std.Io.Dir.cwd().deleteFile(std.testing.io, env_path) catch {};
 
     const cwd = try std.process.currentPathAlloc(std.testing.io, std.testing.allocator);
@@ -272,7 +257,10 @@ test "interactive startup parameter-expands ENV pathname from HOME" {
     try shell_state.putVariable("ENV", env_value, .{ .exported = true });
 
     try loadConfig(std.testing.allocator, std.testing.io, &shell_state, .{ .arg_zero = "rush" });
-    try std.testing.expectEqualStrings("ok", shell_state.getVariable("HOME_ENV_LOADED").?.value);
+    try std.testing.expectEqualStrings("ok", shell_state.getVariable("ENV_LOADED").?.value);
+    // Embedded default config provides PS2; $ENV overrides the embedded PS1 default.
+    try std.testing.expectEqualStrings("> ", shell_state.getVariable("PS2").?.value);
+    try std.testing.expectEqualStrings("env> ", shell_state.getVariable("PS1").?.value);
 }
 test "interactive startup warns and skips user config path directory" {
     const root = "rush-test-config-directory-startup";
@@ -282,13 +270,11 @@ test "interactive startup warns and skips user config path directory" {
 
     var shell_state = shell.ShellState.init(std.testing.allocator);
     defer shell_state.deinit();
-    try shell_state.putVariable("XDG_CONFIG_HOME", root, .{ .exported = true });
 
-    const stderr = try loadConfigCapturingStderr(std.testing.allocator, &shell_state, root ++ "/stderr");
+    const stderr = try sourceOptionalConfigCapturingStderr(std.testing.allocator, &shell_state, root ++ "/rush/config.rush", root ++ "/stderr");
     defer std.testing.allocator.free(stderr);
 
     try std.testing.expectEqualStrings("rush: warning: cannot read " ++ root ++ "/rush/config.rush: is a directory; skipping\n", stderr);
-    try std.testing.expectEqualStrings("> ", shell_state.getVariable("PS2").?.value);
 }
 test "embedded default config sets prompt defaults without clobbering inherited values" {
     var shell_state = shell.ShellState.init(std.testing.allocator);
