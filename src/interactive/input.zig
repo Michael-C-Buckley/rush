@@ -92,3 +92,12 @@ test "interactive incomplete input requests continuation until complete" {
     try std.testing.expect(try needsContinuation(std.testing.allocator, "cat <<EOF", .{}));
     try std.testing.expect(!try needsContinuation(std.testing.allocator, "cat <<EOF\nbody\nEOF", .{}));
 }
+
+test "interactive highlight renderer uses parser classifications" {
+    const rendered = try renderHighlighted(std.testing.allocator, "echo hi > out # comment");
+    defer std.testing.allocator.free(rendered);
+
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[36mecho\x1b[0m") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[35m>\x1b[0m") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[32m# comment\x1b[0m") != null);
+}

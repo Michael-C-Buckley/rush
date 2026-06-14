@@ -243,3 +243,37 @@ test "login shell detection follows argv0 dash convention" {
     try std.testing.expect(!isLoginArgZero("rush"));
     try std.testing.expect(!isLoginArgZero("/bin/rush"));
 }
+
+test "standard input invocation is the default when only invocation options are present" {
+    const invocation = parse(&.{ "rush", "--posix-strict", "-u" }) orelse return error.ExpectedInvocation;
+
+    try std.testing.expectEqual(Kind.standard_input, invocation.kind);
+    try std.testing.expectEqualStrings("-", invocation.source);
+    try std.testing.expectEqualStrings("rush", invocation.arg_zero);
+    try std.testing.expectEqual(@as(usize, 0), invocation.positionals.len);
+    try std.testing.expect(invocation.features.strict_diagnostics);
+    try std.testing.expect(invocation.shell_options.nounset);
+}
+test "interactive invocation tracks explicit monitor option" {
+    const enabled = parse(&.{ "rush", "-im", "-c", "jobs" }) orelse return error.ExpectedInvocation;
+    try std.testing.expect(enabled.interactive);
+    try std.testing.expect(enabled.shell_options.monitor);
+    try std.testing.expect(enabled.monitor_option_explicit);
+
+    const disabled = parse(&.{ "rush", "+m", "-i" }) orelse return error.ExpectedInvocation;
+    try std.testing.expect(disabled.interactive);
+    try std.testing.expect(!disabled.shell_options.monitor);
+    try std.testing.expect(disabled.monitor_option_explicit);
+}
+test "standard input invocation uses interactive editor when terminal rules require it" {
+    const forced = parse(&.{ "rush", "-i" }) orelse return error.ExpectedInvocation;
+    try std.testing.expect(shouldRunInteractiveStandardInput(forced, true, false));
+    try std.testing.expect(!shouldRunInteractiveStandardInput(forced, false, true));
+
+    const implicit = parse(&.{ "rush", "--posix-strict", "-u" }) orelse return error.ExpectedInvocation;
+    try std.testing.expect(shouldRunInteractiveStandardInput(implicit, true, true));
+    try std.testing.expect(!shouldRunInteractiveStandardInput(implicit, true, false));
+
+    const command = parse(&.{ "rush", "-i", "-c", "exit" }) orelse return error.ExpectedInvocation;
+    try std.testing.expect(!shouldRunInteractiveStandardInput(command, true, true));
+}

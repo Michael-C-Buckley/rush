@@ -188,3 +188,114 @@ fn configReadErrorMessage(err: anyerror) []const u8 {
 pub fn sourceConfigScript(allocator: std.mem.Allocator, io: std.Io, shell_state: *shell.ShellState, contents: []const u8, source_path: []const u8, arg_zero: []const u8) !void {
     try ConfigService.init(allocator, io, shell_state, arg_zero, .{}).sourceScript(contents, source_path);
 }
+
+extern "c" fn close(fd: c_int) c_int;
+extern "c" fn dup(fd: c_int) c_int;
+extern "c" fn dup2(oldfd: c_int, newfd: c_int) c_int;
+
+const StderrGuard = struct {
+    saved_fd: c_int,
+
+    fn replaceWith(file: std.Io.File) !StderrGuard {
+        const saved_fd = dup(std.Io.File.stderr().handle);
+        if (saved_fd < 0) return error.SkipZigTest;
+        errdefer _ = close(saved_fd);
+        if (dup2(file.handle, std.Io.File.stderr().handle) < 0) return error.SkipZigTest;
+        return .{ .saved_fd = saved_fd };
+    }
+
+    fn restore(self: *StderrGuard) void {
+        _ = dup2(self.saved_fd, std.Io.File.stderr().handle);
+        _ = close(self.saved_fd);
+        self.* = undefined;
+    }
+};
+
+fn loadConfigCapturingStderr(allocator: std.mem.Allocator, shell_state: *shell.ShellState, stderr_path: []const u8) ![]u8 {
+    var stderr_file = try std.Io.Dir.cwd().createFile(std.testing.io, stderr_path, .{ .truncate = true });
+    var stderr_file_open = true;
+    defer if (stderr_file_open) stderr_file.close(std.testing.io);
+
+    var stderr_guard = try StderrGuard.replaceWith(stderr_file);
+    var stderr_guard_active = true;
+    defer if (stderr_guard_active) stderr_guard.restore();
+
+    try loadConfig(allocator, std.testing.io, shell_state, .{ .arg_zero = "rush" });
+
+    stderr_guard.restore();
+    stderr_guard_active = false;
+    stderr_file.close(std.testing.io);
+    stderr_file_open = false;
+
+    return std.Io.Dir.cwd().readFileAlloc(std.testing.io, stderr_path, allocator, .limited(4096));
+}
+
+test "interactive config service sources simple config through semantic ShellState" {
+    var shell_state = shell.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+
+    try sourceConfigScript(std.testing.allocator, std.testing.io, &shell_state,
+        \\RUSH_SEMANTIC_CONFIG=loaded
+        \\RUSH_SEMANTIC_CONFIG_SECOND=ok
+    , "semantic-config-test.rush", "rush");
+    try std.testing.expectEqualStrings("loaded", shell_state.getVariable("RUSH_SEMANTIC_CONFIG").?.value);
+    try std.testing.expectEqualStrings("ok", shell_state.getVariable("RUSH_SEMANTIC_CONFIG_SECOND").?.value);
+}
+test "interactive startup initializes prompt variables and sources ENV" {
+    const env_path = "rush-test-env-startup.rush";
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = env_path, .data = "ENV_LOADED=ok\nPS1='env> '\n" });
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, env_path) catch {};
+
+    var shell_state = shell.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    try shell_state.putVariable("ENV", env_path, .{ .exported = true });
+
+    try loadConfig(std.testing.allocator, std.testing.io, &shell_state, .{ .arg_zero = "rush" });
+    try std.testing.expectEqualStrings("ok", shell_state.getVariable("ENV_LOADED").?.value);
+    // Embedded default config provides PS2; $ENV overrides the embedded PS1 default.
+    try std.testing.expectEqualStrings("> ", shell_state.getVariable("PS2").?.value);
+    try std.testing.expectEqualStrings("env> ", shell_state.getVariable("PS1").?.value);
+}
+test "interactive startup parameter-expands ENV pathname from HOME" {
+    const env_path = "rush-test-home-env-startup.rush";
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = env_path, .data = "HOME_ENV_LOADED=ok\n" });
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, env_path) catch {};
+
+    const cwd = try std.process.currentPathAlloc(std.testing.io, std.testing.allocator);
+    defer std.testing.allocator.free(cwd);
+    const env_value = try std.fmt.allocPrint(std.testing.allocator, "$HOME/{s}", .{env_path});
+    defer std.testing.allocator.free(env_value);
+
+    var shell_state = shell.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    try shell_state.putVariable("HOME", cwd, .{ .exported = true });
+    try shell_state.putVariable("ENV", env_value, .{ .exported = true });
+
+    try loadConfig(std.testing.allocator, std.testing.io, &shell_state, .{ .arg_zero = "rush" });
+    try std.testing.expectEqualStrings("ok", shell_state.getVariable("HOME_ENV_LOADED").?.value);
+}
+test "interactive startup warns and skips user config path directory" {
+    const root = "rush-test-config-directory-startup";
+    std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, root ++ "/rush/config.rush");
+
+    var shell_state = shell.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    try shell_state.putVariable("XDG_CONFIG_HOME", root, .{ .exported = true });
+
+    const stderr = try loadConfigCapturingStderr(std.testing.allocator, &shell_state, root ++ "/stderr");
+    defer std.testing.allocator.free(stderr);
+
+    try std.testing.expectEqualStrings("rush: warning: cannot read " ++ root ++ "/rush/config.rush: is a directory; skipping\n", stderr);
+    try std.testing.expectEqualStrings("> ", shell_state.getVariable("PS2").?.value);
+}
+test "embedded default config sets prompt defaults without clobbering inherited values" {
+    var shell_state = shell.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    try shell_state.putVariable("PS1", "inherited> ", .{});
+
+    try loadConfig(std.testing.allocator, std.testing.io, &shell_state, .{ .arg_zero = "rush" });
+    try std.testing.expectEqualStrings("inherited> ", shell_state.getVariable("PS1").?.value);
+    try std.testing.expectEqualStrings("> ", shell_state.getVariable("PS2").?.value);
+}

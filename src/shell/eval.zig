@@ -9113,3 +9113,38 @@ test "semantic evaluator reports unsupported simple builtin execution explicitly
     const pwd_plan = command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{"pwd"} } });
     try std.testing.expectError(error.Unimplemented, evaluatePlan(&evaluator, &shell_state, eval_context, pwd_plan));
 }
+
+test "semantic parser lowering plans compound pipeline stages" {
+    var shell_state = state.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    var evaluator = Evaluator.init(std.testing.allocator);
+    var parser_resolver = ParserTrapActionResolver.init(&evaluator);
+    const resolver = parser_resolver.resolver();
+
+    var body = (try resolver.resolve(
+        std.testing.allocator,
+        "{ printf 'left\n'; } | printf 'right\n'",
+        .TERM,
+        context.EvalContext.forTarget(.current_shell),
+        &shell_state,
+    )) orelse return error.ExpectedSemanticBody;
+    defer body.deinit();
+
+    const plan = switch (body) {
+        .owned => |owned| switch (owned.body) {
+            .pipeline => |plan| plan,
+            else => return error.ExpectedPipelinePlan,
+        },
+        else => return error.ExpectedOwnedSemanticBody,
+    };
+
+    try std.testing.expectEqual(@as(usize, 2), plan.stages.len);
+    switch (plan.stages[0]) {
+        .compound => |compound| try std.testing.expectEqualStrings("brace group", compound.kindName()),
+        .simple => return error.ExpectedCompoundPipelineStage,
+    }
+    switch (plan.stages[1]) {
+        .simple => {},
+        .compound => return error.ExpectedSimplePipelineStage,
+    }
+}

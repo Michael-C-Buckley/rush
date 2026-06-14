@@ -554,3 +554,383 @@ pub fn runReplInput(allocator: std.mem.Allocator, io: std.Io, input: []const u8)
         .stderr = try stderr.toOwnedSlice(allocator),
     };
 }
+
+extern "c" fn close(fd: c_int) c_int;
+extern "c" fn dup(fd: c_int) c_int;
+extern "c" fn dup2(oldfd: c_int, newfd: c_int) c_int;
+extern "c" fn openpty(amaster: *c_int, aslave: *c_int, name: ?[*:0]u8, termp: ?*const std.posix.termios, winp: ?*const anyopaque) c_int;
+
+const StdinGuard = struct {
+    saved_fd: c_int,
+
+    fn replaceWith(file: std.Io.File) !StdinGuard {
+        const saved_fd = dup(std.Io.File.stdin().handle);
+        if (saved_fd < 0) return error.SkipZigTest;
+        errdefer _ = close(saved_fd);
+        if (dup2(file.handle, std.Io.File.stdin().handle) < 0) return error.SkipZigTest;
+        return .{ .saved_fd = saved_fd };
+    }
+
+    fn restore(self: *StdinGuard) void {
+        _ = dup2(self.saved_fd, std.Io.File.stdin().handle);
+        _ = close(self.saved_fd);
+        self.* = undefined;
+    }
+};
+
+test "runReplInput executes lines and tracks status" {
+    var result = try runReplInput(std.testing.allocator, std.testing.io, "echo hi\nfalse\nexit\n");
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(shell.ExitStatus, 1), result.status);
+    try std.testing.expectEqualStrings("$ hi\n$ $ ", result.stdout);
+    try std.testing.expectEqualStrings("", result.stderr);
+}
+test "interactive notify schedules editor job notification polling" {
+    var shell_state = shell.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    var context: Context = .{ .semantic_state = &shell_state };
+
+    try std.testing.expectEqual(@as(?u64, null), try nextInteractiveIntervalMs(&context, std.testing.io));
+    try shell_state.appendJobNotification(.{ .job_id = 1, .state = .done, .command = "sleep 1" });
+    try std.testing.expectEqual(@as(?u64, null), try nextInteractiveIntervalMs(&context, std.testing.io));
+
+    shell_state.options.notify = true;
+    try std.testing.expectEqual(@as(?u64, immediate_notify_poll_ms), try nextInteractiveIntervalMs(&context, std.testing.io));
+
+    shell_state.consumeJobNotifications(1);
+    try std.testing.expectEqual(@as(?u64, null), try nextInteractiveIntervalMs(&context, std.testing.io));
+}
+test "interactive semantic job notifications drain from ShellState" {
+    var shell_state = shell.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    shell_state.options.notify = true;
+    try shell_state.appendJobNotification(.{ .job_id = 1, .state = .done, .command = "sleep 1" });
+
+    var context: Context = .{ .semantic_state = &shell_state };
+
+    try std.testing.expectEqual(@as(?u64, immediate_notify_poll_ms), try nextInteractiveIntervalMs(&context, std.testing.io));
+    const hook_result = try runInteractiveIntervalHooks(&context, std.testing.allocator, std.testing.io);
+    defer std.testing.allocator.free(hook_result.output);
+
+    try std.testing.expectEqualStrings("[1] Done sleep 1\n", hook_result.output);
+    try std.testing.expectEqual(@as(usize, 0), shell_state.pending_job_notifications.items.len);
+    try std.testing.expectEqual(@as(?u64, null), try nextInteractiveIntervalMs(&context, std.testing.io));
+}
+test "interactive hooks dispatch pending semantic signal trap" {
+    var shell_state = shell.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    try shell_state.setTrapForSignal(.TERM, "echo term-trap");
+    try shell_state.appendPendingTrap(.TERM);
+
+    var context: Context = .{ .semantic_state = &shell_state };
+
+    const hook_result = try runInteractiveIntervalHooks(&context, std.testing.allocator, std.testing.io);
+    defer std.testing.allocator.free(hook_result.output);
+
+    try std.testing.expectEqualStrings("term-trap\n", hook_result.output);
+    try std.testing.expect(hook_result.refresh_prompt);
+    try std.testing.expect(!hook_result.stop);
+}
+test "interactive interrupt runs INT trap" {
+    var shell_state = shell.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    try shell_state.setTrapForSignal(.INT, "echo trapped");
+
+    var result = (try runInteractiveInterruptTrap(std.testing.allocator, std.testing.io, &shell_state, "rush", .{})) orelse return error.MissingTrapResult;
+    defer result.deinit();
+    try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("trapped\n", result.stdout);
+    try std.testing.expectEqualStrings("", result.stderr);
+}
+test "semantic interactive command updates executor status for later commands" {
+    var interactive_shell = Shell.init(std.testing.allocator);
+    defer interactive_shell.deinit();
+    var env = std.process.Environ.Map.init(std.testing.allocator);
+    defer env.deinit();
+    try interactive_shell.initializeSemanticStartup(std.testing.io, &env, .{ .arg_zero = "rush" });
+
+    var false_result = try runInteractiveScript(std.testing.allocator, std.testing.io, &interactive_shell, "false", .{ .io = std.testing.io, .allow_external = true, .external_stdio = .inherit, .interactive = true, .arg_zero = "rush" });
+    defer false_result.deinit();
+    try std.testing.expectEqual(@as(shell.ExitStatus, 1), false_result.status);
+    try std.testing.expectEqualStrings("", false_result.stdout);
+    try std.testing.expectEqualStrings("", false_result.stderr);
+    try std.testing.expectEqual(@as(shell.ExitStatus, 1), interactive_shell.semantic_state.last_status);
+
+    var status_result = try runInteractiveScript(std.testing.allocator, std.testing.io, &interactive_shell, "echo $?", .{ .io = std.testing.io, .allow_external = true, .external_stdio = .inherit, .interactive = true, .arg_zero = "rush" });
+    defer status_result.deinit();
+    try std.testing.expectEqual(@as(shell.ExitStatus, 0), status_result.status);
+    try std.testing.expectEqualStrings("1\n", status_result.stdout);
+    try std.testing.expectEqualStrings("", status_result.stderr);
+}
+test "semantic interactive shell state persists variable mutations without legacy execution" {
+    var interactive_shell = Shell.init(std.testing.allocator);
+    defer interactive_shell.deinit();
+    var env = std.process.Environ.Map.init(std.testing.allocator);
+    defer env.deinit();
+    try interactive_shell.initializeSemanticStartup(std.testing.io, &env, .{ .arg_zero = "rush" });
+
+    var assign = try runSemanticInteractiveCommandString(std.testing.allocator, std.testing.io, &interactive_shell, "RUSH_INTERACTIVE_SEMANTIC=state", shell.InvocationContext.init(.{ .interactive = true, .arg_zero = "rush" }), .inherit);
+    defer assign.deinit(std.testing.allocator);
+    switch (assign) {
+        .output => |output| try std.testing.expectEqual(@as(shell.ExitStatus, 0), output.status),
+        .unsupported => return error.ExpectedSemanticOutput,
+    }
+    try std.testing.expectEqualStrings("state", interactive_shell.semantic_state.getVariable("RUSH_INTERACTIVE_SEMANTIC").?.value);
+
+    var readback = try runInteractiveScript(std.testing.allocator, std.testing.io, &interactive_shell, "printf '%s\n' \"$RUSH_INTERACTIVE_SEMANTIC\"", .{ .io = std.testing.io, .allow_external = true, .external_stdio = .inherit, .interactive = true, .arg_zero = "rush" });
+    defer readback.deinit();
+    try std.testing.expectEqual(@as(shell.ExitStatus, 0), readback.status);
+    try std.testing.expectEqualStrings("state\n", readback.stdout);
+    try std.testing.expectEqualStrings("", readback.stderr);
+}
+test "semantic interactive assignment-bearing commands preserve assignment lifetime without legacy fallback" {
+    var interactive_shell = Shell.init(std.testing.allocator);
+    defer interactive_shell.deinit();
+    var env = std.process.Environ.Map.init(std.testing.allocator);
+    defer env.deinit();
+    try interactive_shell.initializeSemanticStartup(std.testing.io, &env, .{ .arg_zero = "rush" });
+
+    var temporary = try runSemanticInteractiveCommandString(std.testing.allocator, std.testing.io, &interactive_shell, "RUSH_INTERACTIVE_TEMPORARY=discarded true", shell.InvocationContext.init(.{ .interactive = true, .arg_zero = "rush" }), .inherit);
+    defer temporary.deinit(std.testing.allocator);
+    switch (temporary) {
+        .output => |output| try std.testing.expectEqual(@as(shell.ExitStatus, 0), output.status),
+        .unsupported => return error.ExpectedSemanticOutput,
+    }
+    try std.testing.expect(interactive_shell.semantic_state.getVariable("RUSH_INTERACTIVE_TEMPORARY") == null);
+
+    var persistent = try runSemanticInteractiveCommandString(std.testing.allocator, std.testing.io, &interactive_shell, "RUSH_INTERACTIVE_SPECIAL=persistent :", shell.InvocationContext.init(.{ .interactive = true, .arg_zero = "rush" }), .inherit);
+    defer persistent.deinit(std.testing.allocator);
+    switch (persistent) {
+        .output => |output| try std.testing.expectEqual(@as(shell.ExitStatus, 0), output.status),
+        .unsupported => return error.ExpectedSemanticOutput,
+    }
+    try std.testing.expectEqualStrings("persistent", interactive_shell.semantic_state.getVariable("RUSH_INTERACTIVE_SPECIAL").?.value);
+}
+test "semantic interactive external commands run through runtime ports without legacy fallback" {
+    var interactive_shell = Shell.init(std.testing.allocator);
+    defer interactive_shell.deinit();
+    var env = std.process.Environ.Map.init(std.testing.allocator);
+    defer env.deinit();
+    try interactive_shell.initializeSemanticStartup(std.testing.io, &env, .{ .arg_zero = "rush" });
+
+    var external = try runSemanticInteractiveCommandString(std.testing.allocator, std.testing.io, &interactive_shell, "/usr/bin/printf 'semantic-external\\n'", shell.InvocationContext.init(.{ .interactive = true, .arg_zero = "rush" }), .capture);
+    defer external.deinit(std.testing.allocator);
+    switch (external) {
+        .unsupported => return error.ExpectedSemanticExecution,
+        .output => |output| {
+            try std.testing.expectEqual(@as(shell.ExitStatus, 0), output.status);
+            try std.testing.expectEqualStrings("semantic-external\n", output.stdout);
+            try std.testing.expectEqualStrings("", output.stderr);
+        },
+    }
+}
+test "semantic interactive startup initializes ShellState without executor shell variables as source" {
+    var env = std.process.Environ.Map.init(std.testing.allocator);
+    defer env.deinit();
+    try env.put("RUSH_INTERACTIVE_IMPORTED", "present");
+    try env.put("SHLVL", "2");
+
+    var interactive_shell = Shell.init(std.testing.allocator);
+    defer interactive_shell.deinit();
+    try interactive_shell.initializeSemanticStartup(std.testing.io, &env, .{
+        .arg_zero = "rush",
+        .positionals = &.{ "one", "two" },
+        .shell_options = .{ .ignoreeof = true },
+    });
+    try std.testing.expect(interactive_shell.semantic_enabled);
+    try std.testing.expectEqualStrings("present", interactive_shell.semantic_state.getVariable("RUSH_INTERACTIVE_IMPORTED").?.value);
+    try std.testing.expectEqualStrings("3", interactive_shell.semantic_state.getVariable("SHLVL").?.value);
+    try std.testing.expectEqualStrings(" \t\n", interactive_shell.semantic_state.getVariable("IFS").?.value);
+    try std.testing.expectEqualStrings("1", interactive_shell.semantic_state.getVariable("OPTIND").?.value);
+    try std.testing.expect(interactive_shell.semantic_state.options.ignoreeof);
+    try std.testing.expectEqual(@as(usize, 2), interactive_shell.semantic_state.positionals.items.len);
+    try std.testing.expectEqualStrings("one", interactive_shell.semantic_state.positionals.items[0]);
+    try std.testing.expectEqualStrings("two", interactive_shell.semantic_state.positionals.items[1]);
+}
+test "semantic interactive invocation executes simple command redirections without legacy fallback" {
+    const path = "rush-semantic-interactive-redirection.tmp";
+    std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
+
+    var interactive_shell = Shell.init(std.testing.allocator);
+    defer interactive_shell.deinit();
+    var env = std.process.Environ.Map.init(std.testing.allocator);
+    defer env.deinit();
+    try interactive_shell.initializeSemanticStartup(std.testing.io, &env, .{ .arg_zero = "rush" });
+
+    var semantic = try runSemanticInteractiveCommandString(std.testing.allocator, std.testing.io, &interactive_shell, "echo before > " ++ path ++ "; echo redirected >> " ++ path, shell.InvocationContext.init(.{ .interactive = true, .arg_zero = "rush" }), .inherit);
+    defer semantic.deinit(std.testing.allocator);
+    switch (semantic) {
+        .unsupported => return error.ExpectedSemanticExecution,
+        .output => |result| {
+            try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
+            try std.testing.expectEqualStrings("", result.stdout);
+            try std.testing.expectEqualStrings("", result.stderr);
+        },
+    }
+
+    const output = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, path, std.testing.allocator, .unlimited);
+    defer std.testing.allocator.free(output);
+    try std.testing.expectEqualStrings("before\nredirected\n", output);
+}
+test "repl uses literal PS1 fallback prompt" {
+    var result = try runReplInput(std.testing.allocator, std.testing.io,
+        \\PS1='custom> '
+        \\echo ok
+        \\exit
+    );
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("$ custom> ok\ncustom> ", result.stdout);
+}
+test "interactive startup enables monitor by default for tty stdin" {
+    var master: c_int = -1;
+    var slave: c_int = -1;
+    if (openpty(&master, &slave, null, null, null) != 0) return error.SkipZigTest;
+    defer _ = close(master);
+    defer _ = close(slave);
+
+    var guard = try StdinGuard.replaceWith(.{ .handle = slave, .flags = .{ .nonblocking = false } });
+    defer guard.restore();
+
+    var default_monitor = try runCommandStringWithEnvironment(
+        std.testing.allocator,
+        std.testing.io,
+        "printf '<%s>\\n' \"$-\"",
+        .{ .io = std.testing.io, .allow_external = true, .arg_zero = "rush" },
+        null,
+        &.{},
+        .{ .arg_zero = "rush" },
+        .{},
+    );
+    defer default_monitor.deinit();
+    try std.testing.expectEqual(@as(shell.ExitStatus, 0), default_monitor.status);
+    try std.testing.expect(std.mem.indexOf(u8, default_monitor.stdout, "m") != null);
+    try std.testing.expectEqualStrings("", default_monitor.stderr);
+
+    var explicit_disabled = try runCommandStringWithEnvironment(
+        std.testing.allocator,
+        std.testing.io,
+        "printf '<%s>\\n' \"$-\"",
+        .{ .io = std.testing.io, .allow_external = true, .arg_zero = "rush" },
+        null,
+        &.{},
+        .{ .arg_zero = "rush", .monitor_option_explicit = true },
+        .{},
+    );
+    defer explicit_disabled.deinit();
+    try std.testing.expectEqual(@as(shell.ExitStatus, 0), explicit_disabled.status);
+    try std.testing.expect(std.mem.indexOf(u8, explicit_disabled.stdout, "m") == null);
+    try std.testing.expectEqualStrings("", explicit_disabled.stderr);
+}
+
+test "interactive command string invocation sources ENV before script" {
+    const env_path = "rush-test-command-string-env.rush";
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = env_path, .data = "COMMAND_STRING_ENV=loaded\n" });
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, env_path) catch {};
+
+    var env = std.process.Environ.Map.init(std.testing.allocator);
+    defer env.deinit();
+    try env.put("ENV", env_path);
+
+    var result = try runCommandStringWithEnvironment(
+        std.testing.allocator,
+        std.testing.io,
+        "printf '%s\n' \"$COMMAND_STRING_ENV\"",
+        .{ .io = std.testing.io, .allow_external = true, .arg_zero = "rush" },
+        &env,
+        &.{},
+        .{ .arg_zero = "rush" },
+        .{},
+    );
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("loaded\n", result.stdout);
+    try std.testing.expectEqualStrings("", result.stderr);
+}
+test "interactive command string invocation exits immediately when user config exits" {
+    const root = "rush-test-config-exit-startup";
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, root ++ "/rush");
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = root ++ "/rush/config.rush", .data = "exit 7\n" });
+
+    var env = std.process.Environ.Map.init(std.testing.allocator);
+    defer env.deinit();
+    try env.put("XDG_CONFIG_HOME", root);
+
+    var result = try runCommandStringWithEnvironment(
+        std.testing.allocator,
+        std.testing.io,
+        "echo should-not-run",
+        .{ .io = std.testing.io, .allow_external = true, .arg_zero = "rush" },
+        &env,
+        &.{},
+        .{ .arg_zero = "rush" },
+        .{},
+    );
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(shell.ExitStatus, 7), result.status);
+    try std.testing.expectEqualStrings("", result.stdout);
+    try std.testing.expectEqualStrings("", result.stderr);
+}
+test "interactive command string invocation exits immediately when user config exec fails" {
+    const root = "rush-test-config-exec-failure-startup";
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, root ++ "/rush");
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = root ++ "/rush/config.rush", .data = "exec /nonexistent/rush-task-702 2>/dev/null\n" });
+
+    var env = std.process.Environ.Map.init(std.testing.allocator);
+    defer env.deinit();
+    try env.put("XDG_CONFIG_HOME", root);
+
+    var result = try runCommandStringWithEnvironment(
+        std.testing.allocator,
+        std.testing.io,
+        "echo should-not-run",
+        .{ .io = std.testing.io, .allow_external = true, .arg_zero = "rush" },
+        &env,
+        &.{},
+        .{ .arg_zero = "rush" },
+        .{},
+    );
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(shell.ExitStatus, 127), result.status);
+    try std.testing.expectEqualStrings("", result.stdout);
+    try std.testing.expectEqualStrings("", result.stderr);
+}
+test "interactive command string invocation parameter-expands ENV_DIR before script" {
+    const env_path = "rush-test-env-dir-command-string.rush";
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = env_path, .data = "ENV_DIR_COMMAND_STRING=loaded\n" });
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, env_path) catch {};
+
+    const cwd = try std.process.currentPathAlloc(std.testing.io, std.testing.allocator);
+    defer std.testing.allocator.free(cwd);
+    const env_value = try std.fmt.allocPrint(std.testing.allocator, "${{ENV_DIR}}/{s}", .{env_path});
+    defer std.testing.allocator.free(env_value);
+
+    var env = std.process.Environ.Map.init(std.testing.allocator);
+    defer env.deinit();
+    try env.put("ENV_DIR", cwd);
+    try env.put("ENV", env_value);
+
+    var result = try runCommandStringWithEnvironment(
+        std.testing.allocator,
+        std.testing.io,
+        "printf '%s\n' \"$ENV_DIR_COMMAND_STRING\"",
+        .{ .io = std.testing.io, .allow_external = true, .arg_zero = "rush" },
+        &env,
+        &.{},
+        .{ .arg_zero = "rush" },
+        .{},
+    );
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("loaded\n", result.stdout);
+    try std.testing.expectEqualStrings("", result.stderr);
+}
