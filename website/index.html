@@ -11,9 +11,28 @@
 
     body {
       font-family: monospace;
-      max-width: 120ch;
+      max-width: 100ch;
       margin: 4ch auto;
       padding: 0 2ch;
+    }
+
+    .site-header {
+      display: flex;
+      justify-content: space-between;
+      gap: 2ch;
+      align-items: baseline;
+      margin-bottom: 4ch;
+    }
+
+    .site-nav {
+      display: flex;
+      gap: 2ch;
+    }
+
+    .site-header a,
+    .site-header a:visited {
+      color: inherit;
+      text-decoration: none;
     }
 
     pre {
@@ -71,6 +90,14 @@
   </style>
 </head>
 <body>
+  <header class="site-header">
+    <div><a href="index.html">rush</a></div>
+    <nav class="site-nav" aria-label="Primary">
+      <a href="docs/index.html">docs</a>
+      <a href="https://github.com/rockorager/rush">source</a>
+    </nav>
+  </header>
+
   <h1 id="rush"><a href="#rush">rush</a></h1>
 
   <p>Rush is an experimental, POSIX-facing shell with Bash compatibility and interactive UX improvements.</p>
@@ -108,19 +135,6 @@
 ./zig-out/bin/rush <span class="opt">--help</span></pre>
 
   <p><code>--posix</code> selects POSIX mode with stricter syntax diagnostics for non-interactive execution. There is not currently a user-facing Bash-mode CLI flag.</p>
-
-  <h2 id="docs"><a href="#docs">Docs</a></h2>
-
-  <ul>
-    <li><a href="docs/features.html">Advanced features</a>: adaptive themes, terminal protocols, and interactive UX.</li>
-    <li><a href="docs/completion-manifest.html">Completion manifest schema</a>: JSON schema reference for structured completion manifests.</li>
-    <li><a href="docs/compatibility.html">Compatibility notes</a>: known differences from common shell reference points.</li>
-    <li><a href="docs/configuration.html">Configuration</a>: prompt and startup configuration.</li>
-  </ul>
-
-  <h2 id="source"><a href="#source">Source</a></h2>
-
-  <p><a href="https://github.com/rockorager/rush">github.com/rockorager/rush</a></p>
 
   <h2 id="status"><a href="#status">Status</a></h2>
 
