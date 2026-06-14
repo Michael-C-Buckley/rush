@@ -162,12 +162,31 @@ fn addConformanceTests(
     });
 
     const run_posix = b.addRunArtifact(harness);
-    run_posix.addArg("--rush");
-    run_posix.addArtifactArg(rush);
-    run_posix.addArg("--mode");
-    run_posix.addArg("posix");
+    if (b.args) |args| {
+        if (usesCustomConformanceRunner(args)) {
+            run_posix.addArgs(args);
+        } else {
+            run_posix.addArg("--rush");
+            run_posix.addArtifactArg(rush);
+            run_posix.addArg("--mode");
+            run_posix.addArg("posix");
+            run_posix.addArgs(args);
+        }
+    } else {
+        run_posix.addArg("--rush");
+        run_posix.addArtifactArg(rush);
+        run_posix.addArg("--mode");
+        run_posix.addArg("posix");
+    }
 
     conformance_step.dependOn(&run_posix.step);
+}
+
+fn usesCustomConformanceRunner(args: []const []const u8) bool {
+    for (args) |arg| {
+        if (std.mem.eql(u8, arg, "--rush") or std.mem.eql(u8, arg, "--shell")) return true;
+    }
+    return false;
 }
 
 fn createRushRootModule(
