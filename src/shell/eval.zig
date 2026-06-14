@@ -6271,36 +6271,40 @@ fn evaluateWait(
     std.debug.assert(argv.len != 0);
     std.debug.assert(std.mem.eql(u8, argv[0], "wait"));
 
-    var refreshed_state = try refreshedBackgroundJobState(evaluator, shell_state, buffers);
-    defer refreshed_state.deinit();
+    _ = buffers;
+    var wait_state = shell_state.clone(evaluator.allocator) catch |err| switch (err) {
+        error.OutOfMemory => return error.OutOfMemory,
+        error.ReadonlyVariable => unreachable,
+    };
+    defer wait_state.deinit();
 
     var status: outcome.ExitStatus = 0;
     if (argv.len == 1) {
         var index: usize = 0;
-        while (index < refreshed_state.background_jobs.items.len) {
-            const job = &refreshed_state.background_jobs.items[index];
-            status = try waitForegroundJob(evaluator, job);
+        while (index < wait_state.background_jobs.items.len) {
+            const job = &wait_state.background_jobs.items[index];
+            status = try waitBackgroundJobUntilTerminated(evaluator, job);
             if (job.state == .done) {
-                refreshed_state.removeBackgroundJobById(job.id);
+                wait_state.removeBackgroundJobById(job.id);
             } else {
                 index += 1;
             }
         }
-        try appendJobTableDiff(shell_state, refreshed_state, state_delta);
+        try appendJobTableDiff(shell_state, wait_state, state_delta);
         return 0;
     }
 
     for (argv[1..]) |operand| {
-        const job_id = resolveWaitOperand(refreshed_state, operand) orelse {
-            try appendJobTableDiff(shell_state, refreshed_state, state_delta);
-            return builtinStatusError(buffers, 127, "wait", "unknown job");
+        const job_id = resolveWaitOperand(wait_state, operand) orelse {
+            status = 127;
+            continue;
         };
-        const job = refreshed_state.findBackgroundJobPtrById(job_id) orelse unreachable;
-        status = try waitForegroundJob(evaluator, job);
-        if (job.state == .done) refreshed_state.removeBackgroundJobById(job_id);
+        const job = wait_state.findBackgroundJobPtrById(job_id) orelse unreachable;
+        status = try waitBackgroundJobUntilTerminated(evaluator, job);
+        if (job.state == .done) wait_state.removeBackgroundJobById(job_id);
     }
 
-    try appendJobTableDiff(shell_state, refreshed_state, state_delta);
+    try appendJobTableDiff(shell_state, wait_state, state_delta);
     return status;
 }
 
@@ -6482,6 +6486,20 @@ fn continueJobProcesses(evaluator: *Evaluator, job: *state.BackgroundJob) !void 
         process.termination_signal = null;
     }
     job.validate();
+}
+
+fn waitBackgroundJobUntilTerminated(evaluator: *Evaluator, job: *state.BackgroundJob) !outcome.ExitStatus {
+    job.validate();
+    if (job.state != .done) {
+        const process_port = evaluator.process_port orelse return error.Unimplemented;
+        for (job.processes.items, 0..) |*process, process_index| {
+            if (process.child.state != .running) continue;
+            const result = process_port.wait(.{ .child = &process.child }) catch return error.Unimplemented;
+            applyBackgroundProcessStatus(job, process_index, result.status);
+        }
+    }
+    job.validate();
+    return job.status;
 }
 
 fn waitForegroundJob(evaluator: *Evaluator, job: *state.BackgroundJob) !outcome.ExitStatus {
@@ -10633,7 +10651,7 @@ test "semantic job operands resolve current previous numeric prefix and substrin
 test "semantic wait returns known background pid status and removes waited job" {
     var fake = FakeExternalRuntime.init(std.testing.allocator);
     defer fake.deinit();
-    fake.setPollWaitStatuses(&.{.{ .exited = 7 }});
+    fake.setWaitStatuses(&.{.{ .exited = 7 }});
     var evaluator = Evaluator.initWithExternalPorts(std.testing.allocator, fake.fdPort(), fake.processPort());
     var shell_state = state.ShellState.init(std.testing.allocator);
     defer shell_state.deinit();
@@ -10650,6 +10668,89 @@ test "semantic wait returns known background pid status and removes waited job" 
 
     try std.testing.expectEqual(@as(usize, 0), shell_state.background_jobs.items.len);
     try std.testing.expectEqual(@as(state.ExitStatus, 7), shell_state.last_status);
+}
+
+test "semantic wait with multiple operands returns last operand status" {
+    var fake = FakeExternalRuntime.init(std.testing.allocator);
+    defer fake.deinit();
+    fake.setWaitStatuses(&.{ .{ .exited = 3 }, .{ .exited = 5 } });
+    var evaluator = Evaluator.initWithExternalPorts(std.testing.allocator, fake.fdPort(), fake.processPort());
+    var shell_state = state.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    try appendSemanticTestJob(&shell_state, 1, 7001, 7001, "alpha one", .running);
+    try appendSemanticTestJob(&shell_state, 2, 7002, 7002, "beta two", .running);
+
+    const wait_plan = command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{
+        "wait",
+        "7001",
+        "7002",
+    } } });
+    var result = try evaluatePlan(&evaluator, &shell_state, context.EvalContext.forTarget(.current_shell), wait_plan);
+    defer result.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 5), result.status);
+    try result.commitDelta(&shell_state, .current_shell);
+
+    try std.testing.expectEqual(@as(usize, 0), shell_state.background_jobs.items.len);
+    try std.testing.expectEqual(@as(state.ExitStatus, 5), shell_state.last_status);
+}
+
+test "semantic wait treats unknown pid as status 127 and keeps evaluating operands" {
+    var fake = FakeExternalRuntime.init(std.testing.allocator);
+    defer fake.deinit();
+    fake.setWaitStatuses(&.{.{ .exited = 4 }});
+    var evaluator = Evaluator.initWithExternalPorts(std.testing.allocator, fake.fdPort(), fake.processPort());
+    var shell_state = state.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    try appendSemanticTestJob(&shell_state, 1, 7001, 7001, "alpha one", .running);
+
+    const known_last = command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{
+        "wait",
+        "999999",
+        "7001",
+    } } });
+    var known_last_result = try evaluatePlan(
+        &evaluator,
+        &shell_state,
+        context.EvalContext.forTarget(.current_shell),
+        known_last,
+    );
+    defer known_last_result.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 4), known_last_result.status);
+    try known_last_result.commitDelta(&shell_state, .current_shell);
+    try std.testing.expectEqual(@as(usize, 0), shell_state.background_jobs.items.len);
+
+    const unknown_last = command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{
+        "wait",
+        "999999",
+    } } });
+    var unknown_last_result = try evaluatePlan(
+        &evaluator,
+        &shell_state,
+        context.EvalContext.forTarget(.current_shell),
+        unknown_last,
+    );
+    defer unknown_last_result.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 127), unknown_last_result.status);
+}
+
+test "semantic wait without operands waits all known jobs and returns zero" {
+    var fake = FakeExternalRuntime.init(std.testing.allocator);
+    defer fake.deinit();
+    fake.setWaitStatuses(&.{ .{ .exited = 3 }, .{ .exited = 5 } });
+    var evaluator = Evaluator.initWithExternalPorts(std.testing.allocator, fake.fdPort(), fake.processPort());
+    var shell_state = state.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    try appendSemanticTestJob(&shell_state, 1, 7001, 7001, "alpha one", .running);
+    try appendSemanticTestJob(&shell_state, 2, 7002, 7002, "beta two", .running);
+
+    const wait_plan = command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{"wait"} } });
+    var result = try evaluatePlan(&evaluator, &shell_state, context.EvalContext.forTarget(.current_shell), wait_plan);
+    defer result.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 0), result.status);
+    try result.commitDelta(&shell_state, .current_shell);
+
+    try std.testing.expectEqual(@as(usize, 0), shell_state.background_jobs.items.len);
+    try std.testing.expectEqual(@as(state.ExitStatus, 0), shell_state.last_status);
 }
 
 test "semantic bg continues selected stopped jobs and reports POSIX lines" {
