@@ -1074,7 +1074,7 @@ fn cloneInteractiveCompletionContext(context: *anyopaque, allocator: std.mem.All
     errdefer allocator.destroy(executor);
     executor.* = exec.Executor.init(allocator);
     errdefer executor.deinit();
-    try executor.copyStateFrom(source.executor);
+    try executor.copyCompletionStateFrom(source.executor);
 
     const history = try allocator.create(History);
     errdefer allocator.destroy(history);
@@ -1465,7 +1465,7 @@ const CompletionCache = struct {
             .history = History.init(self.allocator),
         };
         errdefer refresh.deinitFields();
-        try refresh.executor.copyStateFrom(executor);
+        try refresh.executor.copyCompletionStateFrom(executor);
         try refresh.history.copyFrom(history);
         refresh.thread = try std.Thread.spawn(.{}, CompletionRefresh.run, .{refresh});
         self.active_refresh = refresh;
