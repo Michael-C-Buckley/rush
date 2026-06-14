@@ -73,6 +73,19 @@
             .status = 0,
         },
         .{
+            .name = "input-output redirection creates a missing file",
+            .script =
+            \\: <>rw
+            \\test -f rw && printf 'created\n'
+            ,
+            .stdout =
+            \\created
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "redirection without a command is performed in the current environment",
             .script =
             \\: >created
@@ -80,6 +93,50 @@
             ,
             .stdout =
             \\created
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "explicit io number redirects standard error",
+            .script =
+            \\{ printf 'out\n'; printf 'err\n' >&2; } 2>err
+            \\printf 'after\n'
+            \\cat err
+            ,
+            .stdout =
+            \\out
+            \\after
+            \\err
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "quoted io number is not recognized as a redirection prefix",
+            .script =
+            \\\2>out
+            \\test -e out && printf 'created\n'
+            ,
+            .stdout =
+            \\created
+            \\
+            ,
+            .stderr = "",
+            .stderr_match = .nonempty,
+            .status = 0,
+        },
+        .{
+            .name = "quoted redirection operator is passed as an argument",
+            .script =
+            \\printf '%s\n' 2\>out
+            \\test ! -e out && printf 'no-file\n'
+            ,
+            .stdout =
+            \\2>out
+            \\no-file
             \\
             ,
             .stderr = "",
@@ -114,6 +171,128 @@
             .status = 0,
         },
         .{
+            .name = "redirection word expansion does not perform field splitting",
+            .script =
+            \\name='a b'
+            \\printf data >$name
+            \\cat 'a b'
+            ,
+            .stdout = "data",
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "redirection word expansion does not perform pathname expansion",
+            .script =
+            \\touch literal other
+            \\name='*'
+            \\printf data >$name
+            \\cat '*'
+            ,
+            .stdout = "data",
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "redirection word expansion performs command substitution",
+            .script =
+            \\printf data >$(printf out)
+            \\cat out
+            ,
+            .stdout = "data",
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "input redirection failure makes the command fail",
+            .script = "cat <missing",
+            .stdout = "",
+            .stderr = "",
+            .stderr_match = .nonempty,
+            .status = 0,
+            .status_match = .nonzero,
+        },
+        .{
+            .name = "noclobber prevents output redirection from replacing an existing file",
+            .script =
+            \\set -C
+            \\printf old >out
+            \\if printf new >out; then printf 'replaced\n'; else printf 'failed\n'; fi
+            \\cat out
+            ,
+            .stdout =
+            \\failed
+            \\old
+            ,
+            .stderr = "",
+            .stderr_match = .nonempty,
+            .status = 0,
+        },
+        .{
+            .name = "clobber redirection overrides noclobber",
+            .script =
+            \\set -C
+            \\printf old >out
+            \\printf new >|out
+            \\printf 'status:%s\n' "$?"
+            \\cat out
+            ,
+            .stdout =
+            \\status:0
+            \\new
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "input duplication reads from the duplicated descriptor",
+            .script =
+            \\printf 'abc' >in
+            \\cat 3<in <&3
+            \\printf '\n'
+            ,
+            .stdout =
+            \\abc
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "output duplication writes to the duplicated descriptor",
+            .script =
+            \\printf 'via3\n' 3>&1 >&3
+            ,
+            .stdout =
+            \\via3
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "closing an unopened output descriptor succeeds",
+            .script =
+            \\: 9>&-
+            \\printf 'status:%s\n' "$?"
+            ,
+            .stdout =
+            \\status:0
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "input duplication can close standard input",
+            .script = "cat <&-",
+            .stdout = "",
+            .stderr = "",
+            .stderr_match = .nonempty,
+            .status = 0,
+            .status_match = .nonzero,
+        },
+        .{
             .name = "here document body expands when delimiter is unquoted",
             .script =
             \\x=value
@@ -123,6 +302,34 @@
             ,
             .stdout =
             \\<value>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "multiple here documents are supplied in redirection order",
+            .script =
+            \\cat <<A <<B
+            \\one
+            \\A
+            \\two
+            \\B
+            ,
+            .stdout =
+            \\two
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "here document backslash quotes dollar backquote and backslash",
+            .script = "cat <<EOF\n\\$HOME\n\\`echo bad\\`\n\\\\slash\nEOF\n",
+            .stdout =
+            \\$HOME
+            \\`echo bad`
+            \\\slash
             \\
             ,
             .stderr = "",
