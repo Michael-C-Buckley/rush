@@ -183,6 +183,50 @@
             .status = 0,
         },
         .{
+            .name = "read with one variable trims only IFS whitespace",
+            .script =
+            \\printf '  a b  \n' | { IFS=' ' read -r value; printf '<%s>\n' "$value"; }
+            \\printf ':a:' | { IFS=: read -r value; printf '<%s>\n' "$value"; }
+            ,
+            .stdout =
+            \\<a b>
+            \\<:a:>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "read preserves empty fields from non-whitespace IFS delimiters",
+            .script =
+            \\printf ':x::y:\n' | {
+            \\    IFS=: read -r a b c d e
+            \\    printf '<%s>|<%s>|<%s>|<%s>|<%s>\n' "$a" "$b" "$c" "$d" "$e"
+            \\}
+            ,
+            .stdout =
+            \\<>|<x>|<>|<y>|<>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "read with mixed IFS preserves non-whitespace empty fields",
+            .script =
+            \\printf ' x:: y : z \n' | {
+            \\    IFS=': ' read -r a b c d
+            \\    printf '<%s>|<%s>|<%s>|<%s>\n' "$a" "$b" "$c" "$d"
+            \\}
+            ,
+            .stdout =
+            \\<x>|<>|<y>|<z>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "read assigns a partial final line but returns nonzero",
             .script =
             \\printf abc | { read value; printf '<%s>:<%s>\n' "$?" "$value"; }

@@ -8061,22 +8061,24 @@ fn assignReadFields(
     std.debug.assert(names.len != 0);
     if (escaped) |flags| std.debug.assert(flags.len == line.len);
     if (names.len == 1) {
-        try state_delta.assignVariable(names[0], line, .{});
+        const start = skipReadIfsWhitespace(line, escaped, 0, ifs);
+        const end = trimReadIfsWhitespaceEnd(line, escaped, start, ifs);
+        try state_delta.assignVariable(names[0], line[start..end], .{});
         return;
     }
 
     var cursor: usize = 0;
     for (names, 0..) |name, index| {
-        while (cursor < line.len and isReadFieldSeparatorAt(line, escaped, cursor, ifs)) cursor += 1;
+        cursor = skipReadIfsWhitespace(line, escaped, cursor, ifs);
         const start = cursor;
         if (index + 1 == names.len) {
-            var end = line.len;
-            while (end > start and isReadFieldSeparatorAt(line, escaped, end - 1, ifs)) end -= 1;
+            const end = trimReadFieldSeparatorEnd(line, escaped, start, ifs);
             try state_delta.assignVariable(name, line[start..end], .{});
             return;
         }
         while (cursor < line.len and !isReadFieldSeparatorAt(line, escaped, cursor, ifs)) cursor += 1;
         try state_delta.assignVariable(name, line[start..cursor], .{});
+        cursor = advanceReadFieldDelimiter(line, escaped, cursor, ifs);
     }
 }
 
@@ -8084,6 +8086,74 @@ fn isReadFieldSeparatorAt(line: []const u8, escaped: ?[]const bool, index: usize
     std.debug.assert(index < line.len);
     if (escaped) |flags| if (flags[index]) return false;
     return std.mem.indexOfScalar(u8, ifs, line[index]) != null;
+}
+
+fn isReadIfsWhitespaceAt(line: []const u8, escaped: ?[]const bool, index: usize, ifs: []const u8) bool {
+    std.debug.assert(index < line.len);
+    if (escaped) |flags| if (flags[index]) return false;
+    return isIfsWhitespace(line[index]) and std.mem.indexOfScalar(u8, ifs, line[index]) != null;
+}
+
+fn isReadIfsNonWhitespaceAt(line: []const u8, escaped: ?[]const bool, index: usize, ifs: []const u8) bool {
+    std.debug.assert(index < line.len);
+    if (escaped) |flags| if (flags[index]) return false;
+    return !isIfsWhitespace(line[index]) and std.mem.indexOfScalar(u8, ifs, line[index]) != null;
+}
+
+fn isIfsWhitespace(byte: u8) bool {
+    return byte == ' ' or byte == '\t' or byte == '\n';
+}
+
+fn skipReadIfsWhitespace(
+    line: []const u8,
+    escaped: ?[]const bool,
+    start: usize,
+    ifs: []const u8,
+) usize {
+    var cursor = start;
+    while (cursor < line.len and isReadIfsWhitespaceAt(line, escaped, cursor, ifs)) cursor += 1;
+    return cursor;
+}
+
+fn advanceReadFieldDelimiter(
+    line: []const u8,
+    escaped: ?[]const bool,
+    start: usize,
+    ifs: []const u8,
+) usize {
+    if (start >= line.len) return start;
+    std.debug.assert(isReadFieldSeparatorAt(line, escaped, start, ifs));
+
+    var cursor = start;
+    if (isReadIfsWhitespaceAt(line, escaped, cursor, ifs)) {
+        cursor = skipReadIfsWhitespace(line, escaped, cursor, ifs);
+        if (cursor < line.len and isReadIfsNonWhitespaceAt(line, escaped, cursor, ifs)) cursor += 1;
+    } else {
+        cursor += 1;
+    }
+    return skipReadIfsWhitespace(line, escaped, cursor, ifs);
+}
+
+fn trimReadIfsWhitespaceEnd(
+    line: []const u8,
+    escaped: ?[]const bool,
+    start: usize,
+    ifs: []const u8,
+) usize {
+    var end = line.len;
+    while (end > start and isReadIfsWhitespaceAt(line, escaped, end - 1, ifs)) end -= 1;
+    return end;
+}
+
+fn trimReadFieldSeparatorEnd(
+    line: []const u8,
+    escaped: ?[]const bool,
+    start: usize,
+    ifs: []const u8,
+) usize {
+    var end = line.len;
+    while (end > start and isReadFieldSeparatorAt(line, escaped, end - 1, ifs)) end -= 1;
+    return end;
 }
 
 const JobPrintMode = enum {
