@@ -174,6 +174,17 @@
             .status = 0,
         },
         .{
+            .name = "brace group requires separator before closing brace",
+            .script =
+            \\{ printf 'bad\n' }
+            ,
+            .stdout = "",
+            .stderr = "",
+            .stderr_match = .nonempty,
+            .status = 0,
+            .status_match = .nonzero,
+        },
+        .{
             .name = "brace group participates in AND-OR lists by its exit status",
             .script =
             \\{ false; true; } && printf 'ok\n'
