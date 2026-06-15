@@ -92,5 +92,195 @@
             .stderr = "",
             .status = 0,
         },
+        .{
+            .name = "case asterisk matches null and non-empty strings",
+            .script =
+            \\case ac in
+            \\    a*c) printf '<%s>\n' star-null ;;
+            \\    *) printf '<%s>\n' bad ;;
+            \\esac
+            \\case axbyc in
+            \\    a*b*c) printf '<%s>\n' concatenated ;;
+            \\    *) printf '<%s>\n' bad ;;
+            \\esac
+            ,
+            .stdout =
+            \\<star-null>
+            \\<concatenated>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "case non-matching list excludes listed characters",
+            .script =
+            \\case b in
+            \\    [!a]) printf '<%s>\n' not-a ;;
+            \\    *) printf '<%s>\n' bad ;;
+            \\esac
+            \\case a in
+            \\    [!a]) printf '<%s>\n' bad ;;
+            \\    *) printf '<%s>\n' excluded ;;
+            \\esac
+            ,
+            .stdout =
+            \\<not-a>
+            \\<excluded>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "case bracket expressions support POSIX character classes",
+            .script =
+            \\LC_ALL=C; export LC_ALL
+            \\case 7 in
+            \\    [[:digit:]]) printf '<%s>\n' digit ;;
+            \\    *) printf '<%s>\n' bad ;;
+            \\esac
+            \\case A in
+            \\    [![:digit:]]) printf '<%s>\n' not-digit ;;
+            \\    *) printf '<%s>\n' bad ;;
+            \\esac
+            ,
+            .stdout =
+            \\<digit>
+            \\<not-digit>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "case bracket expressions can include literal bracket characters",
+            .script =
+            \\case ']' in
+            \\    []a]) printf '<%s>\n' right-bracket ;;
+            \\    *) printf '<%s>\n' bad ;;
+            \\esac
+            \\case '[' in
+            \\    [[] ) printf '<%s>\n' left-bracket ;;
+            \\    *) printf '<%s>\n' bad ;;
+            \\esac
+            ,
+            .stdout =
+            \\<right-bracket>
+            \\<left-bracket>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "case open bracket that is not a bracket expression matches itself",
+            .script =
+            \\case 'a[b' in
+            \\    a[b) printf '<%s>\n' open-bracket ;;
+            \\    *) printf '<%s>\n' bad ;;
+            \\esac
+            ,
+            .stdout =
+            \\<open-bracket>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "escaping pattern characters makes them literal",
+            .script =
+            \\x='a*b'
+            \\case $x in
+            \\    a\*b) printf '<%s>\n' case-escape ;;
+            \\    *) printf '<%s>\n' bad ;;
+            \\esac
+            \\printf '<%s>\n' "${x#a\*}"
+            ,
+            .stdout =
+            \\<case-escape>
+            \\<b>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "pathname expansion supports non-matching lists and character classes",
+            .script =
+            \\LC_ALL=C; export LC_ALL
+            \\: >a.txt
+            \\: >b.txt
+            \\: >1.txt
+            \\printf '<%s>\n' [!a].txt [[:digit:]].txt
+            ,
+            .stdout =
+            \\<1.txt>
+            \\<b.txt>
+            \\<1.txt>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "pathname expansion requires leading period to be explicit",
+            .script =
+            \\: >.a
+            \\: >b
+            \\printf '<%s>\n' [?a] [!.]
+            ,
+            .stdout =
+            \\<[?a]>
+            \\<b>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "slash before a closing bracket prevents a filename bracket expression",
+            .script =
+            \\mkdir 'a[b'
+            \\: >'a[b/c]d'
+            \\: >abd
+            \\printf '<%s>\n' a[b/c]d
+            ,
+            .stdout =
+            \\<a[b/c]d>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "parameter removal patterns support non-matching lists and character classes",
+            .script =
+            \\LC_ALL=C; export LC_ALL
+            \\x=abc123def
+            \\printf '<%s>\n' "${x%%[![:alpha:]]*}" "${x##*[[:digit:]]}"
+            ,
+            .stdout =
+            \\<abc>
+            \\<def>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "omitted parameter removal pattern is the empty pattern",
+            .script =
+            \\x=abc
+            \\printf '<%s>:<%s>:<%s>:<%s>\n' "${x#}" "${x##}" "${x%}" "${x%%}"
+            ,
+            .stdout =
+            \\<abc>:<abc>:<abc>:<abc>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
     },
 }
