@@ -266,6 +266,7 @@ pub fn run(
     defer allocator.free(terminal_hostname);
 
     var last_status: shell.ExitStatus = 0;
+    var last_command_duration_ms: ?i64 = null;
     var interactive_shell = Shell.init(allocator);
     defer interactive_shell.deinit();
     try interactive_shell.initializeSemanticStartup(io, environ_map, options);
@@ -296,7 +297,11 @@ pub fn run(
             last_status = status;
             break;
         }
-        const prompt_text = try prompt_mod.renderStatic(allocator, &interactive_shell.semantic_state);
+        const prompt_text = try prompt_mod.render(allocator, io, &interactive_shell.semantic_state, .{
+            .arg_zero = options.arg_zero,
+            .features = options.features,
+            .previous_duration_ms = last_command_duration_ms,
+        });
         defer allocator.free(prompt_text);
         var cwd_buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
         const cwd_len = std.Io.Dir.cwd().realPath(io, &cwd_buffer) catch 0;
@@ -484,6 +489,7 @@ pub fn run(
                 },
             );
             const command_duration_ms = durationMillis(command_started, monotonicTimestamp(io));
+            last_command_duration_ms = command_duration_ms;
             defer result.deinit();
             try writeAll(io, .stdout, result.stdout);
             try writeAll(io, .stderr, result.stderr);
@@ -653,7 +659,9 @@ pub fn runReplInput(allocator: std.mem.Allocator, io: std.Io, input: []const u8)
             try allocator.dupe(u8, "");
         try stderr.appendSlice(allocator, notifications);
         allocator.free(notifications);
-        const prompt_text = try prompt_mod.renderStatic(allocator, &interactive_shell.semantic_state);
+        const prompt_text = try prompt_mod.render(allocator, io, &interactive_shell.semantic_state, .{
+            .previous_duration_ms = null,
+        });
         try stdout.appendSlice(allocator, prompt_text);
         allocator.free(prompt_text);
         if (std.mem.eql(u8, line, "exit")) break;
@@ -719,9 +727,18 @@ const StdinGuard = struct {
 test "runReplInput executes lines and tracks status" {
     var result = try runReplInput(std.testing.allocator, std.testing.io, "false\nexit\n");
     defer result.deinit();
+    const cwd = try std.process.currentPathAlloc(std.testing.io, std.testing.allocator);
+    defer std.testing.allocator.free(cwd);
+    const expected = try std.fmt.allocPrint(
+        std.testing.allocator,
+        "\x1b[38;5;4m{s}\x1b[39m\x1b[38;5;2m $ \x1b[39m" ++
+            "\x1b[38;5;4m{s}\x1b[39m\x1b[38;5;1m $ \x1b[39m",
+        .{ cwd, cwd },
+    );
+    defer std.testing.allocator.free(expected);
 
     try std.testing.expectEqual(@as(shell.ExitStatus, 1), result.status);
-    try std.testing.expectEqualStrings("$ $ ", result.stdout);
+    try std.testing.expectEqualStrings(expected, result.stdout);
     try std.testing.expectEqualStrings("", result.stderr);
 }
 test "interactive notify schedules editor job notification polling" {
@@ -1001,15 +1018,24 @@ test "semantic interactive invocation executes simple command redirections witho
     defer std.testing.allocator.free(output);
     try std.testing.expectEqualStrings("before\nredirected\n", output);
 }
-test "repl uses literal PS1 fallback prompt" {
+test "repl uses default rush_prompt" {
     var result = try runReplInput(std.testing.allocator, std.testing.io,
         \\PS1='custom> '
         \\exit
     );
     defer result.deinit();
+    const cwd = try std.process.currentPathAlloc(std.testing.io, std.testing.allocator);
+    defer std.testing.allocator.free(cwd);
+    const expected = try std.fmt.allocPrint(
+        std.testing.allocator,
+        "\x1b[38;5;4m{s}\x1b[39m\x1b[38;5;2m $ \x1b[39m" ++
+            "\x1b[38;5;4m{s}\x1b[39m\x1b[38;5;2m $ \x1b[39m",
+        .{ cwd, cwd },
+    );
+    defer std.testing.allocator.free(expected);
 
     try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
-    try std.testing.expectEqualStrings("$ custom> ", result.stdout);
+    try std.testing.expectEqualStrings(expected, result.stdout);
 }
 test "interactive startup enables monitor by default for tty stdin" {
     var master: c_int = -1;

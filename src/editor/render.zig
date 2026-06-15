@@ -81,7 +81,7 @@ fn parseUiUnderline(name: []const u8) ?UnderlineStyle {
     return null;
 }
 
-fn parseUiColor(name: []const u8) ?vaxis.Color {
+pub fn parseUiColor(name: []const u8) ?vaxis.Color {
     if (std.mem.eql(u8, name, "default")) return .default;
     if (std.mem.eql(u8, name, "black")) return .{ .index = 0 };
     if (std.mem.eql(u8, name, "red")) return .{ .index = 1 };

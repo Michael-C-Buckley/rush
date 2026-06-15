@@ -6,6 +6,16 @@
 : "${PS1=$ }"
 : "${PS2=> }"
 
+rush_prompt() {
+  rush_prompt_status=$?
+  prompt segment --fg blue "$(prompt_pwd)"
+  if test "$rush_prompt_status" = 0; then
+    prompt segment --fg green ' $ '
+  else
+    prompt segment --fg red ' $ '
+  fi
+}
+
 # Colorized ls by default, like fish. The flag is probed once per
 # session and cached; --color=auto and -G only emit color when stdout
 # is a terminal. command bypasses this function, so it cannot recurse.

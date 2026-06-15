@@ -149,7 +149,7 @@ fn semanticClassAcceptsName(semantic_class: BuiltinSemanticClass, name: []const 
         .unsupported => true,
         .no_op => matchesName(name, &.{":"}),
         .status_constant => matchesName(name, &.{ "true", "false" }),
-        .output => matchesName(name, &.{ "echo", "printf", "env", "pwd" }),
+        .output => matchesName(name, &.{ "echo", "printf", "env", "pwd", "prompt_pwd", "prompt_duration" }),
         .predicate => matchesName(name, &.{ "test", "[" }),
         .declaration => matchesName(name, &.{ "export", "readonly", "unset" }),
         .shell_state => matchesName(name, &.{
@@ -172,6 +172,7 @@ fn semanticClassAcceptsName(semantic_class: BuiltinSemanticClass, name: []const 
             "times",
             "ulimit",
             "fc",
+            "prompt",
         }),
         .job_control => matchesName(name, &.{ "jobs", "fg", "bg", "wait", "kill" }),
         .control_flow => matchesName(name, &.{ "break", "continue", "exit", "return" }),
