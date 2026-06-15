@@ -1,0 +1,19 @@
+.{
+    .name = "Bash shell builtins",
+    .mode = .bash,
+    .cases = .{
+        .{
+            .name = "wait rejects operands that are not process ids or job specs by default",
+            .script =
+            \\wait notapid
+            \\printf '<%s>\n' "$?"
+            ,
+            .stdout =
+            \\<1>
+            \\
+            ,
+            .stderr_match = .nonempty,
+            .status = 0,
+        },
+    },
+}

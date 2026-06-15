@@ -224,5 +224,21 @@
             .stderr_match = .nonempty,
             .status = 0,
         },
+        .{
+            .name = "unset -f ignores invalid function names by default",
+            .script =
+            \\f() { printf 'f\n'; }
+            \\unset -f ./x
+            \\printf '<%s>\n' "$?"
+            \\f
+            ,
+            .stdout =
+            \\<0>
+            \\f
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
     },
 }

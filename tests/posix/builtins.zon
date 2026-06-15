@@ -466,6 +466,19 @@
             .status = 0,
         },
         .{
+            .name = "wait rejects operands that are not process ids or job specs",
+            .script =
+            \\wait notapid
+            \\printf '<%s>\n' "$?"
+            ,
+            .stdout =
+            \\<1>
+            \\
+            ,
+            .stderr_match = .nonempty,
+            .status = 0,
+        },
+        .{
             .name = "dot executes a file in the current environment",
             .script =
             \\printf '%s\n' 'sourced=value' >file.sh

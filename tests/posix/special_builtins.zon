@@ -456,5 +456,21 @@
             .stderr = "",
             .status = 0,
         },
+        .{
+            .name = "unset -f ignores function names that are not defined",
+            .script =
+            \\f() { printf 'f\n'; }
+            \\unset -f ./x
+            \\printf '<%s>\n' "$?"
+            \\f
+            ,
+            .stdout =
+            \\<0>
+            \\f
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
     },
 }

@@ -8098,7 +8098,11 @@ fn evaluateUnset(
     }
 
     for (argv[index..]) |arg| {
-        if (!isShellName(arg)) return builtinUsageError(buffers, "unset", "invalid variable name");
+        if (mode == .variable and !isShellName(arg)) return builtinUsageError(
+            buffers,
+            "unset",
+            "invalid variable name",
+        );
         if (mode == .variable and shell_state.isVariableReadonly(arg)) return builtinUsageError(
             buffers,
             "unset",
@@ -8108,7 +8112,7 @@ fn evaluateUnset(
 
     for (argv[index..]) |arg| switch (mode) {
         .variable => try state_delta.unsetVariable(arg),
-        .function => try state_delta.unsetFunction(arg),
+        .function => if (isShellName(arg)) try state_delta.unsetFunction(arg),
     };
     return 0;
 }
@@ -8585,7 +8589,6 @@ fn evaluateWait(
     std.debug.assert(std.mem.eql(u8, argv[0], "wait"));
     eval_context.validate();
 
-    _ = buffers;
     var wait_state = shell_state.clone(evaluator.allocator) catch |err| switch (err) {
         error.OutOfMemory => return error.OutOfMemory,
         error.ReadonlyVariable => unreachable,
@@ -8609,15 +8612,17 @@ fn evaluateWait(
         return if (status > 128) status else 0;
     }
 
-    for (argv[1..]) |operand| {
-        const job_id = resolveWaitOperand(wait_state, operand) orelse {
-            status = 127;
-            continue;
-        };
-        const job = wait_state.findBackgroundJobPtrById(job_id) orelse unreachable;
-        status = try waitBackgroundJobUntilTerminated(evaluator, shell_state, eval_context, state_delta, job);
-        if (status > 128) break;
-        if (job.state == .done) wait_state.removeBackgroundJobById(job_id);
+    wait_operands: for (argv[1..]) |operand| {
+        switch (resolveWaitOperand(wait_state, operand)) {
+            .job_id => |job_id| {
+                const job = wait_state.findBackgroundJobPtrById(job_id) orelse unreachable;
+                status = try waitBackgroundJobUntilTerminated(evaluator, shell_state, eval_context, state_delta, job);
+                if (status > 128) break :wait_operands;
+                if (job.state == .done) wait_state.removeBackgroundJobById(job_id);
+            },
+            .unknown => status = 127,
+            .invalid => status = try builtinStatusError(buffers, 1, "wait", "not a pid or valid job spec"),
+        }
     }
 
     try appendJobTableDiff(shell_state, wait_state, state_delta);
@@ -8747,21 +8752,27 @@ fn resolveBackgroundJobOperand(shell_state: state.ShellState, operand: ?[]const 
     return (findBackgroundJobBySpec(shell_state, spec) orelse return error.UnknownJob).id;
 }
 
-fn resolveWaitOperand(shell_state: state.ShellState, operand: []const u8) ?usize {
+const WaitOperandResolution = union(enum) {
+    job_id: usize,
+    unknown,
+    invalid,
+};
+
+fn resolveWaitOperand(shell_state: state.ShellState, operand: []const u8) WaitOperandResolution {
     shell_state.validate();
-    std.debug.assert(operand.len != 0);
+    if (operand.len == 0) return .invalid;
     if (std.mem.startsWith(u8, operand, "%")) {
-        return if (findBackgroundJobBySpec(shell_state, operand)) |job| job.id else null;
+        return if (findBackgroundJobBySpec(shell_state, operand)) |job| .{ .job_id = job.id } else .unknown;
     }
-    const pid = std.fmt.parseInt(runtime.process.ProcessId, operand, 10) catch return null;
-    if (pid <= 0) return null;
+    const pid = std.fmt.parseInt(runtime.process.ProcessId, operand, 10) catch return .invalid;
+    if (pid <= 0) return .invalid;
     for (shell_state.background_jobs.items) |job| {
-        if (job.pid == pid) return job.id;
+        if (job.pid == pid) return .{ .job_id = job.id };
         for (job.processes.items) |process| {
-            if (process.child.child.id == pid) return job.id;
+            if (process.child.child.id == pid) return .{ .job_id = job.id };
         }
     }
-    return null;
+    return .unknown;
 }
 
 fn selectBackgroundJob(shell_state: *state.ShellState, id: usize) void {
