@@ -150,6 +150,17 @@
             .status_match = .nonzero,
         },
         .{
+            .name = "eval redirection failure exits the shell",
+            .script =
+            \\exec 2>&-
+            \\eval ': >&2'
+            \\printf bad
+            ,
+            .stdout = "",
+            .stderr = "",
+            .status_match = .nonzero,
+        },
+        .{
             .name = "exec duplicate redirection from a closed source descriptor is fatal",
             .script =
             \\exec 2>&-
@@ -179,6 +190,17 @@
             \\readonly ro=value
             \\ro=other
             \\printf 'bad\n'
+            ,
+            .stdout = "",
+            .stderr_match = .nonempty,
+            .status_match = .nonzero,
+        },
+        .{
+            .name = "readonly assignment error before special builtin exits the shell",
+            .script =
+            \\readonly ro=value
+            \\ro=other :
+            \\printf bad
             ,
             .stdout = "",
             .stderr_match = .nonempty,

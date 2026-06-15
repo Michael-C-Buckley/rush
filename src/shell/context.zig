@@ -74,6 +74,7 @@ pub const InvocationContext = struct {
         self.validate();
         return EvalContext.init(.{
             .target = target,
+            .features = self.features,
             .source = self.source,
             .interactive = self.interactive,
         });
@@ -89,6 +90,7 @@ pub const InvocationContext = struct {
 
 pub const EvalContext = struct {
     target: ExecutionTarget,
+    features: compat.Features = .{},
     source: InputSource = .command_string,
     interactive: bool = false,
     errexit_ignored: bool = false,
@@ -106,6 +108,7 @@ pub const EvalContext = struct {
 
     pub const Init = struct {
         target: ExecutionTarget,
+        features: compat.Features = .{},
         source: InputSource = .command_string,
         interactive: bool = false,
         errexit_ignored: bool = false,
@@ -121,6 +124,7 @@ pub const EvalContext = struct {
     pub fn init(options: Init) EvalContext {
         const eval_context: EvalContext = .{
             .target = options.target,
+            .features = options.features,
             .source = options.source,
             .interactive = options.interactive,
             .errexit_ignored = options.errexit_ignored,

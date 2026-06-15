@@ -1,0 +1,34 @@
+.{
+    .name = "Bash special builtins",
+    .mode = .bash,
+    .cases = .{
+        .{
+            .name = "readonly assignment error before special builtin does not exit",
+            .script =
+            \\readonly x
+            \\x=$(printf sub) :
+            \\printf 'after<%s>\n' "$?"
+            ,
+            .stdout =
+            \\after<0>
+            \\
+            ,
+            .stderr_match = .nonempty,
+            .status = 0,
+        },
+        .{
+            .name = "eval redirection error does not exit",
+            .script =
+            \\exec 2>&-
+            \\eval ': >&2'
+            \\printf 'after<%s>\n' "$?"
+            ,
+            .stdout =
+            \\after<1>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+    },
+}

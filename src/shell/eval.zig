@@ -1511,6 +1511,8 @@ fn redirectionFailurePolicy(
     return switch (command_class) {
         .special_builtin => if (eval_context.interactive)
             .special_builtin_interactive
+        else if (eval_context.features.isBash())
+            .regular_command
         else
             .special_builtin_non_interactive,
         else => .regular_command,
@@ -1900,44 +1902,63 @@ fn evaluatePlanWithInput(
     std.debug.assert(plan.target == eval_context.target);
     if (plan.target.allowsShellStateCommit()) std.debug.assert(shell_state.acceptsExecutionTarget(plan.target));
 
-    if (delta.firstReadonlyAssignment(shell_state.*, plan.assignments)) |name| {
-        var failure = try outcome.readonlyVariableFailure(evaluator.allocator, plan.target, name);
-        failure.state_delta.setLastStatus(failure.status);
-        consequence.applyToOutcome(
-            &failure,
-            eval_context,
-            consequence.decideForShellError(shell_state.options, eval_context, .readonly_assignment, failure.status),
-        );
-        failure.validateForContext(eval_context);
-        return failure;
+    var effective_plan = plan;
+    var filtered_assignments: ?[]command_plan.Assignment = null;
+    defer if (filtered_assignments) |assignments| evaluator.allocator.free(assignments);
+    const readonly_assignment = delta.firstReadonlyAssignment(shell_state.*, plan.assignments);
+    if (readonly_assignment) |name| {
+        if (bashCommandIgnoresReadonlyAssignment(eval_context, plan)) {
+            filtered_assignments = try filterReadonlyAssignments(evaluator.allocator, shell_state.*, plan.assignments);
+            effective_plan.assignments = filtered_assignments.?;
+            effective_plan.validate();
+        } else {
+            var failure = try outcome.readonlyVariableFailure(evaluator.allocator, plan.target, name);
+            failure.state_delta.setLastStatus(failure.status);
+            const kind: consequence.ShellErrorKind = if (plan.class() == .special_builtin)
+                .special_builtin_failure
+            else
+                .readonly_assignment;
+            consequence.applyToOutcome(
+                &failure,
+                eval_context,
+                consequence.decideForShellError(shell_state.options, eval_context, kind, failure.status),
+            );
+            failure.validateForContext(eval_context);
+            return failure;
+        }
     }
 
-    var state_delta = delta.StateDelta.init(evaluator.allocator, plan.target);
+    var state_delta = delta.StateDelta.init(evaluator.allocator, effective_plan.target);
     errdefer state_delta.deinit();
-    if (plan.assignmentEffect() == .persistent) {
-        state_delta.appendPersistentCommandAssignments(shell_state.*, plan.assignments) catch |err| switch (err) {
+    if (effective_plan.assignmentEffect() == .persistent) {
+        state_delta.appendPersistentCommandAssignments(shell_state.*, effective_plan.assignments) catch |err| switch (err) {
             error.ReadonlyVariable => unreachable,
             error.OutOfMemory => return error.OutOfMemory,
         };
     }
 
-    var here_doc_input = if (semanticHereDocInput(plan.redirections)) |bytes| EvaluationInput.init(bytes) else null;
+    var here_doc_input = if (semanticHereDocInput(effective_plan.redirections)) |bytes| EvaluationInput.init(bytes) else null;
     var buffers = EvaluationBuffers.init(evaluator.allocator, if (here_doc_input) |*here_doc| here_doc else input);
     defer buffers.deinit();
+    if (readonly_assignment) |name| try buffers.addBuiltinDiagnostic(name, "readonly variable");
 
     var applied_redirections: ?redirection_plan.AppliedRedirections = null;
     defer if (applied_redirections) |*applied| {
         applied.restore();
         applied.deinit();
     };
-    if (hasRedirections(plan) and here_doc_input == null and plan.class() != .external and plan.class() != .function) {
-        try flushBuffersForRedirectionTargets(&buffers, plan.redirections);
+    if (hasRedirections(effective_plan) and
+        here_doc_input == null and
+        effective_plan.class() != .external and
+        effective_plan.class() != .function)
+    {
+        try flushBuffersForRedirectionTargets(&buffers, effective_plan.redirections);
         const fd_port = evaluator.fd_port orelse return error.Unimplemented;
-        const apply_result = try plan.redirections.apply(evaluator.allocator, fd_port);
+        const apply_result = try effective_plan.redirections.apply(evaluator.allocator, fd_port);
         switch (apply_result) {
             .applied => |applied| applied_redirections = applied,
             .failure => |failure| {
-                const command_name = if (plan.argv.len == 0) "redirection" else plan.argv[0];
+                const command_name = if (effective_plan.argv.len == 0) "redirection" else effective_plan.argv[0];
                 try buffers.addBuiltinDiagnostic(command_name, redirectionFailureMessage(failure));
                 const redirection_result = evaluationFromRedirectionFailure(shell_state.options, eval_context, failure);
                 state_delta.setLastStatus(redirection_result.status);
@@ -1953,12 +1974,12 @@ fn evaluatePlanWithInput(
         }
     }
 
-    const command_context = switch (plan.class()) {
+    const command_context = switch (effective_plan.class()) {
         .special_builtin => eval_context.enterSpecialBuiltin(),
         else => eval_context,
     };
-    const result = try evaluateSimpleCommand(evaluator, shell_state, command_context, plan, &state_delta, &buffers);
-    switch (execRedirectionCommitMode(evaluator.*, eval_context, plan, result)) {
+    const result = try evaluateSimpleCommand(evaluator, shell_state, command_context, effective_plan, &state_delta, &buffers);
+    switch (execRedirectionCommitMode(evaluator.*, eval_context, effective_plan, result)) {
         .none => {},
         .permanent => if (applied_redirections) |*applied| applied.commit(),
         .scoped => if (applied_redirections) |applied| {
@@ -1966,25 +1987,25 @@ fn evaluatePlanWithInput(
             applied_redirections = null;
         },
     }
-    if (applied_redirections != null and plan.class() != .external and plan.class() != .function) {
-        if (redirectionTargetsDescriptor(plan.redirections, 1)) {
+    if (applied_redirections != null and effective_plan.class() != .external and effective_plan.class() != .function) {
+        if (redirectionTargetsDescriptor(effective_plan.redirections, 1)) {
             if (!writeAllDescriptor(1, buffers.stdout.items)) return error.Unimplemented;
             buffers.stdout.items.len = 0;
         }
-        if (redirectionTargetsDescriptor(plan.redirections, 2)) {
+        if (redirectionTargetsDescriptor(effective_plan.redirections, 2)) {
             if (!writeAllDescriptor(2, buffers.stderr.items)) return error.Unimplemented;
             buffers.stderr.items.len = 0;
         }
     }
     state_delta.setLastStatus(result.status);
-    assertCommandDeltaCompatible(plan, state_delta);
-    const decision = if (specialBuiltinStatusOnly(plan, result, buffers))
+    assertCommandDeltaCompatible(effective_plan, state_delta);
+    const decision = if (specialBuiltinStatusOnly(effective_plan, result, buffers))
         consequence.decideForStatus(shell_state.options, eval_context, result.status)
     else
         consequence.decideForSimpleCommand(
             shell_state.options,
             eval_context,
-            plan,
+            effective_plan,
             result.status,
             result.control_flow,
         );
@@ -1999,9 +2020,38 @@ fn evaluatePlanWithInput(
     try command_outcome.appendStdout(buffers.stdout.items);
     try command_outcome.appendStderr(buffers.stderr.items);
     for (buffers.diagnostics.items) |message| try command_outcome.addDiagnostic(message);
-    try appendBuiltinDiagnostic(&command_outcome, plan, result.status);
+    try appendBuiltinDiagnostic(&command_outcome, effective_plan, result.status);
     command_outcome.validateForContext(eval_context);
     return command_outcome;
+}
+
+fn bashCommandIgnoresReadonlyAssignment(eval_context: context.EvalContext, plan: command_plan.CommandPlan) bool {
+    eval_context.validate();
+    plan.validate();
+    if (!eval_context.features.isBash()) return false;
+    return switch (plan.class()) {
+        .assignment_only, .empty, .function_definition => false,
+        .special_builtin, .regular_builtin, .function, .external, .not_found => true,
+    };
+}
+
+fn filterReadonlyAssignments(
+    allocator: std.mem.Allocator,
+    shell_state: state.ShellState,
+    assignments: []const command_plan.Assignment,
+) ![]command_plan.Assignment {
+    shell_state.validate();
+    for (assignments) |assignment| assignment.validate();
+    var filtered: std.ArrayList(command_plan.Assignment) = .empty;
+    errdefer filtered.deinit(allocator);
+    for (assignments) |assignment| {
+        const variable = shell_state.getVariable(assignment.name) orelse {
+            try filtered.append(allocator, assignment);
+            continue;
+        };
+        if (!variable.readonly) try filtered.append(allocator, assignment);
+    }
+    return filtered.toOwnedSlice(allocator);
 }
 
 const ExecRedirectionCommitMode = enum {
