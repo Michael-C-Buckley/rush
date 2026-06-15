@@ -10,7 +10,7 @@ rush_prompt() {
   rush_prompt_status=$?
   prompt segment --fg blue "$(prompt_pwd)"
   if test "$rush_prompt_status" = 0; then
-    prompt segment --fg green ' $ '
+    prompt text ' $ '
   else
     prompt segment --fg red ' $ '
   fi
