@@ -12,6 +12,7 @@ pub const Operation = enum {
     set_cwd,
     inspect_path,
     list_dir,
+    set_file_creation_mask,
 };
 
 pub const GetCwdRequest = struct {
@@ -160,17 +161,46 @@ pub const ListDirResult = struct {
     }
 };
 
+pub const FileCreationMask = u16;
+
+pub const SetFileCreationMaskRequest = struct {
+    mask: FileCreationMask,
+
+    pub fn init(mask: FileCreationMask) SetFileCreationMaskRequest {
+        const request: SetFileCreationMaskRequest = .{ .mask = mask };
+        request.validate();
+        return request;
+    }
+
+    pub fn validate(self: SetFileCreationMaskRequest) void {
+        std.debug.assert(self.mask <= 0o777);
+    }
+};
+
+pub const SetFileCreationMaskResult = struct {
+    previous: FileCreationMask,
+
+    pub fn validate(self: SetFileCreationMaskResult) void {
+        std.debug.assert(self.previous <= 0o777);
+    }
+};
+
 pub const GetCwdError = std.process.CurrentPathError;
 pub const ChangeCwdError = std.process.SetCurrentPathError;
 pub const AccessError = std.Io.Dir.AccessError;
 pub const InspectPathError = std.Io.Dir.StatFileError;
 pub const ListDirError = std.mem.Allocator.Error || std.Io.Dir.OpenError || std.Io.Dir.Iterator.Error;
+pub const SetFileCreationMaskError = error{Unexpected};
 
 pub const GetCwdFn = *const fn (*anyopaque, GetCwdRequest) GetCwdError!GetCwdResult;
 pub const ChangeCwdFn = *const fn (*anyopaque, ChangeCwdRequest) ChangeCwdError!void;
 pub const AccessFn = *const fn (*anyopaque, AccessRequest) AccessError!void;
 pub const InspectPathFn = *const fn (*anyopaque, InspectPathRequest) InspectPathError!InspectPathResult;
 pub const ListDirFn = *const fn (*anyopaque, ListDirRequest) ListDirError!ListDirResult;
+pub const SetFileCreationMaskFn = *const fn (
+    *anyopaque,
+    SetFileCreationMaskRequest,
+) SetFileCreationMaskError!SetFileCreationMaskResult;
 
 pub const Port = struct {
     context: *anyopaque,
@@ -179,6 +209,7 @@ pub const Port = struct {
     access_fn: AccessFn,
     inspect_path_fn: InspectPathFn,
     list_dir_fn: ListDirFn,
+    set_file_creation_mask_fn: SetFileCreationMaskFn,
 
     pub fn getCwd(self: Port, request: GetCwdRequest) GetCwdError!GetCwdResult {
         request.validate();
@@ -209,6 +240,16 @@ pub const Port = struct {
     pub fn listDir(self: Port, request: ListDirRequest) ListDirError!ListDirResult {
         request.validate();
         const result = try self.list_dir_fn(self.context, request);
+        result.validate();
+        return result;
+    }
+
+    pub fn setFileCreationMask(
+        self: Port,
+        request: SetFileCreationMaskRequest,
+    ) SetFileCreationMaskError!SetFileCreationMaskResult {
+        request.validate();
+        const result = try self.set_file_creation_mask_fn(self.context, request);
         result.validate();
         return result;
     }

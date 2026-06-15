@@ -166,6 +166,7 @@ fn semanticClassAcceptsName(semantic_class: BuiltinSemanticClass, name: []const 
             "command",
             "abbr",
             "exec",
+            "umask",
         }),
         .job_control => matchesName(name, &.{ "jobs", "fg", "bg", "wait" }),
         .control_flow => matchesName(name, &.{ "break", "continue", "exit", "return" }),
@@ -216,7 +217,7 @@ pub const posix_builtins = [_]Builtin{
     Builtin.initWithSemantics("test", .regular, .predicate),
     Builtin.initWithSemantics("true", .regular, .status_constant),
     Builtin.init("ulimit", .regular),
-    Builtin.init("umask", .regular),
+    Builtin.initWithSemantics("umask", .regular, .shell_state),
     Builtin.initWithSemantics("unalias", .regular, .shell_state),
     Builtin.initWithSemantics("wait", .regular, .job_control),
 };

@@ -42,6 +42,7 @@ pub const Adapter = struct {
             .access_fn = access,
             .inspect_path_fn = inspectPath,
             .list_dir_fn = listDir,
+            .set_file_creation_mask_fn = setFileCreationMask,
         };
     }
 
@@ -207,6 +208,16 @@ fn listDir(context: *anyopaque, request: fs.ListDirRequest) fs.ListDirError!fs.L
         .allocator = request.allocator,
         .entries = try entries.toOwnedSlice(request.allocator),
     };
+}
+
+fn setFileCreationMask(
+    context: *anyopaque,
+    request: fs.SetFileCreationMaskRequest,
+) fs.SetFileCreationMaskError!fs.SetFileCreationMaskResult {
+    _ = context;
+    request.validate();
+    const previous = std.c.umask(@intCast(request.mask));
+    return .{ .previous = @intCast(previous & 0o777) };
 }
 
 fn spawn(context: *anyopaque, request: process.SpawnRequest) process.SpawnError!process.SpawnResult {

@@ -5532,6 +5532,11 @@ fn evaluateBuiltin(
         state_delta,
         buffers,
     ));
+    if (std.mem.eql(u8, definition.name, "umask")) return normalEvaluation(try evaluateUmask(
+        evaluator,
+        plan.argv,
+        buffers,
+    ));
     return error.Unimplemented;
 }
 
@@ -5904,6 +5909,63 @@ fn evaluateCd(
     try state_delta.assignVariable("PWD", cwd.path, .{ .exported = true });
     try state_delta.setLogicalCwd(cwd.path);
     return 0;
+}
+
+fn evaluateUmask(
+    evaluator: *Evaluator,
+    argv: []const []const u8,
+    buffers: *EvaluationBuffers,
+) !outcome.ExitStatus {
+    std.debug.assert(argv.len != 0);
+    std.debug.assert(std.mem.eql(u8, argv[0], "umask"));
+    if (argv.len > 2) return builtinUsageError(buffers, "umask", "too many arguments");
+    if (argv.len == 2 and std.mem.startsWith(u8, argv[1], "-")) {
+        return builtinUsageError(buffers, "umask", "unsupported option");
+    }
+
+    const fs_port = evaluator.fs_port orelse return error.Unimplemented;
+    if (argv.len == 1) {
+        const previous = fs_port.setFileCreationMask(.{ .mask = 0 }) catch {
+            return builtinStatusError(buffers, 1, "umask", "could not read file creation mask");
+        };
+        _ = fs_port.setFileCreationMask(.{ .mask = previous.previous }) catch {
+            return builtinStatusError(buffers, 1, "umask", "could not restore file creation mask");
+        };
+        try printUmask(buffers.allocator, &buffers.stdout, previous.previous);
+        return 0;
+    }
+
+    const mask = parseUmaskOperand(argv[1]) orelse {
+        return builtinUsageError(buffers, "umask", "invalid mask");
+    };
+    _ = fs_port.setFileCreationMask(.{ .mask = mask }) catch {
+        return builtinStatusError(buffers, 1, "umask", "could not set file creation mask");
+    };
+    return 0;
+}
+
+fn parseUmaskOperand(operand: []const u8) ?runtime.fs.FileCreationMask {
+    if (operand.len == 0) return null;
+    for (operand) |byte| if (byte < '0' or byte > '7') return null;
+    const mask = std.fmt.parseInt(runtime.fs.FileCreationMask, operand, 8) catch return null;
+    if (mask > 0o777) return null;
+    return mask;
+}
+
+fn printUmask(
+    allocator: std.mem.Allocator,
+    stdout: *std.ArrayList(u8),
+    mask: runtime.fs.FileCreationMask,
+) !void {
+    std.debug.assert(mask <= 0o777);
+    const digits = [_]u8{
+        '0' + @as(u8, @intCast((mask >> 9) & 0o7)),
+        '0' + @as(u8, @intCast((mask >> 6) & 0o7)),
+        '0' + @as(u8, @intCast((mask >> 3) & 0o7)),
+        '0' + @as(u8, @intCast(mask & 0o7)),
+        '\n',
+    };
+    try stdout.appendSlice(allocator, &digits);
 }
 
 fn evaluateCommandBuiltin(
@@ -9155,6 +9217,42 @@ test "semantic evaluator dispatches color as a Rush extension builtin" {
     try std.testing.expectEqualStrings("color: invalid color\n", invalid_result.stderr.items);
 }
 
+test "semantic evaluator evaluates umask through filesystem runtime" {
+    var fake_fs = FakeFsRuntime.init();
+    fake_fs.file_creation_mask = 0o022;
+    var shell_state = state.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    var evaluator = Evaluator.initWithFsPort(std.testing.allocator, fake_fs.port());
+    const eval_context = context.EvalContext.forTarget(.current_shell);
+
+    const print_plan = command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{"umask"} } });
+    var print_result = try evaluatePlan(&evaluator, &shell_state, eval_context, print_plan);
+    defer print_result.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 0), print_result.status);
+    try std.testing.expectEqualStrings("0022\n", print_result.stdout.items);
+    try std.testing.expectEqual(@as(runtime.fs.FileCreationMask, 0o022), fake_fs.file_creation_mask);
+    try std.testing.expectEqual(@as(usize, 2), fake_fs.file_creation_mask_change_count);
+
+    const set_plan = command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{
+        "umask",
+        "077",
+    } } });
+    var set_result = try evaluatePlan(&evaluator, &shell_state, eval_context, set_plan);
+    defer set_result.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 0), set_result.status);
+    try std.testing.expectEqualStrings("", set_result.stdout.items);
+    try std.testing.expectEqual(@as(runtime.fs.FileCreationMask, 0o077), fake_fs.file_creation_mask);
+
+    const invalid_plan = command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{
+        "umask",
+        "888",
+    } } });
+    var invalid_result = try evaluatePlan(&evaluator, &shell_state, eval_context, invalid_plan);
+    defer invalid_result.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 2), invalid_result.status);
+    try std.testing.expectEqualStrings("umask: invalid mask\n", invalid_result.stderr.items);
+}
+
 test "semantic evaluator dispatches shopt as a compat extension builtin" {
     var shell_state = state.ShellState.init(std.testing.allocator);
     defer shell_state.deinit();
@@ -10839,6 +10937,82 @@ const FakeSignalRuntime = struct {
         while (index < self.event_count) : (index += 1) self.events[index - 1] = self.events[index];
         self.event_count -= 1;
         return event;
+    }
+};
+
+const FakeFsRuntime = struct {
+    file_creation_mask: runtime.fs.FileCreationMask = 0o022,
+    file_creation_mask_change_count: usize = 0,
+
+    fn init() FakeFsRuntime {
+        return .{};
+    }
+
+    fn port(self: *FakeFsRuntime) runtime.fs.Port {
+        return .{
+            .context = self,
+            .get_cwd_fn = getCwd,
+            .change_cwd_fn = changeCwd,
+            .access_fn = access,
+            .inspect_path_fn = inspectPath,
+            .list_dir_fn = listDir,
+            .set_file_creation_mask_fn = setFileCreationMask,
+        };
+    }
+
+    fn fromContext(opaque_context: *anyopaque) *FakeFsRuntime {
+        return @ptrCast(@alignCast(opaque_context));
+    }
+
+    fn getCwd(
+        opaque_context: *anyopaque,
+        request: runtime.fs.GetCwdRequest,
+    ) runtime.fs.GetCwdError!runtime.fs.GetCwdResult {
+        _ = opaque_context;
+        request.validate();
+        const cwd = "/fake";
+        @memcpy(request.buffer[0..cwd.len], cwd);
+        return .{ .path = request.buffer[0..cwd.len] };
+    }
+
+    fn changeCwd(opaque_context: *anyopaque, request: runtime.fs.ChangeCwdRequest) runtime.fs.ChangeCwdError!void {
+        _ = opaque_context;
+        request.validate();
+    }
+
+    fn access(opaque_context: *anyopaque, request: runtime.fs.AccessRequest) runtime.fs.AccessError!void {
+        _ = opaque_context;
+        request.validate();
+    }
+
+    fn inspectPath(
+        opaque_context: *anyopaque,
+        request: runtime.fs.InspectPathRequest,
+    ) runtime.fs.InspectPathError!runtime.fs.InspectPathResult {
+        _ = opaque_context;
+        request.validate();
+        return .{ .stat = undefined };
+    }
+
+    fn listDir(
+        opaque_context: *anyopaque,
+        request: runtime.fs.ListDirRequest,
+    ) runtime.fs.ListDirError!runtime.fs.ListDirResult {
+        _ = opaque_context;
+        request.validate();
+        return .{ .allocator = request.allocator, .entries = &.{} };
+    }
+
+    fn setFileCreationMask(
+        opaque_context: *anyopaque,
+        request: runtime.fs.SetFileCreationMaskRequest,
+    ) runtime.fs.SetFileCreationMaskError!runtime.fs.SetFileCreationMaskResult {
+        const self = fromContext(opaque_context);
+        request.validate();
+        const previous = self.file_creation_mask;
+        self.file_creation_mask = request.mask;
+        self.file_creation_mask_change_count += 1;
+        return .{ .previous = previous };
     }
 };
 
