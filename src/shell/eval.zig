@@ -4246,6 +4246,8 @@ fn evaluateStatementListSource(
     std.debug.assert(eval_context.target.allowsShellStateCommit());
     std.debug.assert(std.mem.findScalar(u8, source, 0) == null);
 
+    if (source.len == 0) return normalEvaluation(0);
+
     var parser_resolver = ParserTrapActionResolver.init(evaluator);
     parser_resolver.features = evaluator.features;
     parser_resolver.arg_zero = evaluator.arg_zero;
@@ -8119,9 +8121,8 @@ fn evaluateTrap(
         const name = try normalizeTrapName(allocator, raw_signal);
         defer allocator.free(name);
         if (!state.isValidTrapName(name)) {
-            const message = try std.fmt.allocPrint(allocator, "{s}: invalid signal specification", .{raw_signal});
-            defer allocator.free(message);
-            return builtinStatusError(buffers, 1, "trap", message);
+            try appendTrapInvalidSignalMessage(buffers, raw_signal);
+            return 1;
         }
     }
     for (argv[index + 1 ..]) |raw_signal| {
@@ -8415,13 +8416,16 @@ fn listTrapOperands(
         const name = try normalizeTrapName(allocator, raw_signal);
         defer allocator.free(name);
         if (!state.isValidTrapName(name)) {
-            const message = try std.fmt.allocPrint(allocator, "{s}: invalid signal specification", .{raw_signal});
-            defer allocator.free(message);
-            return builtinStatusError(buffers, 1, "trap", message);
+            try appendTrapInvalidSignalMessage(buffers, raw_signal);
+            return 1;
         }
         try appendTrapLine(shell_state, buffers, name, true);
     }
     return 0;
+}
+
+fn appendTrapInvalidSignalMessage(buffers: *EvaluationBuffers, raw_signal: []const u8) !void {
+    try buffers.stderr.print(buffers.allocator, "trap: {s}: invalid signal specification\n", .{raw_signal});
 }
 
 fn appendTrapLine(
@@ -11099,6 +11103,40 @@ test "semantic evaluator models alias unalias and trap registration deltas" {
     defer list_trap.deinit();
     try std.testing.expectEqualStrings("trap -- 'echo bye' INT\n", list_trap.stdout.items);
     list_trap.discardDelta(.current_shell);
+
+    const invalid_trap_plan = command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{
+        "trap",
+        "",
+        "NOTASIG",
+    } } });
+    var invalid_trap = try evaluatePlan(&evaluator, &shell_state, eval_context, invalid_trap_plan);
+    defer invalid_trap.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 1), invalid_trap.status);
+    try std.testing.expectEqual(outcome.ControlFlow.normal, invalid_trap.control_flow);
+    try std.testing.expectEqual(@as(usize, 0), invalid_trap.diagnostics.items.len);
+    try std.testing.expectEqualStrings("trap: NOTASIG: invalid signal specification\n", invalid_trap.stderr.items);
+    invalid_trap.discardDelta(.current_shell);
+}
+
+test "semantic evaluator sources empty files as successful no-op scripts" {
+    var shell_state = state.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    var evaluator = Evaluator.init(std.testing.allocator);
+    var input = EvaluationInput.empty();
+    var buffers = EvaluationBuffers.init(std.testing.allocator, &input);
+    defer buffers.deinit();
+
+    const result = try evaluateStatementListSource(
+        &evaluator,
+        &shell_state,
+        context.EvalContext.forTarget(.current_shell).enterSource(),
+        "",
+        &buffers,
+    );
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 0), result.status);
+    try std.testing.expectEqual(outcome.ControlFlow.normal, result.control_flow);
+    try std.testing.expectEqualStrings("", buffers.stdout.items);
+    try std.testing.expectEqualStrings("", buffers.stderr.items);
 }
 
 test "semantic evaluator polls fake runtime signals into pending trap state" {
