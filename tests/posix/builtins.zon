@@ -156,6 +156,21 @@
             .status = 0,
         },
         .{
+            .name = "read with empty IFS assigns the whole line to the first variable",
+            .script =
+            \\IFS= read -r first rest <<EOF
+            \\x y
+            \\EOF
+            \\printf '<%s>:<%s>\n' "$first" "$rest"
+            ,
+            .stdout =
+            \\<x y>:<>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "read trims trailing default separators from the last variable",
             .script =
             \\printf ' a  b   \n' | { read first rest; printf '<%s>:<%s>\n' "$first" "$rest"; }

@@ -5832,7 +5832,7 @@ fn evaluateBuiltin(
     if (std.mem.eql(u8, definition.name, "read")) return normalEvaluation(try evaluateRead(
         evaluator,
         shell_state,
-        plan.argv,
+        plan,
         state_delta,
         buffers,
     ));
@@ -7785,10 +7785,11 @@ fn evaluateShift(
 fn evaluateRead(
     evaluator: *Evaluator,
     shell_state: state.ShellState,
-    argv: []const []const u8,
+    plan: command_plan.CommandPlan,
     state_delta: *delta.StateDelta,
     buffers: *EvaluationBuffers,
 ) !outcome.ExitStatus {
+    const argv = plan.argv;
     std.debug.assert(argv.len != 0);
     std.debug.assert(std.mem.eql(u8, argv[0], "read"));
 
@@ -7837,9 +7838,24 @@ fn evaluateRead(
         if (raw_line) |line| line.bytes else return 1
     else if (escaped_line) |line| line.bytes else return 1;
     const escaped_separators = if (escaped_line) |line| line.escaped else null;
-    try assignReadFields(read_line, escaped_separators, argv[name_index..], state_delta);
+    const ifs = lookupCommandVariableValue(shell_state, plan, "IFS") orelse " \t\n";
+    try assignReadFields(read_line, escaped_separators, argv[name_index..], ifs, state_delta);
     const complete = if (preserve_backslashes) raw_line.?.delimiter_found else escaped_line.?.delimiter_found;
     return if (complete) 0 else 1;
+}
+
+fn lookupCommandVariableValue(
+    shell_state: state.ShellState,
+    plan: command_plan.CommandPlan,
+    name: []const u8,
+) ?[]const u8 {
+    plan.validate();
+    state.assertValidVariableName(name);
+    var value: ?[]const u8 = if (shell_state.getVariable(name)) |variable| variable.value else null;
+    for (plan.assignments) |assignment| {
+        if (std.mem.eql(u8, assignment.name, name)) value = assignment.value;
+    }
+    return value;
 }
 
 const ReadRawLine = struct {
@@ -7971,6 +7987,7 @@ fn assignReadFields(
     line: []const u8,
     escaped: ?[]const bool,
     names: []const []const u8,
+    ifs: []const u8,
     state_delta: *delta.StateDelta,
 ) !void {
     std.debug.assert(names.len != 0);
@@ -7982,23 +7999,23 @@ fn assignReadFields(
 
     var cursor: usize = 0;
     for (names, 0..) |name, index| {
-        while (cursor < line.len and isReadFieldSeparatorAt(line, escaped, cursor)) cursor += 1;
+        while (cursor < line.len and isReadFieldSeparatorAt(line, escaped, cursor, ifs)) cursor += 1;
         const start = cursor;
         if (index + 1 == names.len) {
             var end = line.len;
-            while (end > start and isReadFieldSeparatorAt(line, escaped, end - 1)) end -= 1;
+            while (end > start and isReadFieldSeparatorAt(line, escaped, end - 1, ifs)) end -= 1;
             try state_delta.assignVariable(name, line[start..end], .{});
             return;
         }
-        while (cursor < line.len and !isReadFieldSeparatorAt(line, escaped, cursor)) cursor += 1;
+        while (cursor < line.len and !isReadFieldSeparatorAt(line, escaped, cursor, ifs)) cursor += 1;
         try state_delta.assignVariable(name, line[start..cursor], .{});
     }
 }
 
-fn isReadFieldSeparatorAt(line: []const u8, escaped: ?[]const bool, index: usize) bool {
+fn isReadFieldSeparatorAt(line: []const u8, escaped: ?[]const bool, index: usize, ifs: []const u8) bool {
     std.debug.assert(index < line.len);
     if (escaped) |flags| if (flags[index]) return false;
-    return line[index] == ' ' or line[index] == '\t';
+    return std.mem.indexOfScalar(u8, ifs, line[index]) != null;
 }
 
 const JobPrintMode = enum {
