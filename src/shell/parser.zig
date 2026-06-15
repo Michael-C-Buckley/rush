@@ -7,6 +7,7 @@
 
 const std = @import("std");
 const compat = @import("compat.zig");
+const shell_builtin = @import("builtin.zig");
 
 pub const Span = struct {
     start: usize,
@@ -2611,6 +2612,12 @@ const SyntaxParser = struct {
         var function_children: std.ArrayList(SyntaxChild) = .empty;
         defer function_children.deinit(self.allocator);
 
+        const name_token = self.current();
+        const name = name_token.lexeme(self.source);
+        if (shell_builtin.isSpecialBuiltin(name)) {
+            try self.appendParseError(name_token.span, "function name cannot be a special built-in");
+        }
+
         const header_end = self.functionDefinitionHeaderEnd() orelse self.index;
         while (self.index < header_end) {
             try self.appendCurrentTokenChildTo(&function_children);
@@ -4622,6 +4629,16 @@ test "parser builds POSIX function definition nodes" {
         }
         try std.testing.expect(found);
     }
+}
+
+test "parser rejects function definitions named after special built-ins" {
+    var result = try parse(std.testing.allocator, "export() { echo bad; }", .{});
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(usize, 1), result.diagnostics.len);
+    try std.testing.expectEqual(DiagnosticKind.parse_error, result.diagnostics[0].kind);
+    try expectSpan(.init(0, 6), result.diagnostics[0].span);
+    try std.testing.expectEqualStrings("function name cannot be a special built-in", result.diagnostics[0].message);
 }
 
 test "parser keeps nested brace groups inside POSIX function definitions" {
