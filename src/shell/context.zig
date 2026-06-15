@@ -192,6 +192,13 @@ pub const EvalContext = struct {
         return next;
     }
 
+    pub fn enterSpecialBuiltin(self: EvalContext) EvalContext {
+        var next = self;
+        next.special_builtin = true;
+        next.validate();
+        return next;
+    }
+
     pub fn observesErrexit(self: EvalContext) bool {
         self.validate();
         return !self.errexit_ignored;

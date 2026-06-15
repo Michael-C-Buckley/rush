@@ -1444,7 +1444,7 @@ const TrapActionLowerer = struct {
         );
         const trap_failure: TrapActionFailure = .{
             .kind = .parse_error,
-            .status = self.shell_state.last_status,
+            .status = if (self.shell_state.last_status == 0) 2 else self.shell_state.last_status,
             .message = message,
         };
         trap_failure.validate();
@@ -1931,7 +1931,11 @@ fn evaluatePlanWithInput(
         }
     }
 
-    const result = try evaluateSimpleCommand(evaluator, shell_state, eval_context, plan, &state_delta, &buffers);
+    const command_context = switch (plan.class()) {
+        .special_builtin => eval_context.enterSpecialBuiltin(),
+        else => eval_context,
+    };
+    const result = try evaluateSimpleCommand(evaluator, shell_state, command_context, plan, &state_delta, &buffers);
     if (applied_redirections != null and plan.class() != .external and plan.class() != .function) {
         if (redirectionTargetsDescriptor(plan.redirections, 1)) {
             if (!writeAllDescriptor(1, buffers.stdout.items)) return error.Unimplemented;
@@ -3593,7 +3597,13 @@ pub fn trapActionFailureOutcome(
             .normal
         else
             .{ .exit = failure.status },
-        .parse_error, .lowering_error, .unsupported_shape => .normal,
+        .parse_error => if (eval_context.interactive or
+            shell_state.trap_execution != .idle or
+            !eval_context.special_builtin)
+            .normal
+        else
+            .{ .fatal = failure.status },
+        .lowering_error, .unsupported_shape => .normal,
     };
     var command_outcome = outcome.CommandOutcome.withControlFlow(allocator, failure.status, state_delta, control_flow);
     errdefer command_outcome.deinit();
@@ -11665,6 +11675,30 @@ test "semantic parser trap resolver models parse failures as trap diagnostics" {
     try std.testing.expectEqual(@as(state.ExitStatus, 11), shell_state.last_status);
 }
 
+test "semantic parser trap resolver gives zero-status parse failures a nonzero diagnostic status" {
+    var shell_state = state.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    var evaluator = Evaluator.init(std.testing.allocator);
+    var parser_resolver = ParserTrapActionResolver.init(&evaluator);
+
+    try shell_state.setTrapForSignal(.TERM, "if true; then");
+    try shell_state.appendPendingTrap(.TERM);
+    var trap_outcome = (try executePendingTraps(
+        &evaluator,
+        &shell_state,
+        context.EvalContext.forTarget(.current_shell),
+        parser_resolver.resolver(),
+    )).?;
+    defer trap_outcome.deinit();
+
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 0), trap_outcome.status);
+    try std.testing.expectEqual(outcome.ControlFlow.normal, trap_outcome.control_flow);
+    try std.testing.expect(trap_outcome.diagnostics.items.len != 0);
+    try std.testing.expect(std.mem.indexOf(u8, trap_outcome.stderr.items, "trap TERM: parse error") != null);
+    try trap_outcome.commitDelta(&shell_state, .current_shell);
+    try std.testing.expectEqual(@as(state.ExitStatus, 0), shell_state.last_status);
+}
+
 test "semantic parser trap resolver preserves subshell isolation and exit overrides" {
     var shell_state = state.ShellState.init(std.testing.allocator);
     defer shell_state.deinit();
@@ -13853,6 +13887,38 @@ test "semantic evaluator keeps shell-error fatality outside errexit suppression"
     );
     try std.testing.expectEqualStrings("return: not in a function or dot script", result.diagnostics.items[0].message);
     result.discardDelta(.current_shell);
+}
+
+test "semantic evaluator treats eval parse errors as special builtin shell errors" {
+    var shell_state = state.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    var evaluator = Evaluator.init(std.testing.allocator);
+    const eval_context = context.EvalContext.forTarget(.current_shell);
+    const script = "if then echo bad; fi";
+
+    const direct_plan = command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{
+        "eval",
+        script,
+    } } });
+    var direct = try evaluatePlan(&evaluator, &shell_state, eval_context, direct_plan);
+    defer direct.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 2), direct.status);
+    try std.testing.expectEqual(
+        outcome.ControlFlow{ .fatal = 2 }, // ziglint-ignore: Z010 (expectEqual peer)
+        direct.control_flow,
+    );
+    direct.discardDelta(.current_shell);
+
+    const command_plan_value = command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{
+        "command",
+        "eval",
+        script,
+    } } });
+    var command_result = try evaluatePlan(&evaluator, &shell_state, eval_context, command_plan_value);
+    defer command_result.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 2), command_result.status);
+    try std.testing.expectEqual(outcome.ControlFlow.normal, command_result.control_flow);
+    command_result.discardDelta(.current_shell);
 }
 
 test "semantic evaluator routes redirection failure consequences through central policy" {
