@@ -33,5 +33,20 @@
             .stderr_match = .nonempty,
             .status = 0,
         },
+        .{
+            .name = "readonly for loop variable reports failure and continues by default",
+            .script =
+            \\readonly i
+            \\for i in a b; do printf bad; done
+            \\printf 'i=<%s> status=<%s>\n' "$i" "$?"
+            \\printf after
+            ,
+            .stdout =
+            \\i=<> status=<1>
+            \\after
+            ,
+            .stderr_match = .nonempty,
+            .status = 0,
+        },
     },
 }

@@ -1236,5 +1236,16 @@
             .stderr = "",
             .status = 0,
         },
+        .{
+            .name = "readonly for loop variable is a shell error",
+            .script =
+            \\readonly i
+            \\for i in a b; do printf bad; done
+            \\printf bad
+            ,
+            .stdout = "",
+            .stderr_match = .nonempty,
+            .status_match = .nonzero,
+        },
     },
 }

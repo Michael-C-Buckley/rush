@@ -768,6 +768,17 @@
             .status_match = .nonzero,
         },
         .{
+            .name = "arithmetic assignment to readonly variable is a shell error",
+            .script =
+            \\readonly i=1
+            \\: $((i=2))
+            \\printf bad
+            ,
+            .stdout = "",
+            .stderr_match = .nonempty,
+            .status_match = .nonzero,
+        },
+        .{
             .name = "arithmetic expansion fails when variable contents are not an integer constant",
             .script =
             \\printf 'before\n'

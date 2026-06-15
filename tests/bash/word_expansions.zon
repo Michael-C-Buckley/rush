@@ -71,6 +71,19 @@
             .status = 0,
         },
         .{
+            .name = "arithmetic expansion error in if condition skips the compound body",
+            .script =
+            \\if : $((1/0)); then printf then; else printf else; fi
+            \\printf 'status=<%s>\n' "$?"
+            ,
+            .stdout =
+            \\status=<1>
+            \\
+            ,
+            .stderr_match = .nonempty,
+            .status = 0,
+        },
+        .{
             .name = "arithmetic expansion error in assignment-only command returns from a function",
             .script =
             \\f() { x=$((1/0)); printf bad; }
@@ -106,6 +119,21 @@
             ,
             .stdout =
             \\x=<> status=<1>
+            \\after
+            ,
+            .stderr_match = .nonempty,
+            .status = 0,
+        },
+        .{
+            .name = "arithmetic assignment to readonly variable fails without exiting by default",
+            .script =
+            \\readonly i=1
+            \\: $((i=2))
+            \\printf 'i=<%s> status=<%s>\n' "$i" "$?"
+            \\printf after
+            ,
+            .stdout =
+            \\i=<1> status=<1>
             \\after
             ,
             .stderr_match = .nonempty,

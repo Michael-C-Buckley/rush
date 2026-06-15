@@ -1592,7 +1592,10 @@ fn semanticFailureStopsProgram(failure: shell.TrapActionFailure, features: compa
     }
     return !(features.isBash() and
         failure.kind == .expansion_error and
-        (failure.bash_arithmetic_assignment_only_expansion or failure.bash_parameter_assignment_expansion));
+        (failure.bash_arithmetic_expansion or
+            failure.bash_arithmetic_assignment_only_expansion or
+            failure.bash_parameter_assignment_expansion or
+            std.mem.indexOf(u8, failure.message, "expansion error: arithmetic:") != null));
 }
 
 fn semanticBodyUsesInheritedExternal(body: shell.TrapActionBody) bool {

@@ -169,6 +169,8 @@ pub const TrapActionFailure = struct {
     kind: TrapActionFailureKind,
     status: outcome.ExitStatus = 2,
     message: []const u8,
+    bash_arithmetic_expansion: bool = false,
+    bash_arithmetic_readonly_assignment: bool = false,
     bash_arithmetic_assignment_only_expansion: bool = false,
     bash_parameter_assignment_expansion: bool = false,
 
@@ -287,6 +289,10 @@ pub const ParserTrapActionResolver = struct {
         _ = self.evaluator.allocator;
         std.debug.assert(self.arg_zero.len != 0);
         for (self.externals) |external| external.validate();
+    }
+
+    fn bashMode(self: ParserTrapActionResolver) bool {
+        return self.features.isBash() or self.evaluator.features.isBash();
     }
 
     fn resolve(
@@ -1056,9 +1062,16 @@ const TrapActionLowerer = struct {
                     .kind = .expansion_error,
                     .status = statusForExpansionFailure(self.owner.features, expansion_failure),
                     .message = message,
-                    .bash_arithmetic_assignment_only_expansion = command.argv.len == 0 and
+                    .bash_arithmetic_expansion = self.owner.bashMode() and
                         expansion_failure.kind == .arithmetic_expansion,
-                    .bash_parameter_assignment_expansion = expansion_failure.kind == .parameter_assignment,
+                    .bash_arithmetic_readonly_assignment = self.owner.bashMode() and
+                        expansion_failure.kind == .arithmetic_expansion and
+                        std.mem.eql(u8, expansion_failure.message, "readonly variable"),
+                    .bash_arithmetic_assignment_only_expansion = self.owner.bashMode() and
+                        command.argv.len == 0 and
+                        expansion_failure.kind == .arithmetic_expansion,
+                    .bash_parameter_assignment_expansion = self.owner.bashMode() and
+                        expansion_failure.kind == .parameter_assignment,
                 };
                 trap_failure.validate();
                 return .{ .failure = trap_failure };
@@ -1342,6 +1355,11 @@ const TrapActionLowerer = struct {
                 "trap {s}: expansion error: {s}: {s}",
                 .{ self.signal.name(), expansion_failure.name, expansion_failure.message },
             ),
+            .bash_arithmetic_expansion = self.owner.bashMode() and
+                expansion_failure.kind == .arithmetic_expansion,
+            .bash_arithmetic_readonly_assignment = self.owner.bashMode() and
+                expansion_failure.kind == .arithmetic_expansion and
+                std.mem.eql(u8, expansion_failure.message, "readonly variable"),
         };
         trap_failure.validate();
         return trap_failure;
@@ -3977,6 +3995,8 @@ pub fn trapActionFailureOutcome(
             break :blk .{ .return_from_scope = .{ .scope = .function, .status = failure.status } };
         }
         break :blk decision.control_flow;
+    } else if (bashArithmeticExpansionFailureIsCommandFailure(eval_context, failure, shell_state)) blk: {
+        break :blk if (eval_context.observesErrexit()) .{ .exit = failure.status } else .normal;
     } else switch (failure.kind) {
         .expansion_error => if (eval_context.interactive or shell_state.trap_execution != .idle)
             .normal
@@ -4008,10 +4028,26 @@ fn bashExpansionFailureIsCommandFailure(
     eval_context.validate();
     failure.validate();
     shell_state.validate();
-    return eval_context.features.isBash() and
-        shell_state.trap_execution == .idle and
+    return shell_state.trap_execution == .idle and
         failure.kind == .expansion_error and
-        (failure.bash_arithmetic_assignment_only_expansion or failure.bash_parameter_assignment_expansion);
+        (failure.bash_arithmetic_readonly_assignment or
+            (eval_context.features.isBash() and
+                std.mem.indexOf(u8, failure.message, "expansion error: arithmetic: readonly variable") != null) or
+            failure.bash_arithmetic_assignment_only_expansion or
+            failure.bash_parameter_assignment_expansion);
+}
+
+fn bashArithmeticExpansionFailureIsCommandFailure(
+    eval_context: context.EvalContext,
+    failure: TrapActionFailure,
+    shell_state: state.ShellState,
+) bool {
+    eval_context.validate();
+    failure.validate();
+    shell_state.validate();
+    return shell_state.trap_execution == .idle and
+        failure.kind == .expansion_error and
+        failure.bash_arithmetic_expansion;
 }
 
 fn runtimeDispositionForTrapDisposition(disposition: state.TrapDisposition) runtime.signal.Disposition {
@@ -4748,6 +4784,15 @@ fn evaluateForLoop(
 
     var result = normalEvaluation(0);
     for (words) |word| {
+        const readonly_failure = try forLoopReadonlyAssignmentFailure(
+            shell_state.*,
+            eval_context,
+            for_plan.variable_name,
+            buffers,
+        );
+        if (readonly_failure) |failure| {
+            return failure;
+        }
         try assignForLoopVariable(evaluator.allocator, shell_state, eval_context.target, for_plan.variable_name, word);
         const body = if (for_plan.body_source) |source|
             try evaluateStatementListSource(evaluator, shell_state, loop_context, source, buffers)
@@ -4767,6 +4812,28 @@ fn evaluateForLoop(
         }
     }
     return result;
+}
+
+fn forLoopReadonlyAssignmentFailure(
+    shell_state: state.ShellState,
+    eval_context: context.EvalContext,
+    name: []const u8,
+    buffers: *EvaluationBuffers,
+) !?SimpleEvalResult {
+    shell_state.validate();
+    eval_context.validate();
+    state.assertValidVariableName(name);
+    if (!shell_state.isVariableReadonly(name)) return null;
+
+    try buffers.addBuiltinDiagnostic(name, "readonly variable");
+    const status: outcome.ExitStatus = 1;
+    const decision = consequence.decideForShellError(
+        shell_state.options,
+        eval_context,
+        .readonly_assignment,
+        status,
+    );
+    return .{ .status = status, .control_flow = decision.control_flow };
 }
 
 fn evaluateStatementListSource(

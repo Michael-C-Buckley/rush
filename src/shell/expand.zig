@@ -827,6 +827,7 @@ fn arithmeticExpansionFailed(
         error.InvalidArithmetic => "invalid arithmetic expression",
         error.DivisionByZero => "division by zero",
         error.Overflow => "arithmetic overflow",
+        error.ReadonlyVariable => "readonly variable",
         else => return err,
     };
 
