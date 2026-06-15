@@ -43,6 +43,21 @@
             .status = 0,
         },
         .{
+            .name = "regular built-ins are found before PATH utilities",
+            .script =
+            \\mkdir d
+            \\printf '%s\n' '#!/bin/sh' 'printf "external\n"' >d/printf
+            \\chmod 755 d/printf
+            \\PATH=./d:$PATH printf 'builtin\n'
+            ,
+            .stdout =
+            \\builtin
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "command bypasses functions to find regular built-ins",
             .script =
             \\printf() { echo function; }
@@ -74,6 +89,23 @@
             .status = 0,
         },
         .{
+            .name = "unset -f removes functions from later command lookup",
+            .script =
+            \\foo() { printf 'function\n'; }
+            \\foo
+            \\unset -f foo
+            \\foo 2>/dev/null
+            \\printf '<%s>\n' "$?"
+            ,
+            .stdout =
+            \\function
+            \\<127>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "command search failure sets status 127 and execution continues",
             .script =
             \\no_such_posix_command_for_rush 2>/dev/null
@@ -87,6 +119,35 @@
             .status = 0,
         },
         .{
+            .name = "temporary assignments before command search failure do not persist",
+            .script =
+            \\x=outer
+            \\x=temp no_such_posix_command_for_rush 2>/dev/null
+            \\printf '<%s:%s>\n' "$x" "$?"
+            ,
+            .stdout =
+            \\<outer:127>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "redirections before command search failure still take effect",
+            .script =
+            \\no_such_posix_command_for_rush >out 2>/dev/null
+            \\printf '<%s:' "$?"
+            \\test -f out
+            \\printf '%s>\n' "$?"
+            ,
+            .stdout =
+            \\<127:0>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "empty command names fail as not found and execution continues",
             .script =
             \\"" 2>/dev/null
@@ -94,6 +155,36 @@
             ,
             .stdout =
             \\<127>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "temporary assignments before regular built-ins do not persist",
+            .script =
+            \\x=outer
+            \\x=temp printf 'builtin\n'
+            \\printf '<%s>\n' "$x"
+            ,
+            .stdout =
+            \\builtin
+            \\<outer>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "temporary assignments before external utilities are exported and do not persist",
+            .script =
+            \\x=outer
+            \\x=temp sh -c 'printf "in:%s\n" "$x"'
+            \\printf 'out:%s\n' "$x"
+            ,
+            .stdout =
+            \\in:temp
+            \\out:outer
             \\
             ,
             .stderr = "",
@@ -204,6 +295,34 @@
             ,
             .stdout =
             \\script:./d/myscript:arg
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "command utility preserves special built-in state effects",
+            .script =
+            \\command export COMMAND_EXPORT=ok
+            \\printf '<%s:%s>\n' "$COMMAND_EXPORT" "$?"
+            ,
+            .stdout =
+            \\<ok:0>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "command utility preserves regular built-in state effects",
+            .script =
+            \\start=$PWD
+            \\mkdir d
+            \\command cd d
+            \\case $PWD in "$start"/d) printf '<ok:%s>\n' "$?" ;; *) printf '<bad:%s>\n' "$?" ;; esac
+            ,
+            .stdout =
+            \\<ok:0>
             \\
             ,
             .stderr = "",
