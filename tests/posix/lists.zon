@@ -137,6 +137,23 @@
             .status = 0,
         },
         .{
+            .name = "errexit is ignored before AND-OR control operators",
+            .script =
+            \\set -e
+            \\false || printf '<or>\n'
+            \\( false; printf '<subshell>\n' ) || printf '<fallback>\n'
+            \\printf '<after>\n'
+            ,
+            .stdout =
+            \\<or>
+            \\<subshell>
+            \\<after>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "sequential list status is last executed pipeline status when last succeeds",
             .script =
             \\false; true

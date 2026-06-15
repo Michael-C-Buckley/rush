@@ -2072,6 +2072,17 @@ fn evaluateCompoundPlanWithInput(
     defer working_state.deinit();
 
     var result = try evaluateCompoundBody(evaluator, &working_state, eval_context, plan.body, &buffers);
+    if (plan.target == .subshell and
+        (eval_context.command_substitution_depth == 0 or eval_context.subshell_depth != 0))
+    {
+        try appendSubshellExitTrap(
+            evaluator,
+            &working_state,
+            eval_context,
+            &result,
+            &buffers,
+        );
+    }
     if (plan.target.isIsolatedFromParent()) {
         result.status = result.control_flow.status(result.status);
         result.control_flow = .normal;
@@ -3900,6 +3911,40 @@ fn workingStateForCompound(
         error.OutOfMemory => return error.OutOfMemory,
         error.ReadonlyVariable => unreachable,
     };
+}
+
+fn appendSubshellExitTrap(
+    evaluator: *Evaluator,
+    shell_state: *state.ShellState,
+    eval_context: context.EvalContext,
+    result: *SimpleEvalResult,
+    buffers: *EvaluationBuffers,
+) EvalError!void {
+    shell_state.validate();
+    eval_context.validate();
+    std.debug.assert(eval_context.target == .subshell);
+    result.control_flow.validate();
+    if (shell_state.getTrapForSignal(.EXIT) == null) return;
+
+    const visible_status = result.control_flow.status(result.status);
+    shell_state.last_status = visible_status;
+    try shell_state.appendPendingTrap(.EXIT);
+
+    var parser_resolver = ParserTrapActionResolver.init(evaluator);
+    parser_resolver.features = evaluator.features;
+    parser_resolver.arg_zero = evaluator.arg_zero;
+    parser_resolver.expand_aliases = shell_state.shopts.enabled(.expand_aliases);
+    var trap_outcome = (try executePendingTraps(
+        evaluator,
+        shell_state,
+        eval_context,
+        parser_resolver.resolver(),
+    )) orelse return;
+    defer trap_outcome.deinit();
+
+    try appendOutcomeBuffers(buffers, trap_outcome);
+    try applyOutcomeToWorkingState(shell_state, &trap_outcome, trap_outcome.state_delta.target);
+    result.* = .{ .status = trap_outcome.status, .control_flow = trap_outcome.control_flow };
 }
 
 fn evaluateCompoundBody(

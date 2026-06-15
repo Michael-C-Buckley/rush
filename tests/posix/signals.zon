@@ -44,6 +44,20 @@
             .status = 0,
         },
         .{
+            .name = "subshell EXIT trap runs before the subshell status is observed",
+            .script =
+            \\( trap 'printf "trap:%s\n" "$?"' EXIT; exit 3 )
+            \\printf 'status:%s\n' "$?"
+            ,
+            .stdout =
+            \\trap:3
+            \\status:3
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "trap dash resets the EXIT trap to its default action",
             .script =
             \\trap 'printf "%s\n" bad' 0

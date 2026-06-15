@@ -663,12 +663,19 @@ fn runSemanticLoweredProgram(
         const statement_end = semanticStatementSourceEnd(program, statement_index, script.len);
         const statement_script = std.mem.trim(u8, script[statement.span.start..statement_end], " \t\r\n;");
         std.debug.assert(statement_script.len != 0);
+        var statement_context = eval_context;
+        if (statement_index + 1 < program.statements.len) {
+            switch (program.statements[statement_index + 1].op_before) {
+                .sequence => {},
+                .and_if, .or_if => statement_context = statement_context.ignoreErrexit(),
+            }
+        }
         syncSemanticStdinScriptOffset(stdin_script_file, stdin_script_source_offset, script, statement_end);
         var body = (try resolver.resolve(
             allocator,
             statement_script,
             .TERM,
-            eval_context,
+            statement_context,
             shell_state,
         )) orelse return semanticUnsupported(allocator, "semantic parser lowering returned no body");
         defer body.deinit();
@@ -692,7 +699,7 @@ fn runSemanticLoweredProgram(
             break :blk shell.eval.evaluatePipelinePlan(
                 evaluator,
                 shell_state,
-                eval_context,
+                statement_context,
                 background_plan.plan,
             ) catch |err| switch (err) {
                 error.Unimplemented => return semanticUnsupported(
@@ -701,7 +708,12 @@ fn runSemanticLoweredProgram(
                 ),
                 else => |e| return e,
             };
-        } else evaluateSemanticComparisonBody(evaluator, shell_state, eval_context, body) catch |err| switch (err) {
+        } else evaluateSemanticComparisonBody(
+            evaluator,
+            shell_state,
+            statement_context,
+            body,
+        ) catch |err| switch (err) {
             error.Unimplemented => return semanticUnsupported(
                 allocator,
                 "semantic evaluator reported an unimplemented command shape",
