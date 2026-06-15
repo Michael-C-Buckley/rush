@@ -1,0 +1,25 @@
+.{
+    .name = "Bash aliases",
+    .mode = .bash,
+    .cases = .{
+        .{
+            .name = "expand_aliases shopt controls non-interactive alias expansion",
+            .script =
+            \\shopt -u expand_aliases
+            \\alias hit='printf "%s\n" disabled'
+            \\hit 2>/dev/null
+            \\printf '<%s>\n' "$?"
+            \\shopt -s expand_aliases
+            \\alias hit='printf "%s\n" enabled'
+            \\hit
+            ,
+            .stdout =
+            \\<127>
+            \\enabled
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+    },
+}
