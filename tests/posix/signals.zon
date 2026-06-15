@@ -1,5 +1,5 @@
 .{
-    .name = "2.11 Signals and Error Handling",
+    .name = "2.12 Signals and Error Handling",
     .mode = .posix,
     .cases = .{
         .{

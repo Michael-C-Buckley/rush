@@ -1,5 +1,5 @@
 .{
-    .name = "2.12 Shell Execution Environment",
+    .name = "2.13 Shell Execution Environment",
     .mode = .posix,
     .cases = .{
         .{

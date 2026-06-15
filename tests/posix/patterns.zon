@@ -1,5 +1,5 @@
 .{
-    .name = "2.13 Pattern Matching Notation",
+    .name = "2.14 Pattern Matching Notation",
     .mode = .posix,
     .cases = .{
         .{
