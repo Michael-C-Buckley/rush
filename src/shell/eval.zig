@@ -859,16 +859,15 @@ const TrapActionLowerer = struct {
         const arms = try self.allocator.alloc(command_plan.CaseArm, command.arms.len);
         for (command.arms, 0..) |arm, arm_index| {
             const patterns = try self.allocator.alloc([]const u8, arm.patterns.len);
-            for (arm.patterns, 0..) |pattern, pattern_index| patterns[pattern_index] = try self.expandScalar(
-                pattern.raw,
-                target,
-            );
+            for (arm.patterns, 0..) |pattern, pattern_index| {
+                patterns[pattern_index] = try self.expandCasePattern(pattern.raw, target);
+            }
             const body_result = try self.lowerStatementListSource(arm.body, target);
             const body = switch (body_result) {
                 .failure => |trap_failure| return .{ .failure = trap_failure },
                 .list => |list| list,
             };
-            arms[arm_index] = .{ .patterns = patterns, .body = body };
+            arms[arm_index] = .{ .patterns = patterns, .body = body, .fallthrough = arm.fallthrough };
         }
         const word = try self.expandScalar(command.word.raw, target);
         const plan: command_plan.CompoundCommandPlan = .{
@@ -1277,6 +1276,35 @@ const TrapActionLowerer = struct {
         });
         defer expansion.deinit();
         return expansion.expandWordScalar(raw) catch |err| {
+            if (expansion.classifyError(err)) |expansion_failure| return std.fmt.allocPrint(
+                self.allocator,
+                "{s}: {s}",
+                .{ expansion_failure.name, expansion_failure.message },
+            );
+            return err;
+        };
+    }
+
+    fn expandCasePattern(self: *TrapActionLowerer, raw: []const u8, target: context.ExecutionTarget) ![]const u8 {
+        const expansion_target = self.expansionTarget(target);
+        const expansion_eval_context = self.eval_context.withTarget(expansion_target);
+        var process_id_buffer: [32]u8 = undefined;
+        var last_background_pid_buffer: [32]u8 = undefined;
+        var command_substitutions: TrapActionExpansionCommandSubstitutions = .{};
+        command_substitutions.init(self, expansion_eval_context);
+        defer command_substitutions.deinit();
+        var expansion = shell_expand.ShellExpansion.init(self.allocator, .{
+            .shell_state = self.shell_state,
+            .eval_context = expansion_eval_context,
+            .fs_port = self.owner.evaluator.fs_port,
+            .features = self.owner.features,
+            .command_substitution = command_substitutions.commandSubstitution(),
+            .arg_zero = self.owner.arg_zero,
+            .process_id = self.processIdText(&process_id_buffer),
+            .last_background_pid = self.lastBackgroundPidText(&last_background_pid_buffer),
+        });
+        defer expansion.deinit();
+        return expansion.expandCasePattern(raw) catch |err| {
             if (expansion.classifyError(err)) |expansion_failure| return std.fmt.allocPrint(
                 self.allocator,
                 "{s}: {s}",
@@ -4175,18 +4203,32 @@ fn evaluateCaseClause(
     buffers: *EvaluationBuffers,
 ) EvalError!SimpleEvalResult {
     case_plan.validate();
+    var matched = false;
+    var status: outcome.ExitStatus = 0;
+    var control_flow: outcome.ControlFlow = .normal;
     for (case_plan.arms) |arm| {
-        for (arm.patterns) |pattern| {
-            if (casePatternMatches(pattern, case_plan.word)) return evaluateStatementList(
+        if (!matched) {
+            for (arm.patterns) |pattern| {
+                if (casePatternMatches(pattern, case_plan.word)) {
+                    matched = true;
+                    break;
+                }
+            }
+        }
+        if (matched) {
+            const result = try evaluateStatementList(
                 evaluator,
                 shell_state,
                 eval_context,
                 arm.body,
                 buffers,
             );
+            status = result.status;
+            control_flow = result.control_flow;
+            if (control_flow != .normal or !arm.fallthrough) return .{ .status = status, .control_flow = control_flow };
         }
     }
-    return normalEvaluation(0);
+    return if (matched) .{ .status = status, .control_flow = control_flow } else normalEvaluation(0);
 }
 
 const LoopControlAction = union(enum) {
@@ -12072,6 +12114,29 @@ test "semantic evaluator evaluates compound if loop for and case forms" {
     try std.testing.expectEqual(@as(outcome.ExitStatus, 0), case_result.status);
     try case_result.commitDelta(&shell_state, .current_shell);
     try std.testing.expectEqualStrings("matched", shell_state.getVariable("CASE_RESULT").?.value);
+
+    const fallthrough_first_assignment = [_]command_plan.Assignment{.{ .name = "CASE_FALLTHROUGH_FIRST", .value = "yes" }};
+    const fallthrough_second_assignment = [_]command_plan.Assignment{.{ .name = "CASE_FALLTHROUGH_SECOND", .value = "yes" }};
+    const fallthrough_first_body = [_]command_plan.CommandPlan{command_plan.classifyExpandedSimpleCommand(
+        .{ .command = .{ .assignments = &fallthrough_first_assignment } },
+    )};
+    const fallthrough_second_body = [_]command_plan.CommandPlan{command_plan.classifyExpandedSimpleCommand(
+        .{ .command = .{ .assignments = &fallthrough_second_assignment } },
+    )};
+    const fallthrough_arms = [_]command_plan.CaseArm{
+        .{ .patterns = &[_][]const u8{"fall"}, .body = .{ .commands = &fallthrough_first_body }, .fallthrough = true },
+        .{ .patterns = &[_][]const u8{"no-match"}, .body = .{ .commands = &fallthrough_second_body } },
+    };
+    const fallthrough_plan: command_plan.CompoundCommandPlan = .{
+        .target = .current_shell,
+        .body = .{ .case_clause = .{ .word = "fall", .arms = &fallthrough_arms } },
+    };
+    var fallthrough_result = try evaluateCompoundPlan(&evaluator, &shell_state, eval_context, fallthrough_plan);
+    defer fallthrough_result.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 0), fallthrough_result.status);
+    try fallthrough_result.commitDelta(&shell_state, .current_shell);
+    try std.testing.expectEqualStrings("yes", shell_state.getVariable("CASE_FALLTHROUGH_FIRST").?.value);
+    try std.testing.expectEqualStrings("yes", shell_state.getVariable("CASE_FALLTHROUGH_SECOND").?.value);
 }
 
 test "semantic evaluator applies compound command commit and discard boundaries" {

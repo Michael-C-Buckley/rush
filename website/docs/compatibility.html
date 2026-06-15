@@ -154,5 +154,16 @@
 <span class="cmd">printf</span> <span class="str">'after\n'</span></pre>
 
   <p>Rush reports the error and does not print <code>after</code>. This matches dash and modern Bash POSIX mode. Bash 3.2 POSIX mode reports the error but continues executing the script.</p>
+
+  <h4 id="case-fall-through-posix"><a href="#case-fall-through-posix">POSIX case fall-through with ;&</a></h4>
+
+  <p>Rush accepts the POSIX <code>;&amp;</code> case clause terminator, which executes the matching clause and then continues by executing subsequent clause bodies without testing their patterns until a <code>;;</code> terminator or the end of the <code>case</code> command.</p>
+
+  <pre><span class="kw">case</span> x <span class="kw">in</span>
+  x) <span class="cmd">printf</span> <span class="str">'one\n'</span> ;&amp;
+  y) <span class="cmd">printf</span> <span class="str">'two\n'</span> ;;
+<span class="kw">esac</span></pre>
+
+  <p>Rush and modern Bash POSIX mode print both lines. Bash 3.2 POSIX mode rejects <code>;&amp;</code> as a syntax error.</p>
 </body>
 </html>

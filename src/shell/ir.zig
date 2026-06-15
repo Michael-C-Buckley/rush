@@ -78,6 +78,7 @@ pub const ForCommand = struct {
 pub const CaseArm = struct {
     patterns: []WordRef,
     body: []const u8,
+    fallthrough: bool = false,
 };
 
 pub const CaseCommand = struct {
@@ -1077,7 +1078,7 @@ fn lowerCaseCommand(allocator: std.mem.Allocator, parsed: parser.ParseResult, no
 
         const body_start = if (pattern_end) |token_index| token_index + 1 else child_node.token_end;
         const body_end = if (body_start < child_node.token_end and
-            parsed.tokens[child_node.token_end - 1].kind == .dsemicolon)
+            caseArmHasTerminator(parsed.tokens[child_node.token_end - 1].kind))
             child_node.token_end - 1
         else
             child_node.token_end;
@@ -1085,6 +1086,8 @@ fn lowerCaseCommand(allocator: std.mem.Allocator, parsed: parser.ParseResult, no
         try arms.append(allocator, .{
             .patterns = try patterns.toOwnedSlice(allocator),
             .body = spanSlice(parsed, body_start, body_end),
+            .fallthrough = child_node.token_end > child_node.token_start and
+                parsed.tokens[child_node.token_end - 1].kind == .semicolon_amp,
         });
     }
 
@@ -1100,6 +1103,10 @@ fn lowerCaseCommand(allocator: std.mem.Allocator, parsed: parser.ParseResult, no
         .arms = try arms.toOwnedSlice(allocator),
         .redirections = try redirections.toOwnedSlice(allocator),
     };
+}
+
+fn caseArmHasTerminator(kind: parser.TokenKind) bool {
+    return kind == .dsemicolon or kind == .semicolon_amp;
 }
 
 fn lowerForCommand(allocator: std.mem.Allocator, parsed: parser.ParseResult, node: parser.Node) !ForCommand {

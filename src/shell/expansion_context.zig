@@ -138,6 +138,14 @@ pub const ShellExpansion = struct {
         return text;
     }
 
+    pub fn expandCasePattern(self: *ShellExpansion, raw: []const u8) ![]const u8 {
+        self.validateExpansionInput(raw);
+        const text = try expansion.expandCasePattern(self.allocator, raw, self.expandOptions());
+        errdefer self.allocator.free(text);
+        assertExpandedField(text);
+        return text;
+    }
+
     pub fn expandAssignmentWordScalar(self: *ShellExpansion, raw: []const u8) ![]const u8 {
         self.validateExpansionInput(raw);
         const text = try expansion.expandAssignmentWordScalar(self.allocator, raw, self.expandOptions());

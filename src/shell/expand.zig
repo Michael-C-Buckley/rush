@@ -669,6 +669,45 @@ pub fn renderWordParts(allocator: std.mem.Allocator, word: WordParts, options: O
     return output.toOwnedSlice(allocator);
 }
 
+pub fn expandCasePattern(allocator: std.mem.Allocator, raw: []const u8, options: Options) anyerror![]const u8 {
+    const tilde_expanded = try expandTilde(allocator, raw, options.env);
+    defer allocator.free(tilde_expanded);
+
+    var parts = try parseWordParts(allocator, tilde_expanded);
+    defer parts.deinit();
+
+    var output: std.ArrayList(u8) = .empty;
+    errdefer output.deinit(allocator);
+
+    for (parts.parts) |part| {
+        const rendered = try renderPart(allocator, parts.raw, part, options);
+        defer allocator.free(rendered);
+
+        switch (part.kind) {
+            .unquoted, .parameter, .arithmetic, .command_substitution => try output.appendSlice(allocator, rendered),
+            .escaped, .single_quoted, .dollar_single_quoted, .double_quoted => {
+                try appendQuotedCasePatternText(allocator, &output, rendered);
+            },
+        }
+    }
+
+    return output.toOwnedSlice(allocator);
+}
+
+fn appendQuotedCasePatternText(allocator: std.mem.Allocator, out: *std.ArrayList(u8), text: []const u8) !void {
+    for (text) |byte| {
+        if (casePatternByteNeedsQuoting(byte)) try out.append(allocator, '\\');
+        try out.append(allocator, byte);
+    }
+}
+
+fn casePatternByteNeedsQuoting(byte: u8) bool {
+    return switch (byte) {
+        '*', '?', '[', '\\' => true,
+        else => false,
+    };
+}
+
 fn renderPart(allocator: std.mem.Allocator, raw: []const u8, part: WordPart, options: Options) anyerror![]const u8 {
     return switch (part.kind) {
         .unquoted, .single_quoted => allocator.dupe(u8, part.value(raw)),
@@ -7040,6 +7079,7 @@ fn testLookup(_: ?*const anyopaque, name: []const u8) ?[]const u8 {
     if (std.mem.eql(u8, name, "ESC_AMP_REPL")) return "\\&X";
     if (std.mem.eql(u8, name, "BRACED")) return "ab}cd";
     if (std.mem.eql(u8, name, "GLOBBY")) return "rush-quoted-glob-?.tmp";
+    if (std.mem.eql(u8, name, "STAR")) return "*";
     return null;
 }
 
@@ -7229,6 +7269,30 @@ test "expansion phases include tilde parameter and quote removal" {
     defer std.testing.allocator.free(expanded);
 
     try std.testing.expectEqualStrings("/home/rush/src/rush-user/literal $USER/x", expanded);
+}
+
+test "case pattern expansion preserves quoted pattern characters" {
+    const literal_star = try expandCasePattern(std.testing.allocator, "\"*\"", .{});
+    defer std.testing.allocator.free(literal_star);
+    try std.testing.expectEqualStrings("\\*", literal_star);
+
+    const escaped_question = try expandCasePattern(std.testing.allocator, "\\?", .{});
+    defer std.testing.allocator.free(escaped_question);
+    try std.testing.expectEqualStrings("\\?", escaped_question);
+
+    const unquoted_glob = try expandCasePattern(std.testing.allocator, "a*", .{});
+    defer std.testing.allocator.free(unquoted_glob);
+    try std.testing.expectEqualStrings("a*", unquoted_glob);
+}
+
+test "case pattern expansion treats quoted parameter values literally" {
+    const quoted = try expandCasePattern(std.testing.allocator, "\"$STAR\"", .{ .env = test_env });
+    defer std.testing.allocator.free(quoted);
+    try std.testing.expectEqualStrings("\\*", quoted);
+
+    const unquoted = try expandCasePattern(std.testing.allocator, "$STAR", .{ .env = test_env });
+    defer std.testing.allocator.free(unquoted);
+    try std.testing.expectEqualStrings("*", unquoted);
 }
 
 test "parameter expansion supports braced names and missing values" {

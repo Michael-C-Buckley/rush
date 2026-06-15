@@ -158,6 +158,7 @@ pub const ForPlan = struct {
 pub const CaseArm = struct {
     patterns: []const []const u8,
     body: StatementList,
+    fallthrough: bool = false,
 
     pub fn validate(self: CaseArm) void {
         std.debug.assert(self.patterns.len != 0);
@@ -1165,7 +1166,7 @@ fn cloneCaseArm(allocator: std.mem.Allocator, arm: CaseArm) std.mem.Allocator.Er
     }
     const body = try cloneStatementList(allocator, arm.body);
     errdefer freeStatementList(allocator, body);
-    return .{ .patterns = patterns, .body = body };
+    return .{ .patterns = patterns, .body = body, .fallthrough = arm.fallthrough };
 }
 
 fn freeCaseArm(allocator: std.mem.Allocator, arm: CaseArm) void {
