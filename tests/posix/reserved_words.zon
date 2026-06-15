@@ -48,10 +48,13 @@
         .{
             .name = "reserved words are ordinary words after a command name",
             .script =
-            \\printf '<%s>\n' if then else fi do done case esac while until for
+            \\printf '<%s>\n' ! '{' '}' in then else fi do done case esac while until for if
             ,
             .stdout =
-            \\<if>
+            \\<!>
+            \\<{>
+            \\<}>
+            \\<in>
             \\<then>
             \\<else>
             \\<fi>
@@ -62,6 +65,7 @@
             \\<while>
             \\<until>
             \\<for>
+            \\<if>
             \\
             ,
             .stderr = "",
@@ -77,6 +81,88 @@
             ,
             .stdout =
             \\yes
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "bang is recognized as a reserved word in command position",
+            .script =
+            \\! false
+            \\printf '<%s>\n' "$?"
+            \\! true
+            \\printf '<%s>\n' "$?"
+            ,
+            .stdout =
+            \\<0>
+            \\<1>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "braces are recognized as reserved words in grouping positions",
+            .script =
+            \\{ printf '<brace>\n'; }
+            ,
+            .stdout =
+            \\<brace>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "case recognizes in as the third word and ordinary text in patterns",
+            .script =
+            \\case in in
+            \\    in) printf '<in>\n' ;;
+            \\esac
+            ,
+            .stdout =
+            \\<in>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "for recognizes in as the third word",
+            .script =
+            \\for x in a b; do printf '<%s>\n' "$x"; done
+            ,
+            .stdout =
+            \\<a>
+            \\<b>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "for recognizes do as the third word when in is omitted",
+            .script =
+            \\set -- a b
+            \\for x do printf '<%s>\n' "$x"; done
+            ,
+            .stdout =
+            \\<a>
+            \\<b>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "reserved words are recognized after other reserved words",
+            .script =
+            \\if false; then :; elif true; then while false; do :; done; else :; fi
+            \\printf '<%s>\n' "$?"
+            ,
+            .stdout =
+            \\<0>
             \\
             ,
             .stderr = "",
