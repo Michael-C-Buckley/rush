@@ -36,6 +36,26 @@ pub const ShellOption = enum {
     xtrace,
 };
 
+pub const ShellShopt = enum {
+    expand_aliases,
+};
+
+pub const ShellShopts = struct {
+    expand_aliases: bool = true,
+
+    pub fn set(self: *ShellShopts, option: ShellShopt, value: bool) void {
+        switch (option) {
+            .expand_aliases => self.expand_aliases = value,
+        }
+    }
+
+    pub fn enabled(self: ShellShopts, option: ShellShopt) bool {
+        return switch (option) {
+            .expand_aliases => self.expand_aliases,
+        };
+    }
+};
+
 pub const ShellOptions = struct {
     allexport: bool = false,
     emacs: bool = true,
@@ -413,6 +433,7 @@ pub const ShellState = struct {
     traps: std.StringHashMapUnmanaged(Trap) = .empty,
     positionals: std.ArrayList([]const u8) = .empty,
     options: ShellOptions = .{},
+    shopts: ShellShopts = .{},
     logical_cwd: []const u8 = "",
     last_status: ExitStatus = 0,
     last_pipeline_statuses: std.ArrayList(ExitStatus) = .empty,
@@ -491,6 +512,7 @@ pub const ShellState = struct {
 
         cloned.scope = self.scope;
         cloned.options = self.options;
+        cloned.shopts = self.shopts;
         cloned.last_status = self.last_status;
         cloned.pending_exit = self.pending_exit;
         cloned.trap_execution = self.trap_execution;
@@ -1292,6 +1314,18 @@ test "ShellOptions toggles every modeled option deterministically" {
         try std.testing.expect(shell_options.enabled(option));
         shell_options.set(option, false);
         try std.testing.expect(!shell_options.enabled(option));
+    }
+}
+
+test "ShellShopts toggles every modeled shopt deterministically" {
+    const shopts = [_]ShellShopt{.expand_aliases};
+
+    var shell_shopts: ShellShopts = .{};
+    for (shopts) |shopt| {
+        shell_shopts.set(shopt, false);
+        try std.testing.expect(!shell_shopts.enabled(shopt));
+        shell_shopts.set(shopt, true);
+        try std.testing.expect(shell_shopts.enabled(shopt));
     }
 }
 

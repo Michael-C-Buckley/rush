@@ -47,6 +47,11 @@ pub const OptionChange = struct {
     enabled: bool,
 };
 
+pub const ShoptChange = struct {
+    option: state.ShellShopt,
+    enabled: bool,
+};
+
 pub const JobMarkerMutation = struct {
     current_job_id: ?usize = null,
     previous_job_id: ?usize = null,
@@ -70,6 +75,7 @@ pub const StateDelta = struct {
     function_sets: std.ArrayList(command_plan.FunctionDefinition) = .empty,
     function_unsets: std.ArrayList([]const u8) = .empty,
     option_changes: std.ArrayList(OptionChange) = .empty,
+    shopt_changes: std.ArrayList(ShoptChange) = .empty,
     alias_sets: std.ArrayList(NameValueMutation) = .empty,
     alias_unsets: std.ArrayList([]const u8) = .empty,
     clear_aliases: bool = false,
@@ -114,6 +120,7 @@ pub const StateDelta = struct {
         for (self.function_unsets.items) |name| self.allocator.free(name);
         self.function_unsets.deinit(self.allocator);
         self.option_changes.deinit(self.allocator);
+        self.shopt_changes.deinit(self.allocator);
 
         for (self.alias_sets.items) |mutation| {
             self.allocator.free(mutation.name);
@@ -174,6 +181,9 @@ pub const StateDelta = struct {
         for (self.option_changes.items) |change| {
             try cloned.setOption(change.option, change.enabled);
         }
+        for (self.shopt_changes.items) |change| {
+            try cloned.setShopt(change.option, change.enabled);
+        }
         for (self.alias_sets.items) |mutation| try cloned.setAlias(mutation.name, mutation.value);
         for (self.alias_unsets.items) |name| try cloned.unsetAlias(name);
         if (self.clear_aliases) cloned.clearAliases();
@@ -207,6 +217,7 @@ pub const StateDelta = struct {
             self.function_sets.items.len == 0 and
             self.function_unsets.items.len == 0 and
             self.option_changes.items.len == 0 and
+            self.shopt_changes.items.len == 0 and
             self.alias_sets.items.len == 0 and
             self.alias_unsets.items.len == 0 and
             !self.clear_aliases and
@@ -347,6 +358,17 @@ pub const StateDelta = struct {
             }
         }
         try self.option_changes.append(self.allocator, .{ .option = option, .enabled = enabled });
+    }
+
+    pub fn setShopt(self: *StateDelta, option: state.ShellShopt, enabled: bool) !void {
+        self.assertPending();
+        for (self.shopt_changes.items) |*change| {
+            if (change.option == option) {
+                change.enabled = enabled;
+                return;
+            }
+        }
+        try self.shopt_changes.append(self.allocator, .{ .option = option, .enabled = enabled });
     }
 
     pub fn setAlias(self: *StateDelta, name: []const u8, value: []const u8) !void {
@@ -631,6 +653,9 @@ pub const StateDelta = struct {
         for (self.function_unsets.items) |name| shell_state.unsetFunction(name);
         for (self.option_changes.items) |change| {
             shell_state.options.set(change.option, change.enabled);
+        }
+        for (self.shopt_changes.items) |change| {
+            shell_state.shopts.set(change.option, change.enabled);
         }
         if (self.clear_aliases) shell_state.clearAliases();
         for (self.alias_sets.items) |mutation| try shell_state.setAlias(mutation.name, mutation.value);

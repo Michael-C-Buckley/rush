@@ -3941,6 +3941,7 @@ fn evaluateSourceStatement(
     var parser_resolver = ParserTrapActionResolver.init(evaluator);
     parser_resolver.features = evaluator.features;
     parser_resolver.arg_zero = evaluator.arg_zero;
+    parser_resolver.expand_aliases = shell_state.shopts.enabled(.expand_aliases);
     const resolver = parser_resolver.resolver();
     var body = (resolver.resolve(
         evaluator.allocator,
@@ -4148,6 +4149,7 @@ fn evaluateStatementListSource(
     var parser_resolver = ParserTrapActionResolver.init(evaluator);
     parser_resolver.features = evaluator.features;
     parser_resolver.arg_zero = evaluator.arg_zero;
+    parser_resolver.expand_aliases = shell_state.shopts.enabled(.expand_aliases);
     const resolver = parser_resolver.resolver();
     var body = (resolver.resolve(
         evaluator.allocator,
@@ -4597,6 +4599,7 @@ fn appendFunctionFrameDelta(
     }
 
     try appendOptionDiff(before.options, after.options, state_delta);
+    try appendShoptDiff(before.shopts, after.shopts, state_delta);
     try appendAliasDiff(before, after, state_delta);
     try appendAbbreviationDiff(before, after, state_delta);
     try appendTrapDiff(before, after, state_delta);
@@ -4657,6 +4660,7 @@ fn appendShellStateDiff(
     }
 
     try appendOptionDiff(before.options, after.options, state_delta);
+    try appendShoptDiff(before.shopts, after.shopts, state_delta);
     try appendAliasDiff(before, after, state_delta);
     try appendAbbreviationDiff(before, after, state_delta);
     try appendTrapDiff(before, after, state_delta);
@@ -4702,6 +4706,14 @@ fn appendOptionDiff(before: state.ShellOptions, after: state.ShellOptions, state
     for (options) |option| {
         const enabled = after.enabled(option);
         if (before.enabled(option) != enabled) try state_delta.setOption(option, enabled);
+    }
+}
+
+fn appendShoptDiff(before: state.ShellShopts, after: state.ShellShopts, state_delta: *delta.StateDelta) !void {
+    const shopts = [_]state.ShellShopt{.expand_aliases};
+    for (shopts) |shopt| {
+        const enabled = after.enabled(shopt);
+        if (before.enabled(shopt) != enabled) try state_delta.setShopt(shopt, enabled);
     }
 }
 
@@ -4962,7 +4974,11 @@ fn runExternalWithPipelineInput(
 }
 
 fn evaluateNotFound(not_found: command_plan.NotFound, buffers: *EvaluationBuffers) EvalError!outcome.ExitStatus {
-    std.debug.assert(not_found.name.len != 0);
+    if (not_found.name.len == 0) {
+        try buffers.stderr.appendSlice(buffers.allocator, ": command not found\n");
+        try buffers.diagnostics.append(buffers.allocator, try buffers.allocator.dupe(u8, ": command not found"));
+        return 127;
+    }
     try buffers.addBuiltinDiagnostic(not_found.name, "command not found");
     return 127;
 }
@@ -5902,11 +5918,10 @@ fn evaluateCommandBuiltin(
     std.debug.assert(argv.len != 0);
     std.debug.assert(std.mem.eql(u8, argv[0], "command"));
     if (argv.len == 3 and std.mem.eql(u8, argv[1], "-v")) {
-        if (evaluator.builtinDefinition(argv[2]) != null) {
-            try buffers.stdout.print(buffers.allocator, "{s}\n", .{argv[2]});
-            return normalEvaluation(0);
-        }
-        return normalEvaluation(1);
+        return evaluateCommandLookup(evaluator, shell_state, plan, argv[2], .terse, buffers);
+    }
+    if (argv.len == 3 and std.mem.eql(u8, argv[1], "-V")) {
+        return evaluateCommandLookup(evaluator, shell_state, plan, argv[2], .verbose, buffers);
     }
     if (argv.len == 1) return normalEvaluation(0);
     if (std.mem.startsWith(u8, argv[1], "-") and !std.mem.eql(u8, argv[1], "-")) {
@@ -5928,6 +5943,50 @@ fn evaluateCommandBuiltin(
     });
     var dispatch_state = shell_state;
     return evaluateSimpleCommand(evaluator, &dispatch_state, eval_context, target_plan, state_delta, buffers);
+}
+
+const CommandLookupFormat = enum { terse, verbose };
+
+fn evaluateCommandLookup(
+    evaluator: *Evaluator,
+    shell_state: state.ShellState,
+    plan: command_plan.CommandPlan,
+    name: []const u8,
+    format: CommandLookupFormat,
+    buffers: *EvaluationBuffers,
+) EvalError!SimpleEvalResult {
+    if (evaluator.builtinDefinition(name)) |definition| {
+        switch (format) {
+            .terse => try buffers.stdout.print(buffers.allocator, "{s}\n", .{name}),
+            .verbose => try buffers.stdout.print(buffers.allocator, "{s} is a shell builtin\n", .{definition.name}),
+        }
+        return normalEvaluation(0);
+    }
+
+    if (isShellName(name) and shell_state.getFunction(name) != null) {
+        switch (format) {
+            .terse => try buffers.stdout.print(buffers.allocator, "{s}\n", .{name}),
+            .verbose => try buffers.stdout.print(buffers.allocator, "{s} is a shell function\n", .{name}),
+        }
+        return normalEvaluation(0);
+    }
+
+    const command: command_plan.ExpandedSimpleCommand = .{
+        .assignments = plan.assignments,
+        .argv = &.{name},
+        .last_command_substitution_status = plan.last_command_substitution_status,
+    };
+    const external = try resolveExternalForEvaluation(evaluator.allocator, evaluator.fs_port, shell_state, command);
+    defer if (external) |resolution| evaluator.allocator.free(resolution.path);
+    if (external) |resolution| {
+        switch (format) {
+            .terse => try buffers.stdout.print(buffers.allocator, "{s}\n", .{resolution.path}),
+            .verbose => try buffers.stdout.print(buffers.allocator, "{s} is {s}\n", .{ name, resolution.path }),
+        }
+        return normalEvaluation(0);
+    }
+
+    return normalEvaluation(1);
 }
 
 fn resolveExternalForEvaluation(
@@ -8868,6 +8927,7 @@ fn assertCommandDeltaCompatible(plan: command_plan.CommandPlan, state_delta: del
             std.debug.assert(state_delta.function_sets.items.len == 0);
             std.debug.assert(state_delta.function_unsets.items.len == 0);
             std.debug.assert(state_delta.option_changes.items.len == 0);
+            std.debug.assert(state_delta.shopt_changes.items.len == 0);
             std.debug.assert(state_delta.alias_sets.items.len == 0);
             std.debug.assert(state_delta.alias_unsets.items.len == 0);
             std.debug.assert(!state_delta.clear_aliases);
@@ -8908,6 +8968,7 @@ fn assertCommandDeltaCompatible(plan: command_plan.CommandPlan, state_delta: del
     std.debug.assert(state_delta.function_sets.items.len == 0);
     std.debug.assert(state_delta.function_unsets.items.len == 0);
     std.debug.assert(state_delta.option_changes.items.len == 0);
+    std.debug.assert(state_delta.shopt_changes.items.len == 0);
     std.debug.assert(state_delta.alias_sets.items.len == 0);
     std.debug.assert(state_delta.alias_unsets.items.len == 0);
     std.debug.assert(!state_delta.clear_aliases);
@@ -9052,6 +9113,100 @@ test "semantic evaluator dispatches source as a compat extension builtin" {
     try std.testing.expectEqualStrings("ok", shell_state.getVariable("SOURCED_VALUE").?.value);
 }
 
+test "semantic evaluator dispatches shopt as a compat extension builtin" {
+    var shell_state = state.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    var evaluator = Evaluator.init(std.testing.allocator);
+    const eval_context = context.EvalContext.forTarget(.current_shell);
+
+    const query_default = command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{
+        "shopt",
+        "-q",
+        "expand_aliases",
+    } } });
+    var query_default_result = try evaluatePlan(&evaluator, &shell_state, eval_context, query_default);
+    defer query_default_result.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 0), query_default_result.status);
+
+    const unset = command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{
+        "shopt",
+        "-u",
+        "expand_aliases",
+    } } });
+    var unset_result = try evaluatePlan(&evaluator, &shell_state, eval_context, unset);
+    defer unset_result.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 0), unset_result.status);
+    try unset_result.commitDelta(&shell_state, .current_shell);
+    try std.testing.expect(!shell_state.shopts.enabled(.expand_aliases));
+
+    const query_unset = command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{
+        "shopt",
+        "-q",
+        "expand_aliases",
+    } } });
+    var query_unset_result = try evaluatePlan(&evaluator, &shell_state, eval_context, query_unset);
+    defer query_unset_result.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 1), query_unset_result.status);
+
+    const reusable = command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{
+        "shopt",
+        "-p",
+        "expand_aliases",
+    } } });
+    var reusable_result = try evaluatePlan(&evaluator, &shell_state, eval_context, reusable);
+    defer reusable_result.deinit();
+    try std.testing.expectEqualStrings("shopt -u expand_aliases\n", reusable_result.stdout.items);
+}
+
+test "shopt expand_aliases affects subsequently sourced text" {
+    const path = "rush-shopt-expand-aliases-test.tmp";
+    std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch |err| switch (err) {
+        error.FileNotFound => {},
+        else => return err,
+    };
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = path, .data = "say\n" });
+
+    var shell_state = state.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    try shell_state.setAlias("say", "echo alias-hit");
+    var evaluator = Evaluator.init(std.testing.allocator);
+    evaluator.io = std.testing.io;
+    const eval_context = context.EvalContext.forTarget(.current_shell);
+
+    const disable = command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{
+        "shopt",
+        "-u",
+        "expand_aliases",
+    } } });
+    var disable_result = try evaluatePlan(&evaluator, &shell_state, eval_context, disable);
+    defer disable_result.deinit();
+    try disable_result.commitDelta(&shell_state, .current_shell);
+
+    const source = command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{
+        "source",
+        path,
+    } } });
+    var disabled_source = try evaluatePlan(&evaluator, &shell_state, eval_context, source);
+    defer disabled_source.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 127), disabled_source.status);
+    try std.testing.expectEqualStrings("", disabled_source.stdout.items);
+
+    const enable = command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{
+        "shopt",
+        "-s",
+        "expand_aliases",
+    } } });
+    var enable_result = try evaluatePlan(&evaluator, &shell_state, eval_context, enable);
+    defer enable_result.deinit();
+    try enable_result.commitDelta(&shell_state, .current_shell);
+
+    var enabled_source = try evaluatePlan(&evaluator, &shell_state, eval_context, source);
+    defer enabled_source.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 0), enabled_source.status);
+    try std.testing.expectEqualStrings("alias-hit\n", enabled_source.stdout.items);
+}
+
 test "semantic evaluator dispatches type as a compat extension builtin" {
     var shell_state = state.ShellState.init(std.testing.allocator);
     defer shell_state.deinit();
@@ -9081,6 +9236,39 @@ test "semantic evaluator dispatches type as a compat extension builtin" {
     , result.stdout.items);
     try std.testing.expectEqualStrings("type: missing: not found\n", result.stderr.items);
     try std.testing.expectEqual(@as(usize, 1), result.diagnostics.items.len);
+}
+
+test "command builtin lookup reports shell functions" {
+    var shell_state = state.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    try shell_state.putFunctionName("helper");
+
+    var evaluator = Evaluator.init(std.testing.allocator);
+    const eval_context = context.EvalContext.forTarget(.current_shell);
+    const plan = command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{
+        "command",
+        "-v",
+        "helper",
+    } } });
+
+    var result = try evaluatePlan(&evaluator, &shell_state, eval_context, plan);
+    defer result.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("helper\n", result.stdout.items);
+}
+
+test "semantic evaluator treats empty command names as not found" {
+    var shell_state = state.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    var evaluator = Evaluator.init(std.testing.allocator);
+    const eval_context = context.EvalContext.forTarget(.current_shell);
+    const plan = command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{""} } });
+
+    var result = try evaluatePlan(&evaluator, &shell_state, eval_context, plan);
+    defer result.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 127), result.status);
+    try std.testing.expectEqualStrings(": command not found\n", result.stderr.items);
+    try std.testing.expectEqualStrings(": command not found", result.diagnostics.items[0].message);
 }
 
 test "type compat extension resolves external commands through evaluator runtime" {
