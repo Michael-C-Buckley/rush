@@ -525,10 +525,17 @@ pub const ExpandedSimpleCommand = struct {
     argv: []const []const u8 = &.{},
     redirections: redirection_plan.RedirectionPlan = .{},
     last_command_substitution_status: ?state.ExitStatus = null,
+    expansion_stderr: []const u8 = "",
+    expansion_diagnostics: []const []const u8 = &.{},
 
     pub fn validate(self: ExpandedSimpleCommand) void {
         for (self.assignments) |assignment| assignment.validate();
         validateRedirections(self.redirections);
+        std.debug.assert(std.mem.indexOfScalar(u8, self.expansion_stderr, 0) == null);
+        for (self.expansion_diagnostics) |message| {
+            std.debug.assert(message.len != 0);
+            std.debug.assert(std.mem.indexOfScalar(u8, message, 0) == null);
+        }
     }
 };
 
@@ -597,6 +604,8 @@ pub const CommandPlan = struct {
     argv: []const []const u8 = &.{},
     redirections: redirection_plan.RedirectionPlan = .{},
     last_command_substitution_status: ?state.ExitStatus = null,
+    expansion_stderr: []const u8 = "",
+    expansion_diagnostics: []const []const u8 = &.{},
     classification: Classification,
 
     pub fn classify(request: PlanRequest) CommandPlan {
@@ -623,6 +632,8 @@ pub const CommandPlan = struct {
             .argv = command.argv,
             .redirections = command.redirections,
             .last_command_substitution_status = command.last_command_substitution_status,
+            .expansion_stderr = command.expansion_stderr,
+            .expansion_diagnostics = command.expansion_diagnostics,
             .classification = classification,
         };
         plan.validate();
@@ -657,6 +668,11 @@ pub const CommandPlan = struct {
     pub fn validate(self: CommandPlan) void {
         for (self.assignments) |assignment| assignment.validate();
         validateRedirections(self.redirections);
+        std.debug.assert(std.mem.indexOfScalar(u8, self.expansion_stderr, 0) == null);
+        for (self.expansion_diagnostics) |message| {
+            std.debug.assert(message.len != 0);
+            std.debug.assert(std.mem.indexOfScalar(u8, message, 0) == null);
+        }
 
         switch (self.classification) {
             .empty => {
@@ -853,6 +869,10 @@ fn cloneCommandPlan(allocator: std.mem.Allocator, plan: CommandPlan) std.mem.All
     errdefer freeArgv(allocator, argv);
     var redirections = try plan.redirections.clone(allocator);
     errdefer redirections.deinit();
+    const expansion_stderr = try allocator.dupe(u8, plan.expansion_stderr);
+    errdefer allocator.free(expansion_stderr);
+    const expansion_diagnostics = try cloneArgv(allocator, plan.expansion_diagnostics);
+    errdefer freeArgv(allocator, expansion_diagnostics);
     const classification = try cloneClassification(allocator, plan.classification, argv);
     errdefer freeClassification(allocator, classification);
     const owned: CommandPlan = .{
@@ -861,6 +881,8 @@ fn cloneCommandPlan(allocator: std.mem.Allocator, plan: CommandPlan) std.mem.All
         .argv = argv,
         .redirections = redirections,
         .last_command_substitution_status = plan.last_command_substitution_status,
+        .expansion_stderr = expansion_stderr,
+        .expansion_diagnostics = expansion_diagnostics,
         .classification = classification,
     };
     owned.validate();
@@ -872,6 +894,8 @@ fn freeCommandPlan(allocator: std.mem.Allocator, plan: CommandPlan) void {
     freeArgv(allocator, plan.argv);
     var redirections = plan.redirections;
     redirections.deinit();
+    allocator.free(plan.expansion_stderr);
+    freeArgv(allocator, plan.expansion_diagnostics);
     freeClassification(allocator, plan.classification);
 }
 

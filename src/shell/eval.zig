@@ -1025,6 +1025,7 @@ const TrapActionLowerer = struct {
         };
         expanded.command.validate();
         expanded.command.last_command_substitution_status = command_substitutions.context.last_status;
+        try appendCommandSubstitutionExpansionOutput(self.allocator, &expanded.command, command_substitutions.context);
         const lookup = try self.lookupSnapshot(expanded.command);
         const plan_without_redirections = command_plan.classifyExpandedSimpleCommand(.{
             .command = expanded.command,
@@ -1046,6 +1047,33 @@ const TrapActionLowerer = struct {
         });
         plan.validate();
         return .{ .plan = plan };
+    }
+
+    fn appendCommandSubstitutionExpansionOutput(
+        allocator: std.mem.Allocator,
+        command: *command_plan.ExpandedSimpleCommand,
+        expansion_context: CommandSubstitutionExpansionContext,
+    ) !void {
+        command.validate();
+        expansion_context.validate();
+
+        if (expansion_context.stderr.items.len != 0) {
+            command.expansion_stderr = try allocator.dupe(u8, expansion_context.stderr.items);
+        }
+        if (expansion_context.diagnostics.items.len != 0) {
+            const diagnostics = try allocator.alloc([]const u8, expansion_context.diagnostics.items.len);
+            var diagnostics_owned: usize = 0;
+            errdefer {
+                for (diagnostics[0..diagnostics_owned]) |message| allocator.free(message);
+                allocator.free(diagnostics);
+            }
+            for (expansion_context.diagnostics.items, 0..) |diagnostic, index| {
+                diagnostics[index] = try allocator.dupe(u8, diagnostic.message);
+                diagnostics_owned += 1;
+            }
+            command.expansion_diagnostics = diagnostics;
+        }
+        command.validate();
     }
 
     fn lookupSnapshot(
@@ -1934,16 +1962,23 @@ fn evaluatePlanWithInput(
     var state_delta = delta.StateDelta.init(evaluator.allocator, effective_plan.target);
     errdefer state_delta.deinit();
     if (effective_plan.assignmentEffect() == .persistent) {
-        state_delta.appendPersistentCommandAssignments(shell_state.*, effective_plan.assignments) catch |err| switch (err) {
+        state_delta.appendPersistentCommandAssignments(
+            shell_state.*,
+            effective_plan.assignments,
+        ) catch |err| switch (err) {
             error.ReadonlyVariable => unreachable,
             error.OutOfMemory => return error.OutOfMemory,
         };
     }
 
-    var here_doc_input = if (semanticHereDocInput(effective_plan.redirections)) |bytes| EvaluationInput.init(bytes) else null;
+    var here_doc_input = if (semanticHereDocInput(effective_plan.redirections)) |bytes|
+        EvaluationInput.init(bytes)
+    else
+        null;
     var buffers = EvaluationBuffers.init(evaluator.allocator, if (here_doc_input) |*here_doc| here_doc else input);
     defer buffers.deinit();
     if (readonly_assignment) |name| try buffers.addBuiltinDiagnostic(name, "readonly variable");
+    try appendPlanExpansionOutput(effective_plan, &buffers);
 
     var applied_redirections: ?redirection_plan.AppliedRedirections = null;
     defer if (applied_redirections) |*applied| {
@@ -1981,7 +2016,14 @@ fn evaluatePlanWithInput(
         .special_builtin => eval_context.enterSpecialBuiltin(),
         else => eval_context,
     };
-    const result = try evaluateSimpleCommand(evaluator, shell_state, command_context, effective_plan, &state_delta, &buffers);
+    const result = try evaluateSimpleCommand(
+        evaluator,
+        shell_state,
+        command_context,
+        effective_plan,
+        &state_delta,
+        &buffers,
+    );
     switch (execRedirectionCommitMode(evaluator.*, eval_context, effective_plan, result)) {
         .none => {},
         .permanent => if (applied_redirections) |*applied| applied.commit(),
@@ -2106,6 +2148,14 @@ fn flushBuffersForRedirectionTargets(
     if (redirectionTargetsDescriptor(redirections, 2) and buffers.stderr.items.len != 0) {
         if (!writeAllDescriptor(2, buffers.stderr.items)) return error.Unimplemented;
         buffers.stderr.items.len = 0;
+    }
+}
+
+fn appendPlanExpansionOutput(plan: command_plan.CommandPlan, buffers: *EvaluationBuffers) !void {
+    plan.validate();
+    if (plan.expansion_stderr.len != 0) try buffers.stderr.appendSlice(buffers.allocator, plan.expansion_stderr);
+    for (plan.expansion_diagnostics) |message| {
+        try buffers.diagnostics.append(buffers.allocator, try buffers.allocator.dupe(u8, message));
     }
 }
 
@@ -2765,17 +2815,30 @@ fn runSemanticCommandSubstitution(
 
     expansion_context.last_status = result.status;
     expansion_context.last_control_flow = result.control_flow;
-    try expansion_context.stderr.appendSlice(expansion_context.evaluator.allocator, result.stderr.items);
-    for (result.diagnostics.items) |diagnostic| {
-        const owned_message = try expansion_context.evaluator.allocator.dupe(u8, diagnostic.message);
-        errdefer expansion_context.evaluator.allocator.free(owned_message);
-        try expansion_context.diagnostics.append(expansion_context.evaluator.allocator, .{ .message = owned_message });
+    if (commandSubstitutionHasExpansionDiagnostic(result)) {
+        try expansion_context.stderr.appendSlice(expansion_context.evaluator.allocator, result.stderr.items);
+        for (result.diagnostics.items) |diagnostic| {
+            const owned_message = try expansion_context.evaluator.allocator.dupe(u8, diagnostic.message);
+            errdefer expansion_context.evaluator.allocator.free(owned_message);
+            try expansion_context.diagnostics.append(
+                expansion_context.evaluator.allocator,
+                .{ .message = owned_message },
+            );
+        }
     }
 
     const owned_output = try allocator.dupe(u8, result.output.items);
     std.debug.assert(owned_output.len == result.output.items.len);
     if (owned_output.len != 0) std.debug.assert(owned_output.ptr != result.output.items.ptr);
     return owned_output;
+}
+
+fn commandSubstitutionHasExpansionDiagnostic(result: CommandSubstitutionResult) bool {
+    result.validate();
+    for (result.diagnostics.items) |diagnostic| {
+        if (std.mem.indexOf(u8, diagnostic.message, "expansion error:") != null) return true;
+    }
+    return false;
 }
 
 fn evaluateSingleStagePipeline(
