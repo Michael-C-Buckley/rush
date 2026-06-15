@@ -149,7 +149,7 @@ fn semanticClassAcceptsName(semantic_class: BuiltinSemanticClass, name: []const 
         .unsupported => true,
         .no_op => matchesName(name, &.{":"}),
         .status_constant => matchesName(name, &.{ "true", "false" }),
-        .output => matchesName(name, &.{ "echo", "printf", "env", "pwd", "command" }),
+        .output => matchesName(name, &.{ "echo", "printf", "env", "pwd" }),
         .predicate => matchesName(name, &.{ "test", "[" }),
         .declaration => matchesName(name, &.{ "export", "readonly", "unset" }),
         .shell_state => matchesName(name, &.{
@@ -163,6 +163,7 @@ fn semanticClassAcceptsName(semantic_class: BuiltinSemanticClass, name: []const 
             "local",
             "read",
             "cd",
+            "command",
             "abbr",
             "exec",
         }),
@@ -199,7 +200,7 @@ pub const posix_builtins = [_]Builtin{
     Builtin.initWithSemantics("alias", .regular, .shell_state),
     Builtin.initWithSemantics("bg", .regular, .job_control),
     Builtin.initWithSemantics("cd", .regular, .shell_state),
-    Builtin.initWithSemantics("command", .regular, .output),
+    Builtin.initWithSemantics("command", .regular, .shell_state),
     Builtin.initWithSemantics("echo", .regular, .output),
     Builtin.initWithSemantics("env", .regular, .output),
     Builtin.initWithSemantics("false", .regular, .status_constant),
@@ -300,6 +301,10 @@ test "builtin registry classifies POSIX special builtins separately" {
     try std.testing.expectEqual(
         BuiltinSemanticClass.predicate,
         (lookup("[") orelse return error.TestExpectedEqual).semantic_class,
+    );
+    try std.testing.expectEqual(
+        BuiltinSemanticClass.shell_state,
+        (lookup("command") orelse return error.TestExpectedEqual).semantic_class,
     );
     try std.testing.expectEqual(@as(?Builtin, null), lookup("definitely-not-a-builtin"));
 }

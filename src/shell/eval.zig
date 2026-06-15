@@ -9257,6 +9257,25 @@ test "command builtin lookup reports shell functions" {
     try std.testing.expectEqualStrings("helper\n", result.stdout.items);
 }
 
+test "command builtin preserves state effects from the selected utility" {
+    var shell_state = state.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    var evaluator = Evaluator.init(std.testing.allocator);
+    const eval_context = context.EvalContext.forTarget(.current_shell);
+    const plan = command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{
+        "command",
+        "export",
+        "VALUE=ok",
+    } } });
+
+    var result = try evaluatePlan(&evaluator, &shell_state, eval_context, plan);
+    defer result.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 0), result.status);
+    try result.commitDelta(&shell_state, .current_shell);
+    try std.testing.expectEqualStrings("ok", shell_state.getVariable("VALUE").?.value);
+    try std.testing.expect(shell_state.getVariable("VALUE").?.exported);
+}
+
 test "semantic evaluator treats empty command names as not found" {
     var shell_state = state.ShellState.init(std.testing.allocator);
     defer shell_state.deinit();
