@@ -171,5 +171,15 @@
   <p>Rush supports the Bash-style <code>;;&amp;</code> case clause terminator in its default mode, but rejects it when <code>--posix</code> is requested because POSIX defines <code>;;</code> and <code>;&amp;</code>, not <code>;;&amp;</code>.</p>
 
   <p>Bash 5.3 accepts <code>;;&amp;</code> even when started with <code>--posix</code>. Rush intentionally diverges there so <code>--posix</code> remains a stricter POSIX-facing mode.</p>
+
+  <h4 id="alias-after-leading-redirection-posix"><a href="#alias-after-leading-redirection-posix">Alias substitution after leading redirections in POSIX mode</a></h4>
+
+  <p>Rush recognizes the first command word as an alias candidate even when a simple command starts with one or more redirections.</p>
+
+  <pre><span class="cmd">alias</span> say=<span class="str">'printf alias-hit\\n'</span>
+&gt;/tmp/rush-alias.out <span class="cmd">say</span>
+<span class="cmd">cat</span> /tmp/rush-alias.out</pre>
+
+  <p>Rush, dash, yash, and modern Bash POSIX mode print <code>alias-hit</code>. Bash 3.2 POSIX mode does not expand the alias in this position, so the command search sees <code>say</code> instead.</p>
 </body>
 </html>
