@@ -1179,6 +1179,824 @@ pub fn applyCandidatesForInputWithPolicy(
     return applyCandidates(allocator, matches.items);
 }
 
+pub fn rootForCompletion(allocator: std.mem.Allocator, source: []const u8, cursor: usize) !?[]const u8 {
+    var parse_result = try parser.parse(allocator, source, .{});
+    defer parse_result.deinit();
+    var program = try ir.lowerSimpleCommands(allocator, parse_result);
+    defer program.deinit();
+
+    var selected: ?ir.SimpleCommand = null;
+    for (program.commands) |command| {
+        if (command.argv.len == 0) continue;
+        if (command.span.start > cursor) continue;
+        selected = command;
+        if (cursor <= command.span.end) break;
+    }
+    const command = selected orelse return null;
+    return try allocator.dupe(u8, command.argv[0].text);
+}
+
+pub fn loadManifestFile(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    state: *State,
+    path: []const u8,
+) !void {
+    if (state.loadedCompanion(path)) return;
+    const contents = std.Io.Dir.cwd().readFileAlloc(
+        io,
+        path,
+        allocator,
+        .limited(4 * 1024 * 1024),
+    ) catch |err| switch (err) {
+        error.FileNotFound => return,
+        else => return err,
+    };
+    defer allocator.free(contents);
+
+    var parsed = try std.json.parseFromSlice(std.json.Value, allocator, contents, .{});
+    defer parsed.deinit();
+    const root_object = jsonObject(parsed.value) orelse return error.InvalidCompletionManifest;
+    const version = jsonInteger(root_object.get("manifestVersion") orelse return error.InvalidCompletionManifest) orelse
+        return error.InvalidCompletionManifest;
+    const command_value = root_object.get("command") orelse return error.InvalidCompletionManifest;
+    const command_object = jsonObject(command_value) orelse return error.InvalidCompletionManifest;
+    const providers = if (command_object.get("providers")) |providers_value| jsonObject(providers_value) else null;
+    const root_name = commandPrimaryName(command_object) orelse return error.InvalidCompletionManifest;
+    const platform = comptime @tagName(builtin_os);
+    try state.registerManifestCommandState(.{
+        .command = root_name,
+        .manifest_path = path,
+        .manifest_version = version,
+        .platform = platform,
+        .platform_allowed = true,
+    });
+
+    var path_stack: std.ArrayList([]const u8) = .empty;
+    defer path_stack.deinit(allocator);
+    try registerManifestCommand(allocator, state, root_name, command_object, providers, &path_stack, .{
+        .kind = .manifest,
+        .manifest_path = path,
+        .manifest_version = version,
+    });
+    try state.markLoadedCompanion(path);
+}
+
+pub fn manifestApplication(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    state: *State,
+    shell_state: shell_state_mod.ShellState,
+    source: []const u8,
+    cursor: usize,
+) !Application {
+    var parse_result = try parser.parse(allocator, source, .{});
+    defer parse_result.deinit();
+    const parser_context = parser.completionContext(parse_result, cursor);
+    var program = try ir.lowerSimpleCommands(allocator, parse_result);
+    defer program.deinit();
+
+    const command = commandForCompletion(program, cursor) orelse return .none;
+    if (command.argv.len == 0) return .none;
+    const root = command.argv[0].text;
+    if (state.manifestCommandState(root) == null) return .none;
+
+    var semantic = try semanticContextForCommand(allocator, state.*, command, parser_context, source, cursor);
+    defer semantic.deinit();
+    defer allocator.free(semantic.prefix);
+
+    var builder: Builder = .{};
+    errdefer builder.deinit(allocator);
+    switch (semantic.position) {
+        .subcommand => try appendManifestSubcommands(allocator, state.*, &builder, semantic),
+        .option => try appendManifestOptions(allocator, state.*, &builder, semantic),
+        .option_value, .argument => try appendManifestValueProviders(
+            allocator,
+            io,
+            state.*,
+            shell_state,
+            &builder,
+            semantic,
+        ),
+        .command, .redirect_target => {},
+    }
+    const candidates = try builder.finish(allocator);
+    defer freeCandidates(allocator, candidates);
+    return applyCandidatesForInputWithPolicy(allocator, source, candidates, .engineDefault());
+}
+
+const builtin_os = @import("builtin").os.tag;
+
+fn commandForCompletion(program: ir.Program, cursor: usize) ?ir.SimpleCommand {
+    var selected: ?ir.SimpleCommand = null;
+    for (program.commands) |command| {
+        if (command.argv.len == 0) continue;
+        if (command.span.start > cursor) continue;
+        selected = command;
+        if (cursor <= command.span.end) break;
+    }
+    return selected;
+}
+
+fn semanticContextForCommand(
+    allocator: std.mem.Allocator,
+    state: State,
+    command: ir.SimpleCommand,
+    parser_context: parser.CompletionContext,
+    source: []const u8,
+    cursor: usize,
+) !SemanticContext {
+    const replace_start = parser_context.span.start;
+    const replace_end = parser_context.span.end;
+    const prefix = try decodeShellCompletionSlice(allocator, source, replace_start, replace_end);
+    errdefer allocator.free(prefix);
+
+    var path: std.ArrayList([]const u8) = .empty;
+    errdefer path.deinit(allocator);
+    var operand_index: usize = 0;
+    var options_terminated = false;
+    var current_is_option = false;
+    var pending_option_value: ?OptionValue = null;
+    for (command.argv[1..]) |word| {
+        if (word.span.start >= cursor) break;
+        if (pending_option_value != null) {
+            if (cursor <= word.span.end) break;
+            pending_option_value = null;
+            continue;
+        }
+        if (cursor <= word.span.end) {
+            current_is_option = std.mem.startsWith(u8, word.text, "-") and !options_terminated;
+            break;
+        }
+        if (std.mem.eql(u8, word.text, "--")) {
+            options_terminated = true;
+            continue;
+        }
+        if (!options_terminated and std.mem.startsWith(u8, word.text, "-")) {
+            if (manifestOptionRuleForWord(state, command.argv[0].text, path.items, word.text)) |rule| {
+                if (rule.option.terminates_options) options_terminated = true;
+                if (rule.option.value_count != 0) pending_option_value = optionValueForRule(rule, word.text);
+            }
+            continue;
+        }
+        if (path.items.len == 0) {
+            try path.append(allocator, word.text);
+        } else {
+            operand_index += 1;
+        }
+    }
+
+    const position: SemanticPosition = if (current_is_option)
+        .option
+    else if (pending_option_value != null)
+        .option_value
+    else if (parser_context.kind == .redirect_target)
+        .redirect_target
+    else if (path.items.len == 0)
+        .subcommand
+    else
+        .argument;
+
+    return .{
+        .allocator = allocator,
+        .root = command.argv[0].text,
+        .path = try path.toOwnedSlice(allocator),
+        .prefix = prefix,
+        .argument_index = operand_index,
+        .options_terminated = options_terminated,
+        .position = position,
+        .option_value = pending_option_value,
+        .replace_start = replace_start,
+        .replace_end = replace_end,
+        .parser_position = parser_context.kind,
+    };
+}
+
+fn manifestOptionRuleForWord(
+    state: State,
+    root: []const u8,
+    path: []const []const u8,
+    word: []const u8,
+) ?Rule {
+    for (state.rules.items) |rule| {
+        if (rule.disabled or rule.kind != .option) continue;
+        if (!ruleMatchesPath(rule, root, path)) continue;
+        if (optionMatchesWord(rule.option, word)) return rule;
+    }
+    return null;
+}
+
+fn optionMatchesWord(option: Option, word: []const u8) bool {
+    if (option.long) |long| {
+        if (word.len == long.len + 2 and std.mem.startsWith(u8, word, "--") and
+            std.mem.eql(u8, word[2..], long)) return true;
+    }
+    if (option.short) |short| {
+        if (word.len == short.len + 1 and word[0] == '-' and std.mem.eql(u8, word[1..], short)) return true;
+    }
+    for (option.spellings) |spelling| {
+        if (std.mem.eql(u8, word, spelling)) return true;
+    }
+    return false;
+}
+
+fn optionValueForRule(rule: Rule, word: []const u8) OptionValue {
+    return .{
+        .name = optionName(rule.option),
+        .spelling = optionSpelling(rule.option, word),
+        .value_index = 0,
+    };
+}
+
+fn optionName(option: Option) []const u8 {
+    if (option.long) |long| return long;
+    if (option.short) |short| return short;
+    if (option.spellings.len != 0) return option.spellings[0];
+    return "";
+}
+
+fn optionSpelling(option: Option, word: []const u8) []const u8 {
+    if (option.long) |long| {
+        if (word.len == long.len + 2 and std.mem.startsWith(u8, word, "--") and
+            std.mem.eql(u8, word[2..], long)) return word;
+    }
+    if (option.short) |short| {
+        if (word.len == short.len + 1 and word[0] == '-' and std.mem.eql(u8, word[1..], short)) return word;
+    }
+    for (option.spellings) |spelling| {
+        if (std.mem.eql(u8, word, spelling)) return spelling;
+    }
+    return word;
+}
+
+fn appendManifestSubcommands(
+    allocator: std.mem.Allocator,
+    state: State,
+    builder: *Builder,
+    semantic: SemanticContext,
+) !void {
+    for (state.rules.items) |rule| {
+        if (rule.disabled or rule.kind != .subcommand) continue;
+        if (!ruleMatchesPath(rule, semantic.root, semantic.path)) continue;
+        const value = rule.value orelse continue;
+        try builder.appendCandidateIfMissing(allocator, .{
+            .value = value,
+            .description = rule.description,
+            .kind = .subcommand,
+            .replace_start = semantic.replace_start,
+            .replace_end = semantic.replace_end,
+            .provider_order = rule.provider_order,
+        });
+    }
+}
+
+fn appendManifestOptions(
+    allocator: std.mem.Allocator,
+    state: State,
+    builder: *Builder,
+    semantic: SemanticContext,
+) !void {
+    for (state.rules.items) |rule| {
+        if (rule.disabled or rule.kind != .option) continue;
+        if (!ruleMatchesPath(rule, semantic.root, semantic.path)) continue;
+        try appendOptionCandidate(allocator, builder, rule, semantic);
+    }
+}
+
+fn appendOptionCandidate(
+    allocator: std.mem.Allocator,
+    builder: *Builder,
+    rule: Rule,
+    semantic: SemanticContext,
+) !void {
+    if (rule.option.long) |long| {
+        const spelling = try std.fmt.allocPrint(allocator, "--{s}", .{long});
+        defer allocator.free(spelling);
+        try builder.appendCandidateIfMissing(allocator, optionCandidate(rule, spelling, semantic));
+    }
+    if (rule.option.short) |short| {
+        const spelling = try std.fmt.allocPrint(allocator, "-{s}", .{short});
+        defer allocator.free(spelling);
+        try builder.appendCandidateIfMissing(allocator, optionCandidate(rule, spelling, semantic));
+    }
+    for (rule.option.spellings) |spelling| try builder.appendCandidateIfMissing(
+        allocator,
+        optionCandidate(rule, spelling, semantic),
+    );
+}
+
+fn optionCandidate(rule: Rule, spelling: []const u8, semantic: SemanticContext) Candidate {
+    return .{
+        .value = spelling,
+        .description = rule.description,
+        .kind = .option,
+        .option = rule.option,
+        .replace_start = semantic.replace_start,
+        .replace_end = semantic.replace_end,
+        .append_space = true,
+        .provider_order = rule.provider_order,
+    };
+}
+
+fn appendManifestValueProviders(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    state: State,
+    shell_state: shell_state_mod.ShellState,
+    builder: *Builder,
+    semantic: SemanticContext,
+) !void {
+    switch (semantic.position) {
+        .option_value => {
+            const option_value = semantic.option_value orelse return;
+            for (state.rules.items) |rule| {
+                if (rule.disabled or rule.kind != .dynamic_option_value) continue;
+                if (!ruleMatchesPath(rule, semantic.root, semantic.path)) continue;
+                if (!optionRuleMatchesValue(rule.option, option_value)) continue;
+                if (rule.value_index != option_value.value_index) continue;
+                try appendProviderCandidates(allocator, io, shell_state, builder, rule, semantic);
+            }
+        },
+        .argument => for (state.rules.items) |rule| {
+            if (rule.disabled or rule.kind != .dynamic_argument) continue;
+            if (!ruleMatchesPath(rule, semantic.root, semantic.path)) continue;
+            if (!argumentRuleMatches(rule.argument, semantic.argument_index)) continue;
+            try appendProviderCandidates(allocator, io, shell_state, builder, rule, semantic);
+        },
+        else => {},
+    }
+}
+
+fn optionRuleMatchesValue(option: Option, value: OptionValue) bool {
+    if (option.long) |long| {
+        if (std.mem.eql(u8, value.name, long)) return true;
+        if (value.spelling.len == long.len + 2 and std.mem.startsWith(u8, value.spelling, "--") and
+            std.mem.eql(u8, value.spelling[2..], long)) return true;
+    }
+    if (option.short) |short| {
+        if (std.mem.eql(u8, value.name, short)) return true;
+        if (value.spelling.len == short.len + 1 and value.spelling[0] == '-' and
+            std.mem.eql(u8, value.spelling[1..], short)) return true;
+    }
+    for (option.spellings) |spelling| {
+        if (std.mem.eql(u8, value.spelling, spelling)) return true;
+    }
+    return false;
+}
+
+fn appendProviderCandidates(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    shell_state: shell_state_mod.ShellState,
+    builder: *Builder,
+    rule: Rule,
+    semantic: SemanticContext,
+) !void {
+    switch (rule.provider_kind) {
+        .static_enum => for (rule.static_values) |value| try builder.appendCandidateIfMissing(allocator, .{
+            .value = value.value,
+            .display = value.display,
+            .description = value.description orelse rule.description,
+            .tag = value.tag orelse rule.tag,
+            .suffix = value.suffix,
+            .removable_suffix = value.removable_suffix,
+            .kind = .plain,
+            .replace_start = semantic.replace_start,
+            .replace_end = semantic.replace_end,
+            .append_space = value.append_space,
+            .provider_order = rule.provider_order,
+        }),
+        .builtin_files => {
+            const candidates = try pathCandidatesWithOptions(
+                allocator,
+                io,
+                semantic.prefix,
+                semantic.replace_start,
+                semantic.replace_end,
+                .{},
+            );
+            defer freeCandidates(allocator, candidates);
+            for (candidates) |candidate| try builder.appendCandidateIfMissing(allocator, candidate);
+        },
+        .builtin_directories => {
+            const candidates = try pathCandidatesWithOptions(
+                allocator,
+                io,
+                semantic.prefix,
+                semantic.replace_start,
+                semantic.replace_end,
+                .{ .directories_only = true },
+            );
+            defer freeCandidates(allocator, candidates);
+            for (candidates) |candidate| try builder.appendCandidateIfMissing(allocator, candidate);
+        },
+        .builtin_executables => {
+            const candidates = try commandCandidates(
+                allocator,
+                io,
+                shell_state,
+                semantic.replace_start,
+                semantic.replace_end,
+            );
+            defer freeCandidates(allocator, candidates);
+            for (candidates) |candidate| try builder.appendCandidateIfMissing(allocator, candidate);
+        },
+        .builtin_variables => {
+            var variable_iter = shell_state.variables.iterator();
+            while (variable_iter.next()) |entry| try builder.appendCandidateIfMissing(allocator, .{
+                .value = entry.key_ptr.*,
+                .kind = .variable,
+                .replace_start = semantic.replace_start,
+                .replace_end = semantic.replace_end,
+            });
+        },
+        .function => {},
+    }
+}
+
+fn ruleMatchesPath(rule: Rule, root: []const u8, path: []const []const u8) bool {
+    if (!std.mem.eql(u8, rule.root, root)) return false;
+    if (rule.path.len != path.len) return false;
+    for (rule.path, path) |left, right| {
+        if (!std.mem.eql(u8, left, right)) return false;
+    }
+    return true;
+}
+
+fn argumentRuleMatches(argument: Argument, index: usize) bool {
+    if (argument.index) |argument_index| {
+        return argument_index == index or (argument.repeatable and index >= argument_index);
+    }
+    return index == 0 or argument.repeatable;
+}
+
+fn jsonObject(value: std.json.Value) ?std.json.ObjectMap {
+    return switch (value) {
+        .object => |object| object,
+        else => null,
+    };
+}
+
+fn jsonString(value: std.json.Value) ?[]const u8 {
+    return switch (value) {
+        .string => |string| string,
+        else => null,
+    };
+}
+
+fn jsonInteger(value: std.json.Value) ?i64 {
+    return switch (value) {
+        .integer => |integer| integer,
+        else => null,
+    };
+}
+
+fn jsonBool(value: std.json.Value) ?bool {
+    return switch (value) {
+        .bool => |boolean| boolean,
+        else => null,
+    };
+}
+
+fn commandPrimaryName(command_object: std.json.ObjectMap) ?[]const u8 {
+    const name_value = command_object.get("name") orelse return null;
+    if (jsonString(name_value)) |name| return name;
+    return switch (name_value) {
+        .array => |names| if (names.items.len != 0) jsonString(names.items[0]) else null,
+        else => null,
+    };
+}
+
+fn registerManifestCommand(
+    allocator: std.mem.Allocator,
+    state: *State,
+    root: []const u8,
+    command_object: std.json.ObjectMap,
+    inherited_providers: ?std.json.ObjectMap,
+    path: *std.ArrayList([]const u8),
+    source: RuleSource,
+) !void {
+    const providers = if (command_object.get("providers")) |providers_value|
+        jsonObject(providers_value) orelse inherited_providers
+    else
+        inherited_providers;
+    try registerManifestOptions(allocator, state, root, command_object, providers, path.items, source);
+    try registerManifestArguments(allocator, state, root, command_object, providers, path.items, source);
+
+    const subcommands_value = command_object.get("subcommands") orelse return;
+    const subcommands = switch (subcommands_value) {
+        .array => |array| array,
+        else => return,
+    };
+    for (subcommands.items, 0..) |subcommand_value, index| {
+        const subcommand_object = jsonObject(subcommand_value) orelse continue;
+        const primary = commandPrimaryName(subcommand_object) orelse continue;
+        try registerSubcommandNames(allocator, state, root, subcommand_object, path.items, source, index);
+        try path.append(allocator, primary);
+        try registerManifestCommand(allocator, state, root, subcommand_object, providers, path, source);
+        _ = path.pop();
+    }
+}
+
+fn registerSubcommandNames(
+    allocator: std.mem.Allocator,
+    state: *State,
+    root: []const u8,
+    command_object: std.json.ObjectMap,
+    path: []const []const u8,
+    source: RuleSource,
+    provider_order: usize,
+) !void {
+    const description = if (command_object.get("description")) |value| jsonString(value) else null;
+    const name_value = command_object.get("name") orelse return;
+    try registerCommandNameValue(allocator, state, root, path, name_value, description, source, provider_order);
+    if (command_object.get("aliases")) |aliases_value| switch (aliases_value) {
+        .array => |aliases| for (aliases.items) |alias| {
+            try registerCommandNameValue(allocator, state, root, path, alias, description, source, provider_order);
+        },
+        else => {},
+    };
+}
+
+fn registerCommandNameValue(
+    allocator: std.mem.Allocator,
+    state: *State,
+    root: []const u8,
+    path: []const []const u8,
+    name_value: std.json.Value,
+    description: ?[]const u8,
+    source: RuleSource,
+    provider_order: usize,
+) !void {
+    switch (name_value) {
+        .string => |name| try state.registerRule(.{
+            .root = root,
+            .path = path,
+            .kind = .subcommand,
+            .value = name,
+            .description = description,
+            .provider_order = provider_order,
+            .source = source,
+        }),
+        .array => |names| for (names.items) |item| if (jsonString(item)) |name| try state.registerRule(.{
+            .root = root,
+            .path = path,
+            .kind = .subcommand,
+            .value = name,
+            .description = description,
+            .provider_order = provider_order,
+            .source = source,
+        }),
+        else => {},
+    }
+    _ = allocator;
+}
+
+fn registerManifestOptions(
+    allocator: std.mem.Allocator,
+    state: *State,
+    root: []const u8,
+    command_object: std.json.ObjectMap,
+    providers: ?std.json.ObjectMap,
+    path: []const []const u8,
+    source: RuleSource,
+) !void {
+    const options_value = command_object.get("options") orelse return;
+    const options = switch (options_value) {
+        .array => |array| array,
+        else => return,
+    };
+    for (options.items, 0..) |option_value, index| {
+        const option_object = jsonObject(option_value) orelse continue;
+        var spellings: std.ArrayList([]const u8) = .empty;
+        defer spellings.deinit(allocator);
+        if (option_object.get("spellings")) |spellings_value| switch (spellings_value) {
+            .array => |array| for (array.items) |item| {
+                if (jsonString(item)) |spelling| try spellings.append(allocator, spelling);
+            },
+            else => {},
+        };
+        var option: Option = .{
+            .long = if (option_object.get("long")) |value| jsonString(value) else null,
+            .short = if (option_object.get("short")) |value| jsonString(value) else null,
+            .spellings = spellings.items,
+            .repeatable = if (option_object.get("repeatable")) |value| jsonBool(value) orelse false else false,
+            .inherit = if (option_object.get("inherit")) |value| jsonBool(value) orelse true else true,
+            .exclusive_group = if (option_object.get("exclusiveGroup")) |value| jsonString(value) else null,
+            .terminates_options = if (option_object.get("terminatesOptions")) |value|
+                jsonBool(value) orelse false
+            else
+                false,
+        };
+        const description = if (option_object.get("description")) |value| jsonString(value) else null;
+        if (option_object.get("value")) |value_object| option.value_count = optionValueCount(value_object);
+        try state.registerRule(.{
+            .root = root,
+            .path = path,
+            .kind = .option,
+            .option = option,
+            .description = description,
+            .provider_order = index,
+            .source = source,
+        });
+        if (option_object.get("value")) |value_object| {
+            try registerOptionValueProviders(
+                allocator,
+                state,
+                root,
+                path,
+                option,
+                value_object,
+                providers,
+                description,
+                index,
+                source,
+            );
+        }
+    }
+}
+
+fn registerOptionValueProviders(
+    allocator: std.mem.Allocator,
+    state: *State,
+    root: []const u8,
+    path: []const []const u8,
+    option: Option,
+    value_object: std.json.Value,
+    providers: ?std.json.ObjectMap,
+    description: ?[]const u8,
+    provider_order: usize,
+    source: RuleSource,
+) !void {
+    switch (value_object) {
+        .object => |object| if (object.get("provider")) |provider_ref| {
+            try registerProviderRefRules(allocator, state, .{
+                .root = root,
+                .path = path,
+                .kind = .dynamic_option_value,
+                .option = option,
+                .description = description,
+                .provider_order = provider_order,
+                .source = source,
+            }, provider_ref, providers);
+        },
+        .array => |values| for (values.items, 0..) |item, value_index| if (jsonObject(item)) |object| {
+            if (object.get("provider")) |provider_ref| try registerProviderRefRules(allocator, state, .{
+                .root = root,
+                .path = path,
+                .kind = .dynamic_option_value,
+                .option = option,
+                .value_index = value_index,
+                .description = description,
+                .provider_order = provider_order,
+                .source = source,
+            }, provider_ref, providers);
+        },
+        else => {},
+    }
+}
+
+fn optionValueCount(value_object: std.json.Value) usize {
+    return switch (value_object) {
+        .array => |array| array.items.len,
+        .object => 1,
+        else => 0,
+    };
+}
+
+fn registerManifestArguments(
+    allocator: std.mem.Allocator,
+    state: *State,
+    root: []const u8,
+    command_object: std.json.ObjectMap,
+    providers: ?std.json.ObjectMap,
+    path: []const []const u8,
+    source: RuleSource,
+) !void {
+    const arguments_object = jsonObject(command_object.get("arguments") orelse return) orelse return;
+    const states_value = arguments_object.get("states") orelse return;
+    const states = switch (states_value) {
+        .array => |array| array,
+        else => return,
+    };
+    for (states.items, 0..) |state_value, index| {
+        const argument_object = jsonObject(state_value) orelse continue;
+        const provider_ref = argument_object.get("provider") orelse continue;
+        const description = if (argument_object.get("description")) |value| jsonString(value) else null;
+        const argument: Argument = .{
+            .state = if (argument_object.get("name")) |value| jsonString(value) else null,
+            .index = if (argument_object.get("index")) |value|
+                if (jsonInteger(value)) |integer| @intCast(integer) else index
+            else
+                index,
+            .repeatable = if (argument_object.get("repeatable")) |value| jsonBool(value) orelse false else false,
+            .rest_command_line = if (argument_object.get("rest")) |value|
+                if (jsonString(value)) |rest| std.mem.eql(u8, rest, "command-line") else false
+            else
+                false,
+        };
+        try registerProviderRefRules(allocator, state, .{
+            .root = root,
+            .path = path,
+            .kind = .dynamic_argument,
+            .argument = argument,
+            .description = description,
+            .provider_order = index,
+            .source = source,
+        }, provider_ref, providers);
+    }
+}
+
+fn registerProviderRefRules(
+    allocator: std.mem.Allocator,
+    state: *State,
+    base_rule: Rule,
+    provider_ref: std.json.Value,
+    providers: ?std.json.ObjectMap,
+) !void {
+    switch (provider_ref) {
+        .string => |id| {
+            if (providers) |provider_map| if (provider_map.get(id)) |provider| {
+                return registerProviderRule(allocator, state, base_rule, provider);
+            };
+            try registerBuiltinProviderId(state, base_rule, id);
+        },
+        .object => try registerProviderRule(allocator, state, base_rule, provider_ref),
+        .array => |array| for (array.items) |item| {
+            try registerProviderRefRules(allocator, state, base_rule, item, providers);
+        },
+        else => {},
+    }
+}
+
+fn registerProviderRule(
+    allocator: std.mem.Allocator,
+    state: *State,
+    base_rule: Rule,
+    provider: std.json.Value,
+) !void {
+    const provider_object = jsonObject(provider) orelse return;
+    if (provider_object.get("builtin")) |builtin_value| {
+        if (jsonString(builtin_value)) |id| return registerBuiltinProviderId(state, base_rule, id);
+    }
+    if (provider_object.get("function")) |function_value| {
+        if (jsonString(function_value)) |function_name| {
+            var rule = base_rule;
+            rule.provider_kind = .function;
+            rule.value = function_name;
+            return state.registerRule(rule);
+        }
+    }
+    if (provider_object.get("values")) |values| {
+        const static_values = try parseStaticProviderValues(allocator, values);
+        defer if (static_values.len != 0) allocator.free(static_values);
+        var rule = base_rule;
+        rule.provider_kind = .static_enum;
+        rule.static_values = static_values;
+        return state.registerRule(rule);
+    }
+}
+
+fn registerBuiltinProviderId(state: *State, base_rule: Rule, id: []const u8) !void {
+    var rule = base_rule;
+    rule.provider_kind = if (std.mem.eql(u8, id, "files") or std.mem.eql(u8, id, "builtin.files"))
+        .builtin_files
+    else if (std.mem.eql(u8, id, "directories") or std.mem.eql(u8, id, "builtin.directories"))
+        .builtin_directories
+    else if (std.mem.eql(u8, id, "executables") or std.mem.eql(u8, id, "builtin.executables"))
+        .builtin_executables
+    else if (std.mem.eql(u8, id, "variables") or std.mem.eql(u8, id, "builtin.variables"))
+        .builtin_variables
+    else
+        return;
+    try state.registerRule(rule);
+}
+
+fn parseStaticProviderValues(allocator: std.mem.Allocator, values: std.json.Value) ![]const StaticProviderValue {
+    const array = switch (values) {
+        .array => |array| array,
+        else => return &.{},
+    };
+    const parsed = try allocator.alloc(StaticProviderValue, array.items.len);
+    errdefer allocator.free(parsed);
+    for (array.items, 0..) |item, index| {
+        parsed[index] = switch (item) {
+            .string => |value| .{ .value = value },
+            .object => |object| .{
+                .value = if (object.get("value")) |value| jsonString(value) orelse "" else "",
+                .display = if (object.get("display")) |value| jsonString(value) else null,
+                .description = if (object.get("description")) |value| jsonString(value) else null,
+                .tag = if (object.get("tag")) |value| jsonString(value) else null,
+                .suffix = if (object.get("suffix")) |value| jsonString(value) else null,
+                .removable_suffix = if (object.get("removableSuffix")) |value| jsonBool(value) orelse false else false,
+                .append_space = if (object.get("noSpace")) |value| !(jsonBool(value) orelse false) else true,
+            },
+            else => .{ .value = "" },
+        };
+    }
+    return parsed;
+}
+
 pub fn defaultPathApplication(
     allocator: std.mem.Allocator,
     io: std.Io,
@@ -1255,6 +2073,21 @@ fn pathCandidates(
     replace_start: usize,
     replace_end: usize,
 ) ![]Candidate {
+    return pathCandidatesWithOptions(allocator, io, word, replace_start, replace_end, .{});
+}
+
+const PathCandidateOptions = struct {
+    directories_only: bool = false,
+};
+
+fn pathCandidatesWithOptions(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    word: []const u8,
+    replace_start: usize,
+    replace_end: usize,
+    options: PathCandidateOptions,
+) ![]Candidate {
     const split = std.mem.findScalarLast(u8, word, '/');
     const dir_prefix = if (split) |index| word[0 .. index + 1] else "";
     const entry_prefix = if (split) |index| word[index + 1 ..] else word;
@@ -1278,6 +2111,7 @@ fn pathCandidates(
         if (!std.mem.startsWith(u8, entry.name, entry_prefix)) continue;
 
         const is_directory = entry.kind == .directory;
+        if (options.directories_only and !is_directory) continue;
         const value = try pathCandidateValue(allocator, dir_prefix, entry.name, is_directory);
         defer allocator.free(value);
         const display = try pathCandidateValue(allocator, "", entry.name, is_directory);
@@ -1918,6 +2752,85 @@ test "default completion keeps argument position path-only" {
     const expected_replacement = try std.fmt.allocPrint(std.testing.allocator, "{s}/rush-file", .{tmp_root});
     defer std.testing.allocator.free(expected_replacement);
     try std.testing.expectEqualStrings(expected_replacement, edit.replacement);
+}
+
+test "manifest completion loads git subcommands lazily" {
+    var completion_state = State.init(std.testing.allocator);
+    defer completion_state.deinit();
+    try loadManifestFile(std.testing.allocator, std.testing.io, &completion_state, "share/rush/completions/git.json");
+
+    var shell_state = shell_state_mod.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    const source = "git ch";
+    const application = try manifestApplication(
+        std.testing.allocator,
+        std.testing.io,
+        &completion_state,
+        shell_state,
+        source,
+        source.len,
+    );
+    defer application.deinit(std.testing.allocator);
+
+    const candidates = application.ambiguous;
+    try expectCandidate(candidates, "checkout", .subcommand);
+    try expectCandidate(candidates, "cherry-pick", .subcommand);
+}
+
+test "manifest completion returns root options" {
+    var completion_state = State.init(std.testing.allocator);
+    defer completion_state.deinit();
+    try loadManifestFile(std.testing.allocator, std.testing.io, &completion_state, "share/rush/completions/git.json");
+
+    var shell_state = shell_state_mod.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    const source = "git --h";
+    const application = try manifestApplication(
+        std.testing.allocator,
+        std.testing.io,
+        &completion_state,
+        shell_state,
+        source,
+        source.len,
+    );
+    defer application.deinit(std.testing.allocator);
+
+    const edit = application.edit;
+    try std.testing.expectEqualStrings("--help", edit.replacement);
+}
+
+test "manifest completion uses option value provider after root option" {
+    var completion_state = State.init(std.testing.allocator);
+    defer completion_state.deinit();
+    try loadManifestFile(std.testing.allocator, std.testing.io, &completion_state, "share/rush/completions/git.json");
+
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    try tmp.dir.createDir(std.testing.io, "alpha", .default_dir);
+
+    var tmp_root_buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
+    const tmp_root_len = try tmp.dir.realPath(std.testing.io, &tmp_root_buffer);
+    const tmp_root = tmp_root_buffer[0..tmp_root_len];
+    const original_cwd = try std.process.currentPathAlloc(std.testing.io, std.testing.allocator);
+    defer std.testing.allocator.free(original_cwd);
+    try std.process.setCurrentPath(std.testing.io, tmp_root);
+
+    var shell_state = shell_state_mod.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    const source = "git --git-dir a";
+    const application = try manifestApplication(
+        std.testing.allocator,
+        std.testing.io,
+        &completion_state,
+        shell_state,
+        source,
+        source.len,
+    );
+    defer application.deinit(std.testing.allocator);
+
+    try std.process.setCurrentPath(std.testing.io, original_cwd);
+    const edit = application.edit;
+    try std.testing.expectEqualStrings("alpha/", edit.replacement);
 }
 
 fn expectCandidate(candidates: []const Candidate, value: []const u8, kind: Kind) !void {

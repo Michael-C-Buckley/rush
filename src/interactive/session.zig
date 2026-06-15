@@ -1,6 +1,7 @@
 //! Interactive shell session orchestration.
 
 const std = @import("std");
+const build_config = @import("build_config");
 
 const compat = @import("../shell/compat.zig");
 const completion = @import("../completion.zig");
@@ -65,13 +66,18 @@ pub const Context = struct {
 
 pub const EditorState = struct {
     abbreviations: extension_abbr.State,
+    completions: completion.State,
 
     pub fn init(allocator: std.mem.Allocator) EditorState {
-        return .{ .abbreviations = extension_abbr.State.init(allocator) };
+        return .{
+            .abbreviations = extension_abbr.State.init(allocator),
+            .completions = completion.State.init(allocator),
+        };
     }
 
     pub fn deinit(self: *EditorState) void {
         self.abbreviations.deinit();
+        self.completions.deinit();
         self.* = undefined;
     }
 };
@@ -182,7 +188,161 @@ fn completeInteractiveDefault(
     cursor: usize,
 ) !editor_completion.Application {
     const interactive_context: *Context = @ptrCast(@alignCast(context));
+    try loadInteractiveCompletionAssets(allocator, io, interactive_context, source, cursor);
+    const manifest_application = try completion.manifestApplication(
+        allocator,
+        io,
+        &interactive_context.editor_state.completions,
+        interactive_context.semantic_state.*,
+        source,
+        cursor,
+    );
+    switch (manifest_application) {
+        .none => {},
+        .edit, .ambiguous => return manifest_application,
+    }
     return completion.defaultApplication(allocator, io, interactive_context.semantic_state.*, source, cursor);
+}
+
+fn loadInteractiveCompletionAssets(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    interactive_context: *Context,
+    source: []const u8,
+    cursor: usize,
+) !void {
+    const root = try completion.rootForCompletion(allocator, source, cursor) orelse return;
+    defer allocator.free(root);
+
+    try loadInteractiveCompletionAssetsFromDir(
+        allocator,
+        io,
+        interactive_context,
+        build_config.datadir ++ "/rush/completions",
+        root,
+    );
+    const user_dir = try userCompletionDirectory(allocator, interactive_context.semantic_state.*);
+    defer if (user_dir) |path| allocator.free(path);
+    if (user_dir) |path| try loadInteractiveCompletionAssetsFromDir(allocator, io, interactive_context, path, root);
+}
+
+fn loadInteractiveCompletionAssetsFromDir(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    interactive_context: *Context,
+    dir: []const u8,
+    root: []const u8,
+) !void {
+    const json_name = try std.fmt.allocPrint(allocator, "{s}.json", .{root});
+    defer allocator.free(json_name);
+    const json_path = try std.fs.path.join(allocator, &.{ dir, json_name });
+    defer allocator.free(json_path);
+    try completion.loadManifestFile(allocator, io, &interactive_context.editor_state.completions, json_path);
+
+    const rush_name = try std.fmt.allocPrint(allocator, "{s}.rush", .{root});
+    defer allocator.free(rush_name);
+    const rush_path = try std.fs.path.join(allocator, &.{ dir, rush_name });
+    defer allocator.free(rush_path);
+    try sourceInteractiveCompletionCompanion(allocator, io, interactive_context, rush_path);
+}
+
+fn sourceInteractiveCompletionCompanion(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    interactive_context: *Context,
+    path: []const u8,
+) !void {
+    if (interactive_context.editor_state.completions.loadedCompanion(path)) return;
+    const contents = std.Io.Dir.cwd().readFileAlloc(
+        io,
+        path,
+        allocator,
+        .limited(1024 * 1024),
+    ) catch |err| switch (err) {
+        error.FileNotFound => return,
+        else => return err,
+    };
+    defer allocator.free(contents);
+
+    var result = try runner.runShellStateScriptWithExtensionHandlers(
+        allocator,
+        io,
+        interactive_context.semantic_state,
+        contents,
+        path,
+        interactive_context.arg_zero,
+        interactive_context.features,
+        .capture,
+        interactiveExtensionHandlers(interactive_context),
+    );
+    defer result.deinit();
+    try interactive_context.editor_state.completions.markLoadedCompanion(path);
+}
+
+fn userCompletionDirectory(allocator: std.mem.Allocator, shell_state: shell.ShellState) !?[]const u8 {
+    shell_state.validate();
+    if (shell_state.getVariable("XDG_CONFIG_HOME")) |xdg_config_home| {
+        if (xdg_config_home.value.len != 0) {
+            return try std.fs.path.join(allocator, &.{ xdg_config_home.value, "rush", "completions" });
+        }
+    }
+    if (shell_state.getVariable("HOME")) |home| {
+        if (home.value.len != 0) {
+            return try std.fs.path.join(allocator, &.{ home.value, ".config", "rush", "completions" });
+        }
+    }
+    return null;
+}
+
+test "interactive completion lazily loads user manifest and companion script" {
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    try tmp.dir.createDirPath(std.testing.io, "rush/completions");
+    try tmp.dir.writeFile(std.testing.io, .{
+        .sub_path = "rush/completions/foo.json",
+        .data =
+        \\
+        \\{
+        \\  "manifestVersion": 1,
+        \\  "command": {
+        \\    "name": "foo",
+        \\    "subcommands": [{ "name": "bar", "description": "bar command" }]
+        \\  }
+        \\}
+        \\
+        ,
+    });
+    try tmp.dir.writeFile(std.testing.io, .{
+        .sub_path = "rush/completions/foo.rush",
+        .data = "__rush_complete_foo_values() { :; }\n",
+    });
+    var tmp_root_buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
+    const tmp_root_len = try tmp.dir.realPath(std.testing.io, &tmp_root_buffer);
+    const tmp_root = tmp_root_buffer[0..tmp_root_len];
+
+    var shell_state = shell.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    try shell_state.putVariable("XDG_CONFIG_HOME", tmp_root, .{ .exported = true });
+    var editor_state = EditorState.init(std.testing.allocator);
+    defer editor_state.deinit();
+    var context: Context = .{
+        .semantic_state = &shell_state,
+        .editor_state = &editor_state,
+    };
+
+    const source = "foo b";
+    try loadInteractiveCompletionAssets(std.testing.allocator, std.testing.io, &context, source, source.len);
+    try std.testing.expect(shell_state.getFunction("__rush_complete_foo_values") != null);
+    const application = try completion.manifestApplication(
+        std.testing.allocator,
+        std.testing.io,
+        &editor_state.completions,
+        shell_state,
+        source,
+        source.len,
+    );
+    defer application.deinit(std.testing.allocator);
+    try std.testing.expectEqualStrings("bar", application.edit.replacement);
 }
 
 fn drainInteractiveSemanticJobNotifications(

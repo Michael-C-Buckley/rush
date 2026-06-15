@@ -1493,9 +1493,9 @@ fn commandUsesUnsupportedSemanticBuiltin(command: ir.SimpleCommand, allow_intera
     const name = command.argv[0].text;
     const definition = default_builtins.lookup(name) orelse return false;
     return switch (definition.semantic_class) {
-        .unsupported, .predicate, .shell_state, .job_control, .control_flow => true,
+        .unsupported, .job_control, .control_flow => true,
         .declaration => !allow_interactive_declarations,
-        .no_op, .status_constant, .output, .extension_state => false,
+        .no_op, .status_constant, .output, .predicate, .shell_state, .extension_state => false,
     };
 }
 
@@ -2337,6 +2337,47 @@ test "semantic non-interactive invocation initializes environment arg zero and p
                 result.stdout,
             );
             try std.testing.expectEqualStrings("", result.stderr);
+        },
+    }
+}
+
+test "semantic interactive invocation runs cd" {
+    const original_cwd = try std.process.currentPathAlloc(std.testing.io, std.testing.allocator);
+    defer std.testing.allocator.free(original_cwd);
+    defer std.process.setCurrentPath(std.testing.io, original_cwd) catch {};
+
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    try tmp.dir.createDir(std.testing.io, "target", .default_dir);
+    var tmp_root_buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
+    const tmp_root_len = try tmp.dir.realPath(std.testing.io, &tmp_root_buffer);
+    const tmp_root = tmp_root_buffer[0..tmp_root_len];
+    const target_path = try std.fs.path.join(std.testing.allocator, &.{ tmp_root, "target" });
+    defer std.testing.allocator.free(target_path);
+
+    var shell_state = shell.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    try shell.startup.initializeInvocationState(std.testing.allocator, std.testing.io, &shell_state, null, &.{}, .{});
+
+    const script = try std.fmt.allocPrint(std.testing.allocator, "cd {s}", .{target_path});
+    defer std.testing.allocator.free(script);
+    var execution = try runInteractiveCommandString(
+        std.testing.allocator,
+        std.testing.io,
+        &shell_state,
+        script,
+        shell.InvocationContext.init(.{ .arg_zero = "rush", .interactive = true }),
+        .capture,
+    );
+    defer execution.deinit(std.testing.allocator);
+
+    switch (execution) {
+        .unsupported => return error.ExpectedSemanticExecution,
+        .output => |result| {
+            try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
+            try std.testing.expectEqualStrings("", result.stdout);
+            try std.testing.expectEqualStrings("", result.stderr);
+            try std.testing.expectEqualStrings(target_path, shell_state.getVariable("PWD").?.value);
         },
     }
 }

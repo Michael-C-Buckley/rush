@@ -32,8 +32,15 @@ pub fn build(b: *std.Build) void {
         "Directory for system-wide configuration (default: <prefix>/etc)",
     ) orelse
         b.getInstallPath(.prefix, "etc");
+    const datadir = b.option(
+        []const u8,
+        "datadir",
+        "Directory for read-only data files (default: <prefix>/share)",
+    ) orelse
+        b.getInstallPath(.prefix, "share");
     const build_config = b.addOptions();
     build_config.addOption([]const u8, "sysconfdir", sysconfdir);
+    build_config.addOption([]const u8, "datadir", datadir);
 
     const exe_module = createRushRootModule(
         b,
