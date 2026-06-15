@@ -154,5 +154,130 @@
             .stderr = "",
             .status = 0,
         },
+        .{
+            .name = "brace group redirection does not isolate variable mutations",
+            .script =
+            \\x=outer
+            \\{ x=inner; printf 'group\n'; } >out
+            \\printf '<%s>\n' "$x"
+            \\cat out
+            ,
+            .stdout =
+            \\<inner>
+            \\group
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "if command redirection does not isolate condition or body mutations",
+            .script =
+            \\condition=outer
+            \\body=outer
+            \\if condition=inner
+            \\then
+            \\    body=inner
+            \\    printf 'if-body\n'
+            \\fi >out
+            \\printf '<%s>:<%s>\n' "$condition" "$body"
+            \\cat out
+            ,
+            .stdout =
+            \\<inner>:<inner>
+            \\if-body
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "case command redirection does not isolate matched clause mutations",
+            .script =
+            \\x=outer
+            \\case a in
+            \\    a) x=inner; printf 'case-body\n' ;;
+            \\esac >out
+            \\printf '<%s>\n' "$x"
+            \\cat out
+            ,
+            .stdout =
+            \\<inner>
+            \\case-body
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "loop redirection does not isolate condition or body mutations",
+            .script =
+            \\i=0
+            \\x=outer
+            \\while i=$((i + 1)); test "$i" -le 1
+            \\do
+            \\    x=inner
+            \\    printf 'loop-body\n'
+            \\done >out
+            \\printf '<%s>:<%s>\n' "$i" "$x"
+            \\cat out
+            ,
+            .stdout =
+            \\<2>:<inner>
+            \\loop-body
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "function invocation redirection does not isolate body mutations",
+            .script =
+            \\x=outer
+            \\fn() { x=inner; printf 'function-body\n'; }
+            \\fn >out
+            \\printf '<%s>\n' "$x"
+            \\cat out
+            ,
+            .stdout =
+            \\<inner>
+            \\function-body
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "subshell grouping with redirection still isolates mutations",
+            .script =
+            \\x=outer
+            \\( x=inner; printf 'subshell-body\n' ) >out
+            \\printf '<%s>\n' "$x"
+            \\cat out
+            ,
+            .stdout =
+            \\<outer>
+            \\subshell-body
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "asynchronous brace group executes in a subshell environment",
+            .script =
+            \\x=outer
+            \\{ x=inner; printf 'async-body\n' >out; } & wait "$!"
+            \\printf '<%s>\n' "$x"
+            \\cat out
+            ,
+            .stdout =
+            \\<outer>
+            \\async-body
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
     },
 }
