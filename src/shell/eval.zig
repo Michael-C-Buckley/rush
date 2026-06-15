@@ -36,6 +36,17 @@ pub const EvalError = error{
 
 pub const ExternalStdio = runtime.ExternalStdio;
 
+pub const CommandHistoryEntry = struct {
+    number: i64,
+    text: []const u8,
+
+    pub fn validate(self: CommandHistoryEntry) void {
+        std.debug.assert(self.number > 0);
+        std.debug.assert(self.text.len != 0);
+        std.debug.assert(std.mem.findScalar(u8, self.text, 0) == null);
+    }
+};
+
 pub const Evaluator = struct {
     allocator: std.mem.Allocator,
     fd_port: ?runtime.fd.Port = null,
@@ -52,6 +63,7 @@ pub const Evaluator = struct {
     builtin_definitions: []const builtin.Builtin = default_builtins.default_registry,
     extension_handler_context: ?*anyopaque = null,
     extension_handler_lookup: ?*const fn (?*anyopaque, []const u8) ?extension_api.HandlerSpec = null,
+    history_entries: []const CommandHistoryEntry = &.{},
 
     pub fn init(allocator: std.mem.Allocator) Evaluator {
         return .{ .allocator = allocator, .shell_pid = currentProcessId() };
@@ -105,6 +117,11 @@ pub const Evaluator = struct {
     pub fn setBuiltinDefinitions(self: *Evaluator, definitions: []const builtin.Builtin) void {
         builtin.assertUniqueNames(definitions);
         self.builtin_definitions = definitions;
+    }
+
+    pub fn setHistoryEntries(self: *Evaluator, entries: []const CommandHistoryEntry) void {
+        for (entries) |entry| entry.validate();
+        self.history_entries = entries;
     }
 
     fn builtinDefinition(self: Evaluator, name: []const u8) ?builtin.Builtin {
@@ -5475,6 +5492,14 @@ fn evaluateBuiltin(
             buffers,
         );
     }
+    if (std.mem.eql(u8, definition.name, "fc")) return evaluateFc(
+        evaluator,
+        shell_state,
+        eval_context,
+        plan.argv,
+        state_delta,
+        buffers,
+    );
     if (std.mem.eql(u8, definition.name, "test") or
         std.mem.eql(u8, definition.name, "["))
     {
@@ -6501,6 +6526,218 @@ fn parseKillSignal(raw: []const u8) ?u8 {
 fn parseKillProcess(raw: []const u8) ?i32 {
     if (raw.len == 0) return null;
     return std.fmt.parseInt(i32, raw, 10) catch null;
+}
+
+const FcMode = enum { edit, list, substitute };
+
+const FcOptions = struct {
+    mode: FcMode = .edit,
+    suppress_numbers: bool = false,
+    reverse: bool = false,
+    first: ?[]const u8 = null,
+    last: ?[]const u8 = null,
+    substitution: ?FcSubstitution = null,
+};
+
+const FcSubstitution = struct {
+    old: []const u8,
+    new: []const u8,
+};
+
+fn evaluateFc(
+    evaluator: *Evaluator,
+    shell_state: state.ShellState,
+    eval_context: context.EvalContext,
+    argv: []const []const u8,
+    state_delta: *delta.StateDelta,
+    buffers: *EvaluationBuffers,
+) !SimpleEvalResult {
+    std.debug.assert(argv.len != 0);
+    std.debug.assert(std.mem.eql(u8, argv[0], "fc"));
+    const options = parseFcOptions(argv) orelse return normalEvaluation(try builtinUsageError(
+        buffers,
+        "fc",
+        "unsupported option",
+    ));
+    if (evaluator.history_entries.len == 0) return normalEvaluation(try builtinStatusError(
+        buffers,
+        1,
+        "fc",
+        "history is empty",
+    ));
+
+    return switch (options.mode) {
+        .list => normalEvaluation(try evaluateFcList(evaluator, options, buffers)),
+        .substitute => evaluateFcSubstitute(evaluator, shell_state, eval_context, options, state_delta, buffers),
+        .edit => normalEvaluation(try builtinUsageError(buffers, "fc", "editor mode is not implemented")),
+    };
+}
+
+fn parseFcOptions(argv: []const []const u8) ?FcOptions {
+    var options: FcOptions = .{};
+    var index: usize = 1;
+    while (index < argv.len) : (index += 1) {
+        const arg = argv[index];
+        if (std.mem.eql(u8, arg, "--")) {
+            index += 1;
+            break;
+        }
+        if (arg.len == 0 or arg[0] != '-' or std.mem.eql(u8, arg, "-")) break;
+        if (arg.len > 1 and std.ascii.isDigit(arg[1])) break;
+        for (arg[1..]) |option| switch (option) {
+            'l' => options.mode = .list,
+            'n' => options.suppress_numbers = true,
+            'r' => options.reverse = true,
+            's' => options.mode = .substitute,
+            else => return null,
+        };
+    }
+
+    if (options.mode == .substitute and index < argv.len) {
+        if (parseFcSubstitution(argv[index])) |substitution| {
+            options.substitution = substitution;
+            index += 1;
+        }
+    }
+    if (index < argv.len) {
+        options.first = argv[index];
+        index += 1;
+    }
+    if (index < argv.len) {
+        options.last = argv[index];
+        index += 1;
+    }
+    if (index != argv.len) return null;
+    if (options.mode == .substitute and options.last != null) return null;
+    return options;
+}
+
+fn parseFcSubstitution(raw: []const u8) ?FcSubstitution {
+    const offset = std.mem.indexOfScalar(u8, raw, '=') orelse return null;
+    if (offset == 0) return null;
+    return .{ .old = raw[0..offset], .new = raw[offset + 1 ..] };
+}
+
+fn evaluateFcList(evaluator: *Evaluator, options: FcOptions, buffers: *EvaluationBuffers) !outcome.ExitStatus {
+    const range = fcRange(evaluator.history_entries, options.first, options.last, .list) orelse {
+        return builtinStatusError(buffers, 1, "fc", "history entry not found");
+    };
+    if (options.reverse) {
+        var index = range.last + 1;
+        while (index > range.first) {
+            index -= 1;
+            try printFcEntry(
+                buffers.allocator,
+                &buffers.stdout,
+                evaluator.history_entries[index],
+                options.suppress_numbers,
+            );
+        }
+        return 0;
+    }
+    for (evaluator.history_entries[range.first .. range.last + 1]) |entry| {
+        try printFcEntry(buffers.allocator, &buffers.stdout, entry, options.suppress_numbers);
+    }
+    return 0;
+}
+
+fn evaluateFcSubstitute(
+    evaluator: *Evaluator,
+    shell_state: state.ShellState,
+    eval_context: context.EvalContext,
+    options: FcOptions,
+    state_delta: *delta.StateDelta,
+    buffers: *EvaluationBuffers,
+) !SimpleEvalResult {
+    const range = fcRange(evaluator.history_entries, options.first, null, .substitute) orelse {
+        return normalEvaluation(try builtinStatusError(buffers, 1, "fc", "history entry not found"));
+    };
+    const entry = evaluator.history_entries[range.first];
+    const source = if (options.substitution) |substitution|
+        try fcSubstituteCommand(evaluator.allocator, entry.text, substitution)
+    else
+        try evaluator.allocator.dupe(u8, entry.text);
+    defer evaluator.allocator.free(source);
+
+    try buffers.stdout.print(buffers.allocator, "{s}\n", .{source});
+    return evaluateSourcedText(evaluator, shell_state, eval_context, source, state_delta, buffers);
+}
+
+const FcRangeDefault = enum { list, substitute };
+
+const FcRange = struct {
+    first: usize,
+    last: usize,
+};
+
+fn fcRange(
+    entries: []const CommandHistoryEntry,
+    first_spec: ?[]const u8,
+    last_spec: ?[]const u8,
+    default_mode: FcRangeDefault,
+) ?FcRange {
+    if (entries.len == 0) return null;
+    const default_first = switch (default_mode) {
+        .list => if (entries.len > 16) entries.len - 16 else 0,
+        .substitute => entries.len - 1,
+    };
+    const first = if (first_spec) |spec| fcHistoryIndex(entries, spec) orelse return null else default_first;
+    const last = if (last_spec) |spec| fcHistoryIndex(entries, spec) orelse return null else switch (default_mode) {
+        .list => entries.len - 1,
+        .substitute => first,
+    };
+    return if (first <= last) .{ .first = first, .last = last } else .{ .first = last, .last = first };
+}
+
+fn fcHistoryIndex(entries: []const CommandHistoryEntry, spec: []const u8) ?usize {
+    if (spec.len == 0) return null;
+    if (std.fmt.parseInt(i64, spec, 10)) |number| {
+        if (number > 0) {
+            for (entries, 0..) |entry, index| if (entry.number == number) return index;
+            return null;
+        }
+        if (number < 0) {
+            const offset: usize = @intCast(-number);
+            if (offset == 0 or offset > entries.len) return null;
+            return entries.len - offset;
+        }
+        return null;
+    } else |_| {}
+
+    var index = entries.len;
+    while (index > 0) {
+        index -= 1;
+        if (std.mem.startsWith(u8, entries[index].text, spec)) return index;
+    }
+    return null;
+}
+
+fn printFcEntry(
+    allocator: std.mem.Allocator,
+    stdout: *std.ArrayList(u8),
+    entry: CommandHistoryEntry,
+    suppress_numbers: bool,
+) !void {
+    entry.validate();
+    if (suppress_numbers) {
+        try stdout.print(allocator, "{s}\n", .{entry.text});
+    } else {
+        try stdout.print(allocator, "{d}\t{s}\n", .{ entry.number, entry.text });
+    }
+}
+
+fn fcSubstituteCommand(
+    allocator: std.mem.Allocator,
+    command: []const u8,
+    substitution: FcSubstitution,
+) ![]const u8 {
+    const offset = std.mem.indexOf(u8, command, substitution.old) orelse return allocator.dupe(u8, command);
+    var result: std.ArrayList(u8) = .empty;
+    errdefer result.deinit(allocator);
+    try result.appendSlice(allocator, command[0..offset]);
+    try result.appendSlice(allocator, substitution.new);
+    try result.appendSlice(allocator, command[offset + substitution.old.len ..]);
+    return result.toOwnedSlice(allocator);
 }
 
 fn evaluateCommandBuiltin(
@@ -9829,6 +10066,43 @@ test "semantic evaluator evaluates ulimit file-size resource" {
     defer invalid_result.deinit();
     try std.testing.expectEqual(@as(outcome.ExitStatus, 2), invalid_result.status);
     try std.testing.expectEqualStrings("ulimit: unsupported option\n", invalid_result.stderr.items);
+}
+
+test "semantic evaluator evaluates fc history listing and substitution" {
+    const history = [_]CommandHistoryEntry{
+        .{ .number = 1, .text = "echo one" },
+        .{ .number = 2, .text = "echo two" },
+        .{ .number = 3, .text = "VALUE=old" },
+    };
+    var shell_state = state.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    var evaluator = Evaluator.init(std.testing.allocator);
+    evaluator.setHistoryEntries(&history);
+    const eval_context = context.EvalContext.forTarget(.current_shell);
+
+    const list_plan = command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{
+        "fc",
+        "-ln",
+        "2",
+        "3",
+    } } });
+    var list_result = try evaluatePlan(&evaluator, &shell_state, eval_context, list_plan);
+    defer list_result.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 0), list_result.status);
+    try std.testing.expectEqualStrings("echo two\nVALUE=old\n", list_result.stdout.items);
+
+    const substitute_plan = command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{
+        "fc",
+        "-s",
+        "old=new",
+        "VALUE=old",
+    } } });
+    var substitute_result = try evaluatePlan(&evaluator, &shell_state, eval_context, substitute_plan);
+    defer substitute_result.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 0), substitute_result.status);
+    try std.testing.expectEqualStrings("VALUE=new\n", substitute_result.stdout.items);
+    try substitute_result.commitDelta(&shell_state, .current_shell);
+    try std.testing.expectEqualStrings("new", shell_state.getVariable("VALUE").?.value);
 }
 
 test "semantic evaluator evaluates umask through filesystem runtime" {
