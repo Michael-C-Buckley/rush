@@ -35,6 +35,89 @@
             .status = 0,
         },
         .{
+            .name = "external utility exit status is propagated",
+            .script =
+            \\sh -c 'exit 7'
+            \\printf '<%s>\n' "$?"
+            ,
+            .stdout =
+            \\<7>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "external utility exit status uses the low eight bits",
+            .script =
+            \\sh -c 'exit 300'
+            \\printf '<%s>\n' "$?"
+            ,
+            .stdout =
+            \\<44>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "regular builtin exit status is propagated",
+            .script =
+            \\false
+            \\printf '<%s>\n' "$?"
+            \\true
+            \\printf '<%s>\n' "$?"
+            ,
+            .stdout =
+            \\<1>
+            \\<0>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "function return status is propagated",
+            .script =
+            \\f() { return 7; }
+            \\f
+            \\printf '<%s>\n' "$?"
+            ,
+            .stdout =
+            \\<7>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "function status defaults to the last command status",
+            .script =
+            \\f() { false; }
+            \\f
+            \\printf '<%s>\n' "$?"
+            ,
+            .stdout =
+            \\<1>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "subshell exit status is propagated",
+            .script =
+            \\( exit 9 )
+            \\printf '<%s>\n' "$?"
+            ,
+            .stdout =
+            \\<9>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "command search failure exits with status 127",
             .script =
             \\no_such_posix_command_for_rush 2>/dev/null
@@ -42,6 +125,32 @@
             .stdout = "",
             .stderr = "",
             .status = 127,
+        },
+        .{
+            .name = "PATH search failure reports status 127 and can be observed",
+            .script =
+            \\PATH=./missing-dir no_such_posix_command_for_rush 2>/dev/null
+            \\printf '<%s>\n' "$?"
+            ,
+            .stdout =
+            \\<127>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "missing pathname command reports status 127",
+            .script =
+            \\./missing-command 2>/dev/null
+            \\printf '<%s>\n' "$?"
+            ,
+            .stdout =
+            \\<127>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
         },
         .{
             .name = "non-executable command found by pathname exits with status 126",
@@ -53,6 +162,25 @@
             .stdout = "",
             .stderr = "",
             .status = 126,
+        },
+        .{
+            .name = "signal-terminated utility status is greater than 128",
+            .script =
+            \\sh -c 'kill -TERM $$' 2>/dev/null
+            \\status=$?
+            \\if [ "$status" -gt 128 ]
+            \\then
+            \\    printf 'signal\n'
+            \\else
+            \\    printf 'bad:%s\n' "$status"
+            \\fi
+            ,
+            .stdout =
+            \\signal
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
         },
         .{
             .name = "directory command path exits with status 126",
