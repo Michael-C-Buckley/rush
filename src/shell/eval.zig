@@ -400,6 +400,7 @@ const TrapActionExpansionCommandSubstitutions = struct {
             lowerer.shell_state,
             expansion_eval_context,
             self.resolver.commandSubstitutionResolver(),
+            lowerer.owner.resolver(),
         );
         self.resolver.expansion_context = &self.context;
     }
@@ -1666,6 +1667,7 @@ pub const CommandSubstitutionExpansionContext = struct {
     shell_state: *state.ShellState,
     eval_context: context.EvalContext,
     resolver: CommandSubstitutionResolver,
+    trap_resolver: ?TrapActionResolver = null,
     last_status: ?outcome.ExitStatus = null,
     last_control_flow: outcome.ControlFlow = .normal,
     max_depth_observed: u32 = 0,
@@ -1677,15 +1679,18 @@ pub const CommandSubstitutionExpansionContext = struct {
         shell_state: *state.ShellState,
         eval_context: context.EvalContext,
         resolver: CommandSubstitutionResolver,
+        trap_resolver: ?TrapActionResolver,
     ) CommandSubstitutionExpansionContext {
         shell_state.validate();
         eval_context.validate();
         resolver.validate();
+        if (trap_resolver) |resolver_for_traps| resolver_for_traps.validate();
         return .{
             .evaluator = evaluator,
             .shell_state = shell_state,
             .eval_context = eval_context,
             .resolver = resolver,
+            .trap_resolver = trap_resolver,
         };
     }
 
@@ -1705,6 +1710,7 @@ pub const CommandSubstitutionExpansionContext = struct {
         self.shell_state.validate();
         self.eval_context.validate();
         self.resolver.validate();
+        if (self.trap_resolver) |resolver_for_traps| resolver_for_traps.validate();
         self.last_control_flow.validate();
         if (self.last_status == null) std.debug.assert(self.last_control_flow == .normal);
     }
@@ -2345,7 +2351,7 @@ fn evaluateCommandSubstitutionSnapshot(
     };
     defer substitution_state.deinit();
 
-    return evaluateCommandSubstitutionInState(evaluator, &substitution_state, substitution_context, body);
+    return evaluateCommandSubstitutionInState(evaluator, &substitution_state, substitution_context, body, null);
 }
 
 fn evaluateCommandSubstitutionInState(
@@ -2353,21 +2359,66 @@ fn evaluateCommandSubstitutionInState(
     substitution_state: *state.ShellState,
     substitution_context: context.EvalContext,
     body: CommandSubstitutionBody,
+    exit_trap_resolver: ?TrapActionResolver,
 ) EvalError!CommandSubstitutionResult {
     substitution_state.validate();
     substitution_context.validate();
     assertCommandSubstitutionContext(substitution_context);
     std.debug.assert(substitution_state.acceptsExecutionTarget(.subshell));
     body.validate();
+    if (exit_trap_resolver) |resolver| resolver.validate();
 
     var body_outcome = try evaluateCommandSubstitutionBody(evaluator, substitution_state, substitution_context, body);
     defer body_outcome.deinit();
 
-    const visible_status = body_outcome.control_flow.status(body_outcome.status);
+    var visible_status = body_outcome.control_flow.status(body_outcome.status);
     try applyCommandSubstitutionOutcome(substitution_state, &body_outcome);
+    if (exit_trap_resolver) |resolver| try appendCommandSubstitutionExitTrap(
+        evaluator,
+        substitution_state,
+        substitution_context,
+        &body_outcome,
+        &visible_status,
+        resolver,
+    );
     const result = try commandSubstitutionResultFromOutcome(evaluator.allocator, visible_status, body_outcome);
     result.validate();
     return result;
+}
+
+fn appendCommandSubstitutionExitTrap(
+    evaluator: *Evaluator,
+    substitution_state: *state.ShellState,
+    substitution_context: context.EvalContext,
+    command_outcome: *outcome.CommandOutcome,
+    visible_status: *outcome.ExitStatus,
+    resolver: TrapActionResolver,
+) EvalError!void {
+    substitution_state.validate();
+    substitution_context.validate();
+    assertCommandSubstitutionContext(substitution_context);
+    command_outcome.validate();
+    resolver.validate();
+
+    if (substitution_state.getTrapForSignal(.EXIT) == null) return;
+    substitution_state.last_status = visible_status.*;
+    try substitution_state.appendPendingTrap(.EXIT);
+    var trap_outcome = (try executePendingTraps(
+        evaluator,
+        substitution_state,
+        substitution_context,
+        resolver,
+    )) orelse return;
+    defer trap_outcome.deinit();
+
+    try command_outcome.appendStdout(trap_outcome.stdout.items);
+    try command_outcome.appendStderr(trap_outcome.stderr.items);
+    for (trap_outcome.diagnostics.items) |diagnostic| try command_outcome.addDiagnostic(diagnostic.message);
+    visible_status.* = trap_outcome.status;
+    trap_outcome.applyToShellState(substitution_state, .{}) catch |err| switch (err) {
+        error.ReadonlyVariable => return error.Unimplemented,
+        error.OutOfMemory => return error.OutOfMemory,
+    };
 }
 
 fn evaluateCommandSubstitutionBody(
@@ -2528,6 +2579,7 @@ fn runSemanticCommandSubstitution(
         &substitution_state,
         substitution_context,
         body,
+        expansion_context.trap_resolver,
     );
     defer result.deinit();
 
@@ -5549,6 +5601,11 @@ fn evaluateBuiltin(
         state_delta,
         buffers,
     ));
+    if (std.mem.eql(u8, definition.name, "kill")) return normalEvaluation(try evaluateKill(
+        evaluator,
+        plan.argv,
+        buffers,
+    ));
     return error.Unimplemented;
 }
 
@@ -6200,6 +6257,100 @@ fn assignOptind(state_delta: *delta.StateDelta, optind: usize) !void {
     const value = try std.fmt.allocPrint(state_delta.allocator, "{d}", .{optind});
     defer state_delta.allocator.free(value);
     try state_delta.assignVariable("OPTIND", value, .{});
+}
+
+fn evaluateKill(
+    evaluator: *Evaluator,
+    argv: []const []const u8,
+    buffers: *EvaluationBuffers,
+) !outcome.ExitStatus {
+    std.debug.assert(argv.len != 0);
+    std.debug.assert(std.mem.eql(u8, argv[0], "kill"));
+    if (argv.len == 1) return builtinUsageError(buffers, "kill", "missing operand");
+
+    var signal = signalNumber(.TERM);
+    var index: usize = 1;
+    if (std.mem.eql(u8, argv[index], "--")) {
+        index += 1;
+    } else if (std.mem.eql(u8, argv[index], "-l")) {
+        return evaluateKillList(argv[index + 1 ..], buffers);
+    } else if (std.mem.eql(u8, argv[index], "-s")) {
+        if (index + 1 >= argv.len) return builtinUsageError(buffers, "kill", "missing signal");
+        signal = parseKillSignal(argv[index + 1]) orelse return builtinUsageError(buffers, "kill", "invalid signal");
+        index += 2;
+    } else if (std.mem.startsWith(u8, argv[index], "-") and argv[index].len > 1) {
+        signal = parseKillSignal(argv[index][1..]) orelse return builtinUsageError(buffers, "kill", "invalid signal");
+        index += 1;
+    }
+    if (index < argv.len and std.mem.eql(u8, argv[index], "--")) index += 1;
+    if (index >= argv.len) return builtinUsageError(buffers, "kill", "missing process id");
+
+    const signal_port = evaluator.signal_port orelse return error.Unimplemented;
+    var status: outcome.ExitStatus = 0;
+    for (argv[index..]) |operand| {
+        const process = parseKillProcess(operand) orelse {
+            const message = try std.fmt.allocPrint(buffers.allocator, "{s}: invalid process id", .{operand});
+            defer buffers.allocator.free(message);
+            try buffers.addBuiltinDiagnostic("kill", message);
+            status = 1;
+            continue;
+        };
+        signal_port.send(.{ .process = process, .signal = signal }) catch |err| {
+            const reason: []const u8 = switch (err) {
+                error.ProcessNotFound => "no such process",
+                error.PermissionDenied => "permission denied",
+                error.Unexpected => "unexpected signal error",
+            };
+            const message = try std.fmt.allocPrint(buffers.allocator, "{s}: {s}", .{ operand, reason });
+            defer buffers.allocator.free(message);
+            try buffers.addBuiltinDiagnostic("kill", message);
+            status = 1;
+        };
+    }
+    return status;
+}
+
+fn evaluateKillList(args: []const []const u8, buffers: *EvaluationBuffers) !outcome.ExitStatus {
+    if (args.len > 1) return builtinUsageError(buffers, "kill", "too many arguments");
+    if (args.len == 1) {
+        const signal = parseKillListStatus(args[0]) orelse return builtinUsageError(buffers, "kill", "invalid signal");
+        if (signalName(signal)) |name| {
+            const start: usize = if (std.mem.startsWith(u8, name, "SIG")) 3 else 0;
+            try buffers.stdout.print(buffers.allocator, "{s}\n", .{name[start..]});
+            return 0;
+        }
+        return builtinUsageError(buffers, "kill", "invalid signal");
+    }
+    try buffers.stdout.appendSlice(buffers.allocator, "HUP INT QUIT KILL TERM USR1 USR2\n");
+    return 0;
+}
+
+fn parseKillListStatus(raw: []const u8) ?u8 {
+    const parsed = std.fmt.parseInt(u8, raw, 10) catch return parseKillSignal(raw);
+    return if (parsed >= 128) parsed - 128 else parsed;
+}
+
+fn parseKillSignal(raw: []const u8) ?u8 {
+    if (raw.len == 0) return null;
+    if (std.fmt.parseInt(u8, raw, 10)) |number| {
+        if (number == 0) return null;
+        return number;
+    } else |_| {}
+    const start: usize = if (std.ascii.startsWithIgnoreCase(raw, "SIG") and raw.len > 3) 3 else 0;
+    const name = raw[start..];
+    if (std.ascii.eqlIgnoreCase(name, "HUP")) return signalNumber(.HUP);
+    if (std.ascii.eqlIgnoreCase(name, "INT")) return signalNumber(.INT);
+    if (std.ascii.eqlIgnoreCase(name, "QUIT")) return signalNumber(.QUIT);
+    if (std.ascii.eqlIgnoreCase(name, "KILL")) return signalNumber(.KILL);
+    if (std.ascii.eqlIgnoreCase(name, "TERM")) return signalNumber(.TERM);
+    if (std.ascii.eqlIgnoreCase(name, "USR1")) return signalNumber(.USR1);
+    if (std.ascii.eqlIgnoreCase(name, "USR2")) return signalNumber(.USR2);
+    return null;
+}
+
+fn parseKillProcess(raw: []const u8) ?i32 {
+    if (raw.len == 0) return null;
+    return std.fmt.parseInt(i32, raw, 10) catch null;
 }
 
 fn evaluateCommandBuiltin(
@@ -9609,6 +9760,69 @@ test "semantic evaluator evaluates getopts diagnostics and silent mode" {
     try std.testing.expectEqualStrings("a", shell_state.getVariable("OPTARG").?.value);
 }
 
+test "semantic evaluator evaluates kill through signal runtime" {
+    var fake_signal = FakeSignalRuntime.init();
+    var shell_state = state.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    var evaluator = Evaluator.initWithSignalPort(std.testing.allocator, fake_signal.port());
+    const eval_context = context.EvalContext.forTarget(.current_shell);
+
+    const default_plan = command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{
+        "kill",
+        "123",
+    } } });
+    var default_result = try evaluatePlan(&evaluator, &shell_state, eval_context, default_plan);
+    defer default_result.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 0), default_result.status);
+    try std.testing.expectEqual(@as(usize, 1), fake_signal.send_count);
+    try std.testing.expectEqual(@as(i32, 123), fake_signal.sent_processes[0]);
+    try std.testing.expectEqual(signalNumber(.TERM), fake_signal.sent_signals[0]);
+
+    const explicit_plan = command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{
+        "kill",
+        "-s",
+        "HUP",
+        "456",
+    } } });
+    var explicit_result = try evaluatePlan(&evaluator, &shell_state, eval_context, explicit_plan);
+    defer explicit_result.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 0), explicit_result.status);
+    try std.testing.expectEqual(@as(usize, 2), fake_signal.send_count);
+    try std.testing.expectEqual(@as(i32, 456), fake_signal.sent_processes[1]);
+    try std.testing.expectEqual(signalNumber(.HUP), fake_signal.sent_signals[1]);
+
+    const group_plan = command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{
+        "kill",
+        "-TERM",
+        "--",
+        "-789",
+    } } });
+    var group_result = try evaluatePlan(&evaluator, &shell_state, eval_context, group_plan);
+    defer group_result.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 0), group_result.status);
+    try std.testing.expectEqual(@as(i32, -789), fake_signal.sent_processes[2]);
+    try std.testing.expectEqual(signalNumber(.TERM), fake_signal.sent_signals[2]);
+
+    const list_plan = command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{
+        "kill",
+        "-l",
+        "143",
+    } } });
+    var list_result = try evaluatePlan(&evaluator, &shell_state, eval_context, list_plan);
+    defer list_result.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 0), list_result.status);
+    try std.testing.expectEqualStrings("TERM\n", list_result.stdout.items);
+
+    const invalid_plan = command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{
+        "kill",
+        "not-a-pid",
+    } } });
+    var invalid_result = try evaluatePlan(&evaluator, &shell_state, eval_context, invalid_plan);
+    defer invalid_result.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 1), invalid_result.status);
+    try std.testing.expectEqualStrings("kill: not-a-pid: invalid process id\n", invalid_result.stderr.items);
+}
+
 test "semantic evaluator dispatches shopt as a compat extension builtin" {
     var shell_state = state.ShellState.init(std.testing.allocator);
     defer shell_state.deinit();
@@ -11083,6 +11297,41 @@ test "semantic command substitution captures owned output and trims only trailin
     try std.testing.expectEqual(@as(state.ExitStatus, 0), shell_state.last_status);
 }
 
+test "semantic command substitution runs subshell EXIT trap before trimming captured output" {
+    var parent_state = state.ShellState.init(std.testing.allocator);
+    defer parent_state.deinit();
+    var substitution_state = try parent_state.snapshotForSubshell(std.testing.allocator);
+    defer substitution_state.deinit();
+    var evaluator = Evaluator.init(std.testing.allocator);
+
+    const commands = [_]command_plan.CommandPlan{
+        command_plan.classifyExpandedSimpleCommand(.{
+            .command = .{ .argv = &[_][]const u8{ "trap", "echo term", "0" } },
+            .target = .subshell,
+        }),
+        command_plan.classifyExpandedSimpleCommand(.{
+            .command = .{ .argv = &[_][]const u8{ "printf", "body-" } },
+            .target = .subshell,
+        }),
+    };
+    const compound: command_plan.CompoundCommandPlan = .{
+        .target = .subshell,
+        .body = .{ .sequence = .{ .commands = &commands } },
+    };
+    var result = try evaluateCommandSubstitutionInState(
+        &evaluator,
+        &substitution_state,
+        context.EvalContext.forTarget(.current_shell).enterCommandSubstitution(),
+        .{ .compound = compound },
+        simpleTrapResolver(),
+    );
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("body-term", result.output.items);
+    try std.testing.expectEqual(@as(?state.Trap, null), parent_state.getTrapForSignal(.EXIT));
+}
+
 test "semantic command substitution sees parent variables but isolates body mutations" {
     var shell_state = state.ShellState.init(std.testing.allocator);
     defer shell_state.deinit();
@@ -11214,6 +11463,7 @@ test "semantic expansion callback evaluates nested command substitutions through
             .context = &resolver,
             .resolveFn = NestedResolver.resolve,
         },
+        null,
     );
     defer expansion_context.deinit();
     resolver.expansion_context = &expansion_context;
@@ -11249,6 +11499,9 @@ const FakeSignalRuntime = struct {
     configured_signals: [8]runtime.signal.Number = undefined,
     configured_dispositions: [8]runtime.signal.Disposition = undefined,
     configure_count: usize = 0,
+    sent_processes: [8]i32 = undefined,
+    sent_signals: [8]runtime.signal.Number = undefined,
+    send_count: usize = 0,
 
     fn init() FakeSignalRuntime {
         return .{};
@@ -11259,6 +11512,7 @@ const FakeSignalRuntime = struct {
             .context = self,
             .configure_fn = configure,
             .poll_fn = poll,
+            .send_fn = send,
         };
     }
 
@@ -11293,6 +11547,15 @@ const FakeSignalRuntime = struct {
         while (index < self.event_count) : (index += 1) self.events[index - 1] = self.events[index];
         self.event_count -= 1;
         return event;
+    }
+
+    fn send(opaque_context: *anyopaque, request: runtime.signal.SendRequest) runtime.signal.SendError!void {
+        const self = fromContext(opaque_context);
+        request.validate();
+        std.debug.assert(self.send_count < self.sent_processes.len);
+        self.sent_processes[self.send_count] = request.process;
+        self.sent_signals[self.send_count] = request.signal;
+        self.send_count += 1;
     }
 };
 

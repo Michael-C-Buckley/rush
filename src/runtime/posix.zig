@@ -64,6 +64,7 @@ pub const Adapter = struct {
             .context = self,
             .configure_fn = configureSignal,
             .poll_fn = pollSignal,
+            .send_fn = sendSignal,
         };
     }
 };
@@ -375,6 +376,16 @@ fn configureSignal(context: *anyopaque, request: runtime_signal.ConfigureRequest
 fn pollSignal(context: *anyopaque) runtime_signal.PollError!?runtime_signal.Event {
     _ = adapterFromContext(context);
     return runtime_signal.pollCaughtSignal();
+}
+
+fn sendSignal(context: *anyopaque, request: runtime_signal.SendRequest) runtime_signal.SendError!void {
+    _ = adapterFromContext(context);
+    request.validate();
+    std.posix.kill(@intCast(request.process), @enumFromInt(request.signal)) catch |err| switch (err) {
+        error.ProcessNotFound => return error.ProcessNotFound,
+        error.PermissionDenied => return error.PermissionDenied,
+        error.Unexpected => return error.Unexpected,
+    };
 }
 
 fn runtimeSignalHandler(posix_signal: std.posix.SIG) callconv(.c) void {

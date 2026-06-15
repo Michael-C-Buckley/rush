@@ -170,7 +170,7 @@ fn semanticClassAcceptsName(semantic_class: BuiltinSemanticClass, name: []const 
             "hash",
             "getopts",
         }),
-        .job_control => matchesName(name, &.{ "jobs", "fg", "bg", "wait" }),
+        .job_control => matchesName(name, &.{ "jobs", "fg", "bg", "wait", "kill" }),
         .control_flow => matchesName(name, &.{ "break", "continue", "exit", "return" }),
     };
 }
@@ -212,7 +212,7 @@ pub const posix_builtins = [_]Builtin{
     Builtin.initWithSemantics("getopts", .regular, .shell_state),
     Builtin.initWithSemantics("hash", .regular, .shell_state),
     Builtin.initWithSemantics("jobs", .regular, .job_control),
-    Builtin.init("kill", .regular),
+    Builtin.initWithSemantics("kill", .regular, .job_control),
     Builtin.initWithSemantics("printf", .regular, .output),
     Builtin.initWithSemantics("pwd", .regular, .output),
     Builtin.initWithSemantics("read", .regular, .shell_state),

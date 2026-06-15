@@ -37,6 +37,15 @@ pub const Event = struct {
     }
 };
 
+pub const SendRequest = struct {
+    process: i32,
+    signal: Number,
+
+    pub fn validate(self: SendRequest) void {
+        assertValidNumber(self.signal);
+    }
+};
+
 pub const ConfigureError = error{
     Unsupported,
     Unexpected,
@@ -47,13 +56,21 @@ pub const PollError = error{
     Unexpected,
 };
 
+pub const SendError = error{
+    ProcessNotFound,
+    PermissionDenied,
+    Unexpected,
+};
+
 pub const ConfigureFn = *const fn (*anyopaque, ConfigureRequest) ConfigureError!void;
 pub const PollFn = *const fn (*anyopaque) PollError!?Event;
+pub const SendFn = *const fn (*anyopaque, SendRequest) SendError!void;
 
 pub const Port = struct {
     context: *anyopaque,
     configure_fn: ConfigureFn,
     poll_fn: PollFn,
+    send_fn: SendFn,
 
     pub fn configure(self: Port, request: ConfigureRequest) ConfigureError!void {
         request.validate();
@@ -64,6 +81,11 @@ pub const Port = struct {
         const event = try self.poll_fn(self.context);
         if (event) |signal_event| signal_event.validate();
         return event;
+    }
+
+    pub fn send(self: Port, request: SendRequest) SendError!void {
+        request.validate();
+        try self.send_fn(self.context, request);
     }
 };
 
@@ -143,6 +165,7 @@ const FakeSignalPort = struct {
             .context = self,
             .configure_fn = configure,
             .poll_fn = poll,
+            .send_fn = send,
         };
     }
 
@@ -158,5 +181,10 @@ const FakeSignalPort = struct {
         const event = self.next_event;
         self.next_event = null;
         return event;
+    }
+
+    fn send(context: *anyopaque, request: SendRequest) SendError!void {
+        _ = context;
+        request.validate();
     }
 };
