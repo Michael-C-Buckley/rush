@@ -69,5 +69,107 @@
             .stderr = "",
             .status = 7,
         },
+        .{
+            .name = "function body variable assignments affect the current shell",
+            .script =
+            \\x=before
+            \\foo() { x=after; }
+            \\foo
+            \\printf '%s\n' "$x"
+            ,
+            .stdout =
+            \\after
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "function operands restore all outer positional parameters",
+            .script =
+            \\set -- outer1 outer2
+            \\foo() { shift; printf 'inner:%s:%s\n' "$1" "$#"; }
+            \\foo inner1 inner2 inner3
+            \\printf 'outer:%s:%s:%s\n' "$1" "$2" "$#"
+            ,
+            .stdout =
+            \\inner:inner2:2
+            \\outer:outer1:outer2:2
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "function redefinition replaces the previous body",
+            .script =
+            \\foo() { printf 'old\n'; }
+            \\foo() { printf 'new\n'; }
+            \\foo
+            ,
+            .stdout =
+            \\new
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "function body expansions occur when the function is invoked",
+            .script =
+            \\x=definition
+            \\foo() { printf '%s\n' "$x"; }
+            \\x=invocation
+            \\foo
+            ,
+            .stdout =
+            \\invocation
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "function invocation redirection applies only to that invocation",
+            .script =
+            \\foo() { printf 'inside\n'; }
+            \\foo >out
+            \\printf 'outside\n'
+            \\cat out
+            ,
+            .stdout =
+            \\outside
+            \\inside
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "function definition accepts a subshell compound-command body",
+            .script =
+            \\x=outer
+            \\foo() ( x=inner; printf 'body:%s\n' "$x" )
+            \\foo
+            \\printf 'after:%s\n' "$x"
+            ,
+            .stdout =
+            \\body:inner
+            \\after:outer
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "return without an operand uses the previous command status",
+            .script =
+            \\foo() { false; return; }
+            \\foo
+            ,
+            .stdout = "",
+            .stderr = "",
+            .status = 1,
+        },
     },
 }
