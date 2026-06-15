@@ -54,6 +54,21 @@
             .status = 0,
         },
         .{
+            .name = "eval sees and persists assignment prefix variables",
+            .script =
+            \\A=outer
+            \\A=inner eval 'printf "inside=<%s>\n" "$A"; A=body; B=body'
+            \\printf 'after=<%s>:<%s>\n' "$A" "$B"
+            ,
+            .stdout =
+            \\inside=<inner>
+            \\after=<body>:<body>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "dot returns the status of the last command in the file",
             .script =
             \\printf 'false\n' >file.sh

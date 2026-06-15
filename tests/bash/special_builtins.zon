@@ -30,5 +30,20 @@
             .stderr = "",
             .status = 0,
         },
+        .{
+            .name = "eval assignment prefix variables are temporary",
+            .script =
+            \\A=outer
+            \\A=inner eval 'printf "inside=<%s>\n" "$A"; A=body; B=body'
+            \\printf 'after=<%s>:<%s>\n' "$A" "$B"
+            ,
+            .stdout =
+            \\inside=<inner>
+            \\after=<outer>:<body>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
     },
 }

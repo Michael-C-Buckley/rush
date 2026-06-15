@@ -1961,7 +1961,7 @@ fn evaluatePlanWithInput(
 
     var state_delta = delta.StateDelta.init(evaluator.allocator, effective_plan.target);
     errdefer state_delta.deinit();
-    if (effective_plan.assignmentEffect() == .persistent) {
+    if (evaluatedAssignmentEffect(eval_context, effective_plan) == .persistent) {
         state_delta.appendPersistentCommandAssignments(
             shell_state.*,
             effective_plan.assignments,
@@ -2078,6 +2078,24 @@ fn bashCommandIgnoresReadonlyAssignment(eval_context: context.EvalContext, plan:
         .assignment_only, .empty, .function_definition => false,
         .special_builtin, .regular_builtin, .function, .external, .not_found => true,
     };
+}
+
+fn evaluatedAssignmentEffect(
+    eval_context: context.EvalContext,
+    plan: command_plan.CommandPlan,
+) command_plan.AssignmentEffect {
+    eval_context.validate();
+    plan.validate();
+    if (bashEvalUsesTemporaryAssignments(eval_context, plan)) return .temporary;
+    return plan.assignmentEffect();
+}
+
+fn bashEvalUsesTemporaryAssignments(eval_context: context.EvalContext, plan: command_plan.CommandPlan) bool {
+    eval_context.validate();
+    plan.validate();
+    if (!eval_context.features.isBash()) return false;
+    if (plan.assignments.len == 0 or plan.argv.len == 0) return false;
+    return std.mem.eql(u8, plan.argv[0], "eval") and plan.class() == .special_builtin;
 }
 
 fn filterReadonlyAssignments(
@@ -5048,15 +5066,26 @@ fn appendShellStateDiff(
     after: state.ShellState,
     state_delta: *delta.StateDelta,
 ) EvalError!void {
+    return appendShellStateDiffExcludingVariables(before, after, state_delta, &.{});
+}
+
+fn appendShellStateDiffExcludingVariables(
+    before: state.ShellState,
+    after: state.ShellState,
+    state_delta: *delta.StateDelta,
+    excluded_assignments: []const command_plan.Assignment,
+) EvalError!void {
     std.debug.assert(state_delta.target.allowsShellStateCommit());
     std.debug.assert(state_delta.positionals == null);
     std.debug.assert(state_delta.last_status == null);
     if (state_delta.target == .current_shell) std.debug.assert(before.scope == after.scope);
     if (state_delta.target == .subshell) std.debug.assert(after.scope == .subshell);
+    for (excluded_assignments) |assignment| assignment.validate();
 
     var after_variables = after.variables.iterator();
     while (after_variables.next()) |entry| {
         const name = entry.key_ptr.*;
+        if (assignmentListContainsName(excluded_assignments, name)) continue;
         const next = entry.value_ptr.*;
         if (before.getVariable(name)) |previous| {
             std.debug.assert(!previous.readonly or next.readonly);
@@ -5078,6 +5107,7 @@ fn appendShellStateDiff(
     var before_variables = before.variables.iterator();
     while (before_variables.next()) |entry| {
         const name = entry.key_ptr.*;
+        if (assignmentListContainsName(excluded_assignments, name)) continue;
         if (!after.variables.contains(name)) try state_delta.unsetVariable(name);
     }
 
@@ -5105,6 +5135,15 @@ fn appendShellStateDiff(
     for (after.background_jobs.items) |job| {
         if (before.findBackgroundJobById(job.id) == null) try state_delta.appendBackgroundJob(job);
     }
+}
+
+fn assignmentListContainsName(assignments: []const command_plan.Assignment, name: []const u8) bool {
+    state.assertValidVariableName(name);
+    for (assignments) |assignment| {
+        assignment.validate();
+        if (std.mem.eql(u8, assignment.name, name)) return true;
+    }
+    return false;
 }
 
 fn positionalsEqual(left: []const []const u8, right: []const []const u8) bool {
@@ -5835,7 +5874,7 @@ fn evaluateBuiltin(
         evaluator,
         shell_state,
         eval_context,
-        plan.argv,
+        plan,
         state_delta,
         buffers,
     );
@@ -6152,10 +6191,11 @@ fn evaluateEval(
     evaluator: *Evaluator,
     shell_state: state.ShellState,
     eval_context: context.EvalContext,
-    argv: []const []const u8,
+    plan: command_plan.CommandPlan,
     state_delta: *delta.StateDelta,
     buffers: *EvaluationBuffers,
 ) !SimpleEvalResult {
+    const argv = plan.argv;
     std.debug.assert(argv.len != 0);
     std.debug.assert(std.mem.eql(u8, argv[0], "eval"));
 
@@ -6167,7 +6207,43 @@ fn evaluateEval(
     }
     if (source.items.len == 0) return normalEvaluation(0);
 
-    return evaluateSourcedText(evaluator, shell_state, eval_context, source.items, state_delta, buffers);
+    var working_state = shell_state.clone(evaluator.allocator) catch |err| switch (err) {
+        error.OutOfMemory => return error.OutOfMemory,
+        error.ReadonlyVariable => unreachable,
+    };
+    defer working_state.deinit();
+    try applyEvalAssignmentOverlay(&working_state, shell_state, plan);
+
+    const result = try evaluateStatementListSource(evaluator, &working_state, eval_context, source.items, buffers);
+    if (bashEvalUsesTemporaryAssignments(eval_context, plan)) {
+        try appendShellStateDiffExcludingVariables(shell_state, working_state, state_delta, plan.assignments);
+    } else {
+        try appendShellStateDiff(shell_state, working_state, state_delta);
+    }
+    return result;
+}
+
+fn applyEvalAssignmentOverlay(
+    working_state: *state.ShellState,
+    shell_state: state.ShellState,
+    plan: command_plan.CommandPlan,
+) !void {
+    working_state.validate();
+    shell_state.validate();
+    plan.validate();
+    if (plan.assignments.len == 0) return;
+
+    const exported: ?bool = if (shell_state.options.enabled(.allexport)) true else null;
+    for (plan.assignments) |assignment| {
+        working_state.putVariable(
+            assignment.name,
+            assignment.value,
+            .{ .exported = exported },
+        ) catch |err| switch (err) {
+            error.OutOfMemory => return error.OutOfMemory,
+            error.ReadonlyVariable => unreachable,
+        };
+    }
 }
 
 fn evaluateDot(
