@@ -61,6 +61,7 @@ pub const Evaluator = struct {
     read_stdin_from_fd: bool = false,
     external_stdio: ExternalStdio = .inherit,
     commit_exec_redirections: bool = false,
+    scoped_exec_redirections: ?*std.ArrayList(redirection_plan.AppliedRedirections) = null,
     builtin_definitions: []const builtin.Builtin = default_builtins.default_registry,
     extension_handler_context: ?*anyopaque = null,
     extension_handler_lookup: ?*const fn (?*anyopaque, []const u8) ?extension_api.HandlerSpec = null,
@@ -1956,8 +1957,13 @@ fn evaluatePlanWithInput(
         else => eval_context,
     };
     const result = try evaluateSimpleCommand(evaluator, shell_state, command_context, plan, &state_delta, &buffers);
-    if (execCommitsRedirections(evaluator.*, plan, result)) {
-        if (applied_redirections) |*applied| applied.commit();
+    switch (execRedirectionCommitMode(evaluator.*, eval_context, plan, result)) {
+        .none => {},
+        .permanent => if (applied_redirections) |*applied| applied.commit(),
+        .scoped => if (applied_redirections) |applied| {
+            try evaluator.scoped_exec_redirections.?.append(evaluator.allocator, applied);
+            applied_redirections = null;
+        },
     }
     if (applied_redirections != null and plan.class() != .external and plan.class() != .function) {
         if (redirectionTargetsDescriptor(plan.redirections, 1)) {
@@ -1997,14 +2003,28 @@ fn evaluatePlanWithInput(
     return command_outcome;
 }
 
-fn execCommitsRedirections(evaluator: Evaluator, plan: command_plan.CommandPlan, result: SimpleEvalResult) bool {
+const ExecRedirectionCommitMode = enum {
+    none,
+    permanent,
+    scoped,
+};
+
+fn execRedirectionCommitMode(
+    evaluator: Evaluator,
+    eval_context: context.EvalContext,
+    plan: command_plan.CommandPlan,
+    result: SimpleEvalResult,
+) ExecRedirectionCommitMode {
+    eval_context.validate();
     plan.validate();
     result.control_flow.validate();
-    if (!evaluator.commit_exec_redirections) return false;
-    if (evaluator.external_stdio != .inherit) return false;
-    if (result.status != 0 or result.control_flow != .normal) return false;
-    if (plan.argv.len != 1) return false;
-    return std.mem.eql(u8, plan.argv[0], "exec");
+    if (result.status != 0 or result.control_flow != .normal) return .none;
+    if (plan.argv.len != 1) return .none;
+    if (!std.mem.eql(u8, plan.argv[0], "exec")) return .none;
+    if (eval_context.command_substitution_depth != 0 and evaluator.scoped_exec_redirections != null) return .scoped;
+    if (!evaluator.commit_exec_redirections) return .none;
+    if (evaluator.external_stdio != .inherit) return .none;
+    return .permanent;
 }
 
 fn specialBuiltinStatusOnly(
@@ -2453,6 +2473,15 @@ fn evaluateCommandSubstitutionInState(
     evaluator.external_stdio = .capture;
     defer evaluator.external_stdio = previous_external_stdio;
 
+    var scoped_exec_redirections: std.ArrayList(redirection_plan.AppliedRedirections) = .empty;
+    defer scoped_exec_redirections.deinit(evaluator.allocator);
+    const previous_scoped_exec_redirections = evaluator.scoped_exec_redirections;
+    evaluator.scoped_exec_redirections = &scoped_exec_redirections;
+    defer {
+        restoreScopedExecRedirections(&scoped_exec_redirections);
+        evaluator.scoped_exec_redirections = previous_scoped_exec_redirections;
+    }
+
     var body_outcome = try evaluateCommandSubstitutionBody(evaluator, substitution_state, substitution_context, body);
     defer body_outcome.deinit();
 
@@ -2469,6 +2498,16 @@ fn evaluateCommandSubstitutionInState(
     const result = try commandSubstitutionResultFromOutcome(evaluator.allocator, visible_status, body_outcome);
     result.validate();
     return result;
+}
+
+fn restoreScopedExecRedirections(scoped_redirections: *std.ArrayList(redirection_plan.AppliedRedirections)) void {
+    var index = scoped_redirections.items.len;
+    while (index != 0) {
+        index -= 1;
+        scoped_redirections.items[index].restore();
+        scoped_redirections.items[index].deinit();
+    }
+    scoped_redirections.clearRetainingCapacity();
 }
 
 fn appendCommandSubstitutionExitTrap(
@@ -4016,7 +4055,7 @@ fn evaluateStatementList(
     if (list.commands.len != 0) {
         for (list.commands) |child_plan| {
             child_plan.validate();
-            try flushBuffersForRedirectionTargets(buffers, child_plan.redirections);
+            try flushBuffersForRedirectionTargetsBetweenCommands(buffers, eval_context, child_plan.redirections);
             var child_outcome = try evaluatePlanWithInput(
                 evaluator,
                 shell_state,
@@ -4052,7 +4091,7 @@ fn evaluateStatementList(
             }
         }
 
-        try flushBuffersForStatementRedirections(buffers, entry.plan);
+        try flushBuffersForStatementRedirections(buffers, child_context, entry.plan);
         var child_outcome = try evaluateStatementPlan(evaluator, shell_state, child_context, entry.plan, buffers.stdin);
         defer child_outcome.deinit();
 
@@ -4067,22 +4106,46 @@ fn evaluateStatementList(
 
 fn flushBuffersForStatementRedirections(
     buffers: *EvaluationBuffers,
+    eval_context: context.EvalContext,
     plan: command_plan.StatementPlan,
 ) EvalError!void {
+    eval_context.validate();
     plan.validate();
     switch (plan) {
-        .simple => |simple| try flushBuffersForRedirectionTargets(buffers, simple.redirections),
-        .compound => |compound| try flushBuffersForRedirectionTargets(buffers, compound.redirections),
+        .simple => |simple| try flushBuffersForRedirectionTargetsBetweenCommands(
+            buffers,
+            eval_context,
+            simple.redirections,
+        ),
+        .compound => |compound| try flushBuffersForRedirectionTargetsBetweenCommands(
+            buffers,
+            eval_context,
+            compound.redirections,
+        ),
         .pipeline => {},
-        .source => |source| try flushBuffersForSourceRedirectionTargets(buffers, source),
+        .source => |source| try flushBuffersForSourceRedirectionTargets(buffers, eval_context, source),
     }
+}
+
+fn flushBuffersForRedirectionTargetsBetweenCommands(
+    buffers: *EvaluationBuffers,
+    eval_context: context.EvalContext,
+    redirections: redirection_plan.RedirectionPlan,
+) EvalError!void {
+    eval_context.validate();
+    redirections.validate();
+    if (eval_context.command_substitution_depth != 0) return;
+    try flushBuffersForRedirectionTargets(buffers, redirections);
 }
 
 fn flushBuffersForSourceRedirectionTargets(
     buffers: *EvaluationBuffers,
+    eval_context: context.EvalContext,
     source: command_plan.SourceStatementPlan,
 ) EvalError!void {
+    eval_context.validate();
     source.validate();
+    if (eval_context.command_substitution_depth != 0) return;
     if (source.targets_stdout and buffers.stdout.items.len != 0) {
         if (!writeAllDescriptor(1, buffers.stdout.items)) return error.Unimplemented;
         buffers.stdout.items.len = 0;

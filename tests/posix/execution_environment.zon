@@ -114,6 +114,37 @@
             .status = 0,
         },
         .{
+            .name = "command substitution keeps prior captured output after later redirection failure",
+            .script =
+            \\x=$(printf out; : 1>&- 2>&1; printf bad)
+            \\status=$?
+            \\case $status in 0) label=zero;; *) label=nonzero;; esac
+            \\printf '<%s:%s>\n' "$label" "$x"
+            ,
+            .stdout =
+            \\<nonzero:out>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "exec redirections persist only within the command substitution environment",
+            .script =
+            \\x=$(exec 2>&-; : >&2; printf bad)
+            \\status=$?
+            \\case $status in 0) label=zero;; *) label=nonzero;; esac
+            \\printf '<%s:%s>\n' "$label" "$x"
+            \\printf err >&2
+            ,
+            .stdout =
+            \\<nonzero:>
+            \\
+            ,
+            .stderr = "err",
+            .status = 0,
+        },
+        .{
             .name = "nested command substitutions isolate inner mutations from outer substitutions",
             .script =
             \\printf '<%s>\n' "$(x=outer-sub; printf '%s' "$(x=inner-sub; printf '%s' "$x")"; printf ':%s' "$x")"
