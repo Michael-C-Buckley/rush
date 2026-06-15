@@ -6068,7 +6068,7 @@ fn evaluateBuiltin(
         evaluator,
         shell_state,
         eval_context,
-        plan.argv,
+        plan,
         state_delta,
         buffers,
     );
@@ -6315,12 +6315,14 @@ fn evaluateExtensionSourceFile(
     path: []const u8,
 ) !extension_api.EvaluationResult {
     const source_context: *ExtensionSourceEvaluatorContext = @ptrCast(@alignCast(opaque_context));
-    const result = try evaluateSourceFile(
+    const result = try evaluateSourcePath(
         source_context.evaluator,
         source_context.shell_state,
         source_context.eval_context,
         command,
         path,
+        &.{},
+        false,
         source_context.state_delta,
         source_context.buffers,
     );
@@ -6436,41 +6438,67 @@ fn evaluateDot(
     evaluator: *Evaluator,
     shell_state: state.ShellState,
     eval_context: context.EvalContext,
-    argv: []const []const u8,
+    plan: command_plan.CommandPlan,
     state_delta: *delta.StateDelta,
     buffers: *EvaluationBuffers,
 ) !SimpleEvalResult {
-    std.debug.assert(argv.len != 0);
-    std.debug.assert(std.mem.eql(u8, argv[0], "."));
-    if (argv.len < 2) return normalEvaluation(try builtinStatusError(buffers, 2, ".", "missing file operand"));
-    if (argv.len > 2) return normalEvaluation(try builtinStatusError(
+    plan.validate();
+    std.debug.assert(plan.argv.len != 0);
+    std.debug.assert(std.mem.eql(u8, plan.argv[0], "."));
+    if (plan.argv.len < 2) return normalEvaluation(try builtinStatusError(buffers, 2, ".", "missing file operand"));
+    if (plan.argv.len > 2) return normalEvaluation(try builtinStatusError(
         buffers,
         2,
         ".",
         "arguments are not implemented yet",
     ));
 
-    return evaluateSourceFile(evaluator, shell_state, eval_context, ".", argv[1], state_delta, buffers);
+    return evaluateSourceFile(evaluator, shell_state, eval_context, plan, state_delta, buffers);
 }
 
 fn evaluateSourceFile(
     evaluator: *Evaluator,
     shell_state: state.ShellState,
     eval_context: context.EvalContext,
+    plan: command_plan.CommandPlan,
+    state_delta: *delta.StateDelta,
+    buffers: *EvaluationBuffers,
+) !SimpleEvalResult {
+    plan.validate();
+    std.debug.assert(plan.argv.len == 2);
+    const command = plan.argv[0];
+    const path = plan.argv[1];
+    std.debug.assert(std.mem.eql(u8, command, "."));
+    return evaluateSourcePath(
+        evaluator,
+        shell_state,
+        eval_context,
+        command,
+        path,
+        plan.assignments,
+        true,
+        state_delta,
+        buffers,
+    );
+}
+
+fn evaluateSourcePath(
+    evaluator: *Evaluator,
+    shell_state: state.ShellState,
+    eval_context: context.EvalContext,
     command: []const u8,
     path: []const u8,
+    assignments: []const command_plan.Assignment,
+    search_path: bool,
     state_delta: *delta.StateDelta,
     buffers: *EvaluationBuffers,
 ) !SimpleEvalResult {
     std.debug.assert(command.len != 0);
     std.debug.assert(path.len != 0);
+    for (assignments) |assignment| assignment.validate();
     const io = evaluator.io orelse return error.Unimplemented;
-    const source = std.Io.Dir.cwd().readFileAlloc(
-        io,
-        path,
-        evaluator.allocator,
-        .unlimited,
-    ) catch return normalEvaluation(try builtinStatusError(buffers, 1, command, "file not found"));
+    const source = readSourceFile(evaluator.allocator, io, shell_state, assignments, path, search_path) catch
+        return normalEvaluation(try builtinStatusError(buffers, 1, command, "file not found"));
     defer evaluator.allocator.free(source);
 
     const result = try evaluateSourcedText(
@@ -6482,6 +6510,39 @@ fn evaluateSourceFile(
         buffers,
     );
     return consumeSourcedScriptReturn(result);
+}
+
+fn readSourceFile(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    shell_state: state.ShellState,
+    assignments: []const command_plan.Assignment,
+    path: []const u8,
+    search_path: bool,
+) ![]const u8 {
+    shell_state.validate();
+    for (assignments) |assignment| assignment.validate();
+    std.debug.assert(path.len != 0);
+    if (!search_path or std.mem.findScalar(u8, path, '/') != null) return std.Io.Dir.cwd().readFileAlloc(
+        io,
+        path,
+        allocator,
+        .unlimited,
+    );
+
+    const path_value = commandLookupPath(shell_state, .{
+        .assignments = assignments,
+    }) orelse return error.FileNotFound;
+    var parts = std.mem.splitScalar(u8, path_value, ':');
+    while (parts.next()) |part| {
+        const candidate = if (part.len == 0)
+            try allocator.dupe(u8, path)
+        else
+            try std.mem.concat(allocator, u8, &.{ part, "/", path });
+        defer allocator.free(candidate);
+        return std.Io.Dir.cwd().readFileAlloc(io, candidate, allocator, .unlimited) catch continue;
+    }
+    return error.FileNotFound;
 }
 
 fn consumeSourcedScriptReturn(result: SimpleEvalResult) SimpleEvalResult {

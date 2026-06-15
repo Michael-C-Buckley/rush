@@ -480,6 +480,38 @@
             .status = 0,
         },
         .{
+            .name = "dot searches PATH for operands without slash",
+            .script =
+            \\mkdir scripts
+            \\printf '%s\n' 'sourced=path' >scripts/file.sh
+            \\PATH=scripts
+            \\. file.sh
+            \\printf '<%s>:<%s>\n' "$sourced" "$?"
+            ,
+            .stdout =
+            \\<path>:<0>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "dot PATH search observes assignment prefixes",
+            .script =
+            \\mkdir scripts
+            \\printf '%s\n' 'sourced=assignment' >scripts/file.sh
+            \\PATH=missing
+            \\PATH=scripts . file.sh
+            \\printf '<%s>:<%s>\n' "$sourced" "$PATH"
+            ,
+            .stdout =
+            \\<assignment>:<scripts>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "true and false return their specified statuses",
             .script =
             \\true
