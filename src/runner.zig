@@ -310,6 +310,7 @@ fn runSemanticAliasTimingCommandString(
                     error.ReadonlyVariable => unreachable,
                 };
                 defer alias_snapshot.deinit();
+                parser_resolver.expand_aliases = shell_state.shopts.enabled(.expand_aliases);
                 parser_resolver.alias_state = &alias_snapshot;
                 var execution = try runSemanticLoweredProgram(
                     allocator,
@@ -502,6 +503,7 @@ fn runSemanticAliasTimingShellStateScript(
                     error.ReadonlyVariable => unreachable,
                 };
                 defer alias_snapshot.deinit();
+                parser_resolver.expand_aliases = shell_state.shopts.enabled(.expand_aliases);
                 parser_resolver.alias_state = &alias_snapshot;
                 var execution = try runSemanticLoweredProgram(
                     allocator,
@@ -903,6 +905,7 @@ fn semanticExpandAliases(
     features: compat.Features,
     shell_state: *shell.ShellState,
 ) ![]const u8 {
+    if (!shell_state.shopts.enabled(.expand_aliases)) return allocator.dupe(u8, source);
     return parser.expandAliases(allocator, source, .{
         .features = features.withStrictDiagnostics(),
         .context = shell_state,
@@ -2469,6 +2472,24 @@ test "non-interactive aliases affect later complete commands" {
     try std.testing.expectEqualStrings("script-alias-ok\nscript-alias-ok trailing-ok\n", result.stdout);
     try std.testing.expectEqualStrings("", result.stderr);
 }
+
+test "expand_aliases shopt gates non-interactive alias expansion" {
+    var result = try runScript(std.testing.allocator, std.testing.io,
+        \\shopt -u expand_aliases
+        \\alias hit='echo disabled'
+        \\hit 2>/dev/null
+        \\printf '<%s>\n' "$?"
+        \\shopt -s expand_aliases
+        \\alias hit='echo enabled'
+        \\hit
+    );
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("<127>\nenabled\n", result.stdout);
+    try std.testing.expectEqualStrings("", result.stderr);
+}
+
 test "chunked alias scripts run EXIT trap once" {
     var result = try runScript(std.testing.allocator, std.testing.io,
         \\trap 'echo bye' EXIT
