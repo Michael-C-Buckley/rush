@@ -5588,6 +5588,11 @@ fn evaluateBuiltin(
         state_delta,
         buffers,
     ));
+    if (std.mem.eql(u8, definition.name, "times")) return normalEvaluation(try evaluateTimes(
+        evaluator,
+        plan.argv,
+        buffers,
+    ));
     if (std.mem.eql(u8, definition.name, "umask")) return normalEvaluation(try evaluateUmask(
         evaluator,
         plan.argv,
@@ -5982,6 +5987,42 @@ fn evaluateCd(
     try state_delta.assignVariable("PWD", cwd.path, .{ .exported = true });
     try state_delta.setLogicalCwd(cwd.path);
     return 0;
+}
+
+fn evaluateTimes(
+    evaluator: *Evaluator,
+    argv: []const []const u8,
+    buffers: *EvaluationBuffers,
+) !outcome.ExitStatus {
+    std.debug.assert(argv.len != 0);
+    std.debug.assert(std.mem.eql(u8, argv[0], "times"));
+    if (argv.len > 1) return builtinUsageError(buffers, "times", "too many arguments");
+
+    const process_port = evaluator.process_port orelse return error.Unimplemented;
+    const times = process_port.getTimes() catch return error.Unimplemented;
+    try printProcessTime(buffers.allocator, &buffers.stdout, times.shell_user);
+    try buffers.stdout.append(buffers.allocator, ' ');
+    try printProcessTime(buffers.allocator, &buffers.stdout, times.shell_system);
+    try buffers.stdout.append(buffers.allocator, '\n');
+    try printProcessTime(buffers.allocator, &buffers.stdout, times.children_user);
+    try buffers.stdout.append(buffers.allocator, ' ');
+    try printProcessTime(buffers.allocator, &buffers.stdout, times.children_system);
+    try buffers.stdout.append(buffers.allocator, '\n');
+    return 0;
+}
+
+fn printProcessTime(
+    allocator: std.mem.Allocator,
+    stdout: *std.ArrayList(u8),
+    duration: runtime.process.CpuDuration,
+) !void {
+    const total_centiseconds = duration.microseconds / 10_000;
+    const total_seconds = total_centiseconds / 100;
+    try stdout.print(allocator, "{d}m{d}.{d:0>2}s", .{
+        total_seconds / 60,
+        total_seconds % 60,
+        total_centiseconds % 100,
+    });
 }
 
 fn evaluateUmask(
@@ -9606,6 +9647,36 @@ test "semantic evaluator dispatches color as a Rush extension builtin" {
     try std.testing.expectEqualStrings("color: invalid color\n", invalid_result.stderr.items);
 }
 
+test "semantic evaluator evaluates times through process runtime" {
+    var fake = FakeExternalRuntime.init(std.testing.allocator);
+    defer fake.deinit();
+    fake.setProcessTimes(.{
+        .shell_user = .{ .microseconds = 61_230_000 },
+        .shell_system = .{ .microseconds = 500_000 },
+        .children_user = .{ .microseconds = 3_004_000 },
+        .children_system = .{ .microseconds = 0 },
+    });
+    var shell_state = state.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    var evaluator = Evaluator.initWithExternalPorts(std.testing.allocator, fake.fdPort(), fake.processPort());
+    const eval_context = context.EvalContext.forTarget(.current_shell);
+
+    const plan = command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{"times"} } });
+    var result = try evaluatePlan(&evaluator, &shell_state, eval_context, plan);
+    defer result.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("1m1.23s 0m0.50s\n0m3.00s 0m0.00s\n", result.stdout.items);
+
+    const invalid_plan = command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{
+        "times",
+        "now",
+    } } });
+    var invalid_result = try evaluatePlan(&evaluator, &shell_state, eval_context, invalid_plan);
+    defer invalid_result.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 2), invalid_result.status);
+    try std.testing.expectEqualStrings("times: too many arguments\n", invalid_result.stderr.items);
+}
+
 test "semantic evaluator evaluates umask through filesystem runtime" {
     var fake_fs = FakeFsRuntime.init();
     fake_fs.file_creation_mask = 0o022;
@@ -11734,6 +11805,7 @@ const FakeExternalRuntime = struct {
     run_status: runtime.process.WaitStatus = .{ .exited = 0 },
     run_stdout: []const u8 = &.{},
     run_stderr: []const u8 = &.{},
+    process_times: runtime.process.ProcessTimes = .{},
 
     fn init(allocator: std.mem.Allocator) FakeExternalRuntime {
         return .{
@@ -11770,6 +11842,7 @@ const FakeExternalRuntime = struct {
             .wait_fn = wait,
             .poll_wait_fn = pollWait,
             .run_fn = run,
+            .get_times_fn = getTimes,
             .continue_process_fn = continueProcess,
             .foreground_process_group_fn = foregroundProcessGroup,
         };
@@ -11797,6 +11870,11 @@ const FakeExternalRuntime = struct {
         self.run_stdout = stdout_bytes;
         self.run_stderr = stderr_bytes;
         self.run_status = status_value;
+    }
+
+    fn setProcessTimes(self: *FakeExternalRuntime, times: runtime.process.ProcessTimes) void {
+        times.validate();
+        self.process_times = times;
     }
 
     fn clearObservedArgv(self: *FakeExternalRuntime) void {
@@ -12013,6 +12091,11 @@ const FakeExternalRuntime = struct {
             .stdout = try request.allocator.dupe(u8, self.run_stdout),
             .stderr = try request.allocator.dupe(u8, self.run_stderr),
         };
+    }
+
+    fn getTimes(opaque_context: *anyopaque) runtime.process.TimesError!runtime.process.ProcessTimes {
+        const self = fromContext(opaque_context);
+        return self.process_times;
     }
 };
 

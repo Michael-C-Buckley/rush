@@ -227,6 +227,28 @@ pub const WaitResult = struct {
     }
 };
 
+pub const CpuDuration = struct {
+    microseconds: u64,
+
+    pub fn validate(self: CpuDuration) void {
+        _ = self;
+    }
+};
+
+pub const ProcessTimes = struct {
+    shell_user: CpuDuration = .{ .microseconds = 0 },
+    shell_system: CpuDuration = .{ .microseconds = 0 },
+    children_user: CpuDuration = .{ .microseconds = 0 },
+    children_system: CpuDuration = .{ .microseconds = 0 },
+
+    pub fn validate(self: ProcessTimes) void {
+        self.shell_user.validate();
+        self.shell_system.validate();
+        self.children_user.validate();
+        self.children_system.validate();
+    }
+};
+
 pub const PollWaitRequest = struct {
     child: *ChildProcess,
     nohang: bool = true,
@@ -337,6 +359,7 @@ pub const ForegroundProcessGroupResult = struct {
 pub const SpawnError = std.process.SpawnError;
 pub const WaitError = std.process.Child.WaitError;
 pub const RunError = anyerror;
+pub const TimesError = error{OperationUnsupported};
 pub const JobControlError = error{
     OperationUnsupported,
     ProcessNotFound,
@@ -349,6 +372,7 @@ pub const StartSubshellFn = *const fn (*anyopaque, StartSubshellRequest) SpawnEr
 pub const WaitFn = *const fn (*anyopaque, WaitRequest) WaitError!WaitResult;
 pub const PollWaitFn = *const fn (*anyopaque, PollWaitRequest) WaitError!PollWaitResult;
 pub const RunFn = *const fn (*anyopaque, RunRequest) RunError!RunResult;
+pub const GetTimesFn = *const fn (*anyopaque) TimesError!ProcessTimes;
 pub const ContinueProcessFn = *const fn (*anyopaque, ContinueProcessRequest) JobControlError!void;
 pub const ForegroundProcessGroupFn = *const fn (
     *anyopaque,
@@ -362,6 +386,7 @@ pub const Port = struct {
     wait_fn: WaitFn,
     poll_wait_fn: ?PollWaitFn = null,
     run_fn: RunFn,
+    get_times_fn: ?GetTimesFn = null,
     continue_process_fn: ?ContinueProcessFn = null,
     foreground_process_group_fn: ?ForegroundProcessGroupFn = null,
 
@@ -403,6 +428,13 @@ pub const Port = struct {
     pub fn run(self: Port, request: RunRequest) RunError!RunResult {
         request.validate();
         const result = try self.run_fn(self.context, request);
+        result.validate();
+        return result;
+    }
+
+    pub fn getTimes(self: Port) TimesError!ProcessTimes {
+        const get_times_fn = self.get_times_fn orelse return error.OperationUnsupported;
+        const result = try get_times_fn(self.context);
         result.validate();
         return result;
     }
@@ -493,4 +525,17 @@ test "runtime process captured run request owns byte streams" {
     };
     result.validate();
     result.deinit();
+}
+
+test "runtime process times carry shell and child cpu durations" {
+    const times: ProcessTimes = .{
+        .shell_user = .{ .microseconds = 1 },
+        .shell_system = .{ .microseconds = 2 },
+        .children_user = .{ .microseconds = 3 },
+        .children_system = .{ .microseconds = 4 },
+    };
+    times.validate();
+
+    try std.testing.expectEqual(@as(u64, 1), times.shell_user.microseconds);
+    try std.testing.expectEqual(@as(u64, 4), times.children_system.microseconds);
 }

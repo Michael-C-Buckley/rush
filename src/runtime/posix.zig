@@ -54,6 +54,7 @@ pub const Adapter = struct {
             .wait_fn = wait,
             .poll_wait_fn = pollWait,
             .run_fn = run,
+            .get_times_fn = getTimes,
             .continue_process_fn = continueProcess,
             .foreground_process_group_fn = foregroundProcessGroup,
         };
@@ -299,6 +300,24 @@ fn pollWait(context: *anyopaque, request: process.PollWaitRequest) process.WaitE
         }
         return .{ .status = wait_status };
     }
+}
+
+fn getTimes(context: *anyopaque) process.TimesError!process.ProcessTimes {
+    _ = adapterFromContext(context);
+    const self = std.posix.getrusage(std.posix.rusage.SELF);
+    const children = std.posix.getrusage(std.posix.rusage.CHILDREN);
+    return .{
+        .shell_user = cpuDurationFromTimeval(self.utime),
+        .shell_system = cpuDurationFromTimeval(self.stime),
+        .children_user = cpuDurationFromTimeval(children.utime),
+        .children_system = cpuDurationFromTimeval(children.stime),
+    };
+}
+
+fn cpuDurationFromTimeval(value: std.posix.timeval) process.CpuDuration {
+    std.debug.assert(value.sec >= 0);
+    std.debug.assert(value.usec >= 0);
+    return .{ .microseconds = @as(u64, @intCast(value.sec)) * 1_000_000 + @as(u64, @intCast(value.usec)) };
 }
 
 const WaitPidError = error{
