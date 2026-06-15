@@ -3,6 +3,7 @@
 const std = @import("std");
 const build_config = @import("build_config");
 
+const extension_api = @import("../extensions/api.zig");
 const compat = @import("../shell/compat.zig");
 const runner = @import("../runner.zig");
 const runtime = @import("../runtime.zig");
@@ -20,6 +21,7 @@ pub const Options = struct {
     shell_options: shell.ShellOptions = .{},
     monitor_option_explicit: bool = false,
     positionals: []const []const u8 = &.{},
+    extension_handlers: runner.ExtensionHandlers = .{},
 };
 
 const OutputStream = enum { stdout, stderr };
@@ -46,8 +48,9 @@ pub fn sourceDefaultConfig(
     shell_state: *shell.ShellState,
     arg_zero: []const u8,
     features: compat.Features,
+    extension_handlers: runner.ExtensionHandlers,
 ) !runner.CommandResult {
-    return runner.runShellStateScript(
+    return runner.runShellStateScriptWithExtensionHandlers(
         allocator,
         io,
         shell_state,
@@ -56,6 +59,7 @@ pub fn sourceDefaultConfig(
         arg_zero,
         features,
         .capture,
+        extension_handlers,
     );
 }
 
@@ -65,6 +69,7 @@ const ConfigService = struct {
     shell_state: *shell.ShellState,
     arg_zero: []const u8 = "rush",
     features: compat.Features = .{},
+    extension_handlers: runner.ExtensionHandlers = .{},
 
     fn init(
         allocator: std.mem.Allocator,
@@ -81,13 +86,20 @@ const ConfigService = struct {
             .shell_state = shell_state,
             .arg_zero = arg_zero,
             .features = features,
+            .extension_handlers = .{},
         };
     }
 
     fn load(self: ConfigService, options: Options) !void {
-        try self.sourceScript(embedded_config, embedded_config_path);
-        if (self.pendingExit() != null) return;
+        var configured = self;
+        configured.extension_handlers = options.extension_handlers;
+        try configured.sourceScript(embedded_config, embedded_config_path);
+        if (configured.pendingExit() != null) return;
 
+        try configured.loadRemaining(options);
+    }
+
+    fn loadRemaining(self: ConfigService, options: Options) !void {
         if (self.getEnv("ENV")) |env_path| {
             if (env_path.len != 0) {
                 const expanded_env_path = try self.expandParametersScalar(env_path, options.features);
@@ -139,7 +151,7 @@ const ConfigService = struct {
     }
 
     fn sourceScript(self: ConfigService, contents: []const u8, source_path: []const u8) !void {
-        var result = try runner.runShellStateScript(
+        var result = try runner.runShellStateScriptWithExtensionHandlers(
             self.allocator,
             self.io,
             self.shell_state,
@@ -148,6 +160,7 @@ const ConfigService = struct {
             self.arg_zero,
             self.features,
             .capture,
+            self.extension_handlers,
         );
         defer result.deinit();
         if (result.stdout.len != 0) try writeAll(self.io, .stdout, result.stdout);
@@ -315,6 +328,31 @@ test "interactive config service sources simple config through semantic ShellSta
     try std.testing.expectEqualStrings("loaded", shell_state.getVariable("RUSH_SEMANTIC_CONFIG").?.value);
     try std.testing.expectEqualStrings("ok", shell_state.getVariable("RUSH_SEMANTIC_CONFIG_SECOND").?.value);
 }
+
+const TestAbbrState = struct {
+    saw_ll: bool = false,
+};
+
+fn testAbbrExtensionHandlers(abbr_state: *TestAbbrState) runner.ExtensionHandlers {
+    return .{ .context = abbr_state, .lookup = testAbbrExtensionLookup };
+}
+
+fn testAbbrExtensionLookup(context: ?*anyopaque, name: []const u8) ?extension_api.HandlerSpec {
+    if (!std.mem.eql(u8, name, "abbr")) return null;
+    return .{ .context = context, .handler = testAbbrEvaluate };
+}
+
+fn testAbbrEvaluate(context: ?*anyopaque, invocation: *extension_api.Invocation) !extension_api.EvaluationResult {
+    const abbr_state: *TestAbbrState = @ptrCast(@alignCast(context.?));
+    if (invocation.argv.len == 3 and
+        std.mem.eql(u8, invocation.argv[1], "ll") and
+        std.mem.eql(u8, invocation.argv[2], "ls -lh"))
+    {
+        abbr_state.saw_ll = true;
+    }
+    return extension_api.EvaluationResult.normal(0);
+}
+
 test "interactive startup initializes prompt variables and sources expanded ENV" {
     const env_path = "rush-test-env-startup.rush";
     try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = env_path, .data = "ENV_LOADED=ok\nPS1='env> '\n" });
@@ -330,11 +368,16 @@ test "interactive startup initializes prompt variables and sources expanded ENV"
     try shell_state.putVariable("HOME", cwd, .{ .exported = true });
     try shell_state.putVariable("ENV", env_value, .{ .exported = true });
 
-    try loadConfig(std.testing.allocator, std.testing.io, &shell_state, .{ .arg_zero = "rush" });
+    var abbr_state: TestAbbrState = .{};
+    try loadConfig(std.testing.allocator, std.testing.io, &shell_state, .{
+        .arg_zero = "rush",
+        .extension_handlers = testAbbrExtensionHandlers(&abbr_state),
+    });
     try std.testing.expectEqualStrings("ok", shell_state.getVariable("ENV_LOADED").?.value);
     // Embedded default config provides PS2; $ENV overrides the embedded PS1 default.
     try std.testing.expectEqualStrings("> ", shell_state.getVariable("PS2").?.value);
     try std.testing.expectEqualStrings("env> ", shell_state.getVariable("PS1").?.value);
+    try std.testing.expect(abbr_state.saw_ll);
 }
 test "interactive startup warns and skips user config path directory" {
     const root = "rush-test-config-directory-startup";
@@ -363,7 +406,12 @@ test "embedded default config sets prompt defaults without clobbering inherited 
     defer shell_state.deinit();
     try shell_state.putVariable("PS1", "inherited> ", .{});
 
-    try loadConfig(std.testing.allocator, std.testing.io, &shell_state, .{ .arg_zero = "rush" });
+    var abbr_state: TestAbbrState = .{};
+    try loadConfig(std.testing.allocator, std.testing.io, &shell_state, .{
+        .arg_zero = "rush",
+        .extension_handlers = testAbbrExtensionHandlers(&abbr_state),
+    });
     try std.testing.expectEqualStrings("inherited> ", shell_state.getVariable("PS1").?.value);
     try std.testing.expectEqualStrings("> ", shell_state.getVariable("PS2").?.value);
+    try std.testing.expect(abbr_state.saw_ll);
 }

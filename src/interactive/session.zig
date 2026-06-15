@@ -3,7 +3,11 @@
 const std = @import("std");
 
 const compat = @import("../shell/compat.zig");
+const editor_completion = @import("../editor/completion.zig");
 const editor_driver = @import("../editor.zig").driver;
+const extension_abbr = @import("../extensions/editor/abbr.zig");
+const extension_api = @import("../extensions/api.zig");
+const extension_handlers = @import("../extensions/handlers.zig");
 const history = @import("../history.zig");
 const runner = @import("../runner.zig");
 const runtime = @import("../runtime.zig");
@@ -50,11 +54,38 @@ fn durationMillis(start: std.Io.Clock.Timestamp, end: std.Io.Clock.Timestamp) i6
 
 pub const Context = struct {
     semantic_state: *shell.ShellState,
+    editor_state: *EditorState,
     arg_zero: []const u8 = "rush",
     features: compat.Features = .{},
     previous_duration_ms: ?i64 = null,
     prompt_async_state: ?*prompt_mod.AsyncState = null,
 };
+
+pub const EditorState = struct {
+    abbreviations: extension_abbr.State,
+
+    pub fn init(allocator: std.mem.Allocator) EditorState {
+        return .{ .abbreviations = extension_abbr.State.init(allocator) };
+    }
+
+    pub fn deinit(self: *EditorState) void {
+        self.abbreviations.deinit();
+        self.* = undefined;
+    }
+};
+
+fn interactiveExtensionHandlers(context: *Context) runner.ExtensionHandlers {
+    return .{ .context = context, .lookup = interactiveExtensionLookup };
+}
+
+fn interactiveExtensionLookup(context: ?*anyopaque, name: []const u8) ?extension_api.HandlerSpec {
+    const interactive_context: *Context = @ptrCast(@alignCast(context.?));
+    if (extension_abbr.handlerForContext(
+        name,
+        &interactive_context.editor_state.abbreviations,
+    )) |handler| return handler;
+    return extension_handlers.lookup(name);
+}
 
 pub fn runInteractiveIntervalHooks(
     context: *anyopaque,
@@ -116,6 +147,26 @@ fn refreshInteractivePrompt(context: *anyopaque, allocator: std.mem.Allocator, i
         .previous_duration_ms = interactive_context.previous_duration_ms,
         .async_state = interactive_context.prompt_async_state,
     });
+}
+
+// ziglint-ignore: Z023 - signature is fixed by the expand_abbreviation callback pointer type.
+fn expandInteractiveAbbreviation(
+    context: *anyopaque,
+    // ziglint-ignore: Z023 - opaque context must come first (expand_abbreviation callback ABI).
+    allocator: std.mem.Allocator,
+    source: []const u8,
+    cursor: usize,
+    append_space: bool,
+) !?editor_completion.Edit {
+    const interactive_context: *Context = @ptrCast(@alignCast(context));
+    return extension_abbr.expand(
+        &interactive_context.editor_state.abbreviations,
+        allocator,
+        source,
+        cursor,
+        interactive_context.features,
+        append_space,
+    );
 }
 
 fn drainInteractiveSemanticJobNotifications(
@@ -216,17 +267,20 @@ pub const Options = startup.Options;
 pub const Shell = struct {
     allocator: std.mem.Allocator,
     semantic_state: shell.ShellState,
+    editor_state: EditorState,
     semantic_enabled: bool = false,
 
     pub fn init(allocator: std.mem.Allocator) Shell {
         return .{
             .allocator = allocator,
             .semantic_state = shell.ShellState.init(allocator),
+            .editor_state = EditorState.init(allocator),
         };
     }
 
     pub fn deinit(self: *Shell) void {
         self.semantic_state.deinit();
+        self.editor_state.deinit();
         self.* = undefined;
     }
 
@@ -238,6 +292,8 @@ pub const Shell = struct {
     ) !void {
         self.semantic_state.deinit();
         self.semantic_state = shell.ShellState.init(self.allocator);
+        self.editor_state.deinit();
+        self.editor_state = EditorState.init(self.allocator);
         self.semantic_enabled = false;
 
         var startup_shell_options = options.shell_options;
@@ -283,7 +339,15 @@ pub fn run(
     var interactive_shell = Shell.init(allocator);
     defer interactive_shell.deinit();
     try interactive_shell.initializeSemanticStartup(io, environ_map, options);
-    try startup.loadConfig(allocator, io, &interactive_shell.semantic_state, options);
+    var startup_context: Context = .{
+        .semantic_state = &interactive_shell.semantic_state,
+        .editor_state = &interactive_shell.editor_state,
+        .arg_zero = options.arg_zero,
+        .features = options.features,
+    };
+    var startup_options = options;
+    startup_options.extension_handlers = interactiveExtensionHandlers(&startup_context);
+    try startup.loadConfig(allocator, io, &interactive_shell.semantic_state, startup_options);
     if (interactivePendingExit(&interactive_shell)) |status| return status;
     var terminal = try editor_driver.TerminalSession.init(allocator, io);
     defer terminal.deinit();
@@ -338,6 +402,7 @@ pub fn run(
         try terminal.reportWindowTitle(title.text);
         var interactive_context: Context = .{
             .semantic_state = &interactive_shell.semantic_state,
+            .editor_state = &interactive_shell.editor_state,
             .arg_zero = options.arg_zero,
             .features = options.features,
             .previous_duration_ms = last_command_duration_ms,
@@ -352,6 +417,8 @@ pub fn run(
             .prompt_context = &interactive_context,
             .refresh_prompt = refreshInteractivePrompt,
             .history = history_service.lineEditorView(io),
+            .completion_context = &interactive_context,
+            .expand_abbreviation = expandInteractiveAbbreviation,
             .external_editor_command = prompt_mod.externalEditorCommand(&interactive_shell.semantic_state),
             .external_editor_tmpdir = prompt_mod.externalEditorTmpdir(&interactive_shell.semantic_state),
         };
@@ -587,13 +654,20 @@ pub fn runSemanticInteractiveCommandString(
     external_stdio: runtime.ExternalStdio,
 ) !runner.SemanticInvocationExecution {
     std.debug.assert(interactive_shell.semantic_enabled);
-    return runner.runInteractiveCommandString(
+    var interactive_context: Context = .{
+        .semantic_state = &interactive_shell.semantic_state,
+        .editor_state = &interactive_shell.editor_state,
+        .arg_zero = invocation.arg_zero,
+        .features = invocation.features,
+    };
+    return runner.runInteractiveCommandStringWithExtensionHandlers(
         allocator,
         io,
         &interactive_shell.semantic_state,
         script,
         invocation,
         external_stdio,
+        interactiveExtensionHandlers(&interactive_context),
     );
 }
 
@@ -624,7 +698,15 @@ pub fn runCommandStringWithEnvironment(
         .monitor_option_explicit = startup_options.monitor_option_explicit,
         .positionals = positionals,
     });
-    try startup.loadConfig(allocator, io, &interactive_shell.semantic_state, startup_options);
+    var startup_context: Context = .{
+        .semantic_state = &interactive_shell.semantic_state,
+        .editor_state = &interactive_shell.editor_state,
+        .arg_zero = startup_options.arg_zero,
+        .features = startup_options.features,
+    };
+    var configured_startup_options = startup_options;
+    configured_startup_options.extension_handlers = interactiveExtensionHandlers(&startup_context);
+    try startup.loadConfig(allocator, io, &interactive_shell.semantic_state, configured_startup_options);
     if (interactivePendingExit(&interactive_shell)) |status| return runner.empty(allocator, status);
     return runInteractiveScript(allocator, io, &interactive_shell, script, interactive_run_options);
 }
@@ -662,7 +744,18 @@ pub fn runReplInput(allocator: std.mem.Allocator, io: std.Io, input: []const u8)
     defer empty_env.deinit();
     try interactive_shell.initializeSemanticStartup(io, &empty_env, .{});
     {
-        var result = try startup.sourceDefaultConfig(allocator, io, &interactive_shell.semantic_state, "rush", .{});
+        var context: Context = .{
+            .semantic_state = &interactive_shell.semantic_state,
+            .editor_state = &interactive_shell.editor_state,
+        };
+        var result = try startup.sourceDefaultConfig(
+            allocator,
+            io,
+            &interactive_shell.semantic_state,
+            "rush",
+            .{},
+            interactiveExtensionHandlers(&context),
+        );
         defer result.deinit();
         try stdout.appendSlice(allocator, result.stdout);
         try stderr.appendSlice(allocator, result.stderr);
@@ -764,7 +857,9 @@ test "runReplInput executes lines and tracks status" {
 test "interactive notify schedules editor job notification polling" {
     var shell_state = shell.ShellState.init(std.testing.allocator);
     defer shell_state.deinit();
-    var context: Context = .{ .semantic_state = &shell_state };
+    var editor_state = EditorState.init(std.testing.allocator);
+    defer editor_state.deinit();
+    var context: Context = .{ .semantic_state = &shell_state, .editor_state = &editor_state };
 
     try std.testing.expectEqual(@as(?u64, null), try nextInteractiveIntervalMs(&context, std.testing.io));
     try shell_state.appendJobNotification(.{ .job_id = 1, .state = .done, .command = "sleep 1" });
@@ -785,7 +880,9 @@ test "interactive semantic job notifications drain from ShellState" {
     shell_state.options.notify = true;
     try shell_state.appendJobNotification(.{ .job_id = 1, .state = .done, .command = "sleep 1" });
 
-    var context: Context = .{ .semantic_state = &shell_state };
+    var editor_state = EditorState.init(std.testing.allocator);
+    defer editor_state.deinit();
+    var context: Context = .{ .semantic_state = &shell_state, .editor_state = &editor_state };
 
     try std.testing.expectEqual(
         @as(?u64, immediate_notify_poll_ms),
@@ -804,7 +901,9 @@ test "interactive hooks dispatch pending semantic signal trap" {
     try shell_state.setTrapForSignal(.TERM, "echo term-trap");
     try shell_state.appendPendingTrap(.TERM);
 
-    var context: Context = .{ .semantic_state = &shell_state };
+    var editor_state = EditorState.init(std.testing.allocator);
+    defer editor_state.deinit();
+    var context: Context = .{ .semantic_state = &shell_state, .editor_state = &editor_state };
 
     const hook_result = try runInteractiveIntervalHooks(&context, std.testing.allocator, std.testing.io);
     defer std.testing.allocator.free(hook_result.output);
@@ -1038,6 +1137,68 @@ test "semantic interactive invocation executes simple command redirections witho
     defer std.testing.allocator.free(output);
     try std.testing.expectEqualStrings("before\nredirected\n", output);
 }
+
+test "interactive abbreviation expansion rewrites command words from editor state" {
+    var shell_state = shell.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    var editor_state = EditorState.init(std.testing.allocator);
+    defer editor_state.deinit();
+    try editor_state.abbreviations.set("ll", "ls -lh");
+
+    var interactive_context: Context = .{ .semantic_state = &shell_state, .editor_state = &editor_state };
+    const edit = (try expandInteractiveAbbreviation(
+        &interactive_context,
+        std.testing.allocator,
+        "ll",
+        "ll".len,
+        true,
+    )).?;
+    defer std.testing.allocator.free(edit.replacement);
+
+    try std.testing.expectEqual(@as(usize, 0), edit.replace_start);
+    try std.testing.expectEqual(@as(usize, 2), edit.replace_end);
+    try std.testing.expectEqualStrings("ls -lh", edit.replacement);
+    try std.testing.expect(edit.append_space);
+
+    try std.testing.expect(try expandInteractiveAbbreviation(
+        &interactive_context,
+        std.testing.allocator,
+        "echo ll",
+        "echo ll".len,
+        false,
+    ) == null);
+    try std.testing.expect(try expandInteractiveAbbreviation(
+        &interactive_context,
+        std.testing.allocator,
+        "'ll'",
+        "'ll'".len,
+        false,
+    ) == null);
+}
+
+test "interactive abbreviation expansion handles later command positions" {
+    var shell_state = shell.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    var editor_state = EditorState.init(std.testing.allocator);
+    defer editor_state.deinit();
+    try editor_state.abbreviations.set("ll", "ls -lh");
+
+    var interactive_context: Context = .{ .semantic_state = &shell_state, .editor_state = &editor_state };
+    const edit = (try expandInteractiveAbbreviation(
+        &interactive_context,
+        std.testing.allocator,
+        "true; ll",
+        "true; ll".len,
+        false,
+    )).?;
+    defer std.testing.allocator.free(edit.replacement);
+
+    try std.testing.expectEqual(@as(usize, "true; ".len), edit.replace_start);
+    try std.testing.expectEqual(@as(usize, "true; ll".len), edit.replace_end);
+    try std.testing.expectEqualStrings("ls -lh", edit.replacement);
+    try std.testing.expect(!edit.append_space);
+}
+
 test "repl uses default rush_prompt" {
     var result = try runReplInput(std.testing.allocator, std.testing.io,
         \\PS1='custom> '

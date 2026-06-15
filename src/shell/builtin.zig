@@ -22,6 +22,7 @@ pub const BuiltinSemanticClass = enum {
     predicate,
     declaration,
     shell_state,
+    extension_state,
     job_control,
     control_flow,
 
@@ -33,13 +34,13 @@ pub const BuiltinSemanticClass = enum {
             .predicate,
             .control_flow,
             => true,
-            .unsupported, .declaration, .shell_state, .job_control => false,
+            .unsupported, .declaration, .shell_state, .extension_state, .job_control => false,
         };
     }
 
     pub fn isStateful(self: BuiltinSemanticClass) bool {
         return switch (self) {
-            .declaration, .shell_state, .job_control => true,
+            .declaration, .shell_state, .extension_state, .job_control => true,
             .unsupported, .no_op, .status_constant, .output, .predicate, .control_flow => false,
         };
     }
@@ -182,6 +183,7 @@ fn semanticClassAcceptsName(semantic_class: BuiltinSemanticClass, name: []const 
             "fc",
             "prompt",
         }),
+        .extension_state => false,
         .job_control => matchesName(name, &.{ "jobs", "fg", "bg", "wait", "kill" }),
         .control_flow => matchesName(name, &.{ "break", "continue", "exit", "return" }),
     };

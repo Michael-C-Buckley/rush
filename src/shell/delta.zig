@@ -79,8 +79,6 @@ pub const StateDelta = struct {
     alias_sets: std.ArrayList(NameValueMutation) = .empty,
     alias_unsets: std.ArrayList([]const u8) = .empty,
     clear_aliases: bool = false,
-    abbreviation_sets: std.ArrayList(NameValueMutation) = .empty,
-    abbreviation_unsets: std.ArrayList([]const u8) = .empty,
     trap_mutations: std.ArrayList(TrapMutation) = .empty,
     pending_trap_enqueues: std.ArrayList(state.TrapSignal) = .empty,
     pending_trap_consume_count: usize = 0,
@@ -130,13 +128,6 @@ pub const StateDelta = struct {
         self.alias_sets.deinit(self.allocator);
         for (self.alias_unsets.items) |name| self.allocator.free(name);
         self.alias_unsets.deinit(self.allocator);
-        for (self.abbreviation_sets.items) |mutation| {
-            self.allocator.free(mutation.name);
-            self.allocator.free(mutation.value);
-        }
-        self.abbreviation_sets.deinit(self.allocator);
-        for (self.abbreviation_unsets.items) |name| self.allocator.free(name);
-        self.abbreviation_unsets.deinit(self.allocator);
         for (self.trap_mutations.items) |mutation| {
             self.allocator.free(mutation.name);
             if (mutation.action) |action| self.allocator.free(action);
@@ -188,8 +179,6 @@ pub const StateDelta = struct {
         for (self.alias_sets.items) |mutation| try cloned.setAlias(mutation.name, mutation.value);
         for (self.alias_unsets.items) |name| try cloned.unsetAlias(name);
         if (self.clear_aliases) cloned.clearAliases();
-        for (self.abbreviation_sets.items) |mutation| try cloned.setAbbreviation(mutation.name, mutation.value);
-        for (self.abbreviation_unsets.items) |name| try cloned.unsetAbbreviation(name);
         for (self.trap_mutations.items) |mutation| try cloned.setTrap(mutation.name, mutation.action);
         for (self.pending_trap_enqueues.items) |signal| try cloned.enqueuePendingTrap(signal);
         if (self.pending_trap_consume_count != 0) cloned.consumePendingTraps(self.pending_trap_consume_count);
@@ -223,8 +212,6 @@ pub const StateDelta = struct {
             self.alias_sets.items.len == 0 and
             self.alias_unsets.items.len == 0 and
             !self.clear_aliases and
-            self.abbreviation_sets.items.len == 0 and
-            self.abbreviation_unsets.items.len == 0 and
             self.trap_mutations.items.len == 0 and
             self.pending_trap_enqueues.items.len == 0 and
             self.pending_trap_consume_count == 0 and
@@ -403,37 +390,6 @@ pub const StateDelta = struct {
         const owned_name = try self.allocator.dupe(u8, name);
         errdefer self.allocator.free(owned_name);
         try self.alias_unsets.append(self.allocator, owned_name);
-    }
-
-    pub fn setAbbreviation(self: *StateDelta, name: []const u8, value: []const u8) !void {
-        self.assertPending();
-        state.assertValidVariableName(name);
-
-        if (findNameValueMutation(&self.abbreviation_sets, name)) |mutation| {
-            const owned_value = try self.allocator.dupe(u8, value);
-            self.allocator.free(mutation.value);
-            mutation.value = owned_value;
-            return;
-        }
-
-        const owned_name = try self.allocator.dupe(u8, name);
-        errdefer self.allocator.free(owned_name);
-        const owned_value = try self.allocator.dupe(u8, value);
-        errdefer self.allocator.free(owned_value);
-        try self.abbreviation_sets.append(self.allocator, .{ .name = owned_name, .value = owned_value });
-    }
-
-    pub fn unsetAbbreviation(self: *StateDelta, name: []const u8) !void {
-        self.assertPending();
-        state.assertValidVariableName(name);
-
-        for (self.abbreviation_unsets.items) |existing| {
-            if (std.mem.eql(u8, existing, name)) return;
-        }
-
-        const owned_name = try self.allocator.dupe(u8, name);
-        errdefer self.allocator.free(owned_name);
-        try self.abbreviation_unsets.append(self.allocator, owned_name);
     }
 
     pub fn clearAliases(self: *StateDelta) void {
@@ -669,8 +625,6 @@ pub const StateDelta = struct {
         if (self.clear_aliases) shell_state.clearAliases();
         for (self.alias_sets.items) |mutation| try shell_state.setAlias(mutation.name, mutation.value);
         for (self.alias_unsets.items) |name| _ = shell_state.unsetAlias(name);
-        for (self.abbreviation_sets.items) |mutation| try shell_state.setAbbreviation(mutation.name, mutation.value);
-        for (self.abbreviation_unsets.items) |name| _ = shell_state.unsetAbbreviation(name);
         for (self.trap_mutations.items) |mutation| {
             if (mutation.action) |action| {
                 try shell_state.setTrap(mutation.name, action);

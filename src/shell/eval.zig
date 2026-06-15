@@ -4816,7 +4816,6 @@ fn appendFunctionFrameDelta(
     try appendOptionDiff(before.options, after.options, state_delta);
     try appendShoptDiff(before.shopts, after.shopts, state_delta);
     try appendAliasDiff(before, after, state_delta);
-    try appendAbbreviationDiff(before, after, state_delta);
     try appendTrapDiff(before, after, state_delta);
     if (!std.mem.eql(
         u8,
@@ -4877,7 +4876,6 @@ fn appendShellStateDiff(
     try appendOptionDiff(before.options, after.options, state_delta);
     try appendShoptDiff(before.shopts, after.shopts, state_delta);
     try appendAliasDiff(before, after, state_delta);
-    try appendAbbreviationDiff(before, after, state_delta);
     try appendTrapDiff(before, after, state_delta);
     if (!positionalsEqual(
         before.positionals.items,
@@ -4946,23 +4944,6 @@ fn appendAliasDiff(before: state.ShellState, after: state.ShellState, state_delt
     var before_aliases = before.aliases.iterator();
     while (before_aliases.next()) |entry| {
         if (!after.aliases.contains(entry.key_ptr.*)) try state_delta.unsetAlias(entry.key_ptr.*);
-    }
-}
-
-fn appendAbbreviationDiff(before: state.ShellState, after: state.ShellState, state_delta: *delta.StateDelta) !void {
-    var after_abbreviations = after.abbreviations.iterator();
-    while (after_abbreviations.next()) |entry| {
-        const name = entry.key_ptr.*;
-        const value = entry.value_ptr.*;
-        if (before.getAbbreviation(name)) |previous| {
-            if (std.mem.eql(u8, previous, value)) continue;
-        }
-        try state_delta.setAbbreviation(name, value);
-    }
-
-    var before_abbreviations = before.abbreviations.iterator();
-    while (before_abbreviations.next()) |entry| {
-        if (!after.abbreviations.contains(entry.key_ptr.*)) try state_delta.unsetAbbreviation(entry.key_ptr.*);
     }
 }
 
@@ -10268,8 +10249,6 @@ fn assertCommandDeltaCompatible(plan: command_plan.CommandPlan, state_delta: del
             std.debug.assert(state_delta.alias_sets.items.len == 0);
             std.debug.assert(state_delta.alias_unsets.items.len == 0);
             std.debug.assert(!state_delta.clear_aliases);
-            std.debug.assert(state_delta.abbreviation_sets.items.len == 0);
-            std.debug.assert(state_delta.abbreviation_unsets.items.len == 0);
             std.debug.assert(state_delta.trap_mutations.items.len == 0);
             std.debug.assert(state_delta.pending_trap_enqueues.items.len == 0);
             std.debug.assert(state_delta.pending_trap_consume_count == 0);
@@ -10309,8 +10288,6 @@ fn assertCommandDeltaCompatible(plan: command_plan.CommandPlan, state_delta: del
     std.debug.assert(state_delta.alias_sets.items.len == 0);
     std.debug.assert(state_delta.alias_unsets.items.len == 0);
     std.debug.assert(!state_delta.clear_aliases);
-    std.debug.assert(state_delta.abbreviation_sets.items.len == 0);
-    std.debug.assert(state_delta.abbreviation_unsets.items.len == 0);
     std.debug.assert(state_delta.trap_mutations.items.len == 0);
     std.debug.assert(state_delta.pending_trap_enqueues.items.len == 0);
     std.debug.assert(state_delta.pending_trap_consume_count == 0);

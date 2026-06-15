@@ -806,7 +806,6 @@ fn expectShellStatesEqual(expected: shell.ShellState, actual: shell.ShellState) 
     try std.testing.expectEqual(expected.variables.count(), actual.variables.count());
     try std.testing.expectEqual(expected.aliases.count(), actual.aliases.count());
     try std.testing.expectEqual(expected.functions.count(), actual.functions.count());
-    try std.testing.expectEqual(expected.abbreviations.count(), actual.abbreviations.count());
     try std.testing.expectEqual(expected.traps.count(), actual.traps.count());
     try std.testing.expectEqual(expected.positionals.items.len, actual.positionals.items.len);
     try std.testing.expectEqual(expected.last_pipeline_statuses.items.len, actual.last_pipeline_statuses.items.len);

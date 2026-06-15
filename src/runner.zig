@@ -4,11 +4,21 @@ const std = @import("std");
 
 const default_builtins = @import("builtins.zig");
 const cli_invocation = @import("invocation.zig");
+const extension_api = @import("extensions/api.zig");
 const runtime = @import("runtime.zig");
 const shell = @import("shell.zig");
 const compat = shell.compat;
 const parser = shell.parser;
 const ir = shell.ir;
+
+pub const ExtensionHandlers = struct {
+    context: ?*anyopaque = null,
+    lookup: ?*const fn (?*anyopaque, []const u8) ?extension_api.HandlerSpec = null,
+
+    fn apply(self: ExtensionHandlers, evaluator: *shell.eval.Evaluator) void {
+        if (self.lookup) |lookup_fn| evaluator.setExtensionHandlerLookup(self.context, lookup_fn);
+    }
+};
 
 pub const Options = struct {
     io: ?std.Io = null,
@@ -395,6 +405,30 @@ pub fn runShellStateScript(
     features: compat.Features,
     external_stdio: runtime.ExternalStdio,
 ) !CommandResult {
+    return runShellStateScriptWithExtensionHandlers(
+        allocator,
+        io,
+        shell_state,
+        script,
+        source_path,
+        arg_zero,
+        features,
+        external_stdio,
+        .{},
+    );
+}
+
+pub fn runShellStateScriptWithExtensionHandlers(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    shell_state: *shell.ShellState,
+    script: []const u8,
+    source_path: []const u8,
+    arg_zero: []const u8,
+    features: compat.Features,
+    external_stdio: runtime.ExternalStdio,
+    extension_handlers: ExtensionHandlers,
+) !CommandResult {
     shell_state.validate();
     std.debug.assert(shell_state.scope == .current_shell);
     std.debug.assert(arg_zero.len != 0);
@@ -408,7 +442,15 @@ pub fn runShellStateScript(
         .interactive = true,
     });
     var semantic_execution = if (semanticScriptNeedsAliasTiming(script))
-        try runSemanticAliasTimingShellStateScript(allocator, io, shell_state, script, invocation, external_stdio)
+        try runSemanticAliasTimingShellStateScript(
+            allocator,
+            io,
+            shell_state,
+            script,
+            invocation,
+            external_stdio,
+            extension_handlers,
+        )
     else
         try runSemanticShellStateScriptWithoutAliasTiming(
             allocator,
@@ -417,6 +459,7 @@ pub fn runShellStateScript(
             script,
             invocation,
             external_stdio,
+            extension_handlers,
         );
     switch (semantic_execution) {
         .output => |output| {
@@ -438,6 +481,7 @@ fn runSemanticShellStateScriptWithoutAliasTiming(
     script: []const u8,
     invocation: shell.InvocationContext,
     external_stdio: runtime.ExternalStdio,
+    extension_handlers: ExtensionHandlers,
 ) !SemanticInvocationExecution {
     shell_state.validate();
     invocation.validate();
@@ -465,6 +509,7 @@ fn runSemanticShellStateScriptWithoutAliasTiming(
     evaluator.io = io;
     evaluator.read_stdin_from_fd = true;
     evaluator.external_stdio = external_stdio;
+    extension_handlers.apply(&evaluator);
     var parser_resolver = shell.ParserTrapActionResolver.init(&evaluator);
     parser_resolver.features = invocation.features;
     parser_resolver.arg_zero = invocation.arg_zero;
@@ -492,6 +537,7 @@ fn runSemanticAliasTimingShellStateScript(
     script: []const u8,
     invocation: shell.InvocationContext,
     external_stdio: runtime.ExternalStdio,
+    extension_handlers: ExtensionHandlers,
 ) !SemanticInvocationExecution {
     shell_state.validate();
     invocation.validate();
@@ -503,6 +549,7 @@ fn runSemanticAliasTimingShellStateScript(
     evaluator.io = io;
     evaluator.read_stdin_from_fd = true;
     evaluator.external_stdio = external_stdio;
+    extension_handlers.apply(&evaluator);
     var parser_resolver = shell.ParserTrapActionResolver.init(&evaluator);
     parser_resolver.features = invocation.features;
     parser_resolver.arg_zero = invocation.arg_zero;
@@ -586,6 +633,26 @@ pub fn runInteractiveCommandString(
     invocation: shell.InvocationContext,
     external_stdio: runtime.ExternalStdio,
 ) !SemanticInvocationExecution {
+    return runInteractiveCommandStringWithExtensionHandlers(
+        allocator,
+        io,
+        shell_state,
+        script,
+        invocation,
+        external_stdio,
+        .{},
+    );
+}
+
+pub fn runInteractiveCommandStringWithExtensionHandlers(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    shell_state: *shell.ShellState,
+    script: []const u8,
+    invocation: shell.InvocationContext,
+    external_stdio: runtime.ExternalStdio,
+    extension_handlers: ExtensionHandlers,
+) !SemanticInvocationExecution {
     assertSemanticInteractiveOptions(script, invocation);
     shell_state.validate();
     std.debug.assert(shell_state.scope == .current_shell);
@@ -626,6 +693,7 @@ pub fn runInteractiveCommandString(
     evaluator.features = invocation.features;
     evaluator.arg_zero = invocation.arg_zero;
     evaluator.external_stdio = external_stdio;
+    extension_handlers.apply(&evaluator);
     var parser_resolver = shell.ParserTrapActionResolver.init(&evaluator);
     parser_resolver.features = invocation.features;
     parser_resolver.arg_zero = invocation.arg_zero;
@@ -1360,7 +1428,7 @@ fn commandUsesUnsupportedSemanticBuiltin(command: ir.SimpleCommand, allow_intera
     return switch (definition.semantic_class) {
         .unsupported, .predicate, .shell_state, .job_control, .control_flow => true,
         .declaration => !allow_interactive_declarations,
-        .no_op, .status_constant, .output => false,
+        .no_op, .status_constant, .output, .extension_state => false,
     };
 }
 
