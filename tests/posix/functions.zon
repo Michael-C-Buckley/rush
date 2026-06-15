@@ -93,6 +93,35 @@
             .status = 7,
         },
         .{
+            .name = "return in a dot script called by a function returns from the dot script only",
+            .script =
+            \\printf 'return 7\nprintf bad\n' >f
+            \\foo() { . ./f; printf after-source; }
+            \\foo
+            \\printf '<%s>\n' "$?"
+            ,
+            .stdout =
+            \\after-source<0>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "return in a function called by a dot script does not return from the dot script",
+            .script =
+            \\printf 'foo() { return 7; printf bad; }\nfoo\nprintf after-function\n' >f
+            \\. ./f
+            \\printf '<%s>\n' "$?"
+            ,
+            .stdout =
+            \\after-function<0>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "function body variable assignments affect the current shell",
             .script =
             \\x=before

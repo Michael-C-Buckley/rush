@@ -154,6 +154,7 @@ pub const EvalContext = struct {
         var next = self;
         next.function_depth = checkedIncrement(next.function_depth);
         next.loop_depth = 0;
+        next.source_depth = 0;
         next.validate();
         return next;
     }
@@ -247,6 +248,10 @@ test "EvalContext constructors preserve target and scoped nesting invariants" {
 
     const source_context = root.enterSource();
     try std.testing.expect(source_context.canReturnFromSource());
+
+    const source_function_context = source_context.enterFunction();
+    try std.testing.expect(source_function_context.canReturnFromFunction());
+    try std.testing.expect(!source_function_context.canReturnFromSource());
 
     const command_substitution = root.enterCommandSubstitution();
     try std.testing.expectEqual(ExecutionTarget.subshell, command_substitution.target);

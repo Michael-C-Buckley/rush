@@ -5992,7 +5992,7 @@ fn evaluateReturn(
             "numeric argument required",
         ));
     } else shell_state.last_status;
-    const scope: outcome.ReturnScope = if (eval_context.canReturnFromFunction()) .function else .sourced_script;
+    const scope: outcome.ReturnScope = if (eval_context.canReturnFromSource()) .sourced_script else .function;
     return .{ .status = status, .control_flow = .{ .return_from_scope = .{ .scope = scope, .status = status } } };
 }
 
