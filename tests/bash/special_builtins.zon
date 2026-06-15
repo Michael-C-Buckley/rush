@@ -183,5 +183,20 @@
             .stderr_match = .nonempty,
             .status = 0,
         },
+        .{
+            .name = "printf reports failure when stdout is closed",
+            .script =
+            \\exec 9>&1
+            \\exec 1>&-
+            \\printf hidden
+            \\printf 'visible=<%s>\n' "$?" >&9
+            ,
+            .stdout =
+            \\visible=<1>
+            \\
+            ,
+            .stderr_match = .any,
+            .status = 0,
+        },
     },
 }

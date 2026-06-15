@@ -883,7 +883,7 @@ fn runSemanticLoweredProgram(
         defer command_outcome.deinit();
 
         command_outcome.validateForContext(eval_context);
-        try appendOrWriteOutput(
+        const write_result = try appendOrWriteOutput(
             allocator,
             evaluator.*,
             &accumulated_stdout,
@@ -891,6 +891,7 @@ fn runSemanticLoweredProgram(
             command_outcome.stdout.items,
             command_outcome.stderr.items,
         );
+        applyOutputWriteResult(&command_outcome, write_result);
         status = command_outcome.status;
         control_flow = command_outcome.control_flow;
         if (bashAssignmentErrorAbortsSourceLine(eval_context.features, statement_script, command_outcome)) {
@@ -1008,7 +1009,7 @@ fn appendPendingRuntimeTrapOutcome(
         resolver,
     )) orelse return;
     defer trap_outcome.deinit();
-    try appendOrWriteOutput(
+    _ = try appendOrWriteOutput(
         allocator,
         evaluator.*,
         stdout,
@@ -1107,7 +1108,7 @@ fn appendSemanticExitTrap(
         resolver,
     )) orelse return;
     defer trap_outcome.deinit();
-    try appendOrWriteOutput(
+    _ = try appendOrWriteOutput(
         allocator,
         evaluator.*,
         stdout,
@@ -1624,6 +1625,11 @@ fn flushAccumulatedOutput(stdout: *std.ArrayList(u8), stderr: *std.ArrayList(u8)
     }
 }
 
+const OutputWriteResult = struct {
+    stdout_failed: bool = false,
+    stderr_failed: bool = false,
+};
+
 fn appendOrWriteOutput(
     allocator: std.mem.Allocator,
     evaluator: shell.eval.Evaluator,
@@ -1631,15 +1637,26 @@ fn appendOrWriteOutput(
     stderr: *std.ArrayList(u8),
     stdout_bytes: []const u8,
     stderr_bytes: []const u8,
-) !void {
+) !OutputWriteResult {
     if (evaluator.commit_exec_redirections) {
-        if (stdout_bytes.len != 0) _ = writeAllDescriptor(1, stdout_bytes);
-        if (stderr_bytes.len != 0) _ = writeAllDescriptor(2, stderr_bytes);
-        return;
+        var result: OutputWriteResult = .{};
+        if (stdout_bytes.len != 0 and !writeAllDescriptor(1, stdout_bytes)) result.stdout_failed = true;
+        if (stderr_bytes.len != 0 and !writeAllDescriptor(2, stderr_bytes)) result.stderr_failed = true;
+        return result;
     }
 
     try stdout.appendSlice(allocator, stdout_bytes);
     try stderr.appendSlice(allocator, stderr_bytes);
+    return .{};
+}
+
+fn applyOutputWriteResult(command_outcome: *shell.CommandOutcome, result: OutputWriteResult) void {
+    command_outcome.validate();
+    if (!result.stdout_failed and !result.stderr_failed) return;
+    if (command_outcome.control_flow != .normal) return;
+    if (command_outcome.status != 0) return;
+    command_outcome.status = 1;
+    if (command_outcome.state_delta.last_status != null) command_outcome.state_delta.last_status = 1;
 }
 
 fn writeAllDescriptor(descriptor: runtime.fd.Descriptor, bytes: []const u8) bool {

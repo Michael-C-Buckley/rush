@@ -16,6 +16,21 @@
             .status = 0,
         },
         .{
+            .name = "arithmetic expansion supports bash prefix increment",
+            .script =
+            \\i=1
+            \\printf '<%s> i=<%s>\n' "$((++i))" "$i"
+            \\printf '<%s> i=<%s>\n' "$((--i))" "$i"
+            ,
+            .stdout =
+            \\<2> i=<2>
+            \\<1> i=<1>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "arithmetic expansion error in assignment-only command does not exit",
             .script =
             \\x=$((1/0))
@@ -78,7 +93,7 @@
             ,
             .stdout = "",
             .stderr_match = .nonempty,
-            .status_match = .nonzero,
+            .status = 127,
         },
         .{
             .name = "nounset rejects unset variables in arithmetic expansion",

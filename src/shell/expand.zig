@@ -3639,6 +3639,8 @@ const ArithmeticParser = struct {
 
     fn parseFactor(self: *ArithmeticParser) anyerror!i64 {
         self.skipSpace();
+        if (self.features.isBash() and self.eatString("++")) return self.parsePrefixUpdate(.increment);
+        if (self.features.isBash() and self.eatString("--")) return self.parsePrefixUpdate(.decrement);
         if (self.eat('+')) return self.parseFactor();
         if (self.eat('-')) {
             if (try self.parseNegativeNumber()) |value| return value;
@@ -3662,6 +3664,25 @@ const ArithmeticParser = struct {
         }
         if (self.index < self.input.len and isNameStart(self.input[self.index])) return self.parseIdentifier();
         return self.parseNumber();
+    }
+
+    const PrefixUpdate = enum { increment, decrement };
+
+    fn parsePrefixUpdate(self: *ArithmeticParser, update: PrefixUpdate) anyerror!i64 {
+        self.skipSpace();
+        if (self.index >= self.input.len or !isNameStart(self.input[self.index])) return error.InvalidArithmetic;
+        const start = self.index;
+        self.index += 1;
+        while (self.index < self.input.len and isNameContinue(self.input[self.index])) : (self.index += 1) {}
+        if (!self.evaluating()) return 0;
+        const name = self.input[start..self.index];
+        const old_value = try self.lookupNumber(name);
+        const new_value = switch (update) {
+            .increment => try checkedAdd(old_value, 1),
+            .decrement => try checkedSub(old_value, 1),
+        };
+        try self.setNumber(name, new_value);
+        return new_value;
     }
 
     fn parseIdentifier(self: *ArithmeticParser) anyerror!i64 {

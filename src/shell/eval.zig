@@ -1578,7 +1578,10 @@ fn statusForExpansionFailure(
     features: compat.Features,
     failure: shell_expand.ExpansionFailure,
 ) outcome.ExitStatus {
-    if (features.isBash() and failure.kind == .nounset_parameter) return 127;
+    if (features.isBash()) switch (failure.kind) {
+        .nounset_parameter, .parameter_expansion => return 127,
+        .arithmetic_expansion => {},
+    };
     return 1;
 }
 
