@@ -170,6 +170,7 @@ pub const TrapActionFailure = struct {
     status: outcome.ExitStatus = 2,
     message: []const u8,
     bash_arithmetic_assignment_only_expansion: bool = false,
+    bash_parameter_assignment_expansion: bool = false,
 
     pub fn validate(self: TrapActionFailure) void {
         std.debug.assert(self.status != 0);
@@ -1057,6 +1058,7 @@ const TrapActionLowerer = struct {
                     .message = message,
                     .bash_arithmetic_assignment_only_expansion = command.argv.len == 0 and
                         expansion_failure.kind == .arithmetic_expansion,
+                    .bash_parameter_assignment_expansion = expansion_failure.kind == .parameter_assignment,
                 };
                 trap_failure.validate();
                 return .{ .failure = trap_failure };
@@ -1580,7 +1582,7 @@ fn statusForExpansionFailure(
 ) outcome.ExitStatus {
     if (features.isBash()) switch (failure.kind) {
         .nounset_parameter, .parameter_expansion => return 127,
-        .arithmetic_expansion => {},
+        .parameter_assignment, .arithmetic_expansion => {},
     };
     return 1;
 }
@@ -3965,7 +3967,7 @@ pub fn trapActionFailureOutcome(
     var state_delta = delta.StateDelta.init(allocator, eval_context.target);
     errdefer state_delta.deinit();
     state_delta.setLastStatus(failure.status);
-    const control_flow: outcome.ControlFlow = if (bashAssignmentOnlyExpansionFailureIsCommandFailure(
+    const control_flow: outcome.ControlFlow = if (bashExpansionFailureIsCommandFailure(
         eval_context,
         failure,
         shell_state,
@@ -3998,7 +4000,7 @@ pub fn trapActionFailureOutcome(
     return command_outcome;
 }
 
-fn bashAssignmentOnlyExpansionFailureIsCommandFailure(
+fn bashExpansionFailureIsCommandFailure(
     eval_context: context.EvalContext,
     failure: TrapActionFailure,
     shell_state: state.ShellState,
@@ -4009,7 +4011,7 @@ fn bashAssignmentOnlyExpansionFailureIsCommandFailure(
     return eval_context.features.isBash() and
         shell_state.trap_execution == .idle and
         failure.kind == .expansion_error and
-        failure.bash_arithmetic_assignment_only_expansion;
+        (failure.bash_arithmetic_assignment_only_expansion or failure.bash_parameter_assignment_expansion);
 }
 
 fn runtimeDispositionForTrapDisposition(disposition: state.TrapDisposition) runtime.signal.Disposition {
@@ -6074,12 +6076,14 @@ fn evaluateBuiltin(
     );
     if (std.mem.eql(u8, definition.name, "export")) return normalEvaluation(try evaluateExport(
         shell_state,
+        eval_context.features,
         plan.argv,
         state_delta,
         buffers,
     ));
     if (std.mem.eql(u8, definition.name, "readonly")) return normalEvaluation(try evaluateReadonly(
         shell_state,
+        eval_context.features,
         plan.argv,
         state_delta,
         buffers,
@@ -7935,6 +7939,7 @@ fn appendBuiltinDiagnostic(
 
 fn evaluateExport(
     shell_state: state.ShellState,
+    features: compat.Features,
     argv: []const []const u8,
     state_delta: *delta.StateDelta,
     buffers: *EvaluationBuffers,
@@ -7960,28 +7965,38 @@ fn evaluateExport(
         "unsupported option",
     );
 
-    for (argv[index..]) |arg| {
+    if (!features.isBash()) for (argv[index..]) |arg| {
         const assignment = splitAssignment(arg);
         const name = assignment.name;
         if (!isShellName(name)) return builtinUsageError(buffers, "export", "invalid variable name");
         if (assignment.value) |_| {
             if (shell_state.isVariableReadonly(name)) return builtinUsageError(buffers, "export", "readonly variable");
         }
-    }
+    };
 
+    var status: outcome.ExitStatus = 0;
     for (argv[index..]) |arg| {
         const assignment = splitAssignment(arg);
+        if (!isShellName(assignment.name)) {
+            status = try builtinStatusError(buffers, 1, "export", "invalid variable name");
+            continue;
+        }
         if (assignment.value) |value| {
+            if (shell_state.isVariableReadonly(assignment.name)) {
+                status = try builtinStatusError(buffers, 1, "export", "readonly variable");
+                continue;
+            }
             try state_delta.assignVariable(assignment.name, value, .{ .exported = true });
         } else {
             try state_delta.setVariableExported(assignment.name, true);
         }
     }
-    return 0;
+    return status;
 }
 
 fn evaluateReadonly(
     shell_state: state.ShellState,
+    features: compat.Features,
     argv: []const []const u8,
     state_delta: *delta.StateDelta,
     buffers: *EvaluationBuffers,
@@ -8007,7 +8022,7 @@ fn evaluateReadonly(
         "unsupported option",
     );
 
-    for (argv[index..]) |arg| {
+    if (!features.isBash()) for (argv[index..]) |arg| {
         const assignment = splitAssignment(arg);
         const name = assignment.name;
         if (!isShellName(name)) return builtinUsageError(buffers, "readonly", "invalid variable name");
@@ -8016,13 +8031,29 @@ fn evaluateReadonly(
         {
             return builtinStatusError(buffers, 1, "readonly", "readonly variable");
         }
+    };
+
+    var status: outcome.ExitStatus = 0;
+    for (argv[index..]) |arg| {
+        const assignment = splitAssignment(arg);
+        const name = assignment.name;
+        if (!isShellName(name)) {
+            status = try builtinStatusError(buffers, 1, "readonly", "invalid variable name");
+            continue;
+        }
+        if (assignment.value != null and (shell_state.isVariableReadonly(name) or
+            stateDeltaMarksVariableReadonly(state_delta.*, name)))
+        {
+            status = try builtinStatusError(buffers, 1, "readonly", "readonly variable");
+            continue;
+        }
         if (assignment.value) |value| {
             try state_delta.assignVariable(assignment.name, value, .{ .readonly = true });
         } else {
             try state_delta.setVariableReadonly(assignment.name);
         }
     }
-    return 0;
+    return status;
 }
 
 fn stateDeltaMarksVariableReadonly(state_delta: delta.StateDelta, name: []const u8) bool {

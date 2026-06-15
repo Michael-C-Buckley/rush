@@ -1140,7 +1140,7 @@ fn renderParameter(
             );
             const expanded = try expandParameterWord(allocator, parsed.word, options, in_double_quotes);
             errdefer allocator.free(expanded);
-            try options.env_set.set(parsed.name, expanded);
+            try assignParameterDefault(allocator, options, parsed.name, expanded);
             return expanded;
         },
         .alternate_value => {
@@ -1247,7 +1247,7 @@ fn renderParameterSegmented(
             );
             const expanded = try expandParameterWord(allocator, parsed.word, options, false);
             defer allocator.free(expanded);
-            try options.env_set.set(parsed.name, expanded);
+            try assignParameterDefault(allocator, options, parsed.name, expanded);
             return segmentedFromText(allocator, expanded, true, false, false);
         },
         .alternate_value => {
@@ -2116,6 +2116,30 @@ fn parameterAssignmentInvalid(allocator: std.mem.Allocator, options: Options, pa
         parameter_error.message = message;
     }
     return error.ParameterExpansionFailed;
+}
+
+fn assignParameterDefault(
+    allocator: std.mem.Allocator,
+    options: Options,
+    parameter: []const u8,
+    value: []const u8,
+) anyerror!void {
+    options.env_set.set(parameter, value) catch |err| switch (err) {
+        error.ReadonlyVariable => return parameterAssignmentReadonly(allocator, options, parameter),
+        else => |e| return e,
+    };
+}
+
+fn parameterAssignmentReadonly(allocator: std.mem.Allocator, options: Options, parameter: []const u8) anyerror {
+    if (options.parameter_error) |parameter_error| {
+        const name = try allocator.dupe(u8, parameter);
+        errdefer allocator.free(name);
+        const message = try allocator.dupe(u8, "readonly variable");
+        parameter_error.clear(allocator);
+        parameter_error.name = name;
+        parameter_error.message = message;
+    }
+    return error.ParameterAssignmentFailed;
 }
 
 fn isAssignableParameterName(name: []const u8) bool {
@@ -4281,7 +4305,7 @@ fn appendParameterWordOperatorUnquoted(
             );
             const assigned = try expandParameterWord(allocator, parsed.word, options, false);
             defer allocator.free(assigned);
-            try options.env_set.set(parsed.name, assigned);
+            try assignParameterDefault(allocator, options, parsed.name, assigned);
             try appendSplitText(allocator, fields, current, assigned, ifs);
         },
         .alternate_value => {
@@ -4804,7 +4828,7 @@ fn appendParameterWordOperatorQuoted(
             );
             const assigned = try expandParameterWord(allocator, parsed.word, options, true);
             defer allocator.free(assigned);
-            try options.env_set.set(parsed.name, assigned);
+            try assignParameterDefault(allocator, options, parsed.name, assigned);
             if (hasGlobSyntax(assigned)) quoted_glob.* = true;
             try current.appendSlice(allocator, assigned);
             force_current_field.* = true;

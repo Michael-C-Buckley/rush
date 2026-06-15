@@ -332,6 +332,18 @@
             .status_match = .nonzero,
         },
         .{
+            .name = "readonly assign-default expansion errors exit",
+            .script =
+            \\x=
+            \\readonly x
+            \\printf '<%s>\n' "${x:=new}"
+            \\printf 'bad\n'
+            ,
+            .stdout = "",
+            .stderr_match = .nonempty,
+            .status_match = .nonzero,
+        },
+        .{
             .name = "command lookup failures use status 127 and may continue",
             .script =
             \\no_such_posix_command_for_rush

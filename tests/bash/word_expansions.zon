@@ -96,6 +96,22 @@
             .status = 127,
         },
         .{
+            .name = "readonly assign-default expansion fails without internal error",
+            .script =
+            \\x=
+            \\readonly x
+            \\printf '<%s>\n' "${x:=new}"
+            \\printf 'x=<%s> status=<%s>\n' "$x" "$?"
+            \\printf after
+            ,
+            .stdout =
+            \\x=<> status=<1>
+            \\after
+            ,
+            .stderr_match = .nonempty,
+            .status = 0,
+        },
+        .{
             .name = "nounset rejects unset variables in arithmetic expansion",
             .script =
             \\set -u

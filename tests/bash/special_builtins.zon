@@ -198,5 +198,31 @@
             .stderr_match = .any,
             .status = 0,
         },
+        .{
+            .name = "export continues after invalid variable names by default",
+            .script =
+            \\export A=ok 1BAD=x B=ok
+            \\printf 'A=<%s> B=<%s> status=<%s>\n' "$A" "$B" "$?"
+            ,
+            .stdout =
+            \\A=<ok> B=<ok> status=<1>
+            \\
+            ,
+            .stderr_match = .nonempty,
+            .status = 0,
+        },
+        .{
+            .name = "readonly continues after invalid variable names by default",
+            .script =
+            \\readonly A=ok 1BAD=x B=ok
+            \\printf 'A=<%s> B=<%s> status=<%s>\n' "$A" "$B" "$?"
+            ,
+            .stdout =
+            \\A=<ok> B=<ok> status=<1>
+            \\
+            ,
+            .stderr_match = .nonempty,
+            .status = 0,
+        },
     },
 }

@@ -1592,7 +1592,7 @@ fn semanticFailureStopsProgram(failure: shell.TrapActionFailure, features: compa
     }
     return !(features.isBash() and
         failure.kind == .expansion_error and
-        failure.bash_arithmetic_assignment_only_expansion);
+        (failure.bash_arithmetic_assignment_only_expansion or failure.bash_parameter_assignment_expansion));
 }
 
 fn semanticBodyUsesInheritedExternal(body: shell.TrapActionBody) bool {

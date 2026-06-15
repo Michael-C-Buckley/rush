@@ -19,6 +19,7 @@ pub const shell_option_flags_max = 10;
 pub const ExpansionErrorKind = enum {
     nounset_parameter,
     parameter_expansion,
+    parameter_assignment,
     arithmetic_expansion,
 };
 
@@ -310,6 +311,14 @@ pub const ShellExpansion = struct {
                     self.parameter_error.message
                 else
                     "expansion failed",
+            },
+            error.ParameterAssignmentFailed => .{
+                .kind = .parameter_assignment,
+                .name = if (self.parameter_error.name.len != 0) self.parameter_error.name else "parameter",
+                .message = if (self.parameter_error.message.len != 0)
+                    self.parameter_error.message
+                else
+                    "assignment failed",
             },
             error.ArithmeticExpansionFailed => .{
                 .kind = .arithmetic_expansion,
