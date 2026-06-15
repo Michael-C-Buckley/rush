@@ -7,6 +7,7 @@ const edit_buffer = @import("buffer.zig");
 const completion = @import("completion.zig");
 const key_mod = @import("key.zig");
 const history_mod = @import("history.zig");
+const menu = @import("menu.zig");
 const path = @import("path.zig");
 const render = @import("render.zig");
 const request_mod = @import("request.zig");
@@ -110,74 +111,7 @@ pub const ViAliasView = struct {
 };
 
 pub const ExternalEditorRequest = request_mod.ExternalEditorRequest;
-pub const CompletionMenu = struct {
-    candidates: []completion.Candidate = &.{},
-    selected: usize = no_selection,
-    window_start: usize = 0,
-
-    const no_selection = std.math.maxInt(usize);
-
-    // ziglint-ignore: Z030 reset to a reusable empty state; clear()/replace() read fields after deinit
-    pub fn deinit(self: *CompletionMenu, allocator: std.mem.Allocator) void {
-        if (self.candidates.len != 0) completion.freeCandidates(allocator, self.candidates);
-        self.* = .{};
-    }
-
-    pub fn replace(
-        self: *CompletionMenu,
-        allocator: std.mem.Allocator,
-        candidates: []const completion.Candidate,
-    ) !void {
-        self.deinit(allocator);
-        self.candidates = try completion.cloneCandidates(allocator, candidates);
-        self.selected = no_selection;
-        self.window_start = 0;
-    }
-
-    pub fn clear(self: *CompletionMenu, allocator: std.mem.Allocator) void {
-        self.deinit(allocator);
-    }
-
-    pub fn isOpen(self: CompletionMenu) bool {
-        return self.candidates.len != 0;
-    }
-
-    pub fn selectPrevious(self: *CompletionMenu) void {
-        if (self.candidates.len == 0) return;
-        self.selected = if (self.selected == no_selection or self.selected == 0) 0 else self.selected - 1;
-    }
-
-    pub fn selectNext(self: *CompletionMenu) void {
-        if (self.candidates.len == 0) return;
-        self.selected = if (self.selected == no_selection) 0 else @min(self.selected + 1, self.candidates.len - 1);
-    }
-
-    pub fn selectedCandidate(self: CompletionMenu) ?completion.Candidate {
-        if (self.candidates.len == 0 or self.selected == no_selection) return null;
-        return self.candidates[self.selected];
-    }
-
-    pub fn visibleWindowStart(self: *CompletionMenu, max_rows: usize) usize {
-        if (self.candidates.len == 0) return 0;
-        if (self.selected == no_selection) {
-            self.window_start = 0;
-            return 0;
-        }
-        const visible_rows = @max(max_rows, 1);
-        if (self.candidates.len <= visible_rows) {
-            self.window_start = 0;
-            return 0;
-        }
-        const last_start = self.candidates.len - visible_rows;
-        self.window_start = @min(self.window_start, last_start);
-        if (self.selected < self.window_start) {
-            self.window_start = self.selected;
-        } else if (self.selected >= self.window_start + visible_rows) {
-            self.window_start = self.selected + 1 - visible_rows;
-        }
-        return self.window_start;
-    }
-};
+pub const CompletionMenu = menu.State;
 
 const PendingRemovableSuffix = struct {
     start: usize,

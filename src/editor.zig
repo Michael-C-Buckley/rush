@@ -8,6 +8,7 @@ pub const completion = @import("editor/completion.zig");
 pub const driver = @import("editor/driver.zig");
 pub const history = @import("editor/history.zig");
 pub const key = @import("editor/key.zig");
+pub const menu = @import("editor/menu.zig");
 pub const path = @import("editor/path.zig");
 pub const render = @import("editor/render.zig");
 pub const request = @import("editor/request.zig");
