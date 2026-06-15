@@ -1948,13 +1948,16 @@ fn evaluatePlanWithInput(
     }
     state_delta.setLastStatus(result.status);
     assertCommandDeltaCompatible(plan, state_delta);
-    const decision = consequence.decideForSimpleCommand(
-        shell_state.options,
-        eval_context,
-        plan,
-        result.status,
-        result.control_flow,
-    );
+    const decision = if (specialBuiltinStatusOnly(plan, result, buffers))
+        consequence.decideForStatus(shell_state.options, eval_context, result.status)
+    else
+        consequence.decideForSimpleCommand(
+            shell_state.options,
+            eval_context,
+            plan,
+            result.status,
+            result.control_flow,
+        );
 
     var command_outcome = outcome.CommandOutcome.withControlFlow(
         evaluator.allocator,
@@ -1969,6 +1972,19 @@ fn evaluatePlanWithInput(
     try appendBuiltinDiagnostic(&command_outcome, plan, result.status);
     command_outcome.validateForContext(eval_context);
     return command_outcome;
+}
+
+fn specialBuiltinStatusOnly(
+    plan: command_plan.CommandPlan,
+    result: SimpleEvalResult,
+    buffers: EvaluationBuffers,
+) bool {
+    plan.validate();
+    result.control_flow.validate();
+    if (plan.class() != .special_builtin) return false;
+    if (result.control_flow != .normal) return false;
+    if (result.status == 0) return false;
+    return buffers.diagnostics.items.len == 0;
 }
 
 fn flushBuffersForRedirectionTargets(
@@ -13919,6 +13935,25 @@ test "semantic evaluator treats eval parse errors as special builtin shell error
     try std.testing.expectEqual(@as(outcome.ExitStatus, 2), command_result.status);
     try std.testing.expectEqual(outcome.ControlFlow.normal, command_result.control_flow);
     command_result.discardDelta(.current_shell);
+}
+
+test "semantic evaluator treats nonzero eval command status as a status not a utility error" {
+    var shell_state = state.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    var evaluator = Evaluator.init(std.testing.allocator);
+    const eval_context = context.EvalContext.forTarget(.current_shell);
+
+    const plan = command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{
+        "eval",
+        "false",
+    } } });
+    var result = try evaluatePlan(&evaluator, &shell_state, eval_context, plan);
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 1), result.status);
+    try std.testing.expectEqual(outcome.ControlFlow.normal, result.control_flow);
+    try std.testing.expectEqual(@as(usize, 0), result.diagnostics.items.len);
+    result.discardDelta(.current_shell);
 }
 
 test "semantic evaluator routes redirection failure consequences through central policy" {

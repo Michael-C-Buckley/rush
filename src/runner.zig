@@ -291,6 +291,7 @@ fn runSemanticAliasTimingCommandString(
     errdefer stderr.deinit(allocator);
     var status: shell.ExitStatus = 0;
     var start = skipSemanticChunkSeparators(script, 0);
+    var stop_for_pending_exit = false;
     while (start < script.len) {
         var end = extendSemanticHereDocChunk(script, start, semanticLineEnd(script, start));
         while (true) {
@@ -334,12 +335,14 @@ fn runSemanticAliasTimingCommandString(
                     },
                 }
                 parser_resolver.alias_state = null;
+                if (shell_state.pending_exit != null) stop_for_pending_exit = true;
                 break;
             }
             if (!parsed.incomplete or end >= script.len)
                 return .{ .output = try parseDiagnostics(allocator, source, parsed.diagnostics) };
             end = extendSemanticHereDocChunk(script, start, semanticLineEnd(script, end));
         }
+        if (stop_for_pending_exit) break;
         start = skipSemanticChunkSeparators(script, end);
     }
 
@@ -482,6 +485,7 @@ fn runSemanticAliasTimingShellStateScript(
     errdefer stderr.deinit(allocator);
     var status = shell_state.last_status;
     var start = skipSemanticChunkSeparators(script, 0);
+    var stop_for_pending_exit = false;
     while (start < script.len) {
         var end = extendSemanticHereDocChunk(script, start, semanticLineEnd(script, start));
         while (true) {
@@ -527,12 +531,14 @@ fn runSemanticAliasTimingShellStateScript(
                     },
                 }
                 parser_resolver.alias_state = null;
+                if (shell_state.pending_exit != null) stop_for_pending_exit = true;
                 break;
             }
             if (!parsed.incomplete or end >= script.len)
                 return .{ .output = try parseDiagnostics(allocator, source, parsed.diagnostics) };
             end = extendSemanticHereDocChunk(script, start, semanticLineEnd(script, end));
         }
+        if (stop_for_pending_exit) break;
         start = skipSemanticChunkSeparators(script, end);
     }
 
@@ -2056,6 +2062,30 @@ test "semantic non-interactive invocation initializes environment arg zero and p
         },
     }
 }
+
+test "semantic non-interactive invocation stops after eval parse errors across chunks" {
+    var execution = try runSemanticCommandString(
+        std.testing.allocator,
+        std.testing.io,
+        "eval 'if then echo bad; fi'\nprintf 'bad\\n'",
+        shell.InvocationContext.init(.{ .arg_zero = "rush" }),
+        .inherit,
+        null,
+        &.{},
+        .{},
+    );
+    defer execution.deinit(std.testing.allocator);
+
+    switch (execution) {
+        .unsupported => return error.ExpectedSemanticExecution,
+        .output => |result| {
+            try std.testing.expectEqual(@as(shell.ExitStatus, 2), result.status);
+            try std.testing.expectEqualStrings("", result.stdout);
+            try std.testing.expect(std.mem.indexOf(u8, result.stderr, "parse error") != null);
+        },
+    }
+}
+
 test "semantic non-interactive invocation executes foreground simple pipelines" {
     var execution = try runSemanticCommandString(
         std.testing.allocator,
