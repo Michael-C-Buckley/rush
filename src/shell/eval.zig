@@ -9113,6 +9113,48 @@ test "semantic evaluator dispatches source as a compat extension builtin" {
     try std.testing.expectEqualStrings("ok", shell_state.getVariable("SOURCED_VALUE").?.value);
 }
 
+test "semantic evaluator dispatches color as a Rush extension builtin" {
+    var shell_state = state.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    var evaluator = Evaluator.init(std.testing.allocator);
+    const eval_context = context.EvalContext.forTarget(.current_shell);
+
+    const dim = command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{
+        "color",
+        "dim",
+        "#204080",
+        "25",
+    } } });
+    var dim_result = try evaluatePlan(&evaluator, &shell_state, eval_context, dim);
+    defer dim_result.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 0), dim_result.status);
+    try std.testing.expectEqualStrings("#183060\n", dim_result.stdout.items);
+
+    const blend = command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{
+        "color",
+        "blend",
+        "#000000",
+        "#ffffff",
+        "50",
+    } } });
+    var blend_result = try evaluatePlan(&evaluator, &shell_state, eval_context, blend);
+    defer blend_result.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 0), blend_result.status);
+    try std.testing.expectEqualStrings("#808080\n", blend_result.stdout.items);
+
+    const invalid = command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{
+        "color",
+        "dim",
+        "blue",
+        "25",
+    } } });
+    var invalid_result = try evaluatePlan(&evaluator, &shell_state, eval_context, invalid);
+    defer invalid_result.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 2), invalid_result.status);
+    try std.testing.expectEqualStrings("", invalid_result.stdout.items);
+    try std.testing.expectEqualStrings("color: invalid color\n", invalid_result.stderr.items);
+}
+
 test "semantic evaluator dispatches shopt as a compat extension builtin" {
     var shell_state = state.ShellState.init(std.testing.allocator);
     defer shell_state.deinit();
