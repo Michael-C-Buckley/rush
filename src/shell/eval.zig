@@ -7448,18 +7448,18 @@ fn evaluateCommandLookup(
     use_default_path: bool,
     buffers: *EvaluationBuffers,
 ) EvalError!SimpleEvalResult {
-    if (evaluator.builtinDefinition(name)) |definition| {
-        switch (format) {
-            .terse => try buffers.stdout.print(buffers.allocator, "{s}\n", .{name}),
-            .verbose => try buffers.stdout.print(buffers.allocator, "{s} is a shell builtin\n", .{definition.name}),
-        }
-        return normalEvaluation(0);
-    }
-
     if (isShellName(name) and shell_state.getFunction(name) != null) {
         switch (format) {
             .terse => try buffers.stdout.print(buffers.allocator, "{s}\n", .{name}),
             .verbose => try buffers.stdout.print(buffers.allocator, "{s} is a shell function\n", .{name}),
+        }
+        return normalEvaluation(0);
+    }
+
+    if (evaluator.builtinDefinition(name)) |definition| {
+        switch (format) {
+            .terse => try buffers.stdout.print(buffers.allocator, "{s}\n", .{name}),
+            .verbose => try buffers.stdout.print(buffers.allocator, "{s} is a shell builtin\n", .{definition.name}),
         }
         return normalEvaluation(0);
     }

@@ -346,6 +346,19 @@
             .status = 0,
         },
         .{
+            .name = "command -V reports a function before the builtin it shadows",
+            .script =
+            \\cd() { :; }
+            \\command -V cd
+            ,
+            .stdout =
+            \\cd is a shell function
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "command -v reports a found PATH utility pathname",
             .script =
             \\PATH=/bin command -v sh
