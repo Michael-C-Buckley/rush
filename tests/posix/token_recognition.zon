@@ -95,6 +95,19 @@
             .status = 0,
         },
         .{
+            .name = "alias substitution applies while evaluating eval text",
+            .script =
+            \\alias hi='printf "%s\n" alias'
+            \\eval 'hi'
+            ,
+            .stdout =
+            \\alias
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "alias substitution does not apply to ordinary arguments",
             .script =
             \\alias hi='printf "%s\n" alias'

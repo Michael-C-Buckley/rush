@@ -267,6 +267,7 @@ fn runSemanticCommandStringInternal(
     var shell_state = shell.ShellState.init(allocator);
     defer shell_state.deinit();
     try shell.startup.initializeInvocationState(allocator, io, &shell_state, environ_map, positionals, shell_options);
+    configureCompatibilityShopts(&shell_state, invocation.features, invocation.interactive);
 
     var adapter = runtime.PosixAdapter.init(io);
     var evaluator = shell.eval.Evaluator.initWithRuntimePorts(allocator, runtime.posixPorts(&adapter));
@@ -310,6 +311,7 @@ fn runSemanticAliasTimingCommandString(
     var shell_state = shell.ShellState.init(allocator);
     defer shell_state.deinit();
     try shell.startup.initializeInvocationState(allocator, io, &shell_state, environ_map, positionals, shell_options);
+    configureCompatibilityShopts(&shell_state, invocation.features, invocation.interactive);
 
     var adapter = runtime.PosixAdapter.init(io);
     var evaluator = shell.eval.Evaluator.initWithRuntimePorts(allocator, runtime.posixPorts(&adapter));
@@ -1183,6 +1185,14 @@ fn semanticExpandAliases(
     });
 }
 
+fn configureCompatibilityShopts(
+    shell_state: *shell.ShellState,
+    features: compat.Features,
+    interactive: bool,
+) void {
+    if (features.isBash() and !interactive) shell_state.shopts.set(.expand_aliases, false);
+}
+
 fn lookupSemanticAlias(opaque_context: *anyopaque, name: []const u8) ?[]const u8 {
     if (!isSemanticAliasName(name)) return null;
     const shell_state: *shell.ShellState = @ptrCast(@alignCast(opaque_context));
@@ -1935,6 +1945,7 @@ test "script file invocation sets command name and positional parameters" {
     try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = path, .data =
         \\#!/usr/bin/env rush
         \\# first-line comments and shebangs are shell comments
+        \\shopt -s expand_aliases
         \\alias say='echo'
         \\read value <<EOF
         \\$2

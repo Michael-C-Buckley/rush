@@ -21,5 +21,33 @@
             .stderr = "",
             .status = 0,
         },
+        .{
+            .name = "eval does not expand aliases in default non-interactive mode",
+            .script =
+            \\alias ll='printf "%s\n" alias'
+            \\( eval 'll' ) 2>/dev/null
+            \\printf '<%s>\n' "$?"
+            ,
+            .stdout =
+            \\<127>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "eval expands aliases when expand_aliases is enabled",
+            .script =
+            \\shopt -s expand_aliases
+            \\alias ll='printf "%s\n" alias'
+            \\eval 'll'
+            ,
+            .stdout =
+            \\alias
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
     },
 }
