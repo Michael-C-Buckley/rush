@@ -5,6 +5,9 @@
 
 const std = @import("std");
 const assignment_runtime = @import("assignment.zig");
+const default_builtins = @import("../builtins.zig");
+const extension_api = @import("../extensions/api.zig");
+const extension_handlers = @import("../extensions/handlers.zig");
 const builtin = @import("builtin.zig");
 const command_plan = @import("command_plan.zig");
 const compat = @import("compat.zig");
@@ -46,6 +49,9 @@ pub const Evaluator = struct {
     io: ?std.Io = null,
     read_stdin_from_fd: bool = false,
     external_stdio: ExternalStdio = .inherit,
+    builtin_definitions: []const builtin.Builtin = default_builtins.default_registry,
+    extension_handler_context: ?*anyopaque = null,
+    extension_handler_lookup: ?*const fn (?*anyopaque, []const u8) ?extension_api.HandlerSpec = null,
 
     pub fn init(allocator: std.mem.Allocator) Evaluator {
         return .{ .allocator = allocator, .shell_pid = currentProcessId() };
@@ -85,6 +91,31 @@ pub const Evaluator = struct {
 
     pub fn initWithSignalPort(allocator: std.mem.Allocator, signal_port: runtime.signal.Port) Evaluator {
         return .{ .allocator = allocator, .signal_port = signal_port, .shell_pid = currentProcessId() };
+    }
+
+    pub fn setExtensionHandlerLookup(
+        self: *Evaluator,
+        context_value: ?*anyopaque,
+        lookup: *const fn (?*anyopaque, []const u8) ?extension_api.HandlerSpec,
+    ) void {
+        self.extension_handler_context = context_value;
+        self.extension_handler_lookup = lookup;
+    }
+
+    pub fn setBuiltinDefinitions(self: *Evaluator, definitions: []const builtin.Builtin) void {
+        builtin.assertUniqueNames(definitions);
+        self.builtin_definitions = definitions;
+    }
+
+    fn builtinDefinition(self: Evaluator, name: []const u8) ?builtin.Builtin {
+        return builtin.lookupIn(self.builtin_definitions, name);
+    }
+
+    fn extensionHandler(self: Evaluator, name: []const u8) ?extension_api.HandlerSpec {
+        if (self.extension_handler_lookup) |lookup| {
+            if (lookup(self.extension_handler_context, name)) |handler| return handler;
+        }
+        return extension_handlers.lookup(name);
     }
 };
 
@@ -5318,6 +5349,18 @@ fn evaluateBuiltin(
         else => unreachable,
     }
 
+    if (definition.origin == .extension) {
+        if (evaluator.extensionHandler(definition.name)) |handler| return evaluateExtensionBuiltin(
+            evaluator,
+            handler,
+            shell_state,
+            eval_context,
+            plan,
+            state_delta,
+            buffers,
+        );
+    }
+
     if (std.mem.eql(u8, definition.name, ":")) return normalEvaluation(0);
     if (std.mem.eql(u8, definition.name, "true")) return normalEvaluation(0);
     if (std.mem.eql(u8, definition.name, "false")) return normalEvaluation(1);
@@ -5412,12 +5455,6 @@ fn evaluateBuiltin(
         state_delta,
         buffers,
     ));
-    if (std.mem.eql(u8, definition.name, "abbr")) return normalEvaluation(try evaluateAbbr(
-        shell_state,
-        plan.argv,
-        state_delta,
-        buffers,
-    ));
     if (std.mem.eql(u8, definition.name, "alias")) return normalEvaluation(try evaluateAlias(
         shell_state,
         plan.argv,
@@ -5434,14 +5471,6 @@ fn evaluateBuiltin(
         evaluator.allocator,
         shell_state,
         plan.argv,
-        state_delta,
-        buffers,
-    ));
-    if (std.mem.eql(u8, definition.name, "local")) return normalEvaluation(try evaluateLocal(
-        evaluator,
-        shell_state,
-        eval_context,
-        plan,
         state_delta,
         buffers,
     ));
@@ -5488,6 +5517,105 @@ fn evaluateBuiltin(
         buffers,
     ));
     return error.Unimplemented;
+}
+
+fn evaluateExtensionBuiltin(
+    evaluator: *Evaluator,
+    handler: extension_api.HandlerSpec,
+    shell_state: state.ShellState,
+    eval_context: context.EvalContext,
+    plan: command_plan.CommandPlan,
+    state_delta: *delta.StateDelta,
+    buffers: *EvaluationBuffers,
+) EvalError!SimpleEvalResult {
+    var external_resolver_context: ExtensionExternalResolverContext = .{
+        .evaluator = evaluator,
+        .shell_state = shell_state,
+    };
+    var invocation: extension_api.Invocation = .{
+        .allocator = buffers.allocator,
+        .argv = plan.argv,
+        .assignments = plan.assignments,
+        .builtins = evaluator.builtin_definitions,
+        .shell_state = shell_state,
+        .state_delta = state_delta,
+        .eval_context = eval_context,
+        .function_scope = extensionFunctionScope(evaluator),
+        .external_resolver = extensionExternalResolver(&external_resolver_context),
+        .stdout = &buffers.stdout,
+        .stderr = &buffers.stderr,
+        .diagnostics = &buffers.diagnostics,
+    };
+    const status = handler.handler(handler.context, &invocation) catch |err| switch (err) {
+        error.OutOfMemory => return error.OutOfMemory,
+        else => return error.Unimplemented,
+    };
+    return normalEvaluation(status);
+}
+
+const ExtensionExternalResolverContext = struct {
+    evaluator: *Evaluator,
+    shell_state: state.ShellState,
+};
+
+fn extensionExternalResolver(context_value: *ExtensionExternalResolverContext) extension_api.ExternalResolver {
+    return .{
+        .context = context_value,
+        .resolve_command = resolveExtensionExternal,
+        .resolve_all_commands = resolveAllExtensionExternals,
+    };
+}
+
+fn resolveExtensionExternal(
+    allocator: std.mem.Allocator,
+    opaque_context: *anyopaque,
+    assignments: []const command_plan.Assignment,
+    name: []const u8,
+) !?command_plan.ExternalResolution {
+    const resolver_context: *ExtensionExternalResolverContext = @ptrCast(@alignCast(opaque_context));
+    const command: command_plan.ExpandedSimpleCommand = .{
+        .assignments = assignments,
+        .argv = &.{name},
+    };
+    return resolveExternalForEvaluation(
+        allocator,
+        resolver_context.evaluator.fs_port,
+        resolver_context.shell_state,
+        command,
+    );
+}
+
+fn resolveAllExtensionExternals(
+    allocator: std.mem.Allocator,
+    opaque_context: *anyopaque,
+    assignments: []const command_plan.Assignment,
+    name: []const u8,
+) ![]command_plan.ExternalResolution {
+    const resolver_context: *ExtensionExternalResolverContext = @ptrCast(@alignCast(opaque_context));
+    const command: command_plan.ExpandedSimpleCommand = .{
+        .assignments = assignments,
+        .argv = &.{name},
+    };
+    return resolveAllExternalsForEvaluation(
+        allocator,
+        resolver_context.evaluator.fs_port,
+        resolver_context.shell_state,
+        command,
+    );
+}
+
+fn extensionFunctionScope(evaluator: *Evaluator) ?extension_api.FunctionScope {
+    const frame = evaluator.function_frame orelse return null;
+    return .{
+        .depth = frame.depth,
+        .context = frame,
+        .add_local = addExtensionFunctionLocal,
+    };
+}
+
+fn addExtensionFunctionLocal(opaque_frame: *anyopaque, name: []const u8) !void {
+    const frame: *FunctionFrame = @ptrCast(@alignCast(opaque_frame));
+    try frame.addLocal(name);
 }
 
 fn evaluateReturn(
@@ -5702,7 +5830,7 @@ fn evaluateCommandBuiltin(
     std.debug.assert(argv.len != 0);
     std.debug.assert(std.mem.eql(u8, argv[0], "command"));
     if (argv.len == 3 and std.mem.eql(u8, argv[1], "-v")) {
-        if (builtin.lookup(argv[2]) != null) {
+        if (evaluator.builtinDefinition(argv[2]) != null) {
             try buffers.stdout.print(buffers.allocator, "{s}\n", .{argv[2]});
             return normalEvaluation(0);
         }
@@ -5775,6 +5903,60 @@ fn resolveExternalForEvaluation(
     return null;
 }
 
+fn resolveAllExternalsForEvaluation(
+    allocator: std.mem.Allocator,
+    fs_port: ?runtime.fs.Port,
+    shell_state: state.ShellState,
+    command: command_plan.ExpandedSimpleCommand,
+) ![]command_plan.ExternalResolution {
+    command.validate();
+    if (command.argv.len == 0) return allocator.dupe(command_plan.ExternalResolution, &.{});
+    const name = command.argv[0];
+    if (name.len == 0) return allocator.dupe(command_plan.ExternalResolution, &.{});
+    if (std.mem.findScalar(u8, name, '/') != null) {
+        const owned_path = try allocator.dupe(u8, name);
+        errdefer allocator.free(owned_path);
+        return allocator.dupe(command_plan.ExternalResolution, &.{.{ .name = name, .path = owned_path }});
+    }
+
+    const port = fs_port orelse return allocator.dupe(command_plan.ExternalResolution, &.{});
+    const path_value = commandLookupPath(shell_state, command) orelse return allocator.dupe(
+        command_plan.ExternalResolution,
+        &.{},
+    );
+    var resolutions: std.ArrayList(command_plan.ExternalResolution) = .empty;
+    errdefer {
+        for (resolutions.items) |resolution| allocator.free(resolution.path);
+        resolutions.deinit(allocator);
+    }
+    var first_found_not_executable: ?[]const u8 = null;
+    errdefer if (first_found_not_executable) |path| allocator.free(path);
+    var parts = std.mem.splitScalar(u8, path_value, ':');
+    while (parts.next()) |part| {
+        const dir = if (part.len == 0) "." else part;
+        const candidate = try std.mem.concat(allocator, u8, &.{ dir, "/", name });
+        errdefer allocator.free(candidate);
+        switch (externalCandidate(port, candidate)) {
+            .missing => allocator.free(candidate),
+            .found_not_executable => {
+                if (first_found_not_executable == null) {
+                    first_found_not_executable = candidate;
+                } else {
+                    allocator.free(candidate);
+                }
+            },
+            .executable => try resolutions.append(allocator, .{ .name = name, .path = candidate }),
+        }
+    }
+    if (resolutions.items.len == 0) {
+        if (first_found_not_executable) |path| {
+            first_found_not_executable = null;
+            try resolutions.append(allocator, .{ .name = name, .path = path });
+        }
+    }
+    return resolutions.toOwnedSlice(allocator);
+}
+
 const LoopControlKind = enum { break_loop, continue_loop };
 
 fn evaluateLoopControl(
@@ -5843,53 +6025,6 @@ fn evaluateExec(argv: []const []const u8, buffers: *EvaluationBuffers) !SimpleEv
         "unsupported option",
     ));
     return .{ .status = 127, .control_flow = .{ .exit = 127 } };
-}
-
-fn evaluateLocal(
-    evaluator: *Evaluator,
-    shell_state: state.ShellState,
-    eval_context: context.EvalContext,
-    plan: command_plan.CommandPlan,
-    state_delta: *delta.StateDelta,
-    buffers: *EvaluationBuffers,
-) !outcome.ExitStatus {
-    plan.validate();
-    std.debug.assert(plan.argv.len != 0);
-    std.debug.assert(std.mem.eql(u8, plan.argv[0], "local"));
-    std.debug.assert(plan.assignmentEffect() == .temporary or plan.assignmentEffect() == .none);
-
-    const frame = evaluator.function_frame orelse return builtinStatusError(
-        buffers,
-        1,
-        "local",
-        "can only be used in a function",
-    );
-    std.debug.assert(eval_context.canReturnFromFunction());
-    std.debug.assert(frame.depth == eval_context.function_depth);
-    if (plan.argv.len == 1) return 0;
-
-    for (plan.argv[1..]) |arg| {
-        const assignment = splitAssignment(arg);
-        if (!isShellName(assignment.name)) return builtinUsageError(buffers, "local", "invalid variable name");
-        if (shell_state.isVariableReadonly(assignment.name)) return builtinUsageError(
-            buffers,
-            "local",
-            "readonly variable",
-        );
-    }
-
-    for (plan.argv[1..]) |arg| {
-        const assignment = splitAssignment(arg);
-        try frame.addLocal(assignment.name);
-        if (assignment.value) |value| {
-            try state_delta.assignVariable(assignment.name, value, .{});
-        } else if (findAssignmentPrefixValue(plan.assignments, assignment.name)) |value| {
-            try state_delta.assignVariable(assignment.name, value, .{});
-        } else {
-            try state_delta.unsetVariable(assignment.name);
-        }
-    }
-    return 0;
 }
 
 fn appendBuiltinDiagnostic(
@@ -6487,7 +6622,9 @@ fn resolveBackgroundJobOperand(shell_state: state.ShellState, operand: ?[]const 
 fn resolveWaitOperand(shell_state: state.ShellState, operand: []const u8) ?usize {
     shell_state.validate();
     std.debug.assert(operand.len != 0);
-    if (std.mem.startsWith(u8, operand, "%")) return if (findBackgroundJobBySpec(shell_state, operand)) |job| job.id else null;
+    if (std.mem.startsWith(u8, operand, "%")) {
+        return if (findBackgroundJobBySpec(shell_state, operand)) |job| job.id else null;
+    }
     const pid = std.fmt.parseInt(runtime.process.ProcessId, operand, 10) catch return null;
     if (pid <= 0) return null;
     for (shell_state.background_jobs.items) |job| {
@@ -6899,76 +7036,6 @@ fn evaluateAlias(
         }
     }
     return 0;
-}
-
-fn evaluateAbbr(
-    shell_state: state.ShellState,
-    argv: []const []const u8,
-    state_delta: *delta.StateDelta,
-    buffers: *EvaluationBuffers,
-) !outcome.ExitStatus {
-    std.debug.assert(argv.len != 0);
-    std.debug.assert(std.mem.eql(u8, argv[0], "abbr"));
-
-    if (argv.len == 1 or (argv.len == 2 and std.mem.eql(u8, argv[1], "--list"))) return listAbbreviations(
-        shell_state,
-        state_delta.*,
-        buffers,
-    );
-    if (argv.len >= 2 and std.mem.eql(u8, argv[1], "--erase")) {
-        if (argv.len != 3) return builtinUsageError(buffers, "abbr", "usage: abbr --erase NAME");
-        if (!isShellName(argv[2])) return builtinUsageError(buffers, "abbr", "invalid abbreviation name");
-        if (lookupAbbreviationValue(
-            shell_state,
-            state_delta.*,
-            argv[2],
-        ) == null) return builtinStatusError(buffers, 1, "abbr", "not found");
-        try state_delta.unsetAbbreviation(argv[2]);
-        return 0;
-    }
-    if (argv.len >= 2 and std.mem.startsWith(u8, argv[1], "--")) return builtinUsageError(
-        buffers,
-        "abbr",
-        "unsupported option",
-    );
-    if (argv.len != 3) return builtinUsageError(buffers, "abbr", "usage: abbr NAME EXPANSION");
-    if (!isShellName(argv[1])) return builtinUsageError(buffers, "abbr", "invalid abbreviation name");
-    try state_delta.setAbbreviation(argv[1], argv[2]);
-    return 0;
-}
-
-fn listAbbreviations(
-    shell_state: state.ShellState,
-    state_delta: delta.StateDelta,
-    buffers: *EvaluationBuffers,
-) !outcome.ExitStatus {
-    var names: std.ArrayList([]const u8) = .empty;
-    defer names.deinit(buffers.allocator);
-    var iterator = shell_state.abbreviations.iterator();
-    while (iterator.next()) |entry| try appendUniqueString(buffers.allocator, &names, entry.key_ptr.*);
-    for (state_delta.abbreviation_sets.items) |mutation| try appendUniqueString(
-        buffers.allocator,
-        &names,
-        mutation.name,
-    );
-    std.mem.sort([]const u8, names.items, {}, lessThanString);
-    for (names.items) |name| {
-        const value = lookupAbbreviationValue(shell_state, state_delta, name) orelse continue;
-        try buffers.stdout.print(buffers.allocator, "abbr {s} ", .{name});
-        try appendShellSingleQuoted(buffers.allocator, &buffers.stdout, value);
-        try buffers.stdout.append(buffers.allocator, '\n');
-    }
-    return 0;
-}
-
-fn lookupAbbreviationValue(shell_state: state.ShellState, state_delta: delta.StateDelta, name: []const u8) ?[]const u8 {
-    for (state_delta.abbreviation_unsets.items) |unset| if (std.mem.eql(u8, unset, name)) return null;
-    for (state_delta.abbreviation_sets.items) |mutation| if (std.mem.eql(
-        u8,
-        mutation.name,
-        name,
-    )) return mutation.value;
-    return shell_state.getAbbreviation(name);
 }
 
 fn evaluateUnalias(
@@ -8843,6 +8910,150 @@ test "semantic evaluator captures echo output in CommandOutcome" {
     defer escaped.deinit();
     try std.testing.expectEqualStrings("a\nb", escaped.stdout.items);
     escaped.discardDelta(.current_shell);
+}
+
+test "semantic evaluator dispatches custom extension builtin handlers" {
+    const CustomExtension = struct {
+        fn lookup(_: ?*anyopaque, name: []const u8) ?extension_api.HandlerSpec {
+            if (!std.mem.eql(u8, name, "custom_builtin")) return null;
+            return .{ .handler = evaluate };
+        }
+
+        fn evaluate(_: ?*anyopaque, invocation: *extension_api.Invocation) !outcome.ExitStatus {
+            std.debug.assert(invocation.argv.len != 0);
+            std.debug.assert(std.mem.eql(u8, invocation.argv[0], "custom_builtin"));
+            try invocation.stdout.appendSlice(invocation.allocator, "custom output\n");
+            return 0;
+        }
+    };
+
+    var registry = builtin.BuiltinRegistry.init(std.testing.allocator);
+    defer registry.deinit();
+    try registry.register(builtin.Builtin.initExtension("custom_builtin", .output));
+
+    var shell_state = state.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    var evaluator = Evaluator.init(std.testing.allocator);
+    evaluator.setExtensionHandlerLookup(null, CustomExtension.lookup);
+    const eval_context = context.EvalContext.forTarget(.current_shell);
+
+    const plan = command_plan.classifyExpandedSimpleCommand(.{
+        .command = .{ .argv = &[_][]const u8{"custom_builtin"} },
+        .lookup = .{ .builtins = registry.slice() },
+    });
+    var result = try evaluatePlan(&evaluator, &shell_state, eval_context, plan);
+    defer result.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("custom output\n", result.stdout.items);
+}
+
+test "semantic evaluator dispatches type as a compat extension builtin" {
+    var shell_state = state.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    try shell_state.setAlias("ll", "ls -l");
+    try shell_state.putFunctionName("helper");
+
+    var evaluator = Evaluator.init(std.testing.allocator);
+    const eval_context = context.EvalContext.forTarget(.current_shell);
+    const plan = command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{
+        "type",
+        ":",
+        "helper",
+        "ll",
+        "printf",
+        "missing",
+    } } });
+
+    var result = try evaluatePlan(&evaluator, &shell_state, eval_context, plan);
+    defer result.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 1), result.status);
+    try std.testing.expectEqualStrings(
+        \\: is a special shell builtin
+        \\helper is a shell function
+        \\ll is an alias for 'ls -l'
+        \\printf is a shell builtin
+        \\
+    , result.stdout.items);
+    try std.testing.expectEqualStrings("type: missing: not found\n", result.stderr.items);
+    try std.testing.expectEqual(@as(usize, 1), result.diagnostics.items.len);
+}
+
+test "type compat extension resolves external commands through evaluator runtime" {
+    var shell_state = state.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    var adapter = runtime.posix.Adapter.init(std.testing.io);
+    var evaluator = Evaluator.initWithFsPort(std.testing.allocator, adapter.fsPort());
+    const eval_context = context.EvalContext.forTarget(.current_shell);
+    const assignments = [_]command_plan.Assignment{.{ .name = "PATH", .value = "/bin" }};
+    const plan = command_plan.classifyExpandedSimpleCommand(.{ .command = .{
+        .assignments = &assignments,
+        .argv = &[_][]const u8{ "type", "sh" },
+    } });
+
+    var result = try evaluatePlan(&evaluator, &shell_state, eval_context, plan);
+    defer result.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("sh is /bin/sh\n", result.stdout.items);
+}
+
+test "type compat extension supports bash-style lookup options" {
+    var shell_state = state.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    try shell_state.putFunctionName("helper");
+    var adapter = runtime.posix.Adapter.init(std.testing.io);
+    var evaluator = Evaluator.initWithFsPort(std.testing.allocator, adapter.fsPort());
+    const eval_context = context.EvalContext.forTarget(.current_shell);
+
+    const type_words = command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{
+        "type",
+        "-t",
+        "printf",
+        "helper",
+    } } });
+    var type_words_result = try evaluatePlan(&evaluator, &shell_state, eval_context, type_words);
+    defer type_words_result.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 0), type_words_result.status);
+    try std.testing.expectEqualStrings("builtin\nfunction\n", type_words_result.stdout.items);
+
+    const path_only_builtin = command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{
+        "type",
+        "-p",
+        "printf",
+        "helper",
+    } } });
+    var path_only_builtin_result = try evaluatePlan(&evaluator, &shell_state, eval_context, path_only_builtin);
+    defer path_only_builtin_result.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 0), path_only_builtin_result.status);
+    try std.testing.expectEqualStrings("", path_only_builtin_result.stdout.items);
+
+    const assignments = [_]command_plan.Assignment{.{ .name = "PATH", .value = "/bin" }};
+    const forced_path = command_plan.classifyExpandedSimpleCommand(.{ .command = .{
+        .assignments = &assignments,
+        .argv = &[_][]const u8{ "type", "-P", "sh" },
+    } });
+    var forced_path_result = try evaluatePlan(&evaluator, &shell_state, eval_context, forced_path);
+    defer forced_path_result.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 0), forced_path_result.status);
+    try std.testing.expectEqualStrings("sh is /bin/sh\n", forced_path_result.stdout.items);
+
+    const all_path_words = command_plan.classifyExpandedSimpleCommand(.{ .command = .{
+        .assignments = &assignments,
+        .argv = &[_][]const u8{ "type", "-at", "sh" },
+    } });
+    var all_path_words_result = try evaluatePlan(&evaluator, &shell_state, eval_context, all_path_words);
+    defer all_path_words_result.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 0), all_path_words_result.status);
+    try std.testing.expectEqualStrings("file\n", all_path_words_result.stdout.items);
+
+    const suppressed_function = command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{
+        "type",
+        "-f",
+        "helper",
+    } } });
+    var suppressed_function_result = try evaluatePlan(&evaluator, &shell_state, eval_context, suppressed_function);
+    defer suppressed_function_result.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 1), suppressed_function_result.status);
+    try std.testing.expectEqualStrings("type: helper: not found\n", suppressed_function_result.stderr.items);
 }
 
 test "semantic evaluator executes string and integer test predicates" {
@@ -12126,8 +12337,14 @@ test "semantic evaluator evaluates compound if loop for and case forms" {
     try case_result.commitDelta(&shell_state, .current_shell);
     try std.testing.expectEqualStrings("matched", shell_state.getVariable("CASE_RESULT").?.value);
 
-    const fallthrough_first_assignment = [_]command_plan.Assignment{.{ .name = "CASE_FALLTHROUGH_FIRST", .value = "yes" }};
-    const fallthrough_second_assignment = [_]command_plan.Assignment{.{ .name = "CASE_FALLTHROUGH_SECOND", .value = "yes" }};
+    const fallthrough_first_assignment = [_]command_plan.Assignment{.{
+        .name = "CASE_FALLTHROUGH_FIRST",
+        .value = "yes",
+    }};
+    const fallthrough_second_assignment = [_]command_plan.Assignment{.{
+        .name = "CASE_FALLTHROUGH_SECOND",
+        .value = "yes",
+    }};
     const fallthrough_first_body = [_]command_plan.CommandPlan{command_plan.classifyExpandedSimpleCommand(
         .{ .command = .{ .assignments = &fallthrough_first_assignment } },
     )};
@@ -12150,7 +12367,10 @@ test "semantic evaluator evaluates compound if loop for and case forms" {
     try std.testing.expectEqualStrings("yes", shell_state.getVariable("CASE_FALLTHROUGH_SECOND").?.value);
 
     const test_next_first_assignment = [_]command_plan.Assignment{.{ .name = "CASE_TEST_NEXT_FIRST", .value = "yes" }};
-    const test_next_second_assignment = [_]command_plan.Assignment{.{ .name = "CASE_TEST_NEXT_SECOND", .value = "yes" }};
+    const test_next_second_assignment = [_]command_plan.Assignment{.{
+        .name = "CASE_TEST_NEXT_SECOND",
+        .value = "yes",
+    }};
     const test_next_first_body = [_]command_plan.CommandPlan{command_plan.classifyExpandedSimpleCommand(
         .{ .command = .{ .assignments = &test_next_first_assignment } },
     )};

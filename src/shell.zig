@@ -5,6 +5,7 @@
 //! commit/discard decisions; imperative host effects stay behind `runtime.zig`.
 
 pub const assignment = @import("shell/assignment.zig");
+pub const builtins = @import("builtins.zig");
 pub const builtin = @import("shell/builtin.zig");
 pub const command_plan = @import("shell/command_plan.zig");
 pub const compat = @import("shell/compat.zig");

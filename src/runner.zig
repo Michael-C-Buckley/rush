@@ -2,6 +2,7 @@
 
 const std = @import("std");
 
+const default_builtins = @import("builtins.zig");
 const cli_invocation = @import("invocation.zig");
 const runtime = @import("runtime.zig");
 const shell = @import("shell.zig");
@@ -1030,7 +1031,7 @@ fn semanticInteractiveProgramUnsupported(shell_state: shell.ShellState, program:
     for (program.commands) |command| {
         if (command.argv.len == 0) continue;
         const root = command.argv[0];
-        if (shell.builtin.lookup(root.text) != null and !semanticInteractiveBuiltinRootAllowed(root.text))
+        if (default_builtins.lookup(root.text) != null and !semanticInteractiveBuiltinRootAllowed(root.text))
             return "semantic interactive executor reports unsupported builtins as diagnostics";
         if (shell_state.functions.count() != 0) {
             if (wordMayUseShellExpansion(root.raw))
@@ -1043,7 +1044,7 @@ fn semanticInteractiveProgramUnsupported(shell_state: shell.ShellState, program:
 }
 
 fn semanticInteractiveBuiltinRootAllowed(name: []const u8) bool {
-    const definition = shell.builtin.lookup(name) orelse return false;
+    const definition = default_builtins.lookup(name) orelse return false;
     if (definition.semantic_class == .unsupported) return false;
     if (definition.semantic_class == .job_control or definition.semantic_class == .control_flow) return false;
     if (std.mem.eql(u8, name, "alias") or std.mem.eql(u8, name, "unalias")) return false;
@@ -1200,7 +1201,7 @@ fn semanticPipelinePreflightUnsupported(program: ir.Program, pipeline: ir.Pipeli
 fn commandUsesUnsupportedSemanticBuiltin(command: ir.SimpleCommand, allow_interactive_declarations: bool) bool {
     if (command.argv.len == 0) return false;
     const name = command.argv[0].text;
-    const definition = shell.builtin.lookup(name) orelse return false;
+    const definition = default_builtins.lookup(name) orelse return false;
     return switch (definition.semantic_class) {
         .unsupported, .predicate, .shell_state, .job_control, .control_flow => true,
         .declaration => !allow_interactive_declarations,

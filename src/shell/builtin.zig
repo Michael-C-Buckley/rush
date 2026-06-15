@@ -9,6 +9,11 @@ pub const BuiltinKind = enum {
     special,
 };
 
+pub const BuiltinOrigin = enum {
+    posix,
+    extension,
+};
+
 pub const BuiltinSemanticClass = enum {
     unsupported,
     no_op,
@@ -44,6 +49,7 @@ pub const Builtin = struct {
     name: []const u8,
     kind: BuiltinKind = .regular,
     semantic_class: BuiltinSemanticClass = .unsupported,
+    origin: BuiltinOrigin = .posix,
 
     pub fn init(name: []const u8, kind: BuiltinKind) Builtin {
         return initWithSemantics(name, kind, .unsupported);
@@ -51,6 +57,17 @@ pub const Builtin = struct {
 
     pub fn initWithSemantics(name: []const u8, kind: BuiltinKind, semantic_class: BuiltinSemanticClass) Builtin {
         const definition: Builtin = .{ .name = name, .kind = kind, .semantic_class = semantic_class };
+        definition.validate();
+        return definition;
+    }
+
+    pub fn initExtension(name: []const u8, semantic_class: BuiltinSemanticClass) Builtin {
+        const definition: Builtin = .{
+            .name = name,
+            .kind = .regular,
+            .semantic_class = semantic_class,
+            .origin = .extension,
+        };
         definition.validate();
         return definition;
     }
@@ -67,7 +84,63 @@ pub const Builtin = struct {
 
     pub fn validate(self: Builtin) void {
         std.debug.assert(self.name.len != 0);
+        if (self.origin == .extension) {
+            std.debug.assert(self.kind == .regular);
+            return;
+        }
         std.debug.assert(semanticClassAcceptsName(self.semantic_class, self.name));
+    }
+};
+
+pub const RegistryError = error{
+    DuplicateBuiltin,
+    ExtensionSpecialBuiltin,
+};
+
+pub const BuiltinRegistry = struct {
+    allocator: std.mem.Allocator,
+    entries: std.ArrayList(Builtin) = .empty,
+
+    pub fn init(allocator: std.mem.Allocator) BuiltinRegistry {
+        return .{ .allocator = allocator };
+    }
+
+    pub fn deinit(self: *BuiltinRegistry) void {
+        for (self.entries.items) |entry| self.allocator.free(entry.name);
+        self.entries.deinit(self.allocator);
+        self.* = undefined;
+    }
+
+    pub fn register(self: *BuiltinRegistry, definition: Builtin) (std.mem.Allocator.Error || RegistryError)!void {
+        if (definition.origin == .extension and definition.kind == .special) return error.ExtensionSpecialBuiltin;
+        definition.validate();
+        if (self.lookup(definition.name) != null) return error.DuplicateBuiltin;
+
+        const owned_name = try self.allocator.dupe(u8, definition.name);
+        errdefer self.allocator.free(owned_name);
+        var owned_definition = definition;
+        owned_definition.name = owned_name;
+        try self.entries.append(self.allocator, owned_definition);
+    }
+
+    pub fn registerSlice(
+        self: *BuiltinRegistry,
+        definitions: []const Builtin,
+    ) (std.mem.Allocator.Error || RegistryError)!void {
+        for (definitions) |definition| try self.register(definition);
+    }
+
+    pub fn lookup(self: BuiltinRegistry, name: []const u8) ?Builtin {
+        for (self.entries.items) |definition| {
+            definition.validate();
+            if (std.mem.eql(u8, definition.name, name)) return definition;
+        }
+        return null;
+    }
+
+    pub fn slice(self: BuiltinRegistry) []const Builtin {
+        assertUniqueNames(self.entries.items);
+        return self.entries.items;
     }
 };
 
@@ -105,7 +178,7 @@ fn matchesName(name: []const u8, candidates: []const []const u8) bool {
     return false;
 }
 
-pub const default_builtins = [_]Builtin{
+pub const posix_builtins = [_]Builtin{
     Builtin.initWithSemantics(":", .special, .no_op),
     Builtin.initWithSemantics(".", .special, .shell_state),
     Builtin.initWithSemantics("break", .special, .control_flow),
@@ -123,13 +196,10 @@ pub const default_builtins = [_]Builtin{
     Builtin.initWithSemantics("unset", .special, .declaration),
 
     Builtin.initWithSemantics("[", .regular, .predicate),
-    Builtin.initWithSemantics("abbr", .regular, .shell_state),
     Builtin.initWithSemantics("alias", .regular, .shell_state),
     Builtin.initWithSemantics("bg", .regular, .job_control),
     Builtin.initWithSemantics("cd", .regular, .shell_state),
-    Builtin.init("color", .regular),
     Builtin.initWithSemantics("command", .regular, .output),
-    Builtin.init("complete", .regular),
     Builtin.initWithSemantics("echo", .regular, .output),
     Builtin.initWithSemantics("env", .regular, .output),
     Builtin.initWithSemantics("false", .regular, .status_constant),
@@ -139,25 +209,21 @@ pub const default_builtins = [_]Builtin{
     Builtin.init("hash", .regular),
     Builtin.initWithSemantics("jobs", .regular, .job_control),
     Builtin.init("kill", .regular),
-    Builtin.initWithSemantics("local", .regular, .shell_state),
     Builtin.initWithSemantics("printf", .regular, .output),
     Builtin.initWithSemantics("pwd", .regular, .output),
     Builtin.initWithSemantics("read", .regular, .shell_state),
-    Builtin.init("shopt", .regular),
-    Builtin.init("source", .regular),
     Builtin.initWithSemantics("test", .regular, .predicate),
     Builtin.initWithSemantics("true", .regular, .status_constant),
-    Builtin.init("type", .regular),
     Builtin.init("ulimit", .regular),
     Builtin.init("umask", .regular),
     Builtin.initWithSemantics("unalias", .regular, .shell_state),
     Builtin.initWithSemantics("wait", .regular, .job_control),
 };
 
-pub const default_registry: []const Builtin = &default_builtins;
+pub const posix_registry: []const Builtin = &posix_builtins;
 
 pub fn lookup(name: []const u8) ?Builtin {
-    return lookupIn(default_registry, name);
+    return lookupIn(posix_registry, name);
 }
 
 pub fn lookupIn(registry: []const Builtin, name: []const u8) ?Builtin {
@@ -236,4 +302,37 @@ test "builtin registry classifies POSIX special builtins separately" {
         (lookup("[") orelse return error.TestExpectedEqual).semantic_class,
     );
     try std.testing.expectEqual(@as(?Builtin, null), lookup("definitely-not-a-builtin"));
+}
+
+test "POSIX builtin registry excludes Rush extension builtins" {
+    const extension_names = [_][]const u8{
+        "abbr",
+        "color",
+        "complete",
+        "local",
+        "shopt",
+        "source",
+        "type",
+    };
+
+    for (extension_names) |name| try std.testing.expectEqual(@as(?Builtin, null), lookup(name));
+}
+
+test "builtin registry rejects duplicate names and extension special builtins" {
+    var registry = BuiltinRegistry.init(std.testing.allocator);
+    defer registry.deinit();
+
+    try registry.register(Builtin.initWithSemantics("echo", .regular, .output));
+    try std.testing.expectError(
+        error.DuplicateBuiltin,
+        registry.register(Builtin.initWithSemantics("echo", .regular, .output)),
+    );
+
+    const extension_special: Builtin = .{
+        .name = "rush-special",
+        .kind = .special,
+        .semantic_class = .unsupported,
+        .origin = .extension,
+    };
+    try std.testing.expectError(error.ExtensionSpecialBuiltin, registry.register(extension_special));
 }

@@ -6,6 +6,7 @@
 //! or mutating shell state.
 
 const std = @import("std");
+const default_builtins = @import("../builtins.zig");
 const builtin = @import("builtin.zig");
 const context = @import("context.zig");
 const redirection_plan = @import("redirection_plan.zig");
@@ -532,7 +533,7 @@ pub const ExpandedSimpleCommand = struct {
 };
 
 pub const LookupSnapshot = struct {
-    builtins: []const builtin.Builtin = builtin.default_registry,
+    builtins: []const builtin.Builtin = default_builtins.default_registry,
     functions: []const FunctionDefinition = &.{},
     externals: []const ExternalResolution = &.{},
 
@@ -1320,6 +1321,26 @@ test "CommandPlan classifies expanded simple command shapes" {
     try std.testing.expectEqual(CommandClass.not_found, not_found.class());
     switch (not_found.classification) {
         .not_found => |resolution| try std.testing.expectEqualStrings("missing", resolution.name),
+        else => return error.TestUnexpectedResult,
+    }
+}
+
+test "CommandPlan accepts builtin registry slices from embedders" {
+    var registry = builtin.BuiltinRegistry.init(std.testing.allocator);
+    defer registry.deinit();
+    try registry.registerSlice(default_builtins.default_registry);
+    try registry.register(builtin.Builtin.initExtension("custom_builtin", .output));
+
+    const custom = classifyExpandedSimpleCommand(.{
+        .command = .{ .argv = &[_][]const u8{"custom_builtin"} },
+        .lookup = .{ .builtins = registry.slice() },
+    });
+    try std.testing.expectEqual(CommandClass.regular_builtin, custom.class());
+    switch (custom.classification) {
+        .regular_builtin => |definition| {
+            try std.testing.expectEqual(builtin.BuiltinOrigin.extension, definition.origin);
+            try std.testing.expectEqualStrings("custom_builtin", definition.name);
+        },
         else => return error.TestUnexpectedResult,
     }
 }
