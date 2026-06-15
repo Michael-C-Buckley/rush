@@ -87,6 +87,19 @@
             .status = 0,
         },
         .{
+            .name = "empty command names fail as not found and execution continues",
+            .script =
+            \\"" 2>/dev/null
+            \\printf '<%s>\n' "$?"
+            ,
+            .stdout =
+            \\<127>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "PATH search continues past non-executable candidates",
             .script =
             \\mkdir d1 d2
@@ -120,6 +133,25 @@
             .status = 0,
         },
         .{
+            .name = "PATH changes affect later command lookup",
+            .script =
+            \\mkdir d1 d2
+            \\printf '%s\n' '#!/bin/sh' 'printf "old\n"' >d1/cmd
+            \\chmod 755 d1/cmd
+            \\printf '%s\n' '#!/bin/sh' 'printf "new\n"' >d2/cmd
+            \\chmod 755 d2/cmd
+            \\PATH=./d1 cmd
+            \\PATH=./d2 cmd
+            ,
+            .stdout =
+            \\old
+            \\new
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "slash command name bypasses functions and PATH search",
             .script =
             \\printf '%s\n' '#!/bin/sh' 'printf "external\n"' >cmd
@@ -129,6 +161,20 @@
             ,
             .stdout =
             \\external
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "slash directory command fails with status 126",
+            .script =
+            \\mkdir dir
+            \\./dir 2>/dev/null
+            \\printf '<%s>\n' "$?"
+            ,
+            .stdout =
+            \\<126>
             \\
             ,
             .stderr = "",
@@ -158,6 +204,66 @@
             ,
             .stdout =
             \\script:./d/myscript:arg
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "command -v reports functions and built-ins by name",
+            .script =
+            \\foo() { :; }
+            \\command -v foo
+            \\command -v :
+            \\command -v command
+            ,
+            .stdout =
+            \\foo
+            \\:
+            \\command
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "command -v reports a found PATH utility pathname",
+            .script =
+            \\PATH=/bin command -v sh
+            \\printf '<%s>\n' "$?"
+            ,
+            .stdout =
+            \\/bin/sh
+            \\<0>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "command -v reports nonzero when a name is not found",
+            .script =
+            \\command -v no_such_posix_command_for_rush >/dev/null 2>/dev/null
+            \\case $? in 0) printf 'zero\n';; *) printf 'nonzero\n';; esac
+            ,
+            .stdout =
+            \\nonzero
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "command -V reports zero for found names and nonzero for missing names",
+            .script =
+            \\command -V command >/dev/null
+            \\printf '<%s>\n' "$?"
+            \\command -V no_such_posix_command_for_rush >/dev/null 2>/dev/null
+            \\case $? in 0) printf 'zero\n';; *) printf 'nonzero\n';; esac
+            ,
+            .stdout =
+            \\<0>
+            \\nonzero
             \\
             ,
             .stderr = "",
