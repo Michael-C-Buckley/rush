@@ -4486,7 +4486,7 @@ test "frame renderer clears current frame before interrupt output" {
     try std.testing.expect(std.mem.endsWith(u8, prefix, "\r"));
 }
 
-test "frame renderer redraws when frame adds lines" {
+test "frame renderer diffs when frame adds lines" {
     var renderer: FrameRenderer = .{};
     defer renderer.deinit(std.testing.allocator);
 
@@ -4508,8 +4508,45 @@ test "frame renderer redraws when frame adds lines" {
     defer std.testing.allocator.free(menu_output);
 
     try std.testing.expect(std.mem.indexOf(u8, menu_output, "\x1b[J") == null);
-    try std.testing.expect(std.mem.indexOf(u8, menu_output, "\r\n\x1b[2K") != null);
+    try std.testing.expect(std.mem.indexOf(u8, menu_output, "\x1b[1B\r\x1b[2K") != null);
     try std.testing.expect(std.mem.indexOf(u8, menu_output, "checkout") != null);
+}
+
+test "frame renderer diffs added third wrapped row" {
+    var renderer: FrameRenderer = .{};
+    defer renderer.deinit(std.testing.allocator);
+
+    var first_editor = Editor.init(std.testing.allocator);
+    defer first_editor.deinit();
+    try first_editor.buffer.replace("abcdef");
+    var first = try frameFromLine(std.testing.allocator, first_editor, .{
+        .prompt = .{ .bytes = "$ " },
+        .width = 5,
+        .synchronized_output = false,
+    });
+    defer first.deinit(std.testing.allocator);
+    try std.testing.expectEqual(@as(usize, 2), first.lines.len);
+    try std.testing.expectEqual(@as(usize, 1), first.cursor_row);
+    const first_output = try renderer.render(std.testing.allocator, first, .{ .synchronized_output = false });
+    defer std.testing.allocator.free(first_output);
+
+    var second_editor = Editor.init(std.testing.allocator);
+    defer second_editor.deinit();
+    try second_editor.buffer.replace("abcdefgh");
+    var second = try frameFromLine(std.testing.allocator, second_editor, .{
+        .prompt = .{ .bytes = "$ " },
+        .width = 5,
+        .synchronized_output = false,
+    });
+    defer second.deinit(std.testing.allocator);
+    try std.testing.expectEqual(@as(usize, 3), second.lines.len);
+
+    const second_output = try renderer.render(std.testing.allocator, second, .{ .synchronized_output = false });
+    defer std.testing.allocator.free(second_output);
+
+    try std.testing.expect(std.mem.startsWith(u8, second_output, "\r\x1b[2Kdefgh"));
+    try std.testing.expect(std.mem.indexOf(u8, second_output, "\x1b[1B\r\x1b[2K\r") != null);
+    try std.testing.expect(std.mem.indexOf(u8, second_output, "$ abc") == null);
 }
 
 test "frame renderer diffs when frame removes lines" {
@@ -4542,6 +4579,42 @@ test "frame renderer diffs when frame removes lines" {
     try std.testing.expect(std.mem.indexOf(u8, accepted_output, "\x1b[1B\r\x1b[2K") != null);
     try std.testing.expectEqual(@as(usize, 2), std.mem.count(u8, accepted_output, "\x1b[1B\r\x1b[2K"));
     try std.testing.expect(std.mem.indexOf(u8, accepted_output, "cherry-pick") == null);
+}
+
+test "frame renderer clears old wrapped row when input shrinks" {
+    var renderer: FrameRenderer = .{};
+    defer renderer.deinit(std.testing.allocator);
+
+    var first_editor = Editor.init(std.testing.allocator);
+    defer first_editor.deinit();
+    try first_editor.buffer.replace("abcdefgh");
+    var first = try frameFromLine(std.testing.allocator, first_editor, .{
+        .prompt = .{ .bytes = "$ " },
+        .width = 5,
+        .synchronized_output = false,
+    });
+    defer first.deinit(std.testing.allocator);
+    try std.testing.expectEqual(@as(usize, 3), first.lines.len);
+    const first_output = try renderer.render(std.testing.allocator, first, .{ .synchronized_output = false });
+    defer std.testing.allocator.free(first_output);
+
+    var second_editor = Editor.init(std.testing.allocator);
+    defer second_editor.deinit();
+    try second_editor.buffer.replace("abcdef");
+    var second = try frameFromLine(std.testing.allocator, second_editor, .{
+        .prompt = .{ .bytes = "$ " },
+        .width = 5,
+        .synchronized_output = false,
+    });
+    defer second.deinit(std.testing.allocator);
+    try std.testing.expectEqual(@as(usize, 2), second.lines.len);
+
+    const second_output = try renderer.render(std.testing.allocator, second, .{ .synchronized_output = false });
+    defer std.testing.allocator.free(second_output);
+
+    try std.testing.expect(std.mem.startsWith(u8, second_output, "\x1b[1A\r\x1b[2Kdef"));
+    try std.testing.expect(std.mem.indexOf(u8, second_output, "\x1b[1B\r\x1b[2K") != null);
+    try std.testing.expect(std.mem.endsWith(u8, second_output, "\x1b[1A\r\x1b[3C"));
 }
 
 test "frame renderer clears menu rows when escape closes completion menu" {

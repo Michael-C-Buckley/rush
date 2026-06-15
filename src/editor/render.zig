@@ -168,9 +168,6 @@ pub const FrameRenderer = struct {
         options: FrameRenderOptions,
     ) ![]const u8 {
         const output = if (self.previous) |previous| blk: {
-            if (frame.lines.len > previous.lines.len) {
-                break :blk try serializeFullFrame(allocator, frame, options.synchronized_output);
-            }
             break :blk try serializeFrameDiff(allocator, previous, frame, options.synchronized_output);
         } else try serializeFullFrame(allocator, frame, options.synchronized_output);
         errdefer allocator.free(output);
