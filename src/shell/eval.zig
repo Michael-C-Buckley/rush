@@ -1812,12 +1812,16 @@ const EvaluationInput = struct {
     }
 
     fn readLine(self: *EvaluationInput) ?[]const u8 {
+        return self.readUntil('\n');
+    }
+
+    fn readUntil(self: *EvaluationInput, delimiter: u8) ?[]const u8 {
         self.validate();
         if (self.cursor == self.bytes.len) return null;
         const start = self.cursor;
-        while (self.cursor < self.bytes.len and self.bytes[self.cursor] != '\n') self.cursor += 1;
+        while (self.cursor < self.bytes.len and self.bytes[self.cursor] != delimiter) self.cursor += 1;
         const end = self.cursor;
-        if (self.cursor < self.bytes.len and self.bytes[self.cursor] == '\n') self.cursor += 1;
+        if (self.cursor < self.bytes.len and self.bytes[self.cursor] == delimiter) self.cursor += 1;
         self.validate();
         return self.bytes[start..end];
     }
@@ -6024,12 +6028,68 @@ fn evaluateCd(
 ) !outcome.ExitStatus {
     std.debug.assert(argv.len != 0);
     std.debug.assert(std.mem.eql(u8, argv[0], "cd"));
-    if (argv.len != 2) return builtinUsageError(buffers, "cd", "expected one directory");
+    var index: usize = 1;
+    while (index < argv.len) : (index += 1) {
+        const arg = argv[index];
+        if (std.mem.eql(u8, arg, "--")) {
+            index += 1;
+            break;
+        }
+        if (std.mem.eql(u8, arg, "-L") or std.mem.eql(u8, arg, "-P")) continue;
+        if (std.mem.startsWith(u8, arg, "-") and !std.mem.eql(u8, arg, "-")) {
+            return builtinUsageError(buffers, "cd", "unsupported option");
+        }
+        break;
+    }
+    if (argv.len > index + 1) return builtinUsageError(buffers, "cd", "too many arguments");
     const fs_port = evaluator.fs_port orelse return error.Unimplemented;
     const old_pwd = if (shell_state.logical_cwd.len != 0)
         shell_state.logical_cwd
     else if (shell_state.getVariable("PWD")) |pwd| pwd.value else "";
-    fs_port.changeCwd(runtime.fs.ChangeCwdRequest.init(argv[1])) catch return builtinStatusError(
+
+    const requested_directory = if (index < argv.len)
+        argv[index]
+    else if (shell_state.getVariable("HOME")) |home|
+        home.value
+    else
+        return builtinStatusError(buffers, 1, "cd", "HOME not set");
+    if (requested_directory.len == 0) return builtinStatusError(buffers, 1, "cd", "empty directory");
+
+    const directory = if (std.mem.eql(u8, requested_directory, "-")) blk: {
+        const oldpwd = shell_state.getVariable("OLDPWD") orelse return builtinStatusError(
+            buffers,
+            1,
+            "cd",
+            "OLDPWD not set",
+        );
+        break :blk oldpwd.value;
+    } else requested_directory;
+
+    var path_to_change: ?[]const u8 = null;
+    var owned_path: ?[]const u8 = null;
+    defer if (owned_path) |path| buffers.allocator.free(path);
+    var print_new_directory = std.mem.eql(u8, requested_directory, "-");
+    if (shouldSearchCdpath(directory)) {
+        const cdpath = if (shell_state.getVariable("CDPATH")) |value| value.value else "";
+        var parts = std.mem.splitScalar(u8, cdpath, ':');
+        while (parts.next()) |part| {
+            const candidate = if (part.len == 0)
+                try buffers.allocator.dupe(u8, directory)
+            else
+                try std.mem.concat(buffers.allocator, u8, &.{ part, "/", directory });
+            errdefer buffers.allocator.free(candidate);
+            if (canChangeDirectory(fs_port, candidate)) {
+                owned_path = candidate;
+                path_to_change = candidate;
+                print_new_directory = print_new_directory or part.len != 0;
+                break;
+            }
+            buffers.allocator.free(candidate);
+        }
+    }
+
+    const target = path_to_change orelse directory;
+    fs_port.changeCwd(runtime.fs.ChangeCwdRequest.init(target)) catch return builtinStatusError(
         buffers,
         1,
         "cd",
@@ -6045,7 +6105,21 @@ fn evaluateCd(
     if (old_pwd.len != 0) try state_delta.assignVariable("OLDPWD", old_pwd, .{ .exported = true });
     try state_delta.assignVariable("PWD", cwd.path, .{ .exported = true });
     try state_delta.setLogicalCwd(cwd.path);
+    if (print_new_directory) try buffers.stdout.print(buffers.allocator, "{s}\n", .{cwd.path});
     return 0;
+}
+
+fn shouldSearchCdpath(directory: []const u8) bool {
+    if (directory.len == 0) return false;
+    if (std.fs.path.isAbsolute(directory)) return false;
+    if (std.mem.eql(u8, directory, ".") or std.mem.eql(u8, directory, "..")) return false;
+    if (std.mem.startsWith(u8, directory, "./") or std.mem.startsWith(u8, directory, "../")) return false;
+    return true;
+}
+
+fn canChangeDirectory(fs_port: runtime.fs.Port, path: []const u8) bool {
+    _ = fs_port.inspectPath(runtime.fs.InspectPathRequest.init(path)) catch return false;
+    return true;
 }
 
 fn evaluateTimes(
@@ -6191,24 +6265,35 @@ fn evaluateUmask(
 ) !outcome.ExitStatus {
     std.debug.assert(argv.len != 0);
     std.debug.assert(std.mem.eql(u8, argv[0], "umask"));
-    if (argv.len > 2) return builtinUsageError(buffers, "umask", "too many arguments");
-    if (argv.len == 2 and std.mem.startsWith(u8, argv[1], "-")) {
+    var index: usize = 1;
+    var symbolic = false;
+    if (index < argv.len and std.mem.eql(u8, argv[index], "-S")) {
+        symbolic = true;
+        index += 1;
+    }
+    if (index < argv.len and std.mem.eql(u8, argv[index], "--")) index += 1;
+    if (argv.len > index + 1) return builtinUsageError(buffers, "umask", "too many arguments");
+    if (index < argv.len and std.mem.startsWith(u8, argv[index], "-") and !std.mem.eql(u8, argv[index], "-")) {
         return builtinUsageError(buffers, "umask", "unsupported option");
     }
 
     const fs_port = evaluator.fs_port orelse return error.Unimplemented;
-    if (argv.len == 1) {
+    if (index >= argv.len) {
         const previous = fs_port.setFileCreationMask(.{ .mask = 0 }) catch {
             return builtinStatusError(buffers, 1, "umask", "could not read file creation mask");
         };
         _ = fs_port.setFileCreationMask(.{ .mask = previous.previous }) catch {
             return builtinStatusError(buffers, 1, "umask", "could not restore file creation mask");
         };
-        try printUmask(buffers.allocator, &buffers.stdout, previous.previous);
+        if (symbolic) {
+            try printSymbolicUmask(buffers.allocator, &buffers.stdout, previous.previous);
+        } else {
+            try printUmask(buffers.allocator, &buffers.stdout, previous.previous);
+        }
         return 0;
     }
 
-    const mask = parseUmaskOperand(argv[1]) orelse {
+    const mask = parseUmaskOperand(argv[index]) orelse {
         return builtinUsageError(buffers, "umask", "invalid mask");
     };
     _ = fs_port.setFileCreationMask(.{ .mask = mask }) catch {
@@ -6239,6 +6324,25 @@ fn printUmask(
         '\n',
     };
     try stdout.appendSlice(allocator, &digits);
+}
+
+fn printSymbolicUmask(
+    allocator: std.mem.Allocator,
+    stdout: *std.ArrayList(u8),
+    mask: runtime.fs.FileCreationMask,
+) !void {
+    std.debug.assert(mask <= 0o777);
+    try stdout.print(allocator, "u={s}{s}{s},g={s}{s}{s},o={s}{s}{s}\n", .{
+        if (mask & 0o400 == 0) "r" else "",
+        if (mask & 0o200 == 0) "w" else "",
+        if (mask & 0o100 == 0) "x" else "",
+        if (mask & 0o040 == 0) "r" else "",
+        if (mask & 0o020 == 0) "w" else "",
+        if (mask & 0o010 == 0) "x" else "",
+        if (mask & 0o004 == 0) "r" else "",
+        if (mask & 0o002 == 0) "w" else "",
+        if (mask & 0o001 == 0) "x" else "",
+    });
 }
 
 fn evaluateHash(
@@ -6537,7 +6641,6 @@ fn parseKillListStatus(raw: []const u8) ?u8 {
 fn parseKillSignal(raw: []const u8) ?u8 {
     if (raw.len == 0) return null;
     if (std.fmt.parseInt(u8, raw, 10)) |number| {
-        if (number == 0) return null;
         return number;
     } else |_| {}
     const start: usize = if (std.ascii.startsWithIgnoreCase(raw, "SIG") and raw.len > 3) 3 else 0;
@@ -6780,23 +6883,62 @@ fn evaluateCommandBuiltin(
     const argv = plan.argv;
     std.debug.assert(argv.len != 0);
     std.debug.assert(std.mem.eql(u8, argv[0], "command"));
-    if (argv.len == 3 and std.mem.eql(u8, argv[1], "-v")) {
-        return evaluateCommandLookup(evaluator, shell_state, plan, argv[2], .terse, buffers);
+    var index: usize = 1;
+    var use_default_path = false;
+    var lookup_format: ?CommandLookupFormat = null;
+    while (index < argv.len) : (index += 1) {
+        const arg = argv[index];
+        if (std.mem.eql(u8, arg, "--")) {
+            index += 1;
+            break;
+        }
+        if (std.mem.eql(u8, arg, "-p")) {
+            use_default_path = true;
+        } else if (std.mem.eql(u8, arg, "-v")) {
+            lookup_format = .terse;
+        } else if (std.mem.eql(u8, arg, "-V")) {
+            lookup_format = .verbose;
+        } else if (std.mem.startsWith(u8, arg, "-") and !std.mem.eql(u8, arg, "-")) {
+            return normalEvaluation(try builtinUsageError(buffers, "command", "unsupported arguments"));
+        } else {
+            break;
+        }
     }
-    if (argv.len == 3 and std.mem.eql(u8, argv[1], "-V")) {
-        return evaluateCommandLookup(evaluator, shell_state, plan, argv[2], .verbose, buffers);
+    if (index >= argv.len) return normalEvaluation(0);
+    if (lookup_format) |format| {
+        if (argv.len != index + 1) {
+            return normalEvaluation(try builtinUsageError(buffers, "command", "too many arguments"));
+        }
+        return evaluateCommandLookup(evaluator, shell_state, plan, argv[index], format, use_default_path, buffers);
     }
-    if (argv.len == 1) return normalEvaluation(0);
-    if (std.mem.startsWith(u8, argv[1], "-") and !std.mem.eql(u8, argv[1], "-")) {
-        return normalEvaluation(try builtinUsageError(buffers, "command", "unsupported arguments"));
+
+    var lookup_state = if (use_default_path) shell_state.clone(evaluator.allocator) catch |err| switch (err) {
+        error.ReadonlyVariable => unreachable,
+        error.OutOfMemory => return error.OutOfMemory,
+    } else shell_state;
+    defer if (use_default_path) lookup_state.deinit();
+    if (use_default_path) {
+        lookup_state.putVariable("PATH", default_command_path, .{ .exported = true }) catch |err| switch (err) {
+            error.ReadonlyVariable => unreachable,
+            error.OutOfMemory => return error.OutOfMemory,
+        };
     }
 
     const command: command_plan.ExpandedSimpleCommand = .{
         .assignments = plan.assignments,
-        .argv = argv[1..],
+        .argv = argv[index..],
         .last_command_substitution_status = plan.last_command_substitution_status,
     };
-    const external = try resolveExternalForEvaluation(evaluator.allocator, evaluator.fs_port, shell_state, command);
+    const lookup_command = if (use_default_path) command_plan.ExpandedSimpleCommand{
+        .argv = command.argv,
+        .last_command_substitution_status = command.last_command_substitution_status,
+    } else command;
+    const external = try resolveExternalForEvaluation(
+        evaluator.allocator,
+        evaluator.fs_port,
+        lookup_state,
+        lookup_command,
+    );
     defer if (external) |resolution| evaluator.allocator.free(resolution.path);
     const externals: []const command_plan.ExternalResolution = if (external) |*resolution| &.{resolution.*} else &.{};
     const target_plan = command_plan.classifyExpandedSimpleCommand(.{
@@ -6808,6 +6950,8 @@ fn evaluateCommandBuiltin(
     return evaluateSimpleCommand(evaluator, &dispatch_state, eval_context, target_plan, state_delta, buffers);
 }
 
+const default_command_path = "/bin:/usr/bin";
+
 const CommandLookupFormat = enum { terse, verbose };
 
 fn evaluateCommandLookup(
@@ -6816,6 +6960,7 @@ fn evaluateCommandLookup(
     plan: command_plan.CommandPlan,
     name: []const u8,
     format: CommandLookupFormat,
+    use_default_path: bool,
     buffers: *EvaluationBuffers,
 ) EvalError!SimpleEvalResult {
     if (evaluator.builtinDefinition(name)) |definition| {
@@ -6834,12 +6979,33 @@ fn evaluateCommandLookup(
         return normalEvaluation(0);
     }
 
+    var lookup_state = if (use_default_path) shell_state.clone(evaluator.allocator) catch |err| switch (err) {
+        error.ReadonlyVariable => unreachable,
+        error.OutOfMemory => return error.OutOfMemory,
+    } else shell_state;
+    defer if (use_default_path) lookup_state.deinit();
+    if (use_default_path) {
+        lookup_state.putVariable("PATH", default_command_path, .{ .exported = true }) catch |err| switch (err) {
+            error.ReadonlyVariable => unreachable,
+            error.OutOfMemory => return error.OutOfMemory,
+        };
+    }
+
     const command: command_plan.ExpandedSimpleCommand = .{
         .assignments = plan.assignments,
         .argv = &.{name},
         .last_command_substitution_status = plan.last_command_substitution_status,
     };
-    const external = try resolveExternalForEvaluation(evaluator.allocator, evaluator.fs_port, shell_state, command);
+    const lookup_command = if (use_default_path) command_plan.ExpandedSimpleCommand{
+        .argv = command.argv,
+        .last_command_substitution_status = command.last_command_substitution_status,
+    } else command;
+    const external = try resolveExternalForEvaluation(
+        evaluator.allocator,
+        evaluator.fs_port,
+        lookup_state,
+        lookup_command,
+    );
     defer if (external) |resolution| evaluator.allocator.free(resolution.path);
     if (external) |resolution| {
         switch (format) {
@@ -7290,8 +7456,20 @@ fn evaluateRead(
     std.debug.assert(std.mem.eql(u8, argv[0], "read"));
 
     var name_index: usize = 1;
-    const preserve_backslashes = name_index < argv.len and std.mem.eql(u8, argv[name_index], "-r");
-    if (preserve_backslashes) name_index += 1;
+    var preserve_backslashes = false;
+    var delimiter: u8 = '\n';
+    while (name_index < argv.len) {
+        if (std.mem.eql(u8, argv[name_index], "-r")) {
+            preserve_backslashes = true;
+            name_index += 1;
+        } else if (std.mem.eql(u8, argv[name_index], "-d")) {
+            if (name_index + 1 >= argv.len) return builtinUsageError(buffers, "read", "missing delimiter");
+            delimiter = if (argv[name_index + 1].len == 0) 0 else argv[name_index + 1][0];
+            name_index += 2;
+        } else {
+            break;
+        }
+    }
     if (name_index < argv.len and std.mem.startsWith(u8, argv[name_index], "-") and !std.mem.eql(
         u8,
         argv[name_index],
@@ -7308,9 +7486,9 @@ fn evaluateRead(
         if (shell_state.isVariableReadonly(name)) return builtinUsageError(buffers, "read", "readonly variable");
     }
 
-    const buffered_line = buffers.stdin.readLine();
+    const buffered_line = buffers.stdin.readUntil(delimiter);
     const fd_line = if (buffered_line == null and evaluator.read_stdin_from_fd)
-        try readLineFromStdinFd(evaluator.allocator)
+        try readUntilFromStdinFd(evaluator.allocator, delimiter)
     else
         null;
     defer if (fd_line) |line| evaluator.allocator.free(line);
@@ -7336,7 +7514,7 @@ fn readLineWithEscapesRemoved(allocator: std.mem.Allocator, line: []const u8) ![
     return normalized.toOwnedSlice(allocator);
 }
 
-fn readLineFromStdinFd(allocator: std.mem.Allocator) !?[]const u8 {
+fn readUntilFromStdinFd(allocator: std.mem.Allocator, delimiter: u8) !?[]const u8 {
     var line: std.ArrayList(u8) = .empty;
     errdefer line.deinit(allocator);
 
@@ -7347,7 +7525,7 @@ fn readLineFromStdinFd(allocator: std.mem.Allocator) !?[]const u8 {
             else => break,
         };
         if (read_count == 0) break;
-        if (byte[0] == '\n') return try line.toOwnedSlice(allocator);
+        if (byte[0] == delimiter) return try line.toOwnedSlice(allocator);
         try line.append(allocator, byte[0]);
     }
 
@@ -10152,6 +10330,16 @@ test "semantic evaluator evaluates umask through filesystem runtime" {
     try std.testing.expectEqual(@as(runtime.fs.FileCreationMask, 0o022), fake_fs.file_creation_mask);
     try std.testing.expectEqual(@as(usize, 2), fake_fs.file_creation_mask_change_count);
 
+    const symbolic_plan = command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{
+        "umask",
+        "-S",
+    } } });
+    var symbolic_result = try evaluatePlan(&evaluator, &shell_state, eval_context, symbolic_plan);
+    defer symbolic_result.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 0), symbolic_result.status);
+    try std.testing.expectEqualStrings("u=rwx,g=rx,o=rx\n", symbolic_result.stdout.items);
+    try std.testing.expectEqual(@as(runtime.fs.FileCreationMask, 0o022), fake_fs.file_creation_mask);
+
     const set_plan = command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{
         "umask",
         "077",
@@ -10325,6 +10513,19 @@ test "semantic evaluator evaluates kill through signal runtime" {
     try std.testing.expectEqual(@as(i32, 456), fake_signal.sent_processes[1]);
     try std.testing.expectEqual(signalNumber(.HUP), fake_signal.sent_signals[1]);
 
+    const zero_plan = command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{
+        "kill",
+        "-s",
+        "0",
+        "456",
+    } } });
+    var zero_result = try evaluatePlan(&evaluator, &shell_state, eval_context, zero_plan);
+    defer zero_result.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 0), zero_result.status);
+    try std.testing.expectEqual(@as(usize, 3), fake_signal.send_count);
+    try std.testing.expectEqual(@as(i32, 456), fake_signal.sent_processes[2]);
+    try std.testing.expectEqual(@as(u8, 0), fake_signal.sent_signals[2]);
+
     const group_plan = command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{
         "kill",
         "-TERM",
@@ -10334,8 +10535,8 @@ test "semantic evaluator evaluates kill through signal runtime" {
     var group_result = try evaluatePlan(&evaluator, &shell_state, eval_context, group_plan);
     defer group_result.deinit();
     try std.testing.expectEqual(@as(outcome.ExitStatus, 0), group_result.status);
-    try std.testing.expectEqual(@as(i32, -789), fake_signal.sent_processes[2]);
-    try std.testing.expectEqual(signalNumber(.TERM), fake_signal.sent_signals[2]);
+    try std.testing.expectEqual(@as(i32, -789), fake_signal.sent_processes[3]);
+    try std.testing.expectEqual(signalNumber(.TERM), fake_signal.sent_signals[3]);
 
     const list_plan = command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{
         "kill",
@@ -13622,6 +13823,33 @@ test "semantic pipeline evaluation streams builtin output into read builtin stdi
     try std.testing.expectEqualSlices(outcome.ExitStatus, &.{ 0, 0 }, result.state_delta.last_pipeline_statuses.?);
     try result.commitDelta(&shell_state, .current_shell);
     try std.testing.expectEqual(@as(?state.Variable, null), shell_state.getVariable("PIPE_VALUE"));
+}
+
+test "semantic evaluator reads through custom delimiters" {
+    var shell_state = state.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    var evaluator = Evaluator.init(std.testing.allocator);
+    var input = EvaluationInput.init("ab:cd");
+    const plan = command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{
+        "read",
+        "-r",
+        "-d",
+        ":",
+        "value",
+    } } });
+
+    var result = try evaluatePlanWithInput(
+        &evaluator,
+        &shell_state,
+        context.EvalContext.forTarget(.current_shell),
+        plan,
+        &input,
+    );
+    defer result.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 0), result.status);
+    try result.commitDelta(&shell_state, .current_shell);
+    try std.testing.expectEqualStrings("ab", shell_state.getVariable("value").?.value);
+    try std.testing.expectEqualStrings("cd", input.remaining());
 }
 
 test "semantic pipeline evaluation streams semantic output into external stdin" {

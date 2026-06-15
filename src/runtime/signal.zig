@@ -42,7 +42,9 @@ pub const SendRequest = struct {
     signal: Number,
 
     pub fn validate(self: SendRequest) void {
-        assertValidNumber(self.signal);
+        // Signal 0 is valid for kill(2) existence/permission probes but is not
+        // deliverable and must not appear as a caught/configured trap signal.
+        if (self.signal != 0) assertValidNumber(self.signal);
     }
 };
 
