@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>rush builtins</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+    }
+
+    body {
+      font-family: monospace;
+      background: light-dark(#ffffff, #111111);
+      max-width: 100ch;
+      margin: 4ch auto;
+      padding: 0 2ch;
+    }
+
+    .site-header {
+      display: flex;
+      justify-content: space-between;
+      gap: 2ch;
+      align-items: baseline;
+      margin-bottom: 4ch;
+    }
+
+    .site-nav {
+      display: flex;
+      gap: 2ch;
+    }
+
+    .site-header a,
+    .site-header a:visited {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    pre {
+      background: light-dark(#f2f2f2, #1f1f1f);
+      padding: 2ch;
+      overflow-x: auto;
+    }
+
+    dl {
+      display: grid;
+      grid-template-columns: max-content 1fr;
+      gap: 0.75ch 2ch;
+    }
+
+    dt {
+      font-weight: bold;
+    }
+
+    dd {
+      margin: 0;
+    }
+
+    :is(h1, h2, h3, h4, h5, h6) > a,
+    :is(h1, h2, h3, h4, h5, h6) > a:visited {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    :is(h1, h2, h3, h4, h5, h6) > a:hover,
+    :is(h1, h2, h3, h4, h5, h6) > a:focus-visible {
+      text-decoration: underline;
+    }
+
+    :is(h1, h2, h3, h4, h5, h6) > a::before {
+      content: "#";
+      display: inline-block;
+      width: 2ch;
+      margin-left: -2ch;
+      opacity: 0;
+    }
+
+    :is(h1, h2, h3, h4, h5, h6):hover > a::before,
+    :is(h1, h2, h3, h4, h5, h6) > a:focus-visible::before {
+      opacity: 0.5;
+    }
+
+    code,
+    .cmd,
+    .kw {
+      color: light-dark(#003c8f, #8ab4ff);
+    }
+
+    .opt {
+      color: light-dark(#8a2a00, #ffb86c);
+    }
+
+    .var {
+      color: light-dark(#6f42c1, #d2a8ff);
+    }
+  </style>
+</head>
+<body>
+  <header class="site-header">
+    <div><a href="../../index.html">rush</a></div>
+    <nav class="site-nav" aria-label="Primary">
+      <a href="../index.html">docs</a>
+      <a href="https://github.com/rockorager/rush">source</a>
+    </nav>
+  </header>
+
+  <h1 id="rush-builtins"><a href="#rush-builtins">RUSH-BUILTINS(7)</a></h1>
+
+  <h2 id="name"><a href="#name">NAME</a></h2>
+
+  <p>rush-builtins - builtin commands provided by Rush</p>
+
+  <h2 id="description"><a href="#description">DESCRIPTION</a></h2>
+
+  <p>Builtins are commands executed by Rush itself instead of by searching <code>PATH</code>. POSIX builtins are part of the shell core. Compatibility and Rush-specific builtins are extension builtins included by the default Rush registry.</p>
+
+  <p>Embedders may provide their own extension builtin registry. Extension builtins are regular builtins; POSIX special builtin behavior is reserved for the shell core.</p>
+
+  <h2 id="posix-special-builtins"><a href="#posix-special-builtins">POSIX SPECIAL BUILTINS</a></h2>
+
+  <p>Rush provides the POSIX special builtin names. Special builtins are found before shell functions and have POSIX-defined error and assignment semantics.</p>
+
+  <dl>
+    <dt><a href="colon.html"><code>:</code></a></dt><dd>Return success without doing anything.</dd>
+    <dt><a href="dot.html"><code>.</code></a></dt><dd>Read and execute commands from a file in the current shell environment.</dd>
+    <dt><a href="break.html"><code>break</code></a></dt><dd>Exit enclosing <code>for</code>, <code>while</code>, or <code>until</code> loops.</dd>
+    <dt><a href="continue.html"><code>continue</code></a></dt><dd>Continue enclosing <code>for</code>, <code>while</code>, or <code>until</code> loops.</dd>
+    <dt><a href="eval.html"><code>eval</code></a></dt><dd>Concatenate arguments and evaluate the result as shell input.</dd>
+    <dt><a href="exec.html"><code>exec</code></a></dt><dd>Replace the shell with a command, or apply redirections to the current shell.</dd>
+    <dt><a href="exit.html"><code>exit</code></a></dt><dd>Exit the shell.</dd>
+    <dt><a href="export.html"><code>export</code></a></dt><dd>Mark variables for export to child process environments.</dd>
+    <dt><a href="readonly.html"><code>readonly</code></a></dt><dd>Mark variables as readonly.</dd>
+    <dt><a href="return.html"><code>return</code></a></dt><dd>Return from a function or sourced script.</dd>
+    <dt><a href="set.html"><code>set</code></a></dt><dd>Set shell options and positional parameters.</dd>
+    <dt><a href="shift.html"><code>shift</code></a></dt><dd>Shift positional parameters.</dd>
+    <dt><a href="times.html"><code>times</code></a></dt><dd>Print accumulated shell and child process times.</dd>
+    <dt><a href="trap.html"><code>trap</code></a></dt><dd>Register commands to run when signals are received.</dd>
+    <dt><a href="unset.html"><code>unset</code></a></dt><dd>Unset variables or functions.</dd>
+  </dl>
+
+  <h2 id="posix-regular-builtins"><a href="#posix-regular-builtins">POSIX REGULAR BUILTINS</a></h2>
+
+  <p>Rush also provides POSIX regular builtin names. Regular builtins follow normal command lookup order and may be shadowed by functions.</p>
+
+  <dl>
+    <dt><a href="test-bracket.html"><code>[</code></a></dt><dd>Evaluate a conditional expression; synonym for <code>test</code> requiring a closing <code>]</code>.</dd>
+    <dt><a href="alias.html"><code>alias</code></a></dt><dd>Define or print command aliases.</dd>
+    <dt><a href="bg.html"><code>bg</code></a></dt><dd>Resume jobs in the background.</dd>
+    <dt><a href="cd.html"><code>cd</code></a></dt><dd>Change the current working directory.</dd>
+    <dt><a href="command.html"><code>command</code></a></dt><dd>Execute or describe a command while suppressing shell function lookup.</dd>
+    <dt><a href="echo.html"><code>echo</code></a></dt><dd>Write arguments to standard output.</dd>
+    <dt><a href="env.html"><code>env</code></a></dt><dd>Run a command with a modified environment, or print the environment.</dd>
+    <dt><a href="false.html"><code>false</code></a></dt><dd>Return an unsuccessful status.</dd>
+    <dt><a href="fc.html"><code>fc</code></a></dt><dd>List or edit command history.</dd>
+    <dt><a href="fg.html"><code>fg</code></a></dt><dd>Resume jobs in the foreground.</dd>
+    <dt><a href="getopts.html"><code>getopts</code></a></dt><dd>Parse shell function option arguments.</dd>
+    <dt><a href="hash.html"><code>hash</code></a></dt><dd>Remember or report command path lookups.</dd>
+    <dt><a href="jobs.html"><code>jobs</code></a></dt><dd>Report active jobs.</dd>
+    <dt><a href="kill.html"><code>kill</code></a></dt><dd>Send signals to processes or jobs.</dd>
+    <dt><a href="printf.html"><code>printf</code></a></dt><dd>Format and write data.</dd>
+    <dt><a href="pwd.html"><code>pwd</code></a></dt><dd>Print the current working directory.</dd>
+    <dt><a href="read.html"><code>read</code></a></dt><dd>Read a line and assign fields to variables.</dd>
+    <dt><a href="test.html"><code>test</code></a></dt><dd>Evaluate a conditional expression.</dd>
+    <dt><a href="true.html"><code>true</code></a></dt><dd>Return a successful status.</dd>
+    <dt><a href="ulimit.html"><code>ulimit</code></a></dt><dd>Get or set process resource limits.</dd>
+    <dt><a href="umask.html"><code>umask</code></a></dt><dd>Get or set the file mode creation mask.</dd>
+    <dt><a href="unalias.html"><code>unalias</code></a></dt><dd>Remove command aliases.</dd>
+    <dt><a href="wait.html"><code>wait</code></a></dt><dd>Wait for jobs or process IDs to complete.</dd>
+  </dl>
+
+  <h2 id="compatibility-builtins"><a href="#compatibility-builtins">COMPATIBILITY BUILTINS</a></h2>
+
+  <p>Compatibility builtins are non-POSIX extension builtins included by the default Rush registry because they are common in interactive shell configuration and portable shell-adjacent scripts.</p>
+
+  <dl>
+    <dt><a href="local.html"><code>local</code></a></dt><dd>Declare variables local to the current function invocation.</dd>
+    <dt><a href="shopt.html"><code>shopt</code></a></dt><dd>Inspect or update compatibility shell options.</dd>
+    <dt><a href="source.html"><code>source</code></a></dt><dd>Read and execute commands from a file in the current shell environment.</dd>
+    <dt><a href="type.html"><code>type</code></a></dt><dd>Describe how command names would be resolved.</dd>
+  </dl>
+
+  <h2 id="rush-builtins-section"><a href="#rush-builtins-section">RUSH BUILTINS</a></h2>
+
+  <p>Rush-specific builtins expose interactive shell features through normal shell commands.</p>
+
+  <dl>
+    <dt><a href="abbr.html"><code>abbr</code></a></dt><dd>Manage fish-style interactive abbreviations.</dd>
+    <dt><a href="color.html"><code>color</code></a></dt><dd>Derive <code>#rrggbb</code> colors for prompt and UI style configuration.</dd>
+  </dl>
+
+  <h2 id="see-also"><a href="#see-also">SEE ALSO</a></h2>
+
+  <p><a href="../configuration.html">rush configuration</a>, <a href="../compatibility.html">rush compatibility notes</a>, POSIX Shell Command Language.</p>
+
+</body>
+</html>

@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>rush shopt builtin</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+    }
+
+    body {
+      font-family: monospace;
+      background: light-dark(#ffffff, #111111);
+      max-width: 100ch;
+      margin: 4ch auto;
+      padding: 0 2ch;
+    }
+
+    .site-header {
+      display: flex;
+      justify-content: space-between;
+      gap: 2ch;
+      align-items: baseline;
+      margin-bottom: 4ch;
+    }
+
+    .site-nav {
+      display: flex;
+      gap: 2ch;
+    }
+
+    .site-header a,
+    .site-header a:visited {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    pre {
+      background: light-dark(#f2f2f2, #1f1f1f);
+      padding: 2ch;
+      overflow-x: auto;
+    }
+
+    dl {
+      display: grid;
+      grid-template-columns: max-content 1fr;
+      gap: 0.75ch 2ch;
+    }
+
+    dt {
+      font-weight: bold;
+    }
+
+    dd {
+      margin: 0;
+    }
+
+    :is(h1, h2, h3, h4, h5, h6) > a,
+    :is(h1, h2, h3, h4, h5, h6) > a:visited {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    :is(h1, h2, h3, h4, h5, h6) > a:hover,
+    :is(h1, h2, h3, h4, h5, h6) > a:focus-visible {
+      text-decoration: underline;
+    }
+
+    :is(h1, h2, h3, h4, h5, h6) > a::before {
+      content: "#";
+      display: inline-block;
+      width: 2ch;
+      margin-left: -2ch;
+      opacity: 0;
+    }
+
+    :is(h1, h2, h3, h4, h5, h6):hover > a::before,
+    :is(h1, h2, h3, h4, h5, h6) > a:focus-visible::before {
+      opacity: 0.5;
+    }
+
+    code,
+    .cmd,
+    .kw {
+      color: light-dark(#003c8f, #8ab4ff);
+    }
+
+    .opt {
+      color: light-dark(#8a2a00, #ffb86c);
+    }
+
+    .var {
+      color: light-dark(#6f42c1, #d2a8ff);
+    }
+  </style>
+</head>
+<body>
+  <header class="site-header">
+    <div><a href="../../index.html">rush</a></div>
+    <nav class="site-nav" aria-label="Primary">
+      <a href="../index.html">docs</a>
+      <a href="https://github.com/rockorager/rush">source</a>
+    </nav>
+  </header>
+
+  <h1 id="shopt"><a href="#shopt">SHOPT(1)</a></h1>
+
+  <h2 id="name"><a href="#name">NAME</a></h2>
+
+  <p>shopt - inspect or update compatibility shell options.</p>
+
+  <h2 id="synopsis"><a href="#synopsis">SYNOPSIS</a></h2>
+
+  <pre><span class="cmd">shopt</span> [<span class="var">option</span> ...]
+<span class="cmd">shopt</span> <span class="opt">-p</span> [<span class="var">option</span> ...]
+<span class="cmd">shopt</span> <span class="opt">-q</span> <span class="var">option</span> ...
+<span class="cmd">shopt</span> <span class="opt">-s</span> <span class="var">option</span> ...
+<span class="cmd">shopt</span> <span class="opt">-u</span> <span class="var">option</span> ...</pre>
+
+  <h2 id="description"><a href="#description">DESCRIPTION</a></h2>
+
+  <p><code>shopt</code> inspects or updates compatibility shell options. Rush currently models <code>expand_aliases</code>. Without operands, <code>shopt</code> lists all modeled options and <code>shopt -p</code> prints reusable commands.</p>
+
+  <h2 id="options"><a href="#options">OPTIONS</a></h2>
+
+  <dl>
+    <dt><code>-p</code></dt><dd>Print settings in reusable <code>shopt -s name</code> or <code>shopt -u name</code> form.</dd>
+    <dt><code>-q</code></dt><dd>Query options silently. The status is non-zero if any named option is disabled or invalid.</dd>
+    <dt><code>-s</code></dt><dd>Enable the named options.</dd>
+    <dt><code>-u</code></dt><dd>Disable the named options.</dd>
+    <dt><code>--</code></dt><dd>End option parsing.</dd>
+  </dl>
+
+  <h2 id="exit-status"><a href="#exit-status">EXIT STATUS</a></h2>
+
+  <p>Zero on success, one for invalid option names or failed queries, and two for usage errors.</p>
+
+  <h2 id="see-also"><a href="#see-also">SEE ALSO</a></h2>
+
+  <p><a href="index.html">rush-builtins(7)</a>.</p>
+
+</body>
+</html>
