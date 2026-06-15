@@ -2770,6 +2770,9 @@ fn startBackgroundPipeline(
     std.debug.assert(eval_context.target.allowsShellStateCommit());
     std.debug.assert(shell_state.acceptsExecutionTarget(eval_context.target));
 
+    const background_signals_ignored = try configureBackgroundSignalInheritance(evaluator, shell_state);
+    defer if (background_signals_ignored) restoreBackgroundSignalInheritance(evaluator, shell_state);
+
     if (plan.stages.len == 1) {
         return switch (plan.stages[0]) {
             .simple => |simple| if (simple.class() == .external)
@@ -2790,6 +2793,35 @@ fn startBackgroundPipeline(
         );
     }
     return startBackgroundExternalOnlyPipeline(evaluator, shell_state, plan, buffers);
+}
+
+fn configureBackgroundSignalInheritance(evaluator: *Evaluator, shell_state: state.ShellState) EvalError!bool {
+    shell_state.validate();
+    if (shell_state.options.enabled(.monitor)) return false;
+    try configureRuntimeSignalDisposition(evaluator, .INT, .ignore);
+    try configureRuntimeSignalDisposition(evaluator, .QUIT, .ignore);
+    return true;
+}
+
+fn restoreBackgroundSignalInheritance(evaluator: *Evaluator, shell_state: state.ShellState) void {
+    shell_state.validate();
+    // ziglint-ignore: Z026 best-effort signal restoration from background-spawn defer
+    configureRuntimeTrapSignal(evaluator, shell_state, .INT) catch {};
+    // ziglint-ignore: Z026 best-effort signal restoration from background-spawn defer
+    configureRuntimeTrapSignal(evaluator, shell_state, .QUIT) catch {};
+}
+
+fn configureRuntimeSignalDisposition(
+    evaluator: *Evaluator,
+    signal: state.TrapSignal,
+    disposition: runtime.signal.Disposition,
+) EvalError!void {
+    signal.validate();
+    const signal_number = signal.runtimeNumber() orelse return;
+    const signal_port = evaluator.signal_port orelse return error.Unimplemented;
+    signal_port.configure(.{ .signal = signal_number, .disposition = disposition }) catch |err| switch (err) {
+        error.Unsupported, error.Unexpected => return error.Unimplemented,
+    };
 }
 
 fn startBackgroundSemanticPipeline(
@@ -5551,6 +5583,7 @@ fn evaluateBuiltin(
     if (std.mem.eql(u8, definition.name, "wait")) return normalEvaluation(try evaluateWait(
         evaluator,
         shell_state,
+        eval_context,
         plan.argv,
         state_delta,
         buffers,
@@ -7579,12 +7612,14 @@ fn evaluateJobs(
 fn evaluateWait(
     evaluator: *Evaluator,
     shell_state: state.ShellState,
+    eval_context: context.EvalContext,
     argv: []const []const u8,
     state_delta: *delta.StateDelta,
     buffers: *EvaluationBuffers,
 ) !outcome.ExitStatus {
     std.debug.assert(argv.len != 0);
     std.debug.assert(std.mem.eql(u8, argv[0], "wait"));
+    eval_context.validate();
 
     _ = buffers;
     var wait_state = shell_state.clone(evaluator.allocator) catch |err| switch (err) {
@@ -7598,7 +7633,8 @@ fn evaluateWait(
         var index: usize = 0;
         while (index < wait_state.background_jobs.items.len) {
             const job = &wait_state.background_jobs.items[index];
-            status = try waitBackgroundJobUntilTerminated(evaluator, job);
+            status = try waitBackgroundJobUntilTerminated(evaluator, shell_state, eval_context, state_delta, job);
+            if (status > 128) break;
             if (job.state == .done) {
                 wait_state.removeBackgroundJobById(job.id);
             } else {
@@ -7606,7 +7642,7 @@ fn evaluateWait(
             }
         }
         try appendJobTableDiff(shell_state, wait_state, state_delta);
-        return 0;
+        return status;
     }
 
     for (argv[1..]) |operand| {
@@ -7615,7 +7651,8 @@ fn evaluateWait(
             continue;
         };
         const job = wait_state.findBackgroundJobPtrById(job_id) orelse unreachable;
-        status = try waitBackgroundJobUntilTerminated(evaluator, job);
+        status = try waitBackgroundJobUntilTerminated(evaluator, shell_state, eval_context, state_delta, job);
+        if (status > 128) break;
         if (job.state == .done) wait_state.removeBackgroundJobById(job_id);
     }
 
@@ -7805,18 +7842,62 @@ fn continueJobProcesses(evaluator: *Evaluator, job: *state.BackgroundJob) !void 
     job.validate();
 }
 
-fn waitBackgroundJobUntilTerminated(evaluator: *Evaluator, job: *state.BackgroundJob) !outcome.ExitStatus {
+fn waitBackgroundJobUntilTerminated(
+    evaluator: *Evaluator,
+    shell_state: state.ShellState,
+    eval_context: context.EvalContext,
+    state_delta: *delta.StateDelta,
+    job: *state.BackgroundJob,
+) !outcome.ExitStatus {
     job.validate();
+    shell_state.validate();
+    eval_context.validate();
     if (job.state != .done) {
         const process_port = evaluator.process_port orelse return error.Unimplemented;
         for (job.processes.items, 0..) |*process, process_index| {
             if (process.child.state != .running) continue;
-            const result = process_port.wait(.{ .child = &process.child }) catch return error.Unimplemented;
-            applyBackgroundProcessStatus(job, process_index, result.status);
+            while (process.child.state == .running) {
+                const result = process_port.pollWait(.{
+                    .child = &process.child,
+                    .nohang = false,
+                    .report_stopped = false,
+                }) catch return error.Unimplemented;
+                const wait_status = result.status orelse {
+                    if (try appendInterruptedWaitSignal(evaluator, shell_state, eval_context, state_delta)) |status| {
+                        return status;
+                    }
+                    continue;
+                };
+                applyBackgroundProcessStatus(job, process_index, wait_status);
+            }
         }
     }
     job.validate();
     return job.status;
+}
+
+fn appendInterruptedWaitSignal(
+    evaluator: *Evaluator,
+    shell_state: state.ShellState,
+    eval_context: context.EvalContext,
+    state_delta: *delta.StateDelta,
+) !?outcome.ExitStatus {
+    shell_state.validate();
+    eval_context.validate();
+    std.debug.assert(eval_context.target.allowsShellStateCommit());
+
+    const signal_port = evaluator.signal_port orelse return null;
+    const event = signal_port.poll() catch |err| switch (err) {
+        error.Unsupported, error.Unexpected => return error.Unimplemented,
+    } orelse return null;
+    event.validate();
+    const signal = state.TrapSignal.fromRuntimeNumber(event.signal) orelse return error.Unimplemented;
+    const delivery = try state_delta.appendSignalDelivery(shell_state, signal);
+    return switch (delivery) {
+        .default_action => signal.defaultExitStatus().?,
+        .ignored => null,
+        .queued => signal.defaultExitStatus().?,
+    };
 }
 
 fn waitForegroundJob(evaluator: *Evaluator, job: *state.BackgroundJob) !outcome.ExitStatus {

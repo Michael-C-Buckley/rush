@@ -289,7 +289,7 @@ fn pollWait(context: *anyopaque, request: process.PollWaitRequest) process.WaitE
     while (true) {
         const result = waitPid(pid, &status, flags) catch |err| switch (err) {
             error.ChildNotFound => return error.Unexpected,
-            error.Interrupted => continue,
+            error.Interrupted => return .{},
             error.Unexpected => return error.Unexpected,
         };
         if (result == 0) return .{};

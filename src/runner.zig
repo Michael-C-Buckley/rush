@@ -716,6 +716,18 @@ fn runSemanticLoweredProgram(
         status = command_outcome.status;
         control_flow = command_outcome.control_flow;
         try command_outcome.applyToShellState(shell_state, .{ .record_exit_control_flow = true });
+        try configureRuntimeTrapMutations(evaluator, shell_state.*, command_outcome.state_delta);
+        try appendPendingRuntimeTrapOutcome(
+            allocator,
+            &accumulated_stdout,
+            &accumulated_stderr,
+            &status,
+            &control_flow,
+            evaluator,
+            shell_state,
+            eval_context,
+            resolver,
+        );
         if (control_flow != .normal or body_failed) break;
     }
 
@@ -741,6 +753,59 @@ fn runSemanticLoweredProgram(
         .stdout = stdout,
         .stderr = stderr,
     } };
+}
+
+fn configureRuntimeTrapMutations(
+    evaluator: *shell.eval.Evaluator,
+    shell_state: shell.ShellState,
+    state_delta: shell.StateDelta,
+) !void {
+    shell_state.validate();
+    if (!state_delta.target.allowsShellStateCommit()) return;
+
+    for (state_delta.trap_mutations.items) |mutation| {
+        const signal = shell.TrapSignal.fromName(mutation.name) orelse continue;
+        if (!signal.isRuntimeSignal()) continue;
+        try shell.eval.configureRuntimeTrapSignal(evaluator, shell_state, signal);
+    }
+}
+
+fn appendPendingRuntimeTrapOutcome(
+    allocator: std.mem.Allocator,
+    stdout: *std.ArrayList(u8),
+    stderr: *std.ArrayList(u8),
+    status: *shell.ExitStatus,
+    control_flow: *shell.ControlFlow,
+    evaluator: *shell.eval.Evaluator,
+    shell_state: *shell.ShellState,
+    eval_context: shell.EvalContext,
+    resolver: shell.TrapActionResolver,
+) !void {
+    shell_state.validate();
+    eval_context.validate();
+    control_flow.validate();
+
+    if (try shell.eval.observeRuntimeSignal(evaluator, shell_state, eval_context)) |observed| {
+        var observation = observed;
+        defer observation.deinit();
+        try observation.command_outcome.applyToShellState(shell_state, .{ .record_exit_control_flow = true });
+        status.* = observation.command_outcome.status;
+        control_flow.* = observation.command_outcome.control_flow;
+        if (control_flow.* != .normal) return;
+    }
+
+    var trap_outcome = (try shell.eval.executePendingTraps(
+        evaluator,
+        shell_state,
+        eval_context,
+        resolver,
+    )) orelse return;
+    defer trap_outcome.deinit();
+    try stdout.appendSlice(allocator, trap_outcome.stdout.items);
+    try stderr.appendSlice(allocator, trap_outcome.stderr.items);
+    status.* = trap_outcome.status;
+    control_flow.* = trap_outcome.control_flow;
+    try trap_outcome.applyToShellState(shell_state, .{ .record_exit_control_flow = true });
 }
 
 const SemanticBackgroundPipelinePlan = struct {
