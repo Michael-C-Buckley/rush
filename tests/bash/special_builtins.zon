@@ -60,6 +60,34 @@
             .status = 0,
         },
         .{
+            .name = "readonly assignment-only error skips the rest of its physical line",
+            .script =
+            \\command readonly R=old
+            \\R=new; printf bad
+            \\printf 'after<%s>\n' "$?"
+            ,
+            .stdout =
+            \\after<1>
+            \\
+            ,
+            .stderr_match = .nonempty,
+            .status = 0,
+        },
+        .{
+            .name = "readonly assignment-only error returns from a function",
+            .script =
+            \\f() { command readonly R=old; R=new; printf bad; }
+            \\f
+            \\printf 'after<%s>\n' "$?"
+            ,
+            .stdout =
+            \\after<1>
+            \\
+            ,
+            .stderr_match = .nonempty,
+            .status = 0,
+        },
+        .{
             .name = "readonly assignment-only error obeys errexit",
             .script =
             \\set -e

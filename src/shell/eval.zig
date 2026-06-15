@@ -169,6 +169,7 @@ pub const TrapActionFailure = struct {
     kind: TrapActionFailureKind,
     status: outcome.ExitStatus = 2,
     message: []const u8,
+    bash_assignment_only_expansion: bool = false,
 
     pub fn validate(self: TrapActionFailure) void {
         std.debug.assert(self.status != 0);
@@ -590,6 +591,7 @@ const TrapActionLowerer = struct {
                 .plan = .{ .source = .{
                     .target = target,
                     .source = statementSource(program, index),
+                    .line = statementLine(program.source, statement.span.start),
                     .targets_stdout = statementTargetsDescriptor(program, statement, 1),
                     .targets_stderr = statementTargetsDescriptor(program, statement, 2),
                 } },
@@ -614,6 +616,15 @@ const TrapActionLowerer = struct {
         std.debug.assert(start < end);
         std.debug.assert(end <= program.source.len);
         return program.source[start..end];
+    }
+
+    fn statementLine(source: []const u8, offset: usize) usize {
+        std.debug.assert(offset <= source.len);
+        var line: usize = 0;
+        for (source[0..offset]) |byte| {
+            if (byte == '\n') line += 1;
+        }
+        return line;
     }
 
     fn statementMayHaveHereDoc(source: []const u8) bool {
@@ -1017,7 +1028,12 @@ const TrapActionLowerer = struct {
                     "trap {s}: expansion error: {s}: {s}",
                     .{ self.signal.name(), expansion_failure.name, expansion_failure.message },
                 );
-                const trap_failure: TrapActionFailure = .{ .kind = .expansion_error, .status = 1, .message = message };
+                const trap_failure: TrapActionFailure = .{
+                    .kind = .expansion_error,
+                    .status = 1,
+                    .message = message,
+                    .bash_assignment_only_expansion = command.argv.len == 0,
+                };
                 trap_failure.validate();
                 return .{ .failure = trap_failure };
             }
@@ -1954,6 +1970,9 @@ fn evaluatePlanWithInput(
                 eval_context,
                 consequence.decideForShellError(shell_state.options, eval_context, kind, failure.status),
             );
+            if (bashReadonlyAssignmentOnlyReturnsFromFunction(eval_context, plan, failure.control_flow)) {
+                failure.control_flow = .{ .return_from_scope = .{ .scope = .function, .status = failure.status } };
+            }
             failure.validateForContext(eval_context);
             return failure;
         }
@@ -2078,6 +2097,20 @@ fn bashCommandIgnoresReadonlyAssignment(eval_context: context.EvalContext, plan:
         .assignment_only, .empty, .function_definition => false,
         .special_builtin, .regular_builtin, .function, .external, .not_found => true,
     };
+}
+
+fn bashReadonlyAssignmentOnlyReturnsFromFunction(
+    eval_context: context.EvalContext,
+    plan: command_plan.CommandPlan,
+    control_flow: outcome.ControlFlow,
+) bool {
+    eval_context.validate();
+    plan.validate();
+    control_flow.validateForContext(eval_context);
+    return eval_context.features.isBash() and
+        eval_context.canReturnFromFunction() and
+        plan.class() == .assignment_only and
+        control_flow == .normal;
 }
 
 fn evaluatedAssignmentEffect(
@@ -3897,7 +3930,17 @@ pub fn trapActionFailureOutcome(
     var state_delta = delta.StateDelta.init(allocator, eval_context.target);
     errdefer state_delta.deinit();
     state_delta.setLastStatus(failure.status);
-    const control_flow: outcome.ControlFlow = switch (failure.kind) {
+    const control_flow: outcome.ControlFlow = if (bashAssignmentOnlyExpansionFailureIsCommandFailure(
+        eval_context,
+        failure,
+        shell_state,
+    )) blk: {
+        const decision = consequence.decideForStatus(shell_state.options, eval_context, failure.status);
+        if (decision.control_flow == .normal and eval_context.canReturnFromFunction()) {
+            break :blk .{ .return_from_scope = .{ .scope = .function, .status = failure.status } };
+        }
+        break :blk decision.control_flow;
+    } else switch (failure.kind) {
         .expansion_error => if (eval_context.interactive or shell_state.trap_execution != .idle)
             .normal
         else
@@ -3917,6 +3960,20 @@ pub fn trapActionFailureOutcome(
     try command_outcome.appendStderr("\n");
     command_outcome.validateForContext(eval_context);
     return command_outcome;
+}
+
+fn bashAssignmentOnlyExpansionFailureIsCommandFailure(
+    eval_context: context.EvalContext,
+    failure: TrapActionFailure,
+    shell_state: state.ShellState,
+) bool {
+    eval_context.validate();
+    failure.validate();
+    shell_state.validate();
+    return eval_context.features.isBash() and
+        shell_state.trap_execution == .idle and
+        failure.kind == .expansion_error and
+        failure.bash_assignment_only_expansion;
 }
 
 fn runtimeDispositionForTrapDisposition(disposition: state.TrapDisposition) runtime.signal.Disposition {
@@ -4245,8 +4302,13 @@ fn evaluateStatementList(
         return result;
     }
 
+    var abort_bash_line: ?usize = null;
     for (list.statements, 0..) |entry, index| {
         entry.validate(index);
+        if (abort_bash_line) |line| {
+            if (statementSourceLine(entry.plan) == line) continue;
+            abort_bash_line = null;
+        }
         const should_run = switch (entry.op_before) {
             .sequence => true,
             .and_if => result.status == 0,
@@ -4270,9 +4332,38 @@ fn evaluateStatementList(
         try applyOutcomeToWorkingState(shell_state, &child_outcome, child_outcome.state_delta.target);
 
         result = .{ .status = child_outcome.status, .control_flow = child_outcome.control_flow };
+        if (bashReadonlyAssignmentOnlyAbortsSourceLine(eval_context, entry.plan, child_outcome)) {
+            abort_bash_line = statementSourceLine(entry.plan);
+        }
         if (child_outcome.control_flow != .normal) break;
     }
     return result;
+}
+
+fn statementSourceLine(plan: command_plan.StatementPlan) ?usize {
+    plan.validate();
+    return switch (plan) {
+        .source => |source| source.line,
+        .simple, .compound, .pipeline => null,
+    };
+}
+
+fn bashReadonlyAssignmentOnlyAbortsSourceLine(
+    eval_context: context.EvalContext,
+    plan: command_plan.StatementPlan,
+    child_outcome: outcome.CommandOutcome,
+) bool {
+    eval_context.validate();
+    plan.validate();
+    child_outcome.validateForContext(eval_context);
+    if (!eval_context.features.isBash()) return false;
+    if (eval_context.canReturnFromFunction()) return false;
+    if (child_outcome.status != 1 or child_outcome.control_flow != .normal) return false;
+    if (statementSourceLine(plan) == null) return false;
+    for (child_outcome.diagnostics.items) |diagnostic| {
+        if (std.mem.endsWith(u8, diagnostic.message, ": readonly variable")) return true;
+    }
+    return std.mem.endsWith(u8, child_outcome.stderr.items, ": readonly variable\n");
 }
 
 fn flushBuffersForStatementRedirections(

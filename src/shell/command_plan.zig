@@ -261,6 +261,7 @@ pub const StatementPlan = union(enum) {
 pub const SourceStatementPlan = struct {
     target: context.ExecutionTarget,
     source: []const u8,
+    line: usize = 0,
     targets_stdout: bool = false,
     targets_stderr: bool = false,
 
@@ -852,6 +853,7 @@ fn cloneSourceStatementPlan(
     return .{
         .target = plan.target,
         .source = try allocator.dupe(u8, plan.source),
+        .line = plan.line,
         .targets_stdout = plan.targets_stdout,
         .targets_stderr = plan.targets_stderr,
     };

@@ -799,11 +799,16 @@ fn runSemanticLoweredProgram(
 
     var status: shell.ExitStatus = 0;
     var control_flow: shell.ControlFlow = .normal;
+    var abort_bash_line: ?usize = null;
     for (program.statements, 0..) |statement, statement_index| {
         std.debug.assert(statement.span.start <= statement.span.end);
         std.debug.assert(statement.span.end <= script.len);
         if (semanticStdinScriptConsumedStatement(stdin_script_file, stdin_script_source_offset, statement.span.start))
             continue;
+        if (abort_bash_line) |line| {
+            if (semanticSourceLine(script, statement.span.start) == line) continue;
+            abort_bash_line = null;
+        }
 
         const should_run = if (statement_index == 0) blk: {
             std.debug.assert(statement.op_before == .sequence);
@@ -838,7 +843,7 @@ fn runSemanticLoweredProgram(
         if (semanticBodyUnsupportedMessage(body, eval_context.interactive)) |message| {
             return semanticUnsupported(allocator, message);
         }
-        const body_failed = semanticBodyIsFailure(body);
+        const body_failed = semanticBodyIsStoppingFailure(body, eval_context.features);
         if (evaluator.external_stdio == .inherit and semanticBodyUsesInheritedExternal(body)) {
             try flushAccumulatedOutput(&accumulated_stdout, &accumulated_stderr);
         }
@@ -888,6 +893,9 @@ fn runSemanticLoweredProgram(
         );
         status = command_outcome.status;
         control_flow = command_outcome.control_flow;
+        if (bashReadonlyAssignmentOnlyAbortsSourceLine(eval_context.features, statement_script, command_outcome)) {
+            abort_bash_line = semanticSourceLine(script, statement.span.start);
+        }
         try command_outcome.applyToShellState(shell_state, .{ .record_exit_control_flow = true });
         try configureRuntimeTrapMutations(evaluator, shell_state.*, command_outcome.state_delta);
         try appendPendingRuntimeTrapOutcome(
@@ -926,6 +934,30 @@ fn runSemanticLoweredProgram(
         .stdout = stdout,
         .stderr = stderr,
     } };
+}
+
+fn semanticSourceLine(source: []const u8, offset: usize) usize {
+    std.debug.assert(offset <= source.len);
+    var line: usize = 0;
+    for (source[0..offset]) |byte| {
+        if (byte == '\n') line += 1;
+    }
+    return line;
+}
+
+fn bashReadonlyAssignmentOnlyAbortsSourceLine(
+    features: compat.Features,
+    statement_script: []const u8,
+    command_outcome: shell.CommandOutcome,
+) bool {
+    command_outcome.validate();
+    if (!features.isBash()) return false;
+    if (std.mem.indexOfScalar(u8, statement_script, '=') == null) return false;
+    if (command_outcome.status != 1 or command_outcome.control_flow != .normal) return false;
+    for (command_outcome.diagnostics.items) |diagnostic| {
+        if (std.mem.endsWith(u8, diagnostic.message, ": readonly variable")) return true;
+    }
+    return std.mem.endsWith(u8, command_outcome.stderr.items, ": readonly variable\n");
 }
 
 fn configureRuntimeTrapMutations(
@@ -1534,13 +1566,21 @@ fn semanticBodyUnsupportedMessage(body: shell.TrapActionBody, legacy_fallback_ga
     };
 }
 
-fn semanticBodyIsFailure(body: shell.TrapActionBody) bool {
+fn semanticBodyIsStoppingFailure(body: shell.TrapActionBody, features: compat.Features) bool {
     body.validate();
     return switch (body) {
-        .failure => true,
-        .owned => |owned| owned.body == .failure,
+        .failure => |failure| semanticFailureStopsProgram(failure, features),
+        .owned => |owned| switch (owned.body) {
+            .failure => |failure| semanticFailureStopsProgram(failure, features),
+            .simple, .compound, .pipeline => false,
+        },
         .simple, .compound, .pipeline => false,
     };
+}
+
+fn semanticFailureStopsProgram(failure: shell.TrapActionFailure, features: compat.Features) bool {
+    failure.validate();
+    return !(features.isBash() and failure.kind == .expansion_error and failure.bash_assignment_only_expansion);
 }
 
 fn semanticBodyUsesInheritedExternal(body: shell.TrapActionBody) bool {

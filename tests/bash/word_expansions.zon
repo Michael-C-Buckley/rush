@@ -15,5 +15,33 @@
             .stderr = "",
             .status = 0,
         },
+        .{
+            .name = "arithmetic expansion error in assignment-only command does not exit",
+            .script =
+            \\x=$((1/0))
+            \\printf 'x=<%s> status=<%s>\n' "$x" "$?"
+            \\printf after
+            ,
+            .stdout =
+            \\x=<> status=<1>
+            \\after
+            ,
+            .stderr_match = .nonempty,
+            .status = 0,
+        },
+        .{
+            .name = "arithmetic expansion error in assignment-only command returns from a function",
+            .script =
+            \\f() { x=$((1/0)); printf bad; }
+            \\f
+            \\printf 'after<%s>\n' "$?"
+            ,
+            .stdout =
+            \\after<1>
+            \\
+            ,
+            .stderr_match = .nonempty,
+            .status = 0,
+        },
     },
 }
