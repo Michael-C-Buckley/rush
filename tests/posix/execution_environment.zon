@@ -48,6 +48,20 @@
             .status = 0,
         },
         .{
+            .name = "command substitution inherits errexit in POSIX mode",
+            .script =
+            \\set -e
+            \\printf '<%s>\n' "$(false; printf survived)"
+            \\printf after
+            ,
+            .stdout =
+            \\<>
+            \\after
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "command substitution inherits aliases but isolates alias mutations",
             .script =
             \\alias parent_alias='printf alias-parent'

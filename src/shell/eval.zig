@@ -301,6 +301,9 @@ pub const ParserTrapActionResolver = struct {
         trapSemanticActionAssert(action, signal, eval_context);
         shell_state.validate();
         std.debug.assert(shell_state.acceptsExecutionTarget(eval_context.target));
+        var lowering_eval_context = eval_context;
+        lowering_eval_context.features = self.features;
+        lowering_eval_context.validate();
 
         const arena = try allocator.create(std.heap.ArenaAllocator);
         errdefer allocator.destroy(arena);
@@ -312,7 +315,7 @@ pub const ParserTrapActionResolver = struct {
             .allocator = arena_allocator,
             .owner = self,
             .shell_state = shell_state,
-            .eval_context = eval_context,
+            .eval_context = lowering_eval_context,
             .signal = signal,
             .local_functions = .empty,
         };
@@ -2502,6 +2505,7 @@ fn evaluateCommandSubstitutionSnapshot(
         error.ReadonlyVariable => unreachable,
     };
     defer substitution_state.deinit();
+    if (evaluator.features.isBash()) substitution_state.options.set(.errexit, false);
 
     return evaluateCommandSubstitutionInState(evaluator, &substitution_state, substitution_context, body, null);
 }
@@ -2733,6 +2737,7 @@ fn runSemanticCommandSubstitution(
         error.ReadonlyVariable => unreachable,
     };
     defer substitution_state.deinit();
+    if (expansion_context.evaluator.features.isBash()) substitution_state.options.set(.errexit, false);
 
     expansion_context.eval_context = substitution_context;
     expansion_context.shell_state = &substitution_state;

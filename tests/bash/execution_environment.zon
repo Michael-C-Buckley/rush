@@ -1,0 +1,20 @@
+.{
+    .name = "Bash execution environment",
+    .mode = .bash,
+    .cases = .{
+        .{
+            .name = "command substitution clears errexit by default",
+            .script =
+            \\set -e
+            \\printf '<%s>\n' "$(false; printf survived)"
+            \\printf after
+            ,
+            .stdout =
+            \\<survived>
+            \\after
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+    },
+}
