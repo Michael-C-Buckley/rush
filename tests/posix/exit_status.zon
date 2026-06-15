@@ -64,5 +64,188 @@
             .stderr = "",
             .status = 126,
         },
+        .{
+            .name = "shell language syntax errors exit without executing later commands",
+            .script =
+            \\if then printf 'bad\n'; fi
+            \\printf 'bad\n'
+            ,
+            .stdout = "",
+            .stderr_match = .nonempty,
+            .status_match = .nonzero,
+        },
+        .{
+            .name = "eval syntax errors exit when the special built-in is executed directly",
+            .script =
+            \\eval 'if then printf bad; fi'; printf 'bad\n'
+            ,
+            .stdout = "",
+            .stderr_match = .nonempty,
+            .status_match = .nonzero,
+        },
+        .{
+            .name = "special built-in utility errors exit when executed directly",
+            .script =
+            \\readonly ro
+            \\unset ro
+            \\printf 'bad\n'
+            ,
+            .stdout = "",
+            .stderr_match = .nonempty,
+            .status_match = .nonzero,
+        },
+        .{
+            .name = "command suppresses shell exit for special built-in utility errors",
+            .script =
+            \\readonly ro
+            \\if command unset ro
+            \\then
+            \\    printf 'bad\n'
+            \\else
+            \\    printf 'after\n'
+            \\fi
+            ,
+            .stdout =
+            \\after
+            \\
+            ,
+            .stderr_match = .nonempty,
+            .status = 0,
+        },
+        .{
+            .name = "redirection errors with special built-ins exit the shell",
+            .script =
+            \\: <missing
+            \\printf 'bad\n'
+            ,
+            .stdout = "",
+            .stderr_match = .nonempty,
+            .status_match = .nonzero,
+        },
+        .{
+            .name = "redirection errors with regular utilities do not exit the shell",
+            .script =
+            \\printf 'bad\n' <missing
+            \\printf 'after\n'
+            ,
+            .stdout =
+            \\after
+            \\
+            ,
+            .stderr_match = .nonempty,
+            .status = 0,
+        },
+        .{
+            .name = "redirection errors with compound commands do not exit the shell",
+            .script =
+            \\{ printf 'bad\n'; } <missing
+            \\printf 'after\n'
+            ,
+            .stdout =
+            \\after
+            \\
+            ,
+            .stderr_match = .nonempty,
+            .status = 0,
+        },
+        .{
+            .name = "redirection errors with function execution do not exit the shell",
+            .script =
+            \\f() { printf 'bad\n'; }
+            \\f <missing
+            \\printf 'after\n'
+            ,
+            .stdout =
+            \\after
+            \\
+            ,
+            .stderr_match = .nonempty,
+            .status = 0,
+        },
+        .{
+            .name = "variable assignment errors exit before utility execution",
+            .script =
+            \\readonly ro; ro=value env; printf 'bad\n'
+            ,
+            .stdout = "",
+            .stderr_match = .nonempty,
+            .status_match = .nonzero,
+        },
+        .{
+            .name = "expansion errors exit without executing later commands",
+            .script =
+            \\unset missing
+            \\printf '%s\n' ${missing:?required}
+            \\printf 'bad\n'
+            ,
+            .stdout = "",
+            .stderr_match = .nonempty,
+            .status_match = .nonzero,
+        },
+        .{
+            .name = "command lookup failures use status 127 and may continue",
+            .script =
+            \\no_such_posix_command_for_rush
+            \\printf 'after:%s\n' "$?"
+            ,
+            .stdout =
+            \\after:127
+            \\
+            ,
+            .stderr_match = .nonempty,
+            .status = 0,
+        },
+        .{
+            .name = "dot-script open errors exit when dot is executed directly",
+            .script =
+            \\. ./missing
+            \\printf 'bad\n'
+            ,
+            .stdout = "",
+            .stderr_match = .nonempty,
+            .status_match = .nonzero,
+        },
+        .{
+            .name = "dot-script parse errors exit when dot is executed directly",
+            .script =
+            \\printf '%s\n' 'if then printf bad; fi' >bad-dot
+            \\. ./bad-dot
+            \\printf 'bad\n'
+            ,
+            .stdout = "",
+            .stderr_match = .nonempty,
+            .status_match = .nonzero,
+        },
+        .{
+            .name = "regular built-in utility errors do not exit the shell",
+            .script =
+            \\cd missing
+            \\printf 'after\n'
+            ,
+            .stdout =
+            \\after
+            \\
+            ,
+            .stderr_match = .nonempty,
+            .status = 0,
+        },
+        .{
+            .name = "shell errors in subshell environments do not exit the parent shell",
+            .script =
+            \\( unset missing; printf '%s\n' ${missing:?required}; printf 'bad\n' )
+            \\if [ "$?" -ne 0 ]
+            \\then
+            \\    printf 'after\n'
+            \\else
+            \\    printf 'bad\n'
+            \\fi
+            ,
+            .stdout =
+            \\after
+            \\
+            ,
+            .stderr_match = .nonempty,
+            .status = 0,
+        },
     },
 }
