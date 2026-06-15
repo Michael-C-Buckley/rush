@@ -56,6 +56,16 @@ pub const ShellShopts = struct {
     }
 };
 
+pub const GetoptsCursor = struct {
+    optind: usize = 1,
+    char_index: usize = 1,
+
+    pub fn validate(self: GetoptsCursor) void {
+        std.debug.assert(self.optind >= 1);
+        std.debug.assert(self.char_index >= 1);
+    }
+};
+
 pub const ShellOptions = struct {
     allexport: bool = false,
     emacs: bool = true,
@@ -434,6 +444,7 @@ pub const ShellState = struct {
     positionals: std.ArrayList([]const u8) = .empty,
     options: ShellOptions = .{},
     shopts: ShellShopts = .{},
+    getopts_cursor: GetoptsCursor = .{},
     logical_cwd: []const u8 = "",
     last_status: ExitStatus = 0,
     last_pipeline_statuses: std.ArrayList(ExitStatus) = .empty,
@@ -513,6 +524,7 @@ pub const ShellState = struct {
         cloned.scope = self.scope;
         cloned.options = self.options;
         cloned.shopts = self.shopts;
+        cloned.getopts_cursor = self.getopts_cursor;
         cloned.last_status = self.last_status;
         cloned.pending_exit = self.pending_exit;
         cloned.trap_execution = self.trap_execution;
@@ -1191,6 +1203,7 @@ pub const ShellState = struct {
             entry.value_ptr.validate();
         }
         for (self.pending_traps.items) |signal| signal.validate();
+        self.getopts_cursor.validate();
         for (self.background_jobs.items) |job| {
             job.validate();
             std.debug.assert(job.id < self.next_job_id);

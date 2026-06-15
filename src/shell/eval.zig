@@ -5543,6 +5543,12 @@ fn evaluateBuiltin(
         plan,
         buffers,
     ));
+    if (std.mem.eql(u8, definition.name, "getopts")) return normalEvaluation(try evaluateGetopts(
+        shell_state,
+        plan.argv,
+        state_delta,
+        buffers,
+    ));
     return error.Unimplemented;
 }
 
@@ -6014,6 +6020,186 @@ fn evaluateHash(
         }
     }
     return status;
+}
+
+fn evaluateGetopts(
+    shell_state: state.ShellState,
+    argv: []const []const u8,
+    state_delta: *delta.StateDelta,
+    buffers: *EvaluationBuffers,
+) !outcome.ExitStatus {
+    std.debug.assert(argv.len != 0);
+    std.debug.assert(std.mem.eql(u8, argv[0], "getopts"));
+    if (argv.len < 3) return builtinUsageError(buffers, "getopts", "missing operand");
+    if (!isShellName(argv[2])) return builtinUsageError(buffers, "getopts", "invalid variable name");
+    if (shell_state.isVariableReadonly(argv[2]) or
+        shell_state.isVariableReadonly("OPTIND") or
+        shell_state.isVariableReadonly("OPTARG")) return builtinUsageError(buffers, "getopts", "readonly variable");
+
+    const optstring = argv[1];
+    const silent = optstring.len != 0 and optstring[0] == ':';
+    const specs = if (silent) optstring[1..] else optstring;
+    const args = if (argv.len > 3) argv[3..] else shell_state.positionals.items;
+    const optind = getoptsOptind(shell_state);
+    var cursor: state.GetoptsCursor = if (shell_state.getopts_cursor.optind == optind)
+        shell_state.getopts_cursor
+    else
+        .{ .optind = optind, .char_index = 1 };
+
+    while (cursor.optind <= args.len) {
+        const arg = args[cursor.optind - 1];
+        if (arg.len < 2 or arg[0] != '-') return getoptsEnd(argv[2], cursor.optind, state_delta);
+        if (std.mem.eql(u8, arg, "--")) return getoptsEnd(argv[2], cursor.optind + 1, state_delta);
+        if (cursor.char_index >= arg.len) {
+            cursor.optind += 1;
+            cursor.char_index = 1;
+            continue;
+        }
+
+        const option = arg[cursor.char_index];
+        const spec_index = optionSpecIndex(specs, option) orelse {
+            return getoptsInvalidOption(argv[2], option, silent, cursor, arg.len, state_delta, buffers);
+        };
+        if (option == ':' or (spec_index + 1 < specs.len and specs[spec_index + 1] == ':')) {
+            return getoptsOptionWithArgument(argv[2], option, silent, cursor, arg, args, state_delta, buffers);
+        }
+        return getoptsOption(argv[2], option, advanceGetoptsCursor(cursor, arg.len), state_delta);
+    }
+    return getoptsEnd(argv[2], cursor.optind, state_delta);
+}
+
+fn getoptsOptind(shell_state: state.ShellState) usize {
+    const value = shell_state.getVariable("OPTIND") orelse return 1;
+    const parsed = std.fmt.parseInt(usize, value.value, 10) catch return 1;
+    return if (parsed == 0) 1 else parsed;
+}
+
+fn optionSpecIndex(specs: []const u8, option: u8) ?usize {
+    var index: usize = 0;
+    while (index < specs.len) : (index += 1) {
+        if (specs[index] == ':') continue;
+        if (specs[index] == option) return index;
+    }
+    return null;
+}
+
+fn advanceGetoptsCursor(cursor: state.GetoptsCursor, arg_len: usize) state.GetoptsCursor {
+    std.debug.assert(cursor.char_index < arg_len);
+    if (cursor.char_index + 1 < arg_len) return .{
+        .optind = cursor.optind,
+        .char_index = cursor.char_index + 1,
+    };
+    return .{ .optind = cursor.optind + 1, .char_index = 1 };
+}
+
+fn getoptsOption(
+    name: []const u8,
+    option: u8,
+    cursor: state.GetoptsCursor,
+    state_delta: *delta.StateDelta,
+) !outcome.ExitStatus {
+    const value = [_]u8{option};
+    try state_delta.assignVariable(name, &value, .{});
+    try state_delta.unsetVariable("OPTARG");
+    try assignOptind(state_delta, cursor.optind);
+    state_delta.setGetoptsCursor(cursor);
+    return 0;
+}
+
+fn getoptsOptionWithArgument(
+    name: []const u8,
+    option: u8,
+    silent: bool,
+    cursor: state.GetoptsCursor,
+    arg: []const u8,
+    args: []const []const u8,
+    state_delta: *delta.StateDelta,
+    buffers: *EvaluationBuffers,
+) !outcome.ExitStatus {
+    if (cursor.char_index + 1 < arg.len) {
+        const next_cursor: state.GetoptsCursor = .{ .optind = cursor.optind + 1, .char_index = 1 };
+        try assignGetoptsResult(name, option, arg[cursor.char_index + 1 ..], next_cursor, state_delta);
+        return 0;
+    }
+    if (cursor.optind < args.len) {
+        const next_cursor: state.GetoptsCursor = .{ .optind = cursor.optind + 2, .char_index = 1 };
+        try assignGetoptsResult(name, option, args[cursor.optind], next_cursor, state_delta);
+        return 0;
+    }
+    if (silent) {
+        const option_value = [_]u8{option};
+        try assignGetoptsResult(
+            name,
+            ':',
+            &option_value,
+            .{ .optind = cursor.optind + 1, .char_index = 1 },
+            state_delta,
+        );
+        return 0;
+    }
+    try buffers.addBuiltinDiagnostic("getopts", "option requires an argument");
+    return getoptsQuestion(name, .{ .optind = cursor.optind + 1, .char_index = 1 }, state_delta);
+}
+
+fn assignGetoptsResult(
+    name: []const u8,
+    option: u8,
+    optarg: []const u8,
+    cursor: state.GetoptsCursor,
+    state_delta: *delta.StateDelta,
+) !void {
+    const value = [_]u8{option};
+    try state_delta.assignVariable(name, &value, .{});
+    try state_delta.assignVariable("OPTARG", optarg, .{});
+    try assignOptind(state_delta, cursor.optind);
+    state_delta.setGetoptsCursor(cursor);
+}
+
+fn getoptsInvalidOption(
+    name: []const u8,
+    option: u8,
+    silent: bool,
+    cursor: state.GetoptsCursor,
+    arg_len: usize,
+    state_delta: *delta.StateDelta,
+    buffers: *EvaluationBuffers,
+) !outcome.ExitStatus {
+    const next_cursor = advanceGetoptsCursor(cursor, arg_len);
+    if (silent) {
+        const option_value = [_]u8{option};
+        try assignGetoptsResult(name, '?', &option_value, next_cursor, state_delta);
+        return 0;
+    }
+    try buffers.addBuiltinDiagnostic("getopts", "invalid option");
+    return getoptsQuestion(name, next_cursor, state_delta);
+}
+
+fn getoptsQuestion(
+    name: []const u8,
+    cursor: state.GetoptsCursor,
+    state_delta: *delta.StateDelta,
+) !outcome.ExitStatus {
+    const question = [_]u8{'?'};
+    try state_delta.assignVariable(name, &question, .{});
+    try state_delta.unsetVariable("OPTARG");
+    try assignOptind(state_delta, cursor.optind);
+    state_delta.setGetoptsCursor(cursor);
+    return 0;
+}
+
+fn getoptsEnd(name: []const u8, optind: usize, state_delta: *delta.StateDelta) !outcome.ExitStatus {
+    const question = [_]u8{'?'};
+    try state_delta.assignVariable(name, &question, .{});
+    try state_delta.unsetVariable("OPTARG");
+    try assignOptind(state_delta, optind);
+    state_delta.setGetoptsCursor(.{ .optind = optind, .char_index = 1 });
+    return 1;
+}
+
+fn assignOptind(state_delta: *delta.StateDelta, optind: usize) !void {
+    const value = try std.fmt.allocPrint(state_delta.allocator, "{d}", .{optind});
+    defer state_delta.allocator.free(value);
+    try state_delta.assignVariable("OPTIND", value, .{});
 }
 
 fn evaluateCommandBuiltin(
@@ -9344,6 +9530,83 @@ test "semantic evaluator evaluates hash through command search" {
     defer option_result.deinit();
     try std.testing.expectEqual(@as(outcome.ExitStatus, 2), option_result.status);
     try std.testing.expectEqualStrings("hash: unsupported option\n", option_result.stderr.items);
+}
+
+test "semantic evaluator evaluates getopts over positional parameters" {
+    var shell_state = state.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    try shell_state.replacePositionals(&.{ "-ab", "-c", "value", "rest" });
+    var evaluator = Evaluator.init(std.testing.allocator);
+    const eval_context = context.EvalContext.forTarget(.current_shell);
+
+    const first_plan = command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{
+        "getopts",
+        "abc:",
+        "opt",
+    } } });
+    var first = try evaluatePlan(&evaluator, &shell_state, eval_context, first_plan);
+    defer first.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 0), first.status);
+    try first.commitDelta(&shell_state, .current_shell);
+    try std.testing.expectEqualStrings("a", shell_state.getVariable("opt").?.value);
+    try std.testing.expectEqualStrings("1", shell_state.getVariable("OPTIND").?.value);
+
+    var second = try evaluatePlan(&evaluator, &shell_state, eval_context, first_plan);
+    defer second.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 0), second.status);
+    try second.commitDelta(&shell_state, .current_shell);
+    try std.testing.expectEqualStrings("b", shell_state.getVariable("opt").?.value);
+    try std.testing.expectEqualStrings("2", shell_state.getVariable("OPTIND").?.value);
+
+    var third = try evaluatePlan(&evaluator, &shell_state, eval_context, first_plan);
+    defer third.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 0), third.status);
+    try third.commitDelta(&shell_state, .current_shell);
+    try std.testing.expectEqualStrings("c", shell_state.getVariable("opt").?.value);
+    try std.testing.expectEqualStrings("value", shell_state.getVariable("OPTARG").?.value);
+    try std.testing.expectEqualStrings("4", shell_state.getVariable("OPTIND").?.value);
+
+    var end = try evaluatePlan(&evaluator, &shell_state, eval_context, first_plan);
+    defer end.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 1), end.status);
+    try end.commitDelta(&shell_state, .current_shell);
+    try std.testing.expectEqualStrings("?", shell_state.getVariable("opt").?.value);
+    try std.testing.expectEqualStrings("4", shell_state.getVariable("OPTIND").?.value);
+}
+
+test "semantic evaluator evaluates getopts diagnostics and silent mode" {
+    var shell_state = state.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    var evaluator = Evaluator.init(std.testing.allocator);
+    const eval_context = context.EvalContext.forTarget(.current_shell);
+
+    const invalid_plan = command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{
+        "getopts",
+        "a",
+        "opt",
+        "-x",
+    } } });
+    var invalid = try evaluatePlan(&evaluator, &shell_state, eval_context, invalid_plan);
+    defer invalid.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 0), invalid.status);
+    try std.testing.expectEqualStrings("getopts: invalid option\n", invalid.stderr.items);
+    try invalid.commitDelta(&shell_state, .current_shell);
+    try std.testing.expectEqualStrings("?", shell_state.getVariable("opt").?.value);
+
+    try shell_state.putVariable("OPTIND", "1", .{});
+    const silent_plan = command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{
+        "getopts",
+        ":a:",
+        "opt",
+        "-a",
+    } } });
+    var silent = try evaluatePlan(&evaluator, &shell_state, eval_context, silent_plan);
+    defer silent.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 0), silent.status);
+    try std.testing.expectEqualStrings("", silent.stderr.items);
+    try silent.commitDelta(&shell_state, .current_shell);
+    try std.testing.expectEqualStrings(":", shell_state.getVariable("opt").?.value);
+    try std.testing.expectEqualStrings("a", shell_state.getVariable("OPTARG").?.value);
 }
 
 test "semantic evaluator dispatches shopt as a compat extension builtin" {

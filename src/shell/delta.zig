@@ -88,6 +88,7 @@ pub const StateDelta = struct {
     clear_pending_exit: bool = false,
     positionals: ?[][]const u8 = null,
     logical_cwd: ?[]const u8 = null,
+    getopts_cursor: ?state.GetoptsCursor = null,
     last_status: ?state.ExitStatus = null,
     last_pipeline_statuses: ?[]state.ExitStatus = null,
     background_jobs: std.ArrayList(state.BackgroundJob) = .empty,
@@ -196,6 +197,7 @@ pub const StateDelta = struct {
         if (self.clear_pending_exit) cloned.clearPendingExit();
         if (self.positionals) |args| try cloned.replacePositionals(args);
         if (self.logical_cwd) |cwd| try cloned.setLogicalCwd(cwd);
+        if (self.getopts_cursor) |cursor| cloned.setGetoptsCursor(cursor);
         if (self.last_status) |status| cloned.setLastStatus(status);
         if (self.last_pipeline_statuses) |statuses| try cloned.setLastPipelineStatuses(statuses);
         for (self.background_jobs.items) |job| try cloned.appendBackgroundJob(job);
@@ -230,6 +232,7 @@ pub const StateDelta = struct {
             !self.clear_pending_exit and
             self.positionals == null and
             self.logical_cwd == null and
+            self.getopts_cursor == null and
             self.last_status == null and
             self.last_pipeline_statuses == null and
             self.background_jobs.items.len == 0 and
@@ -527,6 +530,12 @@ pub const StateDelta = struct {
         self.logical_cwd = try self.allocator.dupe(u8, cwd);
     }
 
+    pub fn setGetoptsCursor(self: *StateDelta, cursor: state.GetoptsCursor) void {
+        self.assertPending();
+        cursor.validate();
+        self.getopts_cursor = cursor;
+    }
+
     pub fn setLastStatus(self: *StateDelta, status: state.ExitStatus) void {
         self.assertPending();
         std.debug.assert(self.last_status == null);
@@ -675,6 +684,7 @@ pub const StateDelta = struct {
         if (self.pending_exit) |status| shell_state.setPendingExit(status);
         if (self.positionals) |args| try shell_state.replacePositionals(args);
         if (self.logical_cwd) |cwd| try shell_state.setLogicalCwd(cwd);
+        if (self.getopts_cursor) |cursor| shell_state.getopts_cursor = cursor;
         if (self.last_status) |status| shell_state.last_status = status;
         if (self.last_pipeline_statuses) |statuses| try shell_state.setLastPipelineStatuses(statuses);
         for (self.background_jobs.items) |job| try shell_state.appendBackgroundJob(job);
