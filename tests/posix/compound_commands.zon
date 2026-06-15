@@ -228,6 +228,54 @@
             .status = 1,
         },
         .{
+            .name = "for command iterates explicit in list in order",
+            .script =
+            \\for x in first second third
+            \\do
+            \\    printf '<%s>\n' "$x"
+            \\done
+            ,
+            .stdout =
+            \\<first>
+            \\<second>
+            \\<third>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "for command without in list iterates positional parameters as quoted fields",
+            .script =
+            \\set -- 'a b' '' c
+            \\for x
+            \\do
+            \\    printf '<%s>\n' "$x"
+            \\done
+            ,
+            .stdout =
+            \\<a b>
+            \\<>
+            \\<c>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "for command without in list runs zero times when there are no positional parameters",
+            .script =
+            \\set --
+            \\for x
+            \\do
+            \\    printf 'bad\n'
+            \\done
+            ,
+            .stdout = "",
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "for command status is zero when there are no items",
             .script =
             \\for x in
@@ -236,6 +284,158 @@
             \\done
             ,
             .stdout = "",
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "for command empty in list does not change variable",
+            .script =
+            \\x=old
+            \\for x in
+            \\do
+            \\    x=bad
+            \\done
+            \\printf '%s\n' "$x"
+            ,
+            .stdout =
+            \\old
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "for command leaves variable set to last iterated item",
+            .script =
+            \\for x in a b
+            \\do
+            \\    :
+            \\done
+            \\printf '%s\n' "$x"
+            ,
+            .stdout =
+            \\b
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "for command expands list before executing loop body",
+            .script =
+            \\value=before
+            \\for x in "$value" "$value"
+            \\do
+            \\    printf '%s\n' "$x"
+            \\    value=after
+            \\done
+            ,
+            .stdout =
+            \\before
+            \\before
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "for command accepts semicolon separator before do",
+            .script =
+            \\for x in ok; do
+            \\    printf '%s\n' "$x"
+            \\done
+            ,
+            .stdout =
+            \\ok
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "for command accepts newline separator before do",
+            .script =
+            \\for x in ok
+            \\do
+            \\    printf '%s\n' "$x"
+            \\done
+            ,
+            .stdout =
+            \\ok
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "for command break exits the loop",
+            .script =
+            \\for x in a b c
+            \\do
+            \\    test "$x" = b && break
+            \\    printf '%s\n' "$x"
+            \\done
+            ,
+            .stdout =
+            \\a
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "for command continue proceeds to the next item",
+            .script =
+            \\for x in a b c
+            \\do
+            \\    test "$x" = b && continue
+            \\    printf '%s\n' "$x"
+            \\done
+            ,
+            .stdout =
+            \\a
+            \\c
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "for command break exits the requested enclosing loop depth",
+            .script =
+            \\for outer in one two
+            \\do
+            \\    for inner in a b
+            \\    do
+            \\        printf '%s:%s\n' "$outer" "$inner"
+            \\        break 2
+            \\    done
+            \\done
+            ,
+            .stdout =
+            \\one:a
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "for command continue proceeds at the requested enclosing loop depth",
+            .script =
+            \\for outer in one two
+            \\do
+            \\    for inner in a b
+            \\    do
+            \\        printf '%s:%s\n' "$outer" "$inner"
+            \\        continue 2
+            \\    done
+            \\done
+            ,
+            .stdout =
+            \\one:a
+            \\two:a
+            \\
+            ,
             .stderr = "",
             .status = 0,
         },
