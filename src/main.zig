@@ -151,6 +151,7 @@ fn runShellInvocationWithEnvironment(
 ) !CommandResult {
     var loaded_script = try runner.loadInvocationScript(allocator, io, invocation, external_stdio);
     defer loaded_script.deinit();
+    loaded_script.options.live_stdio = external_stdio == .inherit;
     const interactive_options: ?InteractiveOptions = if (invocation.interactive) .{
         .arg_zero = invocation.arg_zero,
         .login = login_shell,

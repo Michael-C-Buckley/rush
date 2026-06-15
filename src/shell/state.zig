@@ -567,6 +567,8 @@ pub const ShellState = struct {
 
     pub fn snapshotForSubshell(self: *const ShellState, allocator: std.mem.Allocator) !ShellState {
         var snapshot = try self.clone(allocator);
+        errdefer snapshot.deinit();
+        try snapshot.clearCaughtTrapsForSubshell();
         snapshot.clearBackgroundJobs();
         snapshot.next_job_id = 1;
         snapshot.current_job_id = null;
@@ -576,6 +578,19 @@ pub const ShellState = struct {
         snapshot.scope = .subshell;
         snapshot.validate();
         return snapshot;
+    }
+
+    fn clearCaughtTrapsForSubshell(self: *ShellState) !void {
+        self.validate();
+        var caught: std.ArrayList([]const u8) = .empty;
+        defer caught.deinit(self.allocator);
+
+        var traps = self.traps.iterator();
+        while (traps.next()) |entry| {
+            if (entry.value_ptr.kind() == .command) try caught.append(self.allocator, entry.key_ptr.*);
+        }
+        for (caught.items) |name| self.clearTrap(name);
+        self.validate();
     }
 
     pub fn acceptsExecutionTarget(self: ShellState, target: context.ExecutionTarget) bool {

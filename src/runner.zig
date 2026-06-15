@@ -15,6 +15,7 @@ pub const Options = struct {
     allow_external: bool = true,
     features: compat.Features = .{},
     external_stdio: runtime.ExternalStdio = .capture,
+    live_stdio: bool = false,
     interactive: bool = false,
     arg_zero: []const u8 = "rush",
     source_path: ?[]const u8 = null,
@@ -136,12 +137,13 @@ pub fn runCommandStringWithEnvironment(
     if (invocation.interactive or !options.allow_external) {
         return unsupported(allocator, "non-interactive command strings must run through the semantic executor");
     }
-    var execution = try runSemanticCommandString(
+    var execution = try runSemanticCommandStringInternal(
         allocator,
         io,
         script,
         invocation,
         options.external_stdio,
+        options.live_stdio,
         environ_map,
         positionals,
         shell_options,
@@ -182,6 +184,30 @@ pub fn runSemanticCommandString(
     positionals: []const []const u8,
     shell_options: shell.ShellOptions,
 ) !SemanticInvocationExecution {
+    return runSemanticCommandStringInternal(
+        allocator,
+        io,
+        script,
+        invocation,
+        external_stdio,
+        false,
+        environ_map,
+        positionals,
+        shell_options,
+    );
+}
+
+fn runSemanticCommandStringInternal(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    script: []const u8,
+    invocation: shell.InvocationContext,
+    external_stdio: runtime.ExternalStdio,
+    live_stdio: bool,
+    environ_map: ?*const std.process.Environ.Map,
+    positionals: []const []const u8,
+    shell_options: shell.ShellOptions,
+) !SemanticInvocationExecution {
     assertSemanticStartupOptions(script, invocation, positionals);
 
     if (shell_options.noexec or
@@ -209,6 +235,7 @@ pub fn runSemanticCommandString(
             script,
             invocation,
             external_stdio,
+            live_stdio,
             environ_map,
             positionals,
             shell_options,
@@ -238,6 +265,7 @@ pub fn runSemanticCommandString(
     evaluator.io = io;
     evaluator.read_stdin_from_fd = true;
     evaluator.external_stdio = external_stdio;
+    evaluator.commit_exec_redirections = live_stdio and external_stdio == .inherit;
     var parser_resolver = shell.ParserTrapActionResolver.init(&evaluator);
     parser_resolver.features = invocation.features;
     parser_resolver.arg_zero = invocation.arg_zero;
@@ -264,6 +292,7 @@ fn runSemanticAliasTimingCommandString(
     script: []const u8,
     invocation: shell.InvocationContext,
     external_stdio: runtime.ExternalStdio,
+    live_stdio: bool,
     environ_map: ?*const std.process.Environ.Map,
     positionals: []const []const u8,
     shell_options: shell.ShellOptions,
@@ -279,6 +308,7 @@ fn runSemanticAliasTimingCommandString(
     evaluator.io = io;
     evaluator.read_stdin_from_fd = true;
     evaluator.external_stdio = external_stdio;
+    evaluator.commit_exec_redirections = live_stdio and external_stdio == .inherit;
     var parser_resolver = shell.ParserTrapActionResolver.init(&evaluator);
     parser_resolver.features = invocation.features;
     parser_resolver.arg_zero = invocation.arg_zero;
@@ -723,8 +753,14 @@ fn runSemanticLoweredProgram(
         defer command_outcome.deinit();
 
         command_outcome.validateForContext(eval_context);
-        try accumulated_stdout.appendSlice(allocator, command_outcome.stdout.items);
-        try accumulated_stderr.appendSlice(allocator, command_outcome.stderr.items);
+        try appendOrWriteOutput(
+            allocator,
+            evaluator.*,
+            &accumulated_stdout,
+            &accumulated_stderr,
+            command_outcome.stdout.items,
+            command_outcome.stderr.items,
+        );
         status = command_outcome.status;
         control_flow = command_outcome.control_flow;
         try command_outcome.applyToShellState(shell_state, .{ .record_exit_control_flow = true });
@@ -813,8 +849,14 @@ fn appendPendingRuntimeTrapOutcome(
         resolver,
     )) orelse return;
     defer trap_outcome.deinit();
-    try stdout.appendSlice(allocator, trap_outcome.stdout.items);
-    try stderr.appendSlice(allocator, trap_outcome.stderr.items);
+    try appendOrWriteOutput(
+        allocator,
+        evaluator.*,
+        stdout,
+        stderr,
+        trap_outcome.stdout.items,
+        trap_outcome.stderr.items,
+    );
     status.* = trap_outcome.status;
     control_flow.* = trap_outcome.control_flow;
     try trap_outcome.applyToShellState(shell_state, .{ .record_exit_control_flow = true });
@@ -906,8 +948,14 @@ fn appendSemanticExitTrap(
         resolver,
     )) orelse return;
     defer trap_outcome.deinit();
-    try stdout.appendSlice(allocator, trap_outcome.stdout.items);
-    try stderr.appendSlice(allocator, trap_outcome.stderr.items);
+    try appendOrWriteOutput(
+        allocator,
+        evaluator.*,
+        stdout,
+        stderr,
+        trap_outcome.stdout.items,
+        trap_outcome.stderr.items,
+    );
     status.* = trap_outcome.status;
     try trap_outcome.applyToShellState(shell_state, .{});
 }
@@ -1390,6 +1438,24 @@ fn flushAccumulatedOutput(stdout: *std.ArrayList(u8), stderr: *std.ArrayList(u8)
         if (!writeAllDescriptor(2, stderr.items)) return error.Unimplemented;
         stderr.items.len = 0;
     }
+}
+
+fn appendOrWriteOutput(
+    allocator: std.mem.Allocator,
+    evaluator: shell.eval.Evaluator,
+    stdout: *std.ArrayList(u8),
+    stderr: *std.ArrayList(u8),
+    stdout_bytes: []const u8,
+    stderr_bytes: []const u8,
+) !void {
+    if (evaluator.commit_exec_redirections) {
+        if (stdout_bytes.len != 0 and !writeAllDescriptor(1, stdout_bytes)) return error.Unimplemented;
+        if (stderr_bytes.len != 0 and !writeAllDescriptor(2, stderr_bytes)) return error.Unimplemented;
+        return;
+    }
+
+    try stdout.appendSlice(allocator, stdout_bytes);
+    try stderr.appendSlice(allocator, stderr_bytes);
 }
 
 fn writeAllDescriptor(descriptor: runtime.fd.Descriptor, bytes: []const u8) bool {

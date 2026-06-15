@@ -60,6 +60,7 @@ pub const Evaluator = struct {
     io: ?std.Io = null,
     read_stdin_from_fd: bool = false,
     external_stdio: ExternalStdio = .inherit,
+    commit_exec_redirections: bool = false,
     builtin_definitions: []const builtin.Builtin = default_builtins.default_registry,
     extension_handler_context: ?*anyopaque = null,
     extension_handler_lookup: ?*const fn (?*anyopaque, []const u8) ?extension_api.HandlerSpec = null,
@@ -1233,13 +1234,18 @@ const TrapActionLowerer = struct {
         target: context.ExecutionTarget,
     ) !HereDocLowering {
         const expansion_target = self.expansionTarget(target);
+        const expansion_eval_context = self.eval_context.withTarget(expansion_target);
         var process_id_buffer: [32]u8 = undefined;
         var last_background_pid_buffer: [32]u8 = undefined;
+        var command_substitutions: TrapActionExpansionCommandSubstitutions = .{};
+        command_substitutions.init(self, expansion_eval_context);
+        defer command_substitutions.deinit();
         var expansion = shell_expand.ShellExpansion.init(self.allocator, .{
             .shell_state = self.shell_state,
-            .eval_context = self.eval_context.withTarget(expansion_target),
+            .eval_context = expansion_eval_context,
             .fs_port = self.owner.evaluator.fs_port,
             .features = self.owner.features,
+            .command_substitution = command_substitutions.commandSubstitution(),
             .arg_zero = self.owner.arg_zero,
             .process_id = self.processIdText(&process_id_buffer),
             .last_background_pid = self.lastBackgroundPidText(&last_background_pid_buffer),
@@ -1940,6 +1946,9 @@ fn evaluatePlanWithInput(
         else => eval_context,
     };
     const result = try evaluateSimpleCommand(evaluator, shell_state, command_context, plan, &state_delta, &buffers);
+    if (execCommitsRedirections(evaluator.*, plan, result)) {
+        if (applied_redirections) |*applied| applied.commit();
+    }
     if (applied_redirections != null and plan.class() != .external and plan.class() != .function) {
         if (redirectionTargetsDescriptor(plan.redirections, 1)) {
             if (!writeAllDescriptor(1, buffers.stdout.items)) return error.Unimplemented;
@@ -1976,6 +1985,16 @@ fn evaluatePlanWithInput(
     try appendBuiltinDiagnostic(&command_outcome, plan, result.status);
     command_outcome.validateForContext(eval_context);
     return command_outcome;
+}
+
+fn execCommitsRedirections(evaluator: Evaluator, plan: command_plan.CommandPlan, result: SimpleEvalResult) bool {
+    plan.validate();
+    result.control_flow.validate();
+    if (!evaluator.commit_exec_redirections) return false;
+    if (evaluator.external_stdio != .inherit) return false;
+    if (result.status != 0 or result.control_flow != .normal) return false;
+    if (plan.argv.len != 1) return false;
+    return std.mem.eql(u8, plan.argv[0], "exec");
 }
 
 fn specialBuiltinStatusOnly(
@@ -2072,7 +2091,7 @@ fn evaluateCompoundPlanWithInput(
     defer working_state.deinit();
 
     var result = try evaluateCompoundBody(evaluator, &working_state, eval_context, plan.body, &buffers);
-    if (plan.target == .subshell and
+    if (plan.body == .subshell and
         (eval_context.command_substitution_depth == 0 or eval_context.subshell_depth != 0))
     {
         try appendSubshellExitTrap(

@@ -107,6 +107,23 @@
             .status = 0,
         },
         .{
+            .name = "exec redirections persist until explicitly restored",
+            .script =
+            \\exec 3>&1 >out
+            \\printf 'file\n'
+            \\printf 'fd3\n' >&3
+            \\exec >&3 3>&-
+            \\printf 'cat:<%s>\n' "$(cat out)"
+            ,
+            .stdout =
+            \\fd3
+            \\cat:<file>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "readonly assigns a variable value",
             .script =
             \\readonly ro=value

@@ -155,6 +155,22 @@
             .status = 0,
         },
         .{
+            .name = "command substitution resets caught EXIT traps inherited from the parent",
+            .script =
+            \\trap 'printf "parent\n"' EXIT
+            \\printf '<%s>\n' "$( : )"
+            \\printf 'after\n'
+            ,
+            .stdout =
+            \\<>
+            \\after
+            \\parent
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "brace group redirection does not isolate variable mutations",
             .script =
             \\x=outer

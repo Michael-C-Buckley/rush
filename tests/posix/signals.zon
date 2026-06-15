@@ -58,6 +58,36 @@
             .status = 0,
         },
         .{
+            .name = "subshells reset caught EXIT traps inherited from the parent",
+            .script =
+            \\trap 'printf "parent\n"' EXIT
+            \\( : )
+            \\printf 'after\n'
+            ,
+            .stdout =
+            \\after
+            \\parent
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "subshell EXIT trap action mutates only the subshell environment",
+            .script =
+            \\x=outer
+            \\( trap 'x=inner; printf "trap:%s\n" "$x"' EXIT; : )
+            \\printf 'x:%s\n' "$x"
+            ,
+            .stdout =
+            \\trap:inner
+            \\x:outer
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "trap dash resets the EXIT trap to its default action",
             .script =
             \\trap 'printf "%s\n" bad' 0
