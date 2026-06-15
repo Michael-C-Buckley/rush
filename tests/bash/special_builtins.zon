@@ -74,6 +74,35 @@
             .status = 0,
         },
         .{
+            .name = "readonly assignment-only error in if condition skips the compound body",
+            .script =
+            \\command readonly R=old
+            \\if R=new; then printf then; else printf else; fi
+            \\printf 'after<%s>\n' "$?"
+            ,
+            .stdout =
+            \\after<1>
+            \\
+            ,
+            .stderr_match = .nonempty,
+            .status = 0,
+        },
+        .{
+            .name = "readonly assignment-only error in while condition preserves condition status",
+            .script =
+            \\command readonly R=old
+            \\i=0
+            \\while R=new; do i=$((i + 1)); done
+            \\printf 'i=<%s> after<%s>\n' "$i" "$?"
+            ,
+            .stdout =
+            \\i=<0> after<1>
+            \\
+            ,
+            .stderr_match = .nonempty,
+            .status = 0,
+        },
+        .{
             .name = "readonly assignment-only error returns from a function",
             .script =
             \\f() { command readonly R=old; R=new; printf bad; }
@@ -82,6 +111,46 @@
             ,
             .stdout =
             \\after<1>
+            \\
+            ,
+            .stderr_match = .nonempty,
+            .status = 0,
+        },
+        .{
+            .name = "readonly applies operands left to right before duplicate readonly failure",
+            .script =
+            \\readonly A=1 A=2
+            \\printf 'A=<%s> status=<%s>\n' "$A" "$?"
+            ,
+            .stdout =
+            \\A=<1> status=<1>
+            \\
+            ,
+            .stderr_match = .nonempty,
+            .status = 0,
+        },
+        .{
+            .name = "eval parse error does not exit by default",
+            .script =
+            \\eval 'if true; then'
+            \\printf 'after<%s>\n' "$?"
+            ,
+            .stdout =
+            \\after<2>
+            \\
+            ,
+            .stderr_match = .nonempty,
+            .status = 0,
+        },
+        .{
+            .name = "dot script parse error does not exit by default",
+            .script =
+            \\printf 'if true; then\n' >f
+            \\. ./f
+            \\printf 'after<%s>\n' "$?"
+            ,
+            .stdout =
+            \\after<2>
             \\
             ,
             .stderr_match = .nonempty,
@@ -98,6 +167,21 @@
             .stdout = "",
             .stderr_match = .nonempty,
             .status = 1,
+        },
+        .{
+            .name = "local readonly failure returns status one",
+            .script =
+            \\f() { readonly x; local x=1; printf 'inside=<%s>\n' "$?"; }
+            \\f
+            \\printf 'after=<%s>\n' "$?"
+            ,
+            .stdout =
+            \\inside=<1>
+            \\after=<0>
+            \\
+            ,
+            .stderr_match = .nonempty,
+            .status = 0,
         },
     },
 }

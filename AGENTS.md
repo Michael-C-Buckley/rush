@@ -21,6 +21,13 @@ zig build test
 zig build compile-check
 ```
 
+## POSIX Conformance Target
+
+Rush `--posix` targets POSIX.1-2024 / Issue 8 unless a test or code comment
+explicitly documents a deliberate compatibility choice. When checking shell
+language requirements, prefer the Issue 8 text at `pubs.opengroup.org` over
+older Issue 7 / POSIX.1-2017 references.
+
 ## Current Zig Patterns
 
 **ArrayList:**

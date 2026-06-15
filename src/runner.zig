@@ -893,7 +893,7 @@ fn runSemanticLoweredProgram(
         );
         status = command_outcome.status;
         control_flow = command_outcome.control_flow;
-        if (bashReadonlyAssignmentOnlyAbortsSourceLine(eval_context.features, statement_script, command_outcome)) {
+        if (bashAssignmentErrorAbortsSourceLine(eval_context.features, statement_script, command_outcome)) {
             abort_bash_line = semanticSourceLine(script, statement.span.start);
         }
         try command_outcome.applyToShellState(shell_state, .{ .record_exit_control_flow = true });
@@ -945,7 +945,7 @@ fn semanticSourceLine(source: []const u8, offset: usize) usize {
     return line;
 }
 
-fn bashReadonlyAssignmentOnlyAbortsSourceLine(
+fn bashAssignmentErrorAbortsSourceLine(
     features: compat.Features,
     statement_script: []const u8,
     command_outcome: shell.CommandOutcome,
@@ -956,8 +956,10 @@ fn bashReadonlyAssignmentOnlyAbortsSourceLine(
     if (command_outcome.status != 1 or command_outcome.control_flow != .normal) return false;
     for (command_outcome.diagnostics.items) |diagnostic| {
         if (std.mem.endsWith(u8, diagnostic.message, ": readonly variable")) return true;
+        if (std.mem.indexOf(u8, diagnostic.message, "expansion error: arithmetic:") != null) return true;
     }
-    return std.mem.endsWith(u8, command_outcome.stderr.items, ": readonly variable\n");
+    return std.mem.endsWith(u8, command_outcome.stderr.items, ": readonly variable\n") or
+        std.mem.indexOf(u8, command_outcome.stderr.items, "expansion error: arithmetic:") != null;
 }
 
 fn configureRuntimeTrapMutations(
@@ -1580,7 +1582,16 @@ fn semanticBodyIsStoppingFailure(body: shell.TrapActionBody, features: compat.Fe
 
 fn semanticFailureStopsProgram(failure: shell.TrapActionFailure, features: compat.Features) bool {
     failure.validate();
-    return !(features.isBash() and failure.kind == .expansion_error and failure.bash_assignment_only_expansion);
+    if (features.isBash() and
+        failure.kind == .parse_error and
+        failure.status == 1 and
+        std.mem.endsWith(u8, failure.message, ": not a valid identifier"))
+    {
+        return false;
+    }
+    return !(features.isBash() and
+        failure.kind == .expansion_error and
+        failure.bash_arithmetic_assignment_only_expansion);
 }
 
 fn semanticBodyUsesInheritedExternal(body: shell.TrapActionBody) bool {

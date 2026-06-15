@@ -110,6 +110,17 @@
             .status = 0,
         },
         .{
+            .name = "for clause rejects a non-name loop variable",
+            .script =
+            \\name=
+            \\for $name in a; do printf bad; done
+            \\printf bad
+            ,
+            .stdout = "",
+            .stderr_match = .nonempty,
+            .status = 2,
+        },
+        .{
             .name = "case patterns can be separated by vertical bars",
             .script =
             \\case b in

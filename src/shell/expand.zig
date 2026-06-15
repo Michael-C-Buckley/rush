@@ -744,6 +744,7 @@ fn renderArithmetic(
         options.env,
         options.env_set,
         options.features,
+        options.nounset,
     ) catch |err| return arithmeticExpansionFailed(allocator, source, err, options);
     return std.fmt.allocPrint(allocator, "{d}", .{value});
 }
@@ -1984,6 +1985,7 @@ fn evaluateArrayIndexValue(allocator: std.mem.Allocator, index_text: []const u8,
         options.env,
         options.env_set,
         options.features,
+        options.nounset,
     ) catch |err| return arithmeticExpansionFailed(allocator, index_text, err, options);
 }
 
@@ -3342,6 +3344,7 @@ const ArithmeticParser = struct {
     env: EnvLookup = .{},
     env_set: EnvSet = .{},
     features: compat.Features = .{},
+    nounset: bool = false,
     recursion_depth: u8 = 0,
     index: usize = 0,
     mode: EvaluationMode = .evaluate,
@@ -3670,7 +3673,10 @@ const ArithmeticParser = struct {
     }
 
     fn lookupNumber(self: ArithmeticParser, name: []const u8) !i64 {
-        const value = self.env.get(name) orelse return 0;
+        const value = self.env.get(name) orelse {
+            if (self.features.isBash() and self.nounset) return error.NounsetParameter;
+            return 0;
+        };
         const trimmed = std.mem.trim(u8, value, " \t");
         if (trimmed.len == 0) return 0;
         if (self.features.isBash()) return evalArithmeticRecursive(
@@ -3678,6 +3684,7 @@ const ArithmeticParser = struct {
             self.env,
             self.env_set,
             self.features,
+            self.nounset,
             self.recursion_depth + 1,
         );
         return parseIntegerConstant(trimmed);
@@ -3832,7 +3839,7 @@ fn parseSignedIntegerConstant(rest: []const u8, negative: bool) error{ InvalidAr
 }
 
 pub fn evalArithmetic(input: []const u8, env: EnvLookup, env_set: EnvSet) anyerror!i64 {
-    return evalArithmeticWithFeatures(input, env, env_set, .{});
+    return evalArithmeticWithFeatures(input, env, env_set, .{}, false);
 }
 
 pub fn evalArithmeticWithFeatures(
@@ -3840,8 +3847,9 @@ pub fn evalArithmeticWithFeatures(
     env: EnvLookup,
     env_set: EnvSet,
     features: compat.Features,
+    nounset: bool,
 ) anyerror!i64 {
-    return evalArithmeticRecursive(input, env, env_set, features, 0);
+    return evalArithmeticRecursive(input, env, env_set, features, nounset, 0);
 }
 
 fn evalArithmeticRecursive(
@@ -3849,6 +3857,7 @@ fn evalArithmeticRecursive(
     env: EnvLookup,
     env_set: EnvSet,
     features: compat.Features,
+    nounset: bool,
     recursion_depth: u8,
 ) anyerror!i64 {
     if (recursion_depth > 32) return error.InvalidArithmetic;
@@ -3857,6 +3866,7 @@ fn evalArithmeticRecursive(
         .env = env,
         .env_set = env_set,
         .features = features,
+        .nounset = nounset,
         .recursion_depth = recursion_depth,
     };
     return arithmetic_parser.parse();

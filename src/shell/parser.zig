@@ -2935,9 +2935,12 @@ const SyntaxParser = struct {
         while (self.current().kind.isTrivia()) {
             try self.appendCurrentTokenChildTo(&for_children);
         }
-        if (self.at(.word) and !self.atWord("in") and isName(self.current().lexeme(self.source))) {
-            saw_name = true;
-            try self.appendCurrentTokenChildTo(&for_children);
+        if (self.at(.word) and !self.atWord("in")) {
+            const candidate_name = self.current().lexeme(self.source);
+            if (isName(candidate_name) or self.features.isBash()) {
+                saw_name = true;
+                try self.appendCurrentTokenChildTo(&for_children);
+            }
         }
         var saw_in = false;
         var saw_header_separator = false;

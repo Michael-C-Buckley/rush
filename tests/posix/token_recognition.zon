@@ -202,6 +202,21 @@
             .status = 0,
         },
         .{
+            .name = "function bodies capture aliases at definition time",
+            .script =
+            \\alias hit='printf "%s\n" alias'
+            \\f() { hit; }
+            \\unalias hit
+            \\f
+            ,
+            .stdout =
+            \\alias
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "digits separated from redirection operators remain command arguments",
             .script =
             \\printf '%s\n' 2 >out

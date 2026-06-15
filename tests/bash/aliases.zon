@@ -49,5 +49,21 @@
             .stderr = "",
             .status = 0,
         },
+        .{
+            .name = "function bodies capture aliases when expand_aliases is enabled",
+            .script =
+            \\shopt -s expand_aliases
+            \\alias hit='printf "%s\n" alias'
+            \\f() { hit; }
+            \\unalias hit
+            \\f
+            ,
+            .stdout =
+            \\alias
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
     },
 }

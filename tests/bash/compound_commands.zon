@@ -19,5 +19,19 @@
             .stderr = "",
             .status = 0,
         },
+        .{
+            .name = "invalid for loop variable reports failure and continues",
+            .script =
+            \\name=
+            \\for $name in a; do printf bad; done
+            \\printf 'after=<%s>\n' "$?"
+            ,
+            .stdout =
+            \\after=<1>
+            \\
+            ,
+            .stderr_match = .nonempty,
+            .status = 0,
+        },
     },
 }

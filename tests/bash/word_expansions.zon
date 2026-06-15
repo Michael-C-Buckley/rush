@@ -30,6 +30,32 @@
             .status = 0,
         },
         .{
+            .name = "arithmetic expansion error in assignment-only command skips and-or remainder",
+            .script =
+            \\x=$((1/0)) && printf and || printf or
+            \\printf 'status=<%s> x=<%s>\n' "$?" "$x"
+            ,
+            .stdout =
+            \\status=<1> x=<>
+            \\
+            ,
+            .stderr_match = .nonempty,
+            .status = 0,
+        },
+        .{
+            .name = "arithmetic expansion error in assignment-only if condition skips the compound body",
+            .script =
+            \\if x=$((1/0)); then printf then; else printf else; fi
+            \\printf 'status=<%s> x=<%s>\n' "$?" "$x"
+            ,
+            .stdout =
+            \\status=<1> x=<>
+            \\
+            ,
+            .stderr_match = .nonempty,
+            .status = 0,
+        },
+        .{
             .name = "arithmetic expansion error in assignment-only command returns from a function",
             .script =
             \\f() { x=$((1/0)); printf bad; }
@@ -42,6 +68,28 @@
             ,
             .stderr_match = .nonempty,
             .status = 0,
+        },
+        .{
+            .name = "parameter error in assignment-only command exits by default",
+            .script =
+            \\unset x
+            \\y=${x:?boom}
+            \\printf bad
+            ,
+            .stdout = "",
+            .stderr_match = .nonempty,
+            .status_match = .nonzero,
+        },
+        .{
+            .name = "nounset rejects unset variables in arithmetic expansion",
+            .script =
+            \\set -u
+            \\printf '%s\n' "$((missing + 1))"
+            \\printf bad
+            ,
+            .stdout = "",
+            .stderr_match = .nonempty,
+            .status = 127,
         },
     },
 }

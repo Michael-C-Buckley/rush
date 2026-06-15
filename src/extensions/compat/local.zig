@@ -34,7 +34,7 @@ fn evaluate(context: ?*anyopaque, invocation: *api.Invocation) !api.EvaluationRe
             "invalid variable name",
         ));
         if (invocation.shell_state.isVariableReadonly(assignment.name)) {
-            return api.EvaluationResult.normal(try invocation.usageError("local", "readonly variable"));
+            return api.EvaluationResult.normal(try invocation.statusError(1, "local", "readonly variable"));
         }
     }
 

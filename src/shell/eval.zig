@@ -169,7 +169,7 @@ pub const TrapActionFailure = struct {
     kind: TrapActionFailureKind,
     status: outcome.ExitStatus = 2,
     message: []const u8,
-    bash_assignment_only_expansion: bool = false,
+    bash_arithmetic_assignment_only_expansion: bool = false,
 
     pub fn validate(self: TrapActionFailure) void {
         std.debug.assert(self.status != 0);
@@ -887,6 +887,20 @@ const TrapActionLowerer = struct {
         command: ir.ForCommand,
         target: context.ExecutionTarget,
     ) !TrapActionBodyPayload {
+        if (!isShellName(command.name) and self.owner.features.isBash()) {
+            const message = try std.fmt.allocPrint(
+                self.allocator,
+                "{s}: not a valid identifier",
+                .{command.name},
+            );
+            const trap_failure: TrapActionFailure = .{
+                .kind = .parse_error,
+                .status = 1,
+                .message = message,
+            };
+            trap_failure.validate();
+            return .{ .failure = trap_failure };
+        }
         const redirections = try self.lowerRedirections(command.redirections, .regular_command);
         if (redirections == .failure) return .{ .failure = redirections.failure };
         const words = if (command.use_positionals) command_plan.ForWords.positional_parameters else blk: {
@@ -957,7 +971,16 @@ const TrapActionLowerer = struct {
         const redirections = try self.lowerRedirections(definition.redirections, .regular_command);
         if (redirections == .failure) return .{ .failure = redirections.failure };
         const name = try self.allocator.dupe(u8, definition.name);
-        const source_body = try self.allocator.dupe(u8, definition.body);
+        errdefer self.allocator.free(name);
+        const source_body = if (self.owner.expand_aliases)
+            try parser.expandAliases(self.allocator, definition.body, .{
+                .features = self.owner.features.withStrictDiagnostics(),
+                .context = self.owner.alias_state orelse self.shell_state,
+                .lookup = lookupSemanticAliasForParser,
+            })
+        else
+            try self.allocator.dupe(u8, definition.body);
+        errdefer self.allocator.free(source_body);
         const function_definition: command_plan.FunctionDefinition = .{
             .name = name,
             .source_body = source_body,
@@ -1030,9 +1053,10 @@ const TrapActionLowerer = struct {
                 );
                 const trap_failure: TrapActionFailure = .{
                     .kind = .expansion_error,
-                    .status = 1,
+                    .status = statusForExpansionFailure(self.owner.features, expansion_failure),
                     .message = message,
-                    .bash_assignment_only_expansion = command.argv.len == 0,
+                    .bash_arithmetic_assignment_only_expansion = command.argv.len == 0 and
+                        expansion_failure.kind == .arithmetic_expansion,
                 };
                 trap_failure.validate();
                 return .{ .failure = trap_failure };
@@ -1548,6 +1572,14 @@ fn redirectionOperator(token: parser.TokenKind) ?redirection_plan.RedirectionOpe
         .clobber => .clobber,
         else => null,
     };
+}
+
+fn statusForExpansionFailure(
+    features: compat.Features,
+    failure: shell_expand.ExpansionFailure,
+) outcome.ExitStatus {
+    if (features.isBash() and failure.kind == .nounset_parameter) return 127;
+    return 1;
 }
 
 fn redirectionFailurePolicy(
@@ -3947,6 +3979,7 @@ pub fn trapActionFailureOutcome(
             .{ .exit = failure.status },
         .parse_error => if (eval_context.interactive or
             shell_state.trap_execution != .idle or
+            eval_context.features.isBash() or
             !eval_context.special_builtin)
             .normal
         else
@@ -3973,7 +4006,7 @@ fn bashAssignmentOnlyExpansionFailureIsCommandFailure(
     return eval_context.features.isBash() and
         shell_state.trap_execution == .idle and
         failure.kind == .expansion_error and
-        failure.bash_assignment_only_expansion;
+        failure.bash_arithmetic_assignment_only_expansion;
 }
 
 fn runtimeDispositionForTrapDisposition(disposition: state.TrapDisposition) runtime.signal.Disposition {
@@ -4332,7 +4365,7 @@ fn evaluateStatementList(
         try applyOutcomeToWorkingState(shell_state, &child_outcome, child_outcome.state_delta.target);
 
         result = .{ .status = child_outcome.status, .control_flow = child_outcome.control_flow };
-        if (bashReadonlyAssignmentOnlyAbortsSourceLine(eval_context, entry.plan, child_outcome)) {
+        if (bashAssignmentErrorAbortsSourceLine(eval_context, entry.plan, child_outcome)) {
             abort_bash_line = statementSourceLine(entry.plan);
         }
         if (child_outcome.control_flow != .normal) break;
@@ -4348,7 +4381,7 @@ fn statementSourceLine(plan: command_plan.StatementPlan) ?usize {
     };
 }
 
-fn bashReadonlyAssignmentOnlyAbortsSourceLine(
+fn bashAssignmentErrorAbortsSourceLine(
     eval_context: context.EvalContext,
     plan: command_plan.StatementPlan,
     child_outcome: outcome.CommandOutcome,
@@ -4356,14 +4389,54 @@ fn bashReadonlyAssignmentOnlyAbortsSourceLine(
     eval_context.validate();
     plan.validate();
     child_outcome.validateForContext(eval_context);
+    if (statementSourceLine(plan) == null) return false;
+    return bashAssignmentErrorOutcomeAbortsSourceLine(eval_context, child_outcome);
+}
+
+fn bashAssignmentErrorOutcomeAbortsSourceLine(
+    eval_context: context.EvalContext,
+    child_outcome: outcome.CommandOutcome,
+) bool {
+    eval_context.validate();
+    child_outcome.validateForContext(eval_context);
     if (!eval_context.features.isBash()) return false;
     if (eval_context.canReturnFromFunction()) return false;
     if (child_outcome.status != 1 or child_outcome.control_flow != .normal) return false;
-    if (statementSourceLine(plan) == null) return false;
     for (child_outcome.diagnostics.items) |diagnostic| {
-        if (std.mem.endsWith(u8, diagnostic.message, ": readonly variable")) return true;
+        if (bashAssignmentErrorDiagnosticAbortsSourceLine(diagnostic.message)) return true;
     }
-    return std.mem.endsWith(u8, child_outcome.stderr.items, ": readonly variable\n");
+    return bashAssignmentErrorTextAbortsSourceLine(child_outcome.stderr.items);
+}
+
+fn bashAssignmentErrorBuffersAbortSourceLine(
+    eval_context: context.EvalContext,
+    buffers: EvaluationBuffers,
+    stderr_before: usize,
+    diagnostics_before: usize,
+    result: SimpleEvalResult,
+) bool {
+    eval_context.validate();
+    buffers.stdin.validate();
+    result.control_flow.validateForContext(eval_context);
+    std.debug.assert(stderr_before <= buffers.stderr.items.len);
+    std.debug.assert(diagnostics_before <= buffers.diagnostics.items.len);
+    if (!eval_context.features.isBash()) return false;
+    if (eval_context.canReturnFromFunction()) return false;
+    if (result.status != 1 or result.control_flow != .normal) return false;
+    for (buffers.diagnostics.items[diagnostics_before..]) |message| {
+        if (bashAssignmentErrorDiagnosticAbortsSourceLine(message)) return true;
+    }
+    return bashAssignmentErrorTextAbortsSourceLine(buffers.stderr.items[stderr_before..]);
+}
+
+fn bashAssignmentErrorDiagnosticAbortsSourceLine(message: []const u8) bool {
+    return std.mem.endsWith(u8, message, ": readonly variable") or
+        std.mem.indexOf(u8, message, "expansion error: arithmetic:") != null;
+}
+
+fn bashAssignmentErrorTextAbortsSourceLine(text: []const u8) bool {
+    return std.mem.endsWith(u8, text, ": readonly variable\n") or
+        std.mem.indexOf(u8, text, "expansion error: arithmetic:") != null;
 }
 
 fn flushBuffersForStatementRedirections(
@@ -4530,6 +4603,7 @@ fn evaluateAndOrList(
         try applyOutcomeToWorkingState(shell_state, &child_outcome, entry.command.target);
 
         result = .{ .status = child_outcome.status, .control_flow = child_outcome.control_flow };
+        if (bashAssignmentErrorOutcomeAbortsSourceLine(eval_context, child_outcome)) break;
         if (child_outcome.control_flow != .normal) break;
     }
     return result;
@@ -4563,6 +4637,8 @@ fn evaluateIfClause(
 ) EvalError!SimpleEvalResult {
     if_plan.validate();
     for (if_plan.branches) |branch| {
+        const stderr_before = buffers.stderr.items.len;
+        const diagnostics_before = buffers.diagnostics.items.len;
         const condition = try evaluateStatementList(
             evaluator,
             shell_state,
@@ -4571,6 +4647,13 @@ fn evaluateIfClause(
             buffers,
         );
         if (condition.control_flow != .normal) return condition;
+        if (bashAssignmentErrorBuffersAbortSourceLine(
+            eval_context,
+            buffers.*,
+            stderr_before,
+            diagnostics_before,
+            condition,
+        )) return condition;
         if (condition.status == 0) return evaluateStatementList(
             evaluator,
             shell_state,
@@ -4597,6 +4680,8 @@ fn evaluateLoop(
     var result = normalEvaluation(0);
 
     while (true) {
+        const stderr_before = buffers.stderr.items.len;
+        const diagnostics_before = buffers.diagnostics.items.len;
         const condition = if (loop.condition_source) |source|
             try evaluateStatementListSource(evaluator, shell_state, loop_context.ignoreErrexit(), source, buffers)
         else
@@ -4609,6 +4694,13 @@ fn evaluateLoop(
                 .other => return condition,
             }
         }
+        if (bashAssignmentErrorBuffersAbortSourceLine(
+            eval_context,
+            buffers.*,
+            stderr_before,
+            diagnostics_before,
+            condition,
+        )) return condition;
 
         const should_run = switch (kind) {
             .while_loop => condition.status == 0,
@@ -7851,25 +7943,15 @@ fn evaluateReadonly(
         "unsupported option",
     );
 
-    var declared_readonly: std.ArrayList([]const u8) = .empty;
-    defer declared_readonly.deinit(buffers.allocator);
     for (argv[index..]) |arg| {
         const assignment = splitAssignment(arg);
         const name = assignment.name;
         if (!isShellName(name)) return builtinUsageError(buffers, "readonly", "invalid variable name");
-        if (assignment.value != null and (shell_state.isVariableReadonly(name) or containsString(
-            declared_readonly.items,
-            name,
-        ))) return builtinUsageError(
-            buffers,
-            "readonly",
-            "readonly variable",
-        );
-        try declared_readonly.append(buffers.allocator, name);
-    }
-
-    for (argv[index..]) |arg| {
-        const assignment = splitAssignment(arg);
+        if (assignment.value != null and (shell_state.isVariableReadonly(name) or
+            stateDeltaMarksVariableReadonly(state_delta.*, name)))
+        {
+            return builtinStatusError(buffers, 1, "readonly", "readonly variable");
+        }
         if (assignment.value) |value| {
             try state_delta.assignVariable(assignment.name, value, .{ .readonly = true });
         } else {
@@ -7877,6 +7959,18 @@ fn evaluateReadonly(
         }
     }
     return 0;
+}
+
+fn stateDeltaMarksVariableReadonly(state_delta: delta.StateDelta, name: []const u8) bool {
+    std.debug.assert(state_delta.state == .pending);
+    state.assertValidVariableName(name);
+    for (state_delta.variable_assignments.items) |assignment| {
+        if (std.mem.eql(u8, assignment.name, name) and assignment.readonly) return true;
+    }
+    for (state_delta.variable_flags.items) |mutation| {
+        if (std.mem.eql(u8, mutation.name, name) and mutation.flag == .readonly and mutation.enabled) return true;
+    }
+    return false;
 }
 
 fn evaluateUnset(
@@ -15682,7 +15776,7 @@ test "semantic evaluator reports readonly local declarations as shell errors" {
 
     var call = try evaluatePlan(&evaluator, &shell_state, context.EvalContext.forTarget(.current_shell), call_plan);
     defer call.deinit();
-    try std.testing.expectEqual(@as(outcome.ExitStatus, 2), call.status);
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 1), call.status);
     try std.testing.expectEqualStrings("local: readonly variable", call.diagnostics.items[0].message);
     try call.commitDelta(&shell_state, .current_shell);
     try std.testing.expectEqualStrings("outer", shell_state.getVariable("LOCKED").?.value);

@@ -321,6 +321,17 @@
             .status_match = .nonzero,
         },
         .{
+            .name = "parameter errors in assignment-only commands exit",
+            .script =
+            \\unset x
+            \\y=${x:?boom}
+            \\printf 'bad\n'
+            ,
+            .stdout = "",
+            .stderr_match = .nonempty,
+            .status_match = .nonzero,
+        },
+        .{
             .name = "command lookup failures use status 127 and may continue",
             .script =
             \\no_such_posix_command_for_rush
