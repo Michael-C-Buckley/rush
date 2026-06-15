@@ -308,7 +308,6 @@ test "POSIX builtin registry excludes Rush extension builtins" {
     const extension_names = [_][]const u8{
         "abbr",
         "color",
-        "complete",
         "local",
         "shopt",
         "source",

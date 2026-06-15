@@ -6,7 +6,6 @@ const api = @import("api.zig");
 
 const unsupported_names = [_][]const u8{
     "color",
-    "complete",
 };
 
 pub fn handlerFor(name: []const u8) ?api.HandlerSpec {
