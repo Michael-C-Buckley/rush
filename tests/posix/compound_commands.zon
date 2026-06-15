@@ -18,6 +18,78 @@
             .status = 0,
         },
         .{
+            .name = "subshell preserves current directory changes outside the group",
+            .script =
+            \\mkdir child
+            \\before=$(pwd)
+            \\( cd child; printf 'inner\n' )
+            \\after=$(pwd)
+            \\test "$before" = "$after" && printf 'outer-unchanged\n'
+            ,
+            .stdout =
+            \\inner
+            \\outer-unchanged
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "subshell redirection applies to the grouped compound-list",
+            .script =
+            \\( printf 'one\n'; printf 'two\n' ) >out
+            \\cat out
+            ,
+            .stdout =
+            \\one
+            \\two
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "subshell redirection does not affect following commands",
+            .script =
+            \\( printf 'group\n' ) >out
+            \\printf 'after\n'
+            \\cat out
+            ,
+            .stdout =
+            \\after
+            \\group
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "subshell grouping participates in AND-OR lists by its exit status",
+            .script =
+            \\( false; true ) && printf 'ok\n'
+            \\( true; false ) || printf 'fallback\n'
+            ,
+            .stdout =
+            \\ok
+            \\fallback
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "subshell grouping can be a pipeline component",
+            .script =
+            \\( printf 'ok\n' ) | cat
+            ,
+            .stdout =
+            \\ok
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "brace group exit status is compound-list status and assignments persist",
             .script =
             \\x=outer
@@ -27,6 +99,101 @@
             ,
             .stdout =
             \\inner:1
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "brace group preserves current-shell directory changes",
+            .script =
+            \\mkdir child
+            \\{ cd child; }
+            \\test -d ../child && printf 'child\n'
+            ,
+            .stdout =
+            \\child
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "brace group redirection applies to the grouped compound-list",
+            .script =
+            \\{ printf 'one\n'; printf 'two\n'; } >out
+            \\cat out
+            ,
+            .stdout =
+            \\one
+            \\two
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "brace group redirection does not affect following commands",
+            .script =
+            \\{ printf 'group\n'; } >out
+            \\printf 'after\n'
+            \\cat out
+            ,
+            .stdout =
+            \\after
+            \\group
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "brace group accepts newline separator before closing brace",
+            .script =
+            \\{
+            \\printf 'ok\n'
+            \\}
+            ,
+            .stdout =
+            \\ok
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "brace group accepts semicolon separator before closing brace",
+            .script =
+            \\{ printf 'ok\n'; }
+            ,
+            .stdout =
+            \\ok
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "brace group participates in AND-OR lists by its exit status",
+            .script =
+            \\{ false; true; } && printf 'ok\n'
+            \\{ true; false; } || printf 'fallback\n'
+            ,
+            .stdout =
+            \\ok
+            \\fallback
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "brace group can be a pipeline component",
+            .script =
+            \\{ printf 'ok\n'; } | cat
+            ,
+            .stdout =
+            \\ok
             \\
             ,
             .stderr = "",
