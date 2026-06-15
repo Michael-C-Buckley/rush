@@ -200,6 +200,46 @@ pub const ShellExpansion = struct {
         return owned_argv;
     }
 
+    pub fn expandCommandArgv(self: *ShellExpansion, words: []const []const u8) ![]const []const u8 {
+        if (words.len == 0) return self.expandArgv(words);
+
+        var argv: std.ArrayList([]const u8) = .empty;
+        errdefer {
+            for (argv.items) |arg| self.allocator.free(arg);
+            argv.deinit(self.allocator);
+        }
+
+        var first_fields = try self.expandWordFields(words[0]);
+        defer first_fields.deinit();
+        for (first_fields.fields) |field| {
+            const owned = try self.allocator.dupe(u8, field);
+            errdefer self.allocator.free(owned);
+            try argv.append(self.allocator, owned);
+        }
+
+        const declaration_utility = first_fields.fields.len != 0 and isDeclarationUtility(first_fields.fields[0]);
+        for (words[1..]) |word| {
+            if (declaration_utility and isAssignmentOperand(word)) {
+                const expanded = try self.expandAssignmentWordScalar(word);
+                errdefer self.allocator.free(expanded);
+                try argv.append(self.allocator, expanded);
+                continue;
+            }
+
+            var fields = try self.expandWordFields(word);
+            defer fields.deinit();
+            for (fields.fields) |field| {
+                const owned = try self.allocator.dupe(u8, field);
+                errdefer self.allocator.free(owned);
+                try argv.append(self.allocator, owned);
+            }
+        }
+
+        const owned_argv = try argv.toOwnedSlice(self.allocator);
+        assertExpandedFields(owned_argv);
+        return owned_argv;
+    }
+
     pub fn expandAssignmentWord(self: *ShellExpansion, raw: []const u8) !command_plan.Assignment {
         const expanded = try self.expandAssignmentWordScalar(raw);
         defer self.allocator.free(expanded);
@@ -244,7 +284,7 @@ pub const ShellExpansion = struct {
         }
         self.assignment_overrides.clearRetainingCapacity();
 
-        const argv = try self.expandArgv(argv_words);
+        const argv = try self.expandCommandArgv(argv_words);
         errdefer freeFields(self.allocator, argv);
 
         const command: command_plan.ExpandedSimpleCommand = .{
@@ -435,6 +475,15 @@ fn appendDiagnostic(opaque_context: ?*anyopaque, name: []const u8, message: []co
     const diagnostic = try std.fmt.allocPrint(self.allocator, "{s}: {s}", .{ name, message });
     errdefer self.allocator.free(diagnostic);
     try self.diagnostics.append(self.allocator, .{ .message = diagnostic });
+}
+
+fn isDeclarationUtility(name: []const u8) bool {
+    return std.mem.eql(u8, name, "export") or std.mem.eql(u8, name, "readonly");
+}
+
+fn isAssignmentOperand(word: []const u8) bool {
+    const equals = std.mem.indexOfScalar(u8, word, '=') orelse return false;
+    return isValidVariableName(word[0..equals]);
 }
 
 pub fn shellOptionFlags(options: state.ShellOptions, buffer: *[shell_option_flags_max]u8) []const u8 {
@@ -658,6 +707,25 @@ test "ShellExpansion prevents invalid expanded simple command shapes" {
 
     const plan = command_plan.classifyExpandedSimpleCommand(.{ .command = command.command });
     plan.validate();
+}
+
+test "ShellExpansion applies assignment tilde expansion to declaration utility operands" {
+    var shell_state = state.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    try shell_state.putVariable("HOME", "/tmp", .{});
+
+    var adapter = ShellExpansion.init(std.testing.allocator, .{
+        .shell_state = &shell_state,
+        .eval_context = context.EvalContext.forTarget(.current_shell),
+    });
+    defer adapter.deinit();
+
+    var command = try adapter.expandSimpleCommand(&.{}, &.{ "export", "PATH=~:/bin" });
+    defer command.deinit();
+
+    try std.testing.expectEqual(@as(usize, 2), command.command.argv.len);
+    try std.testing.expectEqualStrings("export", command.command.argv[0]);
+    try std.testing.expectEqualStrings("PATH=/tmp:/bin", command.command.argv[1]);
 }
 
 test "ShellExpansion expands assignment words left-to-right without changing argv expansion" {

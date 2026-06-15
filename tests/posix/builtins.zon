@@ -237,6 +237,34 @@
             .status = 0,
         },
         .{
+            .name = "export assignment operands apply assignment tilde expansion",
+            .script =
+            \\HOME=/tmp
+            \\export PATH=~:/bin
+            \\printf '<%s>\n' "$PATH"
+            ,
+            .stdout =
+            \\</tmp:/bin>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "readonly assignment operands apply assignment tilde expansion",
+            .script =
+            \\HOME=/tmp
+            \\readonly locked=~:/bin
+            \\printf '<%s>\n' "$locked"
+            ,
+            .stdout =
+            \\</tmp:/bin>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "regular builtin assignment prefixes do not persist",
             .script =
             \\VALUE=before
