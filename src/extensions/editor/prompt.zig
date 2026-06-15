@@ -12,10 +12,10 @@ const shell_builtin = @import("../../shell/builtin.zig");
 const state = @import("../../shell/state.zig");
 
 pub const builtins = [_]shell_builtin.Builtin{
-    shell_builtin.Builtin.initExtension("prompt", .shell_state),
+    shell_builtin.Builtin.initExtension("prompt", .extension_state),
     shell_builtin.Builtin.initExtension("prompt_pwd", .output),
     shell_builtin.Builtin.initExtension("prompt_duration", .output),
-    shell_builtin.Builtin.initExtension("prompt_async", .output),
+    shell_builtin.Builtin.initExtension("prompt_async", .extension_state),
 };
 
 pub const Builder = struct {
