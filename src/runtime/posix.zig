@@ -525,6 +525,9 @@ fn run(context: *anyopaque, request: process.RunRequest) process.RunError!proces
     const adapter = adapterFromContext(context);
     request.validate();
 
+    var reserved_stdio = try ReservedStandardDescriptors.init();
+    defer reserved_stdio.deinit();
+
     var child = try std.process.spawn(adapter.io, .{
         .argv = request.argv,
         .cwd = request.cwd.toStdCwd(),
@@ -585,6 +588,73 @@ fn run(context: *anyopaque, request: process.RunRequest) process.RunError!proces
         .status = waitStatusFromTerm(term),
         .stdout = stdout_slice,
         .stderr = stderr_slice,
+    };
+}
+
+const ReservedStandardDescriptors = struct {
+    descriptors: [3]?fd.Descriptor = .{ null, null, null },
+
+    fn init() !ReservedStandardDescriptors {
+        var reserved: ReservedStandardDescriptors = .{};
+        errdefer reserved.deinit();
+
+        for (&reserved.descriptors, 0..) |*slot, index| {
+            const descriptor: fd.Descriptor = @intCast(index);
+            if (try descriptorIsOpen(descriptor)) continue;
+
+            const opened = try openNullDescriptor();
+            if (opened == descriptor) {
+                slot.* = opened;
+                continue;
+            }
+
+            closeDescriptor(opened) catch {};
+            if (!(try descriptorIsOpen(descriptor))) return error.Unexpected;
+        }
+
+        return reserved;
+    }
+
+    fn deinit(self: *ReservedStandardDescriptors) void {
+        for (&self.descriptors) |*slot| {
+            const descriptor = slot.* orelse continue;
+            closeDescriptor(descriptor) catch {};
+            slot.* = null;
+        }
+    }
+};
+
+fn descriptorIsOpen(descriptor: fd.Descriptor) !bool {
+    fd.assertValidDescriptor(descriptor);
+    if (builtin.os.tag == .linux and !builtin.link_libc) {
+        while (true) {
+            const rc = std.os.linux.fcntl(descriptor, std.os.linux.F.GETFD, 0);
+            switch (std.os.linux.errno(rc)) {
+                .SUCCESS => return true,
+                .BADF => return false,
+                .INTR => continue,
+                else => return error.Unexpected,
+            }
+        }
+    }
+    while (true) {
+        const rc = std.c.fcntl(descriptor, @as(c_int, std.c.F.GETFD), @as(c_int, 0));
+        switch (std.c.errno(rc)) {
+            .SUCCESS => return true,
+            .BADF => return false,
+            .INTR => continue,
+            else => return error.Unexpected,
+        }
+    }
+}
+
+fn openNullDescriptor() !fd.Descriptor {
+    var flags: std.posix.O = .{ .ACCMODE = .RDWR };
+    if (@hasField(std.posix.O, "CLOEXEC")) flags.CLOEXEC = true;
+    return std.posix.openat(fd.current_working_directory, "/dev/null", flags, 0) catch |err| switch (err) {
+        error.ProcessFdQuotaExceeded => error.ProcessFdQuotaExceeded,
+        error.SystemFdQuotaExceeded => error.SystemFdQuotaExceeded,
+        else => error.Unexpected,
     };
 }
 

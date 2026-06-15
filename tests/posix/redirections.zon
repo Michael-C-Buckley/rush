@@ -339,6 +339,23 @@
             .status_match = .nonzero,
         },
         .{
+            .name = "here document supplies input after standard input is closed",
+            .script =
+            \\exec 0<&-
+            \\cat <<EOF
+            \\hi
+            \\EOF
+            \\printf '<%s>\n' "$?"
+            ,
+            .stdout =
+            \\hi
+            \\<0>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "here document body expands when delimiter is unquoted",
             .script =
             \\x=value
