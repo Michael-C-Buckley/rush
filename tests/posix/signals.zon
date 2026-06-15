@@ -72,5 +72,126 @@
             .stderr = "",
             .status = 0,
         },
+        .{
+            .name = "trap with no operands lists caught signals in reusable form",
+            .script =
+            \\trap 'printf term\n' TERM
+            \\trap
+            ,
+            .stdout =
+            \\trap -- 'printf term\n' TERM
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "trap dash resets a caught signal to its default action",
+            .script =
+            \\trap 'printf bad\n' TERM
+            \\trap - TERM
+            \\trap
+            \\printf '<done>\n'
+            ,
+            .stdout =
+            \\<done>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "trap returns zero for valid trap changes",
+            .script =
+            \\trap 'printf term\n' TERM
+            \\printf '<%s>\n' "$?"
+            \\trap - TERM
+            \\printf '<%s>\n' "$?"
+            ,
+            .stdout =
+            \\<0>
+            \\<0>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "trap returns nonzero for invalid signal names",
+            .script =
+            \\trap : NOSUCHSIGNAL 2>/dev/null
+            \\printf '<%s>\n' "$?"
+            ,
+            .stdout =
+            \\<1>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "trapped signals are deferred while a foreground command completes",
+            .script =
+            \\trap 'printf "<trap>\n"' TERM
+            \\(sleep 0.1; kill -TERM $$) &
+            \\sleep 0.2
+            \\printf '<after>:%s\n' "$?"
+            \\wait
+            ,
+            .stdout =
+            \\<trap>
+            \\<after>:0
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "trapped signals interrupt wait with a status greater than 128",
+            .script =
+            \\trap 'printf "<trap>\n"' TERM
+            \\(sleep 0.1; kill -TERM $$) &
+            \\wait
+            \\status=$?
+            \\if [ "$status" -gt 128 ]; then printf '<interrupted>\n'; else printf '<%s>\n' "$status"; fi
+            ,
+            .stdout =
+            \\<trap>
+            \\<interrupted>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "asynchronous commands inherit ignored SIGINT when job control is disabled",
+            .script =
+            \\sh -c 'kill -INT $$; printf "<survived>\n"' &
+            \\wait
+            \\printf '<wait>:%s\n' "$?"
+            ,
+            .stdout =
+            \\<survived>
+            \\<wait>:0
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "asynchronous commands inherit ignored SIGQUIT when job control is disabled",
+            .script =
+            \\sh -c 'kill -QUIT $$; printf "<survived>\n"' &
+            \\wait
+            \\printf '<wait>:%s\n' "$?"
+            ,
+            .stdout =
+            \\<survived>
+            \\<wait>:0
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
     },
 }
