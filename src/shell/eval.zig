@@ -5537,6 +5537,12 @@ fn evaluateBuiltin(
         plan.argv,
         buffers,
     ));
+    if (std.mem.eql(u8, definition.name, "hash")) return normalEvaluation(try evaluateHash(
+        evaluator,
+        shell_state,
+        plan,
+        buffers,
+    ));
     return error.Unimplemented;
 }
 
@@ -5966,6 +5972,48 @@ fn printUmask(
         '\n',
     };
     try stdout.appendSlice(allocator, &digits);
+}
+
+fn evaluateHash(
+    evaluator: *Evaluator,
+    shell_state: state.ShellState,
+    plan: command_plan.CommandPlan,
+    buffers: *EvaluationBuffers,
+) !outcome.ExitStatus {
+    std.debug.assert(plan.argv.len != 0);
+    std.debug.assert(std.mem.eql(u8, plan.argv[0], "hash"));
+    var index: usize = 1;
+    const option_terminated = index < plan.argv.len and std.mem.eql(u8, plan.argv[index], "--");
+    if (option_terminated) index += 1;
+    if (index >= plan.argv.len) return 0;
+    if (!option_terminated and std.mem.eql(u8, plan.argv[index], "-r")) {
+        index += 1;
+        if (index >= plan.argv.len) return 0;
+    } else if (!option_terminated and std.mem.startsWith(u8, plan.argv[index], "-") and !std.mem.eql(
+        u8,
+        plan.argv[index],
+        "-",
+    )) {
+        return builtinUsageError(buffers, "hash", "unsupported option");
+    }
+
+    var status: outcome.ExitStatus = 0;
+    for (plan.argv[index..]) |name| {
+        const command: command_plan.ExpandedSimpleCommand = .{
+            .assignments = plan.assignments,
+            .argv = &.{name},
+            .last_command_substitution_status = plan.last_command_substitution_status,
+        };
+        const external = try resolveExternalForEvaluation(evaluator.allocator, evaluator.fs_port, shell_state, command);
+        defer if (external) |resolution| evaluator.allocator.free(resolution.path);
+        if (external == null) {
+            const message = try std.fmt.allocPrint(buffers.allocator, "{s}: not found", .{name});
+            defer buffers.allocator.free(message);
+            try buffers.addBuiltinDiagnostic("hash", message);
+            status = 1;
+        }
+    }
+    return status;
 }
 
 fn evaluateCommandBuiltin(
@@ -9253,6 +9301,51 @@ test "semantic evaluator evaluates umask through filesystem runtime" {
     try std.testing.expectEqualStrings("umask: invalid mask\n", invalid_result.stderr.items);
 }
 
+test "semantic evaluator evaluates hash through command search" {
+    var fake_fs = FakeFsRuntime.init();
+    var shell_state = state.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    var evaluator = Evaluator.initWithFsPort(std.testing.allocator, fake_fs.port());
+    const eval_context = context.EvalContext.forTarget(.current_shell);
+    const assignments = [_]command_plan.Assignment{.{ .name = "PATH", .value = "/fake/bin" }};
+
+    const found_plan = command_plan.classifyExpandedSimpleCommand(.{ .command = .{
+        .assignments = &assignments,
+        .argv = &[_][]const u8{ "hash", "tool" },
+    } });
+    var found_result = try evaluatePlan(&evaluator, &shell_state, eval_context, found_plan);
+    defer found_result.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 0), found_result.status);
+    try std.testing.expectEqualStrings("", found_result.stdout.items);
+    try std.testing.expectEqualStrings("", found_result.stderr.items);
+
+    const reset_plan = command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{
+        "hash",
+        "-r",
+    } } });
+    var reset_result = try evaluatePlan(&evaluator, &shell_state, eval_context, reset_plan);
+    defer reset_result.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 0), reset_result.status);
+
+    const missing_plan = command_plan.classifyExpandedSimpleCommand(.{ .command = .{
+        .assignments = &assignments,
+        .argv = &[_][]const u8{ "hash", "missing-tool" },
+    } });
+    var missing_result = try evaluatePlan(&evaluator, &shell_state, eval_context, missing_plan);
+    defer missing_result.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 1), missing_result.status);
+    try std.testing.expectEqualStrings("hash: missing-tool: not found\n", missing_result.stderr.items);
+
+    const option_plan = command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{
+        "hash",
+        "-x",
+    } } });
+    var option_result = try evaluatePlan(&evaluator, &shell_state, eval_context, option_plan);
+    defer option_result.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 2), option_result.status);
+    try std.testing.expectEqualStrings("hash: unsupported option\n", option_result.stderr.items);
+}
+
 test "semantic evaluator dispatches shopt as a compat extension builtin" {
     var shell_state = state.ShellState.init(std.testing.allocator);
     defer shell_state.deinit();
@@ -10983,6 +11076,7 @@ const FakeFsRuntime = struct {
     fn access(opaque_context: *anyopaque, request: runtime.fs.AccessRequest) runtime.fs.AccessError!void {
         _ = opaque_context;
         request.validate();
+        if (std.mem.indexOf(u8, request.path, "missing") != null) return error.FileNotFound;
     }
 
     fn inspectPath(
@@ -10991,6 +11085,7 @@ const FakeFsRuntime = struct {
     ) runtime.fs.InspectPathError!runtime.fs.InspectPathResult {
         _ = opaque_context;
         request.validate();
+        if (std.mem.indexOf(u8, request.path, "missing") != null) return error.FileNotFound;
         return .{ .stat = undefined };
     }
 
