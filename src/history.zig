@@ -516,6 +516,31 @@ fn suggestHistoryEntry(
     return history_service.suggestEntry(allocator, prefix);
 }
 
+fn applyLineHistoryRequest(session: *line_editor.LineSession, history: line_editor.HistoryView) !void {
+    const request = session.takeHistoryRequest() orelse return;
+    defer request.deinit(std.testing.allocator);
+    const context = history.context orelse return try session.applyHistoryResult(request, .{ .entry = null });
+    const result: line_editor.HistoryResult = switch (request) {
+        .previous => |previous| if (history.previous) |callback|
+            .{ .entry = try callback(context, std.testing.allocator, previous.prefix, previous.before) }
+        else
+            .{ .entry = null },
+        .next => |next| if (history.next) |callback|
+            .{ .entry = try callback(context, std.testing.allocator, next.prefix, next.after) }
+        else
+            .{ .entry = null },
+        .by_number => |number| if (history.by_number) |callback|
+            .{ .entry = try callback(context, std.testing.allocator, number) }
+        else
+            .{ .entry = null },
+        .search,
+        .search_next,
+        => .{ .entries = &.{} },
+        .suggest => .{ .entry = null },
+    };
+    try session.applyHistoryResult(request, result);
+}
+
 const HistoryDirection = enum { previous, next };
 
 fn exitSignalFromStatus(status: shell.ExitStatus) ?u8 {
@@ -1181,34 +1206,52 @@ test "line history navigation is scoped to session and cwd" {
     history_b.session_id = "session-b";
     var history_service_b = InteractiveHistoryService.init(&history_b);
 
+    const history_view_a: line_editor.HistoryView = .{
+        .context = &history_service_a,
+        .previous = previousHistoryEntry,
+        .next = nextHistoryEntry,
+    };
     var session_a = try line_editor.LineSession.initWithOptions(
         std.testing.allocator,
         .{ .bytes = "$ " },
-        .{ .context = &history_service_a, .previous = previousHistoryEntry, .next = nextHistoryEntry },
+        history_view_a,
     );
     defer session_a.deinit();
     try session_a.handleKey(.{ .key = .up });
+    try applyLineHistoryRequest(&session_a, history_view_a);
     try std.testing.expectEqualStrings("git status", session_a.editor.buffer.text());
     try session_a.handleKey(.{ .key = .up });
+    try applyLineHistoryRequest(&session_a, history_view_a);
     try std.testing.expectEqualStrings("echo a-one", session_a.editor.buffer.text());
     try session_a.handleKey(.{ .key = .down });
+    try applyLineHistoryRequest(&session_a, history_view_a);
     try std.testing.expectEqualStrings("git status", session_a.editor.buffer.text());
     try session_a.handleKey(.{ .key = .down });
+    try applyLineHistoryRequest(&session_a, history_view_a);
     try std.testing.expectEqualStrings("", session_a.editor.buffer.text());
 
+    const history_view_b: line_editor.HistoryView = .{
+        .context = &history_service_b,
+        .previous = previousHistoryEntry,
+        .next = nextHistoryEntry,
+    };
     var session_b = try line_editor.LineSession.initWithOptions(
         std.testing.allocator,
         .{ .bytes = "$ " },
-        .{ .context = &history_service_b, .previous = previousHistoryEntry, .next = nextHistoryEntry },
+        history_view_b,
     );
     defer session_b.deinit();
     try session_b.handleKey(.{ .key = .up });
+    try applyLineHistoryRequest(&session_b, history_view_b);
     try std.testing.expectEqualStrings("git diff", session_b.editor.buffer.text());
     try session_b.handleKey(.{ .key = .up });
+    try applyLineHistoryRequest(&session_b, history_view_b);
     try std.testing.expectEqualStrings("echo b-one", session_b.editor.buffer.text());
     try session_b.handleKey(.{ .key = .down });
+    try applyLineHistoryRequest(&session_b, history_view_b);
     try std.testing.expectEqualStrings("git diff", session_b.editor.buffer.text());
     try session_b.handleKey(.{ .key = .down });
+    try applyLineHistoryRequest(&session_b, history_view_b);
     try std.testing.expectEqualStrings("", session_b.editor.buffer.text());
 }
 

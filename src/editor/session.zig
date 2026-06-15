@@ -1,4 +1,4 @@
-//! Terminal-independent line editor core.
+//! Terminal-independent editor session core.
 
 const Self = @This();
 
@@ -6,11 +6,14 @@ const std = @import("std");
 const edit_buffer = @import("buffer.zig");
 const completion = @import("completion.zig");
 const key_mod = @import("key.zig");
+const history_mod = @import("history.zig");
 const path = @import("path.zig");
 const render = @import("render.zig");
+const request_mod = @import("request.zig");
+const vi = @import("vi.zig");
 const vaxis = @import("vaxis");
 
-const max_vi_macro_depth = 16;
+const max_vi_macro_depth = vi.max_macro_depth;
 
 pub const UnderlineStyle = render.UnderlineStyle;
 pub const UiStyle = render.UiStyle;
@@ -65,232 +68,48 @@ const pathExpansionReplacementStyle = path.replacementStyle;
 const pathExpansionCompletionReplacement = path.completionReplacement;
 const pathExpansionAllReplacement = path.allReplacement;
 
-pub const ViState = enum {
-    insert,
-    command,
-    replace,
-};
+pub const ViState = vi.ViState;
+const ViOperator = vi.ViOperator;
+const ViFindDirection = vi.ViFindDirection;
+const ViHistoryDirection = vi.ViHistoryDirection;
+const ViFindPlacement = vi.ViFindPlacement;
+const ViFindCommand = vi.ViFindCommand;
+const ViPending = vi.ViPending;
+const ViMotionResult = vi.ViMotionResult;
+const ViMotionRange = vi.ViMotionRange;
+const ViWordKind = vi.ViWordKind;
+const ViInsertPlacement = vi.ViInsertPlacement;
+const ViInsertRepeatCapture = vi.ViInsertRepeatCapture;
+const ViInputRepeatMode = vi.ViInputRepeatMode;
+const ViInputRepeatOp = vi.ViInputRepeatOp;
+const ViInputRepeat = vi.ViInputRepeat;
+const ViRepeat = vi.ViRepeat;
 
-const ViOperator = enum {
-    change,
-    delete,
-    yank,
-};
+const reverseViHistoryDirection = vi.reverseViHistoryDirection;
+const isPortableAlphabetic = vi.isPortableAlphabetic;
+const viMacroKeyEvent = vi.viMacroKeyEvent;
+const viHistoryPatternMatches = vi.viHistoryPatternMatches;
+const viMotion = vi.viMotion;
+const viOperatorMotionRange = vi.viOperatorMotionRange;
+const multiplyViCounts = vi.multiplyViCounts;
+const firstNonBlank = vi.firstNonBlank;
+const previousViWordStart = vi.previousViWordStart;
+const viFind = vi.viFind;
+const reverseViFind = vi.reverseViFind;
+const firstCodepoint = vi.firstCodepoint;
+const previousCodepointStart = vi.previousCodepointStart;
+const nextCodepointEnd = vi.nextCodepointEnd;
+const isAsciiWhitespace = vi.isAsciiWhitespace;
+const staticHistoryStart = vi.staticHistoryStart;
+const viHistoryBigword = vi.viHistoryBigword;
 
-const ViFindDirection = enum {
-    forward,
-    backward,
-};
-
-const ViHistoryDirection = enum {
-    backward,
-    forward,
-};
-
-const ViFindPlacement = enum {
-    on_character,
-    before_character,
-    after_character,
-};
-
-const ViFindCommand = struct {
-    direction: ViFindDirection,
-    placement: ViFindPlacement,
-    char: u21,
-};
-
-const ViPending = union(enum) {
-    none,
-    operator: struct {
-        operator: ViOperator,
-        count: usize,
-    },
-    replace,
-    find: struct {
-        direction: ViFindDirection,
-        placement: ViFindPlacement,
-    },
-    history_search: ViHistoryDirection,
-    alias,
-};
-
-const ViMotionResult = struct {
-    cursor: usize,
-    inclusive: bool = false,
-};
-
-const ViMotionRange = struct {
-    start: usize,
-    end: usize,
-    cursor_after_delete: usize,
-};
-
-const ViWordKind = enum {
-    word,
-    bigword,
-};
-
-const ViInsertPlacement = enum {
-    at_cursor,
-    after_cursor,
-    line_start,
-    line_end,
-};
-
-const ViInsertRepeatCapture = union(enum) {
-    insert: struct {
-        placement: ViInsertPlacement,
-        text_count: usize,
-    },
-    replace_session,
-    change_to_end,
-    clear_line_change,
-    operator_change: struct {
-        motion_command: u21,
-        count: usize,
-    },
-};
-
-const ViInputRepeatMode = enum {
-    insert,
-    replace,
-};
-
-const ViInputRepeatOp = union(enum) {
-    text: []u8,
-    key: Key,
-
-    fn deinit(self: ViInputRepeatOp, allocator: std.mem.Allocator) void {
-        switch (self) {
-            .text => |text| allocator.free(text),
-            .key => {},
-        }
-    }
-
-    fn changesBuffer(self: ViInputRepeatOp) bool {
-        return switch (self) {
-            .text => |text| text.len != 0,
-            .key => |key| switch (key) {
-                .backspace,
-                .delete_previous_word,
-                .delete_to_start,
-                => true,
-                else => false,
-            },
-        };
-    }
-};
-
-const ViInputRepeat = struct {
-    ops: []ViInputRepeatOp,
-
-    fn deinit(self: ViInputRepeat, allocator: std.mem.Allocator) void {
-        for (self.ops) |op| op.deinit(allocator);
-        allocator.free(self.ops);
-    }
-
-    fn changesBuffer(self: ViInputRepeat) bool {
-        for (self.ops) |op| {
-            if (op.changesBuffer()) return true;
-        }
-        return false;
-    }
-};
-
-const ViRepeat = union(enum) {
-    insert: struct {
-        placement: ViInsertPlacement,
-        input: ViInputRepeat,
-        text_count: usize,
-    },
-    replace: struct {
-        text: []u8,
-        count: usize,
-    },
-    replace_session: ViInputRepeat,
-    delete_forward: usize,
-    delete_backward: usize,
-    delete_to_end,
-    change_to_end: ViInputRepeat,
-    clear_line_delete,
-    clear_line_change: ViInputRepeat,
-    operator_delete: struct {
-        motion_command: u21,
-        count: usize,
-    },
-    operator_change: struct {
-        motion_command: u21,
-        count: usize,
-        input: ViInputRepeat,
-    },
-    put_after: usize,
-    put_before: usize,
-    toggle_case: usize,
-
-    fn deinit(self: ViRepeat, allocator: std.mem.Allocator) void {
-        switch (self) {
-            .insert => |repeat| repeat.input.deinit(allocator),
-            .replace => |repeat| allocator.free(repeat.text),
-            .replace_session => |input| input.deinit(allocator),
-            .change_to_end => |input| input.deinit(allocator),
-            .clear_line_change => |input| input.deinit(allocator),
-            .operator_change => |repeat| repeat.input.deinit(allocator),
-            .delete_forward,
-            .delete_backward,
-            .delete_to_end,
-            .clear_line_delete,
-            .operator_delete,
-            .put_after,
-            .put_before,
-            .toggle_case,
-            => {},
-        }
-    }
-};
-
-pub const HistoryView = struct {
-    /// Borrowed static history entries. They must remain valid for the lifetime
-    /// of the line session and are copied into the edit buffer before use.
-    entries: []const []const u8 = &.{},
-    now: i64 = 0,
-    context: ?*anyopaque = null,
-    /// Provider callbacks return allocator-owned `HistoryEntry` values. The
-    /// line session copies `entry.text` before calling `HistoryEntry.deinit`.
-    previous: ?*const fn (*anyopaque, std.mem.Allocator, []const u8, ?i64) anyerror!?HistoryEntry = null,
-    next: ?*const fn (*anyopaque, std.mem.Allocator, []const u8, i64) anyerror!?HistoryEntry = null,
-    by_number: ?*const fn (*anyopaque, std.mem.Allocator, usize) anyerror!?HistoryEntry = null,
-    search: ?*const fn (*anyopaque, std.mem.Allocator, []const u8, ?i64) anyerror!?HistoryEntry = null,
-    search_next: ?*const fn (*anyopaque, std.mem.Allocator, []const u8, ?i64) anyerror!?HistoryEntry = null,
-    suggest: ?*const fn (*anyopaque, std.mem.Allocator, []const u8) anyerror!?HistoryEntry = null,
-
-    pub const HistoryEntry = struct {
-        id: i64,
-        /// Owned by the allocator passed to the provider callback or by the
-        /// helper that constructed this entry; always release with `deinit`.
-        text: []const u8,
-        when: i64 = 0,
-
-        // ziglint-ignore: Z012 Z023 method receiver must stay first; type is public as HistoryView.HistoryEntry
-        pub fn deinit(self: HistoryEntry, allocator: std.mem.Allocator) void {
-            allocator.free(self.text);
-        }
-    };
-};
-
+pub const HistoryView = history_mod.View;
 pub const ViAliasView = struct {
     context: ?*anyopaque = null,
     lookup: ?*const fn (*anyopaque, std.mem.Allocator, u21) anyerror!?[]const u8 = null,
 };
 
-pub const ExternalEditorRequest = struct {
-    text: []const u8,
-    number: ?usize = null,
-
-    pub fn deinit(self: ExternalEditorRequest, allocator: std.mem.Allocator) void {
-        allocator.free(self.text);
-    }
-};
-
+pub const ExternalEditorRequest = request_mod.ExternalEditorRequest;
 pub const CompletionMenu = struct {
     candidates: []completion.Candidate = &.{},
     selected: usize = no_selection,
@@ -370,10 +189,15 @@ const PendingRemovableSuffix = struct {
     }
 };
 
+pub const HistoryRequest = request_mod.HistoryRequest;
+pub const HistoryResult = request_mod.HistoryResult;
+pub const LineRequest = request_mod.LineRequest;
+const LineRequestOutbox = request_mod.Outbox;
+
 pub const LineSession = struct {
     allocator: std.mem.Allocator,
     prompt: Prompt,
-    prompt_dirty: bool = false,
+    requests: LineRequestOutbox = .{},
     editing_mode: EditingMode = .emacs,
     vi_state: ViState = .insert,
     vi_pending: ViPending = .none,
@@ -386,7 +210,6 @@ pub const LineSession = struct {
     vi_insert_repeat_ops: std.ArrayList(ViInputRepeatOp) = .empty,
     vi_replaying_repeat: bool = false,
     vi_macro_depth: usize = 0,
-    vi_aliases: ViAliasView = .{},
     editor: Editor,
     history: HistoryView = .{},
     history_index: ?i64 = null,
@@ -396,6 +219,7 @@ pub const LineSession = struct {
     history_search_match: ?HistoryView.HistoryEntry = null,
     history_search_matches: std.ArrayList(HistoryView.HistoryEntry) = .empty,
     history_search_selected: usize = 0,
+    autosuggestion: ?HistoryView.HistoryEntry = null,
     vi_history_search_query: std.ArrayList(u8) = .empty,
     vi_last_history_search_pattern: std.ArrayList(u8) = .empty,
     vi_last_history_search_direction: ?ViHistoryDirection = null,
@@ -403,10 +227,7 @@ pub const LineSession = struct {
     completion_menu: CompletionMenu = .{},
     state: State = .editing,
     submitted_line: ?[]const u8 = null,
-    external_editor_request: ?ExternalEditorRequest = null,
-    path_expansion_request: ?PathExpansionRequest = null,
     paste_depth: usize = 0,
-    clear_screen_requested: bool = false,
     completion_flash: ?CompletionFlash = null,
     pending_removable_suffix: ?PendingRemovableSuffix = null,
 
@@ -447,11 +268,11 @@ pub const LineSession = struct {
 
     pub fn deinit(self: *LineSession) void {
         if (self.submitted_line) |line| self.allocator.free(line);
-        if (self.external_editor_request) |request| request.deinit(self.allocator);
-        self.clearPathExpansionRequest();
+        self.requests.deinit(self.allocator);
         self.clearPendingRemovableSuffix();
         if (self.history_search_match) |entry| entry.deinit(self.allocator);
         self.clearHistorySearchMatches();
+        self.clearAutosuggestion();
         self.history_search_matches.deinit(self.allocator);
         self.history_search_original.deinit(self.allocator);
         self.history_search_query.deinit(self.allocator);
@@ -468,6 +289,10 @@ pub const LineSession = struct {
         self.editor.deinit();
         self.allocator.free(self.prompt.bytes);
         self.* = undefined;
+    }
+
+    pub fn takeRequest(self: *LineSession) ?LineRequest {
+        return self.requests.takeFirst();
     }
 
     pub fn handleKey(self: *LineSession, event: KeyEvent) !void {
@@ -512,7 +337,7 @@ pub const LineSession = struct {
             .ctrl_r => try self.beginHistorySearch(),
             .clear_screen => {
                 self.completion_menu.clear(self.allocator);
-                self.clear_screen_requested = true;
+                self.requests.put(self.allocator, .clear_screen);
             },
             .backspace => {
                 self.editor.buffer.deletePrevious();
@@ -625,7 +450,7 @@ pub const LineSession = struct {
             },
             .clear_screen => {
                 self.completion_menu.clear(self.allocator);
-                self.clear_screen_requested = true;
+                self.requests.put(self.allocator, .clear_screen);
             },
             .left, .right, .home, .end, .word_left, .word_right => {
                 try self.editor.handleKey(event);
@@ -682,7 +507,7 @@ pub const LineSession = struct {
             .enter => return self.submitInput(),
             .ctrl_c => return self.clearInput(),
             .clear_screen => {
-                self.clear_screen_requested = true;
+                self.requests.put(self.allocator, .clear_screen);
                 return;
             },
             .escape => {
@@ -884,8 +709,7 @@ pub const LineSession = struct {
         } else try self.allocator.dupe(u8, self.editor.buffer.text());
         errdefer self.allocator.free(text);
 
-        if (self.external_editor_request) |request| request.deinit(self.allocator);
-        self.external_editor_request = .{ .text = text, .number = maybe_number };
+        self.requests.put(self.allocator, .{ .external_editor = .{ .text = text, .number = maybe_number } });
         self.state = .external_editor;
         self.resetViCommandPrefix();
         self.completion_menu.clear(self.allocator);
@@ -899,26 +723,26 @@ pub const LineSession = struct {
         const word = try self.allocator.dupe(u8, self.editor.buffer.text()[range.start..range.end]);
         errdefer self.allocator.free(word);
         self.clearPathExpansionRequest();
-        self.path_expansion_request = .{
+        self.requests.put(self.allocator, .{ .path_expansion = .{
             .command = command,
             .word = word,
             .replace_start = range.start,
             .replace_end = range.end,
             .replacement_style = pathExpansionReplacementStyle(word),
-        };
+        } });
         self.resetViCommandPrefix();
         self.completion_menu.clear(self.allocator);
     }
 
     pub fn takePathExpansionRequest(self: *LineSession) ?PathExpansionRequest {
-        const request = self.path_expansion_request orelse return null;
-        self.path_expansion_request = null;
-        return request;
+        return switch (self.requests.take(.path_expansion) orelse return null) {
+            .path_expansion => |request| request,
+            else => unreachable,
+        };
     }
 
     fn clearPathExpansionRequest(self: *LineSession) void {
-        if (self.path_expansion_request) |request| request.deinit(self.allocator);
-        self.path_expansion_request = null;
+        self.requests.clear(self.allocator, .path_expansion);
     }
 
     pub fn applyPathExpansion(self: *LineSession, request: PathExpansionRequest, matches: PathExpansionMatches) !bool {
@@ -945,7 +769,8 @@ pub const LineSession = struct {
     fn historyEntryByNumber(self: *LineSession, number: usize) !?HistoryView.HistoryEntry {
         if (number == 0) return null;
         if (self.history.context != null and self.history.by_number != null) {
-            return self.history.by_number.?(self.history.context.?, self.allocator, number);
+            self.requests.put(self.allocator, .{ .history = .{ .by_number = number } });
+            return null;
         }
         const index = number - 1;
         if (index >= self.history.entries.len) return null;
@@ -953,9 +778,10 @@ pub const LineSession = struct {
     }
 
     pub fn takeExternalEditorRequest(self: *LineSession) ?ExternalEditorRequest {
-        const request = self.external_editor_request orelse return null;
-        self.external_editor_request = null;
-        return request;
+        return switch (self.requests.take(.external_editor) orelse return null) {
+            .external_editor => |request| request,
+            else => unreachable,
+        };
     }
 
     pub fn acceptExternalEditorResult(self: *LineSession, text: []const u8) !void {
@@ -1289,16 +1115,81 @@ pub const LineSession = struct {
         self.vi_pending = .none;
         if (event.key != .text or event.text.len == 0) return;
         const letter = firstCodepoint(event.text) orelse return;
-        try self.applyViAlias(letter);
+        self.requestViAliasLookup(letter);
     }
 
-    fn applyViAlias(self: *LineSession, letter: u21) !void {
+    fn requestViAliasLookup(self: *LineSession, letter: u21) void {
         if (!isPortableAlphabetic(letter)) return;
-        const context = self.vi_aliases.context orelse return;
-        const lookup = self.vi_aliases.lookup orelse return;
-        const value = try lookup(context, self.allocator, letter) orelse return;
-        defer self.allocator.free(value);
-        try self.feedViMacro(value);
+        if (self.vi_macro_depth >= max_vi_macro_depth) return;
+        self.vi_macro_depth += 1;
+        self.requests.put(self.allocator, .{ .vi_alias_lookup = letter });
+    }
+
+    pub fn takeViAliasLookupRequest(self: *LineSession) ?u21 {
+        return switch (self.requests.take(.vi_alias_lookup) orelse return null) {
+            .vi_alias_lookup => |letter| letter,
+            else => unreachable,
+        };
+    }
+
+    pub fn applyViAliasResult(self: *LineSession, letter: u21, value: ?[]const u8) !void {
+        _ = letter;
+        std.debug.assert(self.vi_macro_depth != 0);
+        defer {
+            if (!self.requests.contains(.vi_alias_lookup)) self.vi_macro_depth = 0;
+        }
+        const bytes = value orelse return;
+        try self.feedViMacroBytes(bytes);
+    }
+
+    pub fn takeHistoryRequest(self: *LineSession) ?HistoryRequest {
+        return switch (self.requests.take(.history) orelse return null) {
+            .history => |request| request,
+            else => unreachable,
+        };
+    }
+
+    pub fn applyHistoryResult(self: *LineSession, request: HistoryRequest, result: HistoryResult) !void {
+        switch (request) {
+            .previous => |previous| try self.applyPreviousHistoryResult(
+                previous.prefix,
+                previous.before,
+                historyResultEntry(result),
+            ),
+            .next => |next| try self.applyNextHistoryResult(next.prefix, next.after, historyResultEntry(result)),
+            .by_number => |number| try self.applyHistoryByNumberResult(number, historyResultEntry(result)),
+            .search => |search| try self.applyHistorySearchResult(search.query, result),
+            .search_next => |search| try self.applyHistorySearchResult(search.query, result),
+            .suggest => |prefix| try self.applyAutosuggestionResult(prefix, historyResultEntry(result)),
+        }
+    }
+
+    fn historyResultEntry(result: HistoryResult) ?HistoryView.HistoryEntry {
+        return switch (result) {
+            .entry => |entry| entry,
+            .entries => unreachable,
+        };
+    }
+
+    fn historyResultEntries(result: HistoryResult) []HistoryView.HistoryEntry {
+        return switch (result) {
+            .entries => |entries| entries,
+            .entry => unreachable,
+        };
+    }
+
+    fn applyHistoryByNumberResult(self: *LineSession, number: usize, maybe_entry: ?HistoryView.HistoryEntry) !void {
+        const entry = maybe_entry orelse {
+            self.resetViCommandPrefix();
+            return;
+        };
+        defer entry.deinit(self.allocator);
+        const text = try self.allocator.dupe(u8, entry.text);
+        errdefer self.allocator.free(text);
+        self.requests.put(self.allocator, .{ .external_editor = .{ .text = text, .number = number } });
+        self.state = .external_editor;
+        self.resetViCommandPrefix();
+        self.completion_menu.clear(self.allocator);
     }
 
     fn feedViMacro(self: *LineSession, bytes: []const u8) !void {
@@ -1306,6 +1197,10 @@ pub const LineSession = struct {
         self.vi_macro_depth += 1;
         defer self.vi_macro_depth -= 1;
 
+        try self.feedViMacroBytes(bytes);
+    }
+
+    fn feedViMacroBytes(self: *LineSession, bytes: []const u8) !void {
         var index: usize = 0;
         while (index < bytes.len and self.state == .editing) {
             const event = viMacroKeyEvent(bytes, &index) orelse return;
@@ -1775,19 +1670,15 @@ pub const LineSession = struct {
     }
 
     pub fn takeClearScreenRequest(self: *LineSession) bool {
-        const requested = self.clear_screen_requested;
-        self.clear_screen_requested = false;
-        return requested;
+        return self.requests.take(.clear_screen) != null;
     }
 
     pub fn invalidatePrompt(self: *LineSession) void {
-        self.prompt_dirty = true;
+        self.requests.put(self.allocator, .refresh_prompt);
     }
 
     pub fn takePromptInvalidation(self: *LineSession) bool {
-        const dirty = self.prompt_dirty;
-        self.prompt_dirty = false;
-        return dirty;
+        return self.requests.take(.refresh_prompt) != null;
     }
 
     pub fn replacePrompt(self: *LineSession, prompt: Prompt) !void {
@@ -1797,7 +1688,7 @@ pub const LineSession = struct {
             .bytes = bytes,
             .visible_width = prompt.visible_width,
         };
-        self.prompt_dirty = false;
+        self.requests.clear(self.allocator, .refresh_prompt);
     }
 
     pub fn applyCompletion(self: *LineSession, application: completion.Application) !void {
@@ -1922,8 +1813,7 @@ pub const LineSession = struct {
         } else if (self.state == .editing) {
             // Ghost suggestions are editing aids; an accepted line must show
             // only the text that actually runs.
-            if (try self.currentAutosuggestion(allocator)) |suggestion| {
-                defer suggestion.deinit(allocator);
+            if (self.autosuggestion) |suggestion| {
                 const text = self.editor.buffer.text();
                 if (std.mem.startsWith(u8, suggestion.text, text) and renderableInlineText(suggestion.text)) {
                     suggestion_suffix = try allocator.dupe(u8, suggestion.text[text.len..]);
@@ -1958,13 +1848,28 @@ pub const LineSession = struct {
 
     fn historyPrevious(self: *LineSession) !void {
         const prefix = try self.historyPrefix();
-        if (try self.queryPreviousHistory(prefix)) |entry| {
+        if (try self.queryPreviousHistory(prefix)) |_| return;
+        try self.applyStaticPreviousHistory(prefix);
+    }
+
+    fn applyPreviousHistoryResult(
+        self: *LineSession,
+        prefix: []const u8,
+        before: ?i64,
+        maybe_entry: ?HistoryView.HistoryEntry,
+    ) !void {
+        _ = before;
+        if (maybe_entry) |entry| {
             defer entry.deinit(self.allocator);
             self.history_index = entry.id;
             try self.editor.buffer.replace(entry.text);
             self.completion_menu.clear(self.allocator);
             return;
         }
+        try self.applyStaticPreviousHistory(prefix);
+    }
+
+    fn applyStaticPreviousHistory(self: *LineSession, prefix: []const u8) !void {
         if (self.history.entries.len == 0) return;
         const start: usize = if (self.history_index) |index| @intCast(index) else self.history.entries.len;
         const index = self.findPreviousHistoryMatch(start, prefix) orelse return;
@@ -1976,13 +1881,27 @@ pub const LineSession = struct {
     fn historyNext(self: *LineSession) !void {
         const index = self.history_index orelse return;
         const prefix = self.saved_edit.items;
-        if (try self.queryNextHistory(prefix, index)) |entry| {
+        if (try self.queryNextHistory(prefix, index)) |_| return;
+        try self.applyStaticNextHistory(prefix, index);
+    }
+
+    fn applyNextHistoryResult(
+        self: *LineSession,
+        prefix: []const u8,
+        after: i64,
+        maybe_entry: ?HistoryView.HistoryEntry,
+    ) !void {
+        if (maybe_entry) |entry| {
             defer entry.deinit(self.allocator);
             self.history_index = entry.id;
             try self.editor.buffer.replace(entry.text);
             self.completion_menu.clear(self.allocator);
             return;
         }
+        try self.applyStaticNextHistory(prefix, after);
+    }
+
+    fn applyStaticNextHistory(self: *LineSession, prefix: []const u8, index: i64) !void {
         if (self.history.context != null) {
             self.history_index = null;
             try self.editor.buffer.replace(self.saved_edit.items);
@@ -2007,20 +1926,24 @@ pub const LineSession = struct {
     }
 
     fn queryPreviousHistoryBefore(self: *LineSession, prefix: []const u8, before: ?i64) !?HistoryView.HistoryEntry {
-        const context = self.history.context orelse return null;
-        const previous = self.history.previous orelse return null;
-        return previous(context, self.allocator, prefix, before);
+        if (self.history.context == null or self.history.previous == null) return null;
+        self.requests.put(self.allocator, .{ .history = .{ .previous = .{
+            .prefix = try self.allocator.dupe(u8, prefix),
+            .before = before,
+        } } });
+        return null;
     }
 
     fn queryNextHistory(self: *LineSession, prefix: []const u8, after: i64) !?HistoryView.HistoryEntry {
-        const context = self.history.context orelse return null;
-        const next = self.history.next orelse return null;
-        return next(context, self.allocator, prefix, after);
+        if (self.history.context == null or self.history.next == null) return null;
+        self.requests.put(self.allocator, .{ .history = .{ .next = .{
+            .prefix = try self.allocator.dupe(u8, prefix),
+            .after = after,
+        } } });
+        return null;
     }
 
     fn beginHistorySearch(self: *LineSession) !void {
-        const search = self.history.search orelse return;
-        _ = search;
         self.history_search_query.clearRetainingCapacity();
         self.history_search_original.clearRetainingCapacity();
         try self.history_search_original.appendSlice(self.allocator, self.editor.buffer.text());
@@ -2092,57 +2015,38 @@ pub const LineSession = struct {
         self.clearHistorySearchMatch();
         self.clearHistorySearchMatches();
         self.history_search_selected = 0;
-        const context = self.history.context orelse return;
-        const search = self.history.search orelse return;
-        var cursor = before;
-        while (self.history_search_matches.items.len < 20) {
-            const entry = try search(context, self.allocator, self.history_search_query.items, cursor) orelse break;
-            cursor = entry.id;
-            try self.history_search_matches.append(self.allocator, entry);
-        }
-        if (self.history_search_matches.items.len == 0 and before != null) {
-            cursor = null;
-            while (self.history_search_matches.items.len < 20) {
-                const entry = try search(context, self.allocator, self.history_search_query.items, cursor) orelse break;
-                cursor = entry.id;
-                try self.history_search_matches.append(self.allocator, entry);
-            }
-        }
-        if (self.history_search_matches.items.len != 0) {
-            self.history_search_match = try cloneHistoryEntry(self.allocator, self.history_search_matches.items[0]);
-        }
+        self.requests.put(self.allocator, .{ .history = .{ .search = .{
+            .query = try self.allocator.dupe(u8, self.history_search_query.items),
+            .before = before,
+        } } });
     }
 
     fn refreshHistorySearchNext(self: *LineSession, after: ?i64) !void {
         self.clearHistorySearchMatch();
         self.clearHistorySearchMatches();
         self.history_search_selected = 0;
-        const context = self.history.context orelse return;
-        const search_next = self.history.search_next orelse return try self.refreshHistorySearch(null);
-        var cursor = after;
-        while (self.history_search_matches.items.len < 20) {
-            const entry = try search_next(
-                context,
-                self.allocator,
-                self.history_search_query.items,
-                cursor,
-            ) orelse break;
-            cursor = entry.id;
-            try self.history_search_matches.append(self.allocator, entry);
+        self.requests.put(self.allocator, .{ .history = .{ .search_next = .{
+            .query = try self.allocator.dupe(u8, self.history_search_query.items),
+            .after = after,
+        } } });
+    }
+
+    fn applyHistorySearchResult(self: *LineSession, query: []const u8, result: HistoryResult) !void {
+        if (!std.mem.eql(u8, query, self.history_search_query.items)) {
+            result.deinit(self.allocator);
+            return;
         }
-        if (self.history_search_matches.items.len == 0 and after != null) {
-            cursor = null;
-            while (self.history_search_matches.items.len < 20) {
-                const entry = try search_next(
-                    context,
-                    self.allocator,
-                    self.history_search_query.items,
-                    cursor,
-                ) orelse break;
-                cursor = entry.id;
-                try self.history_search_matches.append(self.allocator, entry);
+        const entries = historyResultEntries(result);
+        var transferred = false;
+        errdefer {
+            if (!transferred) {
+                for (entries) |entry| entry.deinit(self.allocator);
+                self.allocator.free(entries);
             }
         }
+        try self.history_search_matches.appendSlice(self.allocator, entries);
+        self.allocator.free(entries);
+        transferred = true;
         if (self.history_search_matches.items.len != 0) {
             self.history_search_match = try cloneHistoryEntry(self.allocator, self.history_search_matches.items[0]);
         }
@@ -2197,20 +2101,42 @@ pub const LineSession = struct {
         self.history_search_match = null;
     }
 
-    fn currentAutosuggestion(self: *LineSession, allocator: std.mem.Allocator) !?HistoryView.HistoryEntry {
-        if (self.completion_menu.isOpen()) return null;
-        if (self.editor.buffer.cursor_byte != self.editor.buffer.text().len) return null;
-        if (self.editor.buffer.text().len == 0) return null;
-        const context = self.history.context orelse return null;
-        const suggest = self.history.suggest orelse return null;
-        return suggest(context, allocator, self.editor.buffer.text());
+    pub fn requestAutosuggestion(self: *LineSession) !void {
+        self.clearAutosuggestion();
+        if (self.state != .editing) return;
+        if (self.completion_menu.isOpen()) return;
+        if (self.editor.buffer.cursor_byte != self.editor.buffer.text().len) return;
+        if (self.editor.buffer.text().len == 0) return;
+        self.requests.put(self.allocator, .{ .history = .{
+            .suggest = try self.allocator.dupe(u8, self.editor.buffer.text()),
+        } });
+    }
+
+    fn applyAutosuggestionResult(self: *LineSession, prefix: []const u8, maybe_entry: ?HistoryView.HistoryEntry) !void {
+        self.clearAutosuggestion();
+        const entry = maybe_entry orelse return;
+        errdefer entry.deinit(self.allocator);
+        if (!std.mem.eql(u8, prefix, self.editor.buffer.text())) {
+            entry.deinit(self.allocator);
+            return;
+        }
+        if (!std.mem.startsWith(u8, entry.text, prefix)) {
+            entry.deinit(self.allocator);
+            return;
+        }
+        self.autosuggestion = entry;
+    }
+
+    fn clearAutosuggestion(self: *LineSession) void {
+        if (self.autosuggestion) |entry| entry.deinit(self.allocator);
+        self.autosuggestion = null;
     }
 
     fn acceptAutosuggestion(self: *LineSession) !bool {
-        if (try self.currentAutosuggestion(self.allocator)) |suggestion| {
-            defer suggestion.deinit(self.allocator);
+        if (self.autosuggestion) |suggestion| {
             if (!renderableInlineText(suggestion.text)) return false;
             try self.editor.buffer.replace(suggestion.text);
+            self.clearAutosuggestion();
             self.completion_menu.clear(self.allocator);
             return true;
         }
@@ -2360,196 +2286,9 @@ fn isRemovableSuffixTerminator(event: KeyEvent) bool {
     };
 }
 
-fn reverseViHistoryDirection(direction: ViHistoryDirection) ViHistoryDirection {
-    return switch (direction) {
-        .backward => .forward,
-        .forward => .backward,
-    };
-}
-
-fn isPortableAlphabetic(codepoint: u21) bool {
-    return (codepoint >= 'A' and codepoint <= 'Z') or (codepoint >= 'a' and codepoint <= 'z');
-}
-
-fn viMacroKeyEvent(bytes: []const u8, index: *usize) ?KeyEvent {
-    if (index.* >= bytes.len) return null;
-    const start = index.*;
-    const byte = bytes[start];
-    index.* += 1;
-    return switch (byte) {
-        '\x1b' => .{ .key = .escape },
-        '\r', '\n' => .{ .key = .enter },
-        '\x08', '\x7f' => .{ .key = .backspace },
-        else => blk: {
-            if (byte >= 0x80) index.* = @min(nextCodepointEnd(bytes, start), bytes.len);
-            break :blk .{ .key = .text, .text = bytes[start..index.*] };
-        },
-    };
-}
-
-fn staticHistoryStart(entry_count: usize, cursor: ?i64) usize {
-    const index = cursor orelse return entry_count;
-    if (index < 0) return 0;
-    return @min(@as(usize, @intCast(index)), entry_count);
-}
-
-fn viHistoryBigword(line: []const u8, maybe_count: ?usize) ?[]const u8 {
-    var last: ?[]const u8 = null;
-    var ordinal: usize = 0;
-    var index: usize = 0;
-    while (index < line.len) {
-        while (index < line.len and isAsciiWhitespace(line[index])) index += 1;
-        if (index >= line.len) break;
-        const start = index;
-        while (index < line.len and !isAsciiWhitespace(line[index])) index += 1;
-        ordinal += 1;
-        const bigword = line[start..index];
-        if (maybe_count) |count| {
-            if (ordinal == count) return bigword;
-        } else {
-            last = bigword;
-        }
-    }
-    return last;
-}
-
-fn viHistoryPatternMatches(pattern: []const u8, text: []const u8) bool {
-    if (pattern.len == 0) return false;
-    if (pattern[0] == '^') return viHistoryPatternMatchesAt(pattern[1..], text, 0, 0);
-
-    var text_index: usize = 0;
-    while (true) {
-        if (viHistoryPatternMatchesAt(pattern, text, 0, text_index)) return true;
-        if (text_index >= text.len) break;
-        text_index = nextCodepointEnd(text, text_index);
-    }
-    return false;
-}
-
-fn viHistoryPatternMatchesAt(pattern: []const u8, text: []const u8, pattern_index: usize, text_index: usize) bool {
-    if (pattern_index == pattern.len) return true;
-
-    switch (pattern[pattern_index]) {
-        '\\' => {
-            const literal_index = pattern_index + 1;
-            if (literal_index >= pattern.len) {
-                return text_index < text.len and
-                    text[text_index] == '\\' and
-                    viHistoryPatternMatchesAt(pattern, text, literal_index, text_index + 1);
-            }
-            return text_index < text.len and
-                text[text_index] == pattern[literal_index] and
-                viHistoryPatternMatchesAt(pattern, text, literal_index + 1, text_index + 1);
-        },
-        '*' => {
-            var next_text = text_index;
-            while (true) {
-                if (viHistoryPatternMatchesAt(pattern, text, pattern_index + 1, next_text)) return true;
-                if (next_text >= text.len) break;
-                next_text = nextCodepointEnd(text, next_text);
-            }
-            return false;
-        },
-        '?' => return text_index < text.len and
-            viHistoryPatternMatchesAt(pattern, text, pattern_index + 1, nextCodepointEnd(text, text_index)),
-        '[' => {
-            if (matchViHistoryPatternBracket(pattern, pattern_index, text, text_index)) |matched| {
-                return matched.ok and
-                    viHistoryPatternMatchesAt(pattern, text, matched.next_pattern, nextCodepointEnd(text, text_index));
-            }
-            return text_index < text.len and
-                text[text_index] == '[' and
-                viHistoryPatternMatchesAt(pattern, text, pattern_index + 1, text_index + 1);
-        },
-        else => |byte| return text_index < text.len and
-            text[text_index] == byte and
-            viHistoryPatternMatchesAt(pattern, text, pattern_index + 1, text_index + 1),
-    }
-}
-
-const ViHistoryPatternBracketMatch = struct { ok: bool, next_pattern: usize };
-
-fn matchViHistoryPatternBracket(
-    pattern: []const u8,
-    pattern_index: usize,
-    text: []const u8,
-    text_index: usize,
-) ?ViHistoryPatternBracketMatch {
-    if (text_index >= text.len) return .{ .ok = false, .next_pattern = pattern_index + 1 };
-    var index = pattern_index + 1;
-    if (index >= pattern.len) return null;
-    const negated = pattern[index] == '!' or pattern[index] == '^';
-    if (negated) index += 1;
-
-    var matched = false;
-    var saw_end = false;
-    var first_expression = true;
-    while (index < pattern.len) : (index += 1) {
-        if (pattern[index] == ']' and !first_expression) {
-            saw_end = true;
-            break;
-        }
-        first_expression = false;
-
-        if (matchViHistoryPatternBracketCharacterClass(pattern, index, text[text_index])) |class| {
-            if (class.ok) matched = true;
-            index = class.end_index;
-            continue;
-        }
-
-        if (index + 2 < pattern.len and pattern[index + 1] == '-' and pattern[index + 2] != ']') {
-            const start = pattern[index];
-            const end = pattern[index + 2];
-            if (start <= text[text_index] and text[text_index] <= end) matched = true;
-            index += 2;
-            continue;
-        }
-
-        if (pattern[index] == '\\' and index + 1 < pattern.len) index += 1;
-        if (pattern[index] == text[text_index]) matched = true;
-    }
-    if (!saw_end) return null;
-    return .{ .ok = if (negated) !matched else matched, .next_pattern = index + 1 };
-}
-
-const ViHistoryPatternBracketClassMatch = struct { ok: bool, end_index: usize };
-
-fn matchViHistoryPatternBracketCharacterClass(
-    pattern: []const u8,
-    index: usize,
-    text: u8,
-) ?ViHistoryPatternBracketClassMatch {
-    if (index + 3 >= pattern.len or pattern[index] != '[' or pattern[index + 1] != ':') return null;
-    const name_start = index + 2;
-    var name_end = name_start;
-    while (name_end + 1 < pattern.len) : (name_end += 1) {
-        if (pattern[name_end] == ':' and pattern[name_end + 1] == ']') {
-            const ok = bracketCharacterClassMatches(pattern[name_start..name_end], text) orelse return null;
-            return .{ .ok = ok, .end_index = name_end + 1 };
-        }
-    }
-    return null;
-}
-
-fn bracketCharacterClassMatches(class_name: []const u8, text: u8) ?bool {
-    if (std.mem.eql(u8, class_name, "alnum")) return std.ascii.isAlphanumeric(text);
-    if (std.mem.eql(u8, class_name, "alpha")) return std.ascii.isAlphabetic(text);
-    if (std.mem.eql(u8, class_name, "blank")) return text == ' ' or text == '\t';
-    if (std.mem.eql(u8, class_name, "cntrl")) return std.ascii.isControl(text);
-    if (std.mem.eql(u8, class_name, "digit")) return std.ascii.isDigit(text);
-    if (std.mem.eql(u8, class_name, "graph")) return std.ascii.isGraphical(text);
-    if (std.mem.eql(u8, class_name, "lower")) return std.ascii.isLower(text);
-    if (std.mem.eql(u8, class_name, "print")) return std.ascii.isPrint(text);
-    if (std.mem.eql(u8, class_name, "punct")) return std.ascii.isPunctuation(text);
-    if (std.mem.eql(u8, class_name, "space")) return std.ascii.isWhitespace(text);
-    if (std.mem.eql(u8, class_name, "upper")) return std.ascii.isUpper(text);
-    if (std.mem.eql(u8, class_name, "xdigit")) return std.ascii.isHex(text);
-    return null;
-}
-
-fn cloneHistoryEntry(allocator: std.mem.Allocator, entry: HistoryView.HistoryEntry) !HistoryView.HistoryEntry {
-    return .{ .id = entry.id, .text = try allocator.dupe(u8, entry.text), .when = entry.when };
-}
+const cloneHistoryEntry = history_mod.cloneEntry;
+const historySearchDescription = history_mod.description;
+pub const relativeAge = history_mod.relativeAge;
 
 fn normalizePastedText(allocator: std.mem.Allocator, buffer: *std.ArrayList(u8), text: []const u8) ![]const u8 {
     if (std.mem.indexOfScalar(u8, text, '\r') == null) return text;
@@ -2563,34 +2302,6 @@ fn normalizePastedText(allocator: std.mem.Allocator, buffer: *std.ArrayList(u8),
         }
     }
     return buffer.items;
-}
-
-fn historySearchDescription(allocator: std.mem.Allocator, now: i64, when: i64) !?[]const u8 {
-    if (now <= 0 or when <= 0) return null;
-    var age_buffer: [16]u8 = undefined;
-    const age = relativeAge(&age_buffer, now, when);
-    return try allocator.dupe(u8, age);
-}
-
-pub fn relativeAge(buffer: *[16]u8, now: i64, when: i64) []const u8 {
-    const elapsed = @max(now - when, 0);
-    const value = if (elapsed < 60)
-        elapsed
-    else if (elapsed < 60 * 60)
-        @divTrunc(elapsed, 60)
-    else if (elapsed < 24 * 60 * 60)
-        @divTrunc(elapsed, 60 * 60)
-    else
-        @divTrunc(elapsed, 24 * 60 * 60);
-    const suffix: u8 = if (elapsed < 60)
-        's'
-    else if (elapsed < 60 * 60)
-        'm'
-    else if (elapsed < 24 * 60 * 60)
-        'h'
-    else
-        'd';
-    return std.fmt.bufPrint(buffer, "{d}{c}", .{ value, suffix }) catch unreachable;
 }
 
 fn styledHistorySearchLabel(
@@ -2632,304 +2343,6 @@ pub fn frameFromLine(allocator: std.mem.Allocator, editor: Editor, options: Rend
         .text = editor.buffer.text(),
         .cursor_byte = editor.buffer.cursor_byte,
     }, options);
-}
-
-fn viMotion(bytes: []const u8, cursor_byte: usize, command: u21, count: usize) ?ViMotionResult {
-    if (bytes.len == 0) return .{ .cursor = 0 };
-    return switch (command) {
-        '0' => .{ .cursor = 0 },
-        '^' => .{ .cursor = firstNonBlank(bytes) },
-        '$' => if (count == 1) .{ .cursor = lastGraphemeStart(bytes), .inclusive = true } else null,
-        'h' => .{ .cursor = previousViCharacter(bytes, cursor_byte, count) },
-        'l', ' ' => .{ .cursor = nextViCharacter(bytes, cursor_byte, count) },
-        '|' => .{ .cursor = nthViCharacter(bytes, count) },
-        'w' => .{ .cursor = nextViWordStartCount(bytes, cursor_byte, count, .word) },
-        'W' => .{ .cursor = nextViWordStartCount(bytes, cursor_byte, count, .bigword) },
-        'e' => .{ .cursor = nextViWordEndCount(bytes, cursor_byte, count, .word), .inclusive = true },
-        'E' => .{ .cursor = nextViWordEndCount(bytes, cursor_byte, count, .bigword), .inclusive = true },
-        'b' => .{ .cursor = previousViWordStartCount(bytes, cursor_byte, count, .word) },
-        'B' => .{ .cursor = previousViWordStartCount(bytes, cursor_byte, count, .bigword) },
-        else => null,
-    };
-}
-
-fn viMotionRange(bytes: []const u8, cursor_byte: usize, motion: ViMotionResult) ViMotionRange {
-    if (motion.cursor < cursor_byte) return .{
-        .start = motion.cursor,
-        .end = cursor_byte,
-        .cursor_after_delete = motion.cursor,
-    };
-    const end = if (motion.inclusive) nextGraphemeEnd(bytes, motion.cursor) else motion.cursor;
-    return .{ .start = cursor_byte, .end = end, .cursor_after_delete = cursor_byte };
-}
-
-fn viOperatorMotionRange(
-    bytes: []const u8,
-    cursor_byte: usize,
-    operator: ViOperator,
-    motion_command: u21,
-    count: usize,
-    motion: ViMotionResult,
-) ViMotionRange {
-    if (operator == .change and (motion_command == 'w' or motion_command == 'W')) {
-        return viChangeWordMotionRange(bytes, cursor_byte, motion_command, count, motion);
-    }
-    if ((motion_command == 'w' or motion_command == 'W') and
-        motion.cursor == lastGraphemeStart(bytes) and
-        motion.cursor >= cursor_byte)
-    {
-        return .{ .start = cursor_byte, .end = bytes.len, .cursor_after_delete = cursor_byte };
-    }
-    return viMotionRange(bytes, cursor_byte, motion);
-}
-
-fn viChangeWordMotionRange(
-    bytes: []const u8,
-    cursor_byte: usize,
-    motion_command: u21,
-    count: usize,
-    motion: ViMotionResult,
-) ViMotionRange {
-    if (bytes.len == 0 or motion.cursor <= cursor_byte) return viMotionRange(bytes, cursor_byte, motion);
-    if (count == 1 and cursor_byte < bytes.len and isAsciiWhitespace(bytes[cursor_byte])) {
-        return .{
-            .start = cursor_byte,
-            .end = nextCodepointEnd(bytes, cursor_byte),
-            .cursor_after_delete = cursor_byte,
-        };
-    }
-    if (motion.cursor == lastGraphemeStart(bytes)) {
-        return .{ .start = cursor_byte, .end = bytes.len, .cursor_after_delete = cursor_byte };
-    }
-
-    var end = motion.cursor;
-    while (end > cursor_byte) {
-        const previous = previousCodepointStart(bytes, end);
-        if (!isAsciiWhitespace(bytes[previous])) break;
-        end = previous;
-    }
-    if (end == cursor_byte and (motion_command == 'w' or motion_command == 'W')) end = motion.cursor;
-    return .{ .start = cursor_byte, .end = end, .cursor_after_delete = cursor_byte };
-}
-
-fn multiplyViCounts(a: usize, b: usize) usize {
-    if (a != 0 and b > std.math.maxInt(usize) / a) return std.math.maxInt(usize);
-    return a * b;
-}
-
-fn previousViCharacter(bytes: []const u8, cursor_byte: usize, count: usize) usize {
-    var cursor = cursor_byte;
-    var remaining = count;
-    while (remaining != 0 and cursor != 0) : (remaining -= 1) cursor = previousGraphemeStart(bytes, cursor);
-    return cursor;
-}
-
-fn nextViCharacter(bytes: []const u8, cursor_byte: usize, count: usize) usize {
-    var cursor = cursor_byte;
-    var remaining = count;
-    while (remaining != 0 and cursor < lastGraphemeStart(bytes)) : (remaining -= 1) {
-        cursor = nextGraphemeEnd(bytes, cursor);
-    }
-    return @min(cursor, lastGraphemeStart(bytes));
-}
-
-fn nthViCharacter(bytes: []const u8, count: usize) usize {
-    var cursor: usize = 0;
-    var remaining = count - 1;
-    while (remaining != 0 and cursor < lastGraphemeStart(bytes)) : (remaining -= 1) {
-        cursor = nextGraphemeEnd(bytes, cursor);
-    }
-    return cursor;
-}
-
-fn lastGraphemeStart(bytes: []const u8) usize {
-    return previousGraphemeStart(bytes, bytes.len);
-}
-
-fn firstNonBlank(bytes: []const u8) usize {
-    var cursor: usize = 0;
-    while (cursor < bytes.len) : (cursor = nextCodepointEnd(bytes, cursor)) {
-        if (!isAsciiWhitespace(bytes[cursor])) return cursor;
-    }
-    return 0;
-}
-
-fn nextViWordStartCount(bytes: []const u8, cursor_byte: usize, count: usize, kind: ViWordKind) usize {
-    var cursor = cursor_byte;
-    var remaining = count;
-    while (remaining != 0) : (remaining -= 1) cursor = nextViWordStart(bytes, cursor, kind);
-    return cursor;
-}
-
-fn nextViWordStart(bytes: []const u8, cursor_byte: usize, kind: ViWordKind) usize {
-    if (cursor_byte >= lastGraphemeStart(bytes)) return lastGraphemeStart(bytes);
-    var cursor = nextCodepointEnd(bytes, cursor_byte);
-    if (kind == .bigword) {
-        while (cursor < bytes.len and !isAsciiWhitespace(bytes[cursor])) cursor = nextCodepointEnd(bytes, cursor);
-    } else if (cursor_byte < bytes.len and !isAsciiWhitespace(bytes[cursor_byte])) {
-        const class = viWordClass(bytes[cursor_byte]);
-        while (cursor < bytes.len and
-            !isAsciiWhitespace(bytes[cursor]) and
-            viWordClass(bytes[cursor]) == class) : (cursor = nextCodepointEnd(bytes, cursor))
-        {}
-    }
-    while (cursor < bytes.len and isAsciiWhitespace(bytes[cursor])) cursor = nextCodepointEnd(bytes, cursor);
-    return if (cursor >= bytes.len) lastGraphemeStart(bytes) else cursor;
-}
-
-fn nextViWordEndCount(bytes: []const u8, cursor_byte: usize, count: usize, kind: ViWordKind) usize {
-    var cursor = cursor_byte;
-    var remaining = count;
-    while (remaining != 0) : (remaining -= 1) cursor = nextViWordEnd(bytes, cursor, kind);
-    return cursor;
-}
-
-fn nextViWordEnd(bytes: []const u8, cursor_byte: usize, kind: ViWordKind) usize {
-    if (cursor_byte >= lastGraphemeStart(bytes)) return lastGraphemeStart(bytes);
-    var cursor = cursor_byte;
-    if (cursor < bytes.len and !isAsciiWhitespace(bytes[cursor]) and viAtWordEnd(bytes, cursor, kind)) {
-        cursor = nextViWordStart(bytes, cursor, kind);
-    } else if (cursor < bytes.len and isAsciiWhitespace(bytes[cursor])) {
-        while (cursor < bytes.len and isAsciiWhitespace(bytes[cursor])) cursor = nextCodepointEnd(bytes, cursor);
-    }
-    if (cursor >= bytes.len) return lastGraphemeStart(bytes);
-    if (kind == .bigword) {
-        while (nextCodepointEnd(bytes, cursor) < bytes.len and
-            !isAsciiWhitespace(bytes[nextCodepointEnd(bytes, cursor)]))
-        {
-            cursor = nextCodepointEnd(bytes, cursor);
-        }
-    } else {
-        const class = viWordClass(bytes[cursor]);
-        while (nextCodepointEnd(bytes, cursor) < bytes.len and
-            !isAsciiWhitespace(bytes[nextCodepointEnd(bytes, cursor)]) and
-            viWordClass(bytes[nextCodepointEnd(bytes, cursor)]) == class)
-        {
-            cursor = nextCodepointEnd(bytes, cursor);
-        }
-    }
-    return cursor;
-}
-
-fn viAtWordEnd(bytes: []const u8, cursor_byte: usize, kind: ViWordKind) bool {
-    const next = nextCodepointEnd(bytes, cursor_byte);
-    if (next >= bytes.len) return true;
-    if (isAsciiWhitespace(bytes[next])) return true;
-    if (kind == .bigword) return false;
-    return viWordClass(bytes[cursor_byte]) != viWordClass(bytes[next]);
-}
-
-fn previousViWordStartCount(bytes: []const u8, cursor_byte: usize, count: usize, kind: ViWordKind) usize {
-    var cursor = cursor_byte;
-    var remaining = count;
-    while (remaining != 0) : (remaining -= 1) cursor = previousViWordStart(bytes, cursor, kind);
-    return cursor;
-}
-
-fn previousViWordStart(bytes: []const u8, cursor_byte: usize, kind: ViWordKind) usize {
-    if (cursor_byte == 0) return 0;
-    var cursor = previousCodepointStart(bytes, cursor_byte);
-    while (cursor != 0 and isAsciiWhitespace(bytes[cursor])) cursor = previousCodepointStart(bytes, cursor);
-    if (kind == .bigword) {
-        while (cursor != 0) {
-            const previous = previousCodepointStart(bytes, cursor);
-            if (isAsciiWhitespace(bytes[previous])) break;
-            cursor = previous;
-        }
-    } else {
-        const class = viWordClass(bytes[cursor]);
-        while (cursor != 0) {
-            const previous = previousCodepointStart(bytes, cursor);
-            if (isAsciiWhitespace(bytes[previous]) or viWordClass(bytes[previous]) != class) break;
-            cursor = previous;
-        }
-    }
-    return cursor;
-}
-
-fn viWordClass(byte: u8) enum { word, punct } {
-    return if (std.ascii.isAlphanumeric(byte) or byte == '_') .word else .punct;
-}
-
-fn viFind(bytes: []const u8, cursor_byte: usize, find: ViFindCommand, count: usize) ?usize {
-    if (bytes.len == 0) return null;
-    var cursor = cursor_byte;
-    var remaining = count;
-    while (remaining != 0) : (remaining -= 1) {
-        cursor = switch (find.direction) {
-            .forward => findCodepointForward(bytes, cursor, find.char) orelse return null,
-            .backward => findCodepointBackward(bytes, cursor, find.char) orelse return null,
-        };
-    }
-    return switch (find.placement) {
-        .on_character => cursor,
-        .before_character => if (cursor == 0) cursor else previousGraphemeStart(bytes, cursor),
-        .after_character => @min(nextGraphemeEnd(bytes, cursor), lastGraphemeStart(bytes)),
-    };
-}
-
-fn findCodepointForward(bytes: []const u8, cursor_byte: usize, needle: u21) ?usize {
-    var cursor = nextCodepointEnd(bytes, cursor_byte);
-    while (cursor < bytes.len) : (cursor = nextCodepointEnd(bytes, cursor)) {
-        if (codepointAt(bytes, cursor) == needle) return cursor;
-    }
-    return null;
-}
-
-fn findCodepointBackward(bytes: []const u8, cursor_byte: usize, needle: u21) ?usize {
-    if (cursor_byte == 0) return null;
-    var cursor = previousCodepointStart(bytes, cursor_byte);
-    while (true) {
-        if (codepointAt(bytes, cursor) == needle) return cursor;
-        if (cursor == 0) return null;
-        cursor = previousCodepointStart(bytes, cursor);
-    }
-}
-
-fn reverseViFind(find: ViFindCommand) ViFindCommand {
-    return .{
-        .direction = switch (find.direction) {
-            .forward => .backward,
-            .backward => .forward,
-        },
-        .placement = switch (find.placement) {
-            .on_character => .on_character,
-            .before_character => .after_character,
-            .after_character => .before_character,
-        },
-        .char = find.char,
-    };
-}
-
-fn firstCodepoint(bytes: []const u8) ?u21 {
-    if (bytes.len == 0) return null;
-    return codepointAt(bytes, 0);
-}
-
-fn codepointAt(bytes: []const u8, cursor_byte: usize) ?u21 {
-    if (cursor_byte >= bytes.len) return null;
-    const len = std.unicode.utf8ByteSequenceLength(bytes[cursor_byte]) catch return null;
-    if (cursor_byte + len > bytes.len) return null;
-    return std.unicode.utf8Decode(bytes[cursor_byte .. cursor_byte + len]) catch null;
-}
-
-fn previousCodepointStart(bytes: []const u8, cursor_byte: usize) usize {
-    var i = cursor_byte - 1;
-    while (i != 0 and (bytes[i] & 0xc0) == 0x80) i -= 1;
-    return i;
-}
-
-fn nextCodepointEnd(bytes: []const u8, cursor_byte: usize) usize {
-    if (cursor_byte >= bytes.len) return bytes.len;
-    const len = std.unicode.utf8ByteSequenceLength(bytes[cursor_byte]) catch return bytes.len;
-    return cursor_byte + len;
-}
-
-fn isAsciiWhitespace(byte: u8) bool {
-    return switch (byte) {
-        ' ', '\t', '\n', '\r' => true,
-        else => false,
-    };
 }
 
 test "line session yanks last killed text" {
@@ -2992,6 +2405,24 @@ test "line session records clear screen requests" {
     try session.handleKey(.{ .key = .clear_screen });
     try std.testing.expect(session.takeClearScreenRequest());
     try std.testing.expect(!session.takeClearScreenRequest());
+}
+
+test "line session drains shell requests in emission order" {
+    var session = try LineSession.init(std.testing.allocator, "");
+    defer session.deinit();
+
+    try session.handleKey(.{ .key = .clear_screen });
+    session.invalidatePrompt();
+
+    const first = session.takeRequest() orelse return error.MissingLineRequest;
+    defer first.deinit(std.testing.allocator);
+    try std.testing.expectEqual(LineRequest.clear_screen, first);
+
+    const second = session.takeRequest() orelse return error.MissingLineRequest;
+    defer second.deinit(std.testing.allocator);
+    try std.testing.expectEqual(LineRequest.refresh_prompt, second);
+
+    try std.testing.expect(session.takeRequest() == null);
 }
 
 test "editor handles readline movement and deletion keys" {
@@ -3947,6 +3378,14 @@ fn testLookupViAlias(context: *anyopaque, allocator: std.mem.Allocator, letter: 
     return null;
 }
 
+fn testApplyViAliasRequest(session: *LineSession, aliases: TestViAliasSet) !bool {
+    const letter = session.takeViAliasLookupRequest() orelse return false;
+    const value = try testLookupViAlias(@constCast(&aliases), std.testing.allocator, letter);
+    defer if (value) |bytes| std.testing.allocator.free(bytes);
+    try session.applyViAliasResult(letter, value);
+    return true;
+}
+
 test "vi line session expands command aliases as editing input" {
     const alias_entries = [_]TestViAliasSet.Entry{
         .{ .letter = 'a', .value = "Igit \x1b" },
@@ -3955,33 +3394,51 @@ test "vi line session expands command aliases as editing input" {
     const aliases: TestViAliasSet = .{ .entries = &alias_entries };
     var session = try LineSession.initWithEditingMode(std.testing.allocator, .{ .bytes = "$ " }, .{}, .vi);
     defer session.deinit();
-    session.vi_aliases = .{ .context = @constCast(&aliases), .lookup = testLookupViAlias };
 
     try session.handleKey(.{ .key = .text, .text = "status" });
     try session.handleKey(.{ .key = .escape });
     try session.handleKey(.{ .key = .text, .text = "@" });
     try session.handleKey(.{ .key = .text, .text = "a" });
+    try std.testing.expect(try testApplyViAliasRequest(&session, aliases));
     try std.testing.expectEqual(ViState.command, session.vi_state);
     try std.testing.expectEqualStrings("git status", session.editor.buffer.text());
 
     try session.handleKey(.{ .key = .text, .text = "@" });
     try session.handleKey(.{ .key = .text, .text = "d" });
+    try std.testing.expect(try testApplyViAliasRequest(&session, aliases));
     try std.testing.expectEqualStrings("status", session.editor.buffer.text());
 }
 
-test "vi line session ignores disabled command aliases" {
+test "vi line session applies missing command aliases as no-ops" {
     const aliases: TestViAliasSet = .{ .entries = &.{} };
     var session = try LineSession.initWithEditingMode(std.testing.allocator, .{ .bytes = "$ " }, .{}, .vi);
     defer session.deinit();
-    session.vi_aliases = .{ .context = @constCast(&aliases), .lookup = testLookupViAlias };
 
     try session.handleKey(.{ .key = .text, .text = "abc" });
     try session.handleKey(.{ .key = .escape });
     try session.handleKey(.{ .key = .text, .text = "@" });
     try session.handleKey(.{ .key = .text, .text = "z" });
+    try std.testing.expect(try testApplyViAliasRequest(&session, aliases));
 
     try std.testing.expectEqualStrings("abc", session.editor.buffer.text());
     try std.testing.expectEqual(ViState.command, session.vi_state);
+}
+
+test "vi alias request seam preserves recursive macro limit" {
+    const alias_entries = [_]TestViAliasSet.Entry{.{ .letter = 'a', .value = "@a" }};
+    const aliases: TestViAliasSet = .{ .entries = &alias_entries };
+    var session = try LineSession.initWithEditingMode(std.testing.allocator, .{ .bytes = "$ " }, .{}, .vi);
+    defer session.deinit();
+
+    try session.handleKey(.{ .key = .escape });
+    try session.handleKey(.{ .key = .text, .text = "@" });
+    try session.handleKey(.{ .key = .text, .text = "a" });
+
+    var applications: usize = 0;
+    while (try testApplyViAliasRequest(&session, aliases)) applications += 1;
+
+    try std.testing.expectEqual(@as(usize, max_vi_macro_depth), applications);
+    try std.testing.expectEqual(@as(usize, 0), session.vi_macro_depth);
 }
 
 test "vi line session requests external editor for current and numbered history commands" {
@@ -4321,6 +3778,110 @@ fn testSearchNextHistoryEntry(
     return null;
 }
 
+fn applyTestHistoryRequests(session: *LineSession) !void {
+    while (session.takeHistoryRequest()) |request| {
+        defer request.deinit(std.testing.allocator);
+        const result = try resolveTestHistoryRequest(session.history, request);
+        try session.applyHistoryResult(request, result);
+    }
+}
+
+fn resolveTestHistoryRequest(history: HistoryView, request: HistoryRequest) !HistoryResult {
+    const context = history.context orelse return switch (request) {
+        .search, .search_next => .{ .entries = try std.testing.allocator.alloc(HistoryView.HistoryEntry, 0) },
+        .previous,
+        .next,
+        .by_number,
+        .suggest,
+        => .{ .entry = null },
+    };
+    return switch (request) {
+        .previous => |previous| .{ .entry = if (history.previous) |callback|
+            try callback(context, std.testing.allocator, previous.prefix, previous.before)
+        else
+            null },
+        .next => |next| .{ .entry = if (history.next) |callback|
+            try callback(context, std.testing.allocator, next.prefix, next.after)
+        else
+            null },
+        .by_number => |number| .{ .entry = if (history.by_number) |callback|
+            try callback(context, std.testing.allocator, number)
+        else
+            null },
+        .search => |search| .{ .entries = try resolveTestHistorySearch(history, context, search.query, search.before) },
+        .search_next => |search| .{ .entries = try resolveTestHistorySearchNext(
+            history,
+            context,
+            search.query,
+            search.after,
+        ) },
+        .suggest => |prefix| .{ .entry = if (history.suggest) |callback|
+            try callback(context, std.testing.allocator, prefix)
+        else
+            null },
+    };
+}
+
+fn resolveTestHistorySearch(
+    history: HistoryView,
+    context: *anyopaque,
+    query: []const u8,
+    before: ?i64,
+) ![]HistoryView.HistoryEntry {
+    const search = history.search orelse return std.testing.allocator.alloc(HistoryView.HistoryEntry, 0);
+    var matches: std.ArrayList(HistoryView.HistoryEntry) = .empty;
+    errdefer {
+        for (matches.items) |entry| entry.deinit(std.testing.allocator);
+        matches.deinit(std.testing.allocator);
+    }
+    try appendTestHistorySearchEntries(&matches, search, context, query, before);
+    if (matches.items.len == 0 and before != null) {
+        try appendTestHistorySearchEntries(&matches, search, context, query, null);
+    }
+    return matches.toOwnedSlice(std.testing.allocator);
+}
+
+fn resolveTestHistorySearchNext(
+    history: HistoryView,
+    context: *anyopaque,
+    query: []const u8,
+    after: ?i64,
+) ![]HistoryView.HistoryEntry {
+    const search_next = history.search_next orelse return resolveTestHistorySearch(history, context, query, null);
+    var matches: std.ArrayList(HistoryView.HistoryEntry) = .empty;
+    errdefer {
+        for (matches.items) |entry| entry.deinit(std.testing.allocator);
+        matches.deinit(std.testing.allocator);
+    }
+    try appendTestHistorySearchEntries(&matches, search_next, context, query, after);
+    if (matches.items.len == 0 and after != null) {
+        try appendTestHistorySearchEntries(&matches, search_next, context, query, null);
+    }
+    return matches.toOwnedSlice(std.testing.allocator);
+}
+
+const TestHistorySearchCallback = *const fn (
+    *anyopaque,
+    std.mem.Allocator,
+    []const u8,
+    ?i64,
+) anyerror!?HistoryView.HistoryEntry;
+
+fn appendTestHistorySearchEntries(
+    matches: *std.ArrayList(HistoryView.HistoryEntry),
+    callback: TestHistorySearchCallback,
+    context: *anyopaque,
+    query: []const u8,
+    start_cursor: ?i64,
+) !void {
+    var cursor = start_cursor;
+    while (matches.items.len < 20) {
+        const entry = try callback(context, std.testing.allocator, query, cursor) orelse break;
+        cursor = entry.id;
+        try matches.append(std.testing.allocator, entry);
+    }
+}
+
 test "history search seeds query from current buffer and renders menu-style match" {
     const entries = [_][]const u8{ "echo one", "git status", "git diff" };
     const whens = [_]i64{ 10, 60, 90 };
@@ -4334,6 +3895,7 @@ test "history search seeds query from current buffer and renders menu-style matc
 
     try session.handleKey(.{ .key = .text, .text = "git" });
     try session.handleKey(.{ .key = .ctrl_r });
+    try applyTestHistoryRequests(&session);
 
     try std.testing.expectEqual(LineSession.State.history_search, session.state);
     try std.testing.expectEqualStrings("git", session.history_search_query.items);
@@ -4361,6 +3923,7 @@ test "history search renders clean no-match menu state" {
 
     try session.handleKey(.{ .key = .text, .text = "missing" });
     try session.handleKey(.{ .key = .ctrl_r });
+    try applyTestHistoryRequests(&session);
 
     try std.testing.expectEqual(LineSession.State.history_search, session.state);
     try std.testing.expectEqualStrings("missing", session.history_search_query.items);
@@ -4384,6 +3947,7 @@ test "history search cancel restores original and enter accepts match" {
     defer cancel.deinit();
     try cancel.handleKey(.{ .key = .text, .text = "git" });
     try cancel.handleKey(.{ .key = .ctrl_r });
+    try applyTestHistoryRequests(&cancel);
     try cancel.handleKey(.{ .key = .escape });
     try std.testing.expectEqual(LineSession.State.editing, cancel.state);
     try std.testing.expectEqualStrings("git", cancel.editor.buffer.text());
@@ -4395,6 +3959,7 @@ test "history search cancel restores original and enter accepts match" {
     defer accept.deinit();
     try accept.handleKey(.{ .key = .text, .text = "git" });
     try accept.handleKey(.{ .key = .ctrl_r });
+    try applyTestHistoryRequests(&accept);
     try accept.handleKey(.{ .key = .enter });
     try std.testing.expectEqual(LineSession.State.editing, accept.state);
     try std.testing.expectEqualStrings("git diff", accept.editor.buffer.text());
@@ -4411,7 +3976,9 @@ test "history search edits query while staying open" {
 
     try session.handleKey(.{ .key = .text, .text = "git" });
     try session.handleKey(.{ .key = .ctrl_r });
+    try applyTestHistoryRequests(&session);
     try session.handleKey(.{ .key = .text, .text = " s" });
+    try applyTestHistoryRequests(&session);
 
     try std.testing.expectEqual(LineSession.State.history_search, session.state);
     try std.testing.expectEqualStrings("git s", session.history_search_query.items);
@@ -4420,6 +3987,7 @@ test "history search edits query while staying open" {
     try std.testing.expectEqualStrings("git show", session.history_search_match.?.text);
 
     try session.handleKey(.{ .key = .text, .text = "t" });
+    try applyTestHistoryRequests(&session);
     try std.testing.expectEqual(LineSession.State.history_search, session.state);
     try std.testing.expectEqualStrings("git st", session.history_search_query.items);
     try std.testing.expectEqualStrings("git status", session.history_search_match.?.text);
@@ -4436,7 +4004,9 @@ test "history search deletion edits query while staying open" {
 
     try session.handleKey(.{ .key = .text, .text = "git st" });
     try session.handleKey(.{ .key = .ctrl_r });
+    try applyTestHistoryRequests(&session);
     try session.handleKey(.{ .key = .backspace });
+    try applyTestHistoryRequests(&session);
 
     try std.testing.expectEqual(LineSession.State.history_search, session.state);
     try std.testing.expectEqualStrings("git s", session.history_search_query.items);
@@ -4445,6 +4015,7 @@ test "history search deletion edits query while staying open" {
 
     session.editor.buffer.moveLeft();
     try session.handleKey(.{ .key = .delete });
+    try applyTestHistoryRequests(&session);
     try std.testing.expectEqual(LineSession.State.history_search, session.state);
     try std.testing.expectEqualStrings("git ", session.history_search_query.items);
     try std.testing.expectEqualStrings("git ", session.editor.buffer.text());
@@ -4461,11 +4032,14 @@ test "history search transitions from no match to match as query changes" {
 
     try session.handleKey(.{ .key = .text, .text = "missing" });
     try session.handleKey(.{ .key = .ctrl_r });
+    try applyTestHistoryRequests(&session);
     try std.testing.expectEqual(LineSession.State.history_search, session.state);
     try std.testing.expect(session.history_search_match == null);
 
     try session.handleKey(.{ .key = .delete_to_start });
+    try applyTestHistoryRequests(&session);
     try session.handleKey(.{ .key = .text, .text = "git d" });
+    try applyTestHistoryRequests(&session);
     try std.testing.expectEqual(LineSession.State.history_search, session.state);
     try std.testing.expectEqualStrings("git d", session.history_search_query.items);
     try std.testing.expect(session.history_search_match != null);
@@ -4484,6 +4058,7 @@ test "history search uses fuzzy query matching" {
 
     try session.handleKey(.{ .key = .text, .text = "gco" });
     try session.handleKey(.{ .key = .ctrl_r });
+    try applyTestHistoryRequests(&session);
     try std.testing.expectEqual(LineSession.State.history_search, session.state);
     try std.testing.expectEqualStrings("gco", session.history_search_query.items);
     try std.testing.expect(session.history_search_match != null);
@@ -4496,7 +4071,9 @@ test "history search uses fuzzy query matching" {
     try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[38;5;3mc\x1b[39m") != null);
 
     try session.handleKey(.{ .key = .delete_to_start });
+    try applyTestHistoryRequests(&session);
     try session.handleKey(.{ .key = .text, .text = "zz" });
+    try applyTestHistoryRequests(&session);
     try std.testing.expectEqual(LineSession.State.history_search, session.state);
     try std.testing.expect(session.history_search_match == null);
     try std.testing.expectEqual(@as(usize, 0), session.history_search_matches.items.len);
@@ -4514,6 +4091,7 @@ test "history search first tab advances the already-open menu" {
 
     try session.handleKey(.{ .key = .text, .text = "git" });
     try session.handleKey(.{ .key = .ctrl_r });
+    try applyTestHistoryRequests(&session);
     try std.testing.expectEqualStrings("git show", session.history_search_match.?.text);
     try std.testing.expectEqual(@as(usize, 3), session.history_search_matches.items.len);
     try std.testing.expectEqual(@as(usize, 0), session.history_search_selected);
@@ -4556,6 +4134,7 @@ test "history search menu caps visible candidates at sixteen rows" {
     defer session.deinit();
 
     try session.handleKey(.{ .key = .ctrl_r });
+    try applyTestHistoryRequests(&session);
 
     const rendered = try session.render(std.testing.allocator, .{ .synchronized_output = false, .height = 40 });
     defer std.testing.allocator.free(rendered);
@@ -4577,6 +4156,7 @@ test "history search ignores modifier-only text events" {
 
     try session.handleKey(.{ .key = .text, .text = "git" });
     try session.handleKey(.{ .key = .ctrl_r });
+    try applyTestHistoryRequests(&session);
     try session.handleKey(.{ .key = .tab });
     try std.testing.expectEqual(@as(usize, 1), session.history_search_selected);
     try std.testing.expectEqualStrings("git diff", session.selectedHistorySearchMatch().?.text);
@@ -4600,6 +4180,7 @@ test "history search refreshes only when query changes" {
 
     try session.handleKey(.{ .key = .text, .text = "git" });
     try session.handleKey(.{ .key = .ctrl_r });
+    try applyTestHistoryRequests(&session);
     try session.handleKey(.{ .key = .tab });
     try std.testing.expectEqual(@as(usize, 1), session.history_search_selected);
     try std.testing.expectEqualStrings("git diff", session.selectedHistorySearchMatch().?.text);
@@ -4623,6 +4204,7 @@ test "history search shift tab clamps at first match" {
 
     try session.handleKey(.{ .key = .text, .text = "git" });
     try session.handleKey(.{ .key = .ctrl_r });
+    try applyTestHistoryRequests(&session);
     try std.testing.expectEqualStrings("git show", session.history_search_match.?.text);
 
     try session.handleKey(.{ .key = .tab, .modifiers = .{ .shift = true } });
@@ -4648,6 +4230,7 @@ test "history search ctrl n and ctrl p clamp like completion" {
 
     try session.handleKey(.{ .key = .text, .text = "git" });
     try session.handleKey(.{ .key = .ctrl_r });
+    try applyTestHistoryRequests(&session);
     try std.testing.expectEqualStrings("git show", session.history_search_match.?.text);
 
     try session.handleKey(.{ .key = keyFromVaxis('n', .{ .ctrl = true }) });

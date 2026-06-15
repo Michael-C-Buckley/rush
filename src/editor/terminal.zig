@@ -3,8 +3,7 @@
 const std = @import("std");
 const vaxis = @import("vaxis");
 
-const line_editor = @import("line.zig");
-const log = std.log.scoped(.editor_terminal);
+const line_editor = @import("session.zig");
 
 pub const Event = union(enum) {
     key_press: line_editor.KeyEvent,
@@ -55,9 +54,13 @@ pub const Capabilities = struct {
         return if (self.unicode) .unicode else .wcwidth;
     }
 
-    pub fn sendQueries(self: *Capabilities, tty: *vaxis.tty.PosixTty) !void {
-        try writeAll(
-            tty,
+    pub fn appendQuerySequences(
+        self: *Capabilities,
+        allocator: std.mem.Allocator,
+        output: *std.ArrayList(u8),
+    ) !void {
+        try output.appendSlice(
+            allocator,
             vaxis.ctlseqs.decrqm_sgr_pixels ++
                 vaxis.ctlseqs.decrqm_unicode ++
                 vaxis.ctlseqs.decrqm_color_scheme ++
@@ -72,24 +75,32 @@ pub const Capabilities = struct {
         self.in_band_resize_enabled = true;
     }
 
-    pub fn requestColorReports(_: Capabilities, tty: *vaxis.tty.PosixTty) !void {
-        try writeAll(tty, vaxis.ctlseqs.osc10_query ++ vaxis.ctlseqs.osc11_query);
+    pub fn appendColorReportQueries(
+        _: Capabilities,
+        allocator: std.mem.Allocator,
+        output: *std.ArrayList(u8),
+    ) !void {
+        try output.appendSlice(allocator, vaxis.ctlseqs.osc10_query ++ vaxis.ctlseqs.osc11_query);
         for (0..8) |index| {
             var sequence_buffer: [32]u8 = undefined;
             const sequence = try std.fmt.bufPrint(&sequence_buffer, vaxis.ctlseqs.osc4_query, .{index});
-            try writeAll(tty, sequence);
+            try output.appendSlice(allocator, sequence);
         }
     }
 
-    pub fn sendInitialQueries(self: *Capabilities, tty: *vaxis.tty.PosixTty) !void {
-        try self.requestColorReports(tty);
-        try self.sendQueries(tty);
-    }
-
-    pub fn apply(
+    pub fn appendInitialQuerySequences(
         self: *Capabilities,
         allocator: std.mem.Allocator,
-        tty: *vaxis.tty.PosixTty,
+        output: *std.ArrayList(u8),
+    ) !void {
+        try self.appendColorReportQueries(allocator, output);
+        try self.appendQuerySequences(allocator, output);
+    }
+
+    pub fn appendApplySequence(
+        self: *Capabilities,
+        allocator: std.mem.Allocator,
+        output: *std.ArrayList(u8),
         capability: Capability,
     ) !void {
         switch (capability) {
@@ -98,7 +109,7 @@ pub const Capabilities = struct {
                     const flags: u5 = @bitCast(vaxis.Key.KittyFlags{});
                     const sequence = try std.fmt.allocPrint(allocator, vaxis.ctlseqs.csi_u_push, .{flags});
                     defer allocator.free(sequence);
-                    try writeAll(tty, sequence);
+                    try output.appendSlice(allocator, sequence);
                 }
                 self.kitty_keyboard = true;
             },
@@ -106,13 +117,16 @@ pub const Capabilities = struct {
             .rgb => self.rgb = true,
             .sgr_pixels => self.sgr_pixels = true,
             .unicode => {
-                if (!self.unicode) try writeAll(tty, vaxis.ctlseqs.unicode_set);
+                if (!self.unicode) try output.appendSlice(allocator, vaxis.ctlseqs.unicode_set);
                 self.unicode = true;
             },
             .da1 => self.da1 = true,
             .color_scheme_updates => {
                 if (!self.color_scheme_updates) {
-                    try writeAll(tty, vaxis.ctlseqs.color_scheme_request ++ vaxis.ctlseqs.color_scheme_set);
+                    try output.appendSlice(
+                        allocator,
+                        vaxis.ctlseqs.color_scheme_request ++ vaxis.ctlseqs.color_scheme_set,
+                    );
                 }
                 self.color_scheme_updates = true;
             },
@@ -120,27 +134,15 @@ pub const Capabilities = struct {
         }
     }
 
-    pub fn reset(self: *Capabilities, tty: *vaxis.tty.PosixTty) void {
-        if (self.kitty_keyboard) {
-            writeAll(tty, vaxis.ctlseqs.csi_u_pop) catch |err| {
-                log.debug("failed to reset kitty keyboard: {}", .{err});
-            };
-        }
-        if (self.unicode) {
-            writeAll(tty, vaxis.ctlseqs.unicode_reset) catch |err| {
-                log.debug("failed to reset unicode width: {}", .{err});
-            };
-        }
-        if (self.in_band_resize_enabled) {
-            writeAll(tty, vaxis.ctlseqs.in_band_resize_reset) catch |err| {
-                log.debug("failed to reset in-band resize: {}", .{err});
-            };
-        }
-        if (self.bracketed_paste) {
-            writeAll(tty, vaxis.ctlseqs.bp_reset) catch |err| {
-                log.debug("failed to reset bracketed paste: {}", .{err});
-            };
-        }
+    pub fn appendResetSequences(
+        self: *Capabilities,
+        allocator: std.mem.Allocator,
+        output: *std.ArrayList(u8),
+    ) !void {
+        if (self.kitty_keyboard) try output.appendSlice(allocator, vaxis.ctlseqs.csi_u_pop);
+        if (self.unicode) try output.appendSlice(allocator, vaxis.ctlseqs.unicode_reset);
+        if (self.in_band_resize_enabled) try output.appendSlice(allocator, vaxis.ctlseqs.in_band_resize_reset);
+        if (self.bracketed_paste) try output.appendSlice(allocator, vaxis.ctlseqs.bp_reset);
         self.kitty_keyboard = false;
         self.unicode = false;
         self.in_band_resize_enabled = false;
@@ -319,6 +321,49 @@ fn applyTerminalEventsForTest(session: *line_editor.LineSession, events: []const
             => {},
         }
     }
+}
+
+test "terminal capability planning emits query sequences and records enabled modes" {
+    var capabilities: Capabilities = .{};
+    var output: std.ArrayList(u8) = .empty;
+    defer output.deinit(std.testing.allocator);
+
+    try capabilities.appendInitialQuerySequences(std.testing.allocator, &output);
+
+    try std.testing.expect(capabilities.bracketed_paste);
+    try std.testing.expect(capabilities.in_band_resize_enabled);
+    try std.testing.expect(std.mem.indexOf(u8, output.items, vaxis.ctlseqs.osc10_query) != null);
+    try std.testing.expect(std.mem.indexOf(u8, output.items, vaxis.ctlseqs.decrqm_unicode) != null);
+    try std.testing.expect(std.mem.indexOf(u8, output.items, vaxis.ctlseqs.bp_set) != null);
+}
+
+test "terminal capability application plans writes only on state changes" {
+    var capabilities: Capabilities = .{};
+    var output: std.ArrayList(u8) = .empty;
+    defer output.deinit(std.testing.allocator);
+
+    try capabilities.appendApplySequence(std.testing.allocator, &output, .unicode);
+    try std.testing.expect(capabilities.unicode);
+    try std.testing.expectEqualStrings(vaxis.ctlseqs.unicode_set, output.items);
+
+    output.clearRetainingCapacity();
+    try capabilities.appendApplySequence(std.testing.allocator, &output, .unicode);
+    try std.testing.expectEqual(@as(usize, 0), output.items.len);
+}
+
+test "terminal capability reset plans active-mode cleanup" {
+    var capabilities: Capabilities = .{ .kitty_keyboard = true, .unicode = true, .bracketed_paste = true };
+    var output: std.ArrayList(u8) = .empty;
+    defer output.deinit(std.testing.allocator);
+
+    try capabilities.appendResetSequences(std.testing.allocator, &output);
+
+    try std.testing.expect(!capabilities.kitty_keyboard);
+    try std.testing.expect(!capabilities.unicode);
+    try std.testing.expect(!capabilities.bracketed_paste);
+    try std.testing.expect(std.mem.indexOf(u8, output.items, vaxis.ctlseqs.csi_u_pop) != null);
+    try std.testing.expect(std.mem.indexOf(u8, output.items, vaxis.ctlseqs.unicode_reset) != null);
+    try std.testing.expect(std.mem.indexOf(u8, output.items, vaxis.ctlseqs.bp_reset) != null);
 }
 
 test "terminal parser emits text keys" {

@@ -147,7 +147,7 @@ pub const Controller = struct {
         self.* = undefined;
     }
 
-    pub fn request(self: *Controller, io: std.Io, source: []const u8, cursor: usize, reason: RequestReason) !void {
+    pub fn request(self: *Controller, now_ms: u64, source: []const u8, cursor: usize, reason: RequestReason) !void {
         var next = try self.makeRequest(source, cursor, reason);
         errdefer next.deinit(self.allocator);
         if (self.active) |active_worker| active_worker.cancel.cancel();
@@ -159,36 +159,34 @@ pub const Controller = struct {
             .refresh => {
                 if (self.debounce) |*old| old.deinit(self.allocator);
                 self.debounce = next;
-                self.debounce_deadline_ms = nowMs(io) + debounce_ms;
+                self.debounce_deadline_ms = now_ms + debounce_ms;
             },
         }
     }
 
-    pub fn takeReadyRequest(self: *Controller, io: std.Io) ?Request {
+    pub fn takeReadyRequest(self: *Controller, now_ms: u64) ?Request {
         if (self.active != null) return null;
         if (self.queued) |queued_request| {
             self.queued = null;
             return queued_request;
         }
         const deadline = self.debounce_deadline_ms orelse return null;
-        if (nowMs(io) < deadline) return null;
+        if (now_ms < deadline) return null;
         self.debounce_deadline_ms = null;
         const debounce_request = self.debounce orelse return null;
         self.debounce = null;
         return debounce_request;
     }
 
-    pub fn debounceWaitMs(self: Controller, io: std.Io) ?u64 {
+    pub fn debounceWaitMs(self: Controller, now_ms: u64) ?u64 {
         const deadline = self.debounce_deadline_ms orelse return null;
-        const now = nowMs(io);
-        return if (deadline <= now) 0 else deadline - now;
+        return if (deadline <= now_ms) 0 else deadline - now_ms;
     }
 
-    pub fn progressWaitMs(self: Controller, io: std.Io) ?u64 {
+    pub fn progressWaitMs(self: Controller, now_ms: u64) ?u64 {
         if (self.progress_started) return null;
         const deadline = self.progress_deadline_ms orelse return null;
-        const now = nowMs(io);
-        return if (deadline <= now) 0 else deadline - now;
+        return if (deadline <= now_ms) 0 else deadline - now_ms;
     }
 
     pub fn hasSupersedingRequest(self: Controller, generation: u64) bool {
@@ -211,10 +209,6 @@ pub const Controller = struct {
 
 fn lockMutex(mutex: *std.atomic.Mutex) void {
     while (!mutex.tryLock()) std.Thread.yield() catch |err| log.debug("completion mutex yield failed: {}", .{err});
-}
-
-fn nowMs(io: std.Io) u64 {
-    return @intCast(std.Io.Clock.Timestamp.now(io, .awake).raw.toMilliseconds());
 }
 
 fn writeFdAll(fd: std.posix.fd_t, bytes: []const u8) !void {
@@ -256,13 +250,27 @@ test "completion controller debounces refresh requests to the latest input" {
     var controller = Controller.init(std.testing.allocator);
     defer controller.deinit();
 
-    try controller.request(std.testing.io, "git c", 5, .refresh);
-    try controller.request(std.testing.io, "git ch", 6, .refresh);
+    try controller.request(1000, "git c", 5, .refresh);
+    try controller.request(1010, "git ch", 6, .refresh);
 
     try std.testing.expect(controller.debounce != null);
     try std.testing.expectEqualStrings("git ch", controller.debounce.?.source);
     try std.testing.expectEqual(@as(usize, 6), controller.debounce.?.cursor);
-    try std.testing.expect(controller.debounceWaitMs(std.testing.io) != null);
+    try std.testing.expectEqual(@as(?u64, debounce_ms), controller.debounceWaitMs(1010));
+    try std.testing.expectEqual(@as(?u64, 0), controller.debounceWaitMs(1010 + debounce_ms));
+}
+
+test "completion controller readiness uses caller supplied time" {
+    var controller = Controller.init(std.testing.allocator);
+    defer controller.deinit();
+
+    try controller.request(1000, "git st", 6, .refresh);
+    try std.testing.expect(controller.takeReadyRequest(1000 + debounce_ms - 1) == null);
+
+    var ready = controller.takeReadyRequest(1000 + debounce_ms) orelse return error.ExpectedReadyRequest;
+    defer ready.deinit(std.testing.allocator);
+    try std.testing.expectEqualStrings("git st", ready.source);
+    try std.testing.expectEqual(@as(usize, 6), ready.cursor);
 }
 
 test "completion controller cancels active worker when superseded" {
@@ -285,7 +293,7 @@ test "completion controller cancels active worker when superseded" {
     };
     controller.active = active_worker;
 
-    try controller.request(std.testing.io, "git ch", 6, .explicit);
+    try controller.request(1000, "git ch", 6, .explicit);
     try std.testing.expect(active_worker.cancel.isCanceled());
     try std.testing.expect(controller.queued != null);
     try std.testing.expectEqualStrings("git ch", controller.queued.?.source);
@@ -302,7 +310,7 @@ test "completion controller marks same-input active results stale when supersede
 
     var first = try controller.makeRequest("git s", 5, .explicit);
     defer first.deinit(std.testing.allocator);
-    try controller.request(std.testing.io, "git s", 5, .explicit);
+    try controller.request(1000, "git s", 5, .explicit);
 
     try std.testing.expect(controller.hasSupersedingRequest(first.generation));
     try std.testing.expect(!controller.hasSupersedingRequest(controller.queued.?.generation));

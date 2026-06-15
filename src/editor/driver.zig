@@ -7,11 +7,13 @@ const builtin = @import("builtin");
 const vaxis = @import("vaxis");
 
 const event_loop = @import("../event_loop.zig");
-const line_editor = @import("line.zig");
+const line_editor = @import("session.zig");
 const completion = @import("completion.zig");
 const signal = @import("signal.zig");
 const terminal = @import("terminal.zig");
 const worker = @import("worker.zig");
+
+const log = std.log.scoped(.editor_driver);
 
 extern "c" fn openpty(
     amaster: *c_int,
@@ -237,7 +239,7 @@ pub const TerminalSession = struct {
     pub fn deinit(self: *TerminalSession) void {
         // ziglint-ignore: Z026 best-effort terminal cleanup during deinit
         writeTtyAll(&self.tty, completion_progress_stop) catch {};
-        self.capabilities.reset(&self.tty);
+        self.resetTerminalCapabilities();
         self.events.deinit(self.allocator);
         self.completion.deinit();
         self.terminal_parser.deinit();
@@ -264,15 +266,60 @@ pub const TerminalSession = struct {
 
     pub fn leaveEditorMode(self: *TerminalSession) !void {
         self.renderer.reset(self.allocator);
-        self.capabilities.reset(&self.tty);
+        self.resetTerminalCapabilities();
         self.query_batch_sent = false;
         try self.suspendRawMode();
     }
 
     pub fn enterEditorMode(self: *TerminalSession) !void {
         try self.resumeRawMode();
-        try self.capabilities.sendInitialQueries(&self.tty);
+        try self.writeInitialQuerySequences();
         self.query_batch_sent = true;
+    }
+
+    fn writeInitialQuerySequences(self: *TerminalSession) !void {
+        var output: std.ArrayList(u8) = .empty;
+        defer output.deinit(self.allocator);
+        try self.capabilities.appendInitialQuerySequences(self.allocator, &output);
+        try self.writeTerminalSequence(output.items);
+    }
+
+    fn writeQuerySequences(self: *TerminalSession) !void {
+        var output: std.ArrayList(u8) = .empty;
+        defer output.deinit(self.allocator);
+        try self.capabilities.appendQuerySequences(self.allocator, &output);
+        try self.writeTerminalSequence(output.items);
+    }
+
+    fn writeColorReportQueries(self: *TerminalSession) !void {
+        var output: std.ArrayList(u8) = .empty;
+        defer output.deinit(self.allocator);
+        try self.capabilities.appendColorReportQueries(self.allocator, &output);
+        try self.writeTerminalSequence(output.items);
+    }
+
+    fn applyTerminalCapability(self: *TerminalSession, capability: Capability) !void {
+        var output: std.ArrayList(u8) = .empty;
+        defer output.deinit(self.allocator);
+        try self.capabilities.appendApplySequence(self.allocator, &output, capability);
+        try self.writeTerminalSequence(output.items);
+    }
+
+    fn resetTerminalCapabilities(self: *TerminalSession) void {
+        var output: std.ArrayList(u8) = .empty;
+        defer output.deinit(self.allocator);
+        self.capabilities.appendResetSequences(self.allocator, &output) catch |err| {
+            log.debug("failed to plan terminal capability reset: {}", .{err});
+            return;
+        };
+        self.writeTerminalSequence(output.items) catch |err| {
+            log.debug("failed to reset terminal capabilities: {}", .{err});
+        };
+    }
+
+    fn writeTerminalSequence(self: *TerminalSession, bytes: []const u8) !void {
+        if (bytes.len == 0) return;
+        try writeTtyAll(&self.tty, bytes);
     }
 
     pub fn currentWinsize(self: TerminalSession) vaxis.Winsize {
@@ -324,7 +371,7 @@ pub const TerminalSession = struct {
 
     pub fn readLine(self: *TerminalSession, options: ReadLineOptions) !ReadLineResult {
         if (!self.query_batch_sent) {
-            try self.capabilities.sendInitialQueries(&self.tty);
+            try self.writeInitialQuerySequences();
             self.query_batch_sent = true;
         }
         var read_options = options;
@@ -334,7 +381,6 @@ pub const TerminalSession = struct {
             .visible_width = line_editor.visibleWidth(read_options.prompt, self.capabilities.widthMethod()),
         }, read_options.history, read_options.editing_mode);
         defer session.deinit();
-        session.vi_aliases = .{ .context = read_options.vi_alias_context, .lookup = read_options.lookup_vi_alias };
 
         try writeTtyAll(&self.tty, semantic_command_start);
         try renderSession(
@@ -357,15 +403,16 @@ pub const TerminalSession = struct {
             while (session.state == .editing or session.state == .history_search) {
                 var render_needed = false;
                 var loop_events: [8]event_loop.Event = undefined;
+                const wait_now_ms = nowMs(self.io);
                 const ready = try self.loop.waitTimeout(&loop_events, nextWaitMs(
                     self.io,
                     next_prompt_refresh_ms,
                     next_hook_interval_ms,
-                    self.completion.debounceWaitMs(self.io),
+                    self.completion.debounceWaitMs(wait_now_ms),
                     next_completion_flash_clear_ms,
-                    self.completion.progressWaitMs(self.io),
+                    self.completion.progressWaitMs(wait_now_ms),
                 ));
-                if (ready.len == 0 and self.completion.progressWaitMs(self.io) == 0) {
+                if (ready.len == 0 and self.completion.progressWaitMs(nowMs(self.io)) == 0) {
                     try self.startCompletionProgress();
                 }
                 if (ready.len == 0 and
@@ -429,69 +476,9 @@ pub const TerminalSession = struct {
                     switch (event) {
                         .key_press => |key| {
                             render_needed = true;
-                            if (isCompletionTab(key) and session.hasCompletionMenu()) {
-                                try session.handleKey(.{ .key = .tab, .modifiers = key.modifiers });
-                            } else if (isCompletionTab(key) and
-                                read_options.complete != null and
-                                read_options.completion_context != null)
-                            {
-                                _ = try expandAbbreviationBeforeAccept(&session, read_options, false);
-                                if (read_options.clone_completion_context != null and
-                                    read_options.free_completion_context != null)
-                                {
-                                    try self.requestCompletion(
-                                        read_options,
-                                        session.editor.buffer.text(),
-                                        session.editor.buffer.cursor_byte,
-                                        .explicit,
-                                    );
-                                } else {
-                                    const application = try read_options.complete.?(
-                                        read_options.completion_context.?,
-                                        self.allocator,
-                                        self.io,
-                                        session.editor.buffer.text(),
-                                        session.editor.buffer.cursor_byte,
-                                    );
-                                    defer application.deinit(self.allocator);
-                                    try session.applyCompletion(application);
-                                }
-                            } else if (key.key == .enter and !session.hasCompletionMenu()) {
-                                _ = try expandAbbreviationBeforeAccept(&session, read_options, false);
-                                try session.handleKey(key);
-                            } else if (isSpaceAccept(key) and
-                                try expandAbbreviationBeforeAccept(&session, read_options, true))
-                            {} else if (session.hasCompletionMenu() and
-                                shouldRefreshCompletionMenu(key) and
-                                read_options.complete != null and
-                                read_options.completion_context != null)
-                            {
-                                try session.handleKey(key);
-                                if (session.hasCompletionMenu()) {
-                                    if (read_options.clone_completion_context != null and
-                                        read_options.free_completion_context != null)
-                                    {
-                                        try self.requestCompletion(
-                                            read_options,
-                                            session.editor.buffer.text(),
-                                            session.editor.buffer.cursor_byte,
-                                            .refresh,
-                                        );
-                                    } else {
-                                        const application = try read_options.complete.?(
-                                            read_options.completion_context.?,
-                                            self.allocator,
-                                            self.io,
-                                            session.editor.buffer.text(),
-                                            session.editor.buffer.cursor_byte,
-                                        );
-                                        defer application.deinit(self.allocator);
-                                        try session.applyCompletion(application);
-                                    }
-                                }
-                            } else {
-                                try session.handleKey(key);
-                            }
+                            try self.handleKeyPress(read_options, &session, key);
+                            if (try self.processHistoryRequests(read_options, &session)) render_needed = true;
+                            if (try self.processViAliasLookupRequests(read_options, &session)) render_needed = true;
                             if (try self.processPathExpansionRequest(read_options, &session)) render_needed = true;
                         },
                         .paste_start => {
@@ -523,7 +510,7 @@ pub const TerminalSession = struct {
                         },
                         .capability => |capability| {
                             render_needed = true;
-                            try self.capabilities.apply(self.allocator, &self.tty, capability);
+                            try self.applyTerminalCapability(capability);
                             if (capability == .da1 and
                                 read_options.refresh_style != null and
                                 read_options.style_context != null)
@@ -538,8 +525,8 @@ pub const TerminalSession = struct {
                         },
                         .color_scheme => |scheme| {
                             self.color_scheme = scheme;
-                            try self.capabilities.requestColorReports(&self.tty);
-                            try self.capabilities.sendQueries(&self.tty);
+                            try self.writeColorReportQueries();
+                            try self.writeQuerySequences();
                             if (read_options.refresh_style != null and read_options.style_context != null) {
                                 read_options.theme = try read_options.refresh_style.?(
                                     read_options.style_context.?,
@@ -674,6 +661,70 @@ pub const TerminalSession = struct {
         return .interrupted;
     }
 
+    fn handleKeyPress(
+        self: *TerminalSession,
+        options: ReadLineOptions,
+        session: *line_editor.LineSession,
+        key: line_editor.KeyEvent,
+    ) !void {
+        const has_provider = hasCompletionProvider(options);
+        switch (planKeyPress(key, session.hasCompletionMenu(), has_provider)) {
+            .menu_tab => try session.handleKey(.{ .key = .tab, .modifiers = key.modifiers }),
+            .explicit_completion => {
+                _ = try expandAbbreviationBeforeAccept(session, options, false);
+                try self.applyCompletionProvider(options, session, .explicit);
+            },
+            .enter_accept => {
+                _ = try expandAbbreviationBeforeAccept(session, options, false);
+                try session.handleKey(key);
+            },
+            .space_accept => {
+                if (try expandAbbreviationBeforeAccept(session, options, true)) return;
+                try self.handleEditableCompletionKey(options, session, key, has_provider);
+            },
+            .refresh_completion => try self.handleEditableCompletionKey(options, session, key, has_provider),
+            .edit => try session.handleKey(key),
+        }
+    }
+
+    fn handleEditableCompletionKey(
+        self: *TerminalSession,
+        options: ReadLineOptions,
+        session: *line_editor.LineSession,
+        key: line_editor.KeyEvent,
+        has_provider: bool,
+    ) !void {
+        try session.handleKey(key);
+        if (!session.hasCompletionMenu() or !has_provider) return;
+        try self.applyCompletionProvider(options, session, .refresh);
+    }
+
+    fn applyCompletionProvider(
+        self: *TerminalSession,
+        options: ReadLineOptions,
+        session: *line_editor.LineSession,
+        reason: CompletionRequestReason,
+    ) !void {
+        if (options.clone_completion_context != null and options.free_completion_context != null) {
+            try self.requestCompletion(
+                options,
+                session.editor.buffer.text(),
+                session.editor.buffer.cursor_byte,
+                reason,
+            );
+            return;
+        }
+        const application = try options.complete.?(
+            options.completion_context.?,
+            self.allocator,
+            self.io,
+            session.editor.buffer.text(),
+            session.editor.buffer.cursor_byte,
+        );
+        defer application.deinit(self.allocator);
+        try session.applyCompletion(application);
+    }
+
     fn runExternalEditor(
         self: *TerminalSession,
         options: ReadLineOptions,
@@ -711,6 +762,32 @@ pub const TerminalSession = struct {
             session.invalidatePrompt();
         }
         return hook_result.stop;
+    }
+
+    fn processViAliasLookupRequests(
+        self: *TerminalSession,
+        options: ReadLineOptions,
+        session: *line_editor.LineSession,
+    ) !bool {
+        var processed = false;
+        while (session.takeViAliasLookupRequest()) |letter| {
+            processed = true;
+            const value = if (options.lookup_vi_alias != null and options.vi_alias_context != null)
+                try options.lookup_vi_alias.?(options.vi_alias_context.?, self.allocator, letter)
+            else
+                null;
+            defer if (value) |bytes| self.allocator.free(bytes);
+            try session.applyViAliasResult(letter, value);
+        }
+        return processed;
+    }
+
+    fn processHistoryRequests(
+        self: *TerminalSession,
+        options: ReadLineOptions,
+        session: *line_editor.LineSession,
+    ) !bool {
+        return drainHistoryRequests(self.allocator, options.history, session);
     }
 
     fn processPathExpansionRequest(
@@ -808,12 +885,12 @@ pub const TerminalSession = struct {
         reason: CompletionRequestReason,
     ) !void {
         if (options.complete == null or options.completion_context == null) return;
-        try self.completion.request(self.io, source, cursor, reason);
+        try self.completion.request(nowMs(self.io), source, cursor, reason);
         try self.startReadyCompletion(options);
     }
 
     fn startReadyCompletion(self: *TerminalSession, options: ReadLineOptions) !void {
-        var request = self.completion.takeReadyRequest(self.io) orelse return;
+        var request = self.completion.takeReadyRequest(nowMs(self.io)) orelse return;
         errdefer request.deinit(self.allocator);
         const clone = options.clone_completion_context orelse return;
         const free = options.free_completion_context orelse return;
@@ -874,6 +951,136 @@ pub const TerminalSession = struct {
         }
     }
 };
+
+fn drainHistoryRequests(
+    allocator: std.mem.Allocator,
+    history: line_editor.HistoryView,
+    session: *line_editor.LineSession,
+) !bool {
+    var processed = false;
+    while (session.takeHistoryRequest()) |request| {
+        defer request.deinit(allocator);
+        processed = true;
+        const result = try resolveHistoryRequest(allocator, history, request);
+        try session.applyHistoryResult(request, result);
+    }
+    return processed;
+}
+
+fn resolveHistoryRequest(
+    allocator: std.mem.Allocator,
+    history: line_editor.HistoryView,
+    request: line_editor.HistoryRequest,
+) !line_editor.HistoryResult {
+    const context = history.context orelse return emptyHistoryResult(request);
+    return switch (request) {
+        .previous => |previous| .{ .entry = if (history.previous) |callback|
+            try callback(context, allocator, previous.prefix, previous.before)
+        else
+            null },
+        .next => |next| .{ .entry = if (history.next) |callback|
+            try callback(context, allocator, next.prefix, next.after)
+        else
+            null },
+        .by_number => |number| .{ .entry = if (history.by_number) |callback|
+            try callback(context, allocator, number)
+        else
+            null },
+        .search => |search| .{ .entries = try resolveHistorySearch(
+            allocator,
+            history,
+            context,
+            search.query,
+            search.before,
+        ) },
+        .search_next => |search| .{ .entries = try resolveHistorySearchNext(
+            allocator,
+            history,
+            context,
+            search.query,
+            search.after,
+        ) },
+        .suggest => |prefix| .{ .entry = if (history.suggest) |callback|
+            try callback(context, allocator, prefix)
+        else
+            null },
+    };
+}
+
+fn emptyHistoryResult(request: line_editor.HistoryRequest) line_editor.HistoryResult {
+    return switch (request) {
+        .search, .search_next => .{ .entries = &.{} },
+        .previous,
+        .next,
+        .by_number,
+        .suggest,
+        => .{ .entry = null },
+    };
+}
+
+fn resolveHistorySearch(
+    allocator: std.mem.Allocator,
+    history: line_editor.HistoryView,
+    context: *anyopaque,
+    query: []const u8,
+    before: ?i64,
+) ![]line_editor.HistoryView.HistoryEntry {
+    const search = history.search orelse return &.{};
+    var matches: std.ArrayList(line_editor.HistoryView.HistoryEntry) = .empty;
+    errdefer {
+        for (matches.items) |entry| entry.deinit(allocator);
+        matches.deinit(allocator);
+    }
+    try appendHistorySearchEntries(allocator, &matches, search, context, query, before);
+    if (matches.items.len == 0 and before != null) {
+        try appendHistorySearchEntries(allocator, &matches, search, context, query, null);
+    }
+    return matches.toOwnedSlice(allocator);
+}
+
+fn resolveHistorySearchNext(
+    allocator: std.mem.Allocator,
+    history: line_editor.HistoryView,
+    context: *anyopaque,
+    query: []const u8,
+    after: ?i64,
+) ![]line_editor.HistoryView.HistoryEntry {
+    const search_next = history.search_next orelse
+        return resolveHistorySearch(allocator, history, context, query, null);
+    var matches: std.ArrayList(line_editor.HistoryView.HistoryEntry) = .empty;
+    errdefer {
+        for (matches.items) |entry| entry.deinit(allocator);
+        matches.deinit(allocator);
+    }
+    try appendHistorySearchEntries(allocator, &matches, search_next, context, query, after);
+    if (matches.items.len == 0 and after != null) {
+        try appendHistorySearchEntries(allocator, &matches, search_next, context, query, null);
+    }
+    return matches.toOwnedSlice(allocator);
+}
+
+const HistorySearchCallback = *const fn (
+    *anyopaque,
+    std.mem.Allocator,
+    []const u8,
+    ?i64,
+) anyerror!?line_editor.HistoryView.HistoryEntry;
+
+fn appendHistorySearchEntries(
+    allocator: std.mem.Allocator,
+    matches: *std.ArrayList(line_editor.HistoryView.HistoryEntry),
+    callback: HistorySearchCallback,
+    context: *anyopaque,
+    query: []const u8,
+    start_cursor: ?i64,
+) !void {
+    var cursor = start_cursor;
+    while (matches.items.len < 20) {
+        const entry = try callback(context, allocator, query, cursor) orelse break;
+        cursor = entry.id;
+        try matches.append(allocator, entry);
+    }
+}
 
 const ExternalEditorTempFile = struct {
     dir: std.Io.Dir,
@@ -965,6 +1172,37 @@ fn isCompletionTab(key: line_editor.KeyEvent) bool {
 
 fn isSpaceAccept(key: line_editor.KeyEvent) bool {
     return key.key == .text and std.mem.eql(u8, key.text, " ");
+}
+
+const KeyPressPlan = enum {
+    menu_tab,
+    explicit_completion,
+    enter_accept,
+    space_accept,
+    refresh_completion,
+    edit,
+};
+
+fn planKeyPress(
+    key: line_editor.KeyEvent,
+    has_completion_menu: bool,
+    has_completion_provider: bool,
+) KeyPressPlan {
+    if (isCompletionTab(key) and has_completion_menu) return .menu_tab;
+    if (isCompletionTab(key) and has_completion_provider) return .explicit_completion;
+    if (key.key == .enter and !has_completion_menu) return .enter_accept;
+    if (isSpaceAccept(key)) return .space_accept;
+    if (has_completion_menu and
+        shouldRefreshCompletionMenu(key) and
+        has_completion_provider)
+    {
+        return .refresh_completion;
+    }
+    return .edit;
+}
+
+fn hasCompletionProvider(options: ReadLineOptions) bool {
+    return options.complete != null and options.completion_context != null;
 }
 
 fn shouldRefreshCompletionMenu(key: line_editor.KeyEvent) bool {
@@ -1090,6 +1328,8 @@ fn renderSession(
     winsize: vaxis.Winsize,
     options: ReadLineOptions,
 ) !void {
+    try session.requestAutosuggestion();
+    _ = try drainHistoryRequests(allocator, options.history, session);
     const diagnostic = if (options.diagnose != null and options.diagnostic_context != null)
         try options.diagnose.?(options.diagnostic_context.?, allocator, io, session.editor.buffer.text())
     else
@@ -1220,4 +1460,35 @@ test "completion refresh key classification tracks editing keys" {
     try std.testing.expect(!shouldRefreshCompletionMenu(.{ .key = .word_left }));
     try std.testing.expect(!shouldRefreshCompletionMenu(.{ .key = .tab }));
     try std.testing.expect(!shouldRefreshCompletionMenu(.{ .key = .escape }));
+}
+
+test "key press policy separates completion actions from plain editing" {
+    try std.testing.expectEqual(
+        KeyPressPlan.menu_tab,
+        planKeyPress(.{ .key = .tab }, true, true),
+    );
+    try std.testing.expectEqual(
+        KeyPressPlan.explicit_completion,
+        planKeyPress(.{ .key = .tab }, false, true),
+    );
+    try std.testing.expectEqual(
+        KeyPressPlan.enter_accept,
+        planKeyPress(.{ .key = .enter }, false, true),
+    );
+    try std.testing.expectEqual(
+        KeyPressPlan.edit,
+        planKeyPress(.{ .key = .enter }, true, true),
+    );
+    try std.testing.expectEqual(
+        KeyPressPlan.space_accept,
+        planKeyPress(.{ .key = .text, .text = " " }, true, true),
+    );
+    try std.testing.expectEqual(
+        KeyPressPlan.refresh_completion,
+        planKeyPress(.{ .key = .text, .text = "s" }, true, true),
+    );
+    try std.testing.expectEqual(
+        KeyPressPlan.edit,
+        planKeyPress(.{ .key = .text, .text = "s" }, true, false),
+    );
 }
