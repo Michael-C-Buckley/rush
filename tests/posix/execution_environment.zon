@@ -47,5 +47,112 @@
             .stderr = "",
             .status = 0,
         },
+        .{
+            .name = "command substitution inherits aliases but isolates alias mutations",
+            .script =
+            \\alias parent_alias='printf alias-parent'
+            \\printf '<%s>\n' "$(
+            \\parent_alias
+            \\unalias parent_alias
+            \\)"
+            \\parent_alias
+            \\printf '\n'
+            ,
+            .stdout =
+            \\<alias-parent>
+            \\alias-parent
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "command substitution isolates function definitions",
+            .script =
+            \\printf '<%s>\n' "$(fn_inside() { printf function-inside; }; fn_inside)"
+            \\fn_inside >/dev/null 2>&1 && printf 'bad\n' || printf 'missing\n'
+            ,
+            .stdout =
+            \\<function-inside>
+            \\missing
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "command substitution isolates current working directory changes",
+            .script =
+            \\mkdir subdir
+            \\here=$(pwd)
+            \\inside=$(cd subdir; pwd)
+            \\after=$(pwd)
+            \\case $inside in "$here/subdir") printf 'inside\n';; *) printf 'bad-inside\n';; esac
+            \\case $after in "$here") printf 'outside\n';; *) printf 'bad-outside\n';; esac
+            ,
+            .stdout =
+            \\inside
+            \\outside
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "command substitution applies redirections within the substitution",
+            .script =
+            \\printf '<%s>\n' "$(printf hidden >cmdsub.out; printf visible)"
+            \\cat cmdsub.out
+            \\printf '\n'
+            ,
+            .stdout =
+            \\<visible>
+            \\hidden
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "nested command substitutions isolate inner mutations from outer substitutions",
+            .script =
+            \\printf '<%s>\n' "$(x=outer-sub; printf '%s' "$(x=inner-sub; printf '%s' "$x")"; printf ':%s' "$x")"
+            \\printf '<%s>\n' "${x-unset}"
+            ,
+            .stdout =
+            \\<inner-sub:outer-sub>
+            \\<unset>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "command substitution isolates assignments while exporting marked variables to utilities",
+            .script =
+            \\unset TEMP_ONLY EXPORTED_ONLY
+            \\printf '<%s>\n' "$(TEMP_ONLY=inner; export EXPORTED_ONLY=exported; sh -c 'printf "%s:%s" "$TEMP_ONLY" "$EXPORTED_ONLY"')"
+            \\printf '<%s>:<%s>\n' "${TEMP_ONLY-unset}" "${EXPORTED_ONLY-unset}"
+            ,
+            .stdout =
+            \\<:exported>
+            \\<unset>:<unset>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "command substitution runs EXIT traps in the substitution environment",
+            .script =
+            \\printf '<%s>\n' "$(trap 'printf "%s\n" child-exit' 0; printf body)"
+            ,
+            .stdout =
+            \\<bodychild-exit>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
     },
 }
