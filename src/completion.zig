@@ -1356,7 +1356,7 @@ fn semanticContextForCommand(
         .option_value
     else if (parser_context.kind == .redirect_target)
         .redirect_target
-    else if (path.items.len == 0)
+    else if (path.items.len == 0 and manifestHasSubcommands(state, command.argv[0].text))
         .subcommand
     else
         .argument;
@@ -1374,6 +1374,14 @@ fn semanticContextForCommand(
         .replace_end = replace_end,
         .parser_position = parser_context.kind,
     };
+}
+
+fn manifestHasSubcommands(state: State, root: []const u8) bool {
+    for (state.rules.items) |rule| {
+        if (rule.disabled or rule.kind != .subcommand) continue;
+        if (std.mem.eql(u8, rule.root, root)) return true;
+    }
+    return false;
 }
 
 fn manifestOptionRuleForWord(
@@ -2915,6 +2923,55 @@ test "manifest completion uses option value provider after root option" {
     try std.process.setCurrentPath(std.testing.io, original_cwd);
     const edit = application.edit;
     try std.testing.expectEqualStrings("alpha/", edit.replacement);
+}
+
+test "manifest completion loads mkdir options and directory operands" {
+    var completion_state = State.init(std.testing.allocator);
+    defer completion_state.deinit();
+    try loadManifestFile(std.testing.allocator, std.testing.io, &completion_state, "share/rush/completions/mkdir.json");
+
+    var shell_state = shell_state_mod.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    const option_source = "mkdir -";
+    const option_application = try manifestApplication(
+        std.testing.allocator,
+        std.testing.io,
+        &completion_state,
+        shell_state,
+        option_source,
+        option_source.len,
+    );
+    defer option_application.deinit(std.testing.allocator);
+
+    const option_candidates = option_application.ambiguous;
+    try expectCandidate(option_candidates, "-m", .option);
+    try expectCandidate(option_candidates, "-p", .option);
+
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    try tmp.dir.createDir(std.testing.io, "parent", .default_dir);
+
+    var tmp_root_buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
+    const tmp_root_len = try tmp.dir.realPath(std.testing.io, &tmp_root_buffer);
+    const tmp_root = tmp_root_buffer[0..tmp_root_len];
+    const original_cwd = try std.process.currentPathAlloc(std.testing.io, std.testing.allocator);
+    defer std.testing.allocator.free(original_cwd);
+    try std.process.setCurrentPath(std.testing.io, tmp_root);
+
+    const operand_source = "mkdir par";
+    const operand_application = try manifestApplication(
+        std.testing.allocator,
+        std.testing.io,
+        &completion_state,
+        shell_state,
+        operand_source,
+        operand_source.len,
+    );
+    defer operand_application.deinit(std.testing.allocator);
+
+    try std.process.setCurrentPath(std.testing.io, original_cwd);
+    const edit = operand_application.edit;
+    try std.testing.expectEqualStrings("parent/", edit.replacement);
 }
 
 fn expectCandidate(candidates: []const Candidate, value: []const u8, kind: Kind) !void {
