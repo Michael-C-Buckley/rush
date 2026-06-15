@@ -3319,8 +3319,9 @@ fn evaluateFallbackPipeline(
             );
         defer stage_outcome.deinit();
 
-        try appendPipelineStageBuffers(buffers, stage_outcome, is_last_stage);
+        if (is_last_stage) flushInheritedPipelineStdout(evaluator.*, &stage_outcome);
         statuses[index] = stage_outcome.control_flow.status(stage_outcome.status);
+        try appendPipelineStageBuffers(buffers, stage_outcome, is_last_stage);
         stage_outcome.applyToShellState(&stage_state, .{}) catch |err| switch (err) {
             error.OutOfMemory => return error.OutOfMemory,
             error.ReadonlyVariable => unreachable,
@@ -3329,6 +3330,39 @@ fn evaluateFallbackPipeline(
         if (!is_last_stage) {
             next_stdin.clearRetainingCapacity();
             try next_stdin.appendSlice(evaluator.allocator, stage_outcome.stdout.items);
+        }
+    }
+}
+
+fn flushInheritedPipelineStdout(evaluator: Evaluator, stage_outcome: *outcome.CommandOutcome) void {
+    stage_outcome.validate();
+    if (!pipelineStdoutInherits(evaluator.external_stdio)) return;
+    if (stage_outcome.stdout.items.len == 0) return;
+    if (descriptorIsOpen(1)) return;
+
+    if (stage_outcome.control_flow == .normal) {
+        stage_outcome.status = 1;
+    }
+    stage_outcome.stdout.items.len = 0;
+    stage_outcome.validate();
+}
+
+fn pipelineStdoutInherits(external_stdio: ExternalStdio) bool {
+    return switch (external_stdio) {
+        .inherit, .inherit_output => true,
+        .capture, .capture_stdout => false,
+    };
+}
+
+fn descriptorIsOpen(descriptor: runtime.fd.Descriptor) bool {
+    runtime.fd.assertValidDescriptor(descriptor);
+    while (true) {
+        const rc = std.c.fcntl(descriptor, @as(c_int, std.c.F.GETFD), @as(c_int, 0));
+        switch (std.c.errno(rc)) {
+            .SUCCESS => return true,
+            .BADF => return false,
+            .INTR => continue,
+            else => return true,
         }
     }
 }
