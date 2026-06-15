@@ -2447,7 +2447,7 @@ test "line session renders ambiguous completion menu" {
     try std.testing.expect(std.mem.indexOf(u8, rendered, "switch branches") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "apply commits") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[1m\x1b[38;5;6m❯") == null);
-    try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[2mswitch branches") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[38;5;8mswitch branches") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "git che") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[J") == null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[2A") != null);

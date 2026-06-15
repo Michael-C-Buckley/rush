@@ -5,6 +5,7 @@ const std = @import("std");
 const compat = @import("../shell/compat.zig");
 const editor_completion = @import("../editor/completion.zig");
 const editor_driver = @import("../editor.zig").driver;
+const editor_render = @import("../editor/render.zig");
 const extension_abbr = @import("../extensions/editor/abbr.zig");
 const extension_api = @import("../extensions/api.zig");
 const extension_handlers = @import("../extensions/handlers.zig");
@@ -409,6 +410,7 @@ pub fn run(
             .previous_duration_ms = last_command_duration_ms,
             .prompt_async_state = &prompt_async_state,
         };
+        const ui_theme = interactiveUiTheme(interactive_shell.semantic_state);
         const read_options: editor_driver.ReadLineOptions = .{
             .prompt = prompt_text,
             .editing_mode = interactive_input.editingMode(interactive_shell.semantic_state.options),
@@ -422,6 +424,10 @@ pub fn run(
             .expand_abbreviation = expandInteractiveAbbreviation,
             .external_editor_command = prompt_mod.externalEditorCommand(&interactive_shell.semantic_state),
             .external_editor_tmpdir = prompt_mod.externalEditorTmpdir(&interactive_shell.semantic_state),
+            .theme = ui_theme,
+            .style_context = &interactive_context,
+            .refresh_style = refreshInteractiveStyle,
+            .refresh_color_report = refreshInteractiveColorReport,
         };
         const read_result = try terminal.readLine(read_options);
         if (interactive_shell.semantic_enabled) {
@@ -670,6 +676,115 @@ pub fn runSemanticInteractiveCommandString(
         external_stdio,
         interactiveExtensionHandlers(&interactive_context),
     );
+}
+
+fn refreshInteractiveStyle(
+    context: *anyopaque,
+    // ziglint-ignore: Z023 - opaque context must come first (refresh_style callback ABI).
+    allocator: std.mem.Allocator,
+    // ziglint-ignore: Z023 - opaque context must come first (refresh_style callback ABI).
+    io: std.Io,
+    scheme: editor_driver.ColorScheme,
+) !editor_render.UiTheme {
+    const interactive_context: *Context = @ptrCast(@alignCast(context));
+    try interactive_context.semantic_state.putRushStateVariable("rush_color_scheme", colorSchemeName(scheme));
+    try runInteractiveStyleFunction(interactive_context, allocator, io);
+    return interactiveUiTheme(interactive_context.semantic_state.*);
+}
+
+fn refreshInteractiveColorReport(
+    context: *anyopaque,
+    // ziglint-ignore: Z023 - opaque context must come first (refresh_color_report callback ABI).
+    allocator: std.mem.Allocator,
+    // ziglint-ignore: Z023 - opaque context must come first (refresh_color_report callback ABI).
+    io: std.Io,
+    report: editor_driver.ColorReport,
+) !editor_render.UiTheme {
+    const interactive_context: *Context = @ptrCast(@alignCast(context));
+    const variable = colorReportVariable(report) orelse return interactiveUiTheme(interactive_context.semantic_state.*);
+    var value_buffer: [8]u8 = undefined;
+    const value = try std.fmt.bufPrint(
+        &value_buffer,
+        "#{x:0>2}{x:0>2}{x:0>2}",
+        .{ report.value[0], report.value[1], report.value[2] },
+    );
+    try interactive_context.semantic_state.putRushStateVariable(variable, value);
+    try runInteractiveStyleFunction(interactive_context, allocator, io);
+    return interactiveUiTheme(interactive_context.semantic_state.*);
+}
+
+fn runInteractiveStyleFunction(context: *Context, allocator: std.mem.Allocator, io: std.Io) !void {
+    context.semantic_state.validate();
+    if (context.semantic_state.getFunction("rush_style") == null) return;
+
+    var result = try runner.runHiddenShellStateCommandWithExtensionHandlers(
+        allocator,
+        io,
+        context.semantic_state,
+        &.{"rush_style"},
+        context.arg_zero,
+        context.features,
+        .capture,
+        interactiveExtensionHandlers(context),
+    );
+    defer result.deinit();
+}
+
+fn colorReportVariable(report: editor_driver.ColorReport) ?[]const u8 {
+    return switch (report.kind) {
+        .fg => "rush_color_foreground",
+        .bg => "rush_color_background",
+        .cursor => null,
+        .index => |index| switch (index) {
+            0 => "rush_color_black",
+            1 => "rush_color_red",
+            2 => "rush_color_green",
+            3 => "rush_color_yellow",
+            4 => "rush_color_blue",
+            5 => "rush_color_magenta",
+            6 => "rush_color_cyan",
+            7 => "rush_color_white",
+            else => null,
+        },
+    };
+}
+
+fn colorSchemeName(scheme: editor_driver.ColorScheme) []const u8 {
+    return switch (scheme) {
+        .dark => "dark",
+        .light => "light",
+        .unknown => "unknown",
+    };
+}
+
+fn interactiveUiTheme(shell_state: shell.ShellState) editor_render.UiTheme {
+    var theme: editor_render.UiTheme = .{};
+    applyUiStyleVariable(shell_state, &theme.completion_selected, "rush_style_completion_selected");
+    applyUiStyleVariable(shell_state, &theme.completion_command, "rush_style_completion_command");
+    applyUiStyleVariable(shell_state, &theme.completion_builtin, "rush_style_completion_builtin");
+    applyUiStyleVariable(shell_state, &theme.completion_subcommand, "rush_style_completion_subcommand");
+    applyUiStyleVariable(shell_state, &theme.completion_plain, "rush_style_completion_plain");
+    applyUiStyleVariable(shell_state, &theme.completion_directory, "rush_style_completion_directory");
+    applyUiStyleVariable(shell_state, &theme.completion_option, "rush_style_completion_option");
+    applyUiStyleVariable(shell_state, &theme.completion_variable, "rush_style_completion_variable");
+    applyUiStyleVariable(shell_state, &theme.completion_function, "rush_style_completion_function");
+    applyUiStyleVariable(shell_state, &theme.completion_file, "rush_style_completion_file");
+    applyUiStyleVariable(shell_state, &theme.completion_description, "rush_style_completion_description");
+    applyUiStyleVariable(shell_state, &theme.completion_summary, "rush_style_completion_summary");
+    applyUiStyleVariable(shell_state, &theme.completion_flash, "rush_style_completion_flash");
+    applyUiStyleVariable(shell_state, &theme.history_match, "rush_style_history_match");
+    applyUiStyleVariable(shell_state, &theme.autosuggestion, "rush_style_autosuggestion");
+    applyUiStyleVariable(shell_state, &theme.diagnostic_error, "rush_style_diagnostic_error");
+    return theme;
+}
+
+fn applyUiStyleVariable(
+    shell_state: shell.ShellState,
+    style: *editor_render.UiStyle,
+    name: []const u8,
+) void {
+    const variable = shell_state.getVariable(name) orelse return;
+    style.* = editor_render.parseUiStyle(variable.value) orelse style.*;
 }
 
 pub fn runCommandStringWithEnvironment(
@@ -1291,6 +1406,61 @@ test "interactive command string invocation sources expanded ENV before script" 
     try std.testing.expectEqualStrings("loaded\n", result.stdout);
     try std.testing.expectEqualStrings("", result.stderr);
 }
+
+test "interactive style refresh runs rush_style with rush-owned color scheme" {
+    var shell_state = shell.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    try shell_state.putFunction(.{
+        .name = "rush_style",
+        .source_body =
+        \\if test "$rush_color_scheme" = light; then
+        \\  rush_style_history_match='fg=red,bold'
+        \\else
+        \\  rush_style_history_match='fg=blue'
+        \\fi
+        ,
+    });
+    var editor_state = EditorState.init(std.testing.allocator);
+    defer editor_state.deinit();
+    var context: Context = .{
+        .semantic_state = &shell_state,
+        .editor_state = &editor_state,
+        .arg_zero = "rush",
+    };
+
+    const theme = try refreshInteractiveStyle(&context, std.testing.allocator, std.testing.io, .light);
+
+    try std.testing.expectEqualStrings("light", shell_state.getVariable("rush_color_scheme").?.value);
+    try std.testing.expectEqual(editor_render.parseUiColor("red").?, theme.history_match.fg.?);
+    try std.testing.expect(theme.history_match.bold);
+}
+
+test "interactive color reports define rgb theme variables" {
+    var shell_state = shell.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    try shell_state.putFunction(.{
+        .name = "rush_style",
+        .source_body = "rush_style_completion_directory=\"fg=$rush_color_blue\"",
+    });
+    var editor_state = EditorState.init(std.testing.allocator);
+    defer editor_state.deinit();
+    var context: Context = .{
+        .semantic_state = &shell_state,
+        .editor_state = &editor_state,
+        .arg_zero = "rush",
+    };
+
+    const theme = try refreshInteractiveColorReport(
+        &context,
+        std.testing.allocator,
+        std.testing.io,
+        .{ .kind = .{ .index = 4 }, .value = .{ 0x01, 0x23, 0x45 } },
+    );
+
+    try std.testing.expectEqualStrings("#012345", shell_state.getVariable("rush_color_blue").?.value);
+    try std.testing.expectEqual(editor_render.parseUiColor("#012345").?, theme.completion_directory.fg.?);
+}
+
 test "interactive command string invocation exits immediately when user config exits" {
     const root = "rush-test-config-exit-startup";
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};

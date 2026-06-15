@@ -522,6 +522,7 @@ pub fn runHiddenShellStateCommandWithExtensionHandlers(
     });
     var outcome = try shell.eval.evaluatePlan(&evaluator, shell_state, eval_context, plan);
     defer outcome.deinit();
+    try outcome.applyToShellState(shell_state, .{});
     return .{
         .allocator = allocator,
         .status = outcome.status,

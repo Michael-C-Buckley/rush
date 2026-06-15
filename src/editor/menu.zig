@@ -32,11 +32,11 @@ pub const UiTheme = struct {
     completion_variable: UiStyle = .{ .fg = .{ .index = 5 } },
     completion_function: UiStyle = .{ .fg = .{ .index = 5 } },
     completion_file: UiStyle = .{ .fg = .{ .index = 7 } },
-    completion_description: UiStyle = .{ .dim = true },
-    completion_summary: UiStyle = .{ .dim = true },
+    completion_description: UiStyle = .{ .fg = .{ .index = 8 } },
+    completion_summary: UiStyle = .{ .fg = .{ .index = 8 } },
     completion_flash: UiStyle = .{ .fg = .{ .index = 0 }, .bg = .{ .index = 7 } },
     history_match: UiStyle = .{ .fg = .{ .index = 3 } },
-    autosuggestion: UiStyle = .{ .dim = true },
+    autosuggestion: UiStyle = .{ .fg = .{ .index = 8 } },
     diagnostic_error: UiStyle = .{ .ul = .curly, .ul_color = .{ .index = 1 } },
 };
 
@@ -533,7 +533,7 @@ test "menu append lines renders selected row and scroll summary" {
     try std.testing.expectEqual(@as(usize, 2), lines.items.len);
     try std.testing.expect(std.mem.indexOf(u8, lines.items[0], "two") != null);
     try std.testing.expect(std.mem.indexOf(u8, lines.items[0], "\x1b[1m") != null);
-    try std.testing.expectEqualStrings("  \x1b[2mshowing 2-2 of 3\x1b[22m", lines.items[1]);
+    try std.testing.expectEqualStrings("  \x1b[38;5;8mshowing 2-2 of 3\x1b[39m", lines.items[1]);
 }
 
 test "menu presentation customizes spacing summary and option labels" {
@@ -582,7 +582,7 @@ test "menu presentation customizes spacing summary and option labels" {
     try std.testing.expect(std.mem.indexOf(u8, lines.items[0], "+verbos~") != null);
     try std.testing.expect(std.mem.indexOf(u8, lines.items[0], " :: ") != null);
     try std.testing.expect(std.mem.indexOf(u8, lines.items[0], " <") != null);
-    try std.testing.expectEqualStrings("> \x1b[2mrows 1..1/2\x1b[22m", lines.items[1]);
+    try std.testing.expectEqualStrings("> \x1b[38;5;8mrows 1..1/2\x1b[39m", lines.items[1]);
 }
 
 test "menu presentation can hide scroll summary and cap rows" {
