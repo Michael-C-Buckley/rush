@@ -2887,6 +2887,8 @@ fn runBackgroundSemanticSubshell(opaque_context: *anyopaque) u8 {
     defer result.deinit();
 
     const status = result.control_flow.status(result.status);
+    if (!writeAllDescriptor(1, result.stdout.items)) return 126;
+    if (!writeAllDescriptor(2, result.stderr.items)) return 126;
     result.applyToShellState(&child_state, .{}) catch return 126;
     return status;
 }
