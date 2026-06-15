@@ -71,5 +71,112 @@
             .stderr = "",
             .status = 0,
         },
+        .{
+            .name = "double quotes do not give dollar-single-quotes special meaning",
+            .script =
+            \\printf '<%s>\n' "$'a\n'"
+            ,
+            .stdout =
+            \\<$'a\n'>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "double quotes preserve command substitution newlines as literal characters",
+            .script =
+            \\set -- "$(printf 'a\nb')"
+            \\second=$(printf '%s\n' "$1" | sed -n '2p')
+            \\printf '<%s>:<%s>\n' "$#" "$second"
+            ,
+            .stdout =
+            \\<1>:<b>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "double quotes preserve arithmetic expansion results as one field",
+            .script =
+            \\printf '<%s>\n' "$((1 + 2))"
+            ,
+            .stdout =
+            \\<3>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "backslash can escape a closing brace in double-quoted parameter expansion",
+            .script =
+            \\x='abc}'
+            \\printf '<%s>\n' "${x%\}}"
+            ,
+            .stdout =
+            \\<abc>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "quoted here-document delimiters prevent expansion in the body",
+            .script =
+            \\cat <<'EOF'
+            \\$x $(printf bad) "quoted"
+            \\EOF
+            ,
+            .stdout =
+            \\$x $(printf bad) "quoted"
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "dollar-single-quotes process common escape sequences before expansion",
+            .script =
+            \\second=$(printf '%s\n' $'a\nb' | sed -n '2p')
+            \\printf '<%s>\n' "$second" $'\'' $'\\'
+            ,
+            .stdout =
+            \\<b>
+            \\<'>
+            \\<\>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "dollar-single-quotes process hexadecimal and octal byte escapes",
+            .script =
+            \\printf '<%s>\n' $'\101' $'\x41'
+            ,
+            .stdout =
+            \\<A>
+            \\<A>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "dollar-single-quoted dollar signs do not introduce parameter expansion",
+            .script =
+            \\x=ok
+            \\printf '<%s>\n' $'$x' $'\044x'
+            ,
+            .stdout =
+            \\<$x>
+            \\<$x>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
     },
 }
