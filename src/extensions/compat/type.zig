@@ -5,22 +5,27 @@ const std = @import("std");
 const api = @import("../api.zig");
 const shell_builtin = @import("../../shell/builtin.zig");
 const outcome = @import("../../shell/outcome.zig");
-const state = @import("../../shell/state.zig");
 
 pub fn handlerFor(name: []const u8) ?api.HandlerSpec {
     if (!std.mem.eql(u8, name, "type")) return null;
     return .{ .handler = evaluate };
 }
 
-fn evaluate(context: ?*anyopaque, invocation: *api.Invocation) !state.ExitStatus {
+fn evaluate(context: ?*anyopaque, invocation: *api.Invocation) !api.EvaluationResult {
     _ = context;
     std.debug.assert(invocation.argv.len != 0);
     std.debug.assert(std.mem.eql(u8, invocation.argv[0], "type"));
 
     const request = parseRequest(invocation) catch |err| switch (err) {
-        error.UnsupportedOption => return invocation.usageError("type", "unsupported option"),
+        error.UnsupportedOption => return api.EvaluationResult.normal(try invocation.usageError(
+            "type",
+            "unsupported option",
+        )),
     };
-    if (request.first_operand >= invocation.argv.len) return invocation.usageError("type", "missing operand");
+    if (request.first_operand >= invocation.argv.len) return api.EvaluationResult.normal(try invocation.usageError(
+        "type",
+        "missing operand",
+    ));
 
     var status: outcome.ExitStatus = 0;
     for (invocation.argv[request.first_operand..]) |name| {
@@ -28,7 +33,7 @@ fn evaluate(context: ?*anyopaque, invocation: *api.Invocation) !state.ExitStatus
         try reportNotFound(invocation, name);
         status = 1;
     }
-    return status;
+    return api.EvaluationResult.normal(status);
 }
 
 const TypeOptions = struct {

@@ -3,13 +3,11 @@
 const std = @import("std");
 
 const api = @import("api.zig");
-const state = @import("../shell/state.zig");
 
 const unsupported_names = [_][]const u8{
     "color",
     "complete",
     "shopt",
-    "source",
 };
 
 pub fn handlerFor(name: []const u8) ?api.HandlerSpec {
@@ -19,8 +17,12 @@ pub fn handlerFor(name: []const u8) ?api.HandlerSpec {
     return null;
 }
 
-fn evaluate(context: ?*anyopaque, invocation: *api.Invocation) !state.ExitStatus {
+fn evaluate(context: ?*anyopaque, invocation: *api.Invocation) !api.EvaluationResult {
     _ = context;
     std.debug.assert(invocation.argv.len != 0);
-    return invocation.statusError(2, invocation.argv[0], "extension builtin is not implemented");
+    return api.EvaluationResult.normal(try invocation.statusError(
+        2,
+        invocation.argv[0],
+        "extension builtin is not implemented",
+    ));
 }

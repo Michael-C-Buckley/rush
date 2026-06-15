@@ -12,31 +12,43 @@ pub fn handlerFor(name: []const u8) ?api.HandlerSpec {
     return .{ .handler = evaluate };
 }
 
-fn evaluate(context: ?*anyopaque, invocation: *api.Invocation) !state.ExitStatus {
+fn evaluate(context: ?*anyopaque, invocation: *api.Invocation) !api.EvaluationResult {
     _ = context;
     std.debug.assert(invocation.argv.len != 0);
     std.debug.assert(std.mem.eql(u8, invocation.argv[0], "abbr"));
 
     const argv = invocation.argv;
     if (argv.len == 1 or (argv.len == 2 and std.mem.eql(u8, argv[1], "--list"))) {
-        return listAbbreviations(invocation);
+        return api.EvaluationResult.normal(try listAbbreviations(invocation));
     }
     if (argv.len >= 2 and std.mem.eql(u8, argv[1], "--erase")) {
-        if (argv.len != 3) return invocation.usageError("abbr", "usage: abbr --erase NAME");
-        if (!isShellName(argv[2])) return invocation.usageError("abbr", "invalid abbreviation name");
+        if (argv.len != 3) return api.EvaluationResult.normal(try invocation.usageError(
+            "abbr",
+            "usage: abbr --erase NAME",
+        ));
+        if (!isShellName(argv[2])) return api.EvaluationResult.normal(try invocation.usageError(
+            "abbr",
+            "invalid abbreviation name",
+        ));
         if (lookupAbbreviationValue(invocation.shell_state, invocation.state_delta.*, argv[2]) == null) {
-            return invocation.statusError(1, "abbr", "not found");
+            return api.EvaluationResult.normal(try invocation.statusError(1, "abbr", "not found"));
         }
         try invocation.state_delta.unsetAbbreviation(argv[2]);
-        return 0;
+        return api.EvaluationResult.normal(0);
     }
     if (argv.len >= 2 and std.mem.startsWith(u8, argv[1], "--")) {
-        return invocation.usageError("abbr", "unsupported option");
+        return api.EvaluationResult.normal(try invocation.usageError("abbr", "unsupported option"));
     }
-    if (argv.len != 3) return invocation.usageError("abbr", "usage: abbr NAME EXPANSION");
-    if (!isShellName(argv[1])) return invocation.usageError("abbr", "invalid abbreviation name");
+    if (argv.len != 3) return api.EvaluationResult.normal(try invocation.usageError(
+        "abbr",
+        "usage: abbr NAME EXPANSION",
+    ));
+    if (!isShellName(argv[1])) return api.EvaluationResult.normal(try invocation.usageError(
+        "abbr",
+        "invalid abbreviation name",
+    ));
     try invocation.state_delta.setAbbreviation(argv[1], argv[2]);
-    return 0;
+    return api.EvaluationResult.normal(0);
 }
 
 fn listAbbreviations(invocation: *api.Invocation) !state.ExitStatus {

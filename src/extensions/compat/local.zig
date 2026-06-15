@@ -5,30 +5,36 @@ const std = @import("std");
 const api = @import("../api.zig");
 const command_plan = @import("../../shell/command_plan.zig");
 const shell_startup = @import("../../shell/startup.zig");
-const state = @import("../../shell/state.zig");
 
 pub fn handlerFor(name: []const u8) ?api.HandlerSpec {
     if (!std.mem.eql(u8, name, "local")) return null;
     return .{ .handler = evaluate };
 }
 
-fn evaluate(context: ?*anyopaque, invocation: *api.Invocation) !state.ExitStatus {
+fn evaluate(context: ?*anyopaque, invocation: *api.Invocation) !api.EvaluationResult {
     _ = context;
     std.debug.assert(invocation.argv.len != 0);
     std.debug.assert(std.mem.eql(u8, invocation.argv[0], "local"));
 
     const scope = invocation.function_scope orelse {
-        return invocation.statusError(1, "local", "can only be used in a function");
+        return api.EvaluationResult.normal(try invocation.statusError(
+            1,
+            "local",
+            "can only be used in a function",
+        ));
     };
     std.debug.assert(invocation.eval_context.canReturnFromFunction());
     std.debug.assert(scope.depth == invocation.eval_context.function_depth);
-    if (invocation.argv.len == 1) return 0;
+    if (invocation.argv.len == 1) return api.EvaluationResult.normal(0);
 
     for (invocation.argv[1..]) |arg| {
         const assignment = splitAssignment(arg);
-        if (!isShellName(assignment.name)) return invocation.usageError("local", "invalid variable name");
+        if (!isShellName(assignment.name)) return api.EvaluationResult.normal(try invocation.usageError(
+            "local",
+            "invalid variable name",
+        ));
         if (invocation.shell_state.isVariableReadonly(assignment.name)) {
-            return invocation.usageError("local", "readonly variable");
+            return api.EvaluationResult.normal(try invocation.usageError("local", "readonly variable"));
         }
     }
 
@@ -43,7 +49,7 @@ fn evaluate(context: ?*anyopaque, invocation: *api.Invocation) !state.ExitStatus
             try invocation.state_delta.unsetVariable(assignment.name);
         }
     }
-    return 0;
+    return api.EvaluationResult.normal(0);
 }
 
 const AssignmentSlice = struct {

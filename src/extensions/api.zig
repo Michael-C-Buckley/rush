@@ -9,7 +9,20 @@ const delta = @import("../shell/delta.zig");
 const outcome = @import("../shell/outcome.zig");
 const state = @import("../shell/state.zig");
 
-pub const Handler = *const fn (?*anyopaque, *Invocation) anyerror!outcome.ExitStatus;
+pub const EvaluationResult = struct {
+    status: outcome.ExitStatus,
+    control_flow: outcome.ControlFlow = .normal,
+
+    pub fn normal(status: outcome.ExitStatus) EvaluationResult {
+        return .{ .status = status };
+    }
+
+    pub fn validate(self: EvaluationResult) void {
+        self.control_flow.validate();
+    }
+};
+
+pub const Handler = *const fn (?*anyopaque, *Invocation) anyerror!EvaluationResult;
 
 pub const HandlerSpec = struct {
     context: ?*anyopaque = null,
@@ -74,6 +87,17 @@ pub fn freeExternalResolutions(
     allocator.free(resolutions);
 }
 
+pub const SourceEvaluator = struct {
+    context: *anyopaque,
+    source_file: *const fn (*anyopaque, []const u8, []const u8) anyerror!EvaluationResult,
+
+    pub fn sourceFile(self: SourceEvaluator, command: []const u8, path: []const u8) !EvaluationResult {
+        std.debug.assert(command.len != 0);
+        std.debug.assert(path.len != 0);
+        return self.source_file(self.context, command, path);
+    }
+};
+
 pub const Invocation = struct {
     allocator: std.mem.Allocator,
     argv: []const []const u8,
@@ -84,6 +108,7 @@ pub const Invocation = struct {
     eval_context: context.EvalContext,
     function_scope: ?FunctionScope = null,
     external_resolver: ?ExternalResolver = null,
+    source_evaluator: ?SourceEvaluator = null,
     stdout: *std.ArrayList(u8),
     stderr: *std.ArrayList(u8),
     diagnostics: *std.ArrayList([]const u8),

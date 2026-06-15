@@ -5532,6 +5532,13 @@ fn evaluateExtensionBuiltin(
         .evaluator = evaluator,
         .shell_state = shell_state,
     };
+    var source_evaluator_context: ExtensionSourceEvaluatorContext = .{
+        .evaluator = evaluator,
+        .shell_state = shell_state,
+        .eval_context = eval_context,
+        .state_delta = state_delta,
+        .buffers = buffers,
+    };
     var invocation: extension_api.Invocation = .{
         .allocator = buffers.allocator,
         .argv = plan.argv,
@@ -5542,15 +5549,17 @@ fn evaluateExtensionBuiltin(
         .eval_context = eval_context,
         .function_scope = extensionFunctionScope(evaluator),
         .external_resolver = extensionExternalResolver(&external_resolver_context),
+        .source_evaluator = extensionSourceEvaluator(&source_evaluator_context),
         .stdout = &buffers.stdout,
         .stderr = &buffers.stderr,
         .diagnostics = &buffers.diagnostics,
     };
-    const status = handler.handler(handler.context, &invocation) catch |err| switch (err) {
+    const result = handler.handler(handler.context, &invocation) catch |err| switch (err) {
         error.OutOfMemory => return error.OutOfMemory,
         else => return error.Unimplemented,
     };
-    return normalEvaluation(status);
+    result.validate();
+    return .{ .status = result.status, .control_flow = result.control_flow };
 }
 
 const ExtensionExternalResolverContext = struct {
@@ -5602,6 +5611,39 @@ fn resolveAllExtensionExternals(
         resolver_context.shell_state,
         command,
     );
+}
+
+const ExtensionSourceEvaluatorContext = struct {
+    evaluator: *Evaluator,
+    shell_state: state.ShellState,
+    eval_context: context.EvalContext,
+    state_delta: *delta.StateDelta,
+    buffers: *EvaluationBuffers,
+};
+
+fn extensionSourceEvaluator(context_value: *ExtensionSourceEvaluatorContext) extension_api.SourceEvaluator {
+    return .{
+        .context = context_value,
+        .source_file = evaluateExtensionSourceFile,
+    };
+}
+
+fn evaluateExtensionSourceFile(
+    opaque_context: *anyopaque,
+    command: []const u8,
+    path: []const u8,
+) !extension_api.EvaluationResult {
+    const source_context: *ExtensionSourceEvaluatorContext = @ptrCast(@alignCast(opaque_context));
+    const result = try evaluateSourceFile(
+        source_context.evaluator,
+        source_context.shell_state,
+        source_context.eval_context,
+        command,
+        path,
+        source_context.state_delta,
+        source_context.buffers,
+    );
+    return .{ .status = result.status, .control_flow = result.control_flow };
 }
 
 fn extensionFunctionScope(evaluator: *Evaluator) ?extension_api.FunctionScope {
@@ -5690,16 +5732,46 @@ fn evaluateDot(
         "arguments are not implemented yet",
     ));
 
+    return evaluateSourceFile(evaluator, shell_state, eval_context, ".", argv[1], state_delta, buffers);
+}
+
+fn evaluateSourceFile(
+    evaluator: *Evaluator,
+    shell_state: state.ShellState,
+    eval_context: context.EvalContext,
+    command: []const u8,
+    path: []const u8,
+    state_delta: *delta.StateDelta,
+    buffers: *EvaluationBuffers,
+) !SimpleEvalResult {
+    std.debug.assert(command.len != 0);
+    std.debug.assert(path.len != 0);
     const io = evaluator.io orelse return error.Unimplemented;
     const source = std.Io.Dir.cwd().readFileAlloc(
         io,
-        argv[1],
+        path,
         evaluator.allocator,
         .unlimited,
-    ) catch return normalEvaluation(try builtinStatusError(buffers, 1, ".", "file not found"));
+    ) catch return normalEvaluation(try builtinStatusError(buffers, 1, command, "file not found"));
     defer evaluator.allocator.free(source);
 
-    return evaluateSourcedText(evaluator, shell_state, eval_context.enterSource(), source, state_delta, buffers);
+    const result = try evaluateSourcedText(
+        evaluator,
+        shell_state,
+        eval_context.enterSource(),
+        source,
+        state_delta,
+        buffers,
+    );
+    return consumeSourcedScriptReturn(result);
+}
+
+fn consumeSourcedScriptReturn(result: SimpleEvalResult) SimpleEvalResult {
+    if (result.control_flow == .return_from_scope) {
+        const request = result.control_flow.return_from_scope;
+        if (request.scope == .sourced_script) return normalEvaluation(request.status);
+    }
+    return result;
 }
 
 fn evaluateSourcedText(
@@ -8919,11 +8991,11 @@ test "semantic evaluator dispatches custom extension builtin handlers" {
             return .{ .handler = evaluate };
         }
 
-        fn evaluate(_: ?*anyopaque, invocation: *extension_api.Invocation) !outcome.ExitStatus {
+        fn evaluate(_: ?*anyopaque, invocation: *extension_api.Invocation) !extension_api.EvaluationResult {
             std.debug.assert(invocation.argv.len != 0);
             std.debug.assert(std.mem.eql(u8, invocation.argv[0], "custom_builtin"));
             try invocation.stdout.appendSlice(invocation.allocator, "custom output\n");
-            return 0;
+            return extension_api.EvaluationResult.normal(0);
         }
     };
 
@@ -8945,6 +9017,39 @@ test "semantic evaluator dispatches custom extension builtin handlers" {
     defer result.deinit();
     try std.testing.expectEqual(@as(outcome.ExitStatus, 0), result.status);
     try std.testing.expectEqualStrings("custom output\n", result.stdout.items);
+}
+
+test "semantic evaluator dispatches source as a compat extension builtin" {
+    const path = "rush-source-extension-test.tmp";
+    std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch |err| switch (err) {
+        error.FileNotFound => {},
+        else => return err,
+    };
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = path, .data =
+        \\echo sourced
+        \\SOURCED_VALUE=ok
+        \\return 7
+        \\echo after-return
+    });
+
+    var shell_state = state.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    var evaluator = Evaluator.init(std.testing.allocator);
+    evaluator.io = std.testing.io;
+    const eval_context = context.EvalContext.forTarget(.current_shell);
+    const plan = command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{
+        "source",
+        path,
+    } } });
+
+    var result = try evaluatePlan(&evaluator, &shell_state, eval_context, plan);
+    defer result.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 7), result.status);
+    try std.testing.expectEqual(outcome.ControlFlow.normal, result.control_flow);
+    try std.testing.expectEqualStrings("sourced\n", result.stdout.items);
+    try result.commitDelta(&shell_state, .current_shell);
+    try std.testing.expectEqualStrings("ok", shell_state.getVariable("SOURCED_VALUE").?.value);
 }
 
 test "semantic evaluator dispatches type as a compat extension builtin" {
