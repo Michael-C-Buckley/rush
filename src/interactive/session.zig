@@ -3,6 +3,7 @@
 const std = @import("std");
 
 const compat = @import("../shell/compat.zig");
+const completion = @import("../completion.zig");
 const editor_completion = @import("../editor/completion.zig");
 const editor_driver = @import("../editor.zig").driver;
 const editor_render = @import("../editor/render.zig");
@@ -168,6 +169,20 @@ fn expandInteractiveAbbreviation(
         interactive_context.features,
         append_space,
     );
+}
+
+// ziglint-ignore: Z023 - signature is fixed by the complete callback pointer type.
+fn completeInteractiveDefault(
+    context: *anyopaque,
+    // ziglint-ignore: Z023 - opaque context must come first (complete callback ABI).
+    allocator: std.mem.Allocator,
+    // ziglint-ignore: Z023 - complete callback ABI orders allocator before io.
+    io: std.Io,
+    source: []const u8,
+    cursor: usize,
+) !editor_completion.Application {
+    const interactive_context: *Context = @ptrCast(@alignCast(context));
+    return completion.defaultApplication(allocator, io, interactive_context.semantic_state.*, source, cursor);
 }
 
 fn drainInteractiveSemanticJobNotifications(
@@ -421,6 +436,7 @@ pub fn run(
             .refresh_prompt = refreshInteractivePrompt,
             .history = history_service.lineEditorView(io),
             .completion_context = &interactive_context,
+            .complete = completeInteractiveDefault,
             .expand_abbreviation = expandInteractiveAbbreviation,
             .external_editor_command = prompt_mod.externalEditorCommand(&interactive_shell.semantic_state),
             .external_editor_tmpdir = prompt_mod.externalEditorTmpdir(&interactive_shell.semantic_state),

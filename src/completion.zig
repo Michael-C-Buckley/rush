@@ -1,8 +1,10 @@
 //! Shell-aware completion engine.
 
 const std = @import("std");
+const default_builtins = @import("builtins.zig");
 const ir = @import("shell/ir.zig");
 const parser = @import("shell/parser.zig");
+const shell_state_mod = @import("shell/state.zig");
 const editor_completion = @import("editor/completion.zig");
 
 pub const CancellationToken = editor_completion.CancellationToken;
@@ -250,6 +252,43 @@ pub fn cloneArgumentCondition(
     errdefer allocator.destroy(owned);
     owned.* = try cloneArgumentConditionValue(allocator, source.*);
     return owned;
+}
+
+fn cloneStringSlice(allocator: std.mem.Allocator, values: []const []const u8) ![]const []const u8 {
+    if (values.len == 0) return &.{};
+    const cloned = try allocator.alloc([]const u8, values.len);
+    errdefer allocator.free(cloned);
+    var initialized: usize = 0;
+    errdefer for (cloned[0..initialized]) |value| allocator.free(value);
+    for (values, 0..) |value, index| {
+        cloned[index] = try allocator.dupe(u8, value);
+        initialized += 1;
+    }
+    return cloned;
+}
+
+fn cloneOptionExclusions(allocator: std.mem.Allocator, excludes: []const OptionExclusion) ![]const OptionExclusion {
+    if (excludes.len == 0) return &.{};
+    const cloned = try allocator.alloc(OptionExclusion, excludes.len);
+    var initialized: usize = 0;
+    errdefer {
+        for (cloned[0..initialized]) |exclusion| if (exclusion.selector) |selector| allocator.free(selector);
+        allocator.free(cloned);
+    }
+    for (excludes, 0..) |exclusion, index| {
+        cloned[index] = .{
+            .kind = exclusion.kind,
+            .selector = if (exclusion.selector) |selector| try allocator.dupe(u8, selector) else null,
+        };
+        initialized += 1;
+    }
+    return cloned;
+}
+
+fn freeOptionExclusions(allocator: std.mem.Allocator, excludes: []const OptionExclusion) void {
+    if (excludes.len == 0) return;
+    for (excludes) |exclusion| if (exclusion.selector) |selector| allocator.free(selector);
+    allocator.free(excludes);
 }
 
 pub fn cloneArgumentConditionValue(
@@ -1140,6 +1179,219 @@ pub fn applyCandidatesForInputWithPolicy(
     return applyCandidates(allocator, matches.items);
 }
 
+pub fn defaultPathApplication(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    source: []const u8,
+    cursor: usize,
+) !Application {
+    var parse_result = try parser.parse(allocator, source, .{});
+    defer parse_result.deinit();
+
+    const context = parser.completionContext(parse_result, cursor);
+    if (!completionContextUsesPaths(context.kind)) return .none;
+
+    const replace_start = context.span.start;
+    const replace_end = context.span.end;
+    std.debug.assert(replace_start <= replace_end);
+    std.debug.assert(replace_end <= source.len);
+
+    const word = try decodeShellCompletionSlice(allocator, source, replace_start, replace_end);
+    defer allocator.free(word);
+
+    const candidates = try pathCandidates(allocator, io, word, replace_start, replace_end);
+    defer freeCandidates(allocator, candidates);
+    return applyCandidatesForInputWithPolicy(allocator, source, candidates, .prefixOnly());
+}
+
+pub fn defaultApplication(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    shell_state: shell_state_mod.ShellState,
+    source: []const u8,
+    cursor: usize,
+) !Application {
+    var parse_result = try parser.parse(allocator, source, .{});
+    defer parse_result.deinit();
+
+    const context = parser.completionContext(parse_result, cursor);
+    if (!completionContextUsesPaths(context.kind) and context.kind != .command) return .none;
+
+    const replace_start = context.span.start;
+    const replace_end = context.span.end;
+    std.debug.assert(replace_start <= replace_end);
+    std.debug.assert(replace_end <= source.len);
+
+    const word = try decodeShellCompletionSlice(allocator, source, replace_start, replace_end);
+    defer allocator.free(word);
+
+    const candidates = if (context.kind == .command and std.mem.indexOfScalar(u8, word, '/') == null)
+        try commandCandidates(allocator, io, shell_state, replace_start, replace_end)
+    else
+        try pathCandidates(allocator, io, word, replace_start, replace_end);
+    defer freeCandidates(allocator, candidates);
+    return applyCandidatesForInputWithPolicy(allocator, source, candidates, .prefixOnly());
+}
+
+fn completionContextUsesPaths(kind: parser.CompletionKind) bool {
+    return switch (kind) {
+        .command,
+        .argument,
+        .redirect_target,
+        .assignment_value,
+        .quoted_string,
+        => true,
+        .parameter,
+        .assignment_name,
+        .separator,
+        => false,
+    };
+}
+
+fn pathCandidates(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    word: []const u8,
+    replace_start: usize,
+    replace_end: usize,
+) ![]Candidate {
+    const split = std.mem.findScalarLast(u8, word, '/');
+    const dir_prefix = if (split) |index| word[0 .. index + 1] else "";
+    const entry_prefix = if (split) |index| word[index + 1 ..] else word;
+    const dir_path = pathDirectoryToOpen(dir_prefix);
+
+    var dir = std.Io.Dir.cwd().openDir(io, dir_path, .{ .iterate = true }) catch |err| switch (err) {
+        error.FileNotFound, error.NotDir, error.AccessDenied => return &.{},
+        else => return err,
+    };
+    defer dir.close(io);
+
+    var builder: Builder = .{};
+    errdefer builder.deinit(allocator);
+
+    const include_hidden = std.mem.startsWith(u8, entry_prefix, ".");
+    var iterator = dir.iterate();
+    while (try iterator.next(io)) |entry| {
+        if (entry.name.len == 0) continue;
+        if (std.mem.eql(u8, entry.name, ".") or std.mem.eql(u8, entry.name, "..")) continue;
+        if (!include_hidden and entry.name[0] == '.') continue;
+        if (!std.mem.startsWith(u8, entry.name, entry_prefix)) continue;
+
+        const is_directory = entry.kind == .directory;
+        const value = try pathCandidateValue(allocator, dir_prefix, entry.name, is_directory);
+        defer allocator.free(value);
+        const display = try pathCandidateValue(allocator, "", entry.name, is_directory);
+        defer allocator.free(display);
+        try builder.appendCandidate(allocator, .{
+            .value = value,
+            .display = display,
+            .kind = if (is_directory) .directory else .file,
+            .replace_start = replace_start,
+            .replace_end = replace_end,
+            .append_space = !is_directory,
+        });
+    }
+
+    return builder.finish(allocator);
+}
+
+fn commandCandidates(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    shell_state: shell_state_mod.ShellState,
+    replace_start: usize,
+    replace_end: usize,
+) ![]Candidate {
+    var builder: Builder = .{};
+    errdefer builder.deinit(allocator);
+
+    var alias_iter = shell_state.aliases.iterator();
+    while (alias_iter.next()) |entry| try builder.appendCandidateIfMissing(allocator, .{
+        .value = entry.key_ptr.*,
+        .kind = .command,
+        .replace_start = replace_start,
+        .replace_end = replace_end,
+    });
+
+    var function_iter = shell_state.functions.iterator();
+    while (function_iter.next()) |entry| try builder.appendCandidateIfMissing(allocator, .{
+        .value = entry.key_ptr.*,
+        .kind = .function,
+        .replace_start = replace_start,
+        .replace_end = replace_end,
+    });
+
+    for (default_builtins.default_registry) |builtin| try builder.appendCandidateIfMissing(allocator, .{
+        .value = builtin.name,
+        .kind = .builtin,
+        .replace_start = replace_start,
+        .replace_end = replace_end,
+    });
+
+    if (shell_state.getVariable("PATH")) |path_variable| {
+        var path_iter = std.mem.splitScalar(u8, path_variable.value, ':');
+        while (path_iter.next()) |directory| try appendPathExecutableCandidates(
+            allocator,
+            io,
+            &builder,
+            directory,
+            replace_start,
+            replace_end,
+        );
+    }
+
+    return builder.finish(allocator);
+}
+
+fn appendPathExecutableCandidates(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    builder: *Builder,
+    directory: []const u8,
+    replace_start: usize,
+    replace_end: usize,
+) !void {
+    const dir_path = if (directory.len == 0) "." else directory;
+    var dir = std.Io.Dir.cwd().openDir(io, dir_path, .{ .iterate = true }) catch |err| switch (err) {
+        error.FileNotFound, error.NotDir, error.AccessDenied => return,
+        else => return err,
+    };
+    defer dir.close(io);
+
+    var iterator = dir.iterate();
+    while (try iterator.next(io)) |entry| {
+        if (entry.name.len == 0) continue;
+        if (entry.name[0] == '.') continue;
+        if (entry.kind == .directory) continue;
+        dir.access(io, entry.name, .{ .execute = true }) catch continue;
+        try builder.appendCandidateIfMissing(allocator, .{
+            .value = entry.name,
+            .kind = .command,
+            .replace_start = replace_start,
+            .replace_end = replace_end,
+        });
+    }
+}
+
+fn pathDirectoryToOpen(dir_prefix: []const u8) []const u8 {
+    if (dir_prefix.len == 0) return ".";
+    if (std.mem.eql(u8, dir_prefix, "/")) return "/";
+    if (std.mem.endsWith(u8, dir_prefix, "/")) return dir_prefix[0 .. dir_prefix.len - 1];
+    return dir_prefix;
+}
+
+fn pathCandidateValue(
+    allocator: std.mem.Allocator,
+    dir_prefix: []const u8,
+    name: []const u8,
+    is_directory: bool,
+) ![]const u8 {
+    return if (is_directory)
+        std.fmt.allocPrint(allocator, "{s}{s}/", .{ dir_prefix, name })
+    else
+        std.fmt.allocPrint(allocator, "{s}{s}", .{ dir_prefix, name });
+}
+
 fn freeTemporaryCandidates(allocator: std.mem.Allocator, candidates: []Candidate) void {
     for (candidates) |candidate| {
         if (candidate.insert) |insert| allocator.free(insert);
@@ -1532,6 +1784,155 @@ fn freeVariantProbeState(allocator: std.mem.Allocator, state: VariantProbeState)
     }
     allocator.free(state.patterns);
     if (state.selected) |selected| allocator.free(selected);
+}
+
+test "default path completion returns filesystem candidates" {
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    try tmp.dir.writeFile(std.testing.io, .{ .sub_path = "apple.txt", .data = "" });
+    try tmp.dir.createDir(std.testing.io, "apps", .default_dir);
+    try tmp.dir.writeFile(std.testing.io, .{ .sub_path = ".hidden", .data = "" });
+
+    var tmp_root_buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
+    const tmp_root_len = try tmp.dir.realPath(std.testing.io, &tmp_root_buffer);
+    const tmp_root = tmp_root_buffer[0..tmp_root_len];
+
+    const source = try std.fmt.allocPrint(std.testing.allocator, "cat {s}/app", .{tmp_root});
+    defer std.testing.allocator.free(source);
+    const application = try defaultPathApplication(std.testing.allocator, std.testing.io, source, source.len);
+    defer application.deinit(std.testing.allocator);
+
+    const expected_dir = try std.fmt.allocPrint(std.testing.allocator, "{s}/apps/", .{tmp_root});
+    defer std.testing.allocator.free(expected_dir);
+    const expected_file = try std.fmt.allocPrint(std.testing.allocator, "{s}/apple.txt", .{tmp_root});
+    defer std.testing.allocator.free(expected_file);
+
+    const candidates = application.ambiguous;
+    try std.testing.expectEqual(@as(usize, 2), candidates.len);
+    try std.testing.expectEqualStrings(expected_dir, candidates[0].value);
+    try std.testing.expectEqualStrings("apps/", candidates[0].display.?);
+    try std.testing.expectEqual(Kind.directory, candidates[0].kind);
+    try std.testing.expect(!candidates[0].append_space);
+    try std.testing.expectEqualStrings(expected_file, candidates[1].value);
+    try std.testing.expectEqualStrings("apple.txt", candidates[1].display.?);
+    try std.testing.expectEqual(Kind.file, candidates[1].kind);
+    try std.testing.expect(candidates[1].append_space);
+}
+
+test "default path completion inserts escaped single file matches" {
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    try tmp.dir.writeFile(std.testing.io, .{ .sub_path = "two words", .data = "" });
+
+    var tmp_root_buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
+    const tmp_root_len = try tmp.dir.realPath(std.testing.io, &tmp_root_buffer);
+    const tmp_root = tmp_root_buffer[0..tmp_root_len];
+
+    const source = try std.fmt.allocPrint(std.testing.allocator, "cat {s}/two\\ w", .{tmp_root});
+    defer std.testing.allocator.free(source);
+    const application = try defaultPathApplication(std.testing.allocator, std.testing.io, source, source.len);
+    defer application.deinit(std.testing.allocator);
+
+    const expected_replacement = try std.fmt.allocPrint(std.testing.allocator, "{s}/two\\ words", .{tmp_root});
+    defer std.testing.allocator.free(expected_replacement);
+
+    const edit = application.edit;
+    try std.testing.expectEqual(@as(usize, "cat ".len), edit.replace_start);
+    try std.testing.expectEqual(@as(usize, source.len), edit.replace_end);
+    try std.testing.expectEqualStrings(expected_replacement, edit.replacement);
+    try std.testing.expect(edit.append_space);
+}
+
+test "default completion returns commands in command position" {
+    var shell_state = shell_state_mod.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    try shell_state.setAlias("rush_alias", "echo alias");
+    try shell_state.putFunctionName("rush_fn");
+
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    var executable = try tmp.dir.createFile(std.testing.io, "rush-tool", .{ .permissions = .executable_file });
+    executable.close(std.testing.io);
+    try tmp.dir.writeFile(std.testing.io, .{ .sub_path = "rush-note", .data = "" });
+
+    var tmp_root_buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
+    const tmp_root_len = try tmp.dir.realPath(std.testing.io, &tmp_root_buffer);
+    const tmp_root = tmp_root_buffer[0..tmp_root_len];
+    try shell_state.putVariable("PATH", tmp_root, .{ .exported = true });
+
+    const source = "r";
+    const application = try defaultApplication(std.testing.allocator, std.testing.io, shell_state, source, source.len);
+    defer application.deinit(std.testing.allocator);
+
+    const candidates = application.ambiguous;
+    try expectCandidate(candidates, "read", .builtin);
+    try expectCandidate(candidates, "rush_alias", .command);
+    try expectCandidate(candidates, "rush_fn", .function);
+    try expectCandidate(candidates, "rush-tool", .command);
+    try expectNoCandidate(candidates, "rush-note");
+}
+
+test "default completion keeps command words with slash path-like" {
+    var shell_state = shell_state_mod.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    try shell_state.setAlias("rush_alias", "echo alias");
+
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    try tmp.dir.writeFile(std.testing.io, .{ .sub_path = "rush-script", .data = "" });
+
+    var tmp_root_buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
+    const tmp_root_len = try tmp.dir.realPath(std.testing.io, &tmp_root_buffer);
+    const tmp_root = tmp_root_buffer[0..tmp_root_len];
+    const source = try std.fmt.allocPrint(std.testing.allocator, "{s}/rush", .{tmp_root});
+    defer std.testing.allocator.free(source);
+
+    const application = try defaultApplication(std.testing.allocator, std.testing.io, shell_state, source, source.len);
+    defer application.deinit(std.testing.allocator);
+
+    const edit = application.edit;
+    const expected_replacement = try std.fmt.allocPrint(std.testing.allocator, "{s}/rush-script", .{tmp_root});
+    defer std.testing.allocator.free(expected_replacement);
+    try std.testing.expectEqualStrings(expected_replacement, edit.replacement);
+}
+
+test "default completion keeps argument position path-only" {
+    var shell_state = shell_state_mod.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    try shell_state.setAlias("rush_alias", "echo alias");
+
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    try tmp.dir.writeFile(std.testing.io, .{ .sub_path = "rush-file", .data = "" });
+
+    var tmp_root_buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
+    const tmp_root_len = try tmp.dir.realPath(std.testing.io, &tmp_root_buffer);
+    const tmp_root = tmp_root_buffer[0..tmp_root_len];
+    const source = try std.fmt.allocPrint(std.testing.allocator, "cat {s}/rush", .{tmp_root});
+    defer std.testing.allocator.free(source);
+
+    const application = try defaultApplication(std.testing.allocator, std.testing.io, shell_state, source, source.len);
+    defer application.deinit(std.testing.allocator);
+
+    const edit = application.edit;
+    const expected_replacement = try std.fmt.allocPrint(std.testing.allocator, "{s}/rush-file", .{tmp_root});
+    defer std.testing.allocator.free(expected_replacement);
+    try std.testing.expectEqualStrings(expected_replacement, edit.replacement);
+}
+
+fn expectCandidate(candidates: []const Candidate, value: []const u8, kind: Kind) !void {
+    for (candidates) |candidate| {
+        if (!std.mem.eql(u8, candidate.value, value)) continue;
+        try std.testing.expectEqual(kind, candidate.kind);
+        return;
+    }
+    return error.MissingCandidate;
+}
+
+fn expectNoCandidate(candidates: []const Candidate, value: []const u8) !void {
+    for (candidates) |candidate| {
+        if (std.mem.eql(u8, candidate.value, value)) return error.UnexpectedCandidate;
+    }
 }
 
 test "application handles no candidates" {
