@@ -45,5 +45,31 @@
             .stderr = "",
             .status = 0,
         },
+        .{
+            .name = "readonly assignment-only error does not exit by default",
+            .script =
+            \\command readonly R=old
+            \\R=new
+            \\printf 'after<%s>\n' "$?"
+            ,
+            .stdout =
+            \\after<1>
+            \\
+            ,
+            .stderr_match = .nonempty,
+            .status = 0,
+        },
+        .{
+            .name = "readonly assignment-only error obeys errexit",
+            .script =
+            \\set -e
+            \\command readonly R=old
+            \\R=new
+            \\printf bad
+            ,
+            .stdout = "",
+            .stderr_match = .nonempty,
+            .status = 1,
+        },
     },
 }

@@ -222,6 +222,7 @@ fn isFatalShellError(kind: ShellErrorKind, eval_context: context.EvalContext) bo
     eval_context.validate();
     if (eval_context.interactive) return false;
     if (eval_context.features.isBash() and kind == .special_builtin_failure) return false;
+    if (eval_context.features.isBash() and kind == .readonly_assignment) return false;
     return switch (kind) {
         .nonzero_status, .redirection_error => false,
         .readonly_assignment,
