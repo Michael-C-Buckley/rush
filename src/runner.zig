@@ -663,9 +663,7 @@ fn runSemanticLoweredProgram(
     if (stdin_script_file == null) std.debug.assert(stdin_script_source_offset == 0);
 
     var accumulated_stdout: std.ArrayList(u8) = .empty;
-    errdefer accumulated_stdout.deinit(allocator);
     var accumulated_stderr: std.ArrayList(u8) = .empty;
-    errdefer accumulated_stderr.deinit(allocator);
     var release_accumulated = false;
     defer if (!release_accumulated) {
         accumulated_stdout.deinit(allocator);
@@ -1449,8 +1447,8 @@ fn appendOrWriteOutput(
     stderr_bytes: []const u8,
 ) !void {
     if (evaluator.commit_exec_redirections) {
-        if (stdout_bytes.len != 0 and !writeAllDescriptor(1, stdout_bytes)) return error.Unimplemented;
-        if (stderr_bytes.len != 0 and !writeAllDescriptor(2, stderr_bytes)) return error.Unimplemented;
+        if (stdout_bytes.len != 0) _ = writeAllDescriptor(1, stdout_bytes);
+        if (stderr_bytes.len != 0) _ = writeAllDescriptor(2, stderr_bytes);
         return;
     }
 

@@ -116,12 +116,64 @@
             .status = 0,
         },
         .{
+            .name = "read without -r keeps backslash-escaped separators in fields",
+            .script =
+            \\printf 'a\ b c\n' | { read first rest; printf '<%s>:<%s>\n' "$first" "$rest"; }
+            ,
+            .stdout =
+            \\<a b>:<c>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "read without -r joins backslash-newline continuations",
+            .script =
+            \\read value <<EOF
+            \\a\
+            \\b
+            \\EOF
+            \\printf '<%s>\n' "$value"
+            ,
+            .stdout =
+            \\<ab>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "read assigns remaining fields to the last variable",
             .script =
             \\printf 'a b c\n' | { read first rest; printf '<%s>:<%s>\n' "$first" "$rest"; }
             ,
             .stdout =
             \\<a>:<b c>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "read trims trailing default separators from the last variable",
+            .script =
+            \\printf ' a  b   \n' | { read first rest; printf '<%s>:<%s>\n' "$first" "$rest"; }
+            ,
+            .stdout =
+            \\<a>:<b>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "read assigns a partial final line but returns nonzero",
+            .script =
+            \\printf abc | { read value; printf '<%s>:<%s>\n' "$?" "$value"; }
+            ,
+            .stdout =
+            \\<1>:<abc>
             \\
             ,
             .stderr = "",
@@ -277,6 +329,24 @@
             ,
             .stdout =
             \\u=rwx,g=rx,o=rx
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "umask accepts symbolic permission operands",
+            .script =
+            \\umask 022
+            \\umask u=rwx,g=,o=
+            \\umask
+            \\umask 022
+            \\umask g+w
+            \\umask
+            ,
+            .stdout =
+            \\0077
+            \\0002
             \\
             ,
             .stderr = "",

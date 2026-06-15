@@ -153,6 +153,7 @@ pub const EvalContext = struct {
     pub fn enterFunction(self: EvalContext) EvalContext {
         var next = self;
         next.function_depth = checkedIncrement(next.function_depth);
+        next.loop_depth = 0;
         next.validate();
         return next;
     }

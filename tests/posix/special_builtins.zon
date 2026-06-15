@@ -124,6 +124,21 @@
             .status = 0,
         },
         .{
+            .name = "exec can close and restore standard output around builtin writes",
+            .script =
+            \\exec 3>&1 1>&-
+            \\printf hidden 2>/dev/null
+            \\exec 1>&3 3>&-
+            \\printf 'after\n'
+            ,
+            .stdout =
+            \\after
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "readonly assigns a variable value",
             .script =
             \\readonly ro=value
@@ -221,6 +236,24 @@
             ,
             .stdout =
             \\<3>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "continue in a function does not target the caller loop",
+            .script =
+            \\f() { continue 2>/dev/null; printf 'function-after\n'; }
+            \\for x in once
+            \\do
+            \\    f
+            \\    printf 'loop-after\n'
+            \\done
+            ,
+            .stdout =
+            \\function-after
+            \\loop-after
             \\
             ,
             .stderr = "",

@@ -1822,14 +1822,24 @@ const EvaluationInput = struct {
     }
 
     fn readUntil(self: *EvaluationInput, delimiter: u8) ?[]const u8 {
+        return if (self.readUntilStatus(delimiter)) |result| result.bytes else null;
+    }
+
+    const ReadUntilResult = struct {
+        bytes: []const u8,
+        delimiter_found: bool,
+    };
+
+    fn readUntilStatus(self: *EvaluationInput, delimiter: u8) ?ReadUntilResult {
         self.validate();
         if (self.cursor == self.bytes.len) return null;
         const start = self.cursor;
         while (self.cursor < self.bytes.len and self.bytes[self.cursor] != delimiter) self.cursor += 1;
         const end = self.cursor;
-        if (self.cursor < self.bytes.len and self.bytes[self.cursor] == delimiter) self.cursor += 1;
+        const delimiter_found = self.cursor < self.bytes.len and self.bytes[self.cursor] == delimiter;
+        if (delimiter_found) self.cursor += 1;
         self.validate();
-        return self.bytes[start..end];
+        return .{ .bytes = self.bytes[start..end], .delimiter_found = delimiter_found };
     }
 };
 
@@ -6346,7 +6356,10 @@ fn evaluateUmask(
         return 0;
     }
 
-    const mask = parseUmaskOperand(argv[index]) orelse {
+    const current_mask = currentFileCreationMask(fs_port) orelse {
+        return builtinStatusError(buffers, 1, "umask", "could not read file creation mask");
+    };
+    const mask = parseUmaskOperand(argv[index], current_mask) orelse {
         return builtinUsageError(buffers, "umask", "invalid mask");
     };
     _ = fs_port.setFileCreationMask(.{ .mask = mask }) catch {
@@ -6355,12 +6368,92 @@ fn evaluateUmask(
     return 0;
 }
 
-fn parseUmaskOperand(operand: []const u8) ?runtime.fs.FileCreationMask {
+fn currentFileCreationMask(fs_port: runtime.fs.Port) ?runtime.fs.FileCreationMask {
+    const previous = fs_port.setFileCreationMask(.{ .mask = 0 }) catch return null;
+    _ = fs_port.setFileCreationMask(.{ .mask = previous.previous }) catch return null;
+    return previous.previous;
+}
+
+fn parseUmaskOperand(operand: []const u8, current_mask: runtime.fs.FileCreationMask) ?runtime.fs.FileCreationMask {
     if (operand.len == 0) return null;
+    if (std.mem.indexOfAny(u8, operand, "+-=") == null) return parseOctalUmaskOperand(operand);
+    return parseSymbolicUmaskOperand(operand, current_mask);
+}
+
+fn parseOctalUmaskOperand(operand: []const u8) ?runtime.fs.FileCreationMask {
     for (operand) |byte| if (byte < '0' or byte > '7') return null;
     const mask = std.fmt.parseInt(runtime.fs.FileCreationMask, operand, 8) catch return null;
     if (mask > 0o777) return null;
     return mask;
+}
+
+fn parseSymbolicUmaskOperand(
+    operand: []const u8,
+    current_mask: runtime.fs.FileCreationMask,
+) ?runtime.fs.FileCreationMask {
+    var mode: runtime.fs.FileCreationMask = (~current_mask) & 0o777;
+    var clauses = std.mem.splitScalar(u8, operand, ',');
+    while (clauses.next()) |clause| {
+        if (clause.len == 0) return null;
+        const parsed = parseSymbolicUmaskClause(clause) orelse return null;
+        switch (parsed.operator) {
+            '+' => mode |= parsed.permissions,
+            '-' => mode &= ~parsed.permissions,
+            '=' => mode = (mode & ~parsed.who_mask) | parsed.permissions,
+            else => unreachable,
+        }
+        mode &= 0o777;
+    }
+    return (~mode) & 0o777;
+}
+
+const SymbolicUmaskClause = struct {
+    operator: u8,
+    who_mask: runtime.fs.FileCreationMask,
+    permissions: runtime.fs.FileCreationMask,
+};
+
+fn parseSymbolicUmaskClause(clause: []const u8) ?SymbolicUmaskClause {
+    var index: usize = 0;
+    var who_mask: runtime.fs.FileCreationMask = 0;
+    while (index < clause.len) : (index += 1) {
+        switch (clause[index]) {
+            'u' => who_mask |= 0o700,
+            'g' => who_mask |= 0o070,
+            'o' => who_mask |= 0o007,
+            'a' => who_mask |= 0o777,
+            '+', '-', '=' => break,
+            else => return null,
+        }
+    }
+    if (index >= clause.len) return null;
+    if (who_mask == 0) who_mask = 0o777;
+    const operator = clause[index];
+    index += 1;
+
+    var permissions: runtime.fs.FileCreationMask = 0;
+    while (index < clause.len) : (index += 1) {
+        switch (clause[index]) {
+            'r' => permissions |= symbolicUmaskPermission(who_mask, 0o400, 0o040, 0o004),
+            'w' => permissions |= symbolicUmaskPermission(who_mask, 0o200, 0o020, 0o002),
+            'x' => permissions |= symbolicUmaskPermission(who_mask, 0o100, 0o010, 0o001),
+            else => return null,
+        }
+    }
+    return .{ .operator = operator, .who_mask = who_mask, .permissions = permissions };
+}
+
+fn symbolicUmaskPermission(
+    who_mask: runtime.fs.FileCreationMask,
+    user: runtime.fs.FileCreationMask,
+    group: runtime.fs.FileCreationMask,
+    other: runtime.fs.FileCreationMask,
+) runtime.fs.FileCreationMask {
+    var permissions: runtime.fs.FileCreationMask = 0;
+    if (who_mask & 0o700 != 0) permissions |= user;
+    if (who_mask & 0o070 != 0) permissions |= group;
+    if (who_mask & 0o007 != 0) permissions |= other;
+    return permissions;
 }
 
 fn printUmask(
@@ -7185,11 +7278,7 @@ fn evaluateLoopControl(
     };
     std.debug.assert(std.mem.eql(u8, argv[0], command));
 
-    if (!eval_context.canBreakOrContinue(1)) return normalEvaluation(try builtinUsageError(
-        buffers,
-        command,
-        "not in a loop",
-    ));
+    if (!eval_context.canBreakOrContinue(1)) return normalEvaluation(0);
     if (argv.len > 2) return normalEvaluation(try builtinUsageError(buffers, command, "too many arguments"));
     const requested_depth: u32 = if (argv.len == 2) blk: {
         const operand = std.mem.trim(u8, argv[1], &std.ascii.whitespace);
@@ -7539,35 +7628,129 @@ fn evaluateRead(
         if (shell_state.isVariableReadonly(name)) return builtinUsageError(buffers, "read", "readonly variable");
     }
 
-    const buffered_line = buffers.stdin.readUntil(delimiter);
-    const fd_line = if (buffered_line == null and evaluator.read_stdin_from_fd)
-        try readUntilFromStdinFd(evaluator.allocator, delimiter)
+    const raw_line = if (preserve_backslashes)
+        try readSingleRawReadLine(evaluator, buffers, delimiter)
     else
         null;
-    defer if (fd_line) |line| evaluator.allocator.free(line);
-    const line = buffered_line orelse fd_line orelse return 1;
-    const read_line = if (preserve_backslashes)
-        line
+    defer if (raw_line) |line| if (line.owned) evaluator.allocator.free(line.bytes);
+    const escaped_line = if (preserve_backslashes)
+        null
     else
-        try readLineWithEscapesRemoved(evaluator.allocator, line);
-    defer if (!preserve_backslashes) evaluator.allocator.free(read_line);
-    try assignReadFields(read_line, argv[name_index..], state_delta);
-    return 0;
+        try readLineWithEscapesProcessed(evaluator, buffers, delimiter);
+    defer if (escaped_line) |line| line.deinit(evaluator.allocator);
+    const read_line = if (preserve_backslashes)
+        if (raw_line) |line| line.bytes else return 1
+    else if (escaped_line) |line| line.bytes else return 1;
+    const escaped_separators = if (escaped_line) |line| line.escaped else null;
+    try assignReadFields(read_line, escaped_separators, argv[name_index..], state_delta);
+    const complete = if (preserve_backslashes) raw_line.?.delimiter_found else escaped_line.?.delimiter_found;
+    return if (complete) 0 else 1;
 }
 
-fn readLineWithEscapesRemoved(allocator: std.mem.Allocator, line: []const u8) ![]const u8 {
-    var normalized: std.ArrayList(u8) = .empty;
-    errdefer normalized.deinit(allocator);
+const ReadRawLine = struct {
+    bytes: []const u8,
+    owned: bool,
+    delimiter_found: bool,
+};
 
+const ReadLogicalLine = struct {
+    bytes: []const u8,
+    escaped: []const bool,
+    delimiter_found: bool,
+
+    fn deinit(self: ReadLogicalLine, allocator: std.mem.Allocator) void {
+        allocator.free(self.bytes);
+        allocator.free(self.escaped);
+    }
+};
+
+fn readSingleRawReadLine(
+    evaluator: *Evaluator,
+    buffers: *EvaluationBuffers,
+    delimiter: u8,
+) !?ReadRawLine {
+    if (buffers.stdin.readUntilStatus(delimiter)) |line| {
+        return .{ .bytes = line.bytes, .owned = false, .delimiter_found = line.delimiter_found };
+    }
+    if (!evaluator.read_stdin_from_fd) return null;
+    const line = try readUntilFromStdinFd(evaluator.allocator, delimiter) orelse return null;
+    return .{ .bytes = line.bytes, .owned = true, .delimiter_found = line.delimiter_found };
+}
+
+fn readLineWithEscapesProcessed(
+    evaluator: *Evaluator,
+    buffers: *EvaluationBuffers,
+    delimiter: u8,
+) !?ReadLogicalLine {
+    var logical_line: std.ArrayList(u8) = .empty;
+    var escaped: std.ArrayList(bool) = .empty;
+    errdefer logical_line.deinit(evaluator.allocator);
+    errdefer escaped.deinit(evaluator.allocator);
+    var delimiter_found = false;
+
+    while (true) {
+        const raw_line = try readSingleRawReadLine(evaluator, buffers, delimiter) orelse {
+            if (logical_line.items.len == 0) {
+                logical_line.deinit(evaluator.allocator);
+                escaped.deinit(evaluator.allocator);
+                return null;
+            }
+            break;
+        };
+        defer if (raw_line.owned) evaluator.allocator.free(raw_line.bytes);
+        delimiter_found = raw_line.delimiter_found;
+
+        if (delimiter == '\n' and readLineHasContinuation(raw_line.bytes)) {
+            try appendReadEscapedSegment(
+                evaluator.allocator,
+                &logical_line,
+                &escaped,
+                raw_line.bytes[0 .. raw_line.bytes.len - 1],
+            );
+            continue;
+        }
+
+        try appendReadEscapedSegment(evaluator.allocator, &logical_line, &escaped, raw_line.bytes);
+        break;
+    }
+
+    const bytes = try logical_line.toOwnedSlice(evaluator.allocator);
+    errdefer evaluator.allocator.free(bytes);
+    const escaped_flags = try escaped.toOwnedSlice(evaluator.allocator);
+    return .{
+        .bytes = bytes,
+        .escaped = escaped_flags,
+        .delimiter_found = delimiter_found,
+    };
+}
+
+fn readLineHasContinuation(line: []const u8) bool {
+    var backslash_count: usize = 0;
+    while (backslash_count < line.len and line[line.len - 1 - backslash_count] == '\\') backslash_count += 1;
+    return backslash_count % 2 == 1;
+}
+
+fn appendReadEscapedSegment(
+    allocator: std.mem.Allocator,
+    logical_line: *std.ArrayList(u8),
+    escaped: *std.ArrayList(bool),
+    line: []const u8,
+) !void {
     var index: usize = 0;
     while (index < line.len) : (index += 1) {
-        if (line[index] == '\\' and index + 1 < line.len) index += 1;
-        try normalized.append(allocator, line[index]);
+        const escaped_byte = line[index] == '\\' and index + 1 < line.len;
+        if (escaped_byte) index += 1;
+        try logical_line.append(allocator, line[index]);
+        try escaped.append(allocator, escaped_byte);
     }
-    return normalized.toOwnedSlice(allocator);
 }
 
-fn readUntilFromStdinFd(allocator: std.mem.Allocator, delimiter: u8) !?[]const u8 {
+const OwnedReadRawLine = struct {
+    bytes: []const u8,
+    delimiter_found: bool,
+};
+
+fn readUntilFromStdinFd(allocator: std.mem.Allocator, delimiter: u8) !?OwnedReadRawLine {
     var line: std.ArrayList(u8) = .empty;
     errdefer line.deinit(allocator);
 
@@ -7578,7 +7761,7 @@ fn readUntilFromStdinFd(allocator: std.mem.Allocator, delimiter: u8) !?[]const u
             else => break,
         };
         if (read_count == 0) break;
-        if (byte[0] == delimiter) return try line.toOwnedSlice(allocator);
+        if (byte[0] == delimiter) return .{ .bytes = try line.toOwnedSlice(allocator), .delimiter_found = true };
         try line.append(allocator, byte[0]);
     }
 
@@ -7586,11 +7769,17 @@ fn readUntilFromStdinFd(allocator: std.mem.Allocator, delimiter: u8) !?[]const u
         line.deinit(allocator);
         return null;
     }
-    return try line.toOwnedSlice(allocator);
+    return .{ .bytes = try line.toOwnedSlice(allocator), .delimiter_found = false };
 }
 
-fn assignReadFields(line: []const u8, names: []const []const u8, state_delta: *delta.StateDelta) !void {
+fn assignReadFields(
+    line: []const u8,
+    escaped: ?[]const bool,
+    names: []const []const u8,
+    state_delta: *delta.StateDelta,
+) !void {
     std.debug.assert(names.len != 0);
+    if (escaped) |flags| std.debug.assert(flags.len == line.len);
     if (names.len == 1) {
         try state_delta.assignVariable(names[0], line, .{});
         return;
@@ -7598,19 +7787,23 @@ fn assignReadFields(line: []const u8, names: []const []const u8, state_delta: *d
 
     var cursor: usize = 0;
     for (names, 0..) |name, index| {
-        while (cursor < line.len and isReadFieldSeparator(line[cursor])) cursor += 1;
+        while (cursor < line.len and isReadFieldSeparatorAt(line, escaped, cursor)) cursor += 1;
         const start = cursor;
         if (index + 1 == names.len) {
-            try state_delta.assignVariable(name, line[start..], .{});
+            var end = line.len;
+            while (end > start and isReadFieldSeparatorAt(line, escaped, end - 1)) end -= 1;
+            try state_delta.assignVariable(name, line[start..end], .{});
             return;
         }
-        while (cursor < line.len and !isReadFieldSeparator(line[cursor])) cursor += 1;
+        while (cursor < line.len and !isReadFieldSeparatorAt(line, escaped, cursor)) cursor += 1;
         try state_delta.assignVariable(name, line[start..cursor], .{});
     }
 }
 
-fn isReadFieldSeparator(byte: u8) bool {
-    return byte == ' ' or byte == '\t';
+fn isReadFieldSeparatorAt(line: []const u8, escaped: ?[]const bool, index: usize) bool {
+    std.debug.assert(index < line.len);
+    if (escaped) |flags| if (flags[index]) return false;
+    return line[index] == ' ' or line[index] == '\t';
 }
 
 const JobPrintMode = enum {
