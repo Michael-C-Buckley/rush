@@ -249,6 +249,68 @@ pub const ProcessTimes = struct {
     }
 };
 
+pub const ResourceLimitValue = union(enum) {
+    unlimited,
+    bytes: u64,
+
+    pub fn validate(self: ResourceLimitValue) void {
+        switch (self) {
+            .unlimited => {},
+            .bytes => {},
+        }
+    }
+};
+
+pub const ResourceLimits = struct {
+    soft: ResourceLimitValue,
+    hard: ResourceLimitValue,
+
+    pub fn validate(self: ResourceLimits) void {
+        self.soft.validate();
+        self.hard.validate();
+    }
+};
+
+pub const ResourceLimitResource = enum {
+    file_size,
+};
+
+pub const GetResourceLimitRequest = struct {
+    resource: ResourceLimitResource,
+
+    pub fn init(resource: ResourceLimitResource) GetResourceLimitRequest {
+        return .{ .resource = resource };
+    }
+
+    pub fn validate(self: GetResourceLimitRequest) void {
+        _ = self.resource;
+    }
+};
+
+pub const GetResourceLimitResult = struct {
+    limits: ResourceLimits,
+
+    pub fn validate(self: GetResourceLimitResult) void {
+        self.limits.validate();
+    }
+};
+
+pub const SetResourceLimitRequest = struct {
+    resource: ResourceLimitResource,
+    limits: ResourceLimits,
+
+    pub fn init(resource: ResourceLimitResource, limits: ResourceLimits) SetResourceLimitRequest {
+        const request: SetResourceLimitRequest = .{ .resource = resource, .limits = limits };
+        request.validate();
+        return request;
+    }
+
+    pub fn validate(self: SetResourceLimitRequest) void {
+        _ = self.resource;
+        self.limits.validate();
+    }
+};
+
 pub const PollWaitRequest = struct {
     child: *ChildProcess,
     nohang: bool = true,
@@ -360,6 +422,12 @@ pub const SpawnError = std.process.SpawnError;
 pub const WaitError = std.process.Child.WaitError;
 pub const RunError = anyerror;
 pub const TimesError = error{OperationUnsupported};
+pub const ResourceLimitError = error{
+    OperationUnsupported,
+    PermissionDenied,
+    LimitTooBig,
+    Unexpected,
+};
 pub const JobControlError = error{
     OperationUnsupported,
     ProcessNotFound,
@@ -373,6 +441,11 @@ pub const WaitFn = *const fn (*anyopaque, WaitRequest) WaitError!WaitResult;
 pub const PollWaitFn = *const fn (*anyopaque, PollWaitRequest) WaitError!PollWaitResult;
 pub const RunFn = *const fn (*anyopaque, RunRequest) RunError!RunResult;
 pub const GetTimesFn = *const fn (*anyopaque) TimesError!ProcessTimes;
+pub const GetResourceLimitFn = *const fn (
+    *anyopaque,
+    GetResourceLimitRequest,
+) ResourceLimitError!GetResourceLimitResult;
+pub const SetResourceLimitFn = *const fn (*anyopaque, SetResourceLimitRequest) ResourceLimitError!void;
 pub const ContinueProcessFn = *const fn (*anyopaque, ContinueProcessRequest) JobControlError!void;
 pub const ForegroundProcessGroupFn = *const fn (
     *anyopaque,
@@ -387,6 +460,8 @@ pub const Port = struct {
     poll_wait_fn: ?PollWaitFn = null,
     run_fn: RunFn,
     get_times_fn: ?GetTimesFn = null,
+    get_resource_limit_fn: ?GetResourceLimitFn = null,
+    set_resource_limit_fn: ?SetResourceLimitFn = null,
     continue_process_fn: ?ContinueProcessFn = null,
     foreground_process_group_fn: ?ForegroundProcessGroupFn = null,
 
@@ -437,6 +512,20 @@ pub const Port = struct {
         const result = try get_times_fn(self.context);
         result.validate();
         return result;
+    }
+
+    pub fn getResourceLimit(self: Port, request: GetResourceLimitRequest) ResourceLimitError!GetResourceLimitResult {
+        request.validate();
+        const get_resource_limit_fn = self.get_resource_limit_fn orelse return error.OperationUnsupported;
+        const result = try get_resource_limit_fn(self.context, request);
+        result.validate();
+        return result;
+    }
+
+    pub fn setResourceLimit(self: Port, request: SetResourceLimitRequest) ResourceLimitError!void {
+        request.validate();
+        const set_resource_limit_fn = self.set_resource_limit_fn orelse return error.OperationUnsupported;
+        try set_resource_limit_fn(self.context, request);
     }
 
     pub fn continueProcess(self: Port, request: ContinueProcessRequest) JobControlError!void {
@@ -538,4 +627,15 @@ test "runtime process times carry shell and child cpu durations" {
 
     try std.testing.expectEqual(@as(u64, 1), times.shell_user.microseconds);
     try std.testing.expectEqual(@as(u64, 4), times.children_system.microseconds);
+}
+
+test "runtime process resource limits carry soft and hard values" {
+    const limits: ResourceLimits = .{
+        .soft = .{ .bytes = 1024 },
+        .hard = .unlimited,
+    };
+    limits.validate();
+
+    try std.testing.expectEqual(@as(u64, 1024), limits.soft.bytes);
+    try std.testing.expectEqual(ResourceLimitValue.unlimited, limits.hard);
 }

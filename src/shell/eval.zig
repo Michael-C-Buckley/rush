@@ -5593,6 +5593,11 @@ fn evaluateBuiltin(
         plan.argv,
         buffers,
     ));
+    if (std.mem.eql(u8, definition.name, "ulimit")) return normalEvaluation(try evaluateUlimit(
+        evaluator,
+        plan.argv,
+        buffers,
+    ));
     if (std.mem.eql(u8, definition.name, "umask")) return normalEvaluation(try evaluateUmask(
         evaluator,
         plan.argv,
@@ -6023,6 +6028,106 @@ fn printProcessTime(
         total_seconds % 60,
         total_centiseconds % 100,
     });
+}
+
+const UlimitTarget = enum {
+    soft,
+    hard,
+};
+
+const UlimitOptions = struct {
+    target: UlimitTarget = .soft,
+    resource: runtime.process.ResourceLimitResource = .file_size,
+    operand: ?[]const u8 = null,
+};
+
+fn evaluateUlimit(
+    evaluator: *Evaluator,
+    argv: []const []const u8,
+    buffers: *EvaluationBuffers,
+) !outcome.ExitStatus {
+    std.debug.assert(argv.len != 0);
+    std.debug.assert(std.mem.eql(u8, argv[0], "ulimit"));
+    const options = parseUlimitOptions(argv) orelse return builtinUsageError(buffers, "ulimit", "unsupported option");
+
+    const process_port = evaluator.process_port orelse return error.Unimplemented;
+    var current = process_port.getResourceLimit(.{ .resource = options.resource }) catch |err| switch (err) {
+        error.OperationUnsupported => return error.Unimplemented,
+        else => return builtinStatusError(buffers, 1, "ulimit", "could not read resource limit"),
+    };
+    if (options.operand == null) {
+        try printUlimitValue(buffers.allocator, &buffers.stdout, ulimitTargetValue(current.limits, options.target));
+        return 0;
+    }
+
+    const value = parseUlimitValue(options.operand.?) orelse {
+        return builtinUsageError(buffers, "ulimit", "invalid limit");
+    };
+    switch (options.target) {
+        .soft => current.limits.soft = value,
+        .hard => current.limits.hard = value,
+    }
+    process_port.setResourceLimit(.{
+        .resource = options.resource,
+        .limits = current.limits,
+    }) catch |err| switch (err) {
+        error.OperationUnsupported => return error.Unimplemented,
+        error.PermissionDenied => return builtinStatusError(buffers, 1, "ulimit", "permission denied"),
+        error.LimitTooBig => return builtinUsageError(buffers, "ulimit", "limit too big"),
+        error.Unexpected => return builtinStatusError(buffers, 1, "ulimit", "could not set resource limit"),
+    };
+    return 0;
+}
+
+fn parseUlimitOptions(argv: []const []const u8) ?UlimitOptions {
+    var options: UlimitOptions = .{};
+    var index: usize = 1;
+    while (index < argv.len) : (index += 1) {
+        const arg = argv[index];
+        if (std.mem.eql(u8, arg, "--")) {
+            index += 1;
+            break;
+        }
+        if (arg.len == 0 or arg[0] != '-' or std.mem.eql(u8, arg, "-")) break;
+        for (arg[1..]) |option| switch (option) {
+            'f' => options.resource = .file_size,
+            'S' => options.target = .soft,
+            'H' => options.target = .hard,
+            else => return null,
+        };
+    }
+    if (index < argv.len) {
+        options.operand = argv[index];
+        index += 1;
+    }
+    if (index != argv.len) return null;
+    return options;
+}
+
+fn ulimitTargetValue(limits: runtime.process.ResourceLimits, target: UlimitTarget) runtime.process.ResourceLimitValue {
+    limits.validate();
+    return switch (target) {
+        .soft => limits.soft,
+        .hard => limits.hard,
+    };
+}
+
+fn parseUlimitValue(raw: []const u8) ?runtime.process.ResourceLimitValue {
+    if (std.mem.eql(u8, raw, "unlimited")) return .unlimited;
+    const blocks = std.fmt.parseInt(u64, raw, 10) catch return null;
+    const bytes = std.math.mul(u64, blocks, 512) catch return null;
+    return .{ .bytes = bytes };
+}
+
+fn printUlimitValue(
+    allocator: std.mem.Allocator,
+    stdout: *std.ArrayList(u8),
+    value: runtime.process.ResourceLimitValue,
+) !void {
+    switch (value) {
+        .unlimited => try stdout.appendSlice(allocator, "unlimited\n"),
+        .bytes => |bytes| try stdout.print(allocator, "{d}\n", .{bytes / 512}),
+    }
 }
 
 fn evaluateUmask(
@@ -9677,6 +9782,55 @@ test "semantic evaluator evaluates times through process runtime" {
     try std.testing.expectEqualStrings("times: too many arguments\n", invalid_result.stderr.items);
 }
 
+test "semantic evaluator evaluates ulimit file-size resource" {
+    var fake = FakeExternalRuntime.init(std.testing.allocator);
+    defer fake.deinit();
+    fake.setResourceLimits(.{
+        .soft = .{ .bytes = 1024 },
+        .hard = .unlimited,
+    });
+    var shell_state = state.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    var evaluator = Evaluator.initWithExternalPorts(std.testing.allocator, fake.fdPort(), fake.processPort());
+    const eval_context = context.EvalContext.forTarget(.current_shell);
+
+    const print_soft_plan = command_plan.classifyExpandedSimpleCommand(.{
+        .command = .{ .argv = &[_][]const u8{"ulimit"} },
+    });
+    var print_soft = try evaluatePlan(&evaluator, &shell_state, eval_context, print_soft_plan);
+    defer print_soft.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 0), print_soft.status);
+    try std.testing.expectEqualStrings("2\n", print_soft.stdout.items);
+
+    const print_hard_plan = command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{
+        "ulimit",
+        "-Hf",
+    } } });
+    var print_hard = try evaluatePlan(&evaluator, &shell_state, eval_context, print_hard_plan);
+    defer print_hard.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 0), print_hard.status);
+    try std.testing.expectEqualStrings("unlimited\n", print_hard.stdout.items);
+
+    const set_soft_plan = command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{
+        "ulimit",
+        "4",
+    } } });
+    var set_soft = try evaluatePlan(&evaluator, &shell_state, eval_context, set_soft_plan);
+    defer set_soft.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 0), set_soft.status);
+    try std.testing.expectEqual(@as(usize, 1), fake.set_resource_limit_count);
+    try std.testing.expectEqual(@as(u64, 2048), fake.resource_limits.soft.bytes);
+
+    const invalid_plan = command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{
+        "ulimit",
+        "-x",
+    } } });
+    var invalid_result = try evaluatePlan(&evaluator, &shell_state, eval_context, invalid_plan);
+    defer invalid_result.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 2), invalid_result.status);
+    try std.testing.expectEqualStrings("ulimit: unsupported option\n", invalid_result.stderr.items);
+}
+
 test "semantic evaluator evaluates umask through filesystem runtime" {
     var fake_fs = FakeFsRuntime.init();
     fake_fs.file_creation_mask = 0o022;
@@ -11806,6 +11960,11 @@ const FakeExternalRuntime = struct {
     run_stdout: []const u8 = &.{},
     run_stderr: []const u8 = &.{},
     process_times: runtime.process.ProcessTimes = .{},
+    resource_limits: runtime.process.ResourceLimits = .{
+        .soft = .unlimited,
+        .hard = .unlimited,
+    },
+    set_resource_limit_count: usize = 0,
 
     fn init(allocator: std.mem.Allocator) FakeExternalRuntime {
         return .{
@@ -11843,6 +12002,8 @@ const FakeExternalRuntime = struct {
             .poll_wait_fn = pollWait,
             .run_fn = run,
             .get_times_fn = getTimes,
+            .get_resource_limit_fn = getResourceLimit,
+            .set_resource_limit_fn = setResourceLimit,
             .continue_process_fn = continueProcess,
             .foreground_process_group_fn = foregroundProcessGroup,
         };
@@ -11875,6 +12036,11 @@ const FakeExternalRuntime = struct {
     fn setProcessTimes(self: *FakeExternalRuntime, times: runtime.process.ProcessTimes) void {
         times.validate();
         self.process_times = times;
+    }
+
+    fn setResourceLimits(self: *FakeExternalRuntime, limits: runtime.process.ResourceLimits) void {
+        limits.validate();
+        self.resource_limits = limits;
     }
 
     fn clearObservedArgv(self: *FakeExternalRuntime) void {
@@ -12096,6 +12262,25 @@ const FakeExternalRuntime = struct {
     fn getTimes(opaque_context: *anyopaque) runtime.process.TimesError!runtime.process.ProcessTimes {
         const self = fromContext(opaque_context);
         return self.process_times;
+    }
+
+    fn getResourceLimit(
+        opaque_context: *anyopaque,
+        request: runtime.process.GetResourceLimitRequest,
+    ) runtime.process.ResourceLimitError!runtime.process.GetResourceLimitResult {
+        const self = fromContext(opaque_context);
+        request.validate();
+        return .{ .limits = self.resource_limits };
+    }
+
+    fn setResourceLimit(
+        opaque_context: *anyopaque,
+        request: runtime.process.SetResourceLimitRequest,
+    ) runtime.process.ResourceLimitError!void {
+        const self = fromContext(opaque_context);
+        request.validate();
+        self.resource_limits = request.limits;
+        self.set_resource_limit_count += 1;
     }
 };
 

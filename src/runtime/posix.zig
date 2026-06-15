@@ -55,6 +55,8 @@ pub const Adapter = struct {
             .poll_wait_fn = pollWait,
             .run_fn = run,
             .get_times_fn = getTimes,
+            .get_resource_limit_fn = getResourceLimit,
+            .set_resource_limit_fn = setResourceLimit,
             .continue_process_fn = continueProcess,
             .foreground_process_group_fn = foregroundProcessGroup,
         };
@@ -318,6 +320,57 @@ fn cpuDurationFromTimeval(value: std.posix.timeval) process.CpuDuration {
     std.debug.assert(value.sec >= 0);
     std.debug.assert(value.usec >= 0);
     return .{ .microseconds = @as(u64, @intCast(value.sec)) * 1_000_000 + @as(u64, @intCast(value.usec)) };
+}
+
+fn getResourceLimit(
+    context: *anyopaque,
+    request: process.GetResourceLimitRequest,
+) process.ResourceLimitError!process.GetResourceLimitResult {
+    _ = adapterFromContext(context);
+    request.validate();
+    const limits = std.posix.getrlimit(resourceLimitResourceToPosix(request.resource)) catch |err| switch (err) {
+        error.Unexpected => return error.Unexpected,
+    };
+    return .{ .limits = .{
+        .soft = resourceLimitValueFromPosix(limits.cur),
+        .hard = resourceLimitValueFromPosix(limits.max),
+    } };
+}
+
+fn setResourceLimit(context: *anyopaque, request: process.SetResourceLimitRequest) process.ResourceLimitError!void {
+    _ = adapterFromContext(context);
+    request.validate();
+    const limits: std.posix.rlimit = .{
+        .cur = try resourceLimitValueToPosix(request.limits.soft),
+        .max = try resourceLimitValueToPosix(request.limits.hard),
+    };
+    std.posix.setrlimit(resourceLimitResourceToPosix(request.resource), limits) catch |err| switch (err) {
+        error.PermissionDenied => return error.PermissionDenied,
+        error.LimitTooBig => return error.LimitTooBig,
+        error.Unexpected => return error.Unexpected,
+    };
+}
+
+fn resourceLimitResourceToPosix(resource: process.ResourceLimitResource) std.posix.rlimit_resource {
+    return switch (resource) {
+        .file_size => .FSIZE,
+    };
+}
+
+fn resourceLimitValueFromPosix(value: std.posix.rlim_t) process.ResourceLimitValue {
+    if (value == std.c.RLIM.INFINITY) return .unlimited;
+    if (@typeInfo(std.posix.rlim_t).int.signedness == .signed) std.debug.assert(value >= 0);
+    return .{ .bytes = @intCast(value) };
+}
+
+fn resourceLimitValueToPosix(value: process.ResourceLimitValue) process.ResourceLimitError!std.posix.rlim_t {
+    return switch (value) {
+        .unlimited => std.c.RLIM.INFINITY,
+        .bytes => |bytes| blk: {
+            if (bytes > std.math.maxInt(std.posix.rlim_t)) return error.LimitTooBig;
+            break :blk @intCast(bytes);
+        },
+    };
 }
 
 const WaitPidError = error{
