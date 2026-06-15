@@ -2798,6 +2798,7 @@ fn startBackgroundPipeline(
 fn configureBackgroundSignalInheritance(evaluator: *Evaluator, shell_state: state.ShellState) EvalError!bool {
     shell_state.validate();
     if (shell_state.options.enabled(.monitor)) return false;
+    if (evaluator.signal_port == null) return false;
     try configureRuntimeSignalDisposition(evaluator, .INT, .ignore);
     try configureRuntimeSignalDisposition(evaluator, .QUIT, .ignore);
     return true;
@@ -7642,7 +7643,7 @@ fn evaluateWait(
             }
         }
         try appendJobTableDiff(shell_state, wait_state, state_delta);
-        return status;
+        return if (status > 128) status else 0;
     }
 
     for (argv[1..]) |operand| {
@@ -12623,6 +12624,10 @@ const FakeExternalRuntime = struct {
         std.debug.assert(statuses.len <= self.wait_statuses.len);
         for (statuses, 0..) |status_value, index| self.wait_statuses[index] = status_value;
         self.wait_status_count = statuses.len;
+        std.debug.assert(statuses.len <= self.poll_wait_statuses.len);
+        for (statuses, 0..) |status_value, index| self.poll_wait_statuses[index] = status_value;
+        self.poll_wait_status_count = statuses.len;
+        self.poll_wait_count = 0;
     }
 
     fn setPollWaitStatuses(self: *FakeExternalRuntime, statuses: []const ?runtime.process.WaitStatus) void {
@@ -13074,6 +13079,33 @@ test "semantic wait without operands waits all known jobs and returns zero" {
 
     try std.testing.expectEqual(@as(usize, 0), shell_state.background_jobs.items.len);
     try std.testing.expectEqual(@as(state.ExitStatus, 0), shell_state.last_status);
+}
+
+test "semantic wait interrupted by trapped signal enqueues pending trap" {
+    var fake = FakeExternalRuntime.init(std.testing.allocator);
+    defer fake.deinit();
+    fake.setPollWaitStatuses(&.{null});
+    var fake_signal = FakeSignalRuntime.init();
+    fake_signal.push(.{ .signal = 15 });
+    var evaluator = Evaluator.initWithExternalPorts(std.testing.allocator, fake.fdPort(), fake.processPort());
+    evaluator.signal_port = fake_signal.port();
+    var shell_state = state.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    try shell_state.setTrapForSignal(.TERM, "echo term");
+    try appendSemanticTestJob(&shell_state, 1, 7001, 7001, "alpha one", .running);
+
+    const wait_plan = command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{"wait"} } });
+    var result = try evaluatePlan(&evaluator, &shell_state, context.EvalContext.forTarget(.current_shell), wait_plan);
+    defer result.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 143), result.status);
+    try std.testing.expectEqual(@as(usize, 1), result.state_delta.pending_trap_enqueues.items.len);
+    try std.testing.expectEqual(state.TrapSignal.TERM, result.state_delta.pending_trap_enqueues.items[0]);
+    try result.commitDelta(&shell_state, .current_shell);
+
+    try std.testing.expectEqual(@as(usize, 1), shell_state.background_jobs.items.len);
+    try std.testing.expectEqual(@as(usize, 1), shell_state.pending_traps.items.len);
+    try std.testing.expectEqual(state.TrapSignal.TERM, shell_state.pending_traps.items[0]);
+    try std.testing.expectEqual(@as(state.ExitStatus, 143), shell_state.last_status);
 }
 
 test "semantic bg continues selected stopped jobs and reports POSIX lines" {
