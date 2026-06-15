@@ -139,5 +139,206 @@
             .stderr = "",
             .status = 0,
         },
+        .{
+            .name = "complete commands may end with semicolon terminators",
+            .script =
+            \\printf '<one>\n';
+            \\printf '<two>\n';
+            ,
+            .stdout =
+            \\<one>
+            \\<two>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "asynchronous list terminator starts a waitable command",
+            .script =
+            \\printf '%s\n' two >out &
+            \\wait
+            \\printf '<%s>:<%s>\n' "$(cat out)" "$?"
+            ,
+            .stdout =
+            \\<two>:<0>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "AND-OR lists accept linebreaks after control operators",
+            .script =
+            \\true &&
+            \\printf '<and>\n'
+            \\false ||
+            \\printf '<or>\n'
+            ,
+            .stdout =
+            \\<and>
+            \\<or>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "pipelines accept linebreaks after pipe operators",
+            .script =
+            \\printf 'pipe\n' |
+            \\cat
+            ,
+            .stdout =
+            \\pipe
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "for clause with empty in list executes zero iterations",
+            .script =
+            \\var=old
+            \\for var in; do printf '<bad>\n'; done
+            \\printf '<%s>:<%s>\n' "$var" "$?"
+            ,
+            .stdout =
+            \\<old>:<0>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "for clause without in accepts semicolon before do group",
+            .script =
+            \\set -- a b
+            \\for x; do printf '<%s>\n' "$x"; done
+            ,
+            .stdout =
+            \\<a>
+            \\<b>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "for clause accepts linebreak before in and do",
+            .script =
+            \\for x
+            \\in a b
+            \\do printf '<%s>\n' "$x"; done
+            ,
+            .stdout =
+            \\<a>
+            \\<b>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "case clause may have no case items",
+            .script =
+            \\case x in
+            \\esac
+            \\printf '<%s>\n' "$?"
+            ,
+            .stdout =
+            \\<0>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "case pattern list may start with a left parenthesis",
+            .script =
+            \\case x in
+            \\    (x) printf '<match>\n' ;;
+            \\esac
+            ,
+            .stdout =
+            \\<match>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "function body redirections are attached to the function definition",
+            .script =
+            \\f() { printf 'body\n'; } >out
+            \\f
+            \\printf '<%s>:<%s>\n' "$(cat out)" "$?"
+            ,
+            .stdout =
+            \\<body>:<0>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "function bodies expand words when invoked rather than when parsed",
+            .script =
+            \\f() { printf '<%s>\n' "$later"; }
+            \\later=ok
+            \\f
+            ,
+            .stdout =
+            \\<ok>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "compound commands accept trailing redirect lists",
+            .script =
+            \\{ printf 'brace\n'; } >brace.out
+            \\( printf 'sub\n' ) >sub.out
+            \\if true; then printf 'if\n'; fi >if.out
+            \\while false; do :; done >while.out
+            \\test -s while.out; empty=$?
+            \\printf '<%s>:<%s>:<%s>:<%s>\n' "$(cat brace.out)" "$(cat sub.out)" "$(cat if.out)" "$empty"
+            ,
+            .stdout =
+            \\<brace>:<sub>:<if>:<1>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "IO numbers can redirect compound command descriptors",
+            .script =
+            \\{ printf 'err\n' >&2; } 2>err.out
+            \\printf '<%s>\n' "$(cat err.out)"
+            ,
+            .stdout =
+            \\<err>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "reserved words are recognized after AND-OR operators",
+            .script =
+            \\false || if true; then printf '<if>\n'; fi
+            \\true && while false; do :; done
+            \\printf '<done>\n'
+            ,
+            .stdout =
+            \\<if>
+            \\<done>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
     },
 }
