@@ -1199,6 +1199,8 @@ fn wordUsesUnsupportedForWordExpansion(raw: []const u8) bool {
 fn semanticAsyncStatementPreflightUnsupported(program: ir.Program, statement: ir.Statement, index: usize) ?[]const u8 {
     std.debug.assert(index < program.statements.len);
     if (!statement.async_after) return null;
+    // ziglint-ignore: Z024 user-visible diagnostic; wrapping would inject a newline into stderr
+    const unsupported_background = "semantic executor production preflight keeps unsupported background statements outside the switched slice";
     return switch (statement.kind) {
         .pipeline,
         .if_command,
@@ -1208,8 +1210,7 @@ fn semanticAsyncStatementPreflightUnsupported(program: ir.Program, statement: ir
         .brace_group,
         .subshell,
         => null,
-        .function_definition, .bash_test_command =>
-            "semantic executor production preflight keeps unsupported background statements outside the switched slice",
+        .function_definition, .bash_test_command => unsupported_background,
     };
 }
 
