@@ -9,6 +9,11 @@
 rush_prompt() {
   rush_prompt_status=$?
   prompt segment --fg blue "$(prompt_pwd)"
+  rush_prompt_git_branch="$(prompt_async git-branch --ttl 5000 -- git branch --show-current)"
+  if test "$rush_prompt_git_branch" != ""; then
+    prompt text ' '
+    prompt segment --fg yellow "$rush_prompt_git_branch"
+  fi
   if test "$rush_prompt_status" = 0; then
     prompt text ' $ '
   else

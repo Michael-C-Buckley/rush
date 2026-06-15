@@ -1,7 +1,9 @@
 //! Prompt rendering extension builtins.
 
 const std = @import("std");
+const builtin = @import("builtin");
 
+const editor_signal = @import("../../editor/signal.zig");
 const editor_render = @import("../../editor/render.zig");
 const api = @import("../api.zig");
 const shell_context = @import("../../shell/context.zig");
@@ -13,12 +15,16 @@ pub const builtins = [_]shell_builtin.Builtin{
     shell_builtin.Builtin.initExtension("prompt", .shell_state),
     shell_builtin.Builtin.initExtension("prompt_pwd", .output),
     shell_builtin.Builtin.initExtension("prompt_duration", .output),
+    shell_builtin.Builtin.initExtension("prompt_async", .output),
 };
 
 pub const Builder = struct {
     allocator: std.mem.Allocator,
     bytes: std.ArrayList(u8) = .empty,
     previous_duration_ms: ?i64 = null,
+    async_state: ?*AsyncState = null,
+    io: ?std.Io = null,
+    now_ms: u64 = 0,
 
     pub fn init(allocator: std.mem.Allocator) Builder {
         return .{ .allocator = allocator };
@@ -36,6 +42,90 @@ pub const Builder = struct {
     }
 };
 
+const use_debug_allocator = builtin.mode == .Debug;
+const AsyncDebugAllocator = if (use_debug_allocator) std.heap.DebugAllocator(.{}) else void;
+
+pub const AsyncState = struct {
+    debug_allocator: AsyncDebugAllocator = if (use_debug_allocator) .init else {},
+    allocator: std.mem.Allocator = undefined,
+    io: std.Io = undefined,
+    redraw_fd: ?std.posix.fd_t = null,
+    mutex: std.Io.Mutex = .init,
+    entries: std.ArrayList(*AsyncEntry) = .empty,
+
+    pub fn init(self: *AsyncState, io: std.Io, redraw_fd: ?std.posix.fd_t) void {
+        self.* = .{};
+        self.io = io;
+        self.redraw_fd = redraw_fd;
+        self.allocator = if (use_debug_allocator) self.debug_allocator.allocator() else std.heap.smp_allocator;
+    }
+
+    pub fn deinit(self: *AsyncState) void {
+        for (self.entries.items) |entry| {
+            if (entry.thread) |thread| thread.join();
+            self.allocator.free(entry.key);
+            self.allocator.free(entry.cwd);
+            self.allocator.free(entry.stdout);
+            self.allocator.destroy(entry);
+        }
+        self.entries.deinit(self.allocator);
+        if (use_debug_allocator) std.debug.assert(self.debug_allocator.deinit() == .ok);
+        self.* = undefined;
+    }
+
+    pub fn hasPending(self: *AsyncState) bool {
+        self.lock();
+        defer self.unlock();
+        for (self.entries.items) |entry| if (entry.refreshing or entry.completed) return true;
+        return false;
+    }
+
+    pub fn takeCompleted(self: *AsyncState) bool {
+        self.lock();
+        defer self.unlock();
+        var completed = false;
+        for (self.entries.items) |entry| {
+            if (entry.completed) {
+                entry.completed = false;
+                completed = true;
+            }
+        }
+        return completed;
+    }
+
+    fn lock(self: *AsyncState) void {
+        self.mutex.lockUncancelable(self.io);
+    }
+
+    fn unlock(self: *AsyncState) void {
+        self.mutex.unlock(self.io);
+    }
+
+    fn requestRedraw(self: AsyncState) void {
+        const fd = self.redraw_fd orelse return;
+        // ziglint-ignore: Z026 best-effort wakeup; the next input event can redraw
+        editor_signal.rawWriteAll(fd, "p") catch {};
+    }
+};
+
+const AsyncEntry = struct {
+    key: []const u8,
+    cwd: []const u8,
+    stdout: []const u8,
+    updated_ms: u64 = 0,
+    refreshing: bool = false,
+    completed: bool = false,
+    thread: ?std.Thread = null,
+};
+
+const AsyncRequest = struct {
+    state: *AsyncState,
+    entry: *AsyncEntry,
+    io: std.Io,
+    cwd: []const u8,
+    argv: []const []const u8,
+};
+
 pub fn handlerFor(name: []const u8) ?api.HandlerSpec {
     return handlerForContext(name, null);
 }
@@ -46,6 +136,10 @@ pub fn handlerForContext(name: []const u8, handler_context: ?*anyopaque) ?api.Ha
     if (std.mem.eql(u8, name, "prompt_duration")) return .{
         .context = handler_context,
         .handler = evaluatePromptDuration,
+    };
+    if (std.mem.eql(u8, name, "prompt_async")) return .{
+        .context = handler_context,
+        .handler = evaluatePromptAsync,
     };
     return null;
 }
@@ -241,6 +335,195 @@ fn evaluatePromptDuration(handler_context: ?*anyopaque, invocation: *api.Invocat
     const duration_ms = builder.previous_duration_ms orelse return api.EvaluationResult.normal(1);
     try invocation.stdout.print(invocation.allocator, "{d}ms\n", .{duration_ms});
     return api.EvaluationResult.normal(0);
+}
+
+fn evaluatePromptAsync(handler_context: ?*anyopaque, invocation: *api.Invocation) !api.EvaluationResult {
+    std.debug.assert(invocation.argv.len != 0);
+    std.debug.assert(std.mem.eql(u8, invocation.argv[0], "prompt_async"));
+    const builder: *Builder = if (handler_context) |ctx| @ptrCast(@alignCast(ctx)) else {
+        return api.EvaluationResult.normal(try invocation.usageError(
+            "prompt_async",
+            "only available while rendering prompt",
+        ));
+    };
+    const async_state = builder.async_state orelse return api.EvaluationResult.normal(0);
+    const io = builder.io orelse return api.EvaluationResult.normal(0);
+
+    const parsed = parsePromptAsync(invocation.argv) orelse {
+        return api.EvaluationResult.normal(try promptAsyncUsage(invocation));
+    };
+    const cwd = promptCwd(invocation);
+    const entry = try asyncEntry(async_state, parsed.key, cwd);
+
+    async_state.lock();
+    const cached_stdout = try invocation.allocator.dupe(u8, entry.stdout);
+    const should_refresh = !entry.refreshing and
+        (entry.updated_ms == 0 or builder.now_ms >= entry.updated_ms + parsed.ttl_ms);
+    if (should_refresh) entry.refreshing = true;
+    async_state.unlock();
+    defer invocation.allocator.free(cached_stdout);
+
+    try invocation.stdout.appendSlice(invocation.allocator, cached_stdout);
+    if (should_refresh) startPromptAsyncRefresh(async_state, io, entry, cwd, parsed.command, invocation) catch |err| {
+        async_state.lock();
+        entry.refreshing = false;
+        async_state.unlock();
+        if (err == error.OutOfMemory) return error.OutOfMemory;
+    };
+    return api.EvaluationResult.normal(0);
+}
+
+const PromptAsyncOptions = struct {
+    key: []const u8,
+    ttl_ms: u64,
+    command: []const []const u8,
+};
+
+fn parsePromptAsync(argv: []const []const u8) ?PromptAsyncOptions {
+    if (argv.len < 6) return null;
+    var options: PromptAsyncOptions = .{ .key = argv[1], .ttl_ms = 0, .command = &.{} };
+    var index: usize = 2;
+    while (index < argv.len) {
+        const arg = argv[index];
+        if (std.mem.eql(u8, arg, "--")) {
+            index += 1;
+            if (index >= argv.len) return null;
+            options.command = argv[index..];
+            return options;
+        }
+        if (std.mem.eql(u8, arg, "--ttl")) {
+            index += 1;
+            if (index >= argv.len) return null;
+            options.ttl_ms = std.fmt.parseInt(u64, argv[index], 10) catch return null;
+            index += 1;
+            continue;
+        }
+        return null;
+    }
+    return null;
+}
+
+fn asyncEntry(async_state: *AsyncState, key: []const u8, cwd: []const u8) !*AsyncEntry {
+    async_state.lock();
+    defer async_state.unlock();
+    for (async_state.entries.items) |entry| {
+        if (std.mem.eql(u8, entry.key, key) and std.mem.eql(u8, entry.cwd, cwd)) return entry;
+    }
+    const entry = try async_state.allocator.create(AsyncEntry);
+    errdefer async_state.allocator.destroy(entry);
+    entry.* = .{
+        .key = try async_state.allocator.dupe(u8, key),
+        .cwd = try async_state.allocator.dupe(u8, cwd),
+        .stdout = try async_state.allocator.dupe(u8, ""),
+    };
+    errdefer async_state.allocator.free(entry.key);
+    errdefer async_state.allocator.free(entry.cwd);
+    errdefer async_state.allocator.free(entry.stdout);
+    try async_state.entries.append(async_state.allocator, entry);
+    return entry;
+}
+
+fn startPromptAsyncRefresh(
+    async_state: *AsyncState,
+    io: std.Io,
+    entry: *AsyncEntry,
+    cwd: []const u8,
+    command: []const []const u8,
+    invocation: *api.Invocation,
+) !void {
+    if (entry.thread) |thread| {
+        thread.join();
+        entry.thread = null;
+    }
+
+    const request = try async_state.allocator.create(AsyncRequest);
+    errdefer async_state.allocator.destroy(request);
+    const argv = try async_state.allocator.alloc([]const u8, command.len);
+    errdefer async_state.allocator.free(argv);
+    var owned_count: usize = 0;
+    errdefer for (argv[0..owned_count]) |arg| async_state.allocator.free(arg);
+    for (command, 0..) |arg, index| {
+        argv[index] = try async_state.allocator.dupe(u8, arg);
+        owned_count += 1;
+    }
+    if (invocation.external_resolver) |resolver| {
+        if (try resolver.resolve(invocation.allocator, invocation.assignments, command[0])) |resolution| {
+            defer invocation.allocator.free(resolution.path);
+            async_state.allocator.free(argv[0]);
+            argv[0] = try async_state.allocator.dupe(u8, resolution.path);
+        }
+    }
+    request.* = .{
+        .state = async_state,
+        .entry = entry,
+        .io = io,
+        .cwd = try async_state.allocator.dupe(u8, cwd),
+        .argv = argv,
+    };
+    errdefer async_state.allocator.free(request.cwd);
+
+    entry.thread = try std.Thread.spawn(.{}, promptAsyncWorker, .{request});
+}
+
+fn promptAsyncWorker(request: *AsyncRequest) void {
+    const async_state = request.state;
+    const allocator = async_state.allocator;
+    defer {
+        for (request.argv) |arg| allocator.free(arg);
+        allocator.free(request.argv);
+        allocator.free(request.cwd);
+        allocator.destroy(request);
+    }
+
+    var stdout = runPromptAsyncCommand(allocator, request.io, request.cwd, request.argv) catch
+        allocator.dupe(u8, "") catch return;
+    errdefer allocator.free(stdout);
+    const updated_ms = nowMillis(request.io);
+
+    async_state.lock();
+    allocator.free(request.entry.stdout);
+    request.entry.stdout = stdout;
+    request.entry.updated_ms = updated_ms;
+    request.entry.refreshing = false;
+    request.entry.completed = true;
+    async_state.unlock();
+    async_state.requestRedraw();
+    stdout = &.{};
+}
+
+fn runPromptAsyncCommand(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    cwd: []const u8,
+    argv: []const []const u8,
+) ![]u8 {
+    const result = try std.process.run(allocator, io, .{
+        .argv = argv,
+        .cwd = .{ .path = cwd },
+        .stderr_limit = .limited(16 * 1024),
+        .stdout_limit = .limited(64 * 1024),
+        .expand_arg0 = .expand,
+    });
+    defer allocator.free(result.stderr);
+    switch (result.term) {
+        .exited => {},
+        .signal, .stopped, .unknown => {
+            allocator.free(result.stdout);
+            return allocator.dupe(u8, "");
+        },
+    }
+    return result.stdout;
+}
+
+fn nowMillis(io: std.Io) u64 {
+    return @intCast(std.Io.Clock.Timestamp.now(io, .awake).raw.toMilliseconds());
+}
+
+fn promptAsyncUsage(invocation: *api.Invocation) !u8 {
+    return invocation.usageError(
+        "prompt_async",
+        "usage: prompt_async KEY --ttl MS -- COMMAND...",
+    );
 }
 
 fn promptUsage(invocation: *api.Invocation) !u8 {

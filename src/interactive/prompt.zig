@@ -11,6 +11,8 @@ const extension_api = @import("../extensions/api.zig");
 const interactive_input = @import("input.zig");
 const line_editor = @import("../editor.zig").line;
 
+pub const AsyncState = prompt_extension.AsyncState;
+
 pub fn text(shell_state: *shell.ShellState, name: []const u8, fallback: []const u8) []const u8 {
     return getEnv(shell_state, name) orelse fallback;
 }
@@ -23,6 +25,7 @@ pub const RenderOptions = struct {
     arg_zero: []const u8 = "rush",
     features: shell.compat.Features = .{},
     previous_duration_ms: ?i64 = null,
+    async_state: ?*prompt_extension.AsyncState = null,
 };
 
 pub fn render(
@@ -37,6 +40,9 @@ pub fn render(
     var builder = prompt_extension.Builder.init(allocator);
     defer builder.deinit();
     builder.previous_duration_ms = options.previous_duration_ms;
+    builder.async_state = options.async_state;
+    builder.io = io;
+    builder.now_ms = nowMillis(io);
 
     var lookup_context: PromptLookupContext = .{ .builder = &builder };
     var adapter = runtime.PosixAdapter.init(io);
@@ -98,6 +104,10 @@ pub fn externalEditorTmpdir(shell_state: *shell.ShellState) []const u8 {
     return "/tmp";
 }
 
+fn nowMillis(io: std.Io) u64 {
+    return @intCast(std.Io.Clock.Timestamp.now(io, .awake).raw.toMilliseconds());
+}
+
 test "interactive prompt helpers use ShellState prompts and editing mode" {
     var shell_state = shell.ShellState.init(std.testing.allocator);
     defer shell_state.deinit();
@@ -112,4 +122,34 @@ test "interactive prompt helpers use ShellState prompts and editing mode" {
     try std.testing.expectEqualStrings("semantic> ", prompt);
     try std.testing.expectEqualStrings("semantic2> ", text(&shell_state, "PS2", "> "));
     try std.testing.expectEqual(line_editor.EditingMode.vi, interactive_input.editingMode(shell_state.options));
+}
+
+test "interactive prompt async returns cached stdout after hidden refresh" {
+    var shell_state = shell.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    try shell_state.putFunction(.{
+        .name = "rush_prompt",
+        .source_body =
+        \\value="$(prompt_async sample --ttl 10000 -- /usr/bin/printf async)"
+        \\prompt text "[$value]"
+        ,
+    });
+
+    var async_state: AsyncState = .{};
+    async_state.init(std.testing.io, null);
+    defer async_state.deinit();
+
+    const first = try render(std.testing.allocator, std.testing.io, &shell_state, .{ .async_state = &async_state });
+    defer std.testing.allocator.free(first);
+    try std.testing.expectEqualStrings("[]", first);
+
+    var attempts: usize = 0;
+    while (!async_state.takeCompleted()) : (attempts += 1) {
+        if (attempts > 1_000_000) return error.AsyncPromptRefreshTimedOut;
+        std.atomic.spinLoopHint();
+    }
+
+    const second = try render(std.testing.allocator, std.testing.io, &shell_state, .{ .async_state = &async_state });
+    defer std.testing.allocator.free(second);
+    try std.testing.expectEqualStrings("[async]", second);
 }

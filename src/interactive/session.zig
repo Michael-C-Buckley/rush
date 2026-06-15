@@ -52,6 +52,8 @@ pub const Context = struct {
     semantic_state: *shell.ShellState,
     arg_zero: []const u8 = "rush",
     features: compat.Features = .{},
+    previous_duration_ms: ?i64 = null,
+    prompt_async_state: ?*prompt_mod.AsyncState = null,
 };
 
 pub fn runInteractiveIntervalHooks(
@@ -103,6 +105,17 @@ pub fn nextInteractiveIntervalMs(context: *anyopaque, io: std.Io) !?u64 {
         return immediate_notify_poll_ms;
     }
     return null;
+}
+
+// ziglint-ignore: Z023 - signature is fixed by the refresh_prompt callback pointer type.
+fn refreshInteractivePrompt(context: *anyopaque, allocator: std.mem.Allocator, io: std.Io) ![]const u8 {
+    const interactive_context: *Context = @ptrCast(@alignCast(context));
+    return prompt_mod.render(allocator, io, interactive_context.semantic_state, .{
+        .arg_zero = interactive_context.arg_zero,
+        .features = interactive_context.features,
+        .previous_duration_ms = interactive_context.previous_duration_ms,
+        .async_state = interactive_context.prompt_async_state,
+    });
 }
 
 fn drainInteractiveSemanticJobNotifications(
@@ -277,6 +290,9 @@ pub fn run(
     runtime.signal.setWakeFd(terminal.trapSignalWakeFd());
     defer runtime.signal.clearWakeFd(terminal.trapSignalWakeFd());
     if (interactive_shell.semantic_enabled) try syncSemanticTerminalSize(&interactive_shell.semantic_state, terminal);
+    var prompt_async_state: prompt_mod.AsyncState = .{};
+    prompt_async_state.init(io, terminal.promptRedrawWakeFd());
+    defer prompt_async_state.deinit();
 
     repl_loop: while (true) {
         if (interactivePendingExit(&interactive_shell)) |status| {
@@ -301,6 +317,7 @@ pub fn run(
             .arg_zero = options.arg_zero,
             .features = options.features,
             .previous_duration_ms = last_command_duration_ms,
+            .async_state = &prompt_async_state,
         });
         defer allocator.free(prompt_text);
         var cwd_buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
@@ -323,6 +340,8 @@ pub fn run(
             .semantic_state = &interactive_shell.semantic_state,
             .arg_zero = options.arg_zero,
             .features = options.features,
+            .previous_duration_ms = last_command_duration_ms,
+            .prompt_async_state = &prompt_async_state,
         };
         const read_options: editor_driver.ReadLineOptions = .{
             .prompt = prompt_text,
@@ -330,6 +349,8 @@ pub fn run(
             .hook_context = &interactive_context,
             .run_hooks = runInteractiveIntervalHooks,
             .next_hook_interval_ms = nextInteractiveIntervalMs,
+            .prompt_context = &interactive_context,
+            .refresh_prompt = refreshInteractivePrompt,
             .history = history_service.lineEditorView(io),
             .external_editor_command = prompt_mod.externalEditorCommand(&interactive_shell.semantic_state),
             .external_editor_tmpdir = prompt_mod.externalEditorTmpdir(&interactive_shell.semantic_state),
@@ -646,7 +667,6 @@ pub fn runReplInput(allocator: std.mem.Allocator, io: std.Io, input: []const u8)
         try stdout.appendSlice(allocator, result.stdout);
         try stderr.appendSlice(allocator, result.stderr);
     }
-
     var lines = std.mem.splitScalar(u8, input, '\n');
     while (lines.next()) |line| {
         if (interactivePendingExit(&interactive_shell)) |status| {

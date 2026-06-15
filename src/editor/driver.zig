@@ -308,6 +308,10 @@ pub const TerminalSession = struct {
         rawWriteAll(self.prompt_redraw.write.handle, "p") catch {};
     }
 
+    pub fn promptRedrawWakeFd(self: TerminalSession) std.posix.fd_t {
+        return self.prompt_redraw.write.handle;
+    }
+
     pub fn trapSignalWakeFd(self: TerminalSession) std.posix.fd_t {
         return self.trap_signal.write.handle;
     }
