@@ -4009,7 +4009,8 @@ fn evaluateSourceStatement(
     eval_context.validate();
     source_plan.validate();
     input.validate();
-    std.debug.assert(source_plan.target == eval_context.target);
+    std.debug.assert(source_plan.target == eval_context.target or
+        (source_plan.target == .current_shell and eval_context.target == .subshell));
 
     var parser_resolver = ParserTrapActionResolver.init(evaluator);
     parser_resolver.features = evaluator.features;

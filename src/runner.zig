@@ -754,13 +754,15 @@ fn semanticBackgroundPipelinePlan(
     body.validate();
     return switch (body) {
         .simple => |plan| try semanticBackgroundSingleStagePlan(allocator, plan),
+        .compound => |plan| try semanticBackgroundSingleCompoundStagePlan(allocator, plan),
         .pipeline => |plan| semanticBackgroundPipelineFromPipeline(plan),
         .owned => |owned| switch (owned.body) {
             .simple => |plan| try semanticBackgroundSingleStagePlan(allocator, plan),
+            .compound => |plan| try semanticBackgroundSingleCompoundStagePlan(allocator, plan),
             .pipeline => |plan| semanticBackgroundPipelineFromPipeline(plan),
-            .compound, .failure => null,
+            .failure => null,
         },
-        .compound, .failure => null,
+        .failure => null,
     };
 }
 
@@ -772,6 +774,20 @@ fn semanticBackgroundSingleStagePlan(
     const stages = try allocator.alloc(shell.PipelineStagePlan, 1);
     errdefer allocator.free(stages);
     stages[0] = .{ .simple = plan };
+    return .{
+        .plan = shell.PipelinePlan.init(stages, .{ .background = .background }),
+        .allocated_stages = stages,
+    };
+}
+
+fn semanticBackgroundSingleCompoundStagePlan(
+    allocator: std.mem.Allocator,
+    plan: shell.CompoundCommandPlan,
+) !SemanticBackgroundPipelinePlan {
+    plan.validate();
+    const stages = try allocator.alloc(shell.PipelineStagePlan, 1);
+    errdefer allocator.free(stages);
+    stages[0] = .{ .compound = plan };
     return .{
         .plan = shell.PipelinePlan.init(stages, .{ .background = .background }),
         .allocated_stages = stages,
@@ -1179,10 +1195,18 @@ fn wordUsesUnsupportedForWordExpansion(raw: []const u8) bool {
 fn semanticAsyncStatementPreflightUnsupported(program: ir.Program, statement: ir.Statement, index: usize) ?[]const u8 {
     std.debug.assert(index < program.statements.len);
     if (!statement.async_after) return null;
-    if (statement.kind != .pipeline)
-        return "semantic executor production preflight keeps non-pipeline background statements " ++
-            "unsupported outside the switched slice";
-    return null;
+    return switch (statement.kind) {
+        .pipeline,
+        .if_command,
+        .loop_command,
+        .for_command,
+        .case_command,
+        .brace_group,
+        .subshell,
+        => null,
+        .function_definition, .bash_test_command =>
+            "semantic executor production preflight keeps unsupported background statements outside the switched slice",
+    };
 }
 
 fn semanticPipelinePreflightUnsupported(program: ir.Program, pipeline: ir.Pipeline) ?[]const u8 {
@@ -2442,6 +2466,27 @@ test "production shell execution applies pipeline redirections after pipe setup"
 
     try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
     try std.testing.expectEqualStrings("left-file=left\nright-file=right\n", result.stdout);
+    try std.testing.expectEqualStrings("", result.stderr);
+}
+
+test "production shell execution runs background brace group as subshell" {
+    const path = "rush-background-brace-group.tmp";
+    std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch |err| switch (err) {
+        error.FileNotFound => {},
+        else => return err,
+    };
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
+
+    var result = try runScript(std.testing.allocator, std.testing.io,
+        \\x=outer
+        \\{ x=inner; printf 'async-body\n' >rush-background-brace-group.tmp; } & wait "$!"
+        \\printf '<%s>\n' "$x"
+        \\/bin/cat rush-background-brace-group.tmp
+    );
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("<outer>\nasync-body\n", result.stdout);
     try std.testing.expectEqualStrings("", result.stderr);
 }
 
