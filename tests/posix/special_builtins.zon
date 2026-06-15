@@ -54,6 +54,59 @@
             .status = 0,
         },
         .{
+            .name = "dot returns the status of the last command in the file",
+            .script =
+            \\printf 'false\n' >file.sh
+            \\. ./file.sh
+            \\printf '<%s>\n' "$?"
+            ,
+            .stdout =
+            \\<1>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "dot returns zero when no command is executed",
+            .script =
+            \\: >empty.sh
+            \\. ./empty.sh
+            \\printf '<%s>\n' "$?"
+            ,
+            .stdout =
+            \\<0>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "exec with no command returns zero",
+            .script =
+            \\exec
+            \\printf '<%s>\n' "$?"
+            ,
+            .stdout =
+            \\<0>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "exec without a command applies redirections to the current shell",
+            .script =
+            \\exec 3>out
+            \\printf 'ok' >&3
+            \\exec 3>&-
+            \\cat out
+            ,
+            .stdout = "ok",
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "readonly assigns a variable value",
             .script =
             \\readonly ro=value
@@ -76,6 +129,34 @@
             .stdout = "",
             .stderr_match = .nonempty,
             .status_match = .nonzero,
+        },
+        .{
+            .name = "export -p output can restore exported values",
+            .script =
+            \\export X='a b'
+            \\export -p >save.sh
+            \\( unset X; . ./save.sh; sh -c 'printf "<%s>\n" "$X"' )
+            ,
+            .stdout =
+            \\<a b>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "readonly -p lists readonly variables",
+            .script =
+            \\readonly X='a b'
+            \\readonly -p | grep '^readonly X=' >/dev/null
+            \\printf '<%s>\n' "$?"
+            ,
+            .stdout =
+            \\<0>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
         },
         .{
             .name = "unset succeeds for an unset variable name",
@@ -129,6 +210,112 @@
             .status = 0,
         },
         .{
+            .name = "return in a dot script stops the dot script with the requested status",
+            .script =
+            \\printf 'return 7\nprintf bad\n' >file.sh
+            \\. ./file.sh
+            \\printf '<%s>\n' "$?"
+            ,
+            .stdout =
+            \\<7>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "set double dash with no operands clears positional parameters",
+            .script =
+            \\set -- a b
+            \\set --
+            \\printf '<%s>\n' "$#"
+            ,
+            .stdout =
+            \\<0>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "shift without an operand shifts by one",
+            .script =
+            \\set -- a b
+            \\shift
+            \\printf '<%s>:<%s>\n' "$#" "$1"
+            ,
+            .stdout =
+            \\<1>:<b>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "shift zero leaves positional parameters unchanged",
+            .script =
+            \\set -- a
+            \\shift 0
+            \\printf '<%s>:<%s>\n' "$#" "$1"
+            ,
+            .stdout =
+            \\<1>:<a>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "times writes shell and child process time pairs",
+            .script =
+            \\times | {
+            \\    read shell_user shell_system
+            \\    read child_user child_system
+            \\    case $shell_user:$shell_system:$child_user:$child_system in
+            \\        *m*s:*m*s:*m*s:*m*s) printf 'times\n' ;;
+            \\        *) printf 'bad\n' ;;
+            \\    esac
+            \\}
+            ,
+            .stdout =
+            \\times
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "trap invalid signal specifications return nonzero and continue",
+            .script =
+            \\trap '' NOTASIG >/dev/null 2>&1
+            \\printf '<%s>\n' "$?"
+            \\printf 'after\n'
+            ,
+            .stdout =
+            \\<1>
+            \\after
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "trap -p lists selected trap actions",
+            .script =
+            \\trap 'printf term' TERM
+            \\case $(trap -p TERM 2>/dev/null) in
+            \\    *TERM*) printf '<0>\n' ;;
+            \\    *) printf '<1>\n' ;;
+            \\esac
+            ,
+            .stdout =
+            \\<0>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "unset removes a shell variable",
             .script =
             \\x=set
@@ -137,6 +324,24 @@
             ,
             .stdout =
             \\<unset>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "unset -v removes variables without removing functions",
+            .script =
+            \\x=1
+            \\f() { :; }
+            \\unset -v x
+            \\printf '<%s>\n' "${x-unset}"
+            \\f
+            \\printf '<%s>\n' "$?"
+            ,
+            .stdout =
+            \\<unset>
+            \\<0>
             \\
             ,
             .stderr = "",
