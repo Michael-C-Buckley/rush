@@ -1,5 +1,5 @@
 .{
-    .name = "2.14 Shell Built-In Utilities",
+    .name = "Shell Built-In Utilities",
     .mode = .posix,
     .cases = .{
         .{
@@ -18,6 +18,74 @@
             ,
             .stdout =
             \\cd-ok
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "cd without operands uses HOME",
+            .script =
+            \\mkdir home
+            \\HOME=$PWD/home
+            \\cd
+            \\test "$PWD" = "$HOME"
+            \\printf '<%s>\n' "$?"
+            ,
+            .stdout =
+            \\<0>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "cd dash changes to OLDPWD and writes the new directory",
+            .script =
+            \\out=$PWD/cd.out
+            \\mkdir a b
+            \\cd a
+            \\cd ../b
+            \\cd - >"$out"
+            \\case $(cat "$out") in */a) printed=ok ;; *) printed=bad ;; esac
+            \\printf '<%s>:<%s>:<%s>\n' "$printed" "${PWD##*/}" "${OLDPWD##*/}"
+            ,
+            .stdout =
+            \\<ok>:<a>:<b>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "cd uses CDPATH and writes the selected directory",
+            .script =
+            \\out=$PWD/cd.out
+            \\mkdir -p parent/child
+            \\CDPATH=parent
+            \\cd child >"$out"
+            \\case $(cat "$out") in */parent/child) printed=ok ;; *) printed=bad ;; esac
+            \\printf '<%s>:<%s>\n' "$printed" "${PWD##*/}"
+            ,
+            .stdout =
+            \\<ok>:<child>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "pwd -L preserves logical paths and pwd -P resolves physical paths",
+            .script =
+            \\mkdir real
+            \\ln -s real link 2>/dev/null || exit 0
+            \\cd link
+            \\logical=${PWD##*/}
+            \\physical=$(pwd -P)
+            \\printf '<%s>:<%s>\n' "$logical" "${physical##*/}"
+            ,
+            .stdout =
+            \\<link>:<real>
             \\
             ,
             .stderr = "",
@@ -77,6 +145,18 @@
             .status = 0,
         },
         .{
+            .name = "read -d uses the first delimiter byte",
+            .script =
+            \\printf 'ab:cd' | { read -r -d : value; printf '<%s>:<%s>\n' "$value" "$?"; }
+            ,
+            .stdout =
+            \\<ab>:<0>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "pwd output can be redirected",
             .script =
             \\pwd >out
@@ -105,6 +185,20 @@
             .status = 0,
         },
         .{
+            .name = "regular builtin assignment prefixes do not persist",
+            .script =
+            \\VALUE=before
+            \\VALUE=after true
+            \\printf '<%s>\n' "$VALUE"
+            ,
+            .stdout =
+            \\<before>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "command -v writes a found utility name",
             .script =
             \\command -v cd
@@ -113,6 +207,19 @@
             .stdout =
             \\cd
             \\<0>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "command -p uses a default utility path",
+            .script =
+            \\PATH=/no/such command -p sh -c 'printf p'
+            \\printf '<%s>\n' "$?"
+            ,
+            .stdout =
+            \\p<0>
             \\
             ,
             .stderr = "",
@@ -133,6 +240,72 @@
             \\
             ,
             .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "getopts reads option arguments",
+            .script =
+            \\set -- -b value
+            \\getopts ab: opt
+            \\printf '<%s>:<%s>:<%s>\n' "$opt" "$OPTARG" "$?"
+            ,
+            .stdout =
+            \\<b>:<value>:<0>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "kill -s 0 probes the current shell process",
+            .script =
+            \\kill -s 0 $$
+            \\printf '<%s>\n' "$?"
+            ,
+            .stdout =
+            \\<0>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "umask -S writes symbolic permissions",
+            .script =
+            \\umask 022
+            \\umask -S
+            ,
+            .stdout =
+            \\u=rwx,g=rx,o=rx
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "wait with no operands succeeds when known child statuses are consumed",
+            .script =
+            \\wait
+            \\printf '<%s>\n' "$?"
+            ,
+            .stdout =
+            \\<0>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "wait for an unknown process id returns 127",
+            .script =
+            \\wait 999999
+            \\printf '<%s>\n' "$?"
+            ,
+            .stdout =
+            \\<127>
+            \\
+            ,
+            .stderr_match = .any,
             .status = 0,
         },
         .{
@@ -159,6 +332,24 @@
             ,
             .stdout =
             \\<0>
+            \\<1>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "unalias -a removes all alias definitions",
+            .script =
+            \\alias a='printf a' b='printf b'
+            \\alias a b
+            \\unalias -a
+            \\alias a >/dev/null 2>&1
+            \\printf '<%s>\n' "$?"
+            ,
+            .stdout =
+            \\a='printf a'
+            \\b='printf b'
             \\<1>
             \\
             ,
