@@ -5129,86 +5129,7 @@ fn writeAllDescriptor(descriptor: runtime.fd.Descriptor, bytes: []const u8) bool
 fn casePatternMatches(pattern: []const u8, text: []const u8) bool {
     std.debug.assert(std.mem.findScalar(u8, pattern, 0) == null);
     std.debug.assert(std.mem.findScalar(u8, text, 0) == null);
-    return casePatternMatchesAt(pattern, 0, text, 0);
-}
-
-fn casePatternMatchesAt(pattern: []const u8, pattern_index: usize, text: []const u8, text_index: usize) bool {
-    if (pattern_index == pattern.len) return text_index == text.len;
-    const pattern_byte = pattern[pattern_index];
-    switch (pattern_byte) {
-        '*' => {
-            var next_text = text_index;
-            while (true) : (next_text += 1) {
-                if (casePatternMatchesAt(pattern, pattern_index + 1, text, next_text)) return true;
-                if (next_text == text.len) break;
-            }
-            return false;
-        },
-        '?' => return text_index < text.len and casePatternMatchesAt(pattern, pattern_index + 1, text, text_index + 1),
-        '[' => if (matchCaseBracket(pattern, pattern_index, text, text_index)) |matched| {
-            return matched.ok and casePatternMatchesAt(pattern, matched.next_pattern, text, text_index + 1);
-        } else return text_index < text.len and pattern_byte == text[text_index] and casePatternMatchesAt(
-            pattern,
-            pattern_index + 1,
-            text,
-            text_index + 1,
-        ),
-        '\\' => {
-            const escaped_index = pattern_index + 1;
-            if (escaped_index >= pattern.len) return false;
-            return text_index < text.len and pattern[escaped_index] == text[text_index] and casePatternMatchesAt(
-                pattern,
-                escaped_index + 1,
-                text,
-                text_index + 1,
-            );
-        },
-        else => return text_index < text.len and pattern_byte == text[text_index] and casePatternMatchesAt(
-            pattern,
-            pattern_index + 1,
-            text,
-            text_index + 1,
-        ),
-    }
-}
-
-const CaseBracketMatch = struct {
-    ok: bool,
-    next_pattern: usize,
-};
-
-fn matchCaseBracket(pattern: []const u8, start: usize, text: []const u8, text_index: usize) ?CaseBracketMatch {
-    std.debug.assert(start < pattern.len);
-    std.debug.assert(pattern[start] == '[');
-    if (text_index >= text.len) return null;
-
-    var index = start + 1;
-    var negate = false;
-    if (index < pattern.len and (pattern[index] == '!' or pattern[index] == '^')) {
-        negate = true;
-        index += 1;
-    }
-    if (index >= pattern.len) return null;
-
-    var matched = false;
-    var saw_member = false;
-    while (index < pattern.len) : (index += 1) {
-        if (pattern[index] == ']' and saw_member) {
-            return .{ .ok = if (negate) !matched else matched, .next_pattern = index + 1 };
-        }
-        saw_member = true;
-
-        const first = pattern[index];
-        if (index + 2 < pattern.len and pattern[index + 1] == '-' and pattern[index + 2] != ']') {
-            const last = pattern[index + 2];
-            const value = text[text_index];
-            if (first <= value and value <= last) matched = true;
-            index += 2;
-            continue;
-        }
-        if (first == text[text_index]) matched = true;
-    }
-    return null;
+    return expand.patternTextMatches(pattern, text, .{});
 }
 
 fn externalArgv(
@@ -14524,6 +14445,32 @@ test "semantic evaluator evaluates compound if loop for and case forms" {
     try test_next_result.commitDelta(&shell_state, .current_shell);
     try std.testing.expectEqualStrings("yes", shell_state.getVariable("CASE_TEST_NEXT_FIRST").?.value);
     try std.testing.expectEqualStrings("yes", shell_state.getVariable("CASE_TEST_NEXT_SECOND").?.value);
+}
+
+test "semantic evaluator matches case patterns with POSIX character classes" {
+    var shell_state = state.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    var evaluator = Evaluator.init(std.testing.allocator);
+    const eval_context = context.EvalContext.forTarget(.current_shell);
+
+    const matched_assignment = [_]command_plan.Assignment{.{ .name = "CASE_CLASS", .value = "digit" }};
+    const matched_body = [_]command_plan.CommandPlan{command_plan.classifyExpandedSimpleCommand(
+        .{ .command = .{ .assignments = &matched_assignment } },
+    )};
+    const case_arms = [_]command_plan.CaseArm{
+        .{ .patterns = &[_][]const u8{"[![:digit:]]"}, .body = .{} },
+        .{ .patterns = &[_][]const u8{"[[:digit:]]"}, .body = .{ .commands = &matched_body } },
+    };
+    const case_plan: command_plan.CompoundCommandPlan = .{
+        .target = .current_shell,
+        .body = .{ .case_clause = .{ .word = "7", .arms = &case_arms } },
+    };
+
+    var result = try evaluateCompoundPlan(&evaluator, &shell_state, eval_context, case_plan);
+    defer result.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 0), result.status);
+    try result.commitDelta(&shell_state, .current_shell);
+    try std.testing.expectEqualStrings("digit", shell_state.getVariable("CASE_CLASS").?.value);
 }
 
 test "semantic evaluator applies compound command commit and discard boundaries" {
