@@ -2974,6 +2974,54 @@ test "manifest completion loads mkdir options and directory operands" {
     try std.testing.expectEqualStrings("parent/", edit.replacement);
 }
 
+test "manifest completion loads rmdir options and directory operands" {
+    var completion_state = State.init(std.testing.allocator);
+    defer completion_state.deinit();
+    try loadManifestFile(std.testing.allocator, std.testing.io, &completion_state, "share/rush/completions/rmdir.json");
+
+    var shell_state = shell_state_mod.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    const option_source = "rmdir -";
+    const option_application = try manifestApplication(
+        std.testing.allocator,
+        std.testing.io,
+        &completion_state,
+        shell_state,
+        option_source,
+        option_source.len,
+    );
+    defer option_application.deinit(std.testing.allocator);
+
+    const option_edit = option_application.edit;
+    try std.testing.expectEqualStrings("-p", option_edit.replacement);
+
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    try tmp.dir.createDir(std.testing.io, "empty", .default_dir);
+
+    var tmp_root_buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
+    const tmp_root_len = try tmp.dir.realPath(std.testing.io, &tmp_root_buffer);
+    const tmp_root = tmp_root_buffer[0..tmp_root_len];
+    const original_cwd = try std.process.currentPathAlloc(std.testing.io, std.testing.allocator);
+    defer std.testing.allocator.free(original_cwd);
+    try std.process.setCurrentPath(std.testing.io, tmp_root);
+
+    const operand_source = "rmdir emp";
+    const operand_application = try manifestApplication(
+        std.testing.allocator,
+        std.testing.io,
+        &completion_state,
+        shell_state,
+        operand_source,
+        operand_source.len,
+    );
+    defer operand_application.deinit(std.testing.allocator);
+
+    try std.process.setCurrentPath(std.testing.io, original_cwd);
+    const edit = operand_application.edit;
+    try std.testing.expectEqualStrings("empty/", edit.replacement);
+}
+
 fn expectCandidate(candidates: []const Candidate, value: []const u8, kind: Kind) !void {
     for (candidates) |candidate| {
         if (!std.mem.eql(u8, candidate.value, value)) continue;
