@@ -713,6 +713,160 @@
             .status = 0,
         },
         .{
+            .name = "if command executes the condition compound-list in the current shell",
+            .script =
+            \\x=before
+            \\if x=condition
+            \\then
+            \\    printf '%s\n' "$x"
+            \\fi
+            \\printf '%s\n' "$x"
+            ,
+            .stdout =
+            \\condition
+            \\condition
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "if command uses the selected elif body status",
+            .script =
+            \\if false
+            \\then
+            \\    true
+            \\elif true
+            \\then
+            \\    false
+            \\else
+            \\    true
+            \\fi
+            ,
+            .stdout = "",
+            .stderr = "",
+            .status = 1,
+        },
+        .{
+            .name = "if command tests elif clauses in order and stops after the first true condition",
+            .script =
+            \\if false
+            \\then
+            \\    printf 'bad-then\n'
+            \\elif printf 'first-condition\n'; true
+            \\then
+            \\    printf 'first-body\n'
+            \\elif printf 'bad-second-condition\n'; true
+            \\then
+            \\    printf 'bad-second-body\n'
+            \\fi
+            ,
+            .stdout =
+            \\first-condition
+            \\first-body
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "if command accepts semicolon separators around reserved words",
+            .script =
+            \\if false; then printf 'bad\n'; elif true; then printf 'ok\n'; else printf 'bad\n'; fi
+            ,
+            .stdout =
+            \\ok
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "if command accepts newline separators around reserved words",
+            .script =
+            \\if
+            \\true
+            \\then
+            \\printf 'then\n'
+            \\else
+            \\printf 'bad\n'
+            \\fi
+            ,
+            .stdout =
+            \\then
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "if command redirection applies to the selected body",
+            .script =
+            \\if true
+            \\then
+            \\    printf 'redirected\n'
+            \\fi >out
+            \\cat out
+            ,
+            .stdout =
+            \\redirected
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "if command condition uses pipeline status",
+            .script =
+            \\if false | true
+            \\then
+            \\    printf 'pipeline-true\n'
+            \\else
+            \\    printf 'bad\n'
+            \\fi
+            ,
+            .stdout =
+            \\pipeline-true
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "if command condition uses pipeline negation status",
+            .script =
+            \\if ! true
+            \\then
+            \\    printf 'bad\n'
+            \\else
+            \\    printf 'negated-false\n'
+            \\fi
+            ,
+            .stdout =
+            \\negated-false
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "if command condition uses AND-OR list status",
+            .script =
+            \\if false && printf 'bad\n' || true
+            \\then
+            \\    printf 'and-or-true\n'
+            \\else
+            \\    printf 'bad\n'
+            \\fi
+            ,
+            .stdout =
+            \\and-or-true
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "while command status is zero when the body never runs",
             .script =
             \\while false
