@@ -139,6 +139,28 @@
             .status = 0,
         },
         .{
+            .name = "special builtin redirection from a closed source descriptor is fatal",
+            .script =
+            \\exec 2>&-
+            \\: >&2
+            \\printf bad
+            ,
+            .stdout = "",
+            .stderr = "",
+            .status_match = .nonzero,
+        },
+        .{
+            .name = "exec duplicate redirection from a closed source descriptor is fatal",
+            .script =
+            \\exec 2>&-
+            \\exec 1>&2
+            \\printf bad
+            ,
+            .stdout = "",
+            .stderr = "",
+            .status_match = .nonzero,
+        },
+        .{
             .name = "readonly assigns a variable value",
             .script =
             \\readonly ro=value

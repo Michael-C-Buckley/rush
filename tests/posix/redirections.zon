@@ -171,6 +171,36 @@
             .status = 0,
         },
         .{
+            .name = "duplicate redirection from a closed source descriptor fails before command execution",
+            .script =
+            \\exec 3>&2 2>&-
+            \\printf bad >&2
+            \\status=$?
+            \\exec 2>&3 3>&-
+            \\if [ "$status" -ne 0 ]; then printf '<nonzero>\n'; fi
+            ,
+            .stdout =
+            \\<nonzero>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "compound duplicate redirection fails when an earlier redirection closed the source",
+            .script =
+            \\{ printf out; printf err >&2; } 1>&- 2>&1
+            \\status=$?
+            \\if [ "$status" -ne 0 ]; then printf '<nonzero>\n'; fi
+            ,
+            .stdout =
+            \\<nonzero>
+            \\
+            ,
+            .stderr_match = .nonempty,
+            .status = 0,
+        },
+        .{
             .name = "redirection word expansion does not perform field splitting",
             .script =
             \\name='a b'

@@ -566,13 +566,40 @@ pub const AppliedRedirections = struct {
     fn applyDuplicate(self: *AppliedRedirections, step: DuplicateStep) std.mem.Allocator.Error!?ApplyFailureDetail {
         step.validate();
         if (step.source != step.target) {
+            const source = self.port.duplicate(.{
+                .descriptor = step.source,
+                .close_on_exec = true,
+            }) catch |err| return .{ .duplicate = err };
+            if (source.descriptor == step.target) {
+                if (!self.hasSavedTarget(step.target)) {
+                    self.saved.append(self.allocator, .{ .target = step.target, .saved = null }) catch |err| {
+                        // ziglint-ignore: Z026 best-effort rollback after allocation failure
+                        closeOpened(self.port, source.descriptor) catch {};
+                        return err;
+                    };
+                }
+                return null;
+            }
+            errdefer closeOpened(self.port, source.descriptor) catch {};
             if (try self.saveTarget(step.target)) |failure| return failure;
+            self.port.duplicateTo(.{
+                .source = source.descriptor,
+                .target = step.target,
+            }) catch |err| return .{ .duplicate = err };
+            closeOpened(self.port, source.descriptor) catch |err| return .{ .close = err };
+            return null;
         }
         self.port.duplicateTo(.{
             .source = step.source,
             .target = step.target,
         }) catch |err| return .{ .duplicate = err };
         return null;
+    }
+
+    fn hasSavedTarget(self: AppliedRedirections, target: fd.Descriptor) bool {
+        fd.assertValidDescriptor(target);
+        for (self.saved.items) |saved| if (saved.target == target) return true;
+        return false;
     }
 
     fn applyClose(self: *AppliedRedirections, step: CloseStep) std.mem.Allocator.Error!?ApplyFailureDetail {
@@ -584,7 +611,7 @@ pub const AppliedRedirections = struct {
 
     fn saveTarget(self: *AppliedRedirections, target: fd.Descriptor) std.mem.Allocator.Error!?ApplyFailureDetail {
         fd.assertValidDescriptor(target);
-        for (self.saved.items) |saved| if (saved.target == target) return null;
+        if (self.hasSavedTarget(target)) return null;
         const saved = self.port.duplicate(.{ .descriptor = target, .close_on_exec = true }) catch |err| switch (err) {
             error.BadFileDescriptor => null,
             else => |duplicate_err| return .{ .duplicate = duplicate_err },
@@ -901,6 +928,7 @@ const FakeFdRuntime = struct {
     open_descriptors: [64]bool = initOpenDescriptors(),
     next_descriptor: fd.Descriptor = 10,
     fail_duplicate_to_target: ?fd.Descriptor = null,
+    reuse_low_descriptors: bool = false,
 
     fn port(self: *FakeFdRuntime) fd.Port {
         return .{
@@ -926,6 +954,14 @@ const FakeFdRuntime = struct {
     }
 
     fn next(self: *FakeFdRuntime) fd.Descriptor {
+        if (self.reuse_low_descriptors) {
+            for (self.open_descriptors[3..], 3..) |is_open, descriptor| {
+                if (is_open) continue;
+                const fd_descriptor: fd.Descriptor = @intCast(descriptor);
+                self.setOpen(fd_descriptor, true);
+                return fd_descriptor;
+            }
+        }
         const descriptor = self.next_descriptor;
         self.next_descriptor += 1;
         self.setOpen(descriptor, true);
@@ -1059,6 +1095,53 @@ test "RedirectionPlan application restores earlier steps after runtime failure" 
     try std.testing.expect(fake.isOpen(0));
     try std.testing.expect(fake.isOpen(1));
     try std.testing.expect(fake.isOpen(2));
+}
+
+test "RedirectionPlan duplicate from closed source fails before saving target reuses that fd" {
+    const steps = [_]RedirectionStep{RedirectionStep.duplicate(0, 1, 2)};
+    const rollback_steps = [_]RestorationStep{.{ .ordinal = 0, .target = 1 }};
+    const plan: RedirectionPlan = .{ .steps = &steps, .rollback_steps = &rollback_steps };
+
+    var fake: FakeFdRuntime = .{ .reuse_low_descriptors = true };
+    fake.setOpen(2, false);
+    const result = try plan.apply(std.testing.allocator, fake.port());
+    switch (result) {
+        .failure => |failure| {
+            try std.testing.expectEqual(@as(usize, 0), failure.step_index);
+            try std.testing.expectEqual(@as(fd.Descriptor, 1), failure.target);
+            try std.testing.expectEqual(ApplyFailureDetail{ .duplicate = error.BadFileDescriptor }, failure.detail);
+        },
+        .applied => |applied_value| {
+            var applied = applied_value;
+            applied.restore();
+            applied.deinit();
+            return error.TestUnexpectedResult;
+        },
+    }
+
+    try std.testing.expect(fake.isOpen(1));
+    try std.testing.expect(!fake.isOpen(2));
+}
+
+test "RedirectionPlan duplicate to closed target restores that target closed" {
+    const steps = [_]RedirectionStep{RedirectionStep.duplicate(0, 2, 3)};
+    const rollback_steps = [_]RestorationStep{.{ .ordinal = 0, .target = 2 }};
+    const plan: RedirectionPlan = .{ .steps = &steps, .rollback_steps = &rollback_steps };
+
+    var fake: FakeFdRuntime = .{ .reuse_low_descriptors = true };
+    fake.setOpen(2, false);
+    fake.setOpen(3, true);
+    const result = try plan.apply(std.testing.allocator, fake.port());
+    var applied = switch (result) {
+        .applied => |applied_value| applied_value,
+        .failure => return error.TestUnexpectedResult,
+    };
+    defer applied.deinit();
+
+    try std.testing.expect(fake.isOpen(2));
+    applied.restore();
+    try std.testing.expect(!fake.isOpen(2));
+    try std.testing.expect(fake.isOpen(3));
 }
 
 test "RedirectionPlan application closes opened file after duplicate failure" {
