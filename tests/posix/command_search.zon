@@ -27,6 +27,53 @@
             .status = 0,
         },
         .{
+            .name = "functions are found before PATH utilities",
+            .script =
+            \\mkdir d
+            \\printf '%s\n' '#!/bin/sh' 'printf "external\n"' >d/foo
+            \\chmod 755 d/foo
+            \\foo() { printf 'function\n'; }
+            \\PATH=./d:$PATH foo
+            ,
+            .stdout =
+            \\function
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "command bypasses functions to find regular built-ins",
+            .script =
+            \\printf() { echo function; }
+            \\printf ignored
+            \\command printf 'builtin\n'
+            ,
+            .stdout =
+            \\function
+            \\builtin
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "command bypasses functions to find PATH utilities",
+            .script =
+            \\mkdir d
+            \\printf '%s\n' '#!/bin/sh' 'printf "external\n"' >d/foo
+            \\chmod 755 d/foo
+            \\foo() { printf 'function\n'; }
+            \\PATH=./d:$PATH command foo
+            ,
+            .stdout =
+            \\external
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "command search failure sets status 127 and execution continues",
             .script =
             \\no_such_posix_command_for_rush 2>/dev/null
