@@ -608,6 +608,7 @@ const ReservedStandardDescriptors = struct {
                 continue;
             }
 
+            // ziglint-ignore: Z026 best-effort close of a temporary /dev/null descriptor
             closeDescriptor(opened) catch {};
             if (!(try descriptorIsOpen(descriptor))) return error.Unexpected;
         }
@@ -618,9 +619,11 @@ const ReservedStandardDescriptors = struct {
     fn deinit(self: *ReservedStandardDescriptors) void {
         for (&self.descriptors) |*slot| {
             const descriptor = slot.* orelse continue;
+            // ziglint-ignore: Z026 best-effort close during cleanup
             closeDescriptor(descriptor) catch {};
             slot.* = null;
         }
+        self.* = undefined;
     }
 };
 
