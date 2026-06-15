@@ -127,6 +127,18 @@
 
   <p>POSIX requires arithmetic expansion to fail with a diagnostic when the contents of a shell variable used in the expression are not recognized by the shell. Rush reports the error and does not print <code>after</code>. This matches dash and ksh93. Bash 3.2 and Bash 5.3 in POSIX mode instead expand this case to <code>0</code> and continue executing the script.</p>
 
+  <h3 id="invalid-break-and-continue-counts"><a href="#invalid-break-and-continue-counts">Invalid break and continue counts</a></h3>
+
+  <p>Rush treats <code>break</code> and <code>continue</code> operands that are not positive decimal integers as fatal errors in a non-interactive shell.</p>
+
+  <pre><span class="kw">for</span> x <span class="kw">in</span> a b
+<span class="kw">do</span>
+  <span class="cmd">break</span> 0
+  <span class="cmd">printf</span> <span class="str">'after\n'</span>
+<span class="kw">done</span></pre>
+
+  <p>POSIX specifies that applications using <code>break</code> or <code>continue</code> with an operand shall use a positive decimal integer. Rush reports the error and exits the non-interactive script. This matches dash and yash. Bash 3.2 and Bash 5.3 in POSIX mode report <code>break 0</code> and <code>continue 0</code> as errors but continue executing the surrounding script with status 1 for the failed special built-in.</p>
+
   <h2 id="bash"><a href="#bash">Bash</a></h2>
 
   <h3 id="bash-3-2"><a href="#bash-3-2">Bash 3.2</a></h3>
