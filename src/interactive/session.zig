@@ -1037,6 +1037,20 @@ test "repl uses default rush_prompt" {
     try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
     try std.testing.expectEqualStrings(expected, result.stdout);
 }
+
+test "repl executes default config shell function wrappers" {
+    var result = try runReplInput(std.testing.allocator, std.testing.io,
+        \\PATH=/bin:/usr/bin:/usr/local/bin:/opt/homebrew/bin
+        \\ls >/dev/null
+        \\exit
+    );
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("", result.stderr);
+    try std.testing.expect(std.mem.indexOf(u8, result.stdout, "semantic interactive executor") == null);
+}
+
 test "interactive startup enables monitor by default for tty stdin" {
     var master: c_int = -1;
     var slave: c_int = -1;

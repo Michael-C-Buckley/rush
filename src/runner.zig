@@ -1055,8 +1055,6 @@ fn semanticInteractiveProgramUnsupported(shell_state: shell.ShellState, program:
         if (shell_state.functions.count() != 0) {
             if (wordMayUseShellExpansion(root.raw))
                 return "semantic interactive executor does not yet preserve dynamic function lookup";
-            if (shell_state.functions.contains(root.text))
-                return "semantic interactive executor does not yet preserve shell function calls";
         }
     }
     return null;
