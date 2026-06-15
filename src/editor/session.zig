@@ -2916,7 +2916,7 @@ test "completion menu truncates long columns to terminal width" {
 
     const rendered = try session.render(std.testing.allocator, .{ .synchronized_output = false, .width = 32 });
     defer std.testing.allocator.free(rendered);
-    try std.testing.expect(std.mem.indexOf(u8, rendered, "extraordinarily-long-subcomm…") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "extraordinarily-long-subcom…") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "intentionally") == null);
 }
 

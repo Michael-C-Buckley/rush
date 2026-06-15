@@ -6,6 +6,7 @@ const vaxis = @import("vaxis");
 const completion = @import("completion.zig");
 
 const default_max_candidate_rows = 16;
+const default_max_label_width = 32;
 
 pub const UnderlineStyle = enum { none, single, double, curly, dotted, dashed };
 
@@ -46,6 +47,7 @@ pub const Presentation = struct {
     description_separator: []const u8 = " ",
     ellipsis: []const u8 = "…",
     max_candidate_rows: usize = default_max_candidate_rows,
+    max_label_width: usize = default_max_label_width,
     long_option_prefix: []const u8 = "--",
     short_option_prefix: []const u8 = "-",
     option_separator: []const u8 = ",",
@@ -152,13 +154,17 @@ pub fn appendLines(
     if (candidates.len == 0) return;
     const max_rows = candidateRows(options.height, options.presentation);
     const window = visibleWindow(candidates.len, options.selected, options.window_start, max_rows);
-    const label_width = options.label_width_override orelse try labelWidth(
+    const raw_label_width = options.label_width_override orelse try labelWidth(
         allocator,
-        candidates[window.start..window.end],
+        candidates,
         options.width,
         options.presentation,
     );
-    const fixed_width = 2 + label_width + 1;
+    const label_width = @min(raw_label_width, terminalLabelWidth(options.width, options.presentation));
+    const fixed_width = visibleWidth(options.presentation.row_prefix, .unicode) +
+        label_width +
+        visibleWidth(options.presentation.description_separator, .unicode) +
+        visibleWidth(options.presentation.selected_row_suffix, .unicode);
     const description_width = @as(usize, @intCast(options.width)) -| fixed_width;
     for (candidates[window.start..window.end], window.start..) |candidate, index| {
         var line: std.ArrayList(u8) = .empty;
@@ -233,13 +239,19 @@ fn labelWidth(
     width: u16,
     presentation: Presentation,
 ) !usize {
+    const max_width = @min(presentation.max_label_width, terminalLabelWidth(width, presentation));
     var widest: usize = 0;
     for (candidates) |candidate| {
         const label = try candidateLabel(allocator, candidate, presentation);
         defer if (label.owned) |owned| allocator.free(owned);
         widest = @max(widest, visibleWidth(label.text, .unicode));
     }
-    return @min(widest, @as(usize, @intCast(width)) -| 3);
+    return @min(widest, max_width);
+}
+
+fn terminalLabelWidth(width: u16, presentation: Presentation) usize {
+    return @as(usize, @intCast(width)) -|
+        (visibleWidth(presentation.row_prefix, .unicode) + visibleWidth(presentation.selected_row_suffix, .unicode));
 }
 
 const CandidateLabel = struct {
@@ -610,4 +622,74 @@ test "menu presentation can hide scroll summary and cap rows" {
 
     try std.testing.expectEqual(@as(usize, 1), lines.items.len);
     try std.testing.expect(std.mem.indexOf(u8, lines.items[0], "one") != null);
+}
+
+test "menu label column uses all candidates and caps outliers" {
+    const candidates = [_]completion.Candidate{
+        .{
+            .value = "one",
+            .description = "first",
+            .kind = .plain,
+            .replace_start = 0,
+            .replace_end = 0,
+        },
+        .{
+            .value = "much-longer-label",
+            .kind = .plain,
+            .replace_start = 0,
+            .replace_end = 0,
+        },
+        .{
+            .value = "an-outlier-label-that-should-not-own-the-menu-width",
+            .kind = .plain,
+            .replace_start = 0,
+            .replace_end = 0,
+        },
+    };
+    var lines: std.ArrayList([]const u8) = .empty;
+    defer {
+        for (lines.items) |line| std.testing.allocator.free(line);
+        lines.deinit(std.testing.allocator);
+    }
+
+    try appendLines(std.testing.allocator, &lines, .{
+        .candidates = &candidates,
+        .selected = State.no_selection,
+        .window_start = 0,
+        .width = 80,
+        .height = 3,
+        .label_width_override = null,
+        .theme = .{ .completion_description = .{} },
+        .presentation = .{ .max_label_width = 8, .scroll_summary = .{ .visible = false } },
+    });
+
+    try std.testing.expectEqual(@as(usize, 1), lines.items.len);
+    try std.testing.expectEqualStrings("  one      first", lines.items[0]);
+}
+
+test "menu label column truncates before terminal overflow" {
+    const candidates = [_]completion.Candidate{.{
+        .value = "extraordinarily-long-label",
+        .kind = .plain,
+        .replace_start = 0,
+        .replace_end = 0,
+    }};
+    var lines: std.ArrayList([]const u8) = .empty;
+    defer {
+        for (lines.items) |line| std.testing.allocator.free(line);
+        lines.deinit(std.testing.allocator);
+    }
+
+    try appendLines(std.testing.allocator, &lines, .{
+        .candidates = &candidates,
+        .selected = 0,
+        .window_start = 0,
+        .width = 12,
+        .height = 24,
+        .label_width_override = null,
+        .theme = .{},
+    });
+
+    try std.testing.expect(std.mem.indexOf(u8, lines.items[0], "extraor…") != null);
+    try std.testing.expectEqual(@as(u16, 12), visibleWidth(lines.items[0], .unicode));
 }
