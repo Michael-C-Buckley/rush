@@ -29,7 +29,7 @@ pub fn parseCommandString(args: []const []const u8) ?CommandStringInvocation {
 pub fn parse(args: []const []const u8) ?ShellInvocation {
     std.debug.assert(args.len != 0);
 
-    var features: compat.Features = .{};
+    var features = compat.Features.bash();
     var shell_options: shell.ShellOptions = .{};
     var monitor_option_explicit = false;
     var interactive_mode = false;
@@ -147,6 +147,7 @@ test "command string invocation accepts interactive flag before -c" {
     try std.testing.expectEqual(@as(usize, 0), invocation.positionals.len);
     try std.testing.expect(invocation.interactive);
     try std.testing.expect(!invocation.features.strict_diagnostics);
+    try std.testing.expectEqual(compat.Mode.bash, invocation.features.mode);
 }
 
 test "command string invocation accepts posix mode with interactive flag before -c" {

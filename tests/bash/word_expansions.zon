@@ -1,0 +1,19 @@
+.{
+    .name = "Bash word expansions",
+    .mode = .bash,
+    .cases = .{
+        .{
+            .name = "arithmetic expansion recursively evaluates variable contents",
+            .script =
+            \\x='1+2'
+            \\printf '%s\n' "$((x * 3))"
+            ,
+            .stdout =
+            \\9
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+    },
+}

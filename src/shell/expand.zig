@@ -739,10 +739,11 @@ fn renderArithmetic(
 ) anyerror![]const u8 {
     const expanded_expression = try expandArithmeticExpression(allocator, expression, options);
     defer allocator.free(expanded_expression);
-    const value = evalArithmetic(
+    const value = evalArithmeticWithFeatures(
         expanded_expression,
         options.env,
         options.env_set,
+        options.features,
     ) catch |err| return arithmeticExpansionFailed(allocator, source, err, options);
     return std.fmt.allocPrint(allocator, "{d}", .{value});
 }
@@ -1978,10 +1979,11 @@ fn evaluateArrayIndex(
 fn evaluateArrayIndexValue(allocator: std.mem.Allocator, index_text: []const u8, options: Options) anyerror!i64 {
     const expanded_expression = try expandArithmeticExpression(allocator, index_text, options);
     defer allocator.free(expanded_expression);
-    return evalArithmetic(
+    return evalArithmeticWithFeatures(
         expanded_expression,
         options.env,
         options.env_set,
+        options.features,
     ) catch |err| return arithmeticExpansionFailed(allocator, index_text, err, options);
 }
 
@@ -3339,6 +3341,8 @@ const ArithmeticParser = struct {
     input: []const u8,
     env: EnvLookup = .{},
     env_set: EnvSet = .{},
+    features: compat.Features = .{},
+    recursion_depth: u8 = 0,
     index: usize = 0,
     mode: EvaluationMode = .evaluate,
 
@@ -3669,6 +3673,13 @@ const ArithmeticParser = struct {
         const value = self.env.get(name) orelse return 0;
         const trimmed = std.mem.trim(u8, value, " \t");
         if (trimmed.len == 0) return 0;
+        if (self.features.isBash()) return evalArithmeticRecursive(
+            trimmed,
+            self.env,
+            self.env_set,
+            self.features,
+            self.recursion_depth + 1,
+        );
         return parseIntegerConstant(trimmed);
     }
 
@@ -3821,7 +3832,33 @@ fn parseSignedIntegerConstant(rest: []const u8, negative: bool) error{ InvalidAr
 }
 
 pub fn evalArithmetic(input: []const u8, env: EnvLookup, env_set: EnvSet) anyerror!i64 {
-    var arithmetic_parser: ArithmeticParser = .{ .input = input, .env = env, .env_set = env_set };
+    return evalArithmeticWithFeatures(input, env, env_set, .{});
+}
+
+pub fn evalArithmeticWithFeatures(
+    input: []const u8,
+    env: EnvLookup,
+    env_set: EnvSet,
+    features: compat.Features,
+) anyerror!i64 {
+    return evalArithmeticRecursive(input, env, env_set, features, 0);
+}
+
+fn evalArithmeticRecursive(
+    input: []const u8,
+    env: EnvLookup,
+    env_set: EnvSet,
+    features: compat.Features,
+    recursion_depth: u8,
+) anyerror!i64 {
+    if (recursion_depth > 32) return error.InvalidArithmetic;
+    var arithmetic_parser: ArithmeticParser = .{
+        .input = input,
+        .env = env,
+        .env_set = env_set,
+        .features = features,
+        .recursion_depth = recursion_depth,
+    };
     return arithmetic_parser.parse();
 }
 

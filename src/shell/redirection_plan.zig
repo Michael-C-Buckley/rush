@@ -141,6 +141,7 @@ pub const RedirectionSpec = struct {
 pub const PlanOptions = struct {
     noclobber: bool = false,
     failure_policy: FailurePolicy = .regular_command,
+    self_duplicate_noop: bool = false,
 };
 
 pub const OpenPathStep = struct {
@@ -270,6 +271,7 @@ pub const RedirectionPlan = struct {
     steps: []const RedirectionStep = &.{},
     rollback_steps: []const RestorationStep = &.{},
     failure_consequence: FailureConsequence = .command_failure,
+    self_duplicate_noop: bool = false,
     allocator: ?std.mem.Allocator = null,
 
     pub fn clone(self: RedirectionPlan, allocator: std.mem.Allocator) std.mem.Allocator.Error!RedirectionPlan {
@@ -291,6 +293,7 @@ pub const RedirectionPlan = struct {
             .steps = owned_steps,
             .rollback_steps = owned_rollback_steps,
             .failure_consequence = self.failure_consequence,
+            .self_duplicate_noop = self.self_duplicate_noop,
             .allocator = allocator,
         };
         plan.validate();
@@ -331,6 +334,7 @@ pub const RedirectionPlan = struct {
             .steps = owned_steps,
             .rollback_steps = owned_rollback_steps,
             .failure_consequence = consequence,
+            .self_duplicate_noop = options.self_duplicate_noop,
             .allocator = allocator,
         };
         plan.validate();
@@ -369,7 +373,7 @@ pub const RedirectionPlan = struct {
     ) std.mem.Allocator.Error!ApplyResult {
         self.validate();
 
-        var applied = AppliedRedirections.init(allocator, port);
+        var applied = AppliedRedirections.init(allocator, port, self.self_duplicate_noop);
         errdefer {
             applied.restore();
             applied.deinit();
@@ -481,11 +485,12 @@ const SavedDescriptor = struct {
 pub const AppliedRedirections = struct {
     allocator: std.mem.Allocator,
     port: fd.Port,
+    self_duplicate_noop: bool = false,
     saved: std.ArrayList(SavedDescriptor) = .empty,
     active: bool = true,
 
-    fn init(allocator: std.mem.Allocator, port: fd.Port) AppliedRedirections {
-        return .{ .allocator = allocator, .port = port };
+    fn init(allocator: std.mem.Allocator, port: fd.Port, self_duplicate_noop: bool) AppliedRedirections {
+        return .{ .allocator = allocator, .port = port, .self_duplicate_noop = self_duplicate_noop };
     }
 
     pub fn deinit(self: *AppliedRedirections) void {
@@ -589,6 +594,7 @@ pub const AppliedRedirections = struct {
             closeOpened(self.port, source.descriptor) catch |err| return .{ .close = err };
             return null;
         }
+        if (self.self_duplicate_noop) return null;
         self.port.duplicateTo(.{
             .source = step.source,
             .target = step.target,

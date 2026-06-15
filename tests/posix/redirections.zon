@@ -201,6 +201,22 @@
             .status = 0,
         },
         .{
+            .name = "self-duplicate redirection from a closed descriptor fails",
+            .script =
+            \\exec 3>&1 1>&-
+            \\printf '' 1>&1
+            \\status=$?
+            \\exec 1>&3 3>&-
+            \\if [ "$status" -ne 0 ]; then printf '<nonzero>\n'; fi
+            ,
+            .stdout =
+            \\<nonzero>
+            \\
+            ,
+            .stderr_match = .nonempty,
+            .status = 0,
+        },
+        .{
             .name = "redirection word expansion does not perform field splitting",
             .script =
             \\name='a b'

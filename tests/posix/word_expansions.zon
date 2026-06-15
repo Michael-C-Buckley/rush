@@ -770,6 +770,21 @@
             .status_match = .nonzero,
         },
         .{
+            .name = "arithmetic expansion does not recursively evaluate variable contents",
+            .script =
+            \\printf 'before\n'
+            \\x='1+2'
+            \\printf '%s\n' "$((x * 3))"
+            \\printf 'after\n'
+            ,
+            .stdout =
+            \\before
+            \\
+            ,
+            .stderr_match = .nonempty,
+            .status_match = .nonzero,
+        },
+        .{
             .name = "field splitting applies to unquoted parameter expansion",
             .script =
             \\x=' a  b '

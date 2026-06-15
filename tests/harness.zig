@@ -401,7 +401,7 @@ fn runRush(
     defer cwd.close(io);
 
     const argv = switch (config.mode) {
-        .posix => &[_][]const u8{ config.rush_path.?, "-c", script },
+        .posix => &[_][]const u8{ config.rush_path.?, "--posix", "-c", script },
         .bash => &[_][]const u8{ config.rush_path.?, "-c", script },
     };
     return runCommand(allocator, io, cwd, argv);
