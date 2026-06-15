@@ -2368,6 +2368,10 @@ fn evaluateCommandSubstitutionInState(
     body.validate();
     if (exit_trap_resolver) |resolver| resolver.validate();
 
+    const previous_external_stdio = evaluator.external_stdio;
+    evaluator.external_stdio = .capture;
+    defer evaluator.external_stdio = previous_external_stdio;
+
     var body_outcome = try evaluateCommandSubstitutionBody(evaluator, substitution_state, substitution_context, body);
     defer body_outcome.deinit();
 
@@ -11295,6 +11299,34 @@ test "semantic command substitution captures owned output and trims only trailin
     try std.testing.expectEqualStrings("line1\nline2", result.output.items);
     try std.testing.expectEqualStrings("", result.stderr.items);
     try std.testing.expectEqual(@as(state.ExitStatus, 0), shell_state.last_status);
+}
+
+test "semantic command substitution captures external command stdout" {
+    var fake = FakeExternalRuntime.init(std.testing.allocator);
+    defer fake.deinit();
+    fake.setRunResult("external\n", "external-err\n", .{ .exited = 0 });
+    var evaluator = Evaluator.initWithExternalPorts(std.testing.allocator, fake.fdPort(), fake.processPort());
+    var shell_state = state.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+
+    const externals = [_]command_plan.ExternalResolution{.{ .name = "tool", .path = "/bin/tool" }};
+    const plan = command_plan.classifyExpandedSimpleCommand(.{
+        .command = .{ .argv = &[_][]const u8{"tool"} },
+        .lookup = .{ .externals = &externals },
+    });
+
+    var result = try evaluateCommandSubstitution(
+        &evaluator,
+        &shell_state,
+        context.EvalContext.forTarget(.current_shell),
+        .{ .simple = plan },
+    );
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 0), result.status);
+    try std.testing.expectEqual(@as(usize, 1), fake.run_count);
+    try std.testing.expectEqualStrings("external", result.output.items);
+    try std.testing.expectEqualStrings("external-err\n", result.stderr.items);
 }
 
 test "semantic command substitution runs subshell EXIT trap before trimming captured output" {
