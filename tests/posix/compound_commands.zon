@@ -504,6 +504,175 @@
             .status = 0,
         },
         .{
+            .name = "case command expands word before matching patterns",
+            .script =
+            \\x=b
+            \\case $x in
+            \\    a) printf 'bad\n' ;;
+            \\    b) printf 'ok\n' ;;
+            \\esac
+            ,
+            .stdout =
+            \\ok
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "case command uses the first matching clause",
+            .script =
+            \\case abc in
+            \\    a*) printf 'first\n' ;;
+            \\    ab*) printf 'second\n' ;;
+            \\esac
+            ,
+            .stdout =
+            \\first
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "case command does not expand patterns after the first match",
+            .script =
+            \\case a in
+            \\    a) printf 'ok\n' ;;
+            \\    ${MISSING:?bad}) printf 'bad\n' ;;
+            \\esac
+            ,
+            .stdout =
+            \\ok
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "case command matches alternate patterns in a clause",
+            .script =
+            \\case c in
+            \\    a|b|c) printf 'ok\n' ;;
+            \\    *) printf 'bad\n' ;;
+            \\esac
+            ,
+            .stdout =
+            \\ok
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "case command permits an empty matched clause",
+            .script =
+            \\case a in
+            \\    a) ;;
+            \\    *) false ;;
+            \\esac
+            ,
+            .stdout = "",
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "case command permits the last clause terminator to be omitted",
+            .script =
+            \\case a in
+            \\    a) printf 'ok\n'
+            \\esac
+            ,
+            .stdout =
+            \\ok
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "case command ;& continues with the next compound-list",
+            .script =
+            \\case a in
+            \\    a) printf 'one\n' ;&
+            \\    b) printf 'two\n' ;;
+            \\    *) printf 'bad\n' ;;
+            \\esac
+            ,
+            .stdout =
+            \\one
+            \\two
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "case command ;& status is the final continued compound-list status",
+            .script =
+            \\case a in
+            \\    a) true ;&
+            \\    b) false ;;
+            \\esac
+            ,
+            .stdout = "",
+            .stderr = "",
+            .status = 1,
+        },
+        .{
+            .name = "case command quoted pattern characters match literally",
+            .script =
+            \\case x in
+            \\    "*") printf 'bad\n' ;;
+            \\    *) printf 'ok\n' ;;
+            \\esac
+            \\
+            \\case '*' in
+            \\    "*") printf 'literal\n' ;;
+            \\    *) printf 'bad\n' ;;
+            \\esac
+            ,
+            .stdout =
+            \\ok
+            \\literal
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "case command expands unquoted pattern variables as patterns",
+            .script =
+            \\pat='*'
+            \\case x in
+            \\    $pat) printf 'match\n' ;;
+            \\    *) printf 'bad\n' ;;
+            \\esac
+            ,
+            .stdout =
+            \\match
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "case command preserves quotes around expanded pattern variables",
+            .script =
+            \\pat='*'
+            \\case x in
+            \\    "$pat") printf 'bad\n' ;;
+            \\    *) printf 'ok\n' ;;
+            \\esac
+            ,
+            .stdout =
+            \\ok
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "if command status is selected then body status",
             .script =
             \\if true
