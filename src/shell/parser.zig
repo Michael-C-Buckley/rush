@@ -5026,6 +5026,17 @@ test "parser reports incomplete POSIX for commands" {
     try std.testing.expectEqualStrings("missing done to close for command", result.diagnostics[0].message);
 }
 
+test "parser reports missing do in POSIX for commands" {
+    var result = try parse(std.testing.allocator, "for x in a b; echo $x; done", .{});
+    defer result.deinit();
+
+    try std.testing.expect(result.incomplete);
+    try std.testing.expectEqual(@as(usize, 1), result.diagnostics.len);
+    try std.testing.expectEqual(DiagnosticKind.parse_error, result.diagnostics[0].kind);
+    try expectSpan(.init(0, 27), result.diagnostics[0].span);
+    try std.testing.expectEqualStrings("missing do in for command", result.diagnostics[0].message);
+}
+
 test "parser reports missing POSIX for loop variables" {
     var missing_result = try parse(std.testing.allocator, "for in a; do echo $a; done", .{});
     defer missing_result.deinit();

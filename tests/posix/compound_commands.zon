@@ -420,6 +420,24 @@
             .status = 0,
         },
         .{
+            .name = "for command break greater than enclosing depth exits outermost loop",
+            .script =
+            \\for x in a b
+            \\do
+            \\    printf '%s\n' "$x"
+            \\    break 2
+            \\done
+            \\printf 'after\n'
+            ,
+            .stdout =
+            \\a
+            \\after
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "for command continue proceeds at the requested enclosing loop depth",
             .script =
             \\for outer in one two
@@ -434,6 +452,26 @@
             .stdout =
             \\one:a
             \\two:a
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "for command continue greater than enclosing depth continues outermost loop",
+            .script =
+            \\for x in a b
+            \\do
+            \\    printf '%s\n' "$x"
+            \\    continue 2
+            \\    printf 'bad\n'
+            \\done
+            \\printf 'after\n'
+            ,
+            .stdout =
+            \\a
+            \\b
+            \\after
             \\
             ,
             .stderr = "",
