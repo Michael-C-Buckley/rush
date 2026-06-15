@@ -879,6 +879,179 @@
             .status = 0,
         },
         .{
+            .name = "while command re-evaluates the condition compound-list before each iteration",
+            .script =
+            \\i=0
+            \\while i=$((i + 1)); test "$i" -le 3
+            \\do
+            \\    printf 'body:%s\n' "$i"
+            \\done
+            \\printf 'after:%s\n' "$i"
+            ,
+            .stdout =
+            \\body:1
+            \\body:2
+            \\body:3
+            \\after:4
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "while command status is the last completed body status",
+            .script =
+            \\i=0
+            \\while test "$i" -lt 1
+            \\do
+            \\    i=1
+            \\    false
+            \\done
+            ,
+            .stdout = "",
+            .stderr = "",
+            .status = 1,
+        },
+        .{
+            .name = "while command body effects persist in the current shell",
+            .script =
+            \\x=before
+            \\while test "$x" = before
+            \\do
+            \\    x=after
+            \\done
+            \\printf '%s\n' "$x"
+            ,
+            .stdout =
+            \\after
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "while command accepts semicolon separators around do and done",
+            .script =
+            \\i=0; while test "$i" -lt 1; do i=1; printf 'ok\n'; done
+            ,
+            .stdout =
+            \\ok
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "while command accepts newline separators around do and done",
+            .script =
+            \\i=0
+            \\while
+            \\test "$i" -lt 1
+            \\do
+            \\i=1
+            \\printf 'ok\n'
+            \\done
+            ,
+            .stdout =
+            \\ok
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "while command redirection applies to the loop body",
+            .script =
+            \\i=0
+            \\while test "$i" -lt 2
+            \\do
+            \\    i=$((i + 1))
+            \\    printf 'loop:%s\n' "$i"
+            \\done >out
+            \\cat out
+            ,
+            .stdout =
+            \\loop:1
+            \\loop:2
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "while command break exits the loop",
+            .script =
+            \\while true
+            \\do
+            \\    printf 'before\n'
+            \\    break
+            \\    printf 'bad\n'
+            \\done
+            \\printf 'after\n'
+            ,
+            .stdout =
+            \\before
+            \\after
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "while command continue re-enters the condition compound-list",
+            .script =
+            \\i=0
+            \\while test "$i" -lt 3
+            \\do
+            \\    i=$((i + 1))
+            \\    test "$i" -eq 2 && continue
+            \\    printf 'body:%s\n' "$i"
+            \\done
+            ,
+            .stdout =
+            \\body:1
+            \\body:3
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "while command condition uses pipeline status",
+            .script =
+            \\i=0
+            \\while test "$i" -lt 1 | true
+            \\do
+            \\    i=$((i + 1))
+            \\    printf 'pipeline:%s\n' "$i"
+            \\    break
+            \\done
+            ,
+            .stdout =
+            \\pipeline:1
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "while command condition uses AND-OR list status",
+            .script =
+            \\i=0
+            \\while false && printf 'bad\n' || test "$i" -lt 1
+            \\do
+            \\    i=1
+            \\    printf 'and-or\n'
+            \\done
+            ,
+            .stdout =
+            \\and-or
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "until command status is zero when the body never runs",
             .script =
             \\until true
