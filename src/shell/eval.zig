@@ -4992,7 +4992,7 @@ fn applyFunctionAssignmentPrefixes(
         frame_state.putVariable(
             variable.name,
             variable.value,
-            .{ .exported = variable.exported },
+            .{ .exported = true },
         ) catch |err| switch (err) {
             error.OutOfMemory => return error.OutOfMemory,
             error.ReadonlyVariable => unreachable,

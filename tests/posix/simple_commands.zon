@@ -140,6 +140,21 @@
             .status = 0,
         },
         .{
+            .name = "temporary assignment before function is exported to child utilities",
+            .script =
+            \\f() { sh -c 'printf "<%s>\n" "$x"'; }
+            \\x=inner f
+            \\printf '<%s>\n' "$x"
+            ,
+            .stdout =
+            \\<inner>
+            \\<>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "empty command-name expansion is skipped",
             .script =
             \\empty=
