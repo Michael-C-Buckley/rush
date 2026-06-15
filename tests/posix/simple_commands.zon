@@ -84,6 +84,20 @@
             .status = 0,
         },
         .{
+            .name = "assignment-looking words after the command name are ordinary arguments",
+            .script =
+            \\printf '<%s>\n' x=inner
+            \\printf '<%s>\n' "${x-unset}"
+            ,
+            .stdout =
+            \\<x=inner>
+            \\<unset>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "temporary assignment is exported to regular utility environment",
             .script =
             \\x=outer

@@ -18,6 +18,34 @@
             .status = 0,
         },
         .{
+            .name = "reserved words are ordinary words after leading redirections in simple commands",
+            .script =
+            \\>out if 2>/dev/null
+            \\printf '<%s:' "$?"
+            \\test -f out
+            \\printf '%s>\n' "$?"
+            ,
+            .stdout =
+            \\<127:0>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "quoted reserved words are not recognized as reserved words",
+            .script =
+            \\\'if\' true 2>/dev/null
+            \\printf '<%s>\n' "$?"
+            ,
+            .stdout =
+            \\<127>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "reserved words are ordinary words after a command name",
             .script =
             \\printf '<%s>\n' if then else fi do done case esac while until for

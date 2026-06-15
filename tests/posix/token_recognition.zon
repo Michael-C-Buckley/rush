@@ -43,6 +43,31 @@
             .status = 0,
         },
         .{
+            .name = "and-or operators are recognized without surrounding blanks",
+            .script =
+            \\printf '%s\n' one&&printf '%s\n' two||printf '%s\n' bad
+            ,
+            .stdout =
+            \\one
+            \\two
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "pipe operator is recognized without surrounding blanks",
+            .script =
+            \\printf '%s\n' one|cat
+            ,
+            .stdout =
+            \\one
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "newline separates commands",
             .script =
             \\printf '%s\n' one
@@ -51,6 +76,73 @@
             .stdout =
             \\one
             \\two
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "alias substitution applies to later command-name tokens",
+            .script =
+            \\alias hi='printf "%s\n" alias'
+            \\hi
+            ,
+            .stdout =
+            \\alias
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "alias substitution does not apply to ordinary arguments",
+            .script =
+            \\alias hi='printf "%s\n" alias'
+            \\printf '%s\n' hi
+            ,
+            .stdout =
+            \\hi
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "alias values ending in blank continue alias substitution",
+            .script =
+            \\alias first='second '
+            \\alias second='printf "%s\n" chained'
+            \\first
+            ,
+            .stdout =
+            \\chained
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "active aliases are not recursively reexpanded",
+            .script =
+            \\alias self='self'
+            \\self 2>/dev/null
+            \\printf '<%s>\n' "$?"
+            ,
+            .stdout =
+            \\<127>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "digits separated from redirection operators remain command arguments",
+            .script =
+            \\printf '%s\n' 2 >out
+            \\cat out
+            ,
+            .stdout =
+            \\2
             \\
             ,
             .stderr = "",
