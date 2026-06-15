@@ -5021,29 +5021,17 @@ fn evaluateExternal(
         return normalizeWaitStatus(run_result.status);
     }
 
-    if (!hasRedirections(plan) and
-        (evaluator.external_stdio == .capture or evaluator.external_stdio == .capture_stdout))
-    {
-        var run_result = runExternalProcess(
-            evaluator,
-            process_port,
-            argv,
-            &environment,
-            &.{},
-        ) catch |err| switch (err) {
-            error.OutOfMemory => return error.OutOfMemory,
-            else => |run_err| {
-                const failure = runFailure(run_err);
-                try buffers.addBuiltinDiagnostic(plan.argv[0], failure.message);
-                return failure.status;
-            },
-        };
-        defer run_result.deinit();
-
-        try buffers.stdout.appendSlice(buffers.allocator, run_result.stdout);
-        if (evaluator.external_stdio == .capture) try buffers.stderr.appendSlice(buffers.allocator, run_result.stderr);
-        return normalizeWaitStatus(run_result.status);
-    }
+    if (capturedExternalMode(evaluator.external_stdio)) |capture_mode| return evaluateCapturedExternal(
+        evaluator,
+        process_port,
+        fd_port,
+        plan,
+        argv,
+        &environment,
+        buffers,
+        capture_mode,
+        &.{},
+    );
 
     if (buffers.stdout.items.len != 0) {
         if (!writeAllDescriptor(1, buffers.stdout.items)) return error.Unimplemented;
@@ -5088,6 +5076,84 @@ fn evaluateExternal(
         return failure.status;
     };
     return normalizeWaitStatus(wait_result.status);
+}
+
+const CapturedExternalMode = enum {
+    stdout,
+    stdout_and_stderr,
+};
+
+fn capturedExternalMode(external_stdio: ExternalStdio) ?CapturedExternalMode {
+    return switch (external_stdio) {
+        .capture => .stdout_and_stderr,
+        .capture_stdout => .stdout,
+        .inherit_output, .inherit => null,
+    };
+}
+
+fn evaluateCapturedExternal(
+    evaluator: *Evaluator,
+    process_port: runtime.process.Port,
+    fd_port: runtime.fd.Port,
+    plan: command_plan.CommandPlan,
+    argv: []const []const u8,
+    environment: *const std.process.Environ.Map,
+    buffers: *EvaluationBuffers,
+    capture_mode: CapturedExternalMode,
+    stdin: []const u8,
+) EvalError!outcome.ExitStatus {
+    plan.validate();
+    std.debug.assert(plan.argv.len != 0);
+    std.debug.assert(argv.len != 0);
+
+    var applied_redirections: ?redirection_plan.AppliedRedirections = null;
+    defer if (applied_redirections) |*applied| {
+        applied.restore();
+        applied.deinit();
+    };
+    if (hasRedirections(plan)) {
+        const apply_result = try plan.redirections.apply(evaluator.allocator, fd_port);
+        switch (apply_result) {
+            .applied => |applied| applied_redirections = applied,
+            .failure => |failure| {
+                try buffers.addBuiltinDiagnostic(plan.argv[0], redirectionFailureMessage(failure));
+                return 1;
+            },
+        }
+    }
+
+    var run_result = runExternalProcess(
+        evaluator,
+        process_port,
+        argv,
+        environment,
+        stdin,
+    ) catch |err| switch (err) {
+        error.OutOfMemory => return error.OutOfMemory,
+        else => |run_err| {
+            const failure = runFailure(run_err);
+            try buffers.addBuiltinDiagnostic(plan.argv[0], failure.message);
+            return failure.status;
+        },
+    };
+    defer run_result.deinit();
+
+    if (redirectionTargetsDescriptor(plan.redirections, 1)) {
+        if (!writeAllDescriptor(1, run_result.stdout)) return error.Unimplemented;
+    } else {
+        try buffers.stdout.appendSlice(buffers.allocator, run_result.stdout);
+    }
+    switch (capture_mode) {
+        .stdout => if (redirectionTargetsDescriptor(plan.redirections, 2)) {
+            if (!writeAllDescriptor(2, run_result.stderr)) return error.Unimplemented;
+        },
+        .stdout_and_stderr => if (redirectionTargetsDescriptor(plan.redirections, 2)) {
+            if (!writeAllDescriptor(2, run_result.stderr)) return error.Unimplemented;
+        } else {
+            try buffers.stderr.appendSlice(buffers.allocator, run_result.stderr);
+        },
+    }
+    return normalizeWaitStatus(run_result.status);
 }
 
 fn runExternalWithPipelineInput(

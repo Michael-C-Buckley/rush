@@ -273,7 +273,7 @@ test "interactive prompt async runs shell functions in hidden refresh" {
     });
     try shell_state.putFunction(.{
         .name = "rush_prompt_value",
-        .source_body = "/usr/bin/printf async",
+        .source_body = "/usr/bin/printf async 2>/dev/null",
     });
 
     var async_state: AsyncState = .{};
