@@ -108,6 +108,33 @@
             .status = 0,
         },
         .{
+            .name = "alias substitution applies after assignment prefixes",
+            .script =
+            \\alias run='printf "%s\n" assignment'
+            \\name=value run
+            ,
+            .stdout =
+            \\assignment
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "alias substitution applies after leading redirections",
+            .script =
+            \\alias run='printf "%s\n" redirection'
+            \\>out run
+            \\cat out
+            ,
+            .stdout =
+            \\redirection
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "alias values ending in blank continue alias substitution",
             .script =
             \\alias first='second '
@@ -116,6 +143,32 @@
             ,
             .stdout =
             \\chained
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "alias values can produce reserved words in grammar positions",
+            .script =
+            \\alias cond=if
+            \\cond true; then printf '%s\n' alias; fi
+            ,
+            .stdout =
+            \\alias
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "reserved words in grammar positions are not alias candidates",
+            .script =
+            \\alias if='printf "%s\n" alias'
+            \\if true; then printf '%s\n' reserved; fi
+            ,
+            .stdout =
+            \\reserved
             \\
             ,
             .stderr = "",
