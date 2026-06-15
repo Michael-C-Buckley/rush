@@ -6029,13 +6029,21 @@ fn evaluateCd(
     std.debug.assert(argv.len != 0);
     std.debug.assert(std.mem.eql(u8, argv[0], "cd"));
     var index: usize = 1;
+    var physical = false;
     while (index < argv.len) : (index += 1) {
         const arg = argv[index];
         if (std.mem.eql(u8, arg, "--")) {
             index += 1;
             break;
         }
-        if (std.mem.eql(u8, arg, "-L") or std.mem.eql(u8, arg, "-P")) continue;
+        if (std.mem.eql(u8, arg, "-L")) {
+            physical = false;
+            continue;
+        }
+        if (std.mem.eql(u8, arg, "-P")) {
+            physical = true;
+            continue;
+        }
         if (std.mem.startsWith(u8, arg, "-") and !std.mem.eql(u8, arg, "-")) {
             return builtinUsageError(buffers, "cd", "unsupported option");
         }
@@ -6046,6 +6054,16 @@ fn evaluateCd(
     const old_pwd = if (shell_state.logical_cwd.len != 0)
         shell_state.logical_cwd
     else if (shell_state.getVariable("PWD")) |pwd| pwd.value else "";
+    var before_buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
+    const base_pwd = if (old_pwd.len != 0) old_pwd else blk: {
+        const cwd = fs_port.getCwd(runtime.fs.GetCwdRequest.init(&before_buffer)) catch return builtinStatusError(
+            buffers,
+            1,
+            "cd",
+            "could not get current directory",
+        );
+        break :blk cwd.path;
+    };
 
     const requested_directory = if (index < argv.len)
         argv[index]
@@ -6089,7 +6107,13 @@ fn evaluateCd(
     }
 
     const target = path_to_change orelse directory;
-    fs_port.changeCwd(runtime.fs.ChangeCwdRequest.init(target)) catch return builtinStatusError(
+    const logical_target = if (physical)
+        null
+    else
+        try resolveLogicalCdPath(buffers.allocator, base_pwd, target);
+    defer if (logical_target) |path| buffers.allocator.free(path);
+    const change_target = logical_target orelse target;
+    fs_port.changeCwd(runtime.fs.ChangeCwdRequest.init(change_target)) catch return builtinStatusError(
         buffers,
         1,
         "cd",
@@ -6102,11 +6126,19 @@ fn evaluateCd(
         "cd",
         "could not get current directory",
     );
+    const new_pwd = if (physical) cwd.path else logical_target.?;
     if (old_pwd.len != 0) try state_delta.assignVariable("OLDPWD", old_pwd, .{ .exported = true });
-    try state_delta.assignVariable("PWD", cwd.path, .{ .exported = true });
-    try state_delta.setLogicalCwd(cwd.path);
-    if (print_new_directory) try buffers.stdout.print(buffers.allocator, "{s}\n", .{cwd.path});
+    try state_delta.assignVariable("PWD", new_pwd, .{ .exported = true });
+    try state_delta.setLogicalCwd(new_pwd);
+    if (print_new_directory) try buffers.stdout.print(buffers.allocator, "{s}\n", .{new_pwd});
     return 0;
+}
+
+fn resolveLogicalCdPath(allocator: std.mem.Allocator, base_pwd: []const u8, target: []const u8) ![]u8 {
+    std.debug.assert(base_pwd.len != 0);
+    std.debug.assert(target.len != 0);
+    if (std.fs.path.isAbsolute(target)) return std.fs.path.resolvePosix(allocator, &.{target});
+    return std.fs.path.resolvePosix(allocator, &.{ base_pwd, target });
 }
 
 fn shouldSearchCdpath(directory: []const u8) bool {
@@ -10086,6 +10118,16 @@ test "semantic evaluator captures echo output in CommandOutcome" {
     defer escaped.deinit();
     try std.testing.expectEqualStrings("a\nb", escaped.stdout.items);
     escaped.discardDelta(.current_shell);
+}
+
+test "cd logical path resolution preserves path spelling" {
+    const relative = try resolveLogicalCdPath(std.testing.allocator, "/tmp/logical", "link/../next");
+    defer std.testing.allocator.free(relative);
+    try std.testing.expectEqualStrings("/tmp/logical/next", relative);
+
+    const absolute = try resolveLogicalCdPath(std.testing.allocator, "/tmp/logical", "/other/link");
+    defer std.testing.allocator.free(absolute);
+    try std.testing.expectEqualStrings("/other/link", absolute);
 }
 
 test "semantic evaluator dispatches custom extension builtin handlers" {
