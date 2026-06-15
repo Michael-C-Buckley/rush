@@ -555,7 +555,10 @@ fn serializeFrameDiff(
         else
             new_line != null;
         if (!changed) continue;
-        const move = try cursorMoveFrom(allocator, current_row, row, 0);
+        const move = if (row >= previous.lines.len and row > current_row)
+            try cursorLineFeedFrom(allocator, current_row, row)
+        else
+            try cursorMoveFrom(allocator, current_row, row, 0);
         defer allocator.free(move);
         try output.appendSlice(allocator, move);
         try output.appendSlice(allocator, "\x1b[2K");
@@ -592,6 +595,15 @@ fn cursorMoveFrom(allocator: std.mem.Allocator, from_row: usize, to_row: usize, 
         return std.fmt.allocPrint(allocator, "\x1b[{d}B\r\x1b[{d}C", .{ to_row - from_row, col });
     }
     return std.fmt.allocPrint(allocator, "\r\x1b[{d}C", .{col});
+}
+
+fn cursorLineFeedFrom(allocator: std.mem.Allocator, from_row: usize, to_row: usize) ![]const u8 {
+    std.debug.assert(to_row > from_row);
+
+    var output: std.ArrayList(u8) = .empty;
+    errdefer output.deinit(allocator);
+    for (from_row..to_row) |_| try output.appendSlice(allocator, "\r\n");
+    return output.toOwnedSlice(allocator);
 }
 
 fn appendWrappedLine(

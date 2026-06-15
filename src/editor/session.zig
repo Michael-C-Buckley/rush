@@ -4120,6 +4120,45 @@ test "history search first tab advances the already-open menu" {
     try std.testing.expectEqualStrings("git status", session.editor.buffer.text());
 }
 
+test "history search menu line-feeds when diff adds rows" {
+    const entries = [_][]const u8{ "git status", "git diff", "git show" };
+    var history: TestHistorySearch = .{ .entries = &entries };
+    var session = try LineSession.initWithOptions(std.testing.allocator, .{ .bytes = "$ " }, .{
+        .context = &history,
+        .search = testSearchHistoryEntry,
+        .search_next = testSearchNextHistoryEntry,
+    });
+    defer session.deinit();
+    var renderer: FrameRenderer = .{};
+    defer renderer.deinit(std.testing.allocator);
+
+    var input_frame = try session.renderFrame(std.testing.allocator, .{ .synchronized_output = false });
+    defer input_frame.deinit(std.testing.allocator);
+    const input_output = try renderer.render(std.testing.allocator, input_frame, .{ .synchronized_output = false });
+    defer std.testing.allocator.free(input_output);
+
+    try session.handleKey(.{ .key = .text, .text = "git" });
+    try session.handleKey(.{ .key = .ctrl_r });
+    try applyTestHistoryRequests(&session);
+    var menu_frame = try session.renderFrame(std.testing.allocator, .{ .height = 8, .synchronized_output = false });
+    defer menu_frame.deinit(std.testing.allocator);
+    const menu_output = try renderer.render(std.testing.allocator, menu_frame, .{ .synchronized_output = false });
+    defer std.testing.allocator.free(menu_output);
+
+    try std.testing.expect(std.mem.indexOf(u8, menu_output, "\r\n\x1b[2K") != null);
+    try std.testing.expect(std.mem.indexOf(u8, menu_output, "show") != null);
+
+    try session.handleKey(.{ .key = .down });
+    var moved_frame = try session.renderFrame(std.testing.allocator, .{ .height = 8, .synchronized_output = false });
+    defer moved_frame.deinit(std.testing.allocator);
+    const moved_output = try renderer.render(std.testing.allocator, moved_frame, .{ .synchronized_output = false });
+    defer std.testing.allocator.free(moved_output);
+
+    try std.testing.expect(std.mem.indexOf(u8, moved_output, "\r\n\x1b[2K") == null);
+    try std.testing.expect(std.mem.indexOf(u8, moved_output, "\x1b[1B\r\x1b[2K") != null);
+    try std.testing.expect(std.mem.indexOf(u8, moved_output, "diff") != null);
+}
+
 test "history search menu caps visible candidates at sixteen rows" {
     const entries = [_][]const u8{
         "cmd00", "cmd01", "cmd02", "cmd03", "cmd04", "cmd05",
@@ -4486,7 +4525,7 @@ test "frame renderer clears current frame before interrupt output" {
     try std.testing.expect(std.mem.endsWith(u8, prefix, "\r"));
 }
 
-test "frame renderer diffs when frame adds lines" {
+test "frame renderer line-feeds when diff adds rows" {
     var renderer: FrameRenderer = .{};
     defer renderer.deinit(std.testing.allocator);
 
@@ -4508,7 +4547,7 @@ test "frame renderer diffs when frame adds lines" {
     defer std.testing.allocator.free(menu_output);
 
     try std.testing.expect(std.mem.indexOf(u8, menu_output, "\x1b[J") == null);
-    try std.testing.expect(std.mem.indexOf(u8, menu_output, "\x1b[1B\r\x1b[2K") != null);
+    try std.testing.expect(std.mem.indexOf(u8, menu_output, "\r\n\x1b[2K") != null);
     try std.testing.expect(std.mem.indexOf(u8, menu_output, "checkout") != null);
 }
 
@@ -4545,7 +4584,7 @@ test "frame renderer diffs added third wrapped row" {
     defer std.testing.allocator.free(second_output);
 
     try std.testing.expect(std.mem.startsWith(u8, second_output, "\r\x1b[2Kdefgh"));
-    try std.testing.expect(std.mem.indexOf(u8, second_output, "\x1b[1B\r\x1b[2K\r") != null);
+    try std.testing.expect(std.mem.indexOf(u8, second_output, "\r\n\x1b[2K\r") != null);
     try std.testing.expect(std.mem.indexOf(u8, second_output, "$ abc") == null);
 }
 
