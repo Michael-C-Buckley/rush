@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>rush rush_complete builtin</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body { font-family: monospace; background: light-dark(#ffffff, #111111); max-width: 100ch; margin: 4ch auto; padding: 0 2ch; }
+    .site-header { display: flex; justify-content: space-between; gap: 2ch; align-items: baseline; margin-bottom: 4ch; }
+    .site-nav { display: flex; gap: 2ch; }
+    .site-header a, .site-header a:visited { color: inherit; text-decoration: none; }
+    pre { background: light-dark(#f2f2f2, #1f1f1f); padding: 2ch; overflow-x: auto; }
+    dl { display: grid; grid-template-columns: max-content 1fr; gap: 0.75ch 2ch; }
+    dt { font-weight: bold; }
+    dd { margin: 0; }
+    :is(h1, h2, h3, h4, h5, h6) > a, :is(h1, h2, h3, h4, h5, h6) > a:visited { color: inherit; text-decoration: none; }
+    :is(h1, h2, h3, h4, h5, h6) > a:hover, :is(h1, h2, h3, h4, h5, h6) > a:focus-visible { text-decoration: underline; }
+    :is(h1, h2, h3, h4, h5, h6) > a::before { content: "#"; display: inline-block; width: 2ch; margin-left: -2ch; opacity: 0; }
+    :is(h1, h2, h3, h4, h5, h6):hover > a::before, :is(h1, h2, h3, h4, h5, h6) > a:focus-visible::before { opacity: 0.5; }
+    code, .cmd, .kw { color: light-dark(#003c8f, #8ab4ff); }
+    .opt { color: light-dark(#8a2a00, #ffb86c); }
+    .var { color: light-dark(#6f42c1, #d2a8ff); }
+    .str { color: light-dark(#006400, #7ee787); }
+  </style>
+</head>
+<body>
+  <header class="site-header">
+    <div><a href="../../index.html">rush</a></div>
+    <nav class="site-nav" aria-label="Primary">
+      <a href="../index.html">docs</a>
+      <a href="https://github.com/rockorager/rush">source</a>
+    </nav>
+  </header>
+
+  <h1 id="rush-complete"><a href="#rush-complete">RUSH_COMPLETE(1)</a></h1>
+
+  <h2 id="name"><a href="#name">NAME</a></h2>
+  <p>rush_complete - emit completion candidates and inspect completion context.</p>
+
+  <h2 id="synopsis"><a href="#synopsis">SYNOPSIS</a></h2>
+  <pre><span class="cmd">rush_complete</span> candidate <span class="var">value</span> [<span class="opt">--kind</span> <span class="var">kind</span>] [<span class="opt">--description</span> <span class="var">text</span>] [<span class="opt">--no-space</span>]
+<span class="cmd">rush_complete</span> files
+<span class="cmd">rush_complete</span> directories [<span class="opt">--append-slash</span>]
+<span class="cmd">rush_complete</span> option-present (<span class="opt">--long</span> <span class="var">name</span> | <span class="opt">--short</span> <span class="var">name</span>)
+<span class="cmd">rush_complete</span> option-values (<span class="opt">--long</span> <span class="var">name</span> | <span class="opt">--short</span> <span class="var">name</span>)
+<span class="cmd">rush_complete</span> operand <span class="var">index</span></pre>
+
+  <h2 id="description"><a href="#description">DESCRIPTION</a></h2>
+  <p><code>rush_complete</code> is the Rush completion provider API. It is intended for functions referenced by completion manifests, not for ordinary interactive commands. A provider function runs in a hidden captured completion context. Calls to <code>rush_complete candidate</code>, <code>rush_complete files</code>, and <code>rush_complete directories</code> append candidates to the current completion result.</p>
+  <p>Outside a completion provider invocation, <code>rush_complete</code> exits with a usage error because there is no provider context to receive candidates.</p>
+
+  <h2 id="commands"><a href="#commands">COMMANDS</a></h2>
+  <dl>
+    <dt><code>candidate</code></dt><dd>Add one candidate. Supported kinds include <code>plain</code>, <code>file</code>, <code>directory</code>, <code>subcommand</code>, <code>option</code>, <code>variable</code>, <code>function</code>, <code>command</code>, and <code>builtin</code>.</dd>
+    <dt><code>files</code></dt><dd>Add path candidates matching the current completion prefix.</dd>
+    <dt><code>directories</code></dt><dd>Add directory candidates matching the current completion prefix.</dd>
+    <dt><code>option-present</code></dt><dd>Exit zero when the selected option is present in the parsed command line.</dd>
+    <dt><code>option-values</code></dt><dd>Print values already provided for the selected option, one per line.</dd>
+    <dt><code>operand</code></dt><dd>Print the parsed positional operand at the zero-based index.</dd>
+  </dl>
+
+  <h2 id="context-variables"><a href="#context-variables">CONTEXT VARIABLES</a></h2>
+  <dl>
+    <dt><code>rush_completion_argument_index</code></dt><dd>Zero-based positional argument index being completed.</dd>
+    <dt><code>rush_completion_options_terminated</code></dt><dd><code>true</code> when <code>--</code> has been parsed, otherwise <code>false</code>.</dd>
+    <dt><code>rush_completion_value_position</code></dt><dd><code>value</code> while completing an option value, otherwise <code>item</code>.</dd>
+  </dl>
+
+  <h2 id="example"><a href="#example">EXAMPLE</a></h2>
+  <pre>__rush_complete_git_branches() {
+  git branch --format=<span class="str">'%(refname:short)'</span> 2&gt;/dev/null |
+    while read ref; do
+      test -n <span class="str">"$ref"</span> &amp;&amp; rush_complete candidate <span class="str">"$ref"</span> --kind plain --description branch
+    done
+}</pre>
+
+  <h2 id="see-also"><a href="#see-also">SEE ALSO</a></h2>
+  <p><a href="index.html">rush-builtins(7)</a>, <a href="../completions.html">Writing completions</a>, <a href="../completion-manifest.html">Completion manifest schema</a>.</p>
+</body>
+</html>

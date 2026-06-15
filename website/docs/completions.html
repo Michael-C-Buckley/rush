@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>rush completions</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body { font-family: monospace; background: light-dark(#ffffff, #111111); max-width: 100ch; margin: 4ch auto; padding: 0 2ch; }
+    .site-header { display: flex; justify-content: space-between; gap: 2ch; align-items: baseline; margin-bottom: 4ch; }
+    .site-nav { display: flex; gap: 2ch; }
+    .site-header a, .site-header a:visited { color: inherit; text-decoration: none; }
+    pre { background: light-dark(#f2f2f2, #1f1f1f); padding: 2ch; overflow-x: auto; }
+    dl { display: grid; grid-template-columns: max-content 1fr; gap: 0.75ch 2ch; }
+    dt { font-weight: bold; }
+    dd { margin: 0; }
+    :is(h1, h2, h3, h4, h5, h6) > a, :is(h1, h2, h3, h4, h5, h6) > a:visited { color: inherit; text-decoration: none; }
+    :is(h1, h2, h3, h4, h5, h6) > a:hover, :is(h1, h2, h3, h4, h5, h6) > a:focus-visible { text-decoration: underline; }
+    :is(h1, h2, h3, h4, h5, h6) > a::before { content: "#"; display: inline-block; width: 2ch; margin-left: -2ch; opacity: 0; }
+    :is(h1, h2, h3, h4, h5, h6):hover > a::before, :is(h1, h2, h3, h4, h5, h6) > a:focus-visible::before { opacity: 0.5; }
+    code, .cmd, .kw { color: light-dark(#003c8f, #8ab4ff); }
+    .opt { color: light-dark(#8a2a00, #ffb86c); }
+    .var { color: light-dark(#6f42c1, #d2a8ff); }
+    .str { color: light-dark(#006400, #7ee787); }
+  </style>
+</head>
+<body>
+  <header class="site-header">
+    <div><a href="../index.html">rush</a></div>
+    <nav class="site-nav" aria-label="Primary">
+      <a href="index.html">docs</a>
+      <a href="https://github.com/rockorager/rush">source</a>
+    </nav>
+  </header>
+
+  <h1 id="writing-completions"><a href="#writing-completions">Writing completions</a></h1>
+  <p>Rush command completions use a structured manifest plus optional Rush provider functions:</p>
+  <dl>
+    <dt><code>name.json</code></dt><dd>Command tree, options, arguments, and provider references.</dd>
+    <dt><code>name.rush</code></dt><dd>Optional provider functions used by <code>{ "function": "..." }</code> manifest providers.</dd>
+  </dl>
+  <p>Files are loaded lazily when completing that command. System completions load before user completions. User completions live in <code>$XDG_CONFIG_HOME/rush/completions</code>, or <code>~/.config/rush/completions</code> when <code>XDG_CONFIG_HOME</code> is unset.</p>
+
+  <h2 id="minimal-static-completion"><a href="#minimal-static-completion">Minimal static completion</a></h2>
+  <pre>{
+  <span class="str">"$schema"</span>: <span class="str">"https://rush.horse/completion/schema/v1.schema.json"</span>,
+  <span class="str">"manifestVersion"</span>: <span class="kw">1</span>,
+  <span class="str">"command"</span>: {
+    <span class="str">"name"</span>: <span class="str">"tool"</span>,
+    <span class="str">"subcommands"</span>: [
+      { <span class="str">"name"</span>: <span class="str">"build"</span>, <span class="str">"description"</span>: <span class="str">"build the project"</span> },
+      { <span class="str">"name"</span>: <span class="str">"test"</span>, <span class="str">"description"</span>: <span class="str">"run tests"</span> }
+    ],
+    <span class="str">"options"</span>: [
+      { <span class="str">"long"</span>: <span class="str">"directory"</span>, <span class="str">"value"</span>: { <span class="str">"name"</span>: <span class="str">"path"</span>, <span class="str">"provider"</span>: <span class="str">"builtin.directories"</span> } }
+    ]
+  }
+}</pre>
+
+  <h2 id="providers"><a href="#providers">Providers</a></h2>
+  <dl>
+    <dt><code>{ "values": [...] }</code></dt><dd>Static enum candidates embedded in the manifest.</dd>
+    <dt><code>{ "builtin": "files" }</code></dt><dd>Built-in path completion for files and directories.</dd>
+    <dt><code>{ "builtin": "directories" }</code></dt><dd>Built-in path completion restricted to directories.</dd>
+    <dt><code>{ "builtin": "executables" }</code></dt><dd>Command-name completion from functions, builtins, and <code>PATH</code>.</dd>
+    <dt><code>{ "builtin": "variables" }</code></dt><dd>Shell variable-name completion.</dd>
+    <dt><code>{ "function": "name" }</code></dt><dd>Run a Rush function in a hidden completion worker and collect candidates emitted by <code>rush_complete</code>.</dd>
+  </dl>
+
+  <h2 id="dynamic-provider-functions"><a href="#dynamic-provider-functions">Dynamic provider functions</a></h2>
+  <p>Reference a function from the manifest:</p>
+  <pre>{
+  <span class="str">"providers"</span>: {
+    <span class="str">"tool.targets"</span>: { <span class="str">"function"</span>: <span class="str">"__rush_complete_tool_targets"</span> }
+  },
+  <span class="str">"arguments"</span>: {
+    <span class="str">"states"</span>: [
+      { <span class="str">"name"</span>: <span class="str">"target"</span>, <span class="str">"index"</span>: <span class="kw">0</span>, <span class="str">"provider"</span>: <span class="str">"tool.targets"</span> }
+    ]
+  }
+}</pre>
+  <p>Then define it in <code>tool.rush</code>:</p>
+  <pre>__rush_complete_tool_targets() {
+  tool list-targets 2&gt;/dev/null |
+    while read target; do
+      test -n <span class="str">"$target"</span> &amp;&amp; rush_complete candidate <span class="str">"$target"</span> --kind plain --description target
+    done
+}</pre>
+  <p>Function providers run asynchronously from the editor's point of view. Rush runs them hidden with captured output and cloned shell state, so slow providers do not block terminal drawing or leak output to the screen.</p>
+
+  <h2 id="completion-context"><a href="#completion-context">Completion context</a></h2>
+  <pre>__rush_complete_tool_values() {
+  if rush_complete option-present --long all; then
+    rush_complete candidate everything --kind plain
+  fi
+
+  first=<span class="str">"$(rush_complete operand 0)"</span>
+  case <span class="str">"$first"</span> in
+    deploy) rush_complete candidate production --kind plain ;;
+    *) rush_complete files ;;
+  esac
+}</pre>
+  <p>The variables <code>rush_completion_argument_index</code>, <code>rush_completion_options_terminated</code>, and <code>rush_completion_value_position</code> are set while a function provider runs. See <a href="builtins/rush_complete.html">rush_complete(1)</a> for the complete provider API.</p>
+
+  <h2 id="see-also"><a href="#see-also">SEE ALSO</a></h2>
+  <p><a href="completion-manifest.html">Completion manifest schema</a>, <a href="builtins/rush_complete.html">rush_complete(1)</a>, <a href="builtins/index.html">rush-builtins(7)</a>.</p>
+</body>
+</html>

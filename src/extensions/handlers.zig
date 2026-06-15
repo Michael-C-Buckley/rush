@@ -8,6 +8,7 @@ const source = @import("compat/source.zig");
 const type_builtin = @import("compat/type.zig");
 const abbr = @import("editor/abbr.zig");
 const prompt = @import("editor/prompt.zig");
+const rush_complete = @import("editor/rush_complete.zig");
 const color = @import("color.zig");
 
 pub fn lookup(name: []const u8) ?api.HandlerSpec {
@@ -17,6 +18,7 @@ pub fn lookup(name: []const u8) ?api.HandlerSpec {
     if (type_builtin.handlerFor(name)) |handler| return handler;
     if (abbr.handlerFor(name)) |handler| return handler;
     if (prompt.handlerFor(name)) |handler| return handler;
+    if (rush_complete.handlerForContext(name, null)) |handler| return handler;
     if (color.handlerFor(name)) |handler| return handler;
     return null;
 }

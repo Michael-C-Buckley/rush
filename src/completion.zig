@@ -2,8 +2,12 @@
 
 const std = @import("std");
 const default_builtins = @import("builtins.zig");
+const extension_api = @import("extensions/api.zig");
+const extension_handlers = @import("extensions/handlers.zig");
+const extension_rush_complete = @import("extensions/editor/rush_complete.zig");
 const ir = @import("shell/ir.zig");
 const parser = @import("shell/parser.zig");
+const runner = @import("runner.zig");
 const shell_state_mod = @import("shell/state.zig");
 const editor_completion = @import("editor/completion.zig");
 
@@ -1610,8 +1614,88 @@ fn appendProviderCandidates(
                 .replace_end = semantic.replace_end,
             });
         },
-        .function => {},
+        .function => try appendFunctionProviderCandidates(allocator, io, shell_state, builder, rule, semantic),
     }
+}
+
+fn appendFunctionProviderCandidates(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    shell_state: shell_state_mod.ShellState,
+    builder: *Builder,
+    rule: Rule,
+    semantic: SemanticContext,
+) !void {
+    const function_name = rule.value orelse return;
+    var parsed_options = try allocator.alloc(extension_rush_complete.ParsedOption, semantic.parsed_options.len);
+    defer allocator.free(parsed_options);
+    for (semantic.parsed_options, 0..) |option, index| {
+        parsed_options[index] = .{
+            .spelling = option.spelling,
+            .name = option.name,
+            .key = option.key,
+            .value = option.value,
+        };
+    }
+    var operands = try allocator.alloc(extension_rush_complete.ParsedOperand, semantic.operands.len);
+    defer allocator.free(operands);
+    for (semantic.operands, 0..) |operand, index| {
+        operands[index] = .{ .value = operand.value, .index = operand.index };
+    }
+
+    const value_position = if (semantic.position == .option_value) "value" else "item";
+    var provider_state = extension_rush_complete.State.init(
+        allocator,
+        io,
+        semantic.prefix,
+        semantic.replace_start,
+        semantic.replace_end,
+        semantic.argument_index,
+        semantic.options_terminated,
+        value_position,
+        parsed_options,
+        operands,
+    );
+    defer provider_state.deinit();
+
+    var provider_shell_state = shell_state.clone(allocator) catch |err| switch (err) {
+        error.OutOfMemory => return error.OutOfMemory,
+        error.ReadonlyVariable => unreachable,
+    };
+    defer provider_shell_state.deinit();
+    const argument_index = try std.fmt.allocPrint(allocator, "{d}", .{semantic.argument_index});
+    defer allocator.free(argument_index);
+    try provider_shell_state.putVariable("rush_completion_argument_index", argument_index, .{});
+    try provider_shell_state.putVariable(
+        "rush_completion_options_terminated",
+        if (semantic.options_terminated) "true" else "false",
+        .{},
+    );
+    try provider_shell_state.putVariable("rush_completion_value_position", value_position, .{});
+
+    const argv = [_][]const u8{function_name};
+    var result = try runner.runHiddenShellStateCommandWithExtensionHandlers(
+        allocator,
+        io,
+        &provider_shell_state,
+        &argv,
+        "rush",
+        .{},
+        .capture,
+        .{ .context = &provider_state, .lookup = providerExtensionLookup },
+    );
+    defer result.deinit();
+    if (result.status != 0) return;
+
+    const candidates = try provider_state.takeCandidates();
+    defer editor_completion.freeCandidates(allocator, candidates);
+    for (candidates) |candidate| try builder.appendCandidateIfMissing(allocator, candidate);
+}
+
+fn providerExtensionLookup(context: ?*anyopaque, name: []const u8) ?extension_api.HandlerSpec {
+    const provider_state: *extension_rush_complete.State = @ptrCast(@alignCast(context.?));
+    if (extension_rush_complete.handlerForContext(name, provider_state)) |handler| return handler;
+    return extension_handlers.lookup(name);
 }
 
 fn ruleMatchesPath(rule: Rule, root: []const u8, path: []const []const u8) bool {

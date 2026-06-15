@@ -59,6 +59,7 @@ pub const Context = struct {
     semantic_state: *shell.ShellState,
     editor_state: *EditorState,
     arg_zero: []const u8 = "rush",
+    cloned_arg_zero: ?[]const u8 = null,
     features: compat.Features = .{},
     previous_duration_ms: ?i64 = null,
     prompt_async_state: ?*prompt_mod.AsyncState = null,
@@ -204,6 +205,61 @@ fn completeInteractiveDefault(
     return completion.defaultApplication(allocator, io, interactive_context.semantic_state.*, source, cursor);
 }
 
+// ziglint-ignore: Z023 - signature is fixed by the clone_completion_context callback pointer type.
+fn cloneInteractiveCompletionContext(
+    context: *anyopaque,
+    // ziglint-ignore: Z023 - opaque context must come first (clone_completion_context callback ABI).
+    allocator: std.mem.Allocator,
+    cancel: *editor_completion.CancellationToken,
+) !*anyopaque {
+    _ = cancel;
+    const source: *Context = @ptrCast(@alignCast(context));
+    const shell_state = try allocator.create(shell.ShellState);
+    errdefer allocator.destroy(shell_state);
+    shell_state.* = source.semantic_state.clone(allocator) catch |err| switch (err) {
+        error.OutOfMemory => return error.OutOfMemory,
+        error.ReadonlyVariable => unreachable,
+    };
+    errdefer shell_state.deinit();
+
+    const editor_state = try allocator.create(EditorState);
+    errdefer allocator.destroy(editor_state);
+    editor_state.* = EditorState.init(allocator);
+    errdefer editor_state.deinit();
+    try copyEditorState(editor_state, source.editor_state);
+
+    const arg_zero = try allocator.dupe(u8, source.arg_zero);
+    errdefer allocator.free(arg_zero);
+    const cloned = try allocator.create(Context);
+    cloned.* = .{
+        .semantic_state = shell_state,
+        .editor_state = editor_state,
+        .arg_zero = arg_zero,
+        .cloned_arg_zero = arg_zero,
+        .features = source.features,
+        .previous_duration_ms = source.previous_duration_ms,
+        .prompt_async_state = null,
+    };
+    return cloned;
+}
+
+// ziglint-ignore: Z023 - signature is fixed by the free_completion_context callback pointer type.
+fn freeInteractiveCompletionContext(context: *anyopaque, allocator: std.mem.Allocator) void {
+    const cloned: *Context = @ptrCast(@alignCast(context));
+    if (cloned.cloned_arg_zero) |arg_zero| allocator.free(arg_zero);
+    cloned.semantic_state.deinit();
+    allocator.destroy(cloned.semantic_state);
+    cloned.editor_state.deinit();
+    allocator.destroy(cloned.editor_state);
+    allocator.destroy(cloned);
+}
+
+fn copyEditorState(destination: *EditorState, source: *const EditorState) !void {
+    var abbr_iter = source.abbreviations.abbreviations.iterator();
+    while (abbr_iter.next()) |entry| try destination.abbreviations.set(entry.key_ptr.*, entry.value_ptr.*);
+    try destination.completions.copyFrom(&source.completions);
+}
+
 fn loadInteractiveCompletionAssets(
     allocator: std.mem.Allocator,
     io: std.Io,
@@ -306,7 +362,16 @@ test "interactive completion lazily loads user manifest and companion script" {
         \\  "manifestVersion": 1,
         \\  "command": {
         \\    "name": "foo",
-        \\    "subcommands": [{ "name": "bar", "description": "bar command" }]
+        \\    "providers": {
+        \\      "foo.values": { "function": "__rush_complete_foo_values" }
+        \\    },
+        \\    "subcommands": [
+        \\      { "name": "bar", "description": "bar command" },
+        \\      {
+        \\        "name": "run",
+        \\        "arguments": { "states": [{ "name": "value", "index": 0, "provider": "foo.values" }] }
+        \\      }
+        \\    ]
         \\  }
         \\}
         \\
@@ -314,7 +379,7 @@ test "interactive completion lazily loads user manifest and companion script" {
     });
     try tmp.dir.writeFile(std.testing.io, .{
         .sub_path = "rush/completions/foo.rush",
-        .data = "__rush_complete_foo_values() { :; }\n",
+        .data = "__rush_complete_foo_values() { rush_complete candidate branch --kind plain --description dynamic; }\n",
     });
     var tmp_root_buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
     const tmp_root_len = try tmp.dir.realPath(std.testing.io, &tmp_root_buffer);
@@ -343,6 +408,18 @@ test "interactive completion lazily loads user manifest and companion script" {
     );
     defer application.deinit(std.testing.allocator);
     try std.testing.expectEqualStrings("bar", application.edit.replacement);
+
+    const dynamic_source = "foo run br";
+    const dynamic_application = try completion.manifestApplication(
+        std.testing.allocator,
+        std.testing.io,
+        &editor_state.completions,
+        shell_state,
+        dynamic_source,
+        dynamic_source.len,
+    );
+    defer dynamic_application.deinit(std.testing.allocator);
+    try std.testing.expectEqualStrings("branch", dynamic_application.edit.replacement);
 }
 
 fn drainInteractiveSemanticJobNotifications(
@@ -597,6 +674,8 @@ pub fn run(
             .history = history_service.lineEditorView(io),
             .completion_context = &interactive_context,
             .complete = completeInteractiveDefault,
+            .clone_completion_context = cloneInteractiveCompletionContext,
+            .free_completion_context = freeInteractiveCompletionContext,
             .expand_abbreviation = expandInteractiveAbbreviation,
             .external_editor_command = prompt_mod.externalEditorCommand(&interactive_shell.semantic_state),
             .external_editor_tmpdir = prompt_mod.externalEditorTmpdir(&interactive_shell.semantic_state),
