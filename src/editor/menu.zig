@@ -5,7 +5,7 @@ const vaxis = @import("vaxis");
 
 const completion = @import("completion.zig");
 
-const max_candidate_rows = 16;
+const default_max_candidate_rows = 16;
 
 pub const UnderlineStyle = enum { none, single, double, curly, dotted, dashed };
 
@@ -23,16 +23,40 @@ pub const UiStyle = struct {
 
 pub const UiTheme = struct {
     completion_selected: UiStyle = .{ .fg = .{ .index = 6 }, .bold = true },
+    completion_command: UiStyle = .{},
+    completion_builtin: UiStyle = .{},
+    completion_subcommand: UiStyle = .{},
+    completion_plain: UiStyle = .{},
     completion_directory: UiStyle = .{ .fg = .{ .index = 4 } },
     completion_option: UiStyle = .{ .fg = .{ .index = 6 } },
     completion_variable: UiStyle = .{ .fg = .{ .index = 5 } },
     completion_function: UiStyle = .{ .fg = .{ .index = 5 } },
     completion_file: UiStyle = .{ .fg = .{ .index = 7 } },
     completion_description: UiStyle = .{ .dim = true },
+    completion_summary: UiStyle = .{ .dim = true },
     completion_flash: UiStyle = .{ .fg = .{ .index = 0 }, .bg = .{ .index = 7 } },
     history_match: UiStyle = .{ .fg = .{ .index = 3 } },
     autosuggestion: UiStyle = .{ .dim = true },
     diagnostic_error: UiStyle = .{ .ul = .curly, .ul_color = .{ .index = 1 } },
+};
+
+pub const Presentation = struct {
+    row_prefix: []const u8 = "  ",
+    selected_row_suffix: []const u8 = "  ",
+    description_separator: []const u8 = " ",
+    ellipsis: []const u8 = "…",
+    max_candidate_rows: usize = default_max_candidate_rows,
+    long_option_prefix: []const u8 = "--",
+    short_option_prefix: []const u8 = "-",
+    option_separator: []const u8 = ",",
+    scroll_summary: ScrollSummary = .{},
+};
+
+pub const ScrollSummary = struct {
+    visible: bool = true,
+    prefix: []const u8 = "showing ",
+    range_separator: []const u8 = "-",
+    count_separator: []const u8 = " of ",
 };
 
 pub const State = struct {
@@ -112,10 +136,11 @@ pub const RenderOptions = struct {
     height: u16,
     label_width_override: ?usize,
     theme: UiTheme,
+    presentation: Presentation = .{},
 };
 
-pub fn candidateRows(height: u16) usize {
-    return @min(@max(@as(usize, @intCast(height)) -| 2, 1), max_candidate_rows);
+pub fn candidateRows(height: u16, presentation: Presentation) usize {
+    return @min(@max(@as(usize, @intCast(height)) -| 2, 1), presentation.max_candidate_rows);
 }
 
 pub fn appendLines(
@@ -125,77 +150,92 @@ pub fn appendLines(
 ) !void {
     const candidates = options.candidates;
     if (candidates.len == 0) return;
-    const max_rows = candidateRows(options.height);
+    const max_rows = candidateRows(options.height, options.presentation);
     const window = visibleWindow(candidates.len, options.selected, options.window_start, max_rows);
     const label_width = options.label_width_override orelse try labelWidth(
         allocator,
         candidates[window.start..window.end],
         options.width,
+        options.presentation,
     );
     const fixed_width = 2 + label_width + 1;
     const description_width = @as(usize, @intCast(options.width)) -| fixed_width;
     for (candidates[window.start..window.end], window.start..) |candidate, index| {
         var line: std.ArrayList(u8) = .empty;
         errdefer line.deinit(allocator);
-        const label = try candidateLabel(allocator, candidate);
+        const label = try candidateLabel(allocator, candidate, options.presentation);
         defer if (label.owned) |owned| allocator.free(owned);
         if (index == options.selected) {
             try appendUiStyleStart(allocator, &line, options.theme.completion_selected);
-            try line.appendSlice(allocator, "  ");
+            try line.appendSlice(allocator, options.presentation.row_prefix);
             const kind_style = kindStyle(options.theme, candidate.kind);
             try appendUiStyleStart(allocator, &line, kind_style);
-            try appendPaddedCell(allocator, &line, label.text, label_width);
+            try appendPaddedCell(allocator, &line, label.text, label_width, options.presentation);
             try appendUiStyleEnd(allocator, &line, kind_style);
             try appendUiStyleStart(allocator, &line, options.theme.completion_selected);
             if (candidate.description) |description| {
                 if (description.len != 0 and description_width != 0) {
-                    try line.append(allocator, ' ');
+                    try line.appendSlice(allocator, options.presentation.description_separator);
                     try appendUiStyleStart(allocator, &line, options.theme.completion_description);
-                    try appendTruncated(allocator, &line, description, description_width);
+                    try appendTruncated(allocator, &line, description, description_width, options.presentation);
                     try appendUiStyleEnd(allocator, &line, options.theme.completion_description);
                     try appendUiStyleStart(allocator, &line, options.theme.completion_selected);
                 }
             }
-            try line.appendSlice(allocator, "  ");
+            try line.appendSlice(allocator, options.presentation.selected_row_suffix);
             try appendUiStyleEnd(allocator, &line, options.theme.completion_selected);
         } else {
-            try line.appendSlice(allocator, "  ");
+            try line.appendSlice(allocator, options.presentation.row_prefix);
             const kind_style = kindStyle(options.theme, candidate.kind);
             try appendUiStyleStart(allocator, &line, kind_style);
-            try appendPaddedCell(allocator, &line, label.text, label_width);
+            try appendPaddedCell(allocator, &line, label.text, label_width, options.presentation);
             try appendUiStyleEnd(allocator, &line, kind_style);
             if (candidate.description) |description| {
                 if (description.len != 0 and description_width != 0) {
-                    try line.append(allocator, ' ');
+                    try line.appendSlice(allocator, options.presentation.description_separator);
                     try appendUiStyleStart(allocator, &line, options.theme.completion_description);
-                    try appendTruncated(allocator, &line, description, description_width);
+                    try appendTruncated(allocator, &line, description, description_width, options.presentation);
                     try appendUiStyleEnd(allocator, &line, options.theme.completion_description);
                 }
             }
         }
         try lines.append(allocator, try line.toOwnedSlice(allocator));
     }
-    if (window.start != 0 or window.end != candidates.len) {
+    if (options.presentation.scroll_summary.visible and (window.start != 0 or window.end != candidates.len)) {
         var line: std.ArrayList(u8) = .empty;
         errdefer line.deinit(allocator);
-        try line.appendSlice(allocator, "  ");
-        try appendUiStyleStart(allocator, &line, options.theme.completion_description);
-        const text = try std.fmt.allocPrint(
-            allocator,
-            "showing {d}-{d} of {d}",
-            .{ window.start + 1, window.end, candidates.len },
-        );
+        try line.appendSlice(allocator, options.presentation.row_prefix);
+        try appendUiStyleStart(allocator, &line, options.theme.completion_summary);
+        const text = try scrollSummaryText(allocator, window, candidates.len, options.presentation.scroll_summary);
         defer allocator.free(text);
         try line.appendSlice(allocator, text);
-        try appendUiStyleEnd(allocator, &line, options.theme.completion_description);
+        try appendUiStyleEnd(allocator, &line, options.theme.completion_summary);
         try lines.append(allocator, try line.toOwnedSlice(allocator));
     }
 }
 
-fn labelWidth(allocator: std.mem.Allocator, candidates: []const completion.Candidate, width: u16) !usize {
+fn scrollSummaryText(
+    allocator: std.mem.Allocator,
+    window: Window,
+    count: usize,
+    summary: ScrollSummary,
+) ![]const u8 {
+    return std.fmt.allocPrint(
+        allocator,
+        "{s}{d}{s}{d}{s}{d}",
+        .{ summary.prefix, window.start + 1, summary.range_separator, window.end, summary.count_separator, count },
+    );
+}
+
+fn labelWidth(
+    allocator: std.mem.Allocator,
+    candidates: []const completion.Candidate,
+    width: u16,
+    presentation: Presentation,
+) !usize {
     var widest: usize = 0;
     for (candidates) |candidate| {
-        const label = try candidateLabel(allocator, candidate);
+        const label = try candidateLabel(allocator, candidate, presentation);
         defer if (label.owned) |owned| allocator.free(owned);
         widest = @max(widest, visibleWidth(label.text, .unicode));
     }
@@ -207,13 +247,27 @@ const CandidateLabel = struct {
     owned: ?[]const u8 = null,
 };
 
-fn candidateLabel(allocator: std.mem.Allocator, candidate: completion.Candidate) !CandidateLabel {
+fn candidateLabel(
+    allocator: std.mem.Allocator,
+    candidate: completion.Candidate,
+    presentation: Presentation,
+) !CandidateLabel {
     if (candidate.display) |display| return .{ .text = display };
     if (candidate.kind != .option) return .{ .text = candidate.value };
     const option = candidate.option orelse return .{ .text = candidate.value };
     if (option.long) |long| {
         if (option.short) |short| {
-            const owned = try std.fmt.allocPrint(allocator, "--{s},-{s}", .{ long, short });
+            const owned = try std.fmt.allocPrint(
+                allocator,
+                "{s}{s}{s}{s}{s}",
+                .{
+                    presentation.long_option_prefix,
+                    long,
+                    presentation.option_separator,
+                    presentation.short_option_prefix,
+                    short,
+                },
+            );
             return .{ .text = owned, .owned = owned };
         }
     }
@@ -222,12 +276,15 @@ fn candidateLabel(allocator: std.mem.Allocator, candidate: completion.Candidate)
 
 fn kindStyle(theme: UiTheme, kind: completion.Kind) UiStyle {
     return switch (kind) {
+        .command => theme.completion_command,
+        .builtin => theme.completion_builtin,
+        .subcommand => theme.completion_subcommand,
+        .plain => theme.completion_plain,
         .function => theme.completion_function,
         .file => theme.completion_file,
         .directory => theme.completion_directory,
         .variable => theme.completion_variable,
         .option => theme.completion_option,
-        .command, .builtin, .subcommand, .plain => .{},
     };
 }
 
@@ -253,21 +310,33 @@ pub fn visibleWindow(count: usize, selected: usize, window_start: usize, max_row
     return .{ .start = start, .end = start + max_rows };
 }
 
-fn appendPaddedCell(allocator: std.mem.Allocator, output: *std.ArrayList(u8), text: []const u8, width: usize) !void {
+fn appendPaddedCell(
+    allocator: std.mem.Allocator,
+    output: *std.ArrayList(u8),
+    text: []const u8,
+    width: usize,
+    presentation: Presentation,
+) !void {
     const before = output.items.len;
-    try appendTruncated(allocator, output, text, width);
+    try appendTruncated(allocator, output, text, width, presentation);
     const written = visibleWidth(output.items[before..], .unicode);
     if (written < width) try output.appendNTimes(allocator, ' ', width - written);
 }
 
-fn appendTruncated(allocator: std.mem.Allocator, output: *std.ArrayList(u8), text: []const u8, width: usize) !void {
+fn appendTruncated(
+    allocator: std.mem.Allocator,
+    output: *std.ArrayList(u8),
+    text: []const u8,
+    width: usize,
+    presentation: Presentation,
+) !void {
     if (width == 0) return;
     if (visibleWidth(text, .unicode) <= width) {
         try output.appendSlice(allocator, text);
         return;
     }
     if (width == 1) {
-        try output.appendSlice(allocator, "…");
+        try output.appendSlice(allocator, presentation.ellipsis);
         return;
     }
     var written: usize = 0;
@@ -282,7 +351,7 @@ fn appendTruncated(allocator: std.mem.Allocator, output: *std.ArrayList(u8), tex
         i += 1;
         written += 1;
     }
-    try output.appendSlice(allocator, "…");
+    try output.appendSlice(allocator, presentation.ellipsis);
 }
 
 pub fn appendUiStyleStart(allocator: std.mem.Allocator, out: *std.ArrayList(u8), style: UiStyle) !void {
@@ -465,4 +534,80 @@ test "menu append lines renders selected row and scroll summary" {
     try std.testing.expect(std.mem.indexOf(u8, lines.items[0], "two") != null);
     try std.testing.expect(std.mem.indexOf(u8, lines.items[0], "\x1b[1m") != null);
     try std.testing.expectEqualStrings("  \x1b[2mshowing 2-2 of 3\x1b[22m", lines.items[1]);
+}
+
+test "menu presentation customizes spacing summary and option labels" {
+    const candidates = [_]completion.Candidate{
+        .{
+            .value = "--verbose",
+            .kind = .option,
+            .option = .{ .long = "verbose", .short = "v" },
+            .description = "turn on very verbose diagnostics",
+            .replace_start = 0,
+            .replace_end = 0,
+        },
+        .{ .value = "second", .kind = .plain, .replace_start = 0, .replace_end = 0 },
+    };
+    var lines: std.ArrayList([]const u8) = .empty;
+    defer {
+        for (lines.items) |line| std.testing.allocator.free(line);
+        lines.deinit(std.testing.allocator);
+    }
+
+    try appendLines(std.testing.allocator, &lines, .{
+        .candidates = &candidates,
+        .selected = 0,
+        .window_start = 0,
+        .width = 18,
+        .height = 3,
+        .label_width_override = 8,
+        .theme = .{},
+        .presentation = .{
+            .row_prefix = "> ",
+            .selected_row_suffix = " <",
+            .description_separator = " :: ",
+            .ellipsis = "~",
+            .long_option_prefix = "+",
+            .short_option_prefix = "/",
+            .option_separator = "|",
+            .scroll_summary = .{
+                .prefix = "rows ",
+                .range_separator = "..",
+                .count_separator = "/",
+            },
+        },
+    });
+
+    try std.testing.expect(std.mem.indexOf(u8, lines.items[0], "> ") != null);
+    try std.testing.expect(std.mem.indexOf(u8, lines.items[0], "+verbos~") != null);
+    try std.testing.expect(std.mem.indexOf(u8, lines.items[0], " :: ") != null);
+    try std.testing.expect(std.mem.indexOf(u8, lines.items[0], " <") != null);
+    try std.testing.expectEqualStrings("> \x1b[2mrows 1..1/2\x1b[22m", lines.items[1]);
+}
+
+test "menu presentation can hide scroll summary and cap rows" {
+    const candidates = [_]completion.Candidate{
+        .{ .value = "one", .kind = .plain, .replace_start = 0, .replace_end = 0 },
+        .{ .value = "two", .kind = .plain, .replace_start = 0, .replace_end = 0 },
+        .{ .value = "three", .kind = .plain, .replace_start = 0, .replace_end = 0 },
+    };
+    var lines: std.ArrayList([]const u8) = .empty;
+    defer {
+        for (lines.items) |line| std.testing.allocator.free(line);
+        lines.deinit(std.testing.allocator);
+    }
+
+    try appendLines(std.testing.allocator, &lines, .{
+        .candidates = &candidates,
+        .selected = 0,
+        .window_start = 0,
+        .width = 20,
+        .height = 20,
+        .label_width_override = null,
+        .theme = .{},
+        .presentation = .{ .max_candidate_rows = 1, .scroll_summary = .{ .visible = false } },
+    });
+
+    try std.testing.expectEqual(@as(usize, 1), lines.items.len);
+    try std.testing.expect(std.mem.indexOf(u8, lines.items[0], "one") != null);
 }

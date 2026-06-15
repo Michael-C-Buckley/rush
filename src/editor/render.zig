@@ -9,6 +9,7 @@ const menu = @import("menu.zig");
 pub const UnderlineStyle = menu.UnderlineStyle;
 pub const UiStyle = menu.UiStyle;
 pub const UiTheme = menu.UiTheme;
+pub const MenuPresentation = menu.Presentation;
 pub const appendUiStyleStart = menu.appendUiStyleStart;
 pub const appendUiStyleEnd = menu.appendUiStyleEnd;
 pub const visibleWidth = menu.visibleWidth;
@@ -231,6 +232,7 @@ pub const RenderOptions = struct {
     completion_selection: usize = 0,
     completion_window_start: usize = 0,
     completion_label_width: ?usize = null,
+    menu_presentation: MenuPresentation = .{},
     suggestion: []const u8 = "",
     status_line: []const u8 = "",
     diagnostic_line: []const u8 = "",
@@ -245,7 +247,7 @@ pub const RenderOptions = struct {
     cursor_shape: CursorShape = .default,
 
     pub fn menuCandidateRows(self: RenderOptions) usize {
-        return menu.candidateRows(self.height);
+        return menu.candidateRows(self.height, self.menu_presentation);
     }
 };
 
@@ -336,6 +338,7 @@ pub fn frameFromInput(allocator: std.mem.Allocator, input: Input, options: Rende
         .height = options.height,
         .label_width_override = options.completion_label_width,
         .theme = options.theme,
+        .presentation = options.menu_presentation,
     });
 
     return .{

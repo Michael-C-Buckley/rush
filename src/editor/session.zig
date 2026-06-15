@@ -19,6 +19,7 @@ const max_vi_macro_depth = vi.max_macro_depth;
 pub const UnderlineStyle = render.UnderlineStyle;
 pub const UiStyle = render.UiStyle;
 pub const UiTheme = render.UiTheme;
+pub const MenuPresentation = render.MenuPresentation;
 pub const CursorShape = render.CursorShape;
 pub const Prompt = render.Prompt;
 pub const CompletionFlash = render.CompletionFlash;
