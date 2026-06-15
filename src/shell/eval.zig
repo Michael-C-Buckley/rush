@@ -7145,7 +7145,7 @@ fn evaluateCommandLookup(
     return normalEvaluation(1);
 }
 
-fn resolveExternalForEvaluation(
+pub fn resolveExternalForEvaluation(
     allocator: std.mem.Allocator,
     fs_port: ?runtime.fs.Port,
     shell_state: state.ShellState,

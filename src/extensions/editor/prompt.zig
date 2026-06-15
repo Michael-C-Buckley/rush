@@ -6,6 +6,7 @@ const builtin = @import("builtin");
 const editor_signal = @import("../../editor/signal.zig");
 const editor_render = @import("../../editor/render.zig");
 const api = @import("../api.zig");
+const compat = @import("../../shell/compat.zig");
 const shell_context = @import("../../shell/context.zig");
 const delta = @import("../../shell/delta.zig");
 const shell_builtin = @import("../../shell/builtin.zig");
@@ -25,6 +26,8 @@ pub const Builder = struct {
     async_state: ?*AsyncState = null,
     io: ?std.Io = null,
     now_ms: u64 = 0,
+    arg_zero: []const u8 = "rush",
+    features: compat.Features = .{},
 
     pub fn init(allocator: std.mem.Allocator) Builder {
         return .{ .allocator = allocator };
@@ -50,6 +53,7 @@ pub const AsyncState = struct {
     allocator: std.mem.Allocator = undefined,
     io: std.Io = undefined,
     redraw_fd: ?std.posix.fd_t = null,
+    task_scheduler: ?api.AsyncTaskScheduler = null,
     mutex: std.Io.Mutex = .init,
     entries: std.ArrayList(*AsyncEntry) = .empty,
 
@@ -62,7 +66,7 @@ pub const AsyncState = struct {
 
     pub fn deinit(self: *AsyncState) void {
         for (self.entries.items) |entry| {
-            if (entry.thread) |thread| thread.join();
+            if (entry.task) |task| task.join();
             self.allocator.free(entry.key);
             self.allocator.free(entry.cwd);
             self.allocator.free(entry.stdout);
@@ -109,21 +113,14 @@ pub const AsyncState = struct {
 };
 
 const AsyncEntry = struct {
+    state: *AsyncState,
     key: []const u8,
     cwd: []const u8,
     stdout: []const u8,
     updated_ms: u64 = 0,
     refreshing: bool = false,
     completed: bool = false,
-    thread: ?std.Thread = null,
-};
-
-const AsyncRequest = struct {
-    state: *AsyncState,
-    entry: *AsyncEntry,
-    io: std.Io,
-    cwd: []const u8,
-    argv: []const []const u8,
+    task: ?api.AsyncTask = null,
 };
 
 pub fn handlerFor(name: []const u8) ?api.HandlerSpec {
@@ -364,7 +361,14 @@ fn evaluatePromptAsync(handler_context: ?*anyopaque, invocation: *api.Invocation
     defer invocation.allocator.free(cached_stdout);
 
     try invocation.stdout.appendSlice(invocation.allocator, cached_stdout);
-    if (should_refresh) startPromptAsyncRefresh(async_state, io, entry, cwd, parsed.command, invocation) catch |err| {
+    if (should_refresh) startPromptAsyncRefresh(
+        async_state,
+        io,
+        entry,
+        parsed.command,
+        builder,
+        invocation,
+    ) catch |err| {
         async_state.lock();
         entry.refreshing = false;
         async_state.unlock();
@@ -412,6 +416,7 @@ fn asyncEntry(async_state: *AsyncState, key: []const u8, cwd: []const u8) !*Asyn
     const entry = try async_state.allocator.create(AsyncEntry);
     errdefer async_state.allocator.destroy(entry);
     entry.* = .{
+        .state = async_state,
         .key = try async_state.allocator.dupe(u8, key),
         .cwd = try async_state.allocator.dupe(u8, cwd),
         .stdout = try async_state.allocator.dupe(u8, ""),
@@ -427,92 +432,43 @@ fn startPromptAsyncRefresh(
     async_state: *AsyncState,
     io: std.Io,
     entry: *AsyncEntry,
-    cwd: []const u8,
     command: []const []const u8,
+    builder: *Builder,
     invocation: *api.Invocation,
 ) !void {
-    if (entry.thread) |thread| {
-        thread.join();
-        entry.thread = null;
-    }
+    const task_scheduler = async_state.task_scheduler orelse return;
+    if (entry.task) |task| task.join();
+    entry.task = null;
 
-    const request = try async_state.allocator.create(AsyncRequest);
-    errdefer async_state.allocator.destroy(request);
-    const argv = try async_state.allocator.alloc([]const u8, command.len);
-    errdefer async_state.allocator.free(argv);
-    var owned_count: usize = 0;
-    errdefer for (argv[0..owned_count]) |arg| async_state.allocator.free(arg);
-    for (command, 0..) |arg, index| {
-        argv[index] = try async_state.allocator.dupe(u8, arg);
-        owned_count += 1;
-    }
-    if (invocation.external_resolver) |resolver| {
-        if (try resolver.resolve(invocation.allocator, invocation.assignments, command[0])) |resolution| {
-            defer invocation.allocator.free(resolution.path);
-            async_state.allocator.free(argv[0]);
-            argv[0] = try async_state.allocator.dupe(u8, resolution.path);
-        }
-    }
-    request.* = .{
-        .state = async_state,
-        .entry = entry,
-        .io = io,
-        .cwd = try async_state.allocator.dupe(u8, cwd),
-        .argv = argv,
-    };
-    errdefer async_state.allocator.free(request.cwd);
-
-    entry.thread = try std.Thread.spawn(.{}, promptAsyncWorker, .{request});
+    entry.task = try task_scheduler.schedule(async_state.allocator, io, .{
+        .shell_state = invocation.shell_state,
+        .argv = command,
+        .arg_zero = builder.arg_zero,
+        .features = builder.features,
+        .complete_context = entry,
+        .complete = finishPromptAsyncRefresh,
+    });
 }
 
-fn promptAsyncWorker(request: *AsyncRequest) void {
-    const async_state = request.state;
-    const allocator = async_state.allocator;
-    defer {
-        for (request.argv) |arg| allocator.free(arg);
-        allocator.free(request.argv);
-        allocator.free(request.cwd);
-        allocator.destroy(request);
-    }
-
-    var stdout = runPromptAsyncCommand(allocator, request.io, request.cwd, request.argv) catch
-        allocator.dupe(u8, "") catch return;
-    errdefer allocator.free(stdout);
-    const updated_ms = nowMillis(request.io);
-
+fn finishPromptAsyncRefresh(context: ?*anyopaque, result: api.AsyncTaskResult) void {
+    const entry: *AsyncEntry = @ptrCast(@alignCast(context.?));
+    const async_state = entry.state;
+    const stdout = async_state.allocator.dupe(u8, result.stdout) catch {
+        async_state.lock();
+        entry.refreshing = false;
+        entry.completed = true;
+        async_state.unlock();
+        async_state.requestRedraw();
+        return;
+    };
     async_state.lock();
-    allocator.free(request.entry.stdout);
-    request.entry.stdout = stdout;
-    request.entry.updated_ms = updated_ms;
-    request.entry.refreshing = false;
-    request.entry.completed = true;
+    async_state.allocator.free(entry.stdout);
+    entry.stdout = stdout;
+    entry.updated_ms = nowMillis(async_state.io);
+    entry.refreshing = false;
+    entry.completed = true;
     async_state.unlock();
     async_state.requestRedraw();
-    stdout = &.{};
-}
-
-fn runPromptAsyncCommand(
-    allocator: std.mem.Allocator,
-    io: std.Io,
-    cwd: []const u8,
-    argv: []const []const u8,
-) ![]u8 {
-    const result = try std.process.run(allocator, io, .{
-        .argv = argv,
-        .cwd = .{ .path = cwd },
-        .stderr_limit = .limited(16 * 1024),
-        .stdout_limit = .limited(64 * 1024),
-        .expand_arg0 = .expand,
-    });
-    defer allocator.free(result.stderr);
-    switch (result.term) {
-        .exited => {},
-        .signal, .stopped, .unknown => {
-            allocator.free(result.stdout);
-            return allocator.dupe(u8, "");
-        },
-    }
-    return result.stdout;
 }
 
 fn nowMillis(io: std.Io) u64 {

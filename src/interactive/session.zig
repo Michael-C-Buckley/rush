@@ -356,6 +356,7 @@ pub fn run(
     if (interactive_shell.semantic_enabled) try syncSemanticTerminalSize(&interactive_shell.semantic_state, terminal);
     var prompt_async_state: prompt_mod.AsyncState = .{};
     prompt_async_state.init(io, terminal.promptRedrawWakeFd());
+    prompt_async_state.task_scheduler = prompt_mod.asyncTaskScheduler();
     defer prompt_async_state.deinit();
 
     repl_loop: while (true) {

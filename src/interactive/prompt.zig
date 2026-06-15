@@ -5,6 +5,7 @@ const std = @import("std");
 const extension_handlers = @import("../extensions/handlers.zig");
 const prompt_extension = @import("../extensions/editor/prompt.zig");
 const runtime = @import("../runtime.zig");
+const runner = @import("../runner.zig");
 const shell = @import("../shell.zig");
 const command_plan = @import("../shell/command_plan.zig");
 const extension_api = @import("../extensions/api.zig");
@@ -43,6 +44,8 @@ pub fn render(
     builder.async_state = options.async_state;
     builder.io = io;
     builder.now_ms = nowMillis(io);
+    builder.arg_zero = options.arg_zero;
+    builder.features = options.features;
 
     var lookup_context: PromptLookupContext = .{ .builder = &builder };
     var adapter = runtime.PosixAdapter.init(io);
@@ -83,6 +86,109 @@ const PromptLookupContext = struct {
 fn promptExtensionLookup(context: ?*anyopaque, name: []const u8) ?extension_api.HandlerSpec {
     const lookup_context: *PromptLookupContext = @ptrCast(@alignCast(context.?));
     if (prompt_extension.handlerForContext(name, lookup_context.builder)) |handler| return handler;
+    return extension_handlers.lookup(name);
+}
+
+pub fn asyncTaskScheduler() extension_api.AsyncTaskScheduler {
+    return .{ .schedule_fn = scheduleAsyncTask };
+}
+
+const AsyncTask = struct {
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    shell_state: shell.ShellState,
+    argv: []const []const u8,
+    arg_zero: []const u8,
+    features: shell.compat.Features,
+    complete_context: ?*anyopaque,
+    complete: extension_api.AsyncTaskComplete,
+    thread: std.Thread = undefined,
+
+    fn deinit(self: *AsyncTask) void {
+        self.shell_state.deinit();
+        for (self.argv) |arg| self.allocator.free(arg);
+        self.allocator.free(self.argv);
+        self.allocator.free(self.arg_zero);
+        self.* = undefined;
+    }
+
+    fn run(self: *AsyncTask) void {
+        self.shell_state.scope = .current_shell;
+        var result = runner.runHiddenShellStateCommandWithExtensionHandlers(
+            self.allocator,
+            self.io,
+            &self.shell_state,
+            self.argv,
+            self.arg_zero,
+            self.features,
+            .capture,
+            .{ .lookup = asyncTaskExtensionLookup },
+        ) catch {
+            self.complete(self.complete_context, .{ .status = 1, .stdout = "" });
+            return;
+        };
+        defer result.deinit();
+        self.complete(self.complete_context, .{
+            .status = result.status,
+            .stdout = result.stdout,
+            .stderr = result.stderr,
+        });
+    }
+};
+
+fn scheduleAsyncTask(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    context: ?*anyopaque,
+    request: extension_api.AsyncTaskRequest,
+) !extension_api.AsyncTask {
+    _ = context;
+    var task = try allocator.create(AsyncTask);
+    errdefer allocator.destroy(task);
+
+    const argv = try allocator.alloc([]const u8, request.argv.len);
+    errdefer allocator.free(argv);
+    var owned_arg_count: usize = 0;
+    errdefer for (argv[0..owned_arg_count]) |arg| allocator.free(arg);
+    for (request.argv, 0..) |arg, index| {
+        argv[index] = try allocator.dupe(u8, arg);
+        owned_arg_count += 1;
+    }
+
+    const arg_zero = try allocator.dupe(u8, request.arg_zero);
+    errdefer allocator.free(arg_zero);
+    var shell_state = request.shell_state.clone(allocator) catch |err| switch (err) {
+        error.OutOfMemory => return error.OutOfMemory,
+        error.ReadonlyVariable => unreachable,
+    };
+    errdefer shell_state.deinit();
+    task.* = .{
+        .allocator = allocator,
+        .io = io,
+        .shell_state = shell_state,
+        .argv = argv,
+        .arg_zero = arg_zero,
+        .features = request.features,
+        .complete_context = request.complete_context,
+        .complete = request.complete,
+    };
+    shell_state = undefined;
+    errdefer task.deinit();
+
+    task.thread = try std.Thread.spawn(.{}, AsyncTask.run, .{task});
+    return .{ .context = task, .join_fn = joinAsyncTask };
+}
+
+fn joinAsyncTask(context: *anyopaque) void {
+    const task: *AsyncTask = @ptrCast(@alignCast(context));
+    const allocator = task.allocator;
+    task.thread.join();
+    task.deinit();
+    allocator.destroy(task);
+}
+
+fn asyncTaskExtensionLookup(context: ?*anyopaque, name: []const u8) ?extension_api.HandlerSpec {
+    _ = context;
     return extension_handlers.lookup(name);
 }
 
@@ -137,6 +243,42 @@ test "interactive prompt async returns cached stdout after hidden refresh" {
 
     var async_state: AsyncState = .{};
     async_state.init(std.testing.io, null);
+    async_state.task_scheduler = asyncTaskScheduler();
+    defer async_state.deinit();
+
+    const first = try render(std.testing.allocator, std.testing.io, &shell_state, .{ .async_state = &async_state });
+    defer std.testing.allocator.free(first);
+    try std.testing.expectEqualStrings("[]", first);
+
+    var attempts: usize = 0;
+    while (!async_state.takeCompleted()) : (attempts += 1) {
+        if (attempts > 1_000_000) return error.AsyncPromptRefreshTimedOut;
+        std.atomic.spinLoopHint();
+    }
+
+    const second = try render(std.testing.allocator, std.testing.io, &shell_state, .{ .async_state = &async_state });
+    defer std.testing.allocator.free(second);
+    try std.testing.expectEqualStrings("[async]", second);
+}
+
+test "interactive prompt async runs shell functions in hidden refresh" {
+    var shell_state = shell.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    try shell_state.putFunction(.{
+        .name = "rush_prompt",
+        .source_body =
+        \\value="$(prompt_async sample --ttl 10000 -- rush_prompt_value)"
+        \\prompt text "[$value]"
+        ,
+    });
+    try shell_state.putFunction(.{
+        .name = "rush_prompt_value",
+        .source_body = "/usr/bin/printf async",
+    });
+
+    var async_state: AsyncState = .{};
+    async_state.init(std.testing.io, null);
+    async_state.task_scheduler = asyncTaskScheduler();
     defer async_state.deinit();
 
     const first = try render(std.testing.allocator, std.testing.io, &shell_state, .{ .async_state = &async_state });

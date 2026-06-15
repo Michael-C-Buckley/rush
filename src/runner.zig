@@ -474,6 +474,62 @@ pub fn runShellStateScriptWithExtensionHandlers(
     }
 }
 
+pub fn runHiddenShellStateCommandWithExtensionHandlers(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    shell_state: *shell.ShellState,
+    argv: []const []const u8,
+    arg_zero: []const u8,
+    features: compat.Features,
+    external_stdio: runtime.ExternalStdio,
+    extension_handlers: ExtensionHandlers,
+) !CommandResult {
+    shell_state.validate();
+    std.debug.assert(shell_state.scope == .current_shell);
+    std.debug.assert(argv.len != 0);
+    std.debug.assert(arg_zero.len != 0);
+
+    var adapter = runtime.PosixAdapter.init(io);
+    var evaluator = shell.eval.Evaluator.initWithRuntimePorts(allocator, runtime.posixPorts(&adapter));
+    evaluator.features = features;
+    evaluator.arg_zero = arg_zero;
+    evaluator.io = io;
+    evaluator.read_stdin_from_fd = true;
+    evaluator.external_stdio = external_stdio;
+    extension_handlers.apply(&evaluator);
+
+    const command: shell.command_plan.ExpandedSimpleCommand = .{ .argv = argv };
+    var functions: std.ArrayList(shell.command_plan.FunctionDefinition) = .empty;
+    defer functions.deinit(allocator);
+    var function_iterator = shell_state.functions.iterator();
+    while (function_iterator.next()) |entry| try functions.append(allocator, entry.value_ptr.*);
+
+    const external = try shell.eval.resolveExternalForEvaluation(allocator, evaluator.fs_port, shell_state.*, command);
+    defer if (external) |resolution| allocator.free(resolution.path);
+    const externals = if (external) |*resolution|
+        @as([]const shell.command_plan.ExternalResolution, resolution[0..1])
+    else
+        &.{};
+    const plan = shell.command_plan.classifyExpandedSimpleCommand(.{
+        .command = command,
+        .lookup = .{ .functions = functions.items, .externals = externals },
+        .target = .current_shell,
+    });
+    const eval_context = shell.EvalContext.init(.{
+        .target = plan.target,
+        .source = .interactive,
+        .interactive = true,
+    });
+    var outcome = try shell.eval.evaluatePlan(&evaluator, shell_state, eval_context, plan);
+    defer outcome.deinit();
+    return .{
+        .allocator = allocator,
+        .status = outcome.status,
+        .stdout = try allocator.dupe(u8, outcome.stdout.items),
+        .stderr = try allocator.dupe(u8, outcome.stderr.items),
+    };
+}
+
 fn runSemanticShellStateScriptWithoutAliasTiming(
     allocator: std.mem.Allocator,
     io: std.Io,

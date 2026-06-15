@@ -4,6 +4,7 @@ const std = @import("std");
 
 const builtin = @import("../shell/builtin.zig");
 const command_plan = @import("../shell/command_plan.zig");
+const compat = @import("../shell/compat.zig");
 const context = @import("../shell/context.zig");
 const delta = @import("../shell/delta.zig");
 const outcome = @import("../shell/outcome.zig");
@@ -27,6 +28,46 @@ pub const Handler = *const fn (?*anyopaque, *Invocation) anyerror!EvaluationResu
 pub const HandlerSpec = struct {
     context: ?*anyopaque = null,
     handler: Handler,
+};
+
+pub const AsyncTaskResult = struct {
+    status: outcome.ExitStatus,
+    stdout: []const u8,
+    stderr: []const u8 = &.{},
+};
+
+pub const AsyncTaskComplete = *const fn (?*anyopaque, AsyncTaskResult) void;
+
+pub const AsyncTaskRequest = struct {
+    shell_state: state.ShellState,
+    argv: []const []const u8,
+    arg_zero: []const u8,
+    features: compat.Features,
+    complete_context: ?*anyopaque = null,
+    complete: AsyncTaskComplete,
+};
+
+pub const AsyncTask = struct {
+    context: *anyopaque,
+    join_fn: *const fn (*anyopaque) void,
+
+    pub fn join(self: AsyncTask) void {
+        self.join_fn(self.context);
+    }
+};
+
+pub const AsyncTaskScheduler = struct {
+    context: ?*anyopaque = null,
+    schedule_fn: *const fn (std.mem.Allocator, std.Io, ?*anyopaque, AsyncTaskRequest) anyerror!AsyncTask,
+
+    pub fn schedule(
+        self: AsyncTaskScheduler,
+        allocator: std.mem.Allocator,
+        io: std.Io,
+        request: AsyncTaskRequest,
+    ) !AsyncTask {
+        return self.schedule_fn(allocator, io, self.context, request);
+    }
 };
 
 pub const FunctionScope = struct {
