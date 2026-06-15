@@ -19,6 +19,36 @@
             .status = 0,
         },
         .{
+            .name = "set without operands unsets all positional parameters",
+            .script =
+            \\set -- a b
+            \\set --
+            \\printf '<%s>:<%s>\n' "$#" "${1-unset}"
+            ,
+            .stdout =
+            \\<0>:<unset>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "multi-digit positional parameters require braces and use decimal indices",
+            .script =
+            \\set -- x 2 3 4 5 6 7 eight 9 ten
+            \\printf '<%s>\n' "${08}" "${008}" "${10}" "$10"
+            ,
+            .stdout =
+            \\<eight>
+            \\<eight>
+            \\<ten>
+            \\<x0>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "double-quoted at expands positional parameters as separate fields",
             .script =
             \\set -- a 'b c' ''
@@ -31,6 +61,20 @@
             \\<b c>
             \\<>
             \\<end>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "embedded double-quoted at joins the first and last generated fields",
+            .script =
+            \\set -- A B
+            \\printf '<%s>\n' "pre$@post"
+            ,
+            .stdout =
+            \\<preA>
+            \\<Bpost>
             \\
             ,
             .stderr = "",
@@ -54,6 +98,36 @@
             .status = 0,
         },
         .{
+            .name = "double-quoted star uses space as the separator when IFS is unset",
+            .script =
+            \\set -- a 'b c' d
+            \\unset IFS
+            \\printf '<%s>\n' "$*"
+            ,
+            .stdout =
+            \\<a b c d>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "null variable values are set values and unset removes them",
+            .script =
+            \\x=
+            \\printf '<%s>:<%s>\n' "${x+set}" "${x-unset}"
+            \\unset x
+            \\printf '<%s>\n' "${x-unset}"
+            ,
+            .stdout =
+            \\<set>:<>
+            \\<unset>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "question mark expands to the most recent pipeline status",
             .script =
             \\false
@@ -70,6 +144,21 @@
             .status = 0,
         },
         .{
+            .name = "zero expands to a non-empty command name parameter",
+            .script =
+            \\case $0 in
+            \\    '') printf '<bad>\n' ;;
+            \\    *) printf '<arg0>\n' ;;
+            \\esac
+            ,
+            .stdout =
+            \\<arg0>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "dollar expands to the shell process id",
             .script =
             \\case $$ in
@@ -79,6 +168,44 @@
             ,
             .stdout =
             \\pid
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "bang expands to the most recent asynchronous list process id",
+            .script =
+            \\sleep 0.1 &
+            \\pid=$!
+            \\case $pid in
+            \\    ''|*[!0123456789]*) printf '<bad>\n' ;;
+            \\    *) printf '<pid>\n' ;;
+            \\esac
+            \\wait
+            ,
+            .stdout =
+            \\<pid>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "PPID is a numeric parent process id preserved in subshells",
+            .script =
+            \\case $PPID in
+            \\    ''|*[!0123456789]*) printf '<bad>\n' ;;
+            \\    *) printf '<ppid>\n' ;;
+            \\esac
+            \\outer=$PPID
+            \\(printf '%s' "$PPID" >inner)
+            \\inner=$(cat inner)
+            \\if [ "$outer" = "$inner" ]; then printf '<same>\n'; else printf '<diff>\n'; fi
+            ,
+            .stdout =
+            \\<ppid>
+            \\<same>
             \\
             ,
             .stderr = "",
