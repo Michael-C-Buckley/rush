@@ -867,7 +867,12 @@ const TrapActionLowerer = struct {
                 .failure => |trap_failure| return .{ .failure = trap_failure },
                 .list => |list| list,
             };
-            arms[arm_index] = .{ .patterns = patterns, .body = body, .fallthrough = arm.fallthrough };
+            arms[arm_index] = .{
+                .patterns = patterns,
+                .body = body,
+                .fallthrough = arm.fallthrough,
+                .test_next = arm.test_next,
+            };
         }
         const word = try self.expandScalar(command.word.raw, target);
         const plan: command_plan.CompoundCommandPlan = .{
@@ -4225,7 +4230,13 @@ fn evaluateCaseClause(
             );
             status = result.status;
             control_flow = result.control_flow;
-            if (control_flow != .normal or !arm.fallthrough) return .{ .status = status, .control_flow = control_flow };
+            if (control_flow != .normal) return .{ .status = status, .control_flow = control_flow };
+            if (arm.fallthrough) continue;
+            if (arm.test_next) {
+                matched = false;
+                continue;
+            }
+            return .{ .status = status, .control_flow = control_flow };
         }
     }
     return if (matched) .{ .status = status, .control_flow = control_flow } else normalEvaluation(0);
@@ -12137,6 +12148,29 @@ test "semantic evaluator evaluates compound if loop for and case forms" {
     try fallthrough_result.commitDelta(&shell_state, .current_shell);
     try std.testing.expectEqualStrings("yes", shell_state.getVariable("CASE_FALLTHROUGH_FIRST").?.value);
     try std.testing.expectEqualStrings("yes", shell_state.getVariable("CASE_FALLTHROUGH_SECOND").?.value);
+
+    const test_next_first_assignment = [_]command_plan.Assignment{.{ .name = "CASE_TEST_NEXT_FIRST", .value = "yes" }};
+    const test_next_second_assignment = [_]command_plan.Assignment{.{ .name = "CASE_TEST_NEXT_SECOND", .value = "yes" }};
+    const test_next_first_body = [_]command_plan.CommandPlan{command_plan.classifyExpandedSimpleCommand(
+        .{ .command = .{ .assignments = &test_next_first_assignment } },
+    )};
+    const test_next_second_body = [_]command_plan.CommandPlan{command_plan.classifyExpandedSimpleCommand(
+        .{ .command = .{ .assignments = &test_next_second_assignment } },
+    )};
+    const test_next_arms = [_]command_plan.CaseArm{
+        .{ .patterns = &[_][]const u8{"test"}, .body = .{ .commands = &test_next_first_body }, .test_next = true },
+        .{ .patterns = &[_][]const u8{"test"}, .body = .{ .commands = &test_next_second_body } },
+    };
+    const test_next_plan: command_plan.CompoundCommandPlan = .{
+        .target = .current_shell,
+        .body = .{ .case_clause = .{ .word = "test", .arms = &test_next_arms } },
+    };
+    var test_next_result = try evaluateCompoundPlan(&evaluator, &shell_state, eval_context, test_next_plan);
+    defer test_next_result.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 0), test_next_result.status);
+    try test_next_result.commitDelta(&shell_state, .current_shell);
+    try std.testing.expectEqualStrings("yes", shell_state.getVariable("CASE_TEST_NEXT_FIRST").?.value);
+    try std.testing.expectEqualStrings("yes", shell_state.getVariable("CASE_TEST_NEXT_SECOND").?.value);
 }
 
 test "semantic evaluator applies compound command commit and discard boundaries" {

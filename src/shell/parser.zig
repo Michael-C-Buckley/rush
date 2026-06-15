@@ -59,6 +59,7 @@ pub const TokenKind = enum {
     semicolon,
     dsemicolon,
     semicolon_amp,
+    semicolon_amp_amp,
     ampersand,
     left_paren,
     right_paren,
@@ -88,6 +89,7 @@ pub const TokenKind = enum {
             .semicolon,
             .dsemicolon,
             .semicolon_amp,
+            .semicolon_amp_amp,
             .ampersand,
             .left_paren,
             .right_paren,
@@ -292,7 +294,10 @@ const Lexer = struct {
         const kind: TokenKind = switch (self.peek()) {
             '|' => if (self.matchNext('|')) .or_if else .pipe,
             '&' => if (self.matchNext('&')) .and_if else .ampersand,
-            ';' => if (self.matchNext(';')) .dsemicolon else if (self.matchNext('&')) .semicolon_amp else .semicolon,
+            ';' => if (self.startsWith(";;&")) blk: {
+                self.index += 2;
+                break :blk .semicolon_amp_amp;
+            } else if (self.matchNext(';')) .dsemicolon else if (self.matchNext('&')) .semicolon_amp else .semicolon,
             '(' => .left_paren,
             ')' => .right_paren,
             '<' => if (self.matchNext('<')) blk: {
@@ -531,6 +536,14 @@ const Lexer = struct {
         if (self.index + 1 >= self.source.len or self.source[self.index + 1] != c) return false;
         self.index += 1;
         return true;
+    }
+
+    fn startsWith(self: Lexer, text: []const u8) bool {
+        return self.index + text.len <= self.source.len and std.mem.eql(
+            u8,
+            self.source[self.index..][0..text.len],
+            text,
+        );
     }
 
     fn isAtEnd(self: Lexer) bool {
@@ -2795,7 +2808,7 @@ const SyntaxParser = struct {
         var saw_pattern_end = false;
 
         while (!self.at(.eof)) {
-            if (self.at(.dsemicolon) or self.at(.semicolon_amp)) break;
+            if (self.at(.dsemicolon) or self.at(.semicolon_amp) or self.at(.semicolon_amp_amp)) break;
             if (self.atWord("esac") and !self.esacStartsCaseItemPattern()) break;
             try self.appendCurrentTokenChildTo(&item_children);
             if (self.previousToken().kind == .right_paren) {
@@ -2805,10 +2818,14 @@ const SyntaxParser = struct {
         }
 
         if (saw_pattern_end) {
-            const body = try self.parseListUntil(&.{"esac"}, &.{ .dsemicolon, .semicolon_amp });
+            const body = try self.parseListUntil(&.{"esac"}, &.{ .dsemicolon, .semicolon_amp, .semicolon_amp_amp });
             try item_children.append(self.allocator, .{ .node = body });
-            if (self.at(.dsemicolon) or self.at(.semicolon_amp)) try self.appendCurrentTokenChildTo(&item_children);
-        } else if (self.at(.dsemicolon) or self.at(.semicolon_amp)) {
+            if (self.atCaseTerminator()) {
+                if (self.features.strict_posix and self.at(.semicolon_amp_amp)) try self.appendCaseTestNextDiagnostic();
+                try self.appendCurrentTokenChildTo(&item_children);
+            }
+        } else if (self.atCaseTerminator()) {
+            if (self.features.strict_posix and self.at(.semicolon_amp_amp)) try self.appendCaseTestNextDiagnostic();
             try self.appendCurrentTokenChildTo(&item_children);
         }
 
@@ -2825,6 +2842,18 @@ const SyntaxParser = struct {
         try self.children.appendSlice(self.allocator, item_children.items);
         const span = spanForTokenRange(self.tokens, token_start, token_end);
         return self.addNode(.case_item, span, token_start, token_end, child_start, self.children.items.len);
+    }
+
+    fn atCaseTerminator(self: SyntaxParser) bool {
+        return self.at(.dsemicolon) or self.at(.semicolon_amp) or self.at(.semicolon_amp_amp);
+    }
+
+    fn appendCaseTestNextDiagnostic(self: *SyntaxParser) !void {
+        try self.diagnostics.append(self.allocator, .{
+            .kind = .parse_error,
+            .span = self.current().span,
+            .message = ";;& is not defined by POSIX",
+        });
     }
 
     fn esacStartsCaseItemPattern(self: SyntaxParser) bool {
@@ -3762,6 +3791,7 @@ fn isListSeparator(kind: TokenKind) bool {
         .semicolon,
         .dsemicolon,
         .semicolon_amp,
+        .semicolon_amp_amp,
         .ampersand,
         => true,
         else => false,
@@ -4824,6 +4854,27 @@ test "parser accepts POSIX case edge items" {
     }
     try std.testing.expect(saw_case);
     try std.testing.expectEqual(@as(usize, 3), item_count);
+}
+
+test "parser accepts bash case test-next terminator by default" {
+    var result = try parse(std.testing.allocator, "case b in b) echo b ;;& *) echo fallback ;; esac", .{});
+    defer result.deinit();
+
+    var item_count: usize = 0;
+    for (result.nodes) |node| {
+        if (node.kind == .case_item) item_count += 1;
+    }
+    try std.testing.expectEqual(@as(usize, 2), item_count);
+    try std.testing.expectEqual(@as(usize, 0), result.diagnostics.len);
+
+    var posix_result = try parse(
+        std.testing.allocator,
+        "case b in b) echo b ;;& *) echo fallback ;; esac",
+        .{ .features = .strictPosix() },
+    );
+    defer posix_result.deinit();
+    try std.testing.expectEqual(@as(usize, 1), posix_result.diagnostics.len);
+    try std.testing.expectEqualStrings(";;& is not defined by POSIX", posix_result.diagnostics[0].message);
 }
 
 test "parser treats reserved-looking words literally in POSIX case item bodies" {

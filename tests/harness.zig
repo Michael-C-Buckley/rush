@@ -4,6 +4,7 @@ const std = @import("std");
 
 const Mode = enum {
     posix,
+    bash,
 };
 
 const Suite = struct {
@@ -206,6 +207,7 @@ fn parseArgs(allocator: std.mem.Allocator, args: []const []const u8) !?Config {
 
 fn parseMode(text: []const u8) ?Mode {
     if (std.mem.eql(u8, text, "posix")) return .posix;
+    if (std.mem.eql(u8, text, "bash")) return .bash;
     return null;
 }
 
@@ -243,6 +245,7 @@ fn discoverSuiteFiles(
 fn suiteDir(mode: Mode) []const u8 {
     return switch (mode) {
         .posix => "tests/posix",
+        .bash => "tests/bash",
     };
 }
 
@@ -399,6 +402,7 @@ fn runRush(
 
     const argv = switch (config.mode) {
         .posix => &[_][]const u8{ config.rush_path.?, "-c", script },
+        .bash => &[_][]const u8{ config.rush_path.?, "-c", script },
     };
     return runCommand(allocator, io, cwd, argv);
 }
@@ -514,7 +518,8 @@ fn printBytesMismatch(
 
 fn writeUsage(io: std.Io) !void {
     const usage =
-        \\usage: conformance-harness (--rush PATH | --shell SHELL [--shell-arg ARG...]) --mode posix [FILE...]
+        \\usage: conformance-harness (--rush PATH | --shell SHELL [--shell-arg ARG...]) --mode MODE [FILE...]
+        \\modes: posix, bash
         \\
     ;
     var buffer: [256]u8 = undefined;

@@ -165,5 +165,11 @@
 <span class="kw">esac</span></pre>
 
   <p>Rush and modern Bash POSIX mode print both lines. Bash 3.2 POSIX mode rejects <code>;&amp;</code> as a syntax error.</p>
+
+  <h4 id="case-test-next-posix"><a href="#case-test-next-posix">Bash case test-next with ;;&amp; in POSIX mode</a></h4>
+
+  <p>Rush supports the Bash-style <code>;;&amp;</code> case clause terminator in its default mode, but rejects it when <code>--posix</code> is requested because POSIX defines <code>;;</code> and <code>;&amp;</code>, not <code>;;&amp;</code>.</p>
+
+  <p>Bash 5.3 accepts <code>;;&amp;</code> even when started with <code>--posix</code>. Rush intentionally diverges there so <code>--posix</code> remains a stricter POSIX-facing mode.</p>
 </body>
 </html>

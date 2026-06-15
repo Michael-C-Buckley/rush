@@ -13,13 +13,14 @@ pub const Mode = enum {
 pub const Features = struct {
     mode: Mode = .posix,
     strict_diagnostics: bool = false,
+    strict_posix: bool = false,
 
     pub fn posix() Features {
         return .{ .mode = .posix };
     }
 
     pub fn strictPosix() Features {
-        return .{ .mode = .posix, .strict_diagnostics = true };
+        return .{ .mode = .posix, .strict_diagnostics = true, .strict_posix = true };
     }
 
     pub fn withStrictDiagnostics(self: Features) Features {
@@ -47,10 +48,12 @@ test "strict POSIX diagnostics can be requested explicitly" {
     const features = Features.strictPosix();
     try std.testing.expectEqual(Mode.posix, features.mode);
     try std.testing.expect(features.strict_diagnostics);
+    try std.testing.expect(features.strict_posix);
 
     const strict_bash = Features.bash().withStrictDiagnostics();
     try std.testing.expectEqual(Mode.bash, strict_bash.mode);
     try std.testing.expect(strict_bash.strict_diagnostics);
+    try std.testing.expect(!strict_bash.strict_posix);
 }
 
 test "Bash compatibility can be requested explicitly" {

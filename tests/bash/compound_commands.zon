@@ -1,0 +1,23 @@
+.{
+    .name = "Bash compound commands",
+    .mode = .bash,
+    .cases = .{
+        .{
+            .name = "case command ;;& continues by testing the next pattern",
+            .script =
+            \\case a in
+            \\    a) printf 'one\n' ;;&
+            \\    a) printf 'two\n' ;;
+            \\    *) printf 'bad\n' ;;
+            \\esac
+            ,
+            .stdout =
+            \\one
+            \\two
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+    },
+}

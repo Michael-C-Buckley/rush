@@ -159,9 +159,11 @@ pub const CaseArm = struct {
     patterns: []const []const u8,
     body: StatementList,
     fallthrough: bool = false,
+    test_next: bool = false,
 
     pub fn validate(self: CaseArm) void {
         std.debug.assert(self.patterns.len != 0);
+        std.debug.assert(!(self.fallthrough and self.test_next));
         for (self.patterns) |pattern| std.debug.assert(std.mem.indexOfScalar(u8, pattern, 0) == null);
         self.body.validate();
     }
@@ -1166,7 +1168,7 @@ fn cloneCaseArm(allocator: std.mem.Allocator, arm: CaseArm) std.mem.Allocator.Er
     }
     const body = try cloneStatementList(allocator, arm.body);
     errdefer freeStatementList(allocator, body);
-    return .{ .patterns = patterns, .body = body, .fallthrough = arm.fallthrough };
+    return .{ .patterns = patterns, .body = body, .fallthrough = arm.fallthrough, .test_next = arm.test_next };
 }
 
 fn freeCaseArm(allocator: std.mem.Allocator, arm: CaseArm) void {

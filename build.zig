@@ -161,25 +161,35 @@ fn addConformanceTests(
         }),
     });
 
-    const run_posix = b.addRunArtifact(harness);
     if (b.args) |args| {
         if (usesCustomConformanceRunner(args)) {
+            const run_posix = b.addRunArtifact(harness);
             run_posix.addArgs(args);
+            conformance_step.dependOn(&run_posix.step);
         } else {
+            const run_posix = b.addRunArtifact(harness);
             run_posix.addArg("--rush");
             run_posix.addArtifactArg(rush);
             run_posix.addArg("--mode");
             run_posix.addArg("posix");
             run_posix.addArgs(args);
+            conformance_step.dependOn(&run_posix.step);
         }
     } else {
+        const run_posix = b.addRunArtifact(harness);
         run_posix.addArg("--rush");
         run_posix.addArtifactArg(rush);
         run_posix.addArg("--mode");
         run_posix.addArg("posix");
-    }
+        conformance_step.dependOn(&run_posix.step);
 
-    conformance_step.dependOn(&run_posix.step);
+        const run_bash = b.addRunArtifact(harness);
+        run_bash.addArg("--rush");
+        run_bash.addArtifactArg(rush);
+        run_bash.addArg("--mode");
+        run_bash.addArg("bash");
+        conformance_step.dependOn(&run_bash.step);
+    }
 }
 
 fn usesCustomConformanceRunner(args: []const []const u8) bool {

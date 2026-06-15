@@ -79,6 +79,7 @@ pub const CaseArm = struct {
     patterns: []WordRef,
     body: []const u8,
     fallthrough: bool = false,
+    test_next: bool = false,
 };
 
 pub const CaseCommand = struct {
@@ -1088,6 +1089,8 @@ fn lowerCaseCommand(allocator: std.mem.Allocator, parsed: parser.ParseResult, no
             .body = spanSlice(parsed, body_start, body_end),
             .fallthrough = child_node.token_end > child_node.token_start and
                 parsed.tokens[child_node.token_end - 1].kind == .semicolon_amp,
+            .test_next = child_node.token_end > child_node.token_start and
+                parsed.tokens[child_node.token_end - 1].kind == .semicolon_amp_amp,
         });
     }
 
@@ -1106,7 +1109,7 @@ fn lowerCaseCommand(allocator: std.mem.Allocator, parsed: parser.ParseResult, no
 }
 
 fn caseArmHasTerminator(kind: parser.TokenKind) bool {
-    return kind == .dsemicolon or kind == .semicolon_amp;
+    return kind == .dsemicolon or kind == .semicolon_amp or kind == .semicolon_amp_amp;
 }
 
 fn lowerForCommand(allocator: std.mem.Allocator, parsed: parser.ParseResult, node: parser.Node) !ForCommand {
