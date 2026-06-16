@@ -251,6 +251,10 @@ const Lexer = struct {
 
         while (!self.isAtEnd()) {
             const c = self.peek();
+            if (c == '\\' and self.peekNextIs('\n')) {
+                self.index += 2;
+                continue;
+            }
             switch (c) {
                 ' ', '\t', '\r' => try self.scanWhitespace(),
                 '\n' => try self.addAndAdvance(.newline, 1),
@@ -378,6 +382,10 @@ const Lexer = struct {
     fn consumeBackslash(self: *Lexer) void {
         self.index += 1;
         if (!self.isAtEnd()) self.index += 1;
+    }
+
+    fn peekNextIs(self: Lexer, expected: u8) bool {
+        return self.index + 1 < self.source.len and self.source[self.index + 1] == expected;
     }
 
     fn consumeBackquoted(self: *Lexer) !void {

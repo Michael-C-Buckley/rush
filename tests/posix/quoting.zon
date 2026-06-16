@@ -30,6 +30,21 @@
             .status = 0,
         },
         .{
+            .name = "comments are recognized after backslash-newline removal",
+            .script =
+            \\printf '%s\n' foo \
+            \\# comment
+            \\printf '%s\n' bar
+            ,
+            .stdout =
+            \\foo
+            \\bar
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "single quotes preserve literal text",
             .script =
             \\x=value
