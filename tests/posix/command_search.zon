@@ -373,6 +373,29 @@
             .status = 0,
         },
         .{
+            .name = "command -v and -V report aliases",
+            .script =
+            \\alias ll='ls -l'
+            \\lookup=$(command -v ll)
+            \\case $lookup in
+            \\    *ll*'ls -l'*) printf '<%s>\n' terse ;;
+            \\    *) printf '<%s>\n' bad ;;
+            \\esac
+            \\lookup=$(command -V ll)
+            \\case $lookup in
+            \\    *ll*'ls -l'*) printf '<%s>\n' verbose ;;
+            \\    *) printf '<%s>\n' bad ;;
+            \\esac
+            ,
+            .stdout =
+            \\<terse>
+            \\<verbose>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "command -v reports a found PATH utility pathname",
             .script =
             \\PATH=/bin command -v sh

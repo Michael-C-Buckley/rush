@@ -8273,6 +8273,24 @@ fn evaluateCommandLookup(
     use_default_path: bool,
     buffers: *EvaluationBuffers,
 ) EvalError!SimpleEvalResult {
+    if (isAliasName(name)) {
+        if (shell_state.getAlias(name)) |alias| {
+            switch (format) {
+                .terse => {
+                    try buffers.stdout.print(buffers.allocator, "alias {s}=", .{name});
+                    try appendShellSingleQuoted(buffers.allocator, &buffers.stdout, alias.value);
+                    try buffers.stdout.append(buffers.allocator, '\n');
+                },
+                .verbose => try buffers.stdout.print(
+                    buffers.allocator,
+                    "{s} is an alias for {s}\n",
+                    .{ name, alias.value },
+                ),
+            }
+            return normalEvaluation(0);
+        }
+    }
+
     if (isShellName(name) and shell_state.getFunction(name) != null) {
         switch (format) {
             .terse => try buffers.stdout.print(buffers.allocator, "{s}\n", .{name}),
