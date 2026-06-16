@@ -1539,7 +1539,7 @@ fn appendExpandedReplacement(
 
 fn findPatternMatch(value: []const u8, pattern: ExpansionPattern, start_index: usize, extglob: bool) ?PatternMatch {
     var start = start_index;
-    while (start <= value.len) : (start += 1) {
+    while (start <= value.len) : (start = nextCharacterIndex(value, start)) {
         var end = value.len;
         while (end >= start) {
             if (globPatternMatchesWithOptions(
@@ -1548,8 +1548,9 @@ fn findPatternMatch(value: []const u8, pattern: ExpansionPattern, start_index: u
                 .{ .extglob = extglob },
             )) return .{ .start = start, .end = end };
             if (end == start) break;
-            end -= 1;
+            end = previousCharacterIndex(value, end);
         }
+        if (start == value.len) break;
     }
     return null;
 }
@@ -1559,15 +1560,16 @@ fn findPrefixPatternMatch(value: []const u8, pattern: ExpansionPattern, extglob:
     while (true) {
         if (globPatternMatchesWithOptions(pattern, value[0..end], .{ .extglob = extglob })) return end;
         if (end == 0) break;
-        end -= 1;
+        end = previousCharacterIndex(value, end);
     }
     return null;
 }
 
 fn findSuffixPatternMatch(value: []const u8, pattern: ExpansionPattern, extglob: bool) ?usize {
     var start: usize = 0;
-    while (start <= value.len) : (start += 1) {
+    while (start <= value.len) : (start = nextCharacterIndex(value, start)) {
         if (globPatternMatchesWithOptions(pattern, value[start..], .{ .extglob = extglob })) return start;
+        if (start == value.len) break;
     }
     return null;
 }
@@ -2399,29 +2401,31 @@ fn removePattern(
                     .{ .extglob = extglob },
                 )) break :blk allocator.dupe(u8, value[0..start]);
                 if (start == 0) break;
-                start -= 1;
+                start = previousCharacterIndex(value, start);
             }
             break :blk allocator.dupe(u8, value);
         },
         .remove_large_suffix => blk: {
             var start: usize = 0;
-            while (start <= value.len) : (start += 1) {
+            while (start <= value.len) : (start = nextCharacterIndex(value, start)) {
                 if (globPatternMatchesWithOptions(
                     pattern,
                     value[start..],
                     .{ .extglob = extglob },
                 )) break :blk allocator.dupe(u8, value[0..start]);
+                if (start == value.len) break;
             }
             break :blk allocator.dupe(u8, value);
         },
         .remove_small_prefix => blk: {
             var end: usize = 0;
-            while (end <= value.len) : (end += 1) {
+            while (end <= value.len) : (end = nextCharacterIndex(value, end)) {
                 if (globPatternMatchesWithOptions(
                     pattern,
                     value[0..end],
                     .{ .extglob = extglob },
                 )) break :blk allocator.dupe(u8, value[end..]);
+                if (end == value.len) break;
             }
             break :blk allocator.dupe(u8, value);
         },
@@ -2434,7 +2438,7 @@ fn removePattern(
                     .{ .extglob = extglob },
                 )) break :blk allocator.dupe(u8, value[end..]);
                 if (end == 0) break;
-                end -= 1;
+                end = previousCharacterIndex(value, end);
             }
             break :blk allocator.dupe(u8, value);
         },
@@ -6323,6 +6327,25 @@ fn isGlobSpecial(special: ?[]const bool, index: usize) bool {
     return if (special) |mask| mask[index] else true;
 }
 
+fn nextCharacterIndex(text: []const u8, index: usize) usize {
+    if (index >= text.len) return text.len;
+    const width = std.unicode.utf8ByteSequenceLength(text[index]) catch 1;
+    const end = @min(text.len, index + width);
+    if (end > index and std.unicode.utf8ValidateSlice(text[index..end])) return end;
+    return index + 1;
+}
+
+fn previousCharacterIndex(text: []const u8, end: usize) usize {
+    std.debug.assert(end <= text.len);
+    var index: usize = 0;
+    var previous: usize = 0;
+    while (index < end) {
+        previous = index;
+        index = nextCharacterIndex(text, index);
+    }
+    return previous;
+}
+
 fn globMatchesAt(
     pattern: []const u8,
     special: ?[]const bool,
@@ -6342,9 +6365,10 @@ fn globMatchesAt(
     switch (pattern[pattern_index]) {
         '*' => if (isGlobSpecial(special, pattern_index)) {
             var next_text = text_index;
-            while (true) : (next_text += 1) {
+            while (true) {
                 if (globMatchesAt(pattern, special, options, pattern_index + 1, text, next_text)) return true;
                 if (next_text == text.len) break;
+                next_text = nextCharacterIndex(text, next_text);
             }
             return false;
         } else {
@@ -6355,7 +6379,11 @@ fn globMatchesAt(
         '?' => {
             if (text_index >= text.len) return false;
             if (!isGlobSpecial(special, pattern_index) and pattern[pattern_index] != text[text_index]) return false;
-            return globMatchesAt(pattern, special, options, pattern_index + 1, text, text_index + 1);
+            const next_text = if (isGlobSpecial(special, pattern_index))
+                nextCharacterIndex(text, text_index)
+            else
+                text_index + 1;
+            return globMatchesAt(pattern, special, options, pattern_index + 1, text, next_text);
         },
         '[' => if (isGlobSpecial(special, pattern_index)) {
             if (matchBracket(pattern, special, pattern_index, text, text_index)) |matched| {
@@ -6365,7 +6393,7 @@ fn globMatchesAt(
                     options,
                     matched.next_pattern,
                     text,
-                    text_index + 1,
+                    matched.next_text,
                 );
             }
             if (text_index >= text.len) return false;
@@ -6617,7 +6645,7 @@ fn nextExtglobAlternative(
     return .{ .start = start, .end = body_end, .next = null };
 }
 
-const BracketMatch = struct { ok: bool, next_pattern: usize };
+const BracketMatch = struct { ok: bool, next_pattern: usize, next_text: usize };
 
 fn matchBracket(
     pattern: []const u8,
@@ -6626,7 +6654,8 @@ fn matchBracket(
     text: []const u8,
     text_index: usize,
 ) ?BracketMatch {
-    if (text_index >= text.len) return .{ .ok = false, .next_pattern = pattern_index + 1 };
+    if (text_index >= text.len) return .{ .ok = false, .next_pattern = pattern_index + 1, .next_text = text_index };
+    const text_end = nextCharacterIndex(text, text_index);
     var index = pattern_index + 1;
     if (index >= pattern.len) return null;
     const negated = pattern[index] == '!' or pattern[index] == '^';
@@ -6656,10 +6685,12 @@ fn matchBracket(
             index += 2;
             continue;
         }
-        if (pattern[index] == text[text_index]) matched = true;
+        const pattern_end = nextCharacterIndex(pattern, index);
+        if (std.mem.eql(u8, pattern[index..pattern_end], text[text_index..text_end])) matched = true;
+        index = pattern_end - 1;
     }
     if (!saw_end) return null;
-    return .{ .ok = if (negated) !matched else matched, .next_pattern = index + 1 };
+    return .{ .ok = if (negated) !matched else matched, .next_pattern = index + 1, .next_text = text_end };
 }
 
 const BracketCharacterClassMatch = struct { ok: bool, end_index: usize };

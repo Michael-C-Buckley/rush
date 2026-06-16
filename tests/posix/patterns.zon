@@ -78,6 +78,30 @@
             .status = 0,
         },
         .{
+            .name = "patterns match multibyte characters as single characters",
+            .script =
+            \\case å in
+            \\    ?) printf '<%s>\n' case-question ;;
+            \\    *) printf '<%s>\n' bad ;;
+            \\esac
+            \\case å in
+            \\    [å]) printf '<%s>\n' case-bracket ;;
+            \\    *) printf '<%s>\n' bad ;;
+            \\esac
+            \\x=åbç
+            \\printf '<%s>\n' "${x#?}" "${x%?}"
+            ,
+            .stdout =
+            \\<case-question>
+            \\<case-bracket>
+            \\<bç>
+            \\<åb>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "case bracket expression matches any listed character",
             .script =
             \\case b in
