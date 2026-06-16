@@ -1,0 +1,60 @@
+__rush_complete_pnpm_project_dir() {
+  dir=
+  for value in $(rush_complete option-values --long dir); do dir="$value"; done
+  for value in $(rush_complete option-values --short C); do dir="$value"; done
+  if test -n "$dir"; then
+    printf '%s\n' "$dir"
+  else
+    printf '.\n'
+  fi
+}
+
+__rush_complete_pnpm_script_names() {
+  dir="$(__rush_complete_pnpm_project_dir)"
+  command -v node >/dev/null 2>&1 || return
+  node -e '
+const fs = require("fs");
+const path = require("path");
+const dir = process.argv[1] || ".";
+let pkg;
+try {
+  pkg = JSON.parse(fs.readFileSync(path.join(dir, "package.json"), "utf8"));
+} catch (_) {
+  process.exit(0);
+}
+for (const name of Object.keys(pkg.scripts || {})) console.log(name);
+' "$dir" 2>/dev/null
+}
+
+__rush_complete_pnpm_scripts() {
+  __rush_complete_pnpm_script_names | while IFS= read -r script; do
+    test -n "$script" && rush_complete candidate "$script" --kind subcommand --description 'package script' --priority 45
+  done
+}
+
+__rush_complete_pnpm_run_scripts() {
+  __rush_complete_pnpm_script_names | while IFS= read -r script; do
+    test -n "$script" && rush_complete candidate "$script" --kind plain --description 'package script' --priority 45
+  done
+}
+
+__rush_complete_pnpm_dependencies() {
+  dir="$(__rush_complete_pnpm_project_dir)"
+  command -v node >/dev/null 2>&1 || return
+  node -e '
+const fs = require("fs");
+const path = require("path");
+const dir = process.argv[1] || ".";
+let pkg;
+try {
+  pkg = JSON.parse(fs.readFileSync(path.join(dir, "package.json"), "utf8"));
+} catch (_) {
+  process.exit(0);
+}
+for (const section of ["dependencies", "devDependencies", "optionalDependencies", "peerDependencies"]) {
+  for (const name of Object.keys(pkg[section] || {})) console.log(name);
+}
+' "$dir" 2>/dev/null | while IFS= read -r dependency; do
+    test -n "$dependency" && rush_complete candidate "$dependency" --kind plain --description dependency --priority 20
+  done
+}

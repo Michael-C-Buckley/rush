@@ -1,0 +1,162 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "pnpm",
+    "description": "fast, disk space efficient package manager",
+    "providers": {
+      "builtin.files": { "builtin": "files" },
+      "builtin.directories": { "builtin": "directories" },
+      "pnpm.scripts": { "function": "__rush_complete_pnpm_scripts" },
+      "pnpm.run-scripts": { "function": "__rush_complete_pnpm_run_scripts" },
+      "pnpm.dependencies": { "function": "__rush_complete_pnpm_dependencies" },
+      "pnpm.log-levels": { "values": ["debug", "info", "warn", "error"] },
+      "pnpm.reporters": { "values": ["default", "append-only", "ndjson", "silent"] }
+    },
+    "options": [
+      { "short": "C", "long": "dir", "value": { "name": "directory", "provider": "builtin.directories" }, "priority": 30, "description": "change to directory" },
+      { "short": "r", "long": "recursive", "priority": 20, "description": "run command for each workspace project" },
+      { "short": "w", "long": "workspace-root", "priority": 15, "description": "run command on the workspace root project" },
+      { "short": "F", "long": "filter", "value": { "name": "selector" }, "description": "restrict command to matching packages" },
+      { "long": "filter-prod", "value": { "name": "selector" }, "description": "filter packages ignoring dev dependencies" },
+      { "long": "workspace-concurrency", "value": { "name": "number" }, "description": "set workspace concurrency" },
+      { "long": "loglevel", "value": { "name": "level", "provider": "pnpm.log-levels" }, "description": "set reporting level" },
+      { "long": "reporter", "value": { "name": "reporter", "provider": "pnpm.reporters" }, "description": "select reporter output format" },
+      { "short": "h", "long": "help", "priority": 10, "description": "output usage information" },
+      { "short": "v", "long": "version", "priority": 10, "description": "print pnpm version" }
+    ],
+    "subcommands": [
+      { "provider": "pnpm.scripts" },
+      {
+        "name": "run",
+        "aliases": ["run-script"],
+        "priority": 50,
+        "description": "run a package script",
+        "options": [
+          { "short": "C", "long": "dir", "value": { "name": "directory", "provider": "builtin.directories" }, "priority": 30, "description": "change to directory" },
+          { "short": "r", "long": "recursive", "priority": 20, "description": "run script in every workspace project" },
+          { "short": "w", "long": "workspace-root", "description": "run script on the workspace root project" },
+          { "short": "F", "long": "filter", "value": { "name": "selector" }, "description": "restrict command to matching packages" },
+          { "long": "if-present", "description": "do not fail when the script is undefined" },
+          { "long": "parallel", "description": "run scripts immediately in parallel" },
+          { "long": "sequential", "description": "run scripts one by one" },
+          { "long": "stream", "description": "stream output from child processes" },
+          { "long": "aggregate-output", "description": "print child output after completion" },
+          { "long": "reporter-hide-prefix", "description": "hide project name prefixes" },
+          { "long": "use-stderr", "description": "divert output to stderr" },
+          { "short": "h", "long": "help", "description": "output usage information" }
+        ],
+        "arguments": {
+          "terminator": "--",
+          "states": [
+            { "name": "script", "index": 0, "provider": "pnpm.run-scripts", "description": "package script" },
+            { "name": "argument", "index": 1, "repeatable": true, "provider": "builtin.files", "description": "script argument" }
+          ]
+        }
+      },
+      {
+        "name": "install",
+        "aliases": ["i"],
+        "priority": 45,
+        "description": "install project dependencies",
+        "options": [
+          { "short": "C", "long": "dir", "value": { "name": "directory", "provider": "builtin.directories" }, "priority": 30, "description": "change to directory" },
+          { "short": "D", "long": "dev", "description": "install only dev dependencies" },
+          { "short": "P", "long": "prod", "description": "omit dev dependencies" },
+          { "short": "r", "long": "recursive", "description": "install every workspace project" },
+          { "long": "frozen-lockfile", "description": "fail if lockfile update is needed" },
+          { "long": "no-frozen-lockfile", "description": "allow lockfile updates" },
+          { "long": "lockfile-only", "description": "only update pnpm-lock.yaml" },
+          { "long": "offline", "description": "use only local store data" },
+          { "long": "prefer-offline", "description": "prefer cached data" },
+          { "long": "ignore-scripts", "description": "do not run lifecycle scripts" },
+          { "long": "force", "description": "force reinstall dependencies" },
+          { "short": "h", "long": "help", "description": "output usage information" }
+        ]
+      },
+      {
+        "name": "add",
+        "priority": 40,
+        "description": "add package dependencies",
+        "options": [
+          { "short": "C", "long": "dir", "value": { "name": "directory", "provider": "builtin.directories" }, "priority": 30, "description": "change to directory" },
+          { "short": "D", "long": "save-dev", "description": "save to devDependencies" },
+          { "short": "O", "long": "save-optional", "description": "save to optionalDependencies" },
+          { "short": "P", "long": "save-prod", "description": "save to dependencies" },
+          { "short": "E", "long": "save-exact", "description": "save exact version" },
+          { "short": "g", "long": "global", "description": "install globally" },
+          { "long": "workspace", "description": "only add dependency if found in workspace" },
+          { "long": "ignore-workspace-root-check", "description": "allow adding to workspace root" },
+          { "short": "h", "long": "help", "description": "output usage information" }
+        ],
+        "arguments": {
+          "states": [
+            { "name": "package", "index": 0, "repeatable": true, "description": "package specifier" }
+          ]
+        }
+      },
+      {
+        "name": "remove",
+        "aliases": ["rm", "uninstall", "un"],
+        "priority": 35,
+        "description": "remove package dependencies",
+        "options": [
+          { "short": "C", "long": "dir", "value": { "name": "directory", "provider": "builtin.directories" }, "priority": 30, "description": "change to directory" },
+          { "short": "D", "long": "save-dev", "description": "remove from devDependencies" },
+          { "short": "O", "long": "save-optional", "description": "remove from optionalDependencies" },
+          { "short": "P", "long": "save-prod", "description": "remove from dependencies" },
+          { "short": "g", "long": "global", "description": "remove global package" },
+          { "short": "h", "long": "help", "description": "output usage information" }
+        ],
+        "arguments": {
+          "states": [
+            { "name": "package", "index": 0, "repeatable": true, "provider": "pnpm.dependencies", "description": "installed dependency" }
+          ]
+        }
+      },
+      {
+        "name": "update",
+        "aliases": ["up", "upgrade"],
+        "priority": 30,
+        "description": "update dependencies",
+        "options": [
+          { "short": "C", "long": "dir", "value": { "name": "directory", "provider": "builtin.directories" }, "priority": 30, "description": "change to directory" },
+          { "short": "D", "long": "dev", "description": "update dev dependencies" },
+          { "short": "P", "long": "prod", "description": "update prod dependencies" },
+          { "short": "L", "long": "latest", "description": "ignore version ranges" },
+          { "short": "i", "long": "interactive", "description": "show outdated dependencies interactively" },
+          { "short": "r", "long": "recursive", "description": "update every workspace project" },
+          { "short": "h", "long": "help", "description": "output usage information" }
+        ],
+        "arguments": {
+          "states": [
+            { "name": "package", "index": 0, "repeatable": true, "provider": "pnpm.dependencies", "description": "installed dependency" }
+          ]
+        }
+      },
+      {
+        "name": "why",
+        "description": "show packages that depend on a package",
+        "arguments": {
+          "states": [
+            { "name": "package", "index": 0, "provider": "pnpm.dependencies", "description": "installed dependency" }
+          ]
+        }
+      },
+      { "name": "exec", "description": "execute a command in project context" },
+      { "name": "dlx", "description": "fetch and run a package binary" },
+      { "name": "create", "description": "create a project from a starter kit" },
+      { "name": "link", "aliases": ["ln"], "description": "link a package" },
+      { "name": "unlink", "description": "unlink a package" },
+      { "name": "list", "aliases": ["ls"], "description": "list installed packages" },
+      { "name": "outdated", "description": "check for outdated packages" },
+      { "name": "audit", "description": "check for known security issues" },
+      { "name": "config", "aliases": ["c"], "description": "manage pnpm configuration" },
+      { "name": "init", "description": "create a package.json file" },
+      { "name": "publish", "description": "publish a package" },
+      { "name": "store", "description": "manage the pnpm store" },
+      { "name": "env", "description": "manage Node.js versions" },
+      { "name": "help", "description": "output pnpm help" }
+    ]
+  }
+}

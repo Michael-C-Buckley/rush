@@ -1279,7 +1279,7 @@ pub fn manifestApplication(
     switch (semantic.position) {
         .subcommand => {
             handled = true;
-            try appendManifestSubcommands(allocator, state.*, &builder, semantic);
+            try appendManifestSubcommands(allocator, io, state.*, shell_state, &builder, semantic);
         },
         .option => {
             handled = true;
@@ -1492,7 +1492,9 @@ fn optionSpelling(option: Option, word: []const u8) []const u8 {
 
 fn appendManifestSubcommands(
     allocator: std.mem.Allocator,
+    io: std.Io,
     state: State,
+    shell_state: shell_state_mod.ShellState,
     builder: *Builder,
     semantic: SemanticContext,
 ) !void {
@@ -1509,6 +1511,11 @@ fn appendManifestSubcommands(
             .replace_end = semantic.replace_end,
             .provider_order = rule.provider_order,
         });
+    }
+    for (state.rules.items) |rule| {
+        if (rule.disabled or rule.kind != .dynamic_subcommands) continue;
+        if (!ruleMatchesPath(rule, semantic.root, semantic.path)) continue;
+        try appendProviderCandidates(allocator, io, shell_state, builder, rule, semantic);
     }
 }
 
@@ -1860,6 +1867,16 @@ fn registerManifestCommand(
     };
     for (subcommands.items, 0..) |subcommand_value, index| {
         const subcommand_object = jsonObject(subcommand_value) orelse continue;
+        if (subcommand_object.get("provider")) |provider_ref| {
+            try registerProviderRefRules(allocator, state, .{
+                .root = root,
+                .path = path.items,
+                .kind = .dynamic_subcommands,
+                .provider_order = index,
+                .source = source,
+            }, provider_ref, providers);
+            continue;
+        }
         const primary = commandPrimaryName(subcommand_object) orelse continue;
         try registerSubcommandNames(allocator, state, root, subcommand_object, path.items, source, index);
         try path.append(allocator, primary);
@@ -2967,6 +2984,66 @@ test "manifest completion loads git subcommands lazily" {
     const candidates = application.ambiguous;
     try expectCandidate(candidates, "checkout", .subcommand);
     try expectCandidate(candidates, "cherry-pick", .subcommand);
+}
+
+test "manifest completion uses dynamic subcommand providers" {
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    try tmp.dir.writeFile(std.testing.io, .{
+        .sub_path = "tool.json",
+        .data =
+        \\
+        \\{
+        \\  "manifestVersion": 1,
+        \\  "command": {
+        \\    "name": "tool",
+        \\    "providers": {
+        \\      "tool.scripts": { "function": "__rush_complete_tool_scripts" }
+        \\    },
+        \\    "subcommands": [
+        \\      { "provider": "tool.scripts" },
+        \\      { "name": "start", "description": "static command" }
+        \\    ]
+        \\  }
+        \\}
+        \\
+        ,
+    });
+    var manifest_path_buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
+    const tmp_root_len = try tmp.dir.realPath(std.testing.io, &manifest_path_buffer);
+    const tmp_root = manifest_path_buffer[0..tmp_root_len];
+    const manifest_path = try std.fs.path.join(std.testing.allocator, &.{ tmp_root, "tool.json" });
+    defer std.testing.allocator.free(manifest_path);
+
+    var completion_state = State.init(std.testing.allocator);
+    defer completion_state.deinit();
+    try loadManifestFile(std.testing.allocator, std.testing.io, &completion_state, manifest_path);
+
+    var shell_state = shell_state_mod.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    try shell_state.putFunction(.{
+        .name = "__rush_complete_tool_scripts",
+        .source_body =
+        \\
+        \\rush_complete candidate storybook --kind subcommand --description 'package script' --priority 20
+        \\
+        ,
+    });
+    const source = "tool st";
+    const application = try manifestApplication(
+        std.testing.allocator,
+        std.testing.io,
+        &completion_state,
+        shell_state,
+        source,
+        source.len,
+    );
+    defer application.deinit(std.testing.allocator);
+
+    const candidates = application.ambiguous;
+    try expectCandidate(candidates, "storybook", .subcommand);
+    try expectCandidate(candidates, "start", .subcommand);
+    try std.testing.expectEqualStrings("storybook", candidates[0].value);
 }
 
 test "git manifest completion orders common subcommands by priority" {
