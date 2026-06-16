@@ -15,5 +15,43 @@
             .stderr_match = .nonempty,
             .status = 0,
         },
+        .{
+            .name = "source operands initialize sourced positional parameters",
+            .script =
+            \\cat >file.sh <<'EOF'
+            \\printf '<%s>:<%s>\n' "${1-unset}" "${2-unset}"
+            \\set -- changed
+            \\EOF
+            \\set -- outer
+            \\source ./file.sh inner more
+            \\printf '<%s>:<%s>\n' "${1-unset}" "${2-unset}"
+            ,
+            .stdout =
+            \\<inner>:<more>
+            \\<changed>:<unset>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "dot operands initialize sourced positional parameters in Bash mode",
+            .script =
+            \\cat >file.sh <<'EOF'
+            \\printf '<%s>:<%s>\n' "${1-unset}" "${2-unset}"
+            \\set -- changed
+            \\EOF
+            \\set -- outer
+            \\. ./file.sh inner more
+            \\printf '<%s>:<%s>\n' "${1-unset}" "${2-unset}"
+            ,
+            .stdout =
+            \\<inner>:<more>
+            \\<changed>:<unset>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
     },
 }

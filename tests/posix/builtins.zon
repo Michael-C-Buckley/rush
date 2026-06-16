@@ -536,6 +536,24 @@
             .status = 0,
         },
         .{
+            .name = "dot accepts extra operands and preserves caller positional parameters",
+            .script =
+            \\cat >file.sh <<'EOF'
+            \\printf 'sourced\n'
+            \\EOF
+            \\set -- outer
+            \\. ./file.sh inner more
+            \\printf '<%s>:<%s>\n' "${1-unset}" "${2-unset}"
+            ,
+            .stdout =
+            \\sourced
+            \\<outer>:<unset>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "dot searches PATH for operands without slash",
             .script =
             \\mkdir scripts

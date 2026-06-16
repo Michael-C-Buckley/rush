@@ -19,12 +19,7 @@ fn evaluate(context: ?*anyopaque, invocation: *api.Invocation) !api.EvaluationRe
         "source",
         "missing file operand",
     ));
-    if (invocation.argv.len > 2) return api.EvaluationResult.normal(try invocation.statusError(
-        2,
-        "source",
-        "arguments are not implemented yet",
-    ));
 
     const source_evaluator = invocation.source_evaluator orelse return error.Unimplemented;
-    return source_evaluator.sourceFile("source", invocation.argv[1]);
+    return source_evaluator.sourceFileWithArgs("source", invocation.argv[1], invocation.argv[2..]);
 }

@@ -6760,6 +6760,7 @@ fn evaluateExtensionSourceFile(
     opaque_context: *anyopaque,
     command: []const u8,
     path: []const u8,
+    args: []const []const u8,
 ) !extension_api.EvaluationResult {
     const source_context: *ExtensionSourceEvaluatorContext = @ptrCast(@alignCast(opaque_context));
     const result = try evaluateSourcePath(
@@ -6770,6 +6771,7 @@ fn evaluateExtensionSourceFile(
         path,
         &.{},
         false,
+        args,
         source_context.state_delta,
         source_context.buffers,
     );
@@ -6893,12 +6895,6 @@ fn evaluateDot(
     std.debug.assert(plan.argv.len != 0);
     std.debug.assert(std.mem.eql(u8, plan.argv[0], "."));
     if (plan.argv.len < 2) return normalEvaluation(try builtinStatusError(buffers, 2, ".", "missing file operand"));
-    if (plan.argv.len > 2) return normalEvaluation(try builtinStatusError(
-        buffers,
-        2,
-        ".",
-        "arguments are not implemented yet",
-    ));
 
     return evaluateSourceFile(evaluator, shell_state, eval_context, plan, state_delta, buffers);
 }
@@ -6912,7 +6908,7 @@ fn evaluateSourceFile(
     buffers: *EvaluationBuffers,
 ) !SimpleEvalResult {
     plan.validate();
-    std.debug.assert(plan.argv.len == 2);
+    std.debug.assert(plan.argv.len >= 2);
     const command = plan.argv[0];
     const path = plan.argv[1];
     std.debug.assert(std.mem.eql(u8, command, "."));
@@ -6924,6 +6920,7 @@ fn evaluateSourceFile(
         path,
         plan.assignments,
         true,
+        if (eval_context.features.isBash()) plan.argv[2..] else &.{},
         state_delta,
         buffers,
     );
@@ -6937,6 +6934,7 @@ fn evaluateSourcePath(
     path: []const u8,
     assignments: []const command_plan.Assignment,
     search_path: bool,
+    args: []const []const u8,
     state_delta: *delta.StateDelta,
     buffers: *EvaluationBuffers,
 ) !SimpleEvalResult {
@@ -6953,6 +6951,7 @@ fn evaluateSourcePath(
         shell_state,
         eval_context.enterSource(),
         source,
+        args,
         state_delta,
         buffers,
     );
@@ -7005,6 +7004,7 @@ fn evaluateSourcedText(
     shell_state: state.ShellState,
     eval_context: context.EvalContext,
     source: []const u8,
+    args: []const []const u8,
     state_delta: *delta.StateDelta,
     buffers: *EvaluationBuffers,
 ) !SimpleEvalResult {
@@ -7013,8 +7013,12 @@ fn evaluateSourcedText(
         error.ReadonlyVariable => unreachable,
     };
     defer working_state.deinit();
+    if (args.len != 0) try working_state.replacePositionals(args);
 
     const result = try evaluateSourcedTextChunks(evaluator, &working_state, eval_context, source, buffers);
+    if (args.len != 0 and positionalsEqual(working_state.positionals.items, args)) {
+        try working_state.replacePositionals(shell_state.positionals.items);
+    }
     try appendShellStateDiff(shell_state, working_state, state_delta);
     return result;
 }
@@ -8102,7 +8106,7 @@ fn evaluateFcSubstitute(
     defer evaluator.allocator.free(source);
 
     try buffers.stdout.print(buffers.allocator, "{s}\n", .{source});
-    return evaluateSourcedText(evaluator, shell_state, eval_context, source, state_delta, buffers);
+    return evaluateSourcedText(evaluator, shell_state, eval_context, source, &.{}, state_delta, buffers);
 }
 
 const FcRangeDefault = enum { list, substitute };

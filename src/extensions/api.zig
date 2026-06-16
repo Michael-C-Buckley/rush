@@ -130,12 +130,22 @@ pub fn freeExternalResolutions(
 
 pub const SourceEvaluator = struct {
     context: *anyopaque,
-    source_file: *const fn (*anyopaque, []const u8, []const u8) anyerror!EvaluationResult,
+    source_file: *const fn (*anyopaque, []const u8, []const u8, []const []const u8) anyerror!EvaluationResult,
 
     pub fn sourceFile(self: SourceEvaluator, command: []const u8, path: []const u8) !EvaluationResult {
+        return self.sourceFileWithArgs(command, path, &.{});
+    }
+
+    pub fn sourceFileWithArgs(
+        self: SourceEvaluator,
+        command: []const u8,
+        path: []const u8,
+        args: []const []const u8,
+    ) !EvaluationResult {
         std.debug.assert(command.len != 0);
         std.debug.assert(path.len != 0);
-        return self.source_file(self.context, command, path);
+        for (args) |arg| std.debug.assert(std.mem.findScalar(u8, arg, 0) == null);
+        return self.source_file(self.context, command, path, args);
     }
 };
 
