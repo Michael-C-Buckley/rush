@@ -151,6 +151,18 @@
             .status = 0,
         },
         .{
+            .name = "case fallthrough terminator is rejected in POSIX mode",
+            .script =
+            \\case x in
+            \\    x) printf 'bad\n' ;&
+            \\    *) printf 'bad\n' ;;
+            \\esac
+            ,
+            .stdout = "",
+            .stderr_match = .nonempty,
+            .status = 2,
+        },
+        .{
             .name = "complete commands may end with semicolon terminators",
             .script =
             \\printf '<one>\n';

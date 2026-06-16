@@ -2836,10 +2836,12 @@ const SyntaxParser = struct {
             const body = try self.parseListUntil(&.{"esac"}, &.{ .dsemicolon, .semicolon_amp, .semicolon_amp_amp });
             try item_children.append(self.allocator, .{ .node = body });
             if (self.atCaseTerminator()) {
+                if (self.features.strict_posix and self.at(.semicolon_amp)) try self.appendCaseFallthroughDiagnostic();
                 if (self.features.strict_posix and self.at(.semicolon_amp_amp)) try self.appendCaseTestNextDiagnostic();
                 try self.appendCurrentTokenChildTo(&item_children);
             }
         } else if (self.atCaseTerminator()) {
+            if (self.features.strict_posix and self.at(.semicolon_amp)) try self.appendCaseFallthroughDiagnostic();
             if (self.features.strict_posix and self.at(.semicolon_amp_amp)) try self.appendCaseTestNextDiagnostic();
             try self.appendCurrentTokenChildTo(&item_children);
         }
@@ -2861,6 +2863,14 @@ const SyntaxParser = struct {
 
     fn atCaseTerminator(self: SyntaxParser) bool {
         return self.at(.dsemicolon) or self.at(.semicolon_amp) or self.at(.semicolon_amp_amp);
+    }
+
+    fn appendCaseFallthroughDiagnostic(self: *SyntaxParser) !void {
+        try self.diagnostics.append(self.allocator, .{
+            .kind = .parse_error,
+            .span = self.current().span,
+            .message = ";& is not defined by POSIX",
+        });
     }
 
     fn appendCaseTestNextDiagnostic(self: *SyntaxParser) !void {
@@ -4870,7 +4880,7 @@ test "parser builds POSIX case command nodes" {
     try std.testing.expectEqual(@as(usize, 2), item_count);
 }
 
-test "parser accepts POSIX case edge items" {
+test "parser accepts case edge items in default mode" {
     var result = try parse(std.testing.allocator, "case b in (a|b) ;; c) echo c ;& d) echo d; esac", .{});
     defer result.deinit();
 
@@ -4882,6 +4892,15 @@ test "parser accepts POSIX case edge items" {
     }
     try std.testing.expect(saw_case);
     try std.testing.expectEqual(@as(usize, 3), item_count);
+
+    var posix_result = try parse(
+        std.testing.allocator,
+        "case b in c) echo c ;& d) echo d; esac",
+        .{ .features = .strictPosix() },
+    );
+    defer posix_result.deinit();
+    try std.testing.expectEqual(@as(usize, 1), posix_result.diagnostics.len);
+    try std.testing.expectEqualStrings(";& is not defined by POSIX", posix_result.diagnostics[0].message);
 }
 
 test "parser accepts bash case test-next terminator by default" {
