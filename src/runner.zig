@@ -1341,7 +1341,8 @@ fn semanticStatementNeedsEmbeddedHereDocSource(program: ir.Program, statement: i
         .function_definition => semanticSourceMayHaveHereDoc(program.function_definitions[statement.index].body),
         .brace_group => semanticSourceMayHaveHereDoc(program.brace_groups[statement.index].body),
         .subshell => semanticSourceMayHaveHereDoc(program.subshells[statement.index].body),
-        .pipeline, .bash_test_command => false,
+        .pipeline => semanticPipelineStageMayHaveHereDoc(program.pipelines[statement.index]),
+        .bash_test_command => false,
     };
 }
 
@@ -1355,6 +1356,12 @@ fn semanticIfCommandBodyMayHaveHereDoc(command: ir.IfCommand) bool {
 
 fn semanticCaseCommandBodyMayHaveHereDoc(command: ir.CaseCommand) bool {
     for (command.arms) |arm| if (semanticSourceMayHaveHereDoc(arm.body)) return true;
+    return false;
+}
+
+fn semanticPipelineStageMayHaveHereDoc(pipeline: ir.Pipeline) bool {
+    if (pipeline.command_indexes.len == pipeline.stage_spans.len) return false;
+    for (pipeline.stage_sources) |source| if (semanticSourceMayHaveHereDoc(source)) return true;
     return false;
 }
 

@@ -670,7 +670,8 @@ const SourceLowerer = struct {
             .function_definition => sourceMayHaveHereDoc(program.function_definitions[statement.index].body),
             .brace_group => sourceMayHaveHereDoc(program.brace_groups[statement.index].body),
             .subshell => sourceMayHaveHereDoc(program.subshells[statement.index].body),
-            .pipeline, .bash_test_command => false,
+            .pipeline => pipelineStageMayHaveHereDoc(program.pipelines[statement.index]),
+            .bash_test_command => false,
         };
     }
 
@@ -689,6 +690,12 @@ const SourceLowerer = struct {
 
     fn sourceMayHaveHereDoc(source: []const u8) bool {
         return std.mem.indexOf(u8, source, "<<") != null;
+    }
+
+    fn pipelineStageMayHaveHereDoc(pipeline: ir.Pipeline) bool {
+        if (pipeline.command_indexes.len == pipeline.stage_spans.len) return false;
+        for (pipeline.stage_sources) |source| if (sourceMayHaveHereDoc(source)) return true;
+        return false;
     }
 
     fn pipelineSyntacticEnd(program: ir.Program, pipeline: ir.Pipeline) usize {
@@ -868,7 +875,9 @@ const SourceLowerer = struct {
             const lowered = if (pipeline.command_indexes.len == pipeline.stage_spans.len)
                 try self.lowerPipelineSimpleStage(program.commands[pipeline.command_indexes[index]], stage_target)
             else blk: {
-                const source = program.source[stage_span.start..stage_span.end];
+                _ = stage_span;
+                std.debug.assert(pipeline.stage_sources.len == pipeline.stage_spans.len);
+                const source = pipeline.stage_sources[index];
                 break :blk try self.lowerPipelineStageSource(source, stage_target);
             };
             stages[index] = switch (lowered) {

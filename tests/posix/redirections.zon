@@ -541,6 +541,37 @@
             .status = 0,
         },
         .{
+            .name = "here document feeds a subshell pipeline stage",
+            .script =
+            \\( cat <<EOF ) | cat
+            \\hello
+            \\EOF
+            ,
+            .stdout =
+            \\hello
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "compound pipeline stages keep separate here documents",
+            .script =
+            \\( cat <<A ) | { read x; cat <<B; printf '%s\n' "$x"; }
+            \\left
+            \\A
+            \\right
+            \\B
+            ,
+            .stdout =
+            \\right
+            \\left
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "here document feeds a loop body command",
             .script =
             \\for i in 1; do cat <<EOF; done

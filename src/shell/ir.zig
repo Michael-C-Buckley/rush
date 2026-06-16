@@ -37,6 +37,7 @@ pub const Pipeline = struct {
     span: parser.Span,
     command_indexes: []usize,
     stage_spans: []parser.Span = &.{},
+    stage_sources: []const []const u8 = &.{},
     op_before: ListOp = .sequence,
     negated: bool = false,
     async_after: bool = false,
@@ -161,6 +162,7 @@ pub const Program = struct {
         for (self.pipelines) |pipeline| {
             self.allocator.free(pipeline.command_indexes);
             self.allocator.free(pipeline.stage_spans);
+            freePipelineStageSources(self.allocator, pipeline.stage_sources);
         }
         self.allocator.free(self.commands);
         self.allocator.free(self.pipelines);
@@ -218,6 +220,8 @@ pub fn lowerSimpleCommands(allocator: std.mem.Allocator, parsed: parser.ParseRes
         }
         for (pipelines.items) |pipeline| {
             allocator.free(pipeline.command_indexes);
+            allocator.free(pipeline.stage_spans);
+            freePipelineStageSources(allocator, pipeline.stage_sources);
         }
         commands.deinit(allocator);
         pipelines.deinit(allocator);
@@ -470,6 +474,7 @@ fn lowerListNode(
         for (pipelines.items) |pipeline| {
             allocator.free(pipeline.command_indexes);
             allocator.free(pipeline.stage_spans);
+            freePipelineStageSources(allocator, pipeline.stage_sources);
         }
         pipelines.deinit(allocator);
         for (if_commands.items) |command| freeIfCommand(allocator, command);
@@ -632,6 +637,11 @@ fn lowerPipelineDirect(
     errdefer command_indexes.deinit(allocator);
     var stage_spans: std.ArrayList(parser.Span) = .empty;
     errdefer stage_spans.deinit(allocator);
+    var stage_sources: std.ArrayList([]const u8) = .empty;
+    errdefer {
+        for (stage_sources.items) |source| allocator.free(source);
+        stage_sources.deinit(allocator);
+    }
     var negated = false;
 
     for (parsed.nodeChildren(node)) |child| switch (child) {
@@ -642,6 +652,10 @@ fn lowerPipelineDirect(
         .node => |child_node_id| {
             const child_node = parsed.nodes[child_node_id.index()];
             try stage_spans.append(allocator, child_node.span);
+            try stage_sources.append(
+                allocator,
+                try ownedSourceWithHereDocs(allocator, parsed, child_node.span.start, child_node.span.end),
+            );
             if (child_node.kind == .simple_command) {
                 const command_index = commands.items.len;
                 try commands.append(allocator, try lowerSimpleCommand(allocator, parsed, child_node_id));
@@ -654,6 +668,7 @@ fn lowerPipelineDirect(
         .span = node.span,
         .command_indexes = try command_indexes.toOwnedSlice(allocator),
         .stage_spans = try stage_spans.toOwnedSlice(allocator),
+        .stage_sources = try stage_sources.toOwnedSlice(allocator),
         .negated = negated,
     };
 }
@@ -1334,14 +1349,29 @@ fn ownedBodySource(
     token_start: usize,
     token_end: usize,
 ) ![]const u8 {
-    const body = spanSlice(parsed, token_start, token_end);
+    return ownedSourceWithHereDocs(
+        allocator,
+        parsed,
+        sourceStart(parsed, token_start),
+        sourceEnd(parsed, token_end),
+    );
+}
+
+fn ownedSourceWithHereDocs(
+    allocator: std.mem.Allocator,
+    parsed: parser.ParseResult,
+    source_start: usize,
+    source_end: usize,
+) ![]const u8 {
+    std.debug.assert(source_start <= source_end);
+    std.debug.assert(source_end <= parsed.source.len);
+    const body = parsed.source[source_start..source_end];
     var ranges: std.ArrayList(parser.Span) = .empty;
     defer ranges.deinit(allocator);
 
     for (parsed.nodes) |node| {
         if (node.kind != .redirection or !isHereDocRedirectionNode(parsed, node)) continue;
-        if (node.span.start < sourceStart(parsed, token_start) or
-            node.span.start >= sourceEnd(parsed, token_end)) continue;
+        if (node.span.start < source_start or node.span.start >= source_end) continue;
         const here_doc = try extractOrderedHereDocForRedirection(allocator, parsed, node) orelse continue;
         allocator.free(here_doc.body);
         try ranges.append(allocator, here_doc.range);
@@ -1392,6 +1422,11 @@ fn lowerPipeline(
     errdefer command_indexes.deinit(allocator);
     var stage_spans: std.ArrayList(parser.Span) = .empty;
     errdefer stage_spans.deinit(allocator);
+    var stage_sources: std.ArrayList([]const u8) = .empty;
+    errdefer {
+        for (stage_sources.items) |source| allocator.free(source);
+        stage_sources.deinit(allocator);
+    }
     var negated = false;
 
     for (parsed.nodeChildren(node)) |child| switch (child) {
@@ -1402,6 +1437,10 @@ fn lowerPipeline(
         .node => |child_node_id| {
             const child_node = parsed.nodes[child_node_id.index()];
             try stage_spans.append(allocator, child_node.span);
+            try stage_sources.append(
+                allocator,
+                try ownedSourceWithHereDocs(allocator, parsed, child_node.span.start, child_node.span.end),
+            );
             if (child_node.kind == .simple_command) {
                 const command_index = command_indexes_by_node[child_node_id.index()];
                 std.debug.assert(command_index != missing_command);
@@ -1414,6 +1453,7 @@ fn lowerPipeline(
         .span = node.span,
         .command_indexes = try command_indexes.toOwnedSlice(allocator),
         .stage_spans = try stage_spans.toOwnedSlice(allocator),
+        .stage_sources = try stage_sources.toOwnedSlice(allocator),
         .negated = negated,
     };
 }
@@ -1759,6 +1799,11 @@ fn freeSubshell(allocator: std.mem.Allocator, subshell: Subshell) void {
     allocator.free(subshell.body);
     for (subshell.redirections) |redirection| freeRedirection(allocator, redirection);
     allocator.free(subshell.redirections);
+}
+
+fn freePipelineStageSources(allocator: std.mem.Allocator, sources: []const []const u8) void {
+    for (sources) |source| allocator.free(source);
+    allocator.free(sources);
 }
 
 fn freeBraceGroup(allocator: std.mem.Allocator, group: BraceGroup) void {
