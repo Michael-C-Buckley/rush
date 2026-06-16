@@ -510,6 +510,23 @@
             .status = 0,
         },
         .{
+            .name = "multiple here documents feed separate and-or list commands",
+            .script =
+            \\cat <<A && cat <<B
+            \\one
+            \\A
+            \\two
+            \\B
+            ,
+            .stdout =
+            \\one
+            \\two
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "here document feeds a loop body command",
             .script =
             \\for i in 1; do cat <<EOF; done

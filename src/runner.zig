@@ -1291,13 +1291,65 @@ fn semanticStatementSource(
 ) ![]const u8 {
     std.debug.assert(statement_index < program.statements.len);
     const statement = program.statements[statement_index];
-    const statement_end = semanticStatementSourceEnd(program, statement_index, script_len);
-    const base = std.mem.trim(u8, program.source[statement.span.start..statement_end], " \t\r\n;");
+    const source_end = if (semanticStatementNeedsEmbeddedHereDocSource(program, statement))
+        semanticStatementSourceEnd(program, statement_index, script_len)
+    else
+        semanticStatementSyntacticEnd(program, statement);
+    const base = std.mem.trim(u8, program.source[statement.span.start..source_end], " \t\r\n;");
     var source: std.ArrayList(u8) = .empty;
     errdefer source.deinit(allocator);
     try source.appendSlice(allocator, base);
-    try appendSemanticHereDocRanges(allocator, &source, program, statement, statement_end);
+    try appendSemanticHereDocRanges(allocator, &source, program, statement, source_end);
     return source.toOwnedSlice(allocator);
+}
+
+fn semanticStatementSyntacticEnd(program: ir.Program, statement: ir.Statement) usize {
+    return switch (statement.kind) {
+        .pipeline => semanticPipelineSyntacticEnd(program, program.pipelines[statement.index]),
+        .if_command => program.if_commands[statement.index].span.end,
+        .loop_command => program.loop_commands[statement.index].span.end,
+        .for_command => program.for_commands[statement.index].span.end,
+        .case_command => program.case_commands[statement.index].span.end,
+        .function_definition => program.function_definitions[statement.index].span.end,
+        .bash_test_command => program.bash_test_commands[statement.index].span.end,
+        .brace_group => program.brace_groups[statement.index].span.end,
+        .subshell => program.subshells[statement.index].span.end,
+    };
+}
+
+fn semanticPipelineSyntacticEnd(program: ir.Program, pipeline: ir.Pipeline) usize {
+    var end = pipeline.span.end;
+    for (pipeline.command_indexes) |command_index| {
+        end = @max(end, program.commands[command_index].span.end);
+    }
+    return end;
+}
+
+fn semanticStatementNeedsEmbeddedHereDocSource(program: ir.Program, statement: ir.Statement) bool {
+    return switch (statement.kind) {
+        .if_command => semanticIfCommandBodyMayHaveHereDoc(program.if_commands[statement.index]),
+        .loop_command => semanticSourceMayHaveHereDoc(program.loop_commands[statement.index].condition) or
+            semanticSourceMayHaveHereDoc(program.loop_commands[statement.index].body),
+        .for_command => semanticSourceMayHaveHereDoc(program.for_commands[statement.index].body),
+        .case_command => semanticCaseCommandBodyMayHaveHereDoc(program.case_commands[statement.index]),
+        .function_definition => semanticSourceMayHaveHereDoc(program.function_definitions[statement.index].body),
+        .brace_group => semanticSourceMayHaveHereDoc(program.brace_groups[statement.index].body),
+        .subshell => semanticSourceMayHaveHereDoc(program.subshells[statement.index].body),
+        .pipeline, .bash_test_command => false,
+    };
+}
+
+fn semanticIfCommandBodyMayHaveHereDoc(command: ir.IfCommand) bool {
+    for (command.branches) |branch| {
+        if (semanticSourceMayHaveHereDoc(branch.condition) or semanticSourceMayHaveHereDoc(branch.body)) return true;
+    }
+    if (command.else_body) |body| if (semanticSourceMayHaveHereDoc(body)) return true;
+    return false;
+}
+
+fn semanticCaseCommandBodyMayHaveHereDoc(command: ir.CaseCommand) bool {
+    for (command.arms) |arm| if (semanticSourceMayHaveHereDoc(arm.body)) return true;
+    return false;
 }
 
 fn appendSemanticHereDocRanges(
@@ -1605,8 +1657,6 @@ fn semanticFunctionBodyProgramUnsupported(
     return null;
 }
 
-
-
 fn wordUsesUnsupportedForWordExpansion(raw: []const u8) bool {
     return std.mem.indexOf(u8, raw, "$(") != null or
         std.mem.indexOfScalar(u8, raw, '`') != null or
@@ -1631,7 +1681,6 @@ fn semanticAsyncStatementPreflightUnsupported(program: ir.Program, statement: ir
         .function_definition, .bash_test_command => unsupported_background,
     };
 }
-
 
 fn commandUsesUnsupportedSemanticBuiltin(command: ir.SimpleCommand, allow_interactive_declarations: bool) bool {
     if (command.argv.len == 0) return false;
