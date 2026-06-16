@@ -2473,10 +2473,6 @@ const OutputRouting = struct {
         return init(allocator, .command_substitution);
     }
 
-    fn initBuffered(allocator: std.mem.Allocator, captured_stdout: bool) OutputRouting {
-        return init(allocator, if (captured_stdout) .command_substitution else .inherited);
-    }
-
     fn deinit(self: *OutputRouting) void {
         self.bindings.deinit(self.allocator);
         self.* = undefined;
@@ -2598,10 +2594,6 @@ const OutputFrame = struct {
 
     fn initCommandSubstitution(buffers: *EvaluationBuffers) OutputFrame {
         return .{ .buffers = buffers, .routing = OutputRouting.initCommandSubstitution(buffers.allocator) };
-    }
-
-    fn initBuffered(buffers: *EvaluationBuffers, captured_stdout: bool) OutputFrame {
-        return .{ .buffers = buffers, .routing = OutputRouting.initBuffered(buffers.allocator, captured_stdout) };
     }
 
     fn deinit(self: *OutputFrame) void {
@@ -2843,10 +2835,10 @@ fn flushBufferedRedirectionOutput(
     }
 
     const command_substitution_capture = eval_context.command_substitution_depth != 0;
-    var frame = OutputFrame.initBuffered(
-        buffers,
-        command_substitution_capture,
-    );
+    var frame = if (command_substitution_capture)
+        OutputFrame.initCommandSubstitution(buffers)
+    else
+        OutputFrame.initInherited(buffers);
     defer frame.deinit();
 
     if (!command_substitution_capture) {
