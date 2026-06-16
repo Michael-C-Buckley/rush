@@ -263,6 +263,24 @@
             .status = 0,
         },
         .{
+            .name = "for command without in list snapshots positional parameters before iteration",
+            .script =
+            \\set -- a b
+            \\for x
+            \\do
+            \\    printf '<%s>' "$x"
+            \\    set -- z
+            \\done
+            \\printf '\n'
+            ,
+            .stdout =
+            \\<a><b>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "for command without in list runs zero times when there are no positional parameters",
             .script =
             \\set --

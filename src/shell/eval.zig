@@ -4940,9 +4940,16 @@ fn evaluateForLoop(
 ) EvalError!SimpleEvalResult {
     for_plan.validate();
     const loop_context = eval_context.enterLoop();
+    var positional_words: ?[][]const u8 = null;
+    defer if (positional_words) |words| freeForLoopWords(evaluator.allocator, words);
+
     const words = switch (for_plan.words) {
         .explicit => |explicit| explicit,
-        .positional_parameters => shell_state.positionals.items,
+        .positional_parameters => blk: {
+            const snapshot = try cloneForLoopWords(evaluator.allocator, shell_state.positionals.items);
+            positional_words = snapshot;
+            break :blk snapshot;
+        },
     };
 
     var result = normalEvaluation(0);
@@ -4975,6 +4982,25 @@ fn evaluateForLoop(
         }
     }
     return result;
+}
+
+fn cloneForLoopWords(allocator: std.mem.Allocator, words: []const []const u8) ![][]const u8 {
+    const owned = try allocator.alloc([]const u8, words.len);
+    errdefer allocator.free(owned);
+
+    var initialized: usize = 0;
+    errdefer for (owned[0..initialized]) |word| allocator.free(word);
+
+    for (words, 0..) |word, index| {
+        owned[index] = try allocator.dupe(u8, word);
+        initialized += 1;
+    }
+    return owned;
+}
+
+fn freeForLoopWords(allocator: std.mem.Allocator, words: []const []const u8) void {
+    for (words) |word| allocator.free(word);
+    allocator.free(words);
 }
 
 fn forLoopReadonlyAssignmentFailure(
