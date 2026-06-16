@@ -1222,7 +1222,7 @@ const SourceLowerer = struct {
         const plan_result = try redirection_plan.RedirectionPlan.build(self.allocator, specs.items, .{
             .noclobber = self.shell_state.options.noclobber,
             .failure_policy = failure_policy,
-            .self_duplicate_noop = self.owner.features.isBash(),
+            .self_duplicate_noop = true,
         });
         return switch (plan_result) {
             .plan => |plan| .{ .plan = plan },

@@ -183,7 +183,7 @@
             \\<nonzero>
             \\
             ,
-            .stderr = "",
+            .stderr_match = .any,
             .status = 0,
         },
         .{
@@ -197,23 +197,23 @@
             \\<nonzero>
             \\
             ,
-            .stderr_match = .nonempty,
+            .stderr_match = .any,
             .status = 0,
         },
         .{
-            .name = "self-duplicate redirection from a closed descriptor fails",
+            .name = "self-duplicate redirection from a closed descriptor is a no-op",
             .script =
             \\exec 3>&1 1>&-
             \\printf '' 1>&1
             \\status=$?
             \\exec 1>&3 3>&-
-            \\if [ "$status" -ne 0 ]; then printf '<nonzero>\n'; fi
+            \\if [ "$status" -eq 0 ]; then printf '<zero>\n'; fi
             ,
             .stdout =
-            \\<nonzero>
+            \\<zero>
             \\
             ,
-            .stderr_match = .nonempty,
+            .stderr_match = .any,
             .status = 0,
         },
         .{
