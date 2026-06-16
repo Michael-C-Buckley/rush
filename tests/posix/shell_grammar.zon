@@ -163,6 +163,17 @@
             .status = 2,
         },
         .{
+            .name = "case pattern alternatives must not be empty in POSIX mode",
+            .script =
+            \\case x in
+            \\    x|) printf 'bad\n' ;;
+            \\esac
+            ,
+            .stdout = "",
+            .stderr_match = .nonempty,
+            .status = 2,
+        },
+        .{
             .name = "complete commands may end with semicolon terminators",
             .script =
             \\printf '<one>\n';

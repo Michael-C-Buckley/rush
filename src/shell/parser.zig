@@ -2821,10 +2821,28 @@ const SyntaxParser = struct {
         var item_children: std.ArrayList(SyntaxChild) = .empty;
         defer item_children.deinit(self.allocator);
         var saw_pattern_end = false;
+        var expect_case_pattern = true;
+        var diagnosed_empty_case_pattern = false;
 
         while (!self.at(.eof)) {
             if (self.at(.dsemicolon) or self.at(.semicolon_amp) or self.at(.semicolon_amp_amp)) break;
             if (self.atWord("esac") and !self.esacStartsCaseItemPattern()) break;
+            if (self.features.strict_posix and !self.current().kind.isTrivia()) {
+                if (self.current().kind == .pipe or self.current().kind == .or_if) {
+                    if ((expect_case_pattern or self.current().kind == .or_if) and !diagnosed_empty_case_pattern) {
+                        try self.appendEmptyCasePatternDiagnostic();
+                        diagnosed_empty_case_pattern = true;
+                    }
+                    expect_case_pattern = true;
+                } else if (self.current().kind == .right_paren) {
+                    if (expect_case_pattern and !diagnosed_empty_case_pattern) {
+                        try self.appendEmptyCasePatternDiagnostic();
+                        diagnosed_empty_case_pattern = true;
+                    }
+                } else if (self.current().kind != .left_paren or item_children.items.len != 0) {
+                    expect_case_pattern = false;
+                }
+            }
             try self.appendCurrentTokenChildTo(&item_children);
             if (self.previousToken().kind == .right_paren) {
                 saw_pattern_end = true;
@@ -2870,6 +2888,14 @@ const SyntaxParser = struct {
             .kind = .parse_error,
             .span = self.current().span,
             .message = ";& is not defined by POSIX",
+        });
+    }
+
+    fn appendEmptyCasePatternDiagnostic(self: *SyntaxParser) !void {
+        try self.diagnostics.append(self.allocator, .{
+            .kind = .parse_error,
+            .span = self.current().span,
+            .message = "empty case pattern is not defined by POSIX",
         });
     }
 
@@ -4901,6 +4927,24 @@ test "parser accepts case edge items in default mode" {
     defer posix_result.deinit();
     try std.testing.expectEqual(@as(usize, 1), posix_result.diagnostics.len);
     try std.testing.expectEqualStrings(";& is not defined by POSIX", posix_result.diagnostics[0].message);
+}
+
+test "strict parser rejects empty case pattern alternatives" {
+    const cases = [_][]const u8{
+        "case x in |x) echo x ;; esac",
+        "case x in x|) echo x ;; esac",
+        "case x in x||y) echo x ;; esac",
+    };
+
+    for (cases) |source| {
+        var result = try parse(std.testing.allocator, source, .{ .features = .strictPosix() });
+        defer result.deinit();
+        try std.testing.expectEqual(@as(usize, 1), result.diagnostics.len);
+        try std.testing.expectEqualStrings(
+            "empty case pattern is not defined by POSIX",
+            result.diagnostics[0].message,
+        );
+    }
 }
 
 test "parser accepts bash case test-next terminator by default" {
