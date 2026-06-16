@@ -1,0 +1,3 @@
+__rush_complete_fg_jobs() {
+  rush_complete jobs
+}

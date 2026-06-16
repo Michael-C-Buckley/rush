@@ -1,0 +1,3 @@
+__rush_complete_unalias_names() {
+  rush_complete aliases
+}

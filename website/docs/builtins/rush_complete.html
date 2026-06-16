@@ -24,12 +24,16 @@
   <pre><span class="cmd">rush_complete</span> candidate <span class="var">value</span> [<span class="opt">--kind</span> <span class="var">kind</span>] [<span class="opt">--description</span> <span class="var">text</span>] [<span class="opt">--priority</span> <span class="var">n</span>] [<span class="opt">--no-space</span>]
 <span class="cmd">rush_complete</span> files
 <span class="cmd">rush_complete</span> directories [<span class="opt">--append-slash</span>]
+<span class="cmd">rush_complete</span> aliases
+<span class="cmd">rush_complete</span> variables
+<span class="cmd">rush_complete</span> functions
+<span class="cmd">rush_complete</span> jobs
 <span class="cmd">rush_complete</span> option-present (<span class="opt">--long</span> <span class="var">name</span> | <span class="opt">--short</span> <span class="var">name</span>)
 <span class="cmd">rush_complete</span> option-values (<span class="opt">--long</span> <span class="var">name</span> | <span class="opt">--short</span> <span class="var">name</span>)
 <span class="cmd">rush_complete</span> operand <span class="var">index</span></pre>
 
   <h2 id="description"><a href="#description">DESCRIPTION</a></h2>
-  <p><code>rush_complete</code> is the Rush completion provider API. It is intended for functions referenced by completion manifests, not for ordinary interactive commands. A provider function runs in a hidden captured completion context. Calls to <code>rush_complete candidate</code>, <code>rush_complete files</code>, and <code>rush_complete directories</code> append candidates to the current completion result.</p>
+  <p><code>rush_complete</code> is the Rush completion provider API. It is intended for functions referenced by completion manifests, not for ordinary interactive commands. A provider function runs in a hidden captured completion context. Calls to <code>rush_complete candidate</code>, <code>rush_complete files</code>, <code>rush_complete directories</code>, and shell-state list commands append candidates to the current completion result.</p>
   <p>Outside a completion provider invocation, <code>rush_complete</code> exits with a usage error because there is no provider context to receive candidates.</p>
 
   <h2 id="commands"><a href="#commands">COMMANDS</a></h2>
@@ -37,6 +41,10 @@
     <dt><code>candidate</code></dt><dd>Add one candidate. Supported kinds include <code>plain</code>, <code>file</code>, <code>directory</code>, <code>subcommand</code>, <code>option</code>, <code>variable</code>, <code>function</code>, <code>command</code>, and <code>builtin</code>. <code>--priority</code> accepts a signed 8-bit integer. Higher values prefer a candidate among otherwise comparable matches; Rush still performs final query-aware ordering. Omit it for priority <code>0</code>, use small positive bands for contextual preference, and negative values are allowed specifically to derank fallback candidates.</dd>
     <dt><code>files</code></dt><dd>Add path candidates matching the current completion prefix.</dd>
     <dt><code>directories</code></dt><dd>Add directory candidates matching the current completion prefix.</dd>
+    <dt><code>aliases</code></dt><dd>Add alias-name candidates from the current shell state.</dd>
+    <dt><code>variables</code></dt><dd>Add variable-name candidates from the current shell state.</dd>
+    <dt><code>functions</code></dt><dd>Add function-name candidates from the current shell state.</dd>
+    <dt><code>jobs</code></dt><dd>Add job-spec candidates for active jobs in the current shell state.</dd>
     <dt><code>option-present</code></dt><dd>Exit zero when the selected option is present in the parsed command line.</dd>
     <dt><code>option-values</code></dt><dd>Print values already provided for the selected option, one per line.</dd>
     <dt><code>operand</code></dt><dd>Print the parsed positional operand at the zero-based index.</dd>

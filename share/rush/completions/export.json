@@ -1,0 +1,29 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "export",
+    "description": "set export attribute",
+    "providers": {
+      "builtin.variables": { "builtin": "variables" }
+    },
+    "options": [
+      {
+        "short": "p",
+        "description": "print exported variables"
+      }
+    ],
+    "arguments": {
+      "terminator": "--",
+      "states": [
+        {
+          "name": "name",
+          "index": 0,
+          "repeatable": true,
+          "provider": "builtin.variables",
+          "description": "variable to export"
+        }
+      ]
+    }
+  }
+}

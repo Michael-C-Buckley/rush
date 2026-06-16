@@ -1,0 +1,18 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "pwd",
+    "description": "print working directory",
+    "options": [
+      {
+        "short": "L",
+        "description": "print logical working directory"
+      },
+      {
+        "short": "P",
+        "description": "print physical working directory"
+      }
+    ]
+  }
+}

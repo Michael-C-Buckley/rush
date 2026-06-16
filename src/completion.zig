@@ -8,6 +8,7 @@ const extension_rush_complete = @import("extensions/editor/rush_complete.zig");
 const ir = @import("shell/ir.zig");
 const parser = @import("shell/parser.zig");
 const runner = @import("runner.zig");
+const runtime = @import("runtime.zig");
 const shell_state_mod = @import("shell/state.zig");
 const editor_completion = @import("editor/completion.zig");
 
@@ -1335,15 +1336,22 @@ fn semanticContextForCommand(
 
     var path: std.ArrayList([]const u8) = .empty;
     errdefer path.deinit(allocator);
+    var parsed_options: std.ArrayList(ParsedOption) = .empty;
+    errdefer parsed_options.deinit(allocator);
+    var operands: std.ArrayList(ParsedOperand) = .empty;
+    errdefer operands.deinit(allocator);
     var operand_index: usize = 0;
     var options_terminated = false;
     var current_is_option = false;
     var pending_option_value: ?OptionValue = null;
+    var pending_option_index: ?usize = null;
     for (command.argv[1..]) |word| {
         if (word.span.start >= cursor) break;
         if (pending_option_value != null) {
             if (cursor <= word.span.end) break;
+            if (pending_option_index) |index| parsed_options.items[index].value = word.text;
             pending_option_value = null;
+            pending_option_index = null;
             continue;
         }
         if (cursor <= word.span.end) {
@@ -1356,14 +1364,28 @@ fn semanticContextForCommand(
         }
         if (!options_terminated and std.mem.startsWith(u8, word.text, "-")) {
             if (manifestOptionRuleForWord(state, command.argv[0].text, path.items, word.text)) |rule| {
+                const name = optionName(rule.option);
+                try parsed_options.append(allocator, .{
+                    .spelling = optionSpelling(rule.option, word.text),
+                    .name = name,
+                    .key = name,
+                    .repeatable = rule.option.repeatable,
+                    .terminates_options = rule.option.terminates_options,
+                    .exclusive_group = rule.option.exclusive_group,
+                    .excludes = rule.option.excludes,
+                });
                 if (rule.option.terminates_options) options_terminated = true;
-                if (rule.option.value_count != 0) pending_option_value = optionValueForRule(rule, word.text);
+                if (rule.option.value_count != 0) {
+                    pending_option_value = optionValueForRule(rule, word.text);
+                    pending_option_index = parsed_options.items.len - 1;
+                }
             }
             continue;
         }
         if (path.items.len == 0) {
             try path.append(allocator, word.text);
         } else {
+            try operands.append(allocator, .{ .value = word.text, .index = operand_index });
             operand_index += 1;
         }
     }
@@ -1379,12 +1401,21 @@ fn semanticContextForCommand(
     else
         .argument;
 
+    const owned_path = try path.toOwnedSlice(allocator);
+    errdefer allocator.free(owned_path);
+    const owned_parsed_options = try parsed_options.toOwnedSlice(allocator);
+    errdefer allocator.free(owned_parsed_options);
+    const owned_operands = try operands.toOwnedSlice(allocator);
+    errdefer allocator.free(owned_operands);
+
     return .{
         .allocator = allocator,
         .root = command.argv[0].text,
-        .path = try path.toOwnedSlice(allocator),
+        .path = owned_path,
         .prefix = prefix,
         .argument_index = operand_index,
+        .parsed_options = owned_parsed_options,
+        .operands = owned_operands,
         .options_terminated = options_terminated,
         .position = position,
         .option_value = pending_option_value,
@@ -3337,10 +3368,231 @@ test "manifest completion loads rmdir options and directory operands" {
     try std.testing.expectEqualStrings("empty/", edit.replacement);
 }
 
+test "builtin manifests complete alias and unalias aliases dynamically" {
+    var completion_state = State.init(std.testing.allocator);
+    defer completion_state.deinit();
+    try loadManifestFile(std.testing.allocator, std.testing.io, &completion_state, "share/rush/completions/alias.json");
+    try loadManifestFile(
+        std.testing.allocator,
+        std.testing.io,
+        &completion_state,
+        "share/rush/completions/unalias.json",
+    );
+
+    var shell_state = shell_state_mod.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    try sourceCompletionScript(&shell_state, "share/rush/completions/alias.rush");
+    try sourceCompletionScript(&shell_state, "share/rush/completions/unalias.rush");
+    try shell_state.setAlias("ll", "ls -l");
+
+    const alias_source = "alias l";
+    const alias_application = try manifestApplication(
+        std.testing.allocator,
+        std.testing.io,
+        &completion_state,
+        shell_state,
+        alias_source,
+        alias_source.len,
+    );
+    defer alias_application.deinit(std.testing.allocator);
+    try std.testing.expectEqualStrings("ll", alias_application.edit.replacement);
+
+    const unalias_source = "unalias l";
+    const unalias_application = try manifestApplication(
+        std.testing.allocator,
+        std.testing.io,
+        &completion_state,
+        shell_state,
+        unalias_source,
+        unalias_source.len,
+    );
+    defer unalias_application.deinit(std.testing.allocator);
+    try std.testing.expectEqualStrings("ll", unalias_application.edit.replacement);
+}
+
+test "builtin manifests complete export and unset names dynamically" {
+    var completion_state = State.init(std.testing.allocator);
+    defer completion_state.deinit();
+    try loadManifestFile(
+        std.testing.allocator,
+        std.testing.io,
+        &completion_state,
+        "share/rush/completions/export.json",
+    );
+    try loadManifestFile(std.testing.allocator, std.testing.io, &completion_state, "share/rush/completions/unset.json");
+
+    var shell_state = shell_state_mod.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    try sourceCompletionScript(&shell_state, "share/rush/completions/unset.rush");
+    try shell_state.putVariable("ALPHA", "1", .{});
+    try shell_state.putVariable("ZED", "2", .{});
+    try shell_state.putFunctionName("zap");
+
+    const export_source = "export AL";
+    const export_application = try manifestApplication(
+        std.testing.allocator,
+        std.testing.io,
+        &completion_state,
+        shell_state,
+        export_source,
+        export_source.len,
+    );
+    defer export_application.deinit(std.testing.allocator);
+    try std.testing.expectEqualStrings("ALPHA", export_application.edit.replacement);
+
+    const unset_variable_source = "unset ZE";
+    const unset_variable_application = try manifestApplication(
+        std.testing.allocator,
+        std.testing.io,
+        &completion_state,
+        shell_state,
+        unset_variable_source,
+        unset_variable_source.len,
+    );
+    defer unset_variable_application.deinit(std.testing.allocator);
+    try std.testing.expectEqualStrings("ZED", unset_variable_application.edit.replacement);
+
+    const unset_function_source = "unset -f za";
+    const unset_function_application = try manifestApplication(
+        std.testing.allocator,
+        std.testing.io,
+        &completion_state,
+        shell_state,
+        unset_function_source,
+        unset_function_source.len,
+    );
+    defer unset_function_application.deinit(std.testing.allocator);
+    try std.testing.expectEqualStrings("zap", unset_function_application.edit.replacement);
+}
+
+test "builtin manifests complete jobs fg and bg job specs dynamically" {
+    var completion_state = State.init(std.testing.allocator);
+    defer completion_state.deinit();
+    try loadManifestFile(std.testing.allocator, std.testing.io, &completion_state, "share/rush/completions/jobs.json");
+    try loadManifestFile(std.testing.allocator, std.testing.io, &completion_state, "share/rush/completions/fg.json");
+    try loadManifestFile(std.testing.allocator, std.testing.io, &completion_state, "share/rush/completions/bg.json");
+
+    var shell_state = shell_state_mod.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    try sourceCompletionScript(&shell_state, "share/rush/completions/jobs.rush");
+    try sourceCompletionScript(&shell_state, "share/rush/completions/fg.rush");
+    try sourceCompletionScript(&shell_state, "share/rush/completions/bg.rush");
+    try appendCompletionTestJob(&shell_state, 1, 7001, "first job");
+    try appendCompletionTestJob(&shell_state, 2, 7002, "second job");
+
+    const fg_source = "fg ";
+    const fg_application = try manifestApplication(
+        std.testing.allocator,
+        std.testing.io,
+        &completion_state,
+        shell_state,
+        fg_source,
+        fg_source.len,
+    );
+    defer fg_application.deinit(std.testing.allocator);
+    try std.testing.expectEqualStrings("%+", fg_application.ambiguous[0].value);
+    try expectCandidateDescription(fg_application.ambiguous, "%%", "current job");
+    try expectCandidateDescription(fg_application.ambiguous, "%1", "job");
+    try expectCandidateDescription(fg_application.ambiguous, "%-", "previous job");
+
+    const jobs_source = "jobs %";
+    const jobs_application = try manifestApplication(
+        std.testing.allocator,
+        std.testing.io,
+        &completion_state,
+        shell_state,
+        jobs_source,
+        jobs_source.len,
+    );
+    defer jobs_application.deinit(std.testing.allocator);
+    try expectCandidateDescription(jobs_application.ambiguous, "%2", "job");
+
+    const bg_source = "bg %";
+    const bg_application = try manifestApplication(
+        std.testing.allocator,
+        std.testing.io,
+        &completion_state,
+        shell_state,
+        bg_source,
+        bg_source.len,
+    );
+    defer bg_application.deinit(std.testing.allocator);
+    try expectCandidateDescription(bg_application.ambiguous, "%+", "current job");
+}
+
+fn sourceCompletionScript(shell_state: *shell_state_mod.ShellState, path: []const u8) !void {
+    const companion = try std.Io.Dir.cwd().readFileAlloc(
+        std.testing.io,
+        path,
+        std.testing.allocator,
+        .limited(1024 * 1024),
+    );
+    defer std.testing.allocator.free(companion);
+    var result = try runner.runShellStateScriptWithExtensionHandlers(
+        std.testing.allocator,
+        std.testing.io,
+        shell_state,
+        companion,
+        path,
+        "rush",
+        .{},
+        .capture,
+        .{},
+    );
+    defer result.deinit();
+    try std.testing.expectEqual(@as(shell_state_mod.ExitStatus, 0), result.status);
+}
+
+fn appendCompletionTestJob(
+    shell_state: *shell_state_mod.ShellState,
+    id: usize,
+    pid: runtime.process.ProcessId,
+    command: []const u8,
+) !void {
+    const owned_command = try shell_state.allocator.dupe(u8, command);
+    errdefer shell_state.allocator.free(owned_command);
+
+    const child = fakeCompletionChild(pid);
+    var job: shell_state_mod.BackgroundJob = .{
+        .id = id,
+        .pid = pid,
+        .process_group = pid,
+        .command = owned_command,
+    };
+    errdefer job.deinit(shell_state.allocator);
+    try job.appendProcess(shell_state.allocator, .{
+        .stage_index = 0,
+        .child = child,
+    });
+    try shell_state.appendBackgroundJob(job);
+    job.deinit(shell_state.allocator);
+}
+
+fn fakeCompletionChild(id: runtime.process.ProcessId) runtime.process.ChildProcess {
+    const child: std.process.Child = .{
+        .id = id,
+        .thread_handle = {},
+        .stdin = null,
+        .stdout = null,
+        .stderr = null,
+        .request_resource_usage_statistics = false,
+    };
+    return runtime.process.ChildProcess.init(child);
+}
+
 fn expectCandidate(candidates: []const Candidate, value: []const u8, kind: Kind) !void {
     for (candidates) |candidate| {
         if (!std.mem.eql(u8, candidate.value, value)) continue;
         try std.testing.expectEqual(kind, candidate.kind);
+        return;
+    }
+    return error.MissingCandidate;
+}
+
+fn expectCandidateDescription(candidates: []const Candidate, value: []const u8, description: []const u8) !void {
+    for (candidates) |candidate| {
+        if (!std.mem.eql(u8, candidate.value, value)) continue;
+        try std.testing.expectEqualStrings(description, candidate.description.?);
         return;
     }
     return error.MissingCandidate;

@@ -1,0 +1,21 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "fg",
+    "description": "move job to foreground",
+    "providers": {
+      "fg.jobs": { "function": "__rush_complete_fg_jobs" }
+    },
+    "arguments": {
+      "states": [
+        {
+          "name": "job",
+          "index": 0,
+          "provider": "fg.jobs",
+          "description": "job to foreground"
+        }
+      ]
+    }
+  }
+}

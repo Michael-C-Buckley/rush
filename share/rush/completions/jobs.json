@@ -1,0 +1,33 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "jobs",
+    "description": "list active jobs",
+    "providers": {
+      "jobs.specs": { "function": "__rush_complete_jobs_specs" }
+    },
+    "options": [
+      {
+        "short": "l",
+        "description": "list jobs with process ids"
+      },
+      {
+        "short": "p",
+        "description": "list process ids only"
+      }
+    ],
+    "arguments": {
+      "terminator": "--",
+      "states": [
+        {
+          "name": "job",
+          "index": 0,
+          "repeatable": true,
+          "provider": "jobs.specs",
+          "description": "job to list"
+        }
+      ]
+    }
+  }
+}

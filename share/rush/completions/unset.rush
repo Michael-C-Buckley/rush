@@ -1,0 +1,7 @@
+__rush_complete_unset_names() {
+  if rush_complete option-present --short f; then
+    rush_complete functions
+  else
+    rush_complete variables
+  fi
+}

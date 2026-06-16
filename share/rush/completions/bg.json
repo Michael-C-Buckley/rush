@@ -1,0 +1,22 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "bg",
+    "description": "resume jobs in background",
+    "providers": {
+      "bg.jobs": { "function": "__rush_complete_bg_jobs" }
+    },
+    "arguments": {
+      "states": [
+        {
+          "name": "job",
+          "index": 0,
+          "repeatable": true,
+          "provider": "bg.jobs",
+          "description": "job to resume"
+        }
+      ]
+    }
+  }
+}

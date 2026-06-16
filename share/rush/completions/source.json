@@ -1,0 +1,21 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "source",
+    "description": "read commands from a file",
+    "providers": {
+      "builtin.files": { "builtin": "files" }
+    },
+    "arguments": {
+      "states": [
+        {
+          "name": "file",
+          "index": 0,
+          "provider": "builtin.files",
+          "description": "file to read"
+        }
+      ]
+    }
+  }
+}

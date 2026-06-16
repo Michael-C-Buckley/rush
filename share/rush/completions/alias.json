@@ -1,0 +1,22 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "alias",
+    "description": "define or print aliases",
+    "providers": {
+      "alias.names": { "function": "__rush_complete_alias_names" }
+    },
+    "arguments": {
+      "states": [
+        {
+          "name": "alias",
+          "index": 0,
+          "repeatable": true,
+          "provider": "alias.names",
+          "description": "alias to print"
+        }
+      ]
+    }
+  }
+}

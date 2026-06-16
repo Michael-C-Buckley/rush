@@ -5,6 +5,7 @@ const std = @import("std");
 const api = @import("../api.zig");
 const editor_completion = @import("../../editor/completion.zig");
 const shell_builtin = @import("../../shell/builtin.zig");
+const shell_state_mod = @import("../../shell/state.zig");
 
 pub const builtins = [_]shell_builtin.Builtin{
     shell_builtin.Builtin.initExtension("rush_complete", .extension_state),
@@ -94,6 +95,10 @@ fn evaluate(context: ?*anyopaque, invocation: *api.Invocation) !api.EvaluationRe
     if (std.mem.eql(u8, argv[1], "candidate")) return evaluateCandidate(state, invocation);
     if (std.mem.eql(u8, argv[1], "files")) return evaluatePathCandidates(state, invocation, false);
     if (std.mem.eql(u8, argv[1], "directories")) return evaluatePathCandidates(state, invocation, true);
+    if (std.mem.eql(u8, argv[1], "aliases")) return evaluateAliases(state, invocation);
+    if (std.mem.eql(u8, argv[1], "variables")) return evaluateVariables(state, invocation);
+    if (std.mem.eql(u8, argv[1], "functions")) return evaluateFunctions(state, invocation);
+    if (std.mem.eql(u8, argv[1], "jobs")) return evaluateJobs(state, invocation);
     if (std.mem.eql(u8, argv[1], "option-present")) return evaluateOptionPresent(state, invocation);
     if (std.mem.eql(u8, argv[1], "option-values")) return evaluateOptionValues(state, invocation);
     if (std.mem.eql(u8, argv[1], "operand")) return evaluateOperand(state, invocation);
@@ -165,6 +170,90 @@ fn evaluatePathCandidates(
     }
     try appendPathCandidates(state, directories_only);
     return api.EvaluationResult.normal(0);
+}
+
+fn evaluateAliases(state: *State, invocation: *api.Invocation) !api.EvaluationResult {
+    if (invocation.argv.len != 2) return api.EvaluationResult.normal(try usage(invocation));
+    var iterator = invocation.shell_state.aliases.iterator();
+    while (iterator.next()) |entry| try appendNamedCandidate(state, entry.key_ptr.*, .plain, "alias");
+    return api.EvaluationResult.normal(0);
+}
+
+fn evaluateVariables(state: *State, invocation: *api.Invocation) !api.EvaluationResult {
+    if (invocation.argv.len != 2) return api.EvaluationResult.normal(try usage(invocation));
+    var iterator = invocation.shell_state.variables.iterator();
+    while (iterator.next()) |entry| try appendNamedCandidate(state, entry.key_ptr.*, .variable, "variable");
+    return api.EvaluationResult.normal(0);
+}
+
+fn evaluateFunctions(state: *State, invocation: *api.Invocation) !api.EvaluationResult {
+    if (invocation.argv.len != 2) return api.EvaluationResult.normal(try usage(invocation));
+    var iterator = invocation.shell_state.functions.iterator();
+    while (iterator.next()) |entry| try appendNamedCandidate(state, entry.key_ptr.*, .function, "function");
+    return api.EvaluationResult.normal(0);
+}
+
+fn appendNamedCandidate(state: *State, value: []const u8, kind: editor_completion.Kind, description: []const u8) !void {
+    const owned_value = try state.allocator.dupe(u8, value);
+    errdefer state.allocator.free(owned_value);
+    const owned_description = try state.allocator.dupe(u8, description);
+    errdefer state.allocator.free(owned_description);
+    try state.candidates.append(state.allocator, .{
+        .value = owned_value,
+        .description = owned_description,
+        .kind = kind,
+        .replace_start = state.replace_start,
+        .replace_end = state.replace_end,
+        .source_order = state.next_source_order,
+    });
+    state.next_source_order += 1;
+}
+
+fn evaluateJobs(state: *State, invocation: *api.Invocation) !api.EvaluationResult {
+    if (invocation.argv.len != 2) return api.EvaluationResult.normal(try usage(invocation));
+    const shell_state = invocation.shell_state;
+    if (shell_state.current_job_id) |job_id| {
+        try appendJobCandidate(state, "%+", "current job", 30);
+        try appendJobCandidate(state, "%%", "current job", 25);
+        if (shell_state.findBackgroundJobById(job_id)) |job| try appendNumberedJobCandidate(state, job, 20);
+    }
+    if (shell_state.previous_job_id) |job_id| {
+        try appendJobCandidate(state, "%-", "previous job", 15);
+        if (shell_state.findBackgroundJobById(job_id)) |job| try appendNumberedJobCandidate(state, job, 10);
+    }
+    for (shell_state.background_jobs.items) |job| {
+        if (shell_state.current_job_id != null and shell_state.current_job_id.? == job.id) continue;
+        if (shell_state.previous_job_id != null and shell_state.previous_job_id.? == job.id) continue;
+        try appendNumberedJobCandidate(state, job, 0);
+    }
+    return api.EvaluationResult.normal(0);
+}
+
+fn appendNumberedJobCandidate(state: *State, job: shell_state_mod.BackgroundJob, priority: i8) !void {
+    const value = try std.fmt.allocPrint(state.allocator, "%{d}", .{job.id});
+    errdefer state.allocator.free(value);
+    try appendOwnedJobCandidate(state, value, "job", priority);
+}
+
+fn appendJobCandidate(state: *State, value: []const u8, description: []const u8, priority: i8) !void {
+    const owned_value = try state.allocator.dupe(u8, value);
+    errdefer state.allocator.free(owned_value);
+    try appendOwnedJobCandidate(state, owned_value, description, priority);
+}
+
+fn appendOwnedJobCandidate(state: *State, owned_value: []const u8, description: []const u8, priority: i8) !void {
+    const owned_description = try state.allocator.dupe(u8, description);
+    errdefer state.allocator.free(owned_description);
+    try state.candidates.append(state.allocator, .{
+        .value = owned_value,
+        .description = owned_description,
+        .kind = .plain,
+        .replace_start = state.replace_start,
+        .replace_end = state.replace_end,
+        .priority = priority,
+        .source_order = state.next_source_order,
+    });
+    state.next_source_order += 1;
 }
 
 fn evaluateOptionPresent(state: *State, invocation: *api.Invocation) !api.EvaluationResult {
