@@ -555,7 +555,14 @@ fn reportMismatch(
         try printExactBytesMismatch(allocator, "stdout", case.stdout, actual.stdout, color_diff);
     }
     if (stderr_failed) {
-        try printBytesExpectationMismatch(allocator, "stderr", case.stderr, case.stderr_match, actual.stderr, color_diff);
+        try printBytesExpectationMismatch(
+            allocator,
+            "stderr",
+            case.stderr,
+            case.stderr_match,
+            actual.stderr,
+            color_diff,
+        );
     }
     if (status_failed) {
         switch (case.status_match) {
@@ -705,7 +712,7 @@ fn splitDiffLines(allocator: std.mem.Allocator, bytes: []const u8) ![]DiffLine {
 
     var start: usize = 0;
     while (start < bytes.len) {
-        const end = if (std.mem.indexOfScalarPos(u8, bytes, start, '\n')) |newline| newline else bytes.len;
+        const end = if (std.mem.findScalarPos(u8, bytes, start, '\n')) |newline| newline else bytes.len;
         try lines.append(allocator, .{ .text = bytes[start..end] });
         start = if (end < bytes.len) end + 1 else end;
     }
@@ -739,7 +746,8 @@ fn printFullBytesFallback(expected: []const u8, actual: []const u8) void {
 
 fn writeUsage(io: std.Io) !void {
     const usage =
-        \\usage: conformance-harness (--rush PATH | --shell SHELL [--shell-arg ARG...]) --mode MODE [--case TEXT] [--diff] [FILE...]
+        \\usage: conformance-harness (--rush PATH | --shell SHELL [--shell-arg ARG...])
+        \\                           --mode MODE [--case TEXT] [--diff] [FILE...]
         \\modes: posix, bash
         \\--case TEXT: run cases whose names contain TEXT; implies --diff
         \\--diff: print unified stdout/stderr diffs for failures

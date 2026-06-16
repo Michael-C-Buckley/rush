@@ -445,7 +445,6 @@ pub fn lowerSimpleCommands(allocator: std.mem.Allocator, parsed: parser.ParseRes
     };
 }
 
-
 fn lowerListNode(
     allocator: std.mem.Allocator,
     parsed: parser.ParseResult,
@@ -1322,7 +1321,6 @@ fn lowerIfCommand(allocator: std.mem.Allocator, parsed: parser.ParseResult, node
     };
 }
 
-
 fn isListSeparatorToken(kind: parser.TokenKind) bool {
     return switch (kind) {
         .newline, .semicolon, .and_if, .or_if, .ampersand => true,
@@ -1342,7 +1340,8 @@ fn ownedBodySource(
 
     for (parsed.nodes) |node| {
         if (node.kind != .redirection or !isHereDocRedirectionNode(parsed, node)) continue;
-        if (node.span.start < sourceStart(parsed, token_start) or node.span.start >= sourceEnd(parsed, token_end)) continue;
+        if (node.span.start < sourceStart(parsed, token_start) or
+            node.span.start >= sourceEnd(parsed, token_end)) continue;
         const here_doc = try extractOrderedHereDocForRedirection(allocator, parsed, node) orelse continue;
         allocator.free(here_doc.body);
         try ranges.append(allocator, here_doc.range);

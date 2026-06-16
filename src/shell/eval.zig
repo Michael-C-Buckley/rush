@@ -5606,6 +5606,7 @@ const ExternalInvocation = struct {
         allocator.free(self.argv);
         self.environment.deinit();
         self.temporary_environment.deinit();
+        self.* = undefined;
     }
 
     fn run(
@@ -6328,7 +6329,9 @@ fn evaluateBuiltin(
     if (std.mem.eql(u8, definition.name, "continue")) {
         return evaluateLoopControl(eval_context, plan.argv, .continue_loop, buffers);
     }
-    if (std.mem.eql(u8, definition.name, "exec")) return evaluateExec(evaluator, shell_state, plan, state_delta, buffers);
+    if (std.mem.eql(u8, definition.name, "exec")) {
+        return evaluateExec(evaluator, shell_state, plan, state_delta, buffers);
+    }
     if (std.mem.eql(u8, definition.name, "exit")) return evaluateExit(shell_state, plan.argv, buffers);
     if (std.mem.eql(u8, definition.name, "return")) {
         return evaluateReturn(shell_state, eval_context, plan.argv, buffers);
@@ -9912,7 +9915,6 @@ fn isAliasName(name: []const u8) bool {
     }
     return true;
 }
-
 
 const VariableDeclarationMode = enum { exported, readonly };
 
