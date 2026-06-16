@@ -21,6 +21,7 @@
       "git.rebase-arguments": { "function": "__rush_complete_git_context_rebase_args" },
       "git.clean-paths": { "function": "__rush_complete_git_context_clean_paths" },
       "git.branch-arguments": { "function": "__rush_complete_git_context_branch_args" },
+      "git.fetch-arguments": { "function": "__rush_complete_git_context_fetch_args" },
       "git.push-arguments": { "function": "__rush_complete_git_context_push_args" },
       "git.add-paths": { "function": "__rush_complete_git_add_paths" },
       "git.changed-paths": { "function": "__rush_complete_git_changed_paths" },
@@ -712,8 +713,8 @@
         ],
         "arguments": {
           "states": [
-            { "name": "repository", "index": 0, "provider": "git.remotes", "description": "remote repository" },
-            { "name": "refspec", "index": 1, "repeatable": true, "provider": "git.refs", "description": "refspec to fetch" }
+            { "name": "repository", "index": 0, "provider": "git.fetch-arguments", "description": "remote repository" },
+            { "name": "refspec", "index": 1, "repeatable": true, "provider": "git.fetch-arguments", "description": "refspec to fetch" }
           ]
         }
       },

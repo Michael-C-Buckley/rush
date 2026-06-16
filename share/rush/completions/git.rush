@@ -502,6 +502,46 @@ __rush_complete_git_context_branch_args() {
   fi
 }
 
+__rush_complete_git_context_fetch_remote_for_refs() {
+  remote="$(rush_complete operand 0)"
+  test -n "$remote" || return
+  git remote 2>/dev/null | while read configured; do
+    if test "$configured" = "$remote"; then
+      printf '%s\n' "$remote"
+      exit 0
+    fi
+  done
+}
+
+__rush_complete_git_context_fetch_remote_refs() {
+  remote="$(__rush_complete_git_context_fetch_remote_for_refs)"
+  if test -n "$remote"; then
+    git for-each-ref --format='%(refname:short)' "refs/remotes/$remote" 2>/dev/null |
+      sed "s#^$remote/##" |
+      while read ref; do
+        if test "$ref" = "$remote"; then continue; fi
+        test -n "$ref" && rush_complete candidate "$ref" --kind plain --description 'remote ref' --priority 20
+      done
+  else
+    __rush_complete_git_remote_branches
+  fi
+  return 0
+}
+
+__rush_complete_git_context_fetch_args() {
+  if rush_complete option-present --long all; then return; fi
+  if test "$rush_completion_argument_index" = 0; then
+    __rush_complete_git_remotes
+  else
+    if rush_complete option-present --long multiple; then
+      __rush_complete_git_remotes
+    else
+      __rush_complete_git_context_fetch_remote_refs
+    fi
+  fi
+  return 0
+}
+
 __rush_complete_git_context_push_remote_refs() {
   remote="$(__rush_complete_git_context_push_remote_for_refs)"
   if test -n "$remote"; then
