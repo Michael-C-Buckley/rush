@@ -600,6 +600,25 @@
             .status = 0,
         },
         .{
+            .name = "here document inside loop body is not executed as source",
+            .script =
+            \\i=0
+            \\while [ "$i" -lt 2 ]; do
+            \\  cat <<EOF
+            \\body-$i
+            \\EOF
+            \\  i=$((i+1))
+            \\done
+            ,
+            .stdout =
+            \\body-0
+            \\body-1
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "here document feeds a brace group body command",
             .script =
             \\{ cat <<EOF; }

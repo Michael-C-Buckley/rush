@@ -1767,6 +1767,7 @@ fn ownedSourceWithHereDocs(
     errdefer output.deinit(allocator);
     try output.appendSlice(allocator, body);
     for (ranges.items) |range| {
+        if (range.end <= source_end) continue;
         if (output.items.len != 0 and output.items[output.items.len - 1] != '\n') try output.append(allocator, '\n');
         try output.appendSlice(allocator, parsed.source[range.start..range.end]);
     }
