@@ -2532,7 +2532,6 @@ const OutputRouting = struct {
 };
 
 const BufferedDescriptorDestination = OutputDestination;
-const BufferedDescriptorRouting = OutputRouting;
 
 pub const RunnerOutputWriteResult = struct {
     stdout_failed: bool = false,
@@ -2673,6 +2672,20 @@ const OutputFrame = struct {
         try self.addDiagnostic(diagnostic, stderr_text);
     }
 };
+
+fn writeExternalRunOutput(
+    frame: *OutputFrame,
+    descriptor: runtime.fd.Descriptor,
+    bytes: []const u8,
+) EvalError!void {
+    runtime.fd.assertValidDescriptor(descriptor);
+    if (bytes.len == 0) return;
+    switch (frame.routingRef().destination(descriptor)) {
+        .closed => return error.Unimplemented,
+        else => {},
+    }
+    try frame.write(descriptor, bytes);
+}
 
 test "output routing defaults inherited descriptors to host descriptors" {
     var routing = OutputRouting.init(std.testing.allocator, .inherited);
@@ -2851,21 +2864,23 @@ fn flushBufferedRedirectionOutput(
         return;
     }
 
-    if (evaluator.scoped_exec_redirections) |scoped_redirections| {
-        for (scoped_redirections.items) |scoped| {
-            try applyBufferedRoutingRedirections(&frame.routing, scoped.redirections);
-        }
-    }
-    try applyBufferedRoutingRedirections(&frame.routing, redirections);
+    try applyOutputRoutingRedirections(evaluator, &frame.routing, redirections);
 
     try frame.flushPendingDescriptor(1);
     try frame.flushPendingDescriptor(2);
 }
 
-fn applyBufferedRoutingRedirections(
-    routing: *BufferedDescriptorRouting,
+fn applyOutputRoutingRedirections(
+    evaluator: Evaluator,
+    routing: *OutputRouting,
     redirections: redirection_plan.RedirectionPlan,
 ) EvalError!void {
+    redirections.validate();
+    if (evaluator.scoped_exec_redirections) |scoped_redirections| {
+        for (scoped_redirections.items) |scoped| {
+            try routing.applyRedirections(scoped.redirections);
+        }
+    }
     try routing.applyRedirections(redirections);
 }
 
@@ -6418,18 +6433,24 @@ fn evaluateExternalWithProcessEnvironment(
 
         var frame = OutputFrame.initOutcomeCapture(buffers);
         defer frame.deinit();
-        if (redirectionTargetsDescriptor(plan.redirections, 1)) {
-            try frame.routing.setDestination(1, .{ .host_descriptor = 1 });
-        }
-        if (redirectionTargetsDescriptor(plan.redirections, 2)) {
-            try frame.routing.setDestination(2, .{ .host_descriptor = 2 });
-        } else if (evaluator.external_stdio == .capture or evaluator.external_stdio == .inherit) {
-            try frame.routing.setDestination(2, .outcome_stderr_capture);
-        } else {
+        if (evaluator.external_stdio != .capture and evaluator.external_stdio != .inherit) {
             try frame.routing.setDestination(2, .closed);
         }
-        try frame.write(1, run_result.stdout);
-        try frame.write(2, run_result.stderr);
+        try applyOutputRoutingRedirections(evaluator.*, &frame.routing, plan.redirections);
+        writeExternalRunOutput(&frame, 1, run_result.stdout) catch |err| switch (err) {
+            error.Unimplemented => {
+                try buffers.addBuiltinDiagnostic(plan.argv[0], "bad file descriptor");
+                return 1;
+            },
+            else => |e| return e,
+        };
+        writeExternalRunOutput(&frame, 2, run_result.stderr) catch |err| switch (err) {
+            error.Unimplemented => {
+                try buffers.addBuiltinDiagnostic(plan.argv[0], "bad file descriptor");
+                return 1;
+            },
+            else => |e| return e,
+        };
         return normalizeWaitStatus(run_result.status);
     }
 
@@ -6562,30 +6583,17 @@ fn appendCapturedExternalOutput(
         .stdout => {
             var frame = OutputFrame.initOutcomeCapture(buffers);
             defer frame.deinit();
-            if (redirectionOrScopedExecTargetsDescriptor(evaluator, plan, 1)) {
-                try frame.routing.setDestination(1, .{ .host_descriptor = 1 });
-            }
-            if (redirectionOrScopedExecTargetsDescriptor(evaluator, plan, 2)) {
-                try frame.routing.setDestination(2, .{ .host_descriptor = 2 });
-            } else {
-                try frame.routing.setDestination(2, .closed);
-            }
+            try frame.routing.setDestination(2, .closed);
+            try applyOutputRoutingRedirections(evaluator, &frame.routing, plan.redirections);
             try frame.write(1, stdout);
             try frame.write(2, stderr);
         },
         .stdout_and_stderr => {
             var frame = OutputFrame.initCommandSubstitution(buffers);
             defer frame.deinit();
+            try applyOutputRoutingRedirections(evaluator, &frame.routing, plan.redirections);
             try frame.write(1, stdout);
             try frame.write(2, stderr);
-            if (evaluator.scoped_exec_redirections) |scoped_redirections| {
-                for (scoped_redirections.items) |scoped| {
-                    try applyBufferedRoutingRedirections(&frame.routing, scoped.redirections);
-                }
-            }
-            try applyBufferedRoutingRedirections(&frame.routing, plan.redirections);
-            try frame.flushPendingDescriptor(1);
-            try frame.flushPendingDescriptor(2);
         },
     }
 }
@@ -6660,20 +6668,15 @@ fn runExternalWithPipelineInputWithProcessEnvironment(
 
     var frame = OutputFrame.initOutcomeCapture(buffers);
     defer frame.deinit();
-    if (redirectionTargetsDescriptor(plan.redirections, 1)) {
-        try frame.routing.setDestination(1, .{ .host_descriptor = 1 });
-    }
-    if (redirectionTargetsDescriptor(plan.redirections, 2)) {
-        try frame.routing.setDestination(2, .{ .host_descriptor = 2 });
-    }
-    frame.write(1, run_result.stdout) catch |err| switch (err) {
+    try applyOutputRoutingRedirections(evaluator.*, &frame.routing, plan.redirections);
+    writeExternalRunOutput(&frame, 1, run_result.stdout) catch |err| switch (err) {
         error.Unimplemented => {
             try buffers.addBuiltinDiagnostic(plan.argv[0], "bad file descriptor");
             return 1;
         },
         else => |e| return e,
     };
-    frame.write(2, run_result.stderr) catch |err| switch (err) {
+    writeExternalRunOutput(&frame, 2, run_result.stderr) catch |err| switch (err) {
         error.Unimplemented => {
             try buffers.addBuiltinDiagnostic(plan.argv[0], "bad file descriptor");
             return 1;

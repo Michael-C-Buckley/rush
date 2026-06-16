@@ -199,6 +199,39 @@
             .status = 0,
         },
         .{
+            .name = "command substitution external here document preserves ordered output routing",
+            .script =
+            \\exec 3>&1
+            \\out=$(sh -c 'cat; printf err >&2' 2>&1 1>&3 <<EOF
+            \\out
+            \\EOF
+            \\)
+            \\printf ' captured=<%s>\n' "$out"
+            ,
+            .stdout =
+            \\out
+            \\ captured=<err>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "command substitution external pipeline input preserves ordered output routing",
+            .script =
+            \\exec 3>&1
+            \\out=$(printf 'out\n' | sh -c 'cat; printf err >&2' 2>&1 1>&3)
+            \\printf ' captured=<%s>\n' "$out"
+            ,
+            .stdout =
+            \\out
+            \\ captured=<err>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "command substitution external command reads redirected stdin",
             .script =
             \\printf file >in
