@@ -8183,7 +8183,10 @@ fn evaluateExec(
         .lookup = .{ .externals = &.{resolution} },
         .target = .child_process,
     });
-    const status = try evaluateExternal(evaluator, shell_state, target_plan, resolution, buffers);
+    const status = if (buffers.stdin.remaining().len == 0)
+        try evaluateExternal(evaluator, shell_state, target_plan, resolution, buffers)
+    else
+        try runExternalWithPipelineInput(evaluator, shell_state, target_plan, resolution, buffers);
     try state_delta.setTrap(state.TrapSignal.EXIT.name(), null);
     return .{ .status = status, .control_flow = .{ .exit = status } };
 }

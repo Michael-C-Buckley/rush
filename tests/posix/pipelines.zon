@@ -27,6 +27,19 @@
             .status = 0,
         },
         .{
+            .name = "pipeline supplies input to exec replacement command",
+            .script =
+            \\printf hi | exec sh -c 'cat; exit 6'
+            \\printf 'status:%s\n' "$?"
+            ,
+            .stdout =
+            \\histatus:6
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "pipeline connects stdout but leaves stderr independent",
             .script =
             \\{ printf 'out\n'; printf 'err\n' >&2; } | cat
