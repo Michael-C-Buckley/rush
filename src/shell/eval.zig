@@ -299,6 +299,47 @@ pub const ParserBackedSourceResolver = struct {
         return self.lowerSourceWithSignal(allocator, source, null, eval_context, shell_state);
     }
 
+    pub fn lowerProgramStatement(
+        self: *ParserBackedSourceResolver,
+        allocator: std.mem.Allocator,
+        program: ir.Program,
+        statement_index: usize,
+        eval_context: context.EvalContext,
+        shell_state: *state.ShellState,
+    ) !TrapActionBody {
+        self.validate();
+        shell_state.validate();
+        std.debug.assert(statement_index < program.statements.len);
+        std.debug.assert(shell_state.acceptsExecutionTarget(eval_context.target));
+
+        var lowering_eval_context = eval_context;
+        lowering_eval_context.features = self.features;
+        lowering_eval_context.validate();
+
+        const arena = try allocator.create(std.heap.ArenaAllocator);
+        errdefer allocator.destroy(arena);
+        arena.* = std.heap.ArenaAllocator.init(allocator);
+        errdefer arena.deinit();
+
+        const arena_allocator = arena.allocator();
+        var lowerer: SourceLowerer = .{
+            .allocator = arena_allocator,
+            .owner = self,
+            .shell_state = shell_state,
+            .eval_context = lowering_eval_context,
+            .signal = null,
+            .local_functions = .empty,
+        };
+
+        const payload = try lowerer.lowerSingleStatement(
+            program,
+            program.statements[statement_index],
+            lowering_eval_context.target,
+        );
+        payload.validate();
+        return .{ .owned = OwnedTrapActionBody.init(allocator, arena, payload) };
+    }
+
     pub fn validate(self: ParserBackedSourceResolver) void {
         _ = self.evaluator.allocator;
         std.debug.assert(self.arg_zero.len != 0);
@@ -2155,7 +2196,7 @@ fn evaluatePlanWithInput(
             .applied => |applied| applied_redirections = applied,
             .failure => |failure| {
                 const command_name = if (effective_plan.argv.len == 0) "redirection" else effective_plan.argv[0];
-                try buffers.addBuiltinDiagnostic(command_name, redirectionFailureMessage(failure));
+                try addRedirectionFailureDiagnostic(&buffers, command_name, failure);
                 const redirection_result = evaluationFromRedirectionFailure(shell_state.options, eval_context, failure);
                 state_delta.setLastStatus(redirection_result.status);
                 return try commandOutcomeFromBuffers(
@@ -2397,7 +2438,7 @@ fn evaluateCompoundPlanWithInput(
                     failure.consequence,
                     status,
                 );
-                try buffers.addBuiltinDiagnostic(plan.kindName(), redirectionFailureMessage(failure));
+                try addRedirectionFailureDiagnostic(&buffers, plan.kindName(), failure);
                 state_delta.setLastStatus(status);
                 return try commandOutcomeFromBuffers(
                     evaluator.allocator,
@@ -3365,10 +3406,7 @@ fn applySingleStageBackgroundRedirections(
             return true;
         },
         .failure => |failure| {
-            try buffers.addBuiltinDiagnostic(
-                backgroundSingleStageName(plan.stages[0]),
-                redirectionFailureMessage(failure),
-            );
+            try addRedirectionFailureDiagnostic(buffers, backgroundSingleStageName(plan.stages[0]), failure);
             return null;
         },
     }
@@ -3444,7 +3482,7 @@ fn startBackgroundSingleExternal(
         switch (apply_result) {
             .applied => |applied| applied_redirections = applied,
             .failure => |failure| {
-                try buffers.addBuiltinDiagnostic(plan.argv[0], redirectionFailureMessage(failure));
+                try addRedirectionFailureDiagnostic(buffers, plan.argv[0], failure);
                 return .{ .failure = 1 };
             },
         }
@@ -5195,7 +5233,7 @@ fn evaluateFunction(
         switch (apply_result) {
             .applied => |applied| call_redirections = applied,
             .failure => |failure| {
-                try buffers.addBuiltinDiagnostic(definition.name, redirectionFailureMessage(failure));
+                try addRedirectionFailureDiagnostic(buffers, definition.name, failure);
                 return evaluationFromRedirectionFailure(shell_state.options, eval_context, failure);
             },
         }
@@ -5212,7 +5250,7 @@ fn evaluateFunction(
         switch (apply_result) {
             .applied => |applied| definition_redirections = applied,
             .failure => |failure| {
-                try buffers.addBuiltinDiagnostic(definition.name, redirectionFailureMessage(failure));
+                try addRedirectionFailureDiagnostic(buffers, definition.name, failure);
                 return evaluationFromRedirectionFailure(shell_state.options, eval_context, failure);
             },
         }
@@ -5669,7 +5707,7 @@ fn evaluateExternalWithProcessEnvironment(
             switch (apply_result) {
                 .applied => |applied| applied_redirections = applied,
                 .failure => |failure| {
-                    try buffers.addBuiltinDiagnostic(plan.argv[0], redirectionFailureMessage(failure));
+                    try addRedirectionFailureDiagnostic(buffers, plan.argv[0], failure);
                     return 1;
                 },
             }
@@ -5732,7 +5770,7 @@ fn evaluateExternalWithProcessEnvironment(
         switch (apply_result) {
             .applied => |applied| applied_redirections = applied,
             .failure => |failure| {
-                try buffers.addBuiltinDiagnostic(plan.argv[0], redirectionFailureMessage(failure));
+                try addRedirectionFailureDiagnostic(buffers, plan.argv[0], failure);
                 return 1;
             },
         }
@@ -5795,7 +5833,7 @@ fn evaluateCapturedExternal(
         switch (apply_result) {
             .applied => |applied| applied_redirections = applied,
             .failure => |failure| {
-                try buffers.addBuiltinDiagnostic(plan.argv[0], redirectionFailureMessage(failure));
+                try addRedirectionFailureDiagnostic(buffers, plan.argv[0], failure);
                 return 1;
             },
         }
@@ -5880,7 +5918,7 @@ fn runExternalWithPipelineInputWithProcessEnvironment(
         switch (apply_result) {
             .applied => |applied| applied_redirections = applied,
             .failure => |failure| {
-                try buffers.addBuiltinDiagnostic(plan.argv[0], redirectionFailureMessage(failure));
+                try addRedirectionFailureDiagnostic(buffers, plan.argv[0], failure);
                 return 1;
             },
         }
@@ -6215,6 +6253,16 @@ fn redirectionFailureMessage(failure: redirection_plan.ApplyFailure) []const u8 
         },
         .unsupported_here_doc => "unsupported here-document redirection",
     };
+}
+
+fn addRedirectionFailureDiagnostic(
+    buffers: *EvaluationBuffers,
+    command_name: []const u8,
+    failure: redirection_plan.ApplyFailure,
+) !void {
+    runtime.fd.assertValidDescriptor(failure.target);
+    if (!descriptorIsOpen(2)) return;
+    try buffers.addBuiltinDiagnostic(command_name, redirectionFailureMessage(failure));
 }
 
 fn normalizeWaitStatus(status: runtime.process.WaitStatus) outcome.ExitStatus {

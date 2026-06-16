@@ -833,9 +833,8 @@ fn runSemanticLoweredProgram(
         var statement_fragment = try ir.statementSourceFragment(allocator, program, statement_index);
         defer statement_fragment.deinit(allocator);
         const statement_end = statement_fragment.consumed_end;
-        const statement_script = try statement_fragment.render(allocator, program.source, .{ .trim_syntax = true });
-        defer allocator.free(statement_script);
-        std.debug.assert(statement_script.len != 0);
+        const statement_source = statement_fragment.syntax_span.slice(program.source);
+        std.debug.assert(statement_source.len != 0);
         var statement_context = eval_context;
         if (statement_index + 1 < program.statements.len) {
             switch (program.statements[statement_index + 1].op_before) {
@@ -844,12 +843,22 @@ fn runSemanticLoweredProgram(
             }
         }
         syncSemanticStdinScriptOffset(stdin_script_file, stdin_script_source_offset, script, statement_end);
-        var body = (try source_resolver.lowerSource(
+        var body = if (statement.async_after) body: {
+            const statement_script = try statement_fragment.render(allocator, program.source, .{ .trim_syntax = true });
+            defer allocator.free(statement_script);
+            break :body (try source_resolver.lowerSource(
+                allocator,
+                statement_script,
+                statement_context,
+                shell_state,
+            )) orelse return semanticUnsupported(allocator, "semantic parser lowering returned no body");
+        } else try source_resolver.lowerProgramStatement(
             allocator,
-            statement_script,
+            program,
+            statement_index,
             statement_context,
             shell_state,
-        )) orelse return semanticUnsupported(allocator, "semantic parser lowering returned no body");
+        );
         defer body.deinit();
 
         if (semanticBodyUnsupportedMessage(body, eval_context.interactive)) |message| {
@@ -906,7 +915,7 @@ fn runSemanticLoweredProgram(
         applyOutputWriteResult(&command_outcome, write_result);
         status = command_outcome.status;
         control_flow = command_outcome.control_flow;
-        if (bashAssignmentErrorAbortsSourceLine(eval_context.features, statement_script, command_outcome)) {
+        if (bashAssignmentErrorAbortsSourceLine(eval_context.features, statement_source, command_outcome)) {
             abort_bash_line = semanticSourceLine(script, statement.span.start);
         }
         try command_outcome.applyToShellState(shell_state, .{ .record_exit_control_flow = true });

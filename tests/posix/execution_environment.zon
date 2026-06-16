@@ -139,7 +139,7 @@
             \\<nonzero:out>
             \\
             ,
-            .stderr = "",
+            .stderr_match = .nonempty,
             .status = 0,
         },
         .{
