@@ -33,6 +33,16 @@
             .status = 0,
         },
         .{
+            .name = "command substitution parse error inside subshell exits before following commands",
+            .script =
+            \\( echo "$(for do echo; done)" )
+            \\printf 'after\n'
+            ,
+            .stdout = "",
+            .stderr_match = .nonempty,
+            .status_match = .nonzero,
+        },
+        .{
             .name = "command substitution executes in a subshell environment",
             .script =
             \\x=outer

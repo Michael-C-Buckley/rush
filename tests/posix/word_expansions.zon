@@ -645,6 +645,36 @@
             .status = 0,
         },
         .{
+            .name = "command substitution parse error exits before following commands",
+            .script =
+            \\echo "$(for do echo; done)"
+            \\printf 'after\n'
+            ,
+            .stdout = "",
+            .stderr_match = .nonempty,
+            .status_match = .nonzero,
+        },
+        .{
+            .name = "nested command substitution parse error exits before captured output is emitted",
+            .script =
+            \\echo "$(printf before; echo "$(for do echo; done)"; printf after)"
+            \\printf 'outer-after\n'
+            ,
+            .stdout = "",
+            .stderr_match = .nonempty,
+            .status_match = .nonzero,
+        },
+        .{
+            .name = "pipeline command substitution parse error exits before captured output is emitted",
+            .script =
+            \\echo "$(echo "$(for do echo; done)" | cat)"
+            \\printf 'outer-after\n'
+            ,
+            .stdout = "",
+            .stderr_match = .nonempty,
+            .status_match = .nonzero,
+        },
+        .{
             .name = "command substitution runs in an isolated shell environment",
             .script =
             \\x=parent

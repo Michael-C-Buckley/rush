@@ -74,6 +74,17 @@
             .status_match = .nonzero,
         },
         .{
+            .name = "trap action command substitution parse error exits before following commands",
+            .script =
+            \\trap 'echo "$(for do echo; done)"; echo trap-after' TERM
+            \\kill -TERM $$
+            \\echo after
+            ,
+            .stdout = "",
+            .stderr_match = .nonempty,
+            .status_match = .nonzero,
+        },
+        .{
             .name = "pending trap preserves semantic output around inherited external output",
             .script =
             \\trap 'printf "trap-before\n"; cat <<EOF

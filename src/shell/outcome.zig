@@ -66,6 +66,29 @@ pub const ControlFlow = union(enum) {
     }
 };
 
+/// Failure metadata that must survive execution boundaries where ordinary
+/// control flow may be normalized, such as command substitutions, pipelines,
+/// and isolated shell targets.
+pub const PropagatedFailure = union(enum) {
+    command_substitution: ExitStatus,
+
+    pub fn validate(self: PropagatedFailure) void {
+        switch (self) {
+            .command_substitution => |failure_status| std.debug.assert(failure_status != 0),
+        }
+    }
+
+    pub fn status(self: PropagatedFailure) ExitStatus {
+        return switch (self) {
+            .command_substitution => |failure_status| failure_status,
+        };
+    }
+
+    pub fn controlFlow(self: PropagatedFailure) ControlFlow {
+        return .{ .fatal = self.status() };
+    }
+};
+
 pub const CommandOutcome = struct {
     allocator: std.mem.Allocator,
     status: ExitStatus,
@@ -74,6 +97,7 @@ pub const CommandOutcome = struct {
     diagnostics: std.ArrayList(Diagnostic) = .empty,
     state_delta: delta.StateDelta,
     control_flow: ControlFlow = .normal,
+    propagated_failure: ?PropagatedFailure = null,
 
     pub const ApplyOptions = struct {
         /// Top-level command runners record exit/fatal control flow as a pending
@@ -135,6 +159,14 @@ pub const CommandOutcome = struct {
     pub fn validate(self: CommandOutcome) void {
         self.control_flow.validate();
         std.debug.assert(self.state_delta.state == .pending or self.state_delta.state == .consumed);
+        if (self.propagated_failure) |failure| {
+            failure.validate();
+            std.debug.assert(self.status == failure.status());
+            switch (self.control_flow) {
+                .fatal => |fatal_status| std.debug.assert(fatal_status == failure.status()),
+                .normal, .exit, .return_from_scope, .break_loop, .continue_loop => std.debug.assert(false),
+            }
+        }
 
         switch (self.control_flow) {
             .normal => {},
@@ -151,6 +183,12 @@ pub const CommandOutcome = struct {
     pub fn validateForContext(self: CommandOutcome, eval_context: context.EvalContext) void {
         self.validate();
         self.control_flow.validateForContext(eval_context);
+    }
+
+    pub fn effectiveControlFlow(self: CommandOutcome) ControlFlow {
+        self.validate();
+        if (self.propagated_failure) |failure| return failure.controlFlow();
+        return self.control_flow;
     }
 
     pub fn commitDelta(self: *CommandOutcome, shell_state: *state.ShellState, target: context.ExecutionTarget) !void {

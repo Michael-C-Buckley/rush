@@ -175,6 +175,7 @@ pub const TrapActionFailure = struct {
     kind: TrapActionFailureKind,
     status: outcome.ExitStatus = 2,
     message: []const u8,
+    fatal_noninteractive: bool = false,
     bash_arithmetic_expansion: bool = false,
     bash_arithmetic_readonly_assignment: bool = false,
     bash_arithmetic_assignment_only_expansion: bool = false,
@@ -185,7 +186,22 @@ pub const TrapActionFailure = struct {
         std.debug.assert(self.message.len != 0);
         std.debug.assert(std.mem.findScalar(u8, self.message, 0) == null);
     }
+
+    fn fatalInNonInteractiveShell(self: TrapActionFailure) TrapActionFailure {
+        var failure = self;
+        failure.fatal_noninteractive = true;
+        failure.validate();
+        return failure;
+    }
 };
+
+fn cloneTrapActionFailure(allocator: std.mem.Allocator, failure: TrapActionFailure) !TrapActionFailure {
+    failure.validate();
+    var cloned = failure;
+    cloned.message = try allocator.dupe(u8, failure.message);
+    cloned.validate();
+    return cloned;
+}
 
 pub const OwnedTrapActionBody = struct {
     allocator: std.mem.Allocator,
@@ -546,7 +562,7 @@ const SourceLowerer = struct {
             .simple => |plan| .{ .simple = plan },
             .compound => |plan| .{ .compound = plan },
             .pipeline => |plan| .{ .pipeline = plan },
-            .failure => |trap_failure| .{ .failure = trap_failure },
+            .failure => |trap_failure| .{ .failure = trap_failure.fatalInNonInteractiveShell() },
         };
     }
 
@@ -975,7 +991,10 @@ const SourceLowerer = struct {
             var explicit: std.ArrayList([]const u8) = .empty;
             errdefer explicit.deinit(self.allocator);
             for (command.words) |word| {
-                const fields = try self.expandFields(word.raw, target);
+                const fields = switch (try self.expandFields(word.raw, target)) {
+                    .failure => |trap_failure| return .{ .failure = trap_failure },
+                    .result => |fields| fields,
+                };
                 try explicit.appendSlice(self.allocator, fields.fields);
             }
             break :blk command_plan.ForWords{ .explicit = try explicit.toOwnedSlice(self.allocator) };
@@ -1018,7 +1037,10 @@ const SourceLowerer = struct {
         for (command.arms, 0..) |arm, arm_index| {
             const patterns = try self.allocator.alloc([]const u8, arm.patterns.len);
             for (arm.patterns, 0..) |pattern, pattern_index| {
-                patterns[pattern_index] = try self.expandCasePattern(pattern.raw, target);
+                patterns[pattern_index] = switch (try self.expandCasePattern(pattern.raw, target)) {
+                    .failure => |trap_failure| return .{ .failure = trap_failure },
+                    .value => |value| value,
+                };
             }
             const body_result = try self.lowerStatementListSource(arm.body, target);
             const body = switch (body_result) {
@@ -1032,7 +1054,10 @@ const SourceLowerer = struct {
                 .test_next = arm.test_next,
             };
         }
-        const word = try self.expandScalar(command.word.raw, target);
+        const word = switch (try self.expandScalar(command.word.raw, target)) {
+            .failure => |trap_failure| return .{ .failure = trap_failure },
+            .value => |value| value,
+        };
         const plan: command_plan.CompoundCommandPlan = .{
             .target = target,
             .redirections = redirections.plan,
@@ -1147,6 +1172,9 @@ const SourceLowerer = struct {
             return err;
         };
         expanded.command.validate();
+        if (command_substitutions.context.fatal_failure) |trap_failure| {
+            return .{ .failure = try cloneTrapActionFailure(self.allocator, trap_failure) };
+        }
         expanded.command.last_command_substitution_status = command_substitutions.context.last_status;
         try appendCommandSubstitutionExpansionOutput(self.allocator, &expanded.command, command_substitutions.context);
         const lookup = try self.lookupSnapshot(expanded.command);
@@ -1263,6 +1291,16 @@ const SourceLowerer = struct {
         failure: TrapActionFailure,
     };
 
+    const ScalarExpansionLowering = union(enum) {
+        value: []const u8,
+        failure: TrapActionFailure,
+    };
+
+    const WordExpansionLowering = union(enum) {
+        result: expand.ExpansionResult,
+        failure: TrapActionFailure,
+    };
+
     fn lowerRedirections(
         self: *SourceLowerer,
         redirections: []const ir.Redirection,
@@ -1375,6 +1413,9 @@ const SourceLowerer = struct {
                 return .{ .failure = try self.expansionFailure(expansion_failure) };
             return err;
         };
+        if (command_substitutions.context.fatal_failure) |trap_failure| {
+            return .{ .failure = try cloneTrapActionFailure(self.allocator, trap_failure) };
+        }
         const fields = try self.allocator.alloc([]const u8, 1);
         fields[0] = field;
         return .{ .fields = .{ .fields = fields, .ownership = .owned_by_plan } };
@@ -1408,6 +1449,9 @@ const SourceLowerer = struct {
                 return .{ .failure = try self.expansionFailure(expansion_failure) };
             return err;
         };
+        if (command_substitutions.context.fatal_failure) |trap_failure| {
+            return .{ .failure = try cloneTrapActionFailure(self.allocator, trap_failure) };
+        }
         return .{ .data = data };
     }
 
@@ -1487,7 +1531,11 @@ const SourceLowerer = struct {
         return null;
     }
 
-    fn expandScalar(self: *SourceLowerer, raw: []const u8, target: context.ExecutionTarget) ![]const u8 {
+    fn expandScalar(
+        self: *SourceLowerer,
+        raw: []const u8,
+        target: context.ExecutionTarget,
+    ) !ScalarExpansionLowering {
         const expansion_target = self.expansionTarget(target);
         const expansion_eval_context = self.eval_context.withTarget(expansion_target);
         var process_id_buffer: [32]u8 = undefined;
@@ -1506,17 +1554,27 @@ const SourceLowerer = struct {
             .last_background_pid = self.lastBackgroundPidText(&last_background_pid_buffer),
         });
         defer expansion.deinit();
-        return expansion.expandWordScalar(raw) catch |err| {
-            if (expansion.classifyError(err)) |expansion_failure| return std.fmt.allocPrint(
-                self.allocator,
-                "{s}: {s}",
-                .{ expansion_failure.name, expansion_failure.message },
-            );
+        const value = expansion.expandWordScalar(raw) catch |err| {
+            if (expansion.classifyError(err)) |expansion_failure| return .{
+                .value = try std.fmt.allocPrint(
+                    self.allocator,
+                    "{s}: {s}",
+                    .{ expansion_failure.name, expansion_failure.message },
+                ),
+            };
             return err;
         };
+        if (command_substitutions.context.fatal_failure) |trap_failure| {
+            return .{ .failure = try cloneTrapActionFailure(self.allocator, trap_failure) };
+        }
+        return .{ .value = value };
     }
 
-    fn expandCasePattern(self: *SourceLowerer, raw: []const u8, target: context.ExecutionTarget) ![]const u8 {
+    fn expandCasePattern(
+        self: *SourceLowerer,
+        raw: []const u8,
+        target: context.ExecutionTarget,
+    ) !ScalarExpansionLowering {
         const expansion_target = self.expansionTarget(target);
         const expansion_eval_context = self.eval_context.withTarget(expansion_target);
         var process_id_buffer: [32]u8 = undefined;
@@ -1535,21 +1593,27 @@ const SourceLowerer = struct {
             .last_background_pid = self.lastBackgroundPidText(&last_background_pid_buffer),
         });
         defer expansion.deinit();
-        return expansion.expandCasePattern(raw) catch |err| {
-            if (expansion.classifyError(err)) |expansion_failure| return std.fmt.allocPrint(
-                self.allocator,
-                "{s}: {s}",
-                .{ expansion_failure.name, expansion_failure.message },
-            );
+        const value = expansion.expandCasePattern(raw) catch |err| {
+            if (expansion.classifyError(err)) |expansion_failure| return .{
+                .value = try std.fmt.allocPrint(
+                    self.allocator,
+                    "{s}: {s}",
+                    .{ expansion_failure.name, expansion_failure.message },
+                ),
+            };
             return err;
         };
+        if (command_substitutions.context.fatal_failure) |trap_failure| {
+            return .{ .failure = try cloneTrapActionFailure(self.allocator, trap_failure) };
+        }
+        return .{ .value = value };
     }
 
     fn expandFields(
         self: *SourceLowerer,
         raw: []const u8,
         target: context.ExecutionTarget,
-    ) !expand.ExpansionResult {
+    ) !WordExpansionLowering {
         const expansion_target = self.expansionTarget(target);
         const expansion_eval_context = self.eval_context.withTarget(expansion_target);
         var process_id_buffer: [32]u8 = undefined;
@@ -1568,10 +1632,14 @@ const SourceLowerer = struct {
             .last_background_pid = self.lastBackgroundPidText(&last_background_pid_buffer),
         });
         defer expansion.deinit();
-        return expansion.expandWordFields(raw) catch |err| {
+        const result = expansion.expandWordFields(raw) catch |err| {
             if (expansion.classifyError(err)) |_| return err;
             return err;
         };
+        if (command_substitutions.context.fatal_failure) |trap_failure| {
+            return .{ .failure = try cloneTrapActionFailure(self.allocator, trap_failure) };
+        }
+        return .{ .result = result };
     }
 
     fn expandHereDoc(self: *SourceLowerer, text: []const u8, target: context.ExecutionTarget) ![]const u8 {
@@ -1647,7 +1715,11 @@ const SourceLowerer = struct {
                 "command substitution parse error: {s}",
                 .{diagnostic.message},
             );
-        const trap_failure: TrapActionFailure = .{ .kind = .parse_error, .message = message };
+        const trap_failure: TrapActionFailure = .{
+            .kind = .parse_error,
+            .message = message,
+            .fatal_noninteractive = true,
+        };
         trap_failure.validate();
         return .{ .failure = trap_failure };
     }
@@ -1884,6 +1956,7 @@ pub const CommandSubstitutionResult = struct {
     allocator: std.mem.Allocator,
     status: outcome.ExitStatus,
     control_flow: outcome.ControlFlow = .normal,
+    fatal_failure: ?TrapActionFailure = null,
     output: std.ArrayList(u8) = .empty,
     stderr: std.ArrayList(u8) = .empty,
     diagnostics: std.ArrayList(outcome.Diagnostic) = .empty,
@@ -1895,6 +1968,7 @@ pub const CommandSubstitutionResult = struct {
     }
 
     pub fn deinit(self: *CommandSubstitutionResult) void {
+        if (self.fatal_failure) |failure| self.allocator.free(failure.message);
         self.output.deinit(self.allocator);
         self.stderr.deinit(self.allocator);
         for (self.diagnostics.items) |diagnostic| self.allocator.free(diagnostic.message);
@@ -1905,6 +1979,11 @@ pub const CommandSubstitutionResult = struct {
     pub fn validate(self: CommandSubstitutionResult) void {
         self.control_flow.validate();
         std.debug.assert(self.control_flow == .normal);
+        if (self.fatal_failure) |failure| {
+            failure.validate();
+            std.debug.assert(failure.fatal_noninteractive);
+            std.debug.assert(self.status == failure.status);
+        }
         if (self.output.items.len != 0) std.debug.assert(self.output.items[self.output.items.len - 1] != '\n');
     }
 };
@@ -1935,6 +2014,7 @@ pub const CommandSubstitutionExpansionContext = struct {
     eval_context: context.EvalContext,
     resolver: CommandSubstitutionResolver,
     trap_resolver: ?TrapActionResolver = null,
+    fatal_failure: ?TrapActionFailure = null,
     last_status: ?outcome.ExitStatus = null,
     last_control_flow: outcome.ControlFlow = .normal,
     max_depth_observed: u32 = 0,
@@ -1962,6 +2042,7 @@ pub const CommandSubstitutionExpansionContext = struct {
     }
 
     pub fn deinit(self: *CommandSubstitutionExpansionContext) void {
+        if (self.fatal_failure) |failure| self.evaluator.allocator.free(failure.message);
         self.stderr.deinit(self.evaluator.allocator);
         for (self.diagnostics.items) |diagnostic| self.evaluator.allocator.free(diagnostic.message);
         self.diagnostics.deinit(self.evaluator.allocator);
@@ -1973,11 +2054,30 @@ pub const CommandSubstitutionExpansionContext = struct {
         return .{ .context = self, .runFn = runSemanticCommandSubstitution };
     }
 
+    fn recordFailure(self: *CommandSubstitutionExpansionContext, failure: TrapActionFailure) !void {
+        failure.validate();
+        if (self.fatal_failure != null) return;
+
+        var owned = failure.fatalInNonInteractiveShell();
+        owned.message = try self.evaluator.allocator.dupe(u8, failure.message);
+        self.fatal_failure = owned;
+        self.last_status = owned.status;
+        self.last_control_flow = .{ .fatal = owned.status };
+        self.validate();
+    }
+
     pub fn validate(self: CommandSubstitutionExpansionContext) void {
         self.shell_state.validate();
         self.eval_context.validate();
         self.resolver.validate();
         if (self.trap_resolver) |resolver_for_traps| resolver_for_traps.validate();
+        if (self.fatal_failure) |failure| {
+            failure.validate();
+            std.debug.assert(failure.fatal_noninteractive);
+            std.debug.assert(self.last_status != null);
+            std.debug.assert(self.last_status.? == failure.status);
+            std.debug.assert(self.last_control_flow.status(0) == failure.status);
+        }
         self.last_control_flow.validate();
         if (self.last_status == null) std.debug.assert(self.last_control_flow == .normal);
     }
@@ -2091,6 +2191,7 @@ const EvaluationBuffers = struct {
     allocator: std.mem.Allocator,
     stdin: *EvaluationInput,
     routing: OutputRouting,
+    propagated_failure: ?outcome.PropagatedFailure = null,
     stdout: std.ArrayList(u8) = .empty,
     stderr: std.ArrayList(u8) = .empty,
     diagnostics: std.ArrayList([]const u8) = .empty,
@@ -3121,7 +3222,12 @@ fn evaluateCompoundPlanWithInput(
     }
     if (plan.target.isIsolatedFromParent()) {
         result.status = result.control_flow.status(result.status);
-        result.control_flow = .normal;
+        if (buffers.propagated_failure) |propagated_failure| {
+            result.status = propagated_failure.status();
+            result.control_flow = propagated_failure.controlFlow();
+        } else {
+            result.control_flow = .normal;
+        }
     }
 
     if (plan.target.allowsShellStateCommit()) try appendShellStateDiff(shell_state.*, working_state, &state_delta);
@@ -3670,9 +3776,49 @@ fn commandSubstitutionResultFromOutcome(
         errdefer allocator.free(owned_message);
         try result.diagnostics.append(allocator, .{ .message = owned_message });
     }
+    if (command_outcome.propagated_failure) |propagated_failure| {
+        result.fatal_failure = try commandSubstitutionFatalFailureFromOutcome(
+            allocator,
+            propagated_failure,
+            command_outcome,
+        );
+    }
     result.control_flow = .normal;
     result.validate();
     return result;
+}
+
+fn commandSubstitutionFatalFailureFromOutcome(
+    allocator: std.mem.Allocator,
+    propagated_failure: outcome.PropagatedFailure,
+    command_outcome: outcome.CommandOutcome,
+) !TrapActionFailure {
+    command_outcome.validate();
+    std.debug.assert(command_outcome.propagated_failure != null);
+    std.debug.assert(command_outcome.propagated_failure.?.status() == propagated_failure.status());
+    switch (command_outcome.propagated_failure.?) {
+        .command_substitution => {},
+    }
+    switch (propagated_failure) {
+        .command_substitution => {},
+    }
+    const status = propagated_failure.status();
+    std.debug.assert(status != 0);
+
+    const fallback = "command substitution failed";
+    const raw_message = if (command_outcome.diagnostics.items.len != 0)
+        command_outcome.diagnostics.items[0].message
+    else
+        trimCommandSubstitutionOutput(command_outcome.stderr.items);
+    const message = if (raw_message.len == 0) fallback else raw_message;
+    const failure: TrapActionFailure = .{
+        .kind = .expansion_error,
+        .status = status,
+        .message = try allocator.dupe(u8, message),
+        .fatal_noninteractive = true,
+    };
+    failure.validate();
+    return failure;
 }
 
 fn trimCommandSubstitutionOutput(output_bytes: []const u8) []const u8 {
@@ -3699,6 +3845,21 @@ fn assertCommandSubstitutionContext(substitution_context: context.EvalContext) v
     std.debug.assert(substitution_context.command_substitution_depth != 0);
     std.debug.assert(substitution_context.target == .subshell);
     std.debug.assert(substitution_context.target.isIsolatedFromParent());
+}
+
+fn commandSubstitutionBodyFailure(body: CommandSubstitutionBody) ?TrapActionFailure {
+    return switch (body) {
+        .failure => |failure| failure,
+        .owned => |owned| commandSubstitutionBodyPayloadFailure(owned.body),
+        .simple, .compound, .pipeline => null,
+    };
+}
+
+fn commandSubstitutionBodyPayloadFailure(body: CommandSubstitutionBodyPayload) ?TrapActionFailure {
+    return switch (body) {
+        .failure => |failure| failure,
+        .simple, .compound, .pipeline => null,
+    };
 }
 
 fn runSemanticCommandSubstitution(
@@ -3740,6 +3901,10 @@ fn runSemanticCommandSubstitution(
 
     var body = (try expansion_context.resolver.resolve(allocator, script)) orelse return error.Unimplemented;
     defer body.deinit();
+    if (commandSubstitutionBodyFailure(body)) |failure| {
+        try expansion_context.recordFailure(failure);
+        return allocator.dupe(u8, "");
+    }
     var result = try evaluateCommandSubstitutionInState(
         expansion_context.evaluator,
         &substitution_state,
@@ -3748,6 +3913,11 @@ fn runSemanticCommandSubstitution(
         expansion_context.trap_resolver,
     );
     defer result.deinit();
+
+    if (result.fatal_failure) |failure| {
+        try expansion_context.recordFailure(failure);
+        return allocator.dupe(u8, "");
+    }
 
     expansion_context.last_status = result.status;
     expansion_context.last_control_flow = result.control_flow;
@@ -3793,8 +3963,9 @@ fn evaluateSingleStagePipeline(
     defer stage_outcome.deinit();
     try appendOutcomeBuffers(buffers, stage_outcome);
 
-    statuses[0] = stage_outcome.control_flow.status(stage_outcome.status);
-    if (stage_outcome.control_flow != .normal) {
+    const stage_control_flow = stage_outcome.effectiveControlFlow();
+    statuses[0] = stage_control_flow.status(stage_outcome.status);
+    if (stage_control_flow != .normal) {
         var state_delta = delta.StateDelta.init(evaluator.allocator, eval_context.target);
         errdefer state_delta.deinit();
         stage_outcome.discardDelta(stage_target);
@@ -4361,12 +4532,18 @@ fn evaluateFallbackPipeline(
         defer stage_outcome.deinit();
 
         if (is_last_stage) flushInheritedPipelineStdout(evaluator.*, &stage_outcome);
-        statuses[index] = stage_outcome.control_flow.status(stage_outcome.status);
+        const stage_control_flow = stage_outcome.effectiveControlFlow();
+        statuses[index] = stage_control_flow.status(stage_outcome.status);
         try appendPipelineStageBuffers(buffers, stage_outcome, PipelineStageOutputRoute.forStage(is_last_stage));
         stage_outcome.applyToShellState(&stage_state, .{}) catch |err| switch (err) {
             error.OutOfMemory => return error.OutOfMemory,
             error.ReadonlyVariable => unreachable,
         };
+
+        if (stage_control_flow != .normal) {
+            @memset(statuses[index + 1 ..], statuses[index]);
+            break;
+        }
 
         if (!is_last_stage) {
             try transferPipelineStdoutToNextStdin(evaluator.allocator, &next_stdin, stage_outcome);
@@ -4634,18 +4811,25 @@ fn finishPipelineOutcome(
         .status_rule = plan.status_rule,
         .negated = plan.negated,
     });
+    const final_status = if (buffers.propagated_failure) |failure|
+        failure.status()
+    else
+        aggregation.final_status;
     if (mutable_delta.last_status != null) mutable_delta.last_status = null;
-    mutable_delta.setLastStatus(aggregation.final_status);
+    mutable_delta.setLastStatus(final_status);
     try mutable_delta.setLastPipelineStatuses(statuses);
 
     const decision_context = if (plan.negated) eval_context.ignoreErrexit() else eval_context;
-    const decision = consequence.decideForStatus(shell_options, decision_context, aggregation.final_status);
+    const control_flow: outcome.ControlFlow = if (buffers.propagated_failure) |failure|
+        failure.controlFlow()
+    else
+        consequence.decideForStatus(shell_options, decision_context, aggregation.final_status).control_flow;
     return commandOutcomeFromBuffers(
         allocator,
         eval_context,
-        aggregation.final_status,
+        final_status,
         mutable_delta,
-        decision.control_flow,
+        control_flow,
         buffers,
     );
 }
@@ -4807,7 +4991,9 @@ pub fn trapActionFailureOutcome(
     var state_delta = delta.StateDelta.init(allocator, eval_context.target);
     errdefer state_delta.deinit();
     state_delta.setLastStatus(failure.status);
-    const control_flow: outcome.ControlFlow = if (bashExpansionFailureIsCommandFailure(
+    const control_flow: outcome.ControlFlow = if (failure.fatal_noninteractive and !eval_context.interactive)
+        .{ .fatal = failure.status }
+    else if (bashExpansionFailureIsCommandFailure(
         eval_context,
         failure,
         shell_state,
@@ -4835,6 +5021,9 @@ pub fn trapActionFailureOutcome(
     };
     var command_outcome = outcome.CommandOutcome.withControlFlow(allocator, failure.status, state_delta, control_flow);
     errdefer command_outcome.deinit();
+    if (failure.fatal_noninteractive and !eval_context.interactive) {
+        command_outcome.propagated_failure = .{ .command_substitution = failure.status };
+    }
     try command_outcome.addDiagnostic(failure.message);
     try command_outcome.appendStderr(failure.message);
     try command_outcome.appendStderr("\n");
@@ -5061,6 +5250,19 @@ fn commandOutcomeFromBuffers(
 ) EvalError!outcome.CommandOutcome {
     std.debug.assert(state_delta.state == .pending);
     control_flow.validate();
+    var mutable_delta = state_delta;
+    const effective_status = if (buffers.propagated_failure) |failure|
+        failure.status()
+    else
+        status;
+    const effective_control_flow = if (buffers.propagated_failure) |failure|
+        failure.controlFlow()
+    else
+        control_flow;
+    if (buffers.propagated_failure != null) {
+        if (mutable_delta.last_status != null) mutable_delta.last_status = null;
+        mutable_delta.setLastStatus(effective_status);
+    }
 
     var stdout: std.ArrayList(u8) = .empty;
     errdefer stdout.deinit(allocator);
@@ -5081,10 +5283,16 @@ fn commandOutcomeFromBuffers(
         try diagnostics.append(allocator, .{ .message = owned_message });
     }
 
-    var command_outcome = outcome.CommandOutcome.withControlFlow(allocator, status, state_delta, control_flow);
+    var command_outcome = outcome.CommandOutcome.withControlFlow(
+        allocator,
+        effective_status,
+        mutable_delta,
+        effective_control_flow,
+    );
     command_outcome.stdout = stdout;
     command_outcome.stderr = stderr;
     command_outcome.diagnostics = diagnostics;
+    command_outcome.propagated_failure = buffers.propagated_failure;
     command_outcome.validateForContext(eval_context);
     return command_outcome;
 }
@@ -5192,8 +5400,9 @@ fn evaluateStatementList(
             try appendOutcomeBuffers(buffers, child_outcome);
             try applyOutcomeToWorkingState(shell_state, &child_outcome, child_plan.target);
 
-            result = .{ .status = child_outcome.status, .control_flow = child_outcome.control_flow };
-            if (child_outcome.control_flow != .normal) break;
+            const child_control_flow = child_outcome.effectiveControlFlow();
+            result = .{ .status = child_outcome.status, .control_flow = child_control_flow };
+            if (child_control_flow != .normal) break;
         }
         return result;
     }
@@ -5227,11 +5436,12 @@ fn evaluateStatementList(
         try appendOutcomeBuffers(buffers, child_outcome);
         try applyOutcomeToWorkingState(shell_state, &child_outcome, child_outcome.state_delta.target);
 
-        result = .{ .status = child_outcome.status, .control_flow = child_outcome.control_flow };
+        const child_control_flow = child_outcome.effectiveControlFlow();
+        result = .{ .status = child_outcome.status, .control_flow = child_control_flow };
         if (bashAssignmentErrorAbortsSourceLine(eval_context, entry.plan, child_outcome)) {
             abort_bash_line = statementSourceLine(entry.plan);
         }
-        if (child_outcome.control_flow != .normal) break;
+        if (child_control_flow != .normal) break;
     }
     return result;
 }
@@ -5511,9 +5721,10 @@ fn evaluateAndOrList(
         try appendOutcomeBuffers(buffers, child_outcome);
         try applyOutcomeToWorkingState(shell_state, &child_outcome, entry.command.target);
 
-        result = .{ .status = child_outcome.status, .control_flow = child_outcome.control_flow };
+        const child_control_flow = child_outcome.effectiveControlFlow();
+        result = .{ .status = child_outcome.status, .control_flow = child_control_flow };
         if (bashAssignmentErrorOutcomeAbortsSourceLine(eval_context, child_outcome)) break;
-        if (child_outcome.control_flow != .normal) break;
+        if (child_control_flow != .normal) break;
     }
     return result;
 }
@@ -5780,7 +5991,7 @@ fn evaluateStatementListSource(
 
     try appendOutcomeBuffers(buffers, body_outcome);
     try applyOutcomeToWorkingState(shell_state, &body_outcome, body_outcome.state_delta.target);
-    return .{ .status = body_outcome.status, .control_flow = body_outcome.control_flow };
+    return .{ .status = body_outcome.status, .control_flow = body_outcome.effectiveControlFlow() };
 }
 
 fn evaluateTrapActionBodyWithInput(
@@ -5929,6 +6140,9 @@ fn applyOutcomeToWorkingState(
 
 fn appendOutcomeBuffers(buffers: *EvaluationBuffers, command_outcome: outcome.CommandOutcome) !void {
     command_outcome.validate();
+    if (command_outcome.propagated_failure) |failure| {
+        if (buffers.propagated_failure == null) buffers.propagated_failure = failure;
+    }
     var frame = buffers.outputFrame();
     defer frame.deinit();
     try frame.write(1, command_outcome.stdout.items);
@@ -5955,6 +6169,9 @@ fn appendPipelineStageBuffers(
     route: PipelineStageOutputRoute,
 ) !void {
     command_outcome.validate();
+    if (command_outcome.propagated_failure) |failure| {
+        if (buffers.propagated_failure == null) buffers.propagated_failure = failure;
+    }
     var frame = OutputFrame.initOutcomeCapture(buffers);
     defer frame.deinit();
     switch (route) {
