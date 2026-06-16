@@ -14,10 +14,8 @@ const compile_check_targets = [_][]const u8{
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
-    const vaxis = b.dependency("vaxis", .{
-        .target = target,
-        .optimize = optimize,
-    }).module("vaxis");
+    const uucode = sharedUucodeModule(b, target, optimize);
+    const vaxis = sharedVaxisModule(b, target, optimize, uucode);
     const zeit = b.dependency("zeit", .{
         .target = target,
         .optimize = optimize,
@@ -47,6 +45,7 @@ pub fn build(b: *std.Build) void {
         target,
         optimize,
         vaxis,
+        uucode,
         zeit,
         build_config,
         use_system_sqlite,
@@ -77,7 +76,17 @@ pub fn build(b: *std.Build) void {
     run_step.dependOn(&run_cmd.step);
 
     const test_step = b.step("test", "Run unit tests");
-    const test_module = createRushRootModule(b, target, optimize, vaxis, zeit, build_config, use_system_sqlite, .{});
+    const test_module = createRushRootModule(
+        b,
+        target,
+        optimize,
+        vaxis,
+        uucode,
+        zeit,
+        build_config,
+        use_system_sqlite,
+        .{},
+    );
     const exe_tests = b.addTest(.{
         .root_module = test_module,
     });
@@ -126,10 +135,8 @@ fn addCompileChecks(
         const target_query = std.Target.Query.parse(.{ .arch_os_abi = target_name }) catch |err|
             std.debug.panic("invalid compile-check target '{s}': {s}", .{ target_name, @errorName(err) });
         const check_target = b.resolveTargetQuery(target_query);
-        const check_vaxis = b.dependency("vaxis", .{
-            .target = check_target,
-            .optimize = optimize,
-        }).module("vaxis");
+        const check_uucode = sharedUucodeModule(b, check_target, optimize);
+        const check_vaxis = sharedVaxisModule(b, check_target, optimize, check_uucode);
         const check_zeit = b.dependency("zeit", .{
             .target = check_target,
             .optimize = optimize,
@@ -139,6 +146,7 @@ fn addCompileChecks(
             check_target,
             optimize,
             check_vaxis,
+            check_uucode,
             check_zeit,
             build_config,
             use_system_sqlite,
@@ -211,6 +219,7 @@ fn createRushRootModule(
     target: std.Build.ResolvedTarget,
     optimize: std.builtin.OptimizeMode,
     vaxis: *std.Build.Module,
+    uucode: *std.Build.Module,
     zeit: *std.Build.Module,
     build_config: *std.Build.Step.Options,
     use_system_sqlite: bool,
@@ -223,6 +232,7 @@ fn createRushRootModule(
         .link_libc = options.link_libc,
         .imports = &.{
             .{ .name = "vaxis", .module = vaxis },
+            .{ .name = "uucode", .module = uucode },
             .{ .name = "zeit", .module = zeit },
         },
     });
@@ -310,16 +320,52 @@ fn addFuzzTarget(
         }),
         .filters = &.{options.filter},
     });
-    tests.root_module.addImport(options.source_module_name, b.createModule(.{
+    const source_module = b.createModule(.{
         .root_source_file = b.path(options.source_module_root),
         .target = target,
         .optimize = fuzz_optimize,
         .link_libc = options.link_libc,
-    }));
+    });
+    if (std.mem.eql(u8, options.source_module_root, "src/shell.zig")) {
+        source_module.addImport("uucode", sharedUucodeModule(b, target, fuzz_optimize));
+    }
+    tests.root_module.addImport(options.source_module_name, source_module);
     const run = b.addRunArtifact(tests);
     const step = b.step(options.step_name, options.description);
     step.dependOn(&run.step);
     umbrella.dependOn(&run.step);
+}
+
+fn sharedVaxisModule(
+    b: *std.Build,
+    target: std.Build.ResolvedTarget,
+    optimize: std.builtin.OptimizeMode,
+    uucode: *std.Build.Module,
+) *std.Build.Module {
+    const vaxis = b.dependency("vaxis", .{
+        .target = target,
+        .optimize = optimize,
+        .external_uucode = true,
+    }).module("vaxis");
+    vaxis.addImport("uucode", uucode);
+    return vaxis;
+}
+
+fn sharedUucodeModule(
+    b: *std.Build,
+    target: std.Build.ResolvedTarget,
+    optimize: std.builtin.OptimizeMode,
+) *std.Build.Module {
+    return b.dependency("uucode", .{
+        .target = target,
+        .optimize = optimize,
+        .fields = @as([]const []const u8, &.{
+            "east_asian_width",
+            "grapheme_break",
+            "general_category",
+            "is_emoji_presentation",
+        }),
+    }).module("uucode");
 }
 
 fn linkSqlite(b: *std.Build, module: *std.Build.Module, use_system_sqlite: bool) void {
