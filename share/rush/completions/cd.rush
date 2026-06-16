@@ -1,0 +1,6 @@
+__rush_complete_cd_directories() {
+  if test -n "${OLDPWD-}"; then
+    rush_complete candidate - --kind plain --description 'previous directory' --priority 20
+  fi
+  rush_complete directories --append-slash
+}

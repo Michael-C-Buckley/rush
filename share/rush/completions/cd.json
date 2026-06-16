@@ -1,0 +1,37 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "cd",
+    "description": "change directory",
+    "providers": {
+      "cd.directories": { "function": "__rush_complete_cd_directories" }
+    },
+    "options": [
+      {
+        "short": "L",
+        "description": "use logical path resolution"
+      },
+      {
+        "short": "P",
+        "description": "use physical path resolution"
+      },
+      {
+        "spellings": ["-"],
+        "priority": 20,
+        "description": "change to previous directory"
+      }
+    ],
+    "arguments": {
+      "terminator": "--",
+      "states": [
+        {
+          "name": "directory",
+          "index": 0,
+          "provider": "cd.directories",
+          "description": "directory to change to"
+        }
+      ]
+    }
+  }
+}
