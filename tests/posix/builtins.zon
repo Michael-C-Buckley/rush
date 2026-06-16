@@ -582,6 +582,36 @@
             .status = 0,
         },
         .{
+            .name = "env applies assignment operands to utility environment",
+            .script =
+            \\FOO=outer
+            \\env FOO=inner printenv FOO
+            \\printf 'after:%s status:%s\n' "$FOO" "$?"
+            ,
+            .stdout =
+            \\inner
+            \\after:outer status:0
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "env prints assignment operands without changing shell variables",
+            .script =
+            \\FOO=outer
+            \\env FOO=inner | grep '^FOO='
+            \\printf 'after:%s status:%s\n' "$FOO" "$?"
+            ,
+            .stdout =
+            \\FOO=inner
+            \\after:outer status:0
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "exec command exits with the replacement utility status",
             .script =
             \\( exec sh -c 'exit 7'; printf 'bad\n' )

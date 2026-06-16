@@ -6855,11 +6855,25 @@ fn evaluateEnv(
         };
     }
 
+    const assignment_start = index;
+    while (index < plan.argv.len) : (index += 1) {
+        const equals = std.mem.indexOfScalar(u8, plan.argv[index], '=') orelse break;
+        const name = plan.argv[index][0..equals];
+        if (!isShellName(name)) return builtinStatusError(buffers, 1, "env", "invalid variable name");
+        temporary_environment.appendExported(name, plan.argv[index][equals + 1 ..]) catch |err| switch (err) {
+            error.OutOfMemory => return error.OutOfMemory,
+        };
+    }
+
     if (index < plan.argv.len) {
-        if (std.mem.indexOfScalar(u8, plan.argv[index], '=') != null) {
-            return builtinUsageError(buffers, "env", "assignment operands are not supported by semantic env");
+        const env_assignments = try evaluator.allocator.alloc(command_plan.Assignment, index - assignment_start);
+        defer evaluator.allocator.free(env_assignments);
+        for (plan.argv[assignment_start..index], 0..) |operand, assignment_index| {
+            const equals = std.mem.indexOfScalar(u8, operand, '=') orelse unreachable;
+            env_assignments[assignment_index] = .{ .name = operand[0..equals], .value = operand[equals + 1 ..] };
         }
         const command: command_plan.ExpandedSimpleCommand = .{
+            .assignments = env_assignments,
             .argv = plan.argv[index..],
             .last_command_substitution_status = plan.last_command_substitution_status,
         };

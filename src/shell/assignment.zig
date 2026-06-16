@@ -60,6 +60,10 @@ pub const TemporaryEnvironment = struct {
         }
     }
 
+    pub fn appendExported(self: *TemporaryEnvironment, name: []const u8, value: []const u8) !void {
+        try self.put(name, value, true);
+    }
+
     fn put(self: *TemporaryEnvironment, name: []const u8, value: []const u8, exported: bool) !void {
         state.assertValidVariableName(name);
 
