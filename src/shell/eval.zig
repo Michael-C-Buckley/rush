@@ -8291,6 +8291,14 @@ fn evaluateCommandLookup(
         }
     }
 
+    if (parser.isAliasReservedWord(name)) {
+        switch (format) {
+            .terse => try buffers.stdout.print(buffers.allocator, "{s}\n", .{name}),
+            .verbose => try buffers.stdout.print(buffers.allocator, "{s} is a shell keyword\n", .{name}),
+        }
+        return normalEvaluation(0);
+    }
+
     if (isShellName(name) and shell_state.getFunction(name) != null) {
         switch (format) {
             .terse => try buffers.stdout.print(buffers.allocator, "{s}\n", .{name}),

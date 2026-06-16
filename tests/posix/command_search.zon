@@ -360,6 +360,27 @@
             .status = 0,
         },
         .{
+            .name = "command -v and -V report reserved words",
+            .script =
+            \\lookup=$(command -v if)
+            \\case $lookup in if) printf '<%s>\n' terse-if ;; *) printf '<%s>\n' bad ;; esac
+            \\lookup=$(command -v in)
+            \\case $lookup in in) printf '<%s>\n' terse-in ;; *) printf '<%s>\n' bad ;; esac
+            \\lookup=$(command -V while)
+            \\case $lookup in *while*keyword*|*while*reserved*) printf '<%s>\n' verbose ;;
+            \\    *) printf '<%s>\n' bad ;;
+            \\esac
+            ,
+            .stdout =
+            \\<terse-if>
+            \\<terse-in>
+            \\<verbose>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "command -V reports a function before the builtin it shadows",
             .script =
             \\cd() { :; }
