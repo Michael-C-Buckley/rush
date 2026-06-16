@@ -140,15 +140,20 @@ __rush_complete_git_notes_refs() {
 # Async-friendly dynamic overlays for repository-aware path and ref completion.
 
 __rush_complete_git_add_paths() {
-  git diff --name-only 2>/dev/null | while read path; do
-    test -n "$path" &&
-      rush_complete candidate "$path" --kind file --description 'unstaged path' --priority 20
+  git diff --name-status 2>/dev/null | while read status path; do
+    case "$status" in
+      M) description='modified file' ;;
+      D) description='deleted file' ;;
+      A) description='new file' ;;
+      *) description='changed file' ;;
+    esac
+    test -n "$path" && rush_complete candidate "$path" --kind file --description "$description" --priority 20
   done
   if ! rush_complete option-present --long update; then
     if ! rush_complete option-present --short u; then
       git ls-files --others --exclude-standard 2>/dev/null | while read path; do
         test -n "$path" &&
-          rush_complete candidate "$path" --kind file --description 'untracked path' --priority 20
+          rush_complete candidate "$path" --kind file --description 'new file' --priority 20
       done
     fi
   fi
