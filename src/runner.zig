@@ -1344,7 +1344,7 @@ fn semanticInteractiveProgramUnsupported(shell_state: shell.ShellState, program:
 fn semanticInteractiveBuiltinRootAllowed(name: []const u8) bool {
     const definition = default_builtins.lookup(name) orelse return false;
     if (definition.semantic_class == .unsupported) return false;
-    if (definition.semantic_class == .job_control or definition.semantic_class == .control_flow) return false;
+    if (definition.semantic_class == .control_flow) return false;
     if (std.mem.eql(u8, name, "alias") or std.mem.eql(u8, name, "unalias")) return false;
     if (std.mem.eql(u8, name, "local") or
         std.mem.eql(u8, name, "read") or
@@ -1471,9 +1471,9 @@ fn commandUsesUnsupportedSemanticBuiltin(command: ir.SimpleCommand, allow_intera
     const name = command.argv[0].text;
     const definition = default_builtins.lookup(name) orelse return false;
     return switch (definition.semantic_class) {
-        .unsupported, .job_control, .control_flow => true,
+        .unsupported, .control_flow => true,
         .declaration => !allow_interactive_declarations,
-        .no_op, .status_constant, .output, .predicate, .shell_state, .extension_state => false,
+        .no_op, .status_constant, .output, .predicate, .shell_state, .extension_state, .job_control => false,
     };
 }
 
@@ -2392,6 +2392,31 @@ test "semantic interactive invocation runs cd" {
             try std.testing.expectEqualStrings("", result.stdout);
             try std.testing.expectEqualStrings("", result.stderr);
             try std.testing.expectEqualStrings(target_path, shell_state.getVariable("PWD").?.value);
+        },
+    }
+}
+
+test "semantic interactive invocation dispatches job control builtins" {
+    var shell_state = shell.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    try shell.startup.initializeInvocationState(std.testing.allocator, std.testing.io, &shell_state, null, &.{}, .{});
+
+    var execution = try runInteractiveCommandString(
+        std.testing.allocator,
+        std.testing.io,
+        &shell_state,
+        "jobs\nbg\nfg",
+        shell.InvocationContext.init(.{ .arg_zero = "rush", .interactive = true }),
+        .capture,
+    );
+    defer execution.deinit(std.testing.allocator);
+
+    switch (execution) {
+        .unsupported => return error.ExpectedSemanticExecution,
+        .output => |result| {
+            try std.testing.expectEqual(@as(shell.ExitStatus, 1), result.status);
+            try std.testing.expectEqualStrings("", result.stdout);
+            try std.testing.expectEqualStrings("bg: job control disabled\nfg: job control disabled\n", result.stderr);
         },
     }
 }
