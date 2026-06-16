@@ -569,6 +569,19 @@
             .status = 0,
         },
         .{
+            .name = "exec command exits with the replacement utility status",
+            .script =
+            \\( exec sh -c 'exit 7'; printf 'bad\n' )
+            \\printf 'status:%s\n' "$?"
+            ,
+            .stdout =
+            \\status:7
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "unalias -a removes all alias definitions",
             .script =
             \\alias a='printf a' b='printf b'

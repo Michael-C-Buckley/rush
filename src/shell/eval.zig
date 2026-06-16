@@ -6175,7 +6175,7 @@ fn evaluateBuiltin(
     if (std.mem.eql(u8, definition.name, "continue")) {
         return evaluateLoopControl(eval_context, plan.argv, .continue_loop, buffers);
     }
-    if (std.mem.eql(u8, definition.name, "exec")) return evaluateExec(plan.argv, buffers);
+    if (std.mem.eql(u8, definition.name, "exec")) return evaluateExec(evaluator, shell_state, plan, buffers);
     if (std.mem.eql(u8, definition.name, "exit")) return evaluateExit(shell_state, plan.argv, buffers);
     if (std.mem.eql(u8, definition.name, "return")) {
         return evaluateReturn(shell_state, eval_context, plan.argv, buffers);
@@ -8150,16 +8150,40 @@ fn evaluateExit(
     return .{ .status = status, .control_flow = .{ .exit = status } };
 }
 
-fn evaluateExec(argv: []const []const u8, buffers: *EvaluationBuffers) !SimpleEvalResult {
+fn evaluateExec(
+    evaluator: *Evaluator,
+    shell_state: state.ShellState,
+    plan: command_plan.CommandPlan,
+    buffers: *EvaluationBuffers,
+) EvalError!SimpleEvalResult {
+    const argv = plan.argv;
     std.debug.assert(argv.len != 0);
     std.debug.assert(std.mem.eql(u8, argv[0], "exec"));
-    if (argv.len == 1) return normalEvaluation(0);
-    if (argv.len > 1 and std.mem.startsWith(u8, argv[1], "-")) return normalEvaluation(try builtinUsageError(
-        buffers,
-        "exec",
-        "unsupported option",
-    ));
-    return .{ .status = 127, .control_flow = .{ .exit = 127 } };
+    var index: usize = 1;
+    if (index < argv.len and std.mem.eql(u8, argv[index], "--")) index += 1;
+    if (index >= argv.len) return normalEvaluation(0);
+    if (std.mem.startsWith(u8, argv[index], "-")) {
+        return normalEvaluation(try builtinUsageError(buffers, "exec", "unsupported option"));
+    }
+
+    const command: command_plan.ExpandedSimpleCommand = .{
+        .assignments = plan.assignments,
+        .argv = argv[index..],
+        .last_command_substitution_status = plan.last_command_substitution_status,
+    };
+    const external = try resolveExternalForEvaluation(evaluator.allocator, evaluator.fs_port, shell_state, command);
+    defer if (external) |resolution| evaluator.allocator.free(resolution.path);
+    const resolution = external orelse {
+        const status = try evaluateNotFound(.{ .name = command.argv[0] }, buffers);
+        return .{ .status = status, .control_flow = .{ .exit = status } };
+    };
+    const target_plan = command_plan.classifyExpandedSimpleCommand(.{
+        .command = command,
+        .lookup = .{ .externals = &.{resolution} },
+        .target = .child_process,
+    });
+    const status = try evaluateExternal(evaluator, shell_state, target_plan, resolution, buffers);
+    return .{ .status = status, .control_flow = .{ .exit = status } };
 }
 
 fn appendBuiltinDiagnostic(
