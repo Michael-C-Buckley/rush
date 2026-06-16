@@ -85,6 +85,7 @@ __rush_complete_git_remote_branches() {
   tmp=$(mktemp)
   git branch --remotes --format='%(refname:short)' > "$tmp" 2>/dev/null
   while read ref; do
+    case "$ref" in */*) ;; *) continue ;; esac
     rush_complete candidate "$ref" --kind plain --description 'remote branch' --priority 5
   done < "$tmp"
   rm -f "$tmp"
@@ -393,14 +394,85 @@ __rush_complete_git_rebase_action_options() {
   __rush_complete_git_rebase_action_option --rebase-merges 'preserve merge commits' 10
 }
 
+__rush_complete_git_rebase_branches() {
+  current=$(git branch --show-current 2>/dev/null)
+  test -n "$current" && rush_complete candidate "$current" --kind plain --description 'current branch' --priority 60
+  tmp=$(mktemp)
+  git branch --format='%(refname:short)' > "$tmp" 2>/dev/null
+  while read ref; do
+    test -n "$ref" && rush_complete candidate "$ref" --kind plain --description branch --priority 50
+  done < "$tmp"
+  rm -f "$tmp"
+}
+
+__rush_complete_git_rebase_remote_branches() {
+  upstream=$(git rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>/dev/null)
+  test -n "$upstream" && rush_complete candidate "$upstream" --kind plain --description 'upstream branch' --priority 45
+  tmp=$(mktemp)
+  git branch --remotes --format='%(refname:short)' > "$tmp" 2>/dev/null
+  while read ref; do
+    case "$ref" in */*) ;; *) continue ;; esac
+    rush_complete candidate "$ref" --kind plain --description 'remote branch' --priority 40
+  done < "$tmp"
+  rm -f "$tmp"
+}
+
+__rush_complete_git_rebase_tags() {
+  tmp=$(mktemp)
+  git tag --list > "$tmp" 2>/dev/null
+  while read tag; do
+    rush_complete candidate "$tag" --kind plain --description tag --priority 30
+  done < "$tmp"
+  rm -f "$tmp"
+}
+
+__rush_complete_git_rebase_heads() {
+  git rev-parse --verify HEAD >/dev/null 2>&1 && rush_complete candidate HEAD --kind plain --description Head --priority 35
+  git rev-parse --verify refs/stash >/dev/null 2>&1 && rush_complete candidate stash --kind plain --description stash --priority -10
+  git rev-parse --verify FETCH_HEAD >/dev/null 2>&1 && rush_complete candidate FETCH_HEAD --kind plain --description Head --priority -20
+  git rev-parse --verify ORIG_HEAD >/dev/null 2>&1 && rush_complete candidate ORIG_HEAD --kind plain --description Head --priority -20
+}
+
+__rush_complete_git_rebase_remote_aliases() {
+  git remote 2>/dev/null | while read remote; do
+    test -n "$remote" && rush_complete candidate "$remote" --kind plain --description 'remote alias' --priority 25
+  done
+}
+
+__rush_complete_git_rebase_recent_commits() {
+  index=0
+  git log --format='%h %s' -n 50 2>/dev/null | while read commit subject; do
+    if test "$index" = 0; then
+      relative=HEAD
+    elif test "$index" = 1; then
+      relative='HEAD^'
+    else
+      relative="HEAD~$index"
+    fi
+    if test -n "$subject"; then
+      description="$relative  $subject"
+    else
+      description="$relative"
+    fi
+    rush_complete candidate "$commit" --kind plain --description "$description" --priority 20
+    index=$((index + 1))
+  done
+}
+
+__rush_complete_git_rebase_revisions() {
+  __rush_complete_git_rebase_branches
+  __rush_complete_git_rebase_remote_branches
+  __rush_complete_git_rebase_tags
+  __rush_complete_git_rebase_heads
+  __rush_complete_git_rebase_remote_aliases
+  __rush_complete_git_rebase_recent_commits
+}
+
 __rush_complete_git_context_rebase_args() {
   if test "$rush_completion_options_terminated" = true; then
-    __rush_complete_git_refs
+    __rush_complete_git_rebase_revisions
   else
-    if test "$rush_completion_argument_index" = 0; then
-      __rush_complete_git_rebase_action_options
-    fi
-    __rush_complete_git_refs
+    __rush_complete_git_rebase_revisions
   fi
 }
 
