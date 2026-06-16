@@ -17,6 +17,25 @@
             .status = 0,
         },
         .{
+            .name = "EXIT trap preserves semantic output around inherited external output",
+            .script =
+            \\trap 'printf "trap-before\n"; cat <<EOF
+            \\trap-external
+            \\EOF
+            \\printf "trap-after\n"' 0
+            \\printf 'body\n'
+            ,
+            .stdout =
+            \\body
+            \\trap-before
+            \\trap-external
+            \\trap-after
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "EXIT trap sees the status that exits the shell",
             .script =
             \\trap 'printf "<%s>\n" "$?"' 0
@@ -53,6 +72,26 @@
             .stdout = "",
             .stderr_match = .nonempty,
             .status_match = .nonzero,
+        },
+        .{
+            .name = "pending trap preserves semantic output around inherited external output",
+            .script =
+            \\trap 'printf "trap-before\n"; cat <<EOF
+            \\trap-external
+            \\EOF
+            \\printf "trap-after\n"' TERM
+            \\kill -TERM $$
+            \\printf 'after\n'
+            ,
+            .stdout =
+            \\trap-before
+            \\trap-external
+            \\trap-after
+            \\after
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
         },
         .{
             .name = "subshell EXIT trap runs before the subshell status is observed",

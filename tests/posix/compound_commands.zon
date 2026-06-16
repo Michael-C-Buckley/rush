@@ -238,6 +238,21 @@
             .status = 0,
         },
         .{
+            .name = "AND-OR list preserves semantic left output before external right output",
+            .script =
+            \\! printf 'left\n' || cat <<'EOF'
+            \\right
+            \\EOF
+            ,
+            .stdout =
+            \\left
+            \\right
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "AND-OR list output flows through a pipeline",
             .script =
             \\{ ! printf 'a' || printf 'b'; } | sed 's/a/X/'
@@ -287,6 +302,27 @@
             \\<first>
             \\<second>
             \\<third>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "for command preserves semantic output before inherited external output per iteration",
+            .script =
+            \\for x in a b
+            \\do
+            \\    printf '%s\n' "$x"
+            \\    cat <<EOF
+            \\external-$x
+            \\EOF
+            \\done
+            ,
+            .stdout =
+            \\a
+            \\external-a
+            \\b
+            \\external-b
             \\
             ,
             .stderr = "",
@@ -826,6 +862,24 @@
             \\    do
             \\        printf '%s\n' "$word"
             \\    done
+            \\fi
+            ,
+            .stdout =
+            \\condition
+            \\body
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "if command preserves condition output before inherited external body output",
+            .script =
+            \\if printf 'condition\n'
+            \\then
+            \\    cat <<'EOF'
+            \\body
+            \\EOF
             \\fi
             ,
             .stdout =
