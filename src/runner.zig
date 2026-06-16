@@ -325,7 +325,10 @@ fn runSemanticAliasTimingCommandString(
     parser_resolver.arg_zero = invocation.arg_zero;
     const eval_context = invocation.evalContext(.current_shell);
 
-    var output_frame = try shell.eval.RunnerOutputFrame.init(allocator, evaluator.commit_exec_redirections);
+    var output_frame = try shell.eval.RunnerOutputFrame.init(
+        allocator,
+        runnerOutputMode(evaluator.commit_exec_redirections),
+    );
     defer output_frame.deinit();
     var status: shell.ExitStatus = 0;
     var start = skipSemanticChunkSeparators(script, 0);
@@ -619,7 +622,10 @@ fn runSemanticAliasTimingShellStateScript(
     parser_resolver.arg_zero = invocation.arg_zero;
     const eval_context = invocation.evalContext(.current_shell);
 
-    var output_frame = try shell.eval.RunnerOutputFrame.init(allocator, evaluator.commit_exec_redirections);
+    var output_frame = try shell.eval.RunnerOutputFrame.init(
+        allocator,
+        runnerOutputMode(evaluator.commit_exec_redirections),
+    );
     defer output_frame.deinit();
     var status = shell_state.last_status;
     var start = skipSemanticChunkSeparators(script, 0);
@@ -795,7 +801,10 @@ fn runSemanticLoweredProgram(
     shell_state.validate();
     if (stdin_script_file == null) std.debug.assert(stdin_script_source_offset == 0);
 
-    var output_frame = try shell.eval.RunnerOutputFrame.init(allocator, evaluator.commit_exec_redirections);
+    var output_frame = try shell.eval.RunnerOutputFrame.init(
+        allocator,
+        runnerOutputMode(evaluator.commit_exec_redirections),
+    );
     defer output_frame.deinit();
 
     var status: shell.ExitStatus = 0;
@@ -857,7 +866,7 @@ fn runSemanticLoweredProgram(
         }
         const body_failed = semanticBodyIsStoppingFailure(body, eval_context.features);
         if (evaluator.external_stdio == .inherit and semanticBodyUsesInheritedExternal(body)) {
-            const flush_result = try output_frame.flushPendingInheritedExternal();
+            const flush_result = try output_frame.flushPendingToInheritedDescriptors();
             if (flush_result.stdout_failed or flush_result.stderr_failed) return error.Unimplemented;
         }
 
@@ -1530,6 +1539,10 @@ fn semanticCommandUsesInheritedExternal(plan: shell.CommandPlan) bool {
 }
 
 const OutputWriteResult = shell.eval.RunnerOutputWriteResult;
+
+fn runnerOutputMode(commit_exec_redirections: bool) shell.eval.RunnerOutputMode {
+    return if (commit_exec_redirections) .live else .capture;
+}
 
 fn applyOutputWriteResult(command_outcome: *shell.CommandOutcome, result: OutputWriteResult) void {
     command_outcome.validate();

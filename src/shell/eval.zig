@@ -2432,11 +2432,10 @@ fn flushBuffersForRedirectionTargets(
     try frame.applyRedirectionsFlushingRouteChanges(redirections);
 }
 
-fn flushBeforeHostBypass(buffers: *EvaluationBuffers) EvalError!void {
+fn flushBuffersToInheritedDescriptors(buffers: *EvaluationBuffers) EvalError!void {
     var frame = OutputFrame.initInherited(buffers);
     defer frame.deinit();
-    try frame.flushPendingDescriptor(1);
-    try frame.flushPendingDescriptor(2);
+    try frame.flushPendingStandardDescriptors();
 }
 
 const OutputDestination = union(enum) {
@@ -2559,13 +2558,18 @@ pub const RunnerOutput = struct {
     stderr: []u8,
 };
 
+pub const RunnerOutputMode = enum {
+    capture,
+    live,
+};
+
 pub const RunnerOutputFrame = struct {
     allocator: std.mem.Allocator,
     input: *EvaluationInput,
     buffers: *EvaluationBuffers,
     routing: OutputRouting,
 
-    pub fn init(allocator: std.mem.Allocator, live: bool) !RunnerOutputFrame {
+    pub fn init(allocator: std.mem.Allocator, mode: RunnerOutputMode) !RunnerOutputFrame {
         const input = try allocator.create(EvaluationInput);
         errdefer allocator.destroy(input);
         input.* = EvaluationInput.empty();
@@ -2575,7 +2579,10 @@ pub const RunnerOutputFrame = struct {
         buffers.* = EvaluationBuffers.init(allocator, input);
         errdefer buffers.deinit();
 
-        const initial_mode: OutputRouting.InitialMode = if (live) .inherited else .outcome_capture;
+        const initial_mode: OutputRouting.InitialMode = switch (mode) {
+            .capture => .outcome_capture,
+            .live => .inherited,
+        };
         return .{
             .allocator = allocator,
             .input = input,
@@ -2612,23 +2619,7 @@ pub const RunnerOutputFrame = struct {
         return result;
     }
 
-    pub fn flushPending(self: *RunnerOutputFrame) !RunnerOutputWriteResult {
-        var frame = self.outputFrame();
-        defer frame.deinit();
-
-        var result: RunnerOutputWriteResult = .{};
-        frame.flushPendingDescriptor(1) catch |err| switch (err) {
-            error.Unimplemented => result.stdout_failed = true,
-            else => |e| return e,
-        };
-        frame.flushPendingDescriptor(2) catch |err| switch (err) {
-            error.Unimplemented => result.stderr_failed = true,
-            else => |e| return e,
-        };
-        return result;
-    }
-
-    pub fn flushPendingInheritedExternal(self: *RunnerOutputFrame) !RunnerOutputWriteResult {
+    pub fn flushPendingToInheritedDescriptors(self: *RunnerOutputFrame) !RunnerOutputWriteResult {
         var frame = OutputFrame.initInherited(self.buffers);
         defer frame.deinit();
 
@@ -2718,6 +2709,11 @@ const OutputFrame = struct {
         }
     }
 
+    fn flushPendingStandardDescriptors(self: *OutputFrame) EvalError!void {
+        try self.flushPendingDescriptor(1);
+        try self.flushPendingDescriptor(2);
+    }
+
     fn applyRedirectionsFlushingRouteChanges(
         self: *OutputFrame,
         redirections: redirection_plan.RedirectionPlan,
@@ -2771,6 +2767,21 @@ fn writeExternalRunOutput(
         else => {},
     }
     try frame.write(descriptor, bytes);
+}
+
+fn writeOutcomeToInheritedDescriptors(
+    allocator: std.mem.Allocator,
+    stdout_bytes: []const u8,
+    stderr_bytes: []const u8,
+) EvalError!void {
+    var input = EvaluationInput.empty();
+    var buffers = EvaluationBuffers.init(allocator, &input);
+    defer buffers.deinit();
+
+    var frame = OutputFrame.initInherited(&buffers);
+    defer frame.deinit();
+    try frame.write(1, stdout_bytes);
+    try frame.write(2, stderr_bytes);
 }
 
 test "output routing defaults inherited descriptors to host descriptors" {
@@ -4040,8 +4051,11 @@ fn runBackgroundSemanticSubshell(opaque_context: *anyopaque) u8 {
     defer result.deinit();
 
     const status = result.control_flow.status(result.status);
-    if (!writeAllDescriptor(1, result.stdout.items)) return 126;
-    if (!writeAllDescriptor(2, result.stderr.items)) return 126;
+    writeOutcomeToInheritedDescriptors(
+        semantic_context.evaluator.allocator,
+        result.stdout.items,
+        result.stderr.items,
+    ) catch return 126;
     result.applyToShellState(&child_state, .{}) catch return 126;
     return status;
 }
@@ -6551,7 +6565,7 @@ fn evaluateExternalWithProcessEnvironment(
         &.{},
     );
 
-    try flushBeforeHostBypass(buffers);
+    try flushBuffersToInheritedDescriptors(buffers);
 
     var applied_redirections: ?redirection_plan.AppliedRedirections = null;
     defer if (applied_redirections) |*applied| {
