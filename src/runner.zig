@@ -277,10 +277,9 @@ fn runSemanticCommandStringInternal(
     evaluator.read_stdin_from_fd = true;
     evaluator.external_stdio = external_stdio;
     evaluator.commit_exec_redirections = live_stdio and external_stdio == .inherit;
-    var parser_resolver = shell.ParserTrapActionResolver.init(&evaluator);
+    var parser_resolver = shell.ParserBackedSourceResolver.init(&evaluator);
     parser_resolver.features = invocation.features;
     parser_resolver.arg_zero = invocation.arg_zero;
-    const resolver = parser_resolver.resolver();
     const eval_context = invocation.evalContext(.current_shell);
 
     return runSemanticLoweredProgram(
@@ -290,7 +289,7 @@ fn runSemanticCommandStringInternal(
         &evaluator,
         &shell_state,
         eval_context,
-        resolver,
+        &parser_resolver,
         invocation.stdin_script_file,
         invocation.stdin_script_source_offset,
         true,
@@ -321,10 +320,9 @@ fn runSemanticAliasTimingCommandString(
     evaluator.read_stdin_from_fd = true;
     evaluator.external_stdio = external_stdio;
     evaluator.commit_exec_redirections = live_stdio and external_stdio == .inherit;
-    var parser_resolver = shell.ParserTrapActionResolver.init(&evaluator);
+    var parser_resolver = shell.ParserBackedSourceResolver.init(&evaluator);
     parser_resolver.features = invocation.features;
     parser_resolver.arg_zero = invocation.arg_zero;
-    const resolver = parser_resolver.resolver();
     const eval_context = invocation.evalContext(.current_shell);
 
     var stdout: std.ArrayList(u8) = .empty;
@@ -365,7 +363,7 @@ fn runSemanticAliasTimingCommandString(
                     &evaluator,
                     &shell_state,
                     eval_context,
-                    resolver,
+                    &parser_resolver,
                     invocation.stdin_script_file,
                     invocation.stdin_script_source_offset,
                     false,
@@ -391,7 +389,16 @@ fn runSemanticAliasTimingCommandString(
         start = skipSemanticChunkSeparators(script, end);
     }
 
-    try appendSemanticExitTrap(allocator, &stdout, &stderr, &status, &evaluator, &shell_state, eval_context, resolver);
+    try appendSemanticExitTrap(
+        allocator,
+        &stdout,
+        &stderr,
+        &status,
+        &evaluator,
+        &shell_state,
+        eval_context,
+        parser_resolver.resolver(),
+    );
     return .{ .output = .{
         .allocator = allocator,
         .status = status,
@@ -572,10 +579,9 @@ fn runSemanticShellStateScriptWithoutAliasTiming(
     evaluator.read_stdin_from_fd = true;
     evaluator.external_stdio = external_stdio;
     extension_handlers.apply(&evaluator);
-    var parser_resolver = shell.ParserTrapActionResolver.init(&evaluator);
+    var parser_resolver = shell.ParserBackedSourceResolver.init(&evaluator);
     parser_resolver.features = invocation.features;
     parser_resolver.arg_zero = invocation.arg_zero;
-    const resolver = parser_resolver.resolver();
     const eval_context = invocation.evalContext(.current_shell);
 
     return runSemanticLoweredProgram(
@@ -585,7 +591,7 @@ fn runSemanticShellStateScriptWithoutAliasTiming(
         &evaluator,
         shell_state,
         eval_context,
-        resolver,
+        &parser_resolver,
         null,
         0,
         false,
@@ -612,10 +618,9 @@ fn runSemanticAliasTimingShellStateScript(
     evaluator.read_stdin_from_fd = true;
     evaluator.external_stdio = external_stdio;
     extension_handlers.apply(&evaluator);
-    var parser_resolver = shell.ParserTrapActionResolver.init(&evaluator);
+    var parser_resolver = shell.ParserBackedSourceResolver.init(&evaluator);
     parser_resolver.features = invocation.features;
     parser_resolver.arg_zero = invocation.arg_zero;
-    const resolver = parser_resolver.resolver();
     const eval_context = invocation.evalContext(.current_shell);
 
     var stdout: std.ArrayList(u8) = .empty;
@@ -658,7 +663,7 @@ fn runSemanticAliasTimingShellStateScript(
                     &evaluator,
                     shell_state,
                     eval_context,
-                    resolver,
+                    &parser_resolver,
                     null,
                     0,
                     false,
@@ -759,10 +764,9 @@ pub fn runInteractiveCommandStringWithExtensionHandlers(
     evaluator.arg_zero = invocation.arg_zero;
     evaluator.external_stdio = external_stdio;
     extension_handlers.apply(&evaluator);
-    var parser_resolver = shell.ParserTrapActionResolver.init(&evaluator);
+    var parser_resolver = shell.ParserBackedSourceResolver.init(&evaluator);
     parser_resolver.features = invocation.features;
     parser_resolver.arg_zero = invocation.arg_zero;
-    const resolver = parser_resolver.resolver();
     const eval_context = invocation.evalContext(.current_shell);
 
     return runSemanticLoweredProgram(
@@ -772,7 +776,7 @@ pub fn runInteractiveCommandStringWithExtensionHandlers(
         &evaluator,
         shell_state,
         eval_context,
-        resolver,
+        &parser_resolver,
         null,
         0,
         false,
@@ -786,7 +790,7 @@ fn runSemanticLoweredProgram(
     evaluator: *shell.eval.Evaluator,
     shell_state: *shell.ShellState,
     eval_context: shell.EvalContext,
-    resolver: shell.TrapActionResolver,
+    source_resolver: *shell.ParserBackedSourceResolver,
     stdin_script_file: ?std.Io.File,
     stdin_script_source_offset: usize,
     run_exit_trap: bool,
@@ -837,10 +841,9 @@ fn runSemanticLoweredProgram(
             }
         }
         syncSemanticStdinScriptOffset(stdin_script_file, stdin_script_source_offset, script, statement_end);
-        var body = (try resolver.resolve(
+        var body = (try source_resolver.lowerSource(
             allocator,
             statement_script,
-            .TERM,
             statement_context,
             shell_state,
         )) orelse return semanticUnsupported(allocator, "semantic parser lowering returned no body");
@@ -914,7 +917,7 @@ fn runSemanticLoweredProgram(
             evaluator,
             shell_state,
             eval_context,
-            resolver,
+            source_resolver.resolver(),
         );
         if (control_flow != .normal or body_failed) break;
     }
@@ -929,7 +932,7 @@ fn runSemanticLoweredProgram(
         evaluator,
         shell_state,
         eval_context,
-        resolver,
+        source_resolver.resolver(),
     );
     const stdout = try accumulated_stdout.toOwnedSlice(allocator);
     errdefer allocator.free(stdout);

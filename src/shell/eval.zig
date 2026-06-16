@@ -269,7 +269,7 @@ pub const TrapActionResolver = struct {
     }
 };
 
-pub const ParserTrapActionResolver = struct {
+pub const ParserBackedSourceResolver = struct {
     evaluator: *Evaluator,
     features: compat.Features = .{},
     externals: []const command_plan.ExternalResolution = &.{},
@@ -277,26 +277,39 @@ pub const ParserTrapActionResolver = struct {
     expand_aliases: bool = true,
     alias_state: ?*state.ShellState = null,
 
-    pub fn init(evaluator: *Evaluator) ParserTrapActionResolver {
+    pub fn init(evaluator: *Evaluator) ParserBackedSourceResolver {
         return .{ .evaluator = evaluator };
     }
 
-    pub fn resolver(self: *ParserTrapActionResolver) TrapActionResolver {
+    pub fn resolver(self: *ParserBackedSourceResolver) TrapActionResolver {
         self.validate();
-        return .{ .context = self, .resolveFn = resolve };
+        return .{ .context = self, .resolveFn = resolveTrapAction };
     }
 
-    pub fn validate(self: ParserTrapActionResolver) void {
+    pub fn lowerSource(
+        self: *ParserBackedSourceResolver,
+        allocator: std.mem.Allocator,
+        source: []const u8,
+        eval_context: context.EvalContext,
+        shell_state: *state.ShellState,
+    ) !?TrapActionBody {
+        self.validate();
+        shell_state.validate();
+        std.debug.assert(shell_state.acceptsExecutionTarget(eval_context.target));
+        return self.lowerSourceWithSignal(allocator, source, null, eval_context, shell_state);
+    }
+
+    pub fn validate(self: ParserBackedSourceResolver) void {
         _ = self.evaluator.allocator;
         std.debug.assert(self.arg_zero.len != 0);
         for (self.externals) |external| external.validate();
     }
 
-    fn bashMode(self: ParserTrapActionResolver) bool {
+    fn bashMode(self: ParserBackedSourceResolver) bool {
         return self.features.isBash() or self.evaluator.features.isBash();
     }
 
-    fn resolve(
+    fn resolveTrapAction(
         opaque_context: ?*anyopaque,
         allocator: std.mem.Allocator, // ziglint-ignore: Z023 (callback iface)
         action: []const u8,
@@ -305,11 +318,22 @@ pub const ParserTrapActionResolver = struct {
         shell_state: *state.ShellState,
     ) anyerror!?TrapActionBody {
         std.debug.assert(opaque_context != null);
-        const self: *ParserTrapActionResolver = @ptrCast(@alignCast(opaque_context.?));
+        const self: *ParserBackedSourceResolver = @ptrCast(@alignCast(opaque_context.?));
         self.validate();
         trapSemanticActionAssert(action, signal, eval_context);
         shell_state.validate();
         std.debug.assert(shell_state.acceptsExecutionTarget(eval_context.target));
+        return self.lowerSourceWithSignal(allocator, action, signal, eval_context, shell_state);
+    }
+
+    fn lowerSourceWithSignal(
+        self: *ParserBackedSourceResolver,
+        allocator: std.mem.Allocator,
+        source: []const u8,
+        signal: ?state.TrapSignal,
+        eval_context: context.EvalContext,
+        shell_state: *state.ShellState,
+    ) !?TrapActionBody {
         var lowering_eval_context = eval_context;
         lowering_eval_context.features = self.features;
         lowering_eval_context.validate();
@@ -320,7 +344,7 @@ pub const ParserTrapActionResolver = struct {
         errdefer arena.deinit();
 
         const arena_allocator = arena.allocator();
-        var lowerer: TrapActionLowerer = .{
+        var lowerer: SourceLowerer = .{
             .allocator = arena_allocator,
             .owner = self,
             .shell_state = shell_state,
@@ -329,15 +353,15 @@ pub const ParserTrapActionResolver = struct {
             .local_functions = .empty,
         };
 
-        const payload = try lowerer.lower(action);
+        const payload = try lowerer.lower(source);
         payload.validate();
         return .{ .owned = OwnedTrapActionBody.init(allocator, arena, payload) };
     }
 };
 
 const ParserCommandSubstitutionResolver = struct {
-    owner: *ParserTrapActionResolver,
-    signal: state.TrapSignal,
+    owner: *ParserBackedSourceResolver,
+    signal: ?state.TrapSignal,
     expansion_context: *CommandSubstitutionExpansionContext,
     local_functions: []const command_plan.FunctionDefinition = &.{},
 
@@ -347,7 +371,7 @@ const ParserCommandSubstitutionResolver = struct {
 
     fn validate(self: ParserCommandSubstitutionResolver) void {
         self.owner.validate();
-        self.signal.validate();
+        if (self.signal) |signal| signal.validate();
         self.expansion_context.shell_state.validate();
         self.expansion_context.eval_context.validate();
         std.debug.assert(
@@ -371,7 +395,7 @@ const ParserCommandSubstitutionResolver = struct {
         errdefer arena.deinit();
 
         const arena_allocator = arena.allocator();
-        var lowerer: TrapActionLowerer = .{
+        var lowerer: SourceLowerer = .{
             .allocator = arena_allocator,
             .owner = self.owner,
             .shell_state = self.expansion_context.shell_state,
@@ -409,13 +433,13 @@ fn isSemanticAliasName(name: []const u8) bool {
     return true;
 }
 
-const TrapActionExpansionCommandSubstitutions = struct {
+const SourceExpansionCommandSubstitutions = struct {
     resolver: ParserCommandSubstitutionResolver = undefined,
     context: CommandSubstitutionExpansionContext = undefined,
 
     fn init(
-        self: *TrapActionExpansionCommandSubstitutions,
-        lowerer: *TrapActionLowerer,
+        self: *SourceExpansionCommandSubstitutions,
+        lowerer: *SourceLowerer,
         expansion_eval_context: context.EvalContext,
     ) void {
         lowerer.shell_state.validate();
@@ -436,40 +460,36 @@ const TrapActionExpansionCommandSubstitutions = struct {
         self.resolver.expansion_context = &self.context;
     }
 
-    fn deinit(self: *TrapActionExpansionCommandSubstitutions) void {
+    fn deinit(self: *SourceExpansionCommandSubstitutions) void {
         self.context.deinit();
         self.* = undefined;
     }
 
-    fn commandSubstitution(self: *TrapActionExpansionCommandSubstitutions) expand.CommandSubstitution {
+    fn commandSubstitution(self: *SourceExpansionCommandSubstitutions) expand.CommandSubstitution {
         return self.context.commandSubstitution();
     }
 };
 
-const TrapActionLowerer = struct {
+const SourceLowerer = struct {
     allocator: std.mem.Allocator,
-    owner: *ParserTrapActionResolver,
+    owner: *ParserBackedSourceResolver,
     shell_state: *state.ShellState,
     eval_context: context.EvalContext,
-    signal: state.TrapSignal,
+    signal: ?state.TrapSignal,
     local_functions: std.ArrayList(command_plan.FunctionDefinition),
 
-    fn lower(self: *TrapActionLowerer, action: []const u8) !TrapActionBodyPayload {
-        trapSemanticActionAssert(action, self.signal, self.eval_context);
+    fn lower(self: *SourceLowerer, action: []const u8) !TrapActionBodyPayload {
+        if (self.signal) |signal| trapSemanticActionAssert(action, signal, self.eval_context);
         const parsed = try self.parseWithAliases(action);
 
         if (parsed.diagnostics.len != 0) return self.parserDiagnosticFailure(parsed.diagnostics[0]);
-        if (parsed.incomplete) return self.failure(
-            "trap {s}: parse error: incomplete trap action",
-            .parse_error,
-            .{self.signal.name()},
-        );
+        if (parsed.incomplete) return self.incompleteSourceFailure();
 
         const program = try ir.lowerSimpleCommands(self.allocator, parsed);
         return self.lowerProgram(program, self.eval_context.target, true);
     }
 
-    fn lowerCommandSubstitution(self: *TrapActionLowerer, script: []const u8) !CommandSubstitutionBodyPayload {
+    fn lowerCommandSubstitution(self: *SourceLowerer, script: []const u8) !CommandSubstitutionBodyPayload {
         const parsed = try self.parseWithAliases(script);
         if (parsed.diagnostics.len != 0) return self.commandSubstitutionDiagnosticFailure(parsed.diagnostics[0]);
         if (parsed.incomplete) return error.Unimplemented;
@@ -484,7 +504,7 @@ const TrapActionLowerer = struct {
         };
     }
 
-    fn parseWithAliases(self: *TrapActionLowerer, source: []const u8) !parser.ParseResult {
+    fn parseWithAliases(self: *SourceLowerer, source: []const u8) !parser.ParseResult {
         if (!self.owner.expand_aliases) return parser.parse(
             self.allocator,
             source,
@@ -499,7 +519,7 @@ const TrapActionLowerer = struct {
     }
 
     fn lowerProgram(
-        self: *TrapActionLowerer,
+        self: *SourceLowerer,
         program: ir.Program,
         target: context.ExecutionTarget,
         trap_body: bool,
@@ -511,7 +531,7 @@ const TrapActionLowerer = struct {
             return .{ .simple = plan };
         }
 
-        if (program.statements.len == 1 and trap_body) return self.lowerSingleTrapStatement(
+        if (program.statements.len == 1 and trap_body) return self.lowerSingleStatement(
             program,
             program.statements[0],
             target,
@@ -527,16 +547,15 @@ const TrapActionLowerer = struct {
         };
     }
 
-    fn lowerSingleTrapStatement(
-        self: *TrapActionLowerer,
+    fn lowerSingleStatement(
+        self: *SourceLowerer,
         program: ir.Program,
         statement: ir.Statement,
         target: context.ExecutionTarget,
     ) !TrapActionBodyPayload {
-        if (statement.async_after) return self.failure(
-            "trap {s}: unsupported trap action: background commands are not supported by the semantic trap resolver",
-            .unsupported_shape,
-            .{self.signal.name()},
+        if (statement.async_after) return self.unsupportedShapeFailure(
+            "background commands are not supported by the semantic trap resolver",
+            "background commands are not supported by semantic source lowering",
         );
         return switch (statement.kind) {
             .pipeline => self.lowerPipeline(program, program.pipelines[statement.index], target),
@@ -547,11 +566,9 @@ const TrapActionLowerer = struct {
             .for_command => self.lowerForCommand(program.for_commands[statement.index], target),
             .case_command => self.lowerCaseCommand(program.case_commands[statement.index], target),
             .function_definition => self.lowerFunctionDefinition(program.function_definitions[statement.index], target),
-            .bash_test_command => self.failure(
-                "trap {s}: unsupported trap action: bash [[ ]] lowering is not implemented in the " ++
-                    "semantic trap resolver",
-                .unsupported_shape,
-                .{self.signal.name()},
+            .bash_test_command => self.unsupportedShapeFailure(
+                "bash [[ ]] lowering is not implemented in the semantic trap resolver",
+                "bash [[ ]] lowering is not implemented in semantic source lowering",
             ),
         };
     }
@@ -562,23 +579,19 @@ const TrapActionLowerer = struct {
     };
 
     fn lowerStatementList(
-        self: *TrapActionLowerer,
+        self: *SourceLowerer,
         program: ir.Program,
         target: context.ExecutionTarget,
     ) !StatementListLowering {
         for (program.statements, 0..) |statement, index| {
-            if (statement.async_after) return .{ .failure = (try self.failure(
-                "trap {s}: unsupported trap action: background commands are not supported by the " ++
-                    "semantic trap resolver",
-                .unsupported_shape,
-                .{self.signal.name()},
+            if (statement.async_after) return .{ .failure = (try self.unsupportedShapeFailure(
+                "background commands are not supported by the semantic trap resolver",
+                "background commands are not supported by semantic source lowering",
             )).failure };
             if (statement.kind == .function_definition and statement.op_before != .sequence) {
-                return .{ .failure = (try self.failure(
-                    "trap {s}: unsupported trap action: dynamically guarded function definitions " ++
-                        "stay on the old executor",
-                    .unsupported_shape,
-                    .{self.signal.name()},
+                return .{ .failure = (try self.unsupportedShapeFailure(
+                    "dynamically guarded function definitions stay on the old executor",
+                    "dynamically guarded function definitions stay on the old executor",
                 )).failure };
             }
             if (index == 0) {
@@ -688,15 +701,14 @@ const TrapActionLowerer = struct {
     }
 
     fn lowerPipeline(
-        self: *TrapActionLowerer,
+        self: *SourceLowerer,
         program: ir.Program,
         pipeline: ir.Pipeline,
         target: context.ExecutionTarget,
     ) !TrapActionBodyPayload {
-        if (pipeline.async_after) return self.failure(
-            "trap {s}: unsupported trap action: background pipelines are not supported by the semantic trap resolver",
-            .unsupported_shape,
-            .{self.signal.name()},
+        if (pipeline.async_after) return self.unsupportedShapeFailure(
+            "background pipelines are not supported by the semantic trap resolver",
+            "background pipelines are not supported by semantic source lowering",
         );
         if (pipeline.command_indexes.len == 1 and pipeline.stage_spans.len == 1 and !pipeline.negated) {
             const lowered = try self.lowerIrSimpleCommand(program.commands[pipeline.command_indexes[0]], target);
@@ -706,10 +718,9 @@ const TrapActionLowerer = struct {
             };
         }
         if (pipeline.stage_spans.len == 0) {
-            return self.failure(
-                "trap {s}: unsupported trap action: empty pipelines are not supported by the semantic trap resolver",
-                .unsupported_shape,
-                .{self.signal.name()},
+            return self.unsupportedShapeFailure(
+                "empty pipelines are not supported by the semantic trap resolver",
+                "empty pipelines are not supported by semantic source lowering",
             );
         }
 
@@ -738,7 +749,7 @@ const TrapActionLowerer = struct {
     };
 
     fn lowerPipelineStageSource(
-        self: *TrapActionLowerer,
+        self: *SourceLowerer,
         source: []const u8,
         target: context.ExecutionTarget,
     ) anyerror!PipelineStageLowering {
@@ -748,34 +759,28 @@ const TrapActionLowerer = struct {
         const parsed = try self.parseWithAliases(source);
         if (parsed.diagnostics.len != 0)
             return .{ .failure = (try self.parserDiagnosticFailure(parsed.diagnostics[0])).failure };
-        if (parsed.incomplete) return .{ .failure = (try self.failure(
-            "trap {s}: parse error: incomplete pipeline stage",
-            .parse_error,
-            .{self.signal.name()},
-        )).failure };
+        if (parsed.incomplete) return .{ .failure = (try self.incompletePipelineStageFailure()).failure };
 
         const stage_program = try ir.lowerSimpleCommands(self.allocator, parsed);
-        if (stage_program.statements.len != 1) return .{ .failure = (try self.failure(
-            "trap {s}: unsupported trap action: pipeline stages must contain a single command",
-            .unsupported_shape,
-            .{self.signal.name()},
+        if (stage_program.statements.len != 1) return .{ .failure = (try self.unsupportedShapeFailure(
+            "pipeline stages must contain a single command",
+            "pipeline stages must contain a single command",
         )).failure };
 
-        const payload = try self.lowerSingleTrapStatement(stage_program, stage_program.statements[0], target);
+        const payload = try self.lowerSingleStatement(stage_program, stage_program.statements[0], target);
         return switch (payload) {
             .simple => |simple| .{ .stage = .{ .simple = simple } },
             .compound => |compound| .{ .stage = .{ .compound = compound } },
-            .pipeline => .{ .failure = (try self.failure(
-                "trap {s}: unsupported trap action: nested pipelines are not valid pipeline stages",
-                .unsupported_shape,
-                .{self.signal.name()},
+            .pipeline => .{ .failure = (try self.unsupportedShapeFailure(
+                "nested pipelines are not valid pipeline stages",
+                "nested pipelines are not valid pipeline stages",
             )).failure },
             .failure => |trap_failure| .{ .failure = trap_failure },
         };
     }
 
     fn lowerBraceGroup(
-        self: *TrapActionLowerer,
+        self: *SourceLowerer,
         group: ir.BraceGroup,
         target: context.ExecutionTarget,
     ) !TrapActionBodyPayload {
@@ -796,7 +801,7 @@ const TrapActionLowerer = struct {
         }
     }
 
-    fn lowerSubshell(self: *TrapActionLowerer, subshell: ir.Subshell) !TrapActionBodyPayload {
+    fn lowerSubshell(self: *SourceLowerer, subshell: ir.Subshell) !TrapActionBodyPayload {
         const redirections = try self.lowerRedirections(subshell.redirections, .regular_command);
         if (redirections == .failure) return .{ .failure = redirections.failure };
         const list = try self.lowerStatementListSource(subshell.body, .subshell);
@@ -815,7 +820,7 @@ const TrapActionLowerer = struct {
     }
 
     fn lowerIfCommand(
-        self: *TrapActionLowerer,
+        self: *SourceLowerer,
         command: ir.IfCommand,
         target: context.ExecutionTarget,
     ) !TrapActionBodyPayload {
@@ -853,7 +858,7 @@ const TrapActionLowerer = struct {
     }
 
     fn lowerLoopCommand(
-        self: *TrapActionLowerer,
+        self: *SourceLowerer,
         command: ir.LoopCommand,
         target: context.ExecutionTarget,
     ) !TrapActionBodyPayload {
@@ -891,7 +896,7 @@ const TrapActionLowerer = struct {
     }
 
     fn lowerForCommand(
-        self: *TrapActionLowerer,
+        self: *SourceLowerer,
         command: ir.ForCommand,
         target: context.ExecutionTarget,
     ) !TrapActionBodyPayload {
@@ -937,7 +942,7 @@ const TrapActionLowerer = struct {
     }
 
     fn lowerCaseCommand(
-        self: *TrapActionLowerer,
+        self: *SourceLowerer,
         command: ir.CaseCommand,
         target: context.ExecutionTarget,
     ) !TrapActionBodyPayload {
@@ -972,7 +977,7 @@ const TrapActionLowerer = struct {
     }
 
     fn lowerFunctionDefinition(
-        self: *TrapActionLowerer,
+        self: *SourceLowerer,
         definition: ir.FunctionDefinition,
         target: context.ExecutionTarget,
     ) !TrapActionBodyPayload {
@@ -1003,7 +1008,7 @@ const TrapActionLowerer = struct {
     }
 
     fn lowerStatementListSource(
-        self: *TrapActionLowerer,
+        self: *SourceLowerer,
         source: []const u8,
         target: context.ExecutionTarget,
     ) !StatementListLowering {
@@ -1024,7 +1029,7 @@ const TrapActionLowerer = struct {
     };
 
     fn lowerIrSimpleCommand(
-        self: *TrapActionLowerer,
+        self: *SourceLowerer,
         command: ir.SimpleCommand,
         target: context.ExecutionTarget,
     ) !SimpleCommandLowering {
@@ -1037,7 +1042,7 @@ const TrapActionLowerer = struct {
         const expansion_eval_context = self.eval_context.withTarget(expansion_target);
         var process_id_buffer: [32]u8 = undefined;
         var last_background_pid_buffer: [32]u8 = undefined;
-        var command_substitutions: TrapActionExpansionCommandSubstitutions = .{};
+        var command_substitutions: SourceExpansionCommandSubstitutions = .{};
         command_substitutions.init(self, expansion_eval_context);
         defer command_substitutions.deinit();
         var expansion = shell_expand.ShellExpansion.init(self.allocator, .{
@@ -1129,7 +1134,7 @@ const TrapActionLowerer = struct {
     }
 
     fn lookupSnapshot(
-        self: *TrapActionLowerer,
+        self: *SourceLowerer,
         command: command_plan.ExpandedSimpleCommand,
     ) !command_plan.LookupSnapshot {
         var functions: std.ArrayList(command_plan.FunctionDefinition) = .empty;
@@ -1155,7 +1160,7 @@ const TrapActionLowerer = struct {
         };
     }
 
-    fn rememberLocalFunction(self: *TrapActionLowerer, definition: command_plan.FunctionDefinition) !void {
+    fn rememberLocalFunction(self: *SourceLowerer, definition: command_plan.FunctionDefinition) !void {
         definition.validate();
         for (self.local_functions.items) |*existing| {
             if (!std.mem.eql(u8, existing.name, definition.name)) continue;
@@ -1165,7 +1170,7 @@ const TrapActionLowerer = struct {
         try self.local_functions.append(self.allocator, definition);
     }
 
-    fn localFunction(self: TrapActionLowerer, name: []const u8) ?command_plan.FunctionDefinition {
+    fn localFunction(self: SourceLowerer, name: []const u8) ?command_plan.FunctionDefinition {
         for (self.local_functions.items) |definition| {
             if (std.mem.eql(u8, definition.name, name)) return definition;
         }
@@ -1193,7 +1198,7 @@ const TrapActionLowerer = struct {
     };
 
     fn lowerRedirections(
-        self: *TrapActionLowerer,
+        self: *SourceLowerer,
         redirections: []const ir.Redirection,
         failure_policy: redirection_plan.FailurePolicy,
     ) !LoweredRedirections {
@@ -1220,16 +1225,12 @@ const TrapActionLowerer = struct {
             .failure => |planning_failure| .{ .failure = .{
                 .kind = .lowering_error,
                 .status = consequence.statusForRedirectionFailure(planning_failure.consequence),
-                .message = try std.fmt.allocPrint(
-                    self.allocator,
-                    "trap {s}: redirection planning error: {s}",
-                    .{ self.signal.name(), planning_failure.diagnosticText() },
-                ),
+                .message = try self.formatRedirectionPlanningFailure(planning_failure.diagnosticText()),
             } },
         };
     }
 
-    fn lowerRedirection(self: *TrapActionLowerer, redirection: ir.Redirection) !LoweredRedirection {
+    fn lowerRedirection(self: *SourceLowerer, redirection: ir.Redirection) !LoweredRedirection {
         const operator = redirectionOperator(redirection.operator) orelse
             return .{ .failure = try self.malformedRedirectionFailure() };
         const descriptor = if (redirection.io_number) |io_number| std.fmt.parseInt(
@@ -1271,17 +1272,17 @@ const TrapActionLowerer = struct {
         } };
     }
 
-    fn malformedRedirectionFailure(self: *TrapActionLowerer) !TrapActionFailure {
+    fn malformedRedirectionFailure(self: *SourceLowerer) !TrapActionFailure {
         const trap_failure: TrapActionFailure = .{
             .kind = .lowering_error,
-            .message = try std.fmt.allocPrint(self.allocator, "trap {s}: malformed redirection", .{self.signal.name()}),
+            .message = try self.formatMalformedRedirectionFailure(),
         };
         trap_failure.validate();
         return trap_failure;
     }
 
     fn expandFieldsForRedirection(
-        self: *TrapActionLowerer,
+        self: *SourceLowerer,
         raw: []const u8,
         target: context.ExecutionTarget,
     ) !ExpandedFieldsLowering {
@@ -1289,7 +1290,7 @@ const TrapActionLowerer = struct {
         const expansion_eval_context = self.eval_context.withTarget(expansion_target);
         var process_id_buffer: [32]u8 = undefined;
         var last_background_pid_buffer: [32]u8 = undefined;
-        var command_substitutions: TrapActionExpansionCommandSubstitutions = .{};
+        var command_substitutions: SourceExpansionCommandSubstitutions = .{};
         command_substitutions.init(self, expansion_eval_context);
         defer command_substitutions.deinit();
         var expansion = shell_expand.ShellExpansion.init(self.allocator, .{
@@ -1314,7 +1315,7 @@ const TrapActionLowerer = struct {
     }
 
     fn expandHereDocForRedirection(
-        self: *TrapActionLowerer,
+        self: *SourceLowerer,
         text: []const u8,
         target: context.ExecutionTarget,
     ) !HereDocLowering {
@@ -1322,7 +1323,7 @@ const TrapActionLowerer = struct {
         const expansion_eval_context = self.eval_context.withTarget(expansion_target);
         var process_id_buffer: [32]u8 = undefined;
         var last_background_pid_buffer: [32]u8 = undefined;
-        var command_substitutions: TrapActionExpansionCommandSubstitutions = .{};
+        var command_substitutions: SourceExpansionCommandSubstitutions = .{};
         command_substitutions.init(self, expansion_eval_context);
         defer command_substitutions.deinit();
         var expansion = shell_expand.ShellExpansion.init(self.allocator, .{
@@ -1344,7 +1345,7 @@ const TrapActionLowerer = struct {
         return .{ .data = data };
     }
 
-    fn expansionFailure(self: *TrapActionLowerer, expansion_failure: shell_expand.ExpansionFailure) !TrapActionFailure {
+    fn expansionFailure(self: *SourceLowerer, expansion_failure: shell_expand.ExpansionFailure) !TrapActionFailure {
         const trap_failure: TrapActionFailure = .{
             .kind = .expansion_error,
             .message = try self.formatExpansionFailureMessage(expansion_failure),
@@ -1359,14 +1360,14 @@ const TrapActionLowerer = struct {
     }
 
     fn formatExpansionFailureMessage(
-        self: *TrapActionLowerer,
+        self: *SourceLowerer,
         expansion_failure: shell_expand.ExpansionFailure,
     ) ![]const u8 {
-        if (self.shell_state.trap_execution != .idle) {
+        if (self.signal) |signal| {
             return std.fmt.allocPrint(
                 self.allocator,
                 "trap {s}: expansion error: {s}: {s}",
-                .{ self.signal.name(), expansion_failure.name, expansion_failure.message },
+                .{ signal.name(), expansion_failure.name, expansion_failure.message },
             );
         }
         return std.fmt.allocPrint(
@@ -1377,7 +1378,7 @@ const TrapActionLowerer = struct {
     }
 
     fn resolveExternal(
-        self: *TrapActionLowerer,
+        self: *SourceLowerer,
         command: command_plan.ExpandedSimpleCommand,
     ) !?command_plan.ExternalResolution {
         command.validate();
@@ -1420,12 +1421,12 @@ const TrapActionLowerer = struct {
         return null;
     }
 
-    fn expandScalar(self: *TrapActionLowerer, raw: []const u8, target: context.ExecutionTarget) ![]const u8 {
+    fn expandScalar(self: *SourceLowerer, raw: []const u8, target: context.ExecutionTarget) ![]const u8 {
         const expansion_target = self.expansionTarget(target);
         const expansion_eval_context = self.eval_context.withTarget(expansion_target);
         var process_id_buffer: [32]u8 = undefined;
         var last_background_pid_buffer: [32]u8 = undefined;
-        var command_substitutions: TrapActionExpansionCommandSubstitutions = .{};
+        var command_substitutions: SourceExpansionCommandSubstitutions = .{};
         command_substitutions.init(self, expansion_eval_context);
         defer command_substitutions.deinit();
         var expansion = shell_expand.ShellExpansion.init(self.allocator, .{
@@ -1449,12 +1450,12 @@ const TrapActionLowerer = struct {
         };
     }
 
-    fn expandCasePattern(self: *TrapActionLowerer, raw: []const u8, target: context.ExecutionTarget) ![]const u8 {
+    fn expandCasePattern(self: *SourceLowerer, raw: []const u8, target: context.ExecutionTarget) ![]const u8 {
         const expansion_target = self.expansionTarget(target);
         const expansion_eval_context = self.eval_context.withTarget(expansion_target);
         var process_id_buffer: [32]u8 = undefined;
         var last_background_pid_buffer: [32]u8 = undefined;
-        var command_substitutions: TrapActionExpansionCommandSubstitutions = .{};
+        var command_substitutions: SourceExpansionCommandSubstitutions = .{};
         command_substitutions.init(self, expansion_eval_context);
         defer command_substitutions.deinit();
         var expansion = shell_expand.ShellExpansion.init(self.allocator, .{
@@ -1479,7 +1480,7 @@ const TrapActionLowerer = struct {
     }
 
     fn expandFields(
-        self: *TrapActionLowerer,
+        self: *SourceLowerer,
         raw: []const u8,
         target: context.ExecutionTarget,
     ) !expand.ExpansionResult {
@@ -1487,7 +1488,7 @@ const TrapActionLowerer = struct {
         const expansion_eval_context = self.eval_context.withTarget(expansion_target);
         var process_id_buffer: [32]u8 = undefined;
         var last_background_pid_buffer: [32]u8 = undefined;
-        var command_substitutions: TrapActionExpansionCommandSubstitutions = .{};
+        var command_substitutions: SourceExpansionCommandSubstitutions = .{};
         command_substitutions.init(self, expansion_eval_context);
         defer command_substitutions.deinit();
         var expansion = shell_expand.ShellExpansion.init(self.allocator, .{
@@ -1507,12 +1508,12 @@ const TrapActionLowerer = struct {
         };
     }
 
-    fn expandHereDoc(self: *TrapActionLowerer, text: []const u8, target: context.ExecutionTarget) ![]const u8 {
+    fn expandHereDoc(self: *SourceLowerer, text: []const u8, target: context.ExecutionTarget) ![]const u8 {
         const expansion_target = self.expansionTarget(target);
         const expansion_eval_context = self.eval_context.withTarget(expansion_target);
         var process_id_buffer: [32]u8 = undefined;
         var last_background_pid_buffer: [32]u8 = undefined;
-        var command_substitutions: TrapActionExpansionCommandSubstitutions = .{};
+        var command_substitutions: SourceExpansionCommandSubstitutions = .{};
         command_substitutions.init(self, expansion_eval_context);
         defer command_substitutions.deinit();
         var expansion = shell_expand.ShellExpansion.init(self.allocator, .{
@@ -1529,16 +1530,16 @@ const TrapActionLowerer = struct {
         return expansion.expandHereDocBody(text);
     }
 
-    fn processIdText(self: TrapActionLowerer, buffer: []u8) []const u8 {
+    fn processIdText(self: SourceLowerer, buffer: []u8) []const u8 {
         return std.fmt.bufPrint(buffer, "{d}", .{self.owner.evaluator.shell_pid}) catch "";
     }
 
-    fn lastBackgroundPidText(self: TrapActionLowerer, buffer: []u8) []const u8 {
+    fn lastBackgroundPidText(self: SourceLowerer, buffer: []u8) []const u8 {
         if (self.shell_state.last_background_pid) |pid| return std.fmt.bufPrint(buffer, "{d}", .{pid}) catch "";
         return "";
     }
 
-    fn expansionTarget(self: TrapActionLowerer, target: context.ExecutionTarget) context.ExecutionTarget {
+    fn expansionTarget(self: SourceLowerer, target: context.ExecutionTarget) context.ExecutionTarget {
         std.debug.assert(target.allowsShellStateCommit());
         if (self.shell_state.acceptsExecutionTarget(target)) return target;
         std.debug.assert(target == .subshell);
@@ -1546,12 +1547,15 @@ const TrapActionLowerer = struct {
         return self.eval_context.target;
     }
 
-    fn parserDiagnosticFailure(self: *TrapActionLowerer, diagnostic: parser.Diagnostic) !TrapActionBodyPayload {
-        const message = try std.fmt.allocPrint(
-            self.allocator,
-            "trap {s}: parse error: {s}",
-            .{ self.signal.name(), diagnostic.message },
-        );
+    fn parserDiagnosticFailure(self: *SourceLowerer, diagnostic: parser.Diagnostic) !TrapActionBodyPayload {
+        const message = if (self.signal) |signal|
+            try std.fmt.allocPrint(
+                self.allocator,
+                "trap {s}: parse error: {s}",
+                .{ signal.name(), diagnostic.message },
+            )
+        else
+            try std.fmt.allocPrint(self.allocator, "parse error: {s}", .{diagnostic.message});
         const trap_failure: TrapActionFailure = .{
             .kind = .parse_error,
             .status = if (self.shell_state.last_status == 0) 2 else self.shell_state.last_status,
@@ -1562,14 +1566,21 @@ const TrapActionLowerer = struct {
     }
 
     fn commandSubstitutionDiagnosticFailure(
-        self: *TrapActionLowerer,
+        self: *SourceLowerer,
         diagnostic: parser.Diagnostic,
     ) !CommandSubstitutionBodyPayload {
-        const message = try std.fmt.allocPrint(
-            self.allocator,
-            "trap {s}: command substitution parse error: {s}",
-            .{ self.signal.name(), diagnostic.message },
-        );
+        const message = if (self.signal) |signal|
+            try std.fmt.allocPrint(
+                self.allocator,
+                "trap {s}: command substitution parse error: {s}",
+                .{ signal.name(), diagnostic.message },
+            )
+        else
+            try std.fmt.allocPrint(
+                self.allocator,
+                "command substitution parse error: {s}",
+                .{diagnostic.message},
+            );
         const plan = command_plan.classifyExpandedSimpleCommand(.{
             .command = .{ .argv = &[_][]const u8{message} },
             .target = .subshell,
@@ -1578,8 +1589,57 @@ const TrapActionLowerer = struct {
         return .{ .simple = plan };
     }
 
+    fn incompleteSourceFailure(self: *SourceLowerer) !TrapActionBodyPayload {
+        if (self.signal) |signal| return self.failure(
+            "trap {s}: parse error: incomplete trap action",
+            .parse_error,
+            .{signal.name()},
+        );
+        return self.failure("parse error: incomplete source", .parse_error, .{});
+    }
+
+    fn incompletePipelineStageFailure(self: *SourceLowerer) !TrapActionBodyPayload {
+        if (self.signal) |signal| return self.failure(
+            "trap {s}: parse error: incomplete pipeline stage",
+            .parse_error,
+            .{signal.name()},
+        );
+        return self.failure("parse error: incomplete pipeline stage", .parse_error, .{});
+    }
+
+    fn unsupportedShapeFailure(
+        self: *SourceLowerer,
+        comptime trap_detail: []const u8,
+        comptime source_detail: []const u8,
+    ) !TrapActionBodyPayload {
+        if (self.signal) |signal| return self.failure(
+            "trap {s}: unsupported trap action: " ++ trap_detail,
+            .unsupported_shape,
+            .{signal.name()},
+        );
+        return self.failure("unsupported source shape: " ++ source_detail, .unsupported_shape, .{});
+    }
+
+    fn formatRedirectionPlanningFailure(self: *SourceLowerer, diagnostic: []const u8) ![]const u8 {
+        if (self.signal) |signal| return std.fmt.allocPrint(
+            self.allocator,
+            "trap {s}: redirection planning error: {s}",
+            .{ signal.name(), diagnostic },
+        );
+        return std.fmt.allocPrint(self.allocator, "redirection planning error: {s}", .{diagnostic});
+    }
+
+    fn formatMalformedRedirectionFailure(self: *SourceLowerer) ![]const u8 {
+        if (self.signal) |signal| return std.fmt.allocPrint(
+            self.allocator,
+            "trap {s}: malformed redirection",
+            .{signal.name()},
+        );
+        return self.allocator.dupe(u8, "malformed redirection");
+    }
+
     fn failure(
-        self: *TrapActionLowerer,
+        self: *SourceLowerer,
         comptime fmt: []const u8,
         kind: TrapActionFailureKind,
         args: anytype,
@@ -4299,7 +4359,7 @@ fn appendSubshellExitTrap(
     shell_state.last_status = visible_status;
     try shell_state.appendPendingTrap(.EXIT);
 
-    var parser_resolver = ParserTrapActionResolver.init(evaluator);
+    var parser_resolver = ParserBackedSourceResolver.init(evaluator);
     parser_resolver.features = evaluator.features;
     parser_resolver.arg_zero = evaluator.arg_zero;
     parser_resolver.expand_aliases = shell_state.shopts.enabled(.expand_aliases);
@@ -4589,16 +4649,14 @@ fn evaluateSourceStatement(
     std.debug.assert(source_plan.target == eval_context.target or
         (source_plan.target == .current_shell and eval_context.target == .subshell));
 
-    var parser_resolver = ParserTrapActionResolver.init(evaluator);
+    var parser_resolver = ParserBackedSourceResolver.init(evaluator);
     parser_resolver.features = evaluator.features;
     parser_resolver.arg_zero = evaluator.arg_zero;
     parser_resolver.expand_aliases = shell_state.shopts.enabled(.expand_aliases);
     parser_resolver.alias_state = evaluator.alias_state;
-    const resolver = parser_resolver.resolver();
-    var body = (resolver.resolve(
+    var body = (parser_resolver.lowerSource(
         evaluator.allocator,
         source_plan.source,
-        .TERM,
         eval_context,
         shell_state,
     ) catch |err| switch (err) {
@@ -4850,16 +4908,14 @@ fn evaluateStatementListSource(
 
     if (source.len == 0) return normalEvaluation(0);
 
-    var parser_resolver = ParserTrapActionResolver.init(evaluator);
+    var parser_resolver = ParserBackedSourceResolver.init(evaluator);
     parser_resolver.features = evaluator.features;
     parser_resolver.arg_zero = evaluator.arg_zero;
     parser_resolver.expand_aliases = shell_state.shopts.enabled(.expand_aliases);
     parser_resolver.alias_state = evaluator.alias_state;
-    const resolver = parser_resolver.resolver();
-    var body = (resolver.resolve(
+    var body = (parser_resolver.lowerSource(
         evaluator.allocator,
         source,
-        .TERM,
         eval_context,
         shell_state,
     ) catch |err| switch (err) {
@@ -12885,7 +12941,7 @@ test "semantic parser trap resolver lowers arbitrary simple actions at delivery 
 
     var evaluator = Evaluator.init(std.testing.allocator);
     evaluator.shell_pid = 1234;
-    var parser_resolver = ParserTrapActionResolver.init(&evaluator);
+    var parser_resolver = ParserBackedSourceResolver.init(&evaluator);
     var trap_outcome = (try executePendingTraps(
         &evaluator,
         &shell_state,
@@ -12907,7 +12963,7 @@ test "semantic parser trap resolver expands nested command substitutions in acti
     var shell_state = state.ShellState.init(std.testing.allocator);
     defer shell_state.deinit();
     var evaluator = Evaluator.init(std.testing.allocator);
-    var parser_resolver = ParserTrapActionResolver.init(&evaluator);
+    var parser_resolver = ParserBackedSourceResolver.init(&evaluator);
 
     shell_state.last_status = 24;
     try shell_state.setTrapForSignal(.TERM, "echo outer-$(printf \"%s\" \"$(printf inner)\")");
@@ -12931,7 +12987,7 @@ test "semantic parser trap command substitutions isolate body mutations from par
     var shell_state = state.ShellState.init(std.testing.allocator);
     defer shell_state.deinit();
     var evaluator = Evaluator.init(std.testing.allocator);
-    var parser_resolver = ParserTrapActionResolver.init(&evaluator);
+    var parser_resolver = ParserBackedSourceResolver.init(&evaluator);
 
     shell_state.last_status = 25;
     try shell_state.setTrapForSignal(.TERM, "echo \"$(echo ${MUTATED_IN_SUB:=inner})\"; TRAP_MUTATED=ok");
@@ -12957,7 +13013,7 @@ test "semantic parser trap resolver lowers compound pipeline and and-or actions"
     var shell_state = state.ShellState.init(std.testing.allocator);
     defer shell_state.deinit();
     var evaluator = Evaluator.init(std.testing.allocator);
-    var parser_resolver = ParserTrapActionResolver.init(&evaluator);
+    var parser_resolver = ParserBackedSourceResolver.init(&evaluator);
     const eval_context = context.EvalContext.forTarget(.current_shell);
 
     shell_state.last_status = 5;
@@ -13007,7 +13063,7 @@ test "semantic parser trap resolver lowers heterogeneous statement lists and fun
     var shell_state = state.ShellState.init(std.testing.allocator);
     defer shell_state.deinit();
     var evaluator = Evaluator.init(std.testing.allocator);
-    var parser_resolver = ParserTrapActionResolver.init(&evaluator);
+    var parser_resolver = ParserBackedSourceResolver.init(&evaluator);
     const eval_context = context.EvalContext.forTarget(.current_shell);
 
     shell_state.last_status = 31;
@@ -13054,7 +13110,7 @@ test "semantic parser trap resolver classifies same-list function calls" {
     var shell_state = state.ShellState.init(std.testing.allocator);
     defer shell_state.deinit();
     var evaluator = Evaluator.init(std.testing.allocator);
-    var parser_resolver = ParserTrapActionResolver.init(&evaluator);
+    var parser_resolver = ParserBackedSourceResolver.init(&evaluator);
     const eval_context = context.EvalContext.forTarget(.current_shell);
 
     var body = (try parser_resolver.resolver().resolve(
@@ -13095,7 +13151,7 @@ test "semantic parser trap resolver lowers redirection operators for trap action
 
     var evaluator = Evaluator.init(std.testing.allocator);
     const externals = [_]command_plan.ExternalResolution{.{ .name = "tool", .path = "/bin/tool" }};
-    var parser_resolver = ParserTrapActionResolver.init(&evaluator);
+    var parser_resolver = ParserBackedSourceResolver.init(&evaluator);
     parser_resolver.externals = &externals;
     const eval_context = context.EvalContext.forTarget(.current_shell);
 
@@ -13194,7 +13250,7 @@ test "semantic parser trap resolver preserves compound redirection io number" {
     defer shell_state.deinit();
 
     var evaluator = Evaluator.init(std.testing.allocator);
-    var parser_resolver = ParserTrapActionResolver.init(&evaluator);
+    var parser_resolver = ParserBackedSourceResolver.init(&evaluator);
     const eval_context = context.EvalContext.forTarget(.current_shell);
 
     var body = (try parser_resolver.resolver().resolve(
@@ -13232,7 +13288,7 @@ test "semantic parser trap resolver reports redirection expansion failures as tr
     try shell_state.appendPendingTrap(.TERM);
 
     var evaluator = Evaluator.init(std.testing.allocator);
-    var parser_resolver = ParserTrapActionResolver.init(&evaluator);
+    var parser_resolver = ParserBackedSourceResolver.init(&evaluator);
     var trap_outcome = (try executePendingTraps(
         &evaluator,
         &shell_state,
@@ -13261,7 +13317,7 @@ test "semantic parser trap resolver reports bad descriptor redirects as trap dia
     try shell_state.appendPendingTrap(.TERM);
 
     var evaluator = Evaluator.init(std.testing.allocator);
-    var parser_resolver = ParserTrapActionResolver.init(&evaluator);
+    var parser_resolver = ParserBackedSourceResolver.init(&evaluator);
     var trap_outcome = (try executePendingTraps(
         &evaluator,
         &shell_state,
@@ -13292,7 +13348,7 @@ test "semantic parser trap resolver preserves current-shell fds around compound 
     try shell_state.setTrapForSignal(.TERM, "{ :; } > trap-out");
     try shell_state.appendPendingTrap(.TERM);
 
-    var parser_resolver = ParserTrapActionResolver.init(&evaluator);
+    var parser_resolver = ParserBackedSourceResolver.init(&evaluator);
     var trap_outcome = (try executePendingTraps(
         &evaluator,
         &shell_state,
@@ -13338,7 +13394,7 @@ test "semantic parser trap resolver stores parser-backed function definition red
     var shell_state = state.ShellState.init(std.testing.allocator);
     defer shell_state.deinit();
     var evaluator = Evaluator.initWithFdPort(std.testing.allocator, fake.fdPort());
-    var parser_resolver = ParserTrapActionResolver.init(&evaluator);
+    var parser_resolver = ParserBackedSourceResolver.init(&evaluator);
     const eval_context = context.EvalContext.forTarget(.current_shell);
 
     shell_state.last_status = 33;
@@ -13369,7 +13425,7 @@ test "semantic parser trap resolver models parse failures as trap diagnostics" {
     var shell_state = state.ShellState.init(std.testing.allocator);
     defer shell_state.deinit();
     var evaluator = Evaluator.init(std.testing.allocator);
-    var parser_resolver = ParserTrapActionResolver.init(&evaluator);
+    var parser_resolver = ParserBackedSourceResolver.init(&evaluator);
 
     shell_state.last_status = 11;
     try shell_state.setTrapForSignal(.TERM, "if true; then");
@@ -13400,7 +13456,7 @@ test "semantic parser trap resolver gives zero-status parse failures a nonzero d
     var shell_state = state.ShellState.init(std.testing.allocator);
     defer shell_state.deinit();
     var evaluator = Evaluator.init(std.testing.allocator);
-    var parser_resolver = ParserTrapActionResolver.init(&evaluator);
+    var parser_resolver = ParserBackedSourceResolver.init(&evaluator);
 
     try shell_state.setTrapForSignal(.TERM, "if true; then");
     try shell_state.appendPendingTrap(.TERM);
@@ -13424,7 +13480,7 @@ test "semantic parser trap resolver preserves subshell isolation and exit overri
     var shell_state = state.ShellState.init(std.testing.allocator);
     defer shell_state.deinit();
     var evaluator = Evaluator.init(std.testing.allocator);
-    var parser_resolver = ParserTrapActionResolver.init(&evaluator);
+    var parser_resolver = ParserBackedSourceResolver.init(&evaluator);
     const eval_context = context.EvalContext.forTarget(.current_shell);
 
     shell_state.last_status = 12;
@@ -16543,7 +16599,7 @@ test "semantic parser lowering plans compound pipeline stages" {
     var shell_state = state.ShellState.init(std.testing.allocator);
     defer shell_state.deinit();
     var evaluator = Evaluator.init(std.testing.allocator);
-    var parser_resolver = ParserTrapActionResolver.init(&evaluator);
+    var parser_resolver = ParserBackedSourceResolver.init(&evaluator);
     const resolver = parser_resolver.resolver();
 
     var body = (try resolver.resolve(

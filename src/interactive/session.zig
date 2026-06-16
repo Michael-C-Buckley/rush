@@ -476,7 +476,7 @@ fn executeInteractivePendingTraps(
         try observation.command_outcome.commitDelta(shell_state, .current_shell);
     }
 
-    var resolver = shell.eval.ParserTrapActionResolver.init(&evaluator);
+    var resolver = shell.eval.ParserBackedSourceResolver.init(&evaluator);
     resolver.features = features;
     resolver.arg_zero = arg_zero;
     var trap_outcome = (try shell.eval.executePendingTraps(
