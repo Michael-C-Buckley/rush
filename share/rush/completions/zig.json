@@ -1,0 +1,98 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "zig",
+    "description": "Zig compiler and build system",
+    "providers": {
+      "builtin.files": { "builtin": "files" },
+      "builtin.directories": { "builtin": "directories" },
+      "zig.build-steps": { "function": "__rush_complete_zig_build_steps" },
+      "zig.build-options": { "function": "__rush_complete_zig_build_options" },
+      "zig.color-modes": { "values": ["auto", "off", "on"] },
+      "zig.error-styles": { "values": ["verbose", "minimal", "verbose_clear", "minimal_clear"] },
+      "zig.multiline-error-styles": { "values": ["indent", "newline", "none"] },
+      "zig.summary-modes": { "values": ["all", "new", "failures", "line", "none"] },
+      "zig.release-modes": { "values": ["fast", "safe", "small"] },
+      "zig.fetch-modes": { "values": ["needed", "all"] }
+    },
+    "options": [
+      { "short": "h", "long": "help", "priority": 20, "description": "print command-specific usage" }
+    ],
+    "subcommands": [
+      {
+        "name": "build",
+        "priority": 50,
+        "description": "build project from build.zig",
+        "options": [
+          { "provider": "zig.build-options" },
+          { "short": "h", "long": "help", "priority": 20, "description": "print help and exit" },
+          { "short": "l", "long": "list-steps", "priority": 20, "description": "print available steps" },
+          { "short": "p", "long": "prefix", "value": { "name": "path", "provider": "builtin.directories" }, "priority": 25, "description": "where to install files" },
+          { "long": "prefix-lib-dir", "value": { "name": "path", "provider": "builtin.directories" }, "description": "where to install libraries" },
+          { "long": "prefix-exe-dir", "value": { "name": "path", "provider": "builtin.directories" }, "description": "where to install executables" },
+          { "long": "prefix-include-dir", "value": { "name": "path", "provider": "builtin.directories" }, "description": "where to install C header files" },
+          { "long": "release", "value": { "name": "mode", "provider": "zig.release-modes" }, "description": "request release mode" },
+          { "long": "verbose", "description": "print commands before executing them" },
+          { "long": "color", "value": { "name": "when", "provider": "zig.color-modes" }, "description": "enable or disable colored errors" },
+          { "long": "error-style", "value": { "name": "style", "provider": "zig.error-styles" }, "description": "control how build errors are printed" },
+          { "long": "multiline-errors", "value": { "name": "style", "provider": "zig.multiline-error-styles" }, "description": "control multi-line error formatting" },
+          { "long": "summary", "value": { "name": "mode", "provider": "zig.summary-modes" }, "description": "control build summary printing" },
+          { "spellings": ["-j"], "value": { "name": "jobs" }, "description": "limit concurrent jobs" },
+          { "long": "maxrss", "value": { "name": "bytes" }, "description": "limit memory usage" },
+          { "long": "skip-oom-steps", "description": "skip steps that would exceed --maxrss" },
+          { "long": "test-timeout", "value": { "name": "timeout" }, "description": "limit unit test execution time" },
+          { "long": "watch", "description": "continuously rebuild when source files are modified" },
+          { "long": "debounce", "value": { "name": "ms" }, "description": "delay before rebuilding after a file change" },
+          { "long": "webui", "value": { "name": "ip" }, "description": "enable the web interface" },
+          { "long": "fuzz", "value": { "name": "limit" }, "priority": 20, "description": "search continuously for unit test failures" },
+          { "long": "time-report", "description": "force full rebuild and report compilation time" },
+          { "spellings": ["-fincremental"], "description": "enable incremental compilation" },
+          { "spellings": ["-fno-incremental"], "description": "disable incremental compilation" },
+          { "long": "fetch", "value": { "name": "mode", "provider": "zig.fetch-modes" }, "description": "fetch dependency tree and exit" },
+          { "long": "fork", "value": { "name": "path", "provider": "builtin.directories" }, "description": "override a project from dependency tree" },
+          { "long": "build-file", "value": { "name": "file", "provider": "builtin.files" }, "description": "override path to build.zig" },
+          { "long": "cache-dir", "value": { "name": "path", "provider": "builtin.directories" }, "description": "override local Zig cache directory" },
+          { "long": "global-cache-dir", "value": { "name": "path", "provider": "builtin.directories" }, "description": "override global Zig cache directory" },
+          { "long": "zig-lib-dir", "value": { "name": "path", "provider": "builtin.directories" }, "description": "override Zig lib directory" },
+          { "long": "build-runner", "value": { "name": "file", "provider": "builtin.files" }, "description": "override path to build runner" },
+          { "long": "seed", "value": { "name": "integer" }, "description": "shuffle dependency traversal order" }
+        ],
+        "arguments": {
+          "terminator": "--",
+          "states": [
+            { "name": "step", "index": 0, "repeatable": true, "provider": "zig.build-steps", "description": "build step to run" }
+          ]
+        }
+      },
+      { "name": "fetch", "description": "copy a package into global cache and print its hash", "arguments": { "states": [{ "name": "url", "index": 0, "provider": "builtin.files" }] } },
+      { "name": "init", "description": "initialize a Zig package in the current directory" },
+      { "name": "build-exe", "description": "create executable from source or object files", "arguments": { "states": [{ "name": "file", "index": 0, "repeatable": true, "provider": "builtin.files" }] } },
+      { "name": "build-lib", "description": "create library from source or object files", "arguments": { "states": [{ "name": "file", "index": 0, "repeatable": true, "provider": "builtin.files" }] } },
+      { "name": "build-obj", "description": "create object from source or object files", "arguments": { "states": [{ "name": "file", "index": 0, "repeatable": true, "provider": "builtin.files" }] } },
+      { "name": "test", "priority": 30, "description": "perform unit testing", "arguments": { "states": [{ "name": "file", "index": 0, "repeatable": true, "provider": "builtin.files" }] } },
+      { "name": "test-obj", "description": "create object for unit testing", "arguments": { "states": [{ "name": "file", "index": 0, "repeatable": true, "provider": "builtin.files" }] } },
+      { "name": "run", "priority": 25, "description": "create executable and run immediately", "arguments": { "states": [{ "name": "file", "index": 0, "repeatable": true, "provider": "builtin.files" }] } },
+      { "name": "ast-check", "description": "look for simple compile errors", "arguments": { "states": [{ "name": "file", "index": 0, "repeatable": true, "provider": "builtin.files" }] } },
+      { "name": "fmt", "priority": 20, "description": "reformat Zig source", "arguments": { "states": [{ "name": "path", "index": 0, "repeatable": true, "provider": "builtin.files" }] } },
+      { "name": "reduce", "description": "minimize a bug report", "arguments": { "states": [{ "name": "file", "index": 0, "repeatable": true, "provider": "builtin.files" }] } },
+      { "name": "translate-c", "description": "convert C code to Zig code", "arguments": { "states": [{ "name": "file", "index": 0, "repeatable": true, "provider": "builtin.files" }] } },
+      { "name": "ar", "description": "combine object files into static archive" },
+      { "name": "cc", "description": "use Zig as a drop-in C compiler" },
+      { "name": "c++", "description": "use Zig as a drop-in C++ compiler" },
+      { "name": "dlltool", "description": "use Zig as a drop-in dlltool.exe" },
+      { "name": "lib", "description": "use Zig as a drop-in lib.exe" },
+      { "name": "objcopy", "description": "manipulate executables and relocatables" },
+      { "name": "objdump", "description": "print information about executables and relocatables" },
+      { "name": "ranlib", "description": "use Zig as a drop-in ranlib" },
+      { "name": "rc", "description": "use Zig as a drop-in rc.exe" },
+      { "name": "env", "priority": 10, "description": "print lib path, std path, cache directory, and version" },
+      { "name": "help", "description": "print help and exit" },
+      { "name": "std", "description": "view standard library documentation in a browser" },
+      { "name": "libc", "description": "display native libc paths file or validate one" },
+      { "name": "targets", "description": "list available compilation targets" },
+      { "name": "version", "description": "print version number and exit" },
+      { "name": "zen", "description": "print Zen of Zig and exit" }
+    ]
+  }
+}

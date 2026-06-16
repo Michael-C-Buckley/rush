@@ -1,0 +1,78 @@
+__rush_complete_zig_build_steps() {
+  tmp=$(mktemp)
+  zig build --help > "$tmp" 2>/dev/null
+  in_steps=false
+  while IFS= read -r line; do
+    if test "$line" = Steps:; then
+      in_steps=true
+      continue
+    fi
+    if test "$in_steps" = true; then
+      test -n "$line" || break
+      set -- $line
+      case "$1" in
+        install) priority=50 ;;
+        test) priority=45 ;;
+        run) priority=40 ;;
+        conformance) priority=35 ;;
+        lint) priority=30 ;;
+        compile-check) priority=30 ;;
+        *) priority=0 ;;
+      esac
+      rush_complete candidate "$1" --kind plain --description 'build step' --priority "$priority"
+    fi
+  done < "$tmp"
+  rm -f "$tmp"
+}
+
+__rush_complete_zig_build_options() {
+  tmp=$(mktemp)
+  zig build --help > "$tmp" 2>/dev/null
+  in_project_options=false
+  in_supported_values=false
+  enum_prefix=''
+  while IFS= read -r line; do
+    if test "$line" = 'Project-Specific Options:'; then
+      in_project_options=true
+      continue
+    fi
+    if test "$in_project_options" = true; then
+      test -n "$line" || break
+      case "$line" in
+        '  -D'*)
+          in_supported_values=false
+          set -- $line
+          option="$1"
+          case "$option" in
+            *=*)
+              name="${option%%=*}"
+              value="${option#*=}"
+              candidate="$name="
+              rush_complete candidate "$candidate" --kind option --description 'project build option' --no-space
+              case "$value" in
+                '[enum]') enum_prefix="$candidate" ;;
+                *) enum_prefix='' ;;
+              esac
+              ;;
+            *)
+              rush_complete candidate "$option" --kind option --description 'project build option'
+              enum_prefix=''
+              ;;
+          esac
+          ;;
+        *'Supported Values:'*)
+          if test -n "$enum_prefix"; then
+            in_supported_values=true
+          fi
+          ;;
+        *)
+          if test "$in_supported_values" = true; then
+            set -- $line
+            test -n "$1" && rush_complete candidate "$enum_prefix$1" --kind option --description 'project build option'
+          fi
+          ;;
+      esac
+    fi
+  done < "$tmp"
+  rm -f "$tmp"
+}

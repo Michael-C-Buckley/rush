@@ -1283,7 +1283,7 @@ pub fn manifestApplication(
         },
         .option => {
             handled = true;
-            try appendManifestOptions(allocator, state.*, &builder, semantic);
+            try appendManifestOptions(allocator, io, state.*, shell_state, &builder, semantic);
         },
         .option_value, .argument => handled = try appendManifestValueProviders(
             allocator,
@@ -1514,14 +1514,20 @@ fn appendManifestSubcommands(
 
 fn appendManifestOptions(
     allocator: std.mem.Allocator,
+    io: std.Io,
     state: State,
+    shell_state: shell_state_mod.ShellState,
     builder: *Builder,
     semantic: SemanticContext,
 ) !void {
     for (state.rules.items) |rule| {
-        if (rule.disabled or rule.kind != .option) continue;
+        if (rule.disabled) continue;
         if (!ruleMatchesPath(rule, semantic.root, semantic.path)) continue;
-        try appendOptionCandidate(allocator, builder, rule, semantic);
+        switch (rule.kind) {
+            .option => try appendOptionCandidate(allocator, builder, rule, semantic),
+            .dynamic_options => try appendProviderCandidates(allocator, io, shell_state, builder, rule, semantic),
+            else => {},
+        }
     }
 }
 
@@ -1955,6 +1961,16 @@ fn registerManifestOptions(
     };
     for (options.items, 0..) |option_value, index| {
         const option_object = jsonObject(option_value) orelse continue;
+        if (option_object.get("provider")) |provider_ref| {
+            try registerProviderRefRules(allocator, state, .{
+                .root = root,
+                .path = path,
+                .kind = .dynamic_options,
+                .provider_order = index,
+                .source = source,
+            }, provider_ref, providers);
+            continue;
+        }
         var spellings: std.ArrayList([]const u8) = .empty;
         defer spellings.deinit(allocator);
         if (option_object.get("spellings")) |spellings_value| switch (spellings_value) {
@@ -3060,6 +3076,73 @@ test "manifest completion orders subcommands and options by priority" {
     defer option_application.deinit(std.testing.allocator);
     try std.testing.expectEqualStrings("--apricot", option_application.ambiguous[0].value);
     try std.testing.expectEqualStrings("--alpha", option_application.ambiguous[1].value);
+}
+
+test "manifest completion uses dynamic option providers" {
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    try tmp.dir.writeFile(std.testing.io, .{
+        .sub_path = "tool.json",
+        .data =
+        \\
+        \\{
+        \\  "manifestVersion": 1,
+        \\  "command": {
+        \\    "name": "tool",
+        \\    "providers": {
+        \\      "tool.options": { "function": "__rush_complete_tool_options" }
+        \\    },
+        \\    "subcommands": [
+        \\      {
+        \\        "name": "run",
+        \\        "options": [
+        \\          { "provider": "tool.options" },
+        \\          { "long": "alpha", "description": "static option" }
+        \\        ]
+        \\      }
+        \\    ]
+        \\  }
+        \\}
+        \\
+        ,
+    });
+    var manifest_path_buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
+    const tmp_root_len = try tmp.dir.realPath(std.testing.io, &manifest_path_buffer);
+    const tmp_root = manifest_path_buffer[0..tmp_root_len];
+    const manifest_path = try std.fs.path.join(std.testing.allocator, &.{ tmp_root, "tool.json" });
+    defer std.testing.allocator.free(manifest_path);
+
+    var completion_state = State.init(std.testing.allocator);
+    defer completion_state.deinit();
+    try loadManifestFile(std.testing.allocator, std.testing.io, &completion_state, manifest_path);
+
+    var shell_state = shell_state_mod.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    try shell_state.putFunction(.{
+        .name = "__rush_complete_tool_options",
+        .source_body =
+        \\
+        \\rush_complete candidate -Doptimize=ReleaseSafe --kind option --description 'dynamic option' --priority 20
+        \\rush_complete candidate -Dtarget= --kind option --description 'dynamic target option'
+        \\
+        ,
+    });
+
+    const source = "tool run -D";
+    const application = try manifestApplication(
+        std.testing.allocator,
+        std.testing.io,
+        &completion_state,
+        shell_state,
+        source,
+        source.len,
+    );
+    defer application.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 2), application.ambiguous.len);
+    try std.testing.expectEqualStrings("-Doptimize=ReleaseSafe", application.ambiguous[0].value);
+    try std.testing.expectEqualStrings("dynamic option", application.ambiguous[0].description.?);
+    try std.testing.expectEqualStrings("-Dtarget=", application.ambiguous[1].value);
 }
 
 test "manifest completion orders static provider values by priority" {
