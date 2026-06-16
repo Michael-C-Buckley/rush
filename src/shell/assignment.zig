@@ -60,10 +60,6 @@ pub const TemporaryEnvironment = struct {
         }
     }
 
-    pub fn appendExported(self: *TemporaryEnvironment, name: []const u8, value: []const u8) !void {
-        try self.put(name, value, true);
-    }
-
     fn put(self: *TemporaryEnvironment, name: []const u8, value: []const u8, exported: bool) !void {
         state.assertValidVariableName(name);
 
@@ -87,6 +83,62 @@ pub const TemporaryEnvironment = struct {
         });
     }
 };
+
+pub const ProcessEnvironmentEntry = struct {
+    name: []const u8,
+    value: []const u8,
+
+    pub fn validate(self: ProcessEnvironmentEntry) void {
+        assertValidProcessEnvironmentName(self.name);
+        std.debug.assert(std.mem.findScalar(u8, self.value, 0) == null);
+    }
+};
+
+pub const ProcessEnvironmentOverlay = struct {
+    allocator: std.mem.Allocator,
+    entries: std.ArrayList(ProcessEnvironmentEntry) = .empty,
+
+    pub fn init(allocator: std.mem.Allocator) ProcessEnvironmentOverlay {
+        return .{ .allocator = allocator };
+    }
+
+    pub fn deinit(self: *ProcessEnvironmentOverlay) void {
+        for (self.entries.items) |entry| {
+            self.allocator.free(entry.name);
+            self.allocator.free(entry.value);
+        }
+        self.entries.deinit(self.allocator);
+        self.* = undefined;
+    }
+
+    pub fn put(self: *ProcessEnvironmentOverlay, name: []const u8, value: []const u8) !void {
+        assertValidProcessEnvironmentName(name);
+        std.debug.assert(std.mem.findScalar(u8, value, 0) == null);
+
+        if (findProcessEnvironmentEntry(self, name)) |entry| {
+            const owned_value = try self.allocator.dupe(u8, value);
+            self.allocator.free(entry.value);
+            entry.value = owned_value;
+            return;
+        }
+
+        const owned_name = try self.allocator.dupe(u8, name);
+        errdefer self.allocator.free(owned_name);
+        const owned_value = try self.allocator.dupe(u8, value);
+        errdefer self.allocator.free(owned_value);
+        try self.entries.append(self.allocator, .{ .name = owned_name, .value = owned_value });
+    }
+};
+
+pub fn isProcessEnvironmentName(name: []const u8) bool {
+    return name.len != 0 and
+        std.mem.findScalar(u8, name, '=') == null and
+        std.mem.findScalar(u8, name, 0) == null;
+}
+
+pub fn assertValidProcessEnvironmentName(name: []const u8) void {
+    std.debug.assert(isProcessEnvironmentName(name));
+}
 
 pub const AssignmentEffects = struct {
     allocator: std.mem.Allocator,
@@ -188,6 +240,16 @@ fn temporaryAssignmentsAreExported(plan: command_plan.CommandPlan) bool {
 fn findTemporaryVariable(environment: *TemporaryEnvironment, name: []const u8) ?*TemporaryVariable {
     for (environment.variables.items) |*variable| {
         if (std.mem.eql(u8, variable.name, name)) return variable;
+    }
+    return null;
+}
+
+fn findProcessEnvironmentEntry(
+    environment: *ProcessEnvironmentOverlay,
+    name: []const u8,
+) ?*ProcessEnvironmentEntry {
+    for (environment.entries.items) |*entry| {
+        if (std.mem.eql(u8, entry.name, name)) return entry;
     }
     return null;
 }

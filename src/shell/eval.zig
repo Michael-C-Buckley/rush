@@ -5513,6 +5513,17 @@ fn evaluateExternal(
     resolution: command_plan.ExternalResolution,
     buffers: *EvaluationBuffers,
 ) EvalError!outcome.ExitStatus {
+    return evaluateExternalWithProcessEnvironment(evaluator, shell_state, plan, resolution, &.{}, buffers);
+}
+
+fn evaluateExternalWithProcessEnvironment(
+    evaluator: *Evaluator,
+    shell_state: state.ShellState,
+    plan: command_plan.CommandPlan,
+    resolution: command_plan.ExternalResolution,
+    process_overlay: []const assignment_runtime.ProcessEnvironmentEntry,
+    buffers: *EvaluationBuffers,
+) EvalError!outcome.ExitStatus {
     resolution.validate();
     std.debug.assert(plan.target == .child_process);
     std.debug.assert(plan.argv.len != 0);
@@ -5533,14 +5544,26 @@ fn evaluateExternal(
         };
     }
 
-    var environment = try buildExternalEnvironment(evaluator.allocator, shell_state, temporary_environment);
+    var environment = try buildExternalEnvironmentWithProcessOverlay(
+        evaluator.allocator,
+        shell_state,
+        temporary_environment,
+        process_overlay,
+    );
     defer environment.deinit();
 
     const argv = try externalArgv(evaluator.allocator, plan, resolution);
     defer evaluator.allocator.free(argv);
 
     if (externalNeedsBufferedStdin(plan, buffers)) {
-        return runExternalWithPipelineInput(evaluator, shell_state, plan, resolution, buffers);
+        return runExternalWithPipelineInputWithProcessEnvironment(
+            evaluator,
+            shell_state,
+            plan,
+            resolution,
+            process_overlay,
+            buffers,
+        );
     }
 
     if (semanticHereDocInput(plan.redirections)) |stdin| {
@@ -5734,6 +5757,17 @@ fn runExternalWithPipelineInput(
     resolution: command_plan.ExternalResolution,
     buffers: *EvaluationBuffers,
 ) EvalError!outcome.ExitStatus {
+    return runExternalWithPipelineInputWithProcessEnvironment(evaluator, shell_state, plan, resolution, &.{}, buffers);
+}
+
+fn runExternalWithPipelineInputWithProcessEnvironment(
+    evaluator: *Evaluator,
+    shell_state: state.ShellState,
+    plan: command_plan.CommandPlan,
+    resolution: command_plan.ExternalResolution,
+    process_overlay: []const assignment_runtime.ProcessEnvironmentEntry,
+    buffers: *EvaluationBuffers,
+) EvalError!outcome.ExitStatus {
     resolution.validate();
     std.debug.assert(plan.target == .child_process);
     std.debug.assert(plan.argv.len != 0);
@@ -5754,7 +5788,12 @@ fn runExternalWithPipelineInput(
         };
     }
 
-    var environment = try buildExternalEnvironment(evaluator.allocator, shell_state, temporary_environment);
+    var environment = try buildExternalEnvironmentWithProcessOverlay(
+        evaluator.allocator,
+        shell_state,
+        temporary_environment,
+        process_overlay,
+    );
     defer environment.deinit();
 
     const argv = try externalArgv(evaluator.allocator, plan, resolution);
@@ -6001,6 +6040,15 @@ fn buildExternalEnvironment(
     shell_state: state.ShellState,
     temporary_environment: assignment_runtime.TemporaryEnvironment,
 ) !std.process.Environ.Map {
+    return buildExternalEnvironmentWithProcessOverlay(allocator, shell_state, temporary_environment, &.{});
+}
+
+fn buildExternalEnvironmentWithProcessOverlay(
+    allocator: std.mem.Allocator,
+    shell_state: state.ShellState,
+    temporary_environment: assignment_runtime.TemporaryEnvironment,
+    process_overlay: []const assignment_runtime.ProcessEnvironmentEntry,
+) !std.process.Environ.Map {
     var environment = std.process.Environ.Map.init(allocator);
     errdefer environment.deinit();
 
@@ -6009,14 +6057,22 @@ fn buildExternalEnvironment(
         const name = entry.key_ptr.*;
         const variable = entry.value_ptr.*;
         if (!variable.exported) continue;
+        state.assertValidVariableName(name);
         assertValidEnvironmentEntry(name, variable.value);
         try environment.put(name, variable.value);
     }
 
     for (temporary_environment.variables.items) |variable| {
         std.debug.assert(variable.exported);
+        state.assertValidVariableName(variable.name);
         assertValidEnvironmentEntry(variable.name, variable.value);
         try environment.put(variable.name, variable.value);
+    }
+
+    for (process_overlay) |entry| {
+        entry.validate();
+        assertValidEnvironmentEntry(entry.name, entry.value);
+        try environment.put(entry.name, entry.value);
     }
 
     assertValidEnvironmentMap(environment);
@@ -6029,7 +6085,7 @@ fn assertExternalArgv(argv: []const []const u8) void {
 }
 
 fn assertValidEnvironmentEntry(name: []const u8, value: []const u8) void {
-    state.assertValidVariableName(name);
+    assignment_runtime.assertValidProcessEnvironmentName(name);
     std.debug.assert(std.mem.findScalar(u8, name, '=') == null);
     std.debug.assert(std.mem.findScalar(u8, name, 0) == null);
     std.debug.assert(std.mem.findScalar(u8, value, 0) == null);
@@ -6855,29 +6911,32 @@ fn evaluateEnv(
         };
     }
 
-    const assignment_start = index;
+    var process_overlay = assignment_runtime.ProcessEnvironmentOverlay.init(evaluator.allocator);
+    defer process_overlay.deinit();
     while (index < plan.argv.len) : (index += 1) {
         const equals = std.mem.indexOfScalar(u8, plan.argv[index], '=') orelse break;
         const name = plan.argv[index][0..equals];
-        if (!isShellName(name)) return builtinStatusError(buffers, 1, "env", "invalid variable name");
-        temporary_environment.appendExported(name, plan.argv[index][equals + 1 ..]) catch |err| switch (err) {
+        if (!assignment_runtime.isProcessEnvironmentName(name)) {
+            return builtinStatusError(buffers, 1, "env", "invalid variable name");
+        }
+        process_overlay.put(name, plan.argv[index][equals + 1 ..]) catch |err| switch (err) {
             error.OutOfMemory => return error.OutOfMemory,
         };
     }
 
     if (index < plan.argv.len) {
-        const env_assignments = try evaluator.allocator.alloc(command_plan.Assignment, index - assignment_start);
-        defer evaluator.allocator.free(env_assignments);
-        for (plan.argv[assignment_start..index], 0..) |operand, assignment_index| {
-            const equals = std.mem.indexOfScalar(u8, operand, '=') orelse unreachable;
-            env_assignments[assignment_index] = .{ .name = operand[0..equals], .value = operand[equals + 1 ..] };
-        }
         const command: command_plan.ExpandedSimpleCommand = .{
-            .assignments = env_assignments,
+            .assignments = plan.assignments,
             .argv = plan.argv[index..],
             .last_command_substitution_status = plan.last_command_substitution_status,
         };
-        const external = try resolveExternalForEvaluation(evaluator.allocator, evaluator.fs_port, shell_state, command);
+        const external = try resolveExternalForEnvEvaluation(
+            evaluator.allocator,
+            evaluator.fs_port,
+            shell_state,
+            command,
+            process_overlay.entries.items,
+        );
         defer if (external) |resolution| evaluator.allocator.free(resolution.path);
         const resolution = external orelse return evaluateNotFound(.{ .name = command.argv[0] }, buffers);
         const target_plan = command_plan.classifyExpandedSimpleCommand(.{
@@ -6885,10 +6944,22 @@ fn evaluateEnv(
             .lookup = .{ .externals = &.{resolution} },
             .target = .child_process,
         });
-        return evaluateExternal(evaluator, shell_state, target_plan, resolution, buffers);
+        return evaluateExternalWithProcessEnvironment(
+            evaluator,
+            shell_state,
+            target_plan,
+            resolution,
+            process_overlay.entries.items,
+            buffers,
+        );
     }
 
-    var environment = try buildExternalEnvironment(evaluator.allocator, shell_state, temporary_environment);
+    var environment = try buildExternalEnvironmentWithProcessOverlay(
+        evaluator.allocator,
+        shell_state,
+        temporary_environment,
+        process_overlay.entries.items,
+    );
     defer environment.deinit();
     var iterator = environment.iterator();
     while (iterator.next()) |entry| {
@@ -8096,6 +8167,65 @@ pub fn resolveExternalForEvaluation(
         return .{ .name = name, .path = path };
     }
     return null;
+}
+
+fn resolveExternalForEnvEvaluation(
+    allocator: std.mem.Allocator,
+    fs_port: ?runtime.fs.Port,
+    shell_state: state.ShellState,
+    command: command_plan.ExpandedSimpleCommand,
+    process_overlay: []const assignment_runtime.ProcessEnvironmentEntry,
+) !?command_plan.ExternalResolution {
+    command.validate();
+    if (command.argv.len == 0) return null;
+    const name = command.argv[0];
+    if (name.len == 0) return null;
+    if (std.mem.findScalar(u8, name, '/') != null) {
+        return .{ .name = name, .path = try allocator.dupe(u8, name) };
+    }
+
+    const port = fs_port orelse return null;
+    const path_value = processOverlayValue(process_overlay, "PATH") orelse
+        commandLookupPath(shell_state, command) orelse return null;
+    var first_found: ?[]const u8 = null;
+    errdefer if (first_found) |path| allocator.free(path);
+    var parts = std.mem.splitScalar(u8, path_value, ':');
+    while (parts.next()) |part| {
+        const dir = if (part.len == 0) "." else part;
+        const candidate = try std.mem.concat(allocator, u8, &.{ dir, "/", name });
+        errdefer allocator.free(candidate);
+        switch (externalCandidate(port, candidate)) {
+            .missing => allocator.free(candidate),
+            .found_not_executable => {
+                if (first_found == null) {
+                    first_found = candidate;
+                } else {
+                    allocator.free(candidate);
+                }
+            },
+            .executable => {
+                if (first_found) |path| allocator.free(path);
+                return .{ .name = name, .path = candidate };
+            },
+        }
+    }
+    if (first_found) |path| {
+        first_found = null;
+        return .{ .name = name, .path = path };
+    }
+    return null;
+}
+
+fn processOverlayValue(
+    process_overlay: []const assignment_runtime.ProcessEnvironmentEntry,
+    name: []const u8,
+) ?[]const u8 {
+    var value: ?[]const u8 = null;
+    for (process_overlay) |entry| {
+        entry.validate();
+        if (std.mem.eql(u8, entry.name, name)) value = entry.value;
+    }
+    return value;
 }
 
 fn resolveAllExternalsForEvaluation(

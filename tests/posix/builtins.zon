@@ -612,6 +612,33 @@
             .status = 0,
         },
         .{
+            .name = "env assignment operands are process environment entries",
+            .script =
+            \\env 1BAD=x printenv 1BAD
+            \\env 1BAD=x | grep '^1BAD='
+            \\FOO=outer
+            \\readonly FOO
+            \\env FOO=inner printenv FOO
+            \\printf 'after:%s\n' "$FOO"
+            \\if ( export 1BAD=x ) 2>/dev/null
+            \\then
+            \\    printf 'export-bad\n'
+            \\else
+            \\    printf 'export-invalid\n'
+            \\fi
+            ,
+            .stdout =
+            \\x
+            \\1BAD=x
+            \\inner
+            \\after:outer
+            \\export-invalid
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "exec command exits with the replacement utility status",
             .script =
             \\( exec sh -c 'exit 7'; printf 'bad\n' )
