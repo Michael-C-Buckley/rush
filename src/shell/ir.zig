@@ -135,6 +135,45 @@ pub const Statement = struct {
     async_after: bool = false,
 };
 
+pub const SourceFragmentRenderOptions = struct {
+    trim_syntax: bool = false,
+};
+
+pub const SourceFragment = struct {
+    syntax_span: parser.Span,
+    consumed_end: usize,
+    payload_slices: []const []const u8 = &.{},
+
+    pub fn deinit(self: *SourceFragment, allocator: std.mem.Allocator) void {
+        allocator.free(self.payload_slices);
+        self.* = undefined;
+    }
+
+    pub fn render(
+        self: SourceFragment,
+        allocator: std.mem.Allocator,
+        source: []const u8,
+        options: SourceFragmentRenderOptions,
+    ) ![]const u8 {
+        std.debug.assert(self.syntax_span.end <= source.len);
+        std.debug.assert(self.syntax_span.end <= self.consumed_end);
+        std.debug.assert(self.consumed_end <= source.len);
+        var syntax = self.syntax_span.slice(source);
+        if (options.trim_syntax) syntax = std.mem.trim(u8, syntax, " \t\r\n;");
+
+        var output: std.ArrayList(u8) = .empty;
+        errdefer output.deinit(allocator);
+        try output.appendSlice(allocator, syntax);
+        for (self.payload_slices) |payload| {
+            if (output.items.len != 0 and output.items[output.items.len - 1] != '\n') {
+                try output.append(allocator, '\n');
+            }
+            try output.appendSlice(allocator, payload);
+        }
+        return output.toOwnedSlice(allocator);
+    }
+};
+
 pub const Program = struct {
     allocator: std.mem.Allocator,
     source: []const u8,
@@ -447,6 +486,228 @@ pub fn lowerSimpleCommands(allocator: std.mem.Allocator, parsed: parser.ParseRes
         .subshells = try subshells.toOwnedSlice(allocator),
         .statements = try statements.toOwnedSlice(allocator),
     };
+}
+
+pub fn statementSourceFragment(
+    allocator: std.mem.Allocator,
+    program: Program,
+    statement_index: usize,
+) !SourceFragment {
+    std.debug.assert(statement_index < program.statements.len);
+    const statement = program.statements[statement_index];
+    const syntax_end = statementSyntacticEnd(program, statement);
+    std.debug.assert(statement.span.start <= syntax_end);
+    std.debug.assert(syntax_end <= program.source.len);
+    const broad_end = if (statement_index + 1 < program.statements.len)
+        program.statements[statement_index + 1].span.start
+    else
+        program.source.len;
+
+    var payloads: std.ArrayList([]const u8) = .empty;
+    errdefer payloads.deinit(allocator);
+    var consumed_end = syntax_end;
+    try appendStatementPayloadSlices(allocator, &payloads, &consumed_end, program, statement, syntax_end, broad_end);
+    return .{
+        .syntax_span = .init(statement.span.start, syntax_end),
+        .consumed_end = consumed_end,
+        .payload_slices = try payloads.toOwnedSlice(allocator),
+    };
+}
+
+fn statementSyntacticEnd(program: Program, statement: Statement) usize {
+    return switch (statement.kind) {
+        .pipeline => pipelineSyntacticEnd(program, program.pipelines[statement.index]),
+        .if_command => program.if_commands[statement.index].span.end,
+        .loop_command => program.loop_commands[statement.index].span.end,
+        .for_command => program.for_commands[statement.index].span.end,
+        .case_command => program.case_commands[statement.index].span.end,
+        .function_definition => program.function_definitions[statement.index].span.end,
+        .bash_test_command => program.bash_test_commands[statement.index].span.end,
+        .brace_group => program.brace_groups[statement.index].span.end,
+        .subshell => program.subshells[statement.index].span.end,
+    };
+}
+
+fn pipelineSyntacticEnd(program: Program, pipeline: Pipeline) usize {
+    var end = pipeline.span.end;
+    for (pipeline.command_indexes) |command_index| end = @max(end, program.commands[command_index].span.end);
+    return end;
+}
+
+fn appendStatementPayloadSlices(
+    allocator: std.mem.Allocator,
+    payloads: *std.ArrayList([]const u8),
+    consumed_end: *usize,
+    program: Program,
+    statement: Statement,
+    syntax_end: usize,
+    broad_end: usize,
+) anyerror!void {
+    switch (statement.kind) {
+        .pipeline => {
+            const pipeline = program.pipelines[statement.index];
+            if (pipeline.command_indexes.len == pipeline.stage_spans.len) {
+                for (pipeline.command_indexes) |command_index| {
+                    try appendRedirectionPayloadSlices(
+                        allocator,
+                        payloads,
+                        consumed_end,
+                        program.source,
+                        program.commands[command_index].redirections,
+                        syntax_end,
+                    );
+                }
+            } else {
+                for (pipeline.stage_sources, pipeline.stage_spans) |source, span| {
+                    const syntax_len = span.end - span.start;
+                    const payload_start = payloadTailStart(source, syntax_len);
+                    if (source.len > payload_start) {
+                        consumed_end.* = @max(consumed_end.*, broad_end);
+                        try payloads.append(allocator, source[payload_start..]);
+                    }
+                }
+            }
+        },
+        .if_command => {
+            const command = program.if_commands[statement.index];
+            try appendRedirectionPayloadSlices(
+                allocator,
+                payloads,
+                consumed_end,
+                program.source,
+                command.redirections,
+                syntax_end,
+            );
+            for (command.branches) |branch| {
+                try appendEmbeddedPayloadSlices(allocator, payloads, branch.condition);
+                try appendEmbeddedPayloadSlices(allocator, payloads, branch.body);
+            }
+            if (command.else_body) |body| try appendEmbeddedPayloadSlices(allocator, payloads, body);
+        },
+        .loop_command => {
+            const command = program.loop_commands[statement.index];
+            try appendRedirectionPayloadSlices(
+                allocator,
+                payloads,
+                consumed_end,
+                program.source,
+                command.redirections,
+                syntax_end,
+            );
+            try appendEmbeddedPayloadSlices(allocator, payloads, command.condition);
+            try appendEmbeddedPayloadSlices(allocator, payloads, command.body);
+        },
+        .for_command => {
+            const command = program.for_commands[statement.index];
+            try appendRedirectionPayloadSlices(
+                allocator,
+                payloads,
+                consumed_end,
+                program.source,
+                command.redirections,
+                syntax_end,
+            );
+            try appendEmbeddedPayloadSlices(allocator, payloads, command.body);
+        },
+        .case_command => {
+            const command = program.case_commands[statement.index];
+            try appendRedirectionPayloadSlices(
+                allocator,
+                payloads,
+                consumed_end,
+                program.source,
+                command.redirections,
+                syntax_end,
+            );
+            for (command.arms) |arm| try appendEmbeddedPayloadSlices(allocator, payloads, arm.body);
+        },
+        .function_definition => {
+            const definition = program.function_definitions[statement.index];
+            try appendRedirectionPayloadSlices(
+                allocator,
+                payloads,
+                consumed_end,
+                program.source,
+                definition.redirections,
+                syntax_end,
+            );
+            try appendEmbeddedPayloadSlices(allocator, payloads, definition.body);
+        },
+        .brace_group => {
+            const group = program.brace_groups[statement.index];
+            try appendRedirectionPayloadSlices(
+                allocator,
+                payloads,
+                consumed_end,
+                program.source,
+                group.redirections,
+                syntax_end,
+            );
+            try appendEmbeddedPayloadSlices(allocator, payloads, group.body);
+        },
+        .subshell => {
+            const subshell = program.subshells[statement.index];
+            try appendRedirectionPayloadSlices(
+                allocator,
+                payloads,
+                consumed_end,
+                program.source,
+                subshell.redirections,
+                syntax_end,
+            );
+            try appendEmbeddedPayloadSlices(allocator, payloads, subshell.body);
+        },
+        .bash_test_command => {},
+    }
+}
+
+fn payloadTailStart(source: []const u8, syntax_len: usize) usize {
+    std.debug.assert(syntax_len <= source.len);
+    var start = syntax_len;
+    if (start < source.len and source[start] == '\r') start += 1;
+    if (start < source.len and source[start] == '\n') start += 1;
+    return start;
+}
+
+fn appendRedirectionPayloadSlices(
+    allocator: std.mem.Allocator,
+    payloads: *std.ArrayList([]const u8),
+    consumed_end: ?*usize,
+    source: []const u8,
+    redirections: []const Redirection,
+    syntax_end: usize,
+) !void {
+    for (redirections) |redirection| {
+        const range = redirection.here_doc_range orelse continue;
+        if (range.start < syntax_end) continue;
+        if (consumed_end) |end| end.* = @max(end.*, range.end);
+        try payloads.append(allocator, source[range.start..range.end]);
+    }
+}
+
+fn appendEmbeddedPayloadSlices(
+    allocator: std.mem.Allocator,
+    payloads: *std.ArrayList([]const u8),
+    body: []const u8,
+) anyerror!void {
+    if (std.mem.indexOf(u8, body, "<<") == null) return;
+    var parsed = try parser.parse(allocator, body, .{});
+    defer parsed.deinit();
+    var body_program = try lowerSimpleCommands(allocator, parsed);
+    defer body_program.deinit();
+    for (body_program.statements) |statement| {
+        const syntax_end = statementSyntacticEnd(body_program, statement);
+        var ignored_consumed_end = syntax_end;
+        try appendStatementPayloadSlices(
+            allocator,
+            payloads,
+            &ignored_consumed_end,
+            body_program,
+            statement,
+            syntax_end,
+            body_program.source.len,
+        );
+    }
 }
 
 fn lowerListNode(
