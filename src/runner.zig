@@ -1292,7 +1292,7 @@ fn semanticStatementSource(
     std.debug.assert(statement_index < program.statements.len);
     const statement = program.statements[statement_index];
     const source_end = if (semanticStatementNeedsEmbeddedHereDocSource(program, statement))
-        semanticStatementSourceEnd(program, statement_index, script_len)
+        semanticStatementBroadEnd(program, statement_index, script_len)
     else
         semanticStatementSyntacticEnd(program, statement);
     const base = std.mem.trim(u8, program.source[statement.span.start..source_end], " \t\r\n;");
@@ -1315,6 +1315,12 @@ fn semanticStatementSyntacticEnd(program: ir.Program, statement: ir.Statement) u
         .brace_group => program.brace_groups[statement.index].span.end,
         .subshell => program.subshells[statement.index].span.end,
     };
+}
+
+fn semanticStatementBroadEnd(program: ir.Program, statement_index: usize, script_len: usize) usize {
+    std.debug.assert(statement_index < program.statements.len);
+    if (statement_index + 1 < program.statements.len) return program.statements[statement_index + 1].span.start;
+    return script_len;
 }
 
 fn semanticPipelineSyntacticEnd(program: ir.Program, pipeline: ir.Pipeline) usize {

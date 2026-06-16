@@ -527,6 +527,20 @@
             .status = 0,
         },
         .{
+            .name = "here document feeds a case arm command",
+            .script =
+            \\case x in x) cat <<EOF ;; esac
+            \\hello
+            \\EOF
+            ,
+            .stdout =
+            \\hello
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "here document feeds a loop body command",
             .script =
             \\for i in 1; do cat <<EOF; done
