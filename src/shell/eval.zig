@@ -922,8 +922,15 @@ const SourceLowerer = struct {
             .failure => |trap_failure| return .{ .failure = trap_failure },
             .list => |list| list,
         };
-        const condition_source = try self.allocator.dupe(u8, command.condition);
-        const body_source = try self.allocator.dupe(u8, command.body);
+        const source_backed = self.owner.expand_aliases;
+        const condition_source: ?[]const u8 = if (source_backed)
+            try self.allocator.dupe(u8, command.condition)
+        else
+            null;
+        const body_source: ?[]const u8 = if (source_backed)
+            try self.allocator.dupe(u8, command.body)
+        else
+            null;
         const loop: command_plan.LoopPlan = .{
             .condition_source = condition_source,
             .condition = condition,
@@ -974,7 +981,18 @@ const SourceLowerer = struct {
             break :blk command_plan.ForWords{ .explicit = try explicit.toOwnedSlice(self.allocator) };
         };
         const name = try self.allocator.dupe(u8, command.name);
-        const body_source = try self.allocator.dupe(u8, command.body);
+        const source_backed = self.owner.expand_aliases;
+        const body_source: ?[]const u8 = if (source_backed)
+            try self.allocator.dupe(u8, command.body)
+        else
+            null;
+        const body: command_plan.StatementList = if (source_backed) .{} else blk: {
+            const lowered = try self.lowerStatementListSource(command.body, target);
+            break :blk switch (lowered) {
+                .failure => |trap_failure| return .{ .failure = trap_failure },
+                .list => |list| list,
+            };
+        };
         const plan: command_plan.CompoundCommandPlan = .{
             .target = target,
             .redirections = redirections.plan,
@@ -982,7 +1000,7 @@ const SourceLowerer = struct {
                 .variable_name = name,
                 .words = words,
                 .body_source = body_source,
-                .body = .{},
+                .body = body,
             } },
         };
         plan.validate();
@@ -14058,6 +14076,136 @@ test "semantic parser trap resolver classifies same-list function calls" {
     defer call_outcome.deinit();
     try std.testing.expectEqual(@as(outcome.ExitStatus, 0), call_outcome.status);
     try std.testing.expectEqualStrings("hi\n", call_outcome.stdout.items);
+}
+
+test "semantic parser trap resolver uses lazy IR for alias-disabled while loops" {
+    var shell_state = state.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    var evaluator = Evaluator.init(std.testing.allocator);
+    var parser_resolver = ParserBackedSourceResolver.init(&evaluator);
+    parser_resolver.expand_aliases = false;
+    const eval_context = context.EvalContext.forTarget(.current_shell);
+
+    var body = (try parser_resolver.resolver().resolve(
+        std.testing.allocator,
+        "i=0; while test \"$i\" != 2; do printf '%s\n' \"$i\"; i=$((i + 1)); done",
+        .TERM,
+        eval_context,
+        &shell_state,
+    )) orelse return error.ExpectedSemanticBody;
+    defer body.deinit();
+
+    const list = switch (body) {
+        .owned => |owned| switch (owned.body) {
+            .compound => |compound| switch (compound.body) {
+                .sequence => |list| list,
+                else => return error.ExpectedStatementList,
+            },
+            else => return error.ExpectedCompoundPlan,
+        },
+        else => return error.ExpectedOwnedSemanticBody,
+    };
+    try std.testing.expectEqual(@as(usize, 2), list.statements.len);
+    const loop = switch (list.statements[1].plan) {
+        .compound => |compound| switch (compound.body) {
+            .while_loop => |loop| loop,
+            else => return error.ExpectedWhileLoop,
+        },
+        else => return error.ExpectedCompoundPlan,
+    };
+    try std.testing.expect(loop.condition_source == null);
+    try std.testing.expect(loop.body_source == null);
+    try std.testing.expect(loop.condition.statements.len != 0);
+    try std.testing.expect(loop.body.statements.len != 0);
+
+    var outcome_body = try evaluateTrapActionBody(&evaluator, &shell_state, eval_context, body);
+    defer outcome_body.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 0), outcome_body.status);
+    try std.testing.expectEqualStrings("0\n1\n", outcome_body.stdout.items);
+}
+
+test "semantic parser trap resolver uses lazy IR for alias-disabled for loops" {
+    var shell_state = state.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    var evaluator = Evaluator.init(std.testing.allocator);
+    var parser_resolver = ParserBackedSourceResolver.init(&evaluator);
+    parser_resolver.expand_aliases = false;
+    const eval_context = context.EvalContext.forTarget(.current_shell);
+
+    var body = (try parser_resolver.resolver().resolve(
+        std.testing.allocator,
+        "for word in a b; do printf '%s\n' \"$word\"; done",
+        .TERM,
+        eval_context,
+        &shell_state,
+    )) orelse return error.ExpectedSemanticBody;
+    defer body.deinit();
+
+    const for_plan = switch (body) {
+        .owned => |owned| switch (owned.body) {
+            .compound => |compound| switch (compound.body) {
+                .for_loop => |for_plan| for_plan,
+                else => return error.ExpectedForLoop,
+            },
+            else => return error.ExpectedCompoundPlan,
+        },
+        else => return error.ExpectedOwnedSemanticBody,
+    };
+    try std.testing.expect(for_plan.body_source == null);
+    try std.testing.expect(for_plan.body.statements.len != 0);
+
+    var outcome_body = try evaluateTrapActionBody(&evaluator, &shell_state, eval_context, body);
+    defer outcome_body.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 0), outcome_body.status);
+    try std.testing.expectEqualStrings("a\nb\n", outcome_body.stdout.items);
+}
+
+test "semantic parser trap resolver keeps loops source-backed when aliases are enabled" {
+    var shell_state = state.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    var evaluator = Evaluator.init(std.testing.allocator);
+    var parser_resolver = ParserBackedSourceResolver.init(&evaluator);
+    const eval_context = context.EvalContext.forTarget(.current_shell);
+
+    var body = (try parser_resolver.resolver().resolve(
+        std.testing.allocator,
+        "while :; do break; done; for word in a; do :; done",
+        .TERM,
+        eval_context,
+        &shell_state,
+    )) orelse return error.ExpectedSemanticBody;
+    defer body.deinit();
+
+    const list = switch (body) {
+        .owned => |owned| switch (owned.body) {
+            .compound => |compound| switch (compound.body) {
+                .sequence => |list| list,
+                else => return error.ExpectedStatementList,
+            },
+            else => return error.ExpectedCompoundPlan,
+        },
+        else => return error.ExpectedOwnedSemanticBody,
+    };
+    try std.testing.expectEqual(@as(usize, 2), list.statements.len);
+    const loop = switch (list.statements[0].plan) {
+        .compound => |compound| switch (compound.body) {
+            .while_loop => |loop| loop,
+            else => return error.ExpectedWhileLoop,
+        },
+        else => return error.ExpectedCompoundPlan,
+    };
+    try std.testing.expect(loop.condition_source != null);
+    try std.testing.expect(loop.body_source != null);
+
+    const for_plan = switch (list.statements[1].plan) {
+        .compound => |compound| switch (compound.body) {
+            .for_loop => |for_plan| for_plan,
+            else => return error.ExpectedForLoop,
+        },
+        else => return error.ExpectedCompoundPlan,
+    };
+    try std.testing.expect(for_plan.body_source != null);
+    try std.testing.expectEqual(@as(usize, 0), for_plan.body.statements.len);
 }
 
 test "semantic parser trap resolver lowers redirection operators for trap actions" {
