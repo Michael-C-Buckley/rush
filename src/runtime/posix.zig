@@ -488,6 +488,11 @@ fn terminalGetProcessGroup(terminal: fd.Descriptor) process.JobControlError!std.
 fn terminalSetProcessGroup(terminal: fd.Descriptor, process_group: std.posix.pid_t) process.JobControlError!void {
     fd.assertValidDescriptor(terminal);
     std.debug.assert(process_group > 0);
+    var blocked = std.posix.sigemptyset();
+    std.posix.sigaddset(&blocked, .TTOU);
+    var previous: std.posix.sigset_t = undefined;
+    std.posix.sigprocmask(std.posix.SIG.BLOCK, &blocked, &previous);
+    defer std.posix.sigprocmask(std.posix.SIG.SETMASK, &previous, null);
     const rc = tcsetpgrp(terminal, process_group);
     switch (std.c.errno(rc)) {
         .SUCCESS => return,
