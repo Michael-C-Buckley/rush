@@ -6230,7 +6230,6 @@ fn buildExternalEnvironmentWithProcessOverlay(
     }
 
     for (temporary_environment.variables.items) |variable| {
-        std.debug.assert(variable.exported);
         state.assertValidVariableName(variable.name);
         assertValidEnvironmentEntry(variable.name, variable.value);
         try environment.put(variable.name, variable.value);
