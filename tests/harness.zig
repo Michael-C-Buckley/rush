@@ -41,6 +41,7 @@ const Config = struct {
     mode: Mode,
     files: []const []const u8,
     print_diff: bool,
+    color_diff: bool,
     case_filter: ?[]const u8,
 };
 
@@ -143,6 +144,7 @@ pub fn main(init: std.process.Init) !u8 {
         .mode = parsed_config.mode,
         .files = files,
         .print_diff = parsed_config.print_diff or parsed_config.case_filter != null,
+        .color_diff = std.Io.File.stderr().isTty(init.io) catch false,
         .case_filter = parsed_config.case_filter,
     };
     if (config.files.len == 0) {
@@ -233,6 +235,7 @@ fn parseArgs(allocator: std.mem.Allocator, args: []const []const u8) !?Config {
         .mode = parsed_mode,
         .files = args[index..],
         .print_diff = print_diff,
+        .color_diff = false,
         .case_filter = case_filter,
     };
 }
@@ -418,6 +421,7 @@ fn runCase(
         target_name,
         target,
         config.print_diff,
+        config.color_diff,
     );
     progress.completeCase();
 
@@ -532,6 +536,7 @@ fn reportMismatch(
     shell_name: []const u8,
     actual: RunResult,
     print_diff: bool,
+    color_diff: bool,
 ) !bool {
     const stdout_failed = !std.mem.eql(u8, actual.stdout, case.stdout);
     const stderr_failed = !bytesMatch(actual.stderr, case.stderr, case.stderr_match);
@@ -547,10 +552,10 @@ fn reportMismatch(
     printFailureHeader(path, suite_name, case.name);
     std.debug.print("  target: {s}\n", .{shell_name});
     if (stdout_failed) {
-        try printExactBytesMismatch(allocator, "stdout", case.stdout, actual.stdout);
+        try printExactBytesMismatch(allocator, "stdout", case.stdout, actual.stdout, color_diff);
     }
     if (stderr_failed) {
-        try printBytesExpectationMismatch(allocator, "stderr", case.stderr, case.stderr_match, actual.stderr);
+        try printBytesExpectationMismatch(allocator, "stderr", case.stderr, case.stderr_match, actual.stderr, color_diff);
     }
     if (status_failed) {
         switch (case.status_match) {
@@ -596,9 +601,10 @@ fn printBytesExpectationMismatch(
     expected: []const u8,
     expectation: BytesExpectation,
     actual: []const u8,
+    color_diff: bool,
 ) !void {
     switch (expectation) {
-        .exact => try printExactBytesMismatch(allocator, stream, expected, actual),
+        .exact => try printExactBytesMismatch(allocator, stream, expected, actual, color_diff),
         .any => {},
         .nonempty => std.debug.print(
             "  {s} mismatch: expected nonempty, got {d} byte(s)\n",
@@ -616,15 +622,16 @@ fn printExactBytesMismatch(
     stream: []const u8,
     expected: []const u8,
     actual: []const u8,
+    color_diff: bool,
 ) !void {
     std.debug.print(
         "  {s} mismatch (- expected, + actual):\n  --- expected {s} ({d} byte(s))\n  +++ actual {s} ({d} byte(s))\n",
         .{ stream, stream, expected.len, stream, actual.len },
     );
-    try printUnifiedDiff(allocator, expected, actual);
+    try printUnifiedDiff(allocator, expected, actual, color_diff);
 }
 
-fn printUnifiedDiff(allocator: std.mem.Allocator, expected: []const u8, actual: []const u8) !void {
+fn printUnifiedDiff(allocator: std.mem.Allocator, expected: []const u8, actual: []const u8, color_diff: bool) !void {
     const expected_lines = try splitDiffLines(allocator, expected);
     defer allocator.free(expected_lines);
     const actual_lines = try splitDiffLines(allocator, actual);
@@ -664,24 +671,24 @@ fn printUnifiedDiff(allocator: std.mem.Allocator, expected: []const u8, actual: 
     var actual_index: usize = 0;
     while (expected_index < expected_lines.len and actual_index < actual_lines.len) {
         if (std.mem.eql(u8, expected_lines[expected_index].text, actual_lines[actual_index].text)) {
-            printDiffLine(' ', expected_lines[expected_index].text);
+            printDiffLine(' ', expected_lines[expected_index].text, color_diff);
             expected_index += 1;
             actual_index += 1;
         } else if (lcs[(expected_index + 1) * width + actual_index] >=
             lcs[expected_index * width + actual_index + 1])
         {
-            printDiffLine('-', expected_lines[expected_index].text);
+            printDiffLine('-', expected_lines[expected_index].text, color_diff);
             expected_index += 1;
         } else {
-            printDiffLine('+', actual_lines[actual_index].text);
+            printDiffLine('+', actual_lines[actual_index].text, color_diff);
             actual_index += 1;
         }
     }
     while (expected_index < expected_lines.len) : (expected_index += 1) {
-        printDiffLine('-', expected_lines[expected_index].text);
+        printDiffLine('-', expected_lines[expected_index].text, color_diff);
     }
     while (actual_index < actual_lines.len) : (actual_index += 1) {
-        printDiffLine('+', actual_lines[actual_index].text);
+        printDiffLine('+', actual_lines[actual_index].text, color_diff);
     }
 
     if (expected.len != 0 and !std.mem.endsWith(u8, expected, "\n")) {
@@ -706,7 +713,20 @@ fn splitDiffLines(allocator: std.mem.Allocator, bytes: []const u8) ![]DiffLine {
     return lines.toOwnedSlice(allocator);
 }
 
-fn printDiffLine(prefix: u8, line: []const u8) void {
+fn printDiffLine(prefix: u8, line: []const u8, color_diff: bool) void {
+    if (color_diff) {
+        switch (prefix) {
+            '-' => {
+                std.debug.print("  \x1b[31m-{s}\x1b[0m\n", .{line});
+                return;
+            },
+            '+' => {
+                std.debug.print("  \x1b[32m+{s}\x1b[0m\n", .{line});
+                return;
+            },
+            else => {},
+        }
+    }
     std.debug.print("  {c}{s}\n", .{ prefix, line });
 }
 
