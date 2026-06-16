@@ -9,6 +9,7 @@ const std = @import("std");
 const default_builtins = @import("../builtins.zig");
 const builtin = @import("builtin.zig");
 const context = @import("context.zig");
+const ir = @import("ir.zig");
 const redirection_plan = @import("redirection_plan.zig");
 const state = @import("state.zig");
 
@@ -247,6 +248,7 @@ pub const StatementPlan = union(enum) {
     compound: CompoundCommandPlan,
     pipeline: PipelinePlan,
     source: SourceStatementPlan,
+    ir_source: IrStatementPlan,
 
     pub fn validate(self: StatementPlan) void {
         switch (self) {
@@ -254,6 +256,7 @@ pub const StatementPlan = union(enum) {
             .compound => |plan| plan.validate(),
             .pipeline => |plan| plan.validate(),
             .source => |plan| plan.validate(),
+            .ir_source => |plan| plan.validate(),
         }
     }
 };
@@ -269,6 +272,23 @@ pub const SourceStatementPlan = struct {
         std.debug.assert(self.target.allowsShellStateCommit());
         std.debug.assert(self.source.len != 0);
         std.debug.assert(std.mem.indexOfScalar(u8, self.source, 0) == null);
+    }
+};
+
+pub const IrStatementPlan = struct {
+    target: context.ExecutionTarget,
+    program: *const ir.Program,
+    statement_index: usize,
+    fallback_source: []const u8,
+    line: usize = 0,
+    targets_stdout: bool = false,
+    targets_stderr: bool = false,
+
+    pub fn validate(self: IrStatementPlan) void {
+        std.debug.assert(self.target.allowsShellStateCommit());
+        std.debug.assert(self.statement_index < self.program.statements.len);
+        std.debug.assert(self.fallback_source.len != 0);
+        std.debug.assert(std.mem.indexOfScalar(u8, self.fallback_source, 0) == null);
     }
 };
 
@@ -833,6 +853,7 @@ fn cloneStatementPlan(allocator: std.mem.Allocator, plan: StatementPlan) std.mem
         .compound => |compound| .{ .compound = try cloneCompoundCommandPlan(allocator, compound) },
         .pipeline => |pipeline| .{ .pipeline = try clonePipelinePlan(allocator, pipeline) },
         .source => |source| .{ .source = try cloneSourceStatementPlan(allocator, source) },
+        .ir_source => |source| .{ .source = try cloneIrStatementPlanAsSource(allocator, source) },
     };
 }
 
@@ -842,6 +863,7 @@ fn freeStatementPlan(allocator: std.mem.Allocator, plan: StatementPlan) void {
         .compound => |compound| freeCompoundCommandPlan(allocator, compound),
         .pipeline => |pipeline| freePipelinePlan(allocator, pipeline),
         .source => |source| freeSourceStatementPlan(allocator, source),
+        .ir_source => {},
     }
 }
 
@@ -861,6 +883,20 @@ fn cloneSourceStatementPlan(
 
 fn freeSourceStatementPlan(allocator: std.mem.Allocator, plan: SourceStatementPlan) void {
     allocator.free(plan.source);
+}
+
+fn cloneIrStatementPlanAsSource(
+    allocator: std.mem.Allocator,
+    plan: IrStatementPlan,
+) std.mem.Allocator.Error!SourceStatementPlan {
+    plan.validate();
+    return .{
+        .target = plan.target,
+        .source = try allocator.dupe(u8, plan.fallback_source),
+        .line = plan.line,
+        .targets_stdout = plan.targets_stdout,
+        .targets_stderr = plan.targets_stderr,
+    };
 }
 
 fn cloneCommandPlan(allocator: std.mem.Allocator, plan: CommandPlan) std.mem.Allocator.Error!CommandPlan {

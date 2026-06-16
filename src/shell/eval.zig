@@ -641,6 +641,8 @@ const SourceLowerer = struct {
             }
         }
 
+        const program_ref = try self.allocator.create(ir.Program);
+        program_ref.* = program;
         const statements = try self.allocator.alloc(command_plan.StatementListEntry, program.statements.len);
         for (program.statements, 0..) |statement, index| {
             const op_before: command_plan.StatementListOperator = switch (statement.op_before) {
@@ -650,9 +652,11 @@ const SourceLowerer = struct {
             };
             statements[index] = .{
                 .op_before = op_before,
-                .plan = .{ .source = .{
+                .plan = .{ .ir_source = .{
                     .target = target,
-                    .source = try self.statementSource(program, index),
+                    .program = program_ref,
+                    .statement_index = index,
+                    .fallback_source = try self.statementSource(program, index),
                     .line = statementLine(program.source, statement.span.start),
                     .targets_stdout = statementTargetsDescriptor(program, statement, 1),
                     .targets_stderr = statementTargetsDescriptor(program, statement, 2),
@@ -4523,6 +4527,7 @@ fn statementSourceLine(plan: command_plan.StatementPlan) ?usize {
     plan.validate();
     return switch (plan) {
         .source => |source| source.line,
+        .ir_source => |source| source.line,
         .simple, .compound, .pipeline => null,
     };
 }
@@ -4605,6 +4610,7 @@ fn flushBuffersForStatementRedirections(
         ),
         .pipeline => {},
         .source => |source| try flushBuffersForSourceRedirectionTargets(buffers, eval_context, source),
+        .ir_source => |source| try flushBuffersForIrSourceRedirectionTargets(buffers, eval_context, source),
     }
 }
 
@@ -4623,6 +4629,24 @@ fn flushBuffersForSourceRedirectionTargets(
     buffers: *EvaluationBuffers,
     eval_context: context.EvalContext,
     source: command_plan.SourceStatementPlan,
+) EvalError!void {
+    eval_context.validate();
+    source.validate();
+    if (eval_context.command_substitution_depth != 0) return;
+    if (source.targets_stdout and buffers.stdout.items.len != 0) {
+        if (!writeAllDescriptor(1, buffers.stdout.items)) return error.Unimplemented;
+        buffers.stdout.items.len = 0;
+    }
+    if (source.targets_stderr and buffers.stderr.items.len != 0) {
+        if (!writeAllDescriptor(2, buffers.stderr.items)) return error.Unimplemented;
+        buffers.stderr.items.len = 0;
+    }
+}
+
+fn flushBuffersForIrSourceRedirectionTargets(
+    buffers: *EvaluationBuffers,
+    eval_context: context.EvalContext,
+    source: command_plan.IrStatementPlan,
 ) EvalError!void {
     eval_context.validate();
     source.validate();
@@ -4678,6 +4702,7 @@ fn evaluateStatementPlan(
         ),
         .pipeline => |pipeline| evaluatePipelinePlan(evaluator, shell_state, eval_context, pipeline),
         .source => |source| evaluateSourceStatement(evaluator, shell_state, eval_context, source, input),
+        .ir_source => |source| evaluateIrSourceStatement(evaluator, shell_state, eval_context, source, input),
     };
 }
 
@@ -4709,6 +4734,40 @@ fn evaluateSourceStatement(
         error.OutOfMemory => return error.OutOfMemory,
         else => return error.Unimplemented,
     }) orelse return error.Unimplemented;
+    defer body.deinit();
+
+    return evaluateTrapActionBodyWithInput(evaluator, shell_state, eval_context, body, input);
+}
+
+fn evaluateIrSourceStatement(
+    evaluator: *Evaluator,
+    shell_state: *state.ShellState,
+    eval_context: context.EvalContext,
+    source_plan: command_plan.IrStatementPlan,
+    input: *EvaluationInput,
+) EvalError!outcome.CommandOutcome {
+    shell_state.validate();
+    eval_context.validate();
+    source_plan.validate();
+    input.validate();
+    std.debug.assert(source_plan.target == eval_context.target or
+        (source_plan.target == .current_shell and eval_context.target == .subshell));
+
+    var parser_resolver = ParserBackedSourceResolver.init(evaluator);
+    parser_resolver.features = evaluator.features;
+    parser_resolver.arg_zero = evaluator.arg_zero;
+    parser_resolver.expand_aliases = shell_state.shopts.enabled(.expand_aliases);
+    parser_resolver.alias_state = evaluator.alias_state;
+    var body = (parser_resolver.lowerProgramStatement(
+        evaluator.allocator,
+        source_plan.program.*,
+        source_plan.statement_index,
+        eval_context,
+        shell_state,
+    ) catch |err| switch (err) {
+        error.OutOfMemory => return error.OutOfMemory,
+        else => return error.Unimplemented,
+    });
     defer body.deinit();
 
     return evaluateTrapActionBodyWithInput(evaluator, shell_state, eval_context, body, input);
@@ -13203,6 +13262,7 @@ test "semantic parser trap resolver classifies same-list function calls" {
     try std.testing.expectEqual(@as(usize, 2), list.statements.len);
     switch (list.statements[1].plan) {
         .source => |plan| try std.testing.expectEqualStrings("fn", plan.source),
+        .ir_source => |plan| try std.testing.expectEqualStrings("fn", plan.fallback_source),
         else => return error.ExpectedSourceStatement,
     }
 
