@@ -145,12 +145,16 @@
   <p>When POSIX leaves room for more than one valid behavior, Rush surveys established shells before choosing. The primary survey set is:</p>
 
   <ul>
-    <li><strong>dash</strong>, representing a small POSIX-oriented shell and common Linux <code>/bin/sh</code> behavior;</li>
-    <li><strong>bash in POSIX mode</strong>, representing the most widely deployed shell in its POSIX-facing configuration;</li>
-    <li><strong>FreeBSD sh</strong>, representing BSD <code>/bin/sh</code> behavior on Rush's target platforms.</li>
+    <li><strong>dash</strong>, representing Debian and Ubuntu <code>/bin/sh</code> behavior;</li>
+    <li><strong>current stable GNU Bash in POSIX mode</strong>, representing the most widely deployed shell in its POSIX-facing configuration;</li>
+    <li><strong>zsh in sh emulation</strong>, representing modern macOS's default interactive shell and an independent Bourne-family implementation.</li>
   </ul>
 
-  <p>When those shells agree, Rush normally follows them. When they disagree, Rush may also consult yash, ksh93, BusyBox ash, zsh sh emulation, current Bash default mode, or macOS Bash 3.2 depending on the feature and migration risk.</p>
+  <p>When those shells agree, Rush normally follows them. When they disagree, Rush may also consult platform shells such as FreeBSD <code>/bin/sh</code>, macOS <code>/bin/sh</code>, and BusyBox ash, plus yash, ksh93, current Bash default mode, or macOS Bash 3.2 depending on the feature and migration risk.</p>
+
+  <p>FreeBSD <code>/bin/sh</code> and macOS <code>/bin/sh</code> are important platform references, but they are not required for every local conformance run. They should be exercised when available locally, in platform CI, or when a compatibility decision specifically affects those systems.</p>
+
+  <p>macOS Bash 3.2 is tracked as a platform and legacy compatibility reference, not as the main Bash compatibility target. When current stable Bash and macOS Bash 3.2 disagree, Rush normally follows current stable Bash unless the decision is specifically about macOS compatibility or existing macOS scripts.</p>
 
   <p>Default Bash behavior is important for compatibility, but it is not the primary oracle for POSIX mode. Bash extensions that are useful in normal Rush or interactive Rush can still be rejected by <code>rush --posix</code>.</p>
 
@@ -192,7 +196,7 @@
 
   <h3 id="default-bash-reference"><a href="#default-bash-reference">Bash is the main extension reference</a></h3>
 
-  <p>For Bash extensions, current Bash default mode is the primary behavior reference. macOS Bash 3.2 is an important migration signal, but not the sole target. When Bash versions disagree, Rush normally prefers current Bash unless older behavior is still common in real scripts or important on supported platforms.</p>
+  <p>For Bash extensions, current stable GNU Bash default mode is the primary behavior reference. macOS Bash 3.2 is an important migration signal, but not the sole target. When Bash versions disagree, Rush normally prefers current stable Bash unless older behavior is still common in real scripts or important on supported platforms.</p>
 
   <p>For extensions that also exist in other shell families, Rush may survey ksh93, mksh, zsh, BusyBox ash, dash, or FreeBSD sh depending on the feature. The goal is practical compatibility, not bug-for-bug emulation of any one shell.</p>
 

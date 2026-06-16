@@ -28,6 +28,28 @@ explicitly documents a deliberate compatibility choice. When checking shell
 language requirements, prefer the Issue 8 text at `pubs.opengroup.org` over
 older Issue 7 / POSIX.1-2017 references.
 
+When running conformance comparisons against other shells, use only the primary
+installed-base reference shells below unless the user explicitly asks for a
+platform-specific shell:
+
+```bash
+zig build conformance -- --shell dash --mode posix
+zig build conformance -- --shell bash --shell-arg --posix --mode posix
+zig build conformance -- --shell zsh --shell-arg --emulate --shell-arg sh --shell-arg -f --mode posix
+```
+
+The full conformance suite intentionally prints compact one-line failures. Add
+`--diff` for detailed stdout/stderr diffs, or add `--case TEXT` to run matching
+case names only; `--case` implies detailed diffs.
+
+The Bash reference is current stable GNU Bash in POSIX mode; do not substitute
+macOS `/bin/bash` 3.2 or `/bin/sh` for it. The zsh reference is zsh in sh
+emulation with startup files disabled; do not run default zsh or substitute
+`/bin/sh` for it. If one of these shells is not installed, report that it was
+not run rather than silently using another shell. FreeBSD `/bin/sh`, macOS
+`/bin/sh`, BusyBox ash, ksh, yash, and other shells are secondary/platform
+references only.
+
 ## Current Zig Patterns
 
 **ArrayList:**

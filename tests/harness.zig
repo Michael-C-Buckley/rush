@@ -40,6 +40,8 @@ const Config = struct {
     shell_args: []const []const u8,
     mode: Mode,
     files: []const []const u8,
+    print_diff: bool,
+    case_filter: ?[]const u8,
 };
 
 const DiscoveredFiles = struct {
@@ -140,6 +142,8 @@ pub fn main(init: std.process.Init) !u8 {
         .shell_args = parsed_config.shell_args,
         .mode = parsed_config.mode,
         .files = files,
+        .print_diff = parsed_config.print_diff or parsed_config.case_filter != null,
+        .case_filter = parsed_config.case_filter,
     };
     if (config.files.len == 0) {
         std.debug.print("conformance: no suite files found\n", .{});
@@ -148,16 +152,34 @@ pub fn main(init: std.process.Init) !u8 {
 
     var failures: usize = 0;
     const case_count = try countCases(allocator, init.io, config);
+    if (case_count == 0) {
+        if (config.case_filter) |case_filter| {
+            std.debug.print("conformance: no case names matched '{s}'\n", .{case_filter});
+        } else {
+            std.debug.print("conformance: no cases found\n", .{});
+        }
+        return 2;
+    }
+    const target_name = try targetNameAlloc(allocator, config);
+    defer allocator.free(target_name);
     var progress = Progress.init(init.io, case_count);
     errdefer progress.deinit();
-    for (config.files) |path| failures += try runSuiteFile(allocator, init.io, config, path, &progress);
+    for (config.files) |path| {
+        failures += try runSuiteFile(allocator, init.io, config, path, &progress);
+    }
     progress.deinit();
 
     if (failures != 0) {
-        std.debug.print("conformance: {d} failure(s)\n", .{failures});
+        std.debug.print(
+            "conformance: failed {d}/{d} case(s) from {d} file(s) against {s}\n",
+            .{ failures, case_count, config.files.len, target_name },
+        );
         return 1;
     }
-    std.debug.print("conformance: {d} file(s) passed\n", .{config.files.len});
+    std.debug.print(
+        "conformance: passed {d} case(s) from {d} file(s) against {s}\n",
+        .{ case_count, config.files.len, target_name },
+    );
     return 0;
 }
 
@@ -168,6 +190,8 @@ fn parseArgs(allocator: std.mem.Allocator, args: []const []const u8) !?Config {
     var shell_args: std.ArrayList([]const u8) = .empty;
     defer shell_args.deinit(allocator);
     var mode: ?Mode = null;
+    var print_diff = false;
+    var case_filter: ?[]const u8 = null;
     var index: usize = 1;
     while (index < args.len) {
         const arg = args[index];
@@ -187,6 +211,12 @@ fn parseArgs(allocator: std.mem.Allocator, args: []const []const u8) !?Config {
             index += 1;
             if (index >= args.len) return null;
             mode = parseMode(args[index]) orelse return null;
+        } else if (std.mem.eql(u8, arg, "--diff")) {
+            print_diff = true;
+        } else if (std.mem.eql(u8, arg, "--case")) {
+            index += 1;
+            if (index >= args.len) return null;
+            case_filter = args[index];
         } else if (std.mem.startsWith(u8, arg, "--")) {
             return null;
         } else {
@@ -202,6 +232,8 @@ fn parseArgs(allocator: std.mem.Allocator, args: []const []const u8) !?Config {
         .shell_args = try shell_args.toOwnedSlice(allocator),
         .mode = parsed_mode,
         .files = args[index..],
+        .print_diff = print_diff,
+        .case_filter = case_filter,
     };
 }
 
@@ -265,9 +297,22 @@ fn countCases(allocator: std.mem.Allocator, io: std.Io, config: Config) !usize {
         defer arena.deinit();
         const suite = try std.zon.parse.fromSliceAlloc(Suite, arena.allocator(), source_z, null, .{});
         std.debug.assert(suite.mode == config.mode);
-        case_count += suite.cases.len;
+        case_count += countMatchingCases(config, suite);
     }
     return case_count;
+}
+
+fn countMatchingCases(config: Config, suite: Suite) usize {
+    var case_count: usize = 0;
+    for (suite.cases) |case| {
+        if (caseMatches(config, case.name)) case_count += 1;
+    }
+    return case_count;
+}
+
+fn caseMatches(config: Config, case_name: []const u8) bool {
+    const case_filter = config.case_filter orelse return true;
+    return std.mem.indexOf(u8, case_name, case_filter) != null;
 }
 
 fn runSuiteFile(
@@ -286,7 +331,10 @@ fn runSuiteFile(
     defer arena.deinit();
     const suite = try std.zon.parse.fromSliceAlloc(Suite, arena.allocator(), source_z, null, .{});
     std.debug.assert(suite.mode == config.mode);
-    const file_node = progress.startFile(path, suite.name, suite.cases.len);
+    const matching_cases = countMatchingCases(config, suite);
+    if (matching_cases == 0) return 0;
+
+    const file_node = progress.startFile(path, suite.name, matching_cases);
     defer progress.finishFile(file_node);
 
     var temp_root = try createTempRoot(allocator, io);
@@ -294,6 +342,7 @@ fn runSuiteFile(
 
     var failures: usize = 0;
     for (suite.cases, 0..) |case, case_index| {
+        if (!caseMatches(config, case.name)) continue;
         failures += try runCase(
             allocator,
             io,
@@ -355,20 +404,41 @@ fn runCase(
     case_index: usize,
     progress: *Progress,
 ) !usize {
-    var failures: usize = 0;
-
     const case_node = progress.startCase(file_node, case.name);
     defer case_node.end();
     const target = try runTarget(allocator, io, temp_root, case_index, config, case.script);
     defer target.deinit(allocator);
-    failures += reportMismatch(path, suite_name, case, targetName(config), target);
+    const target_name = try targetNameAlloc(allocator, config);
+    defer allocator.free(target_name);
+    const failed = try reportMismatch(
+        allocator,
+        path,
+        suite_name,
+        case,
+        target_name,
+        target,
+        config.print_diff,
+    );
     progress.completeCase();
 
-    return failures;
+    return if (failed) 1 else 0;
 }
 
-fn targetName(config: Config) []const u8 {
-    return config.shell orelse "rush";
+fn targetNameAlloc(allocator: std.mem.Allocator, config: Config) ![]u8 {
+    var name: std.Io.Writer.Allocating = .init(allocator);
+    errdefer name.deinit();
+
+    if (config.shell) |shell| {
+        try name.writer.writeAll(shell);
+        for (config.shell_args) |arg| {
+            try name.writer.print(" {s}", .{arg});
+        }
+    } else {
+        try name.writer.writeAll("rush");
+        if (config.mode == .posix) try name.writer.writeAll(" --posix");
+    }
+
+    return name.toOwnedSlice();
 }
 
 fn runTarget(
@@ -455,35 +525,46 @@ fn signalStatus(signal: u32) u8 {
 }
 
 fn reportMismatch(
+    allocator: std.mem.Allocator,
     path: []const u8,
     suite_name: []const u8,
     case: Case,
     shell_name: []const u8,
     actual: RunResult,
-) usize {
-    var failed = false;
-    if (!std.mem.eql(u8, actual.stdout, case.stdout)) {
-        failed = true;
-        printBytesMismatch(path, suite_name, case.name, shell_name, "stdout", case.stdout, actual.stdout);
+    print_diff: bool,
+) !bool {
+    const stdout_failed = !std.mem.eql(u8, actual.stdout, case.stdout);
+    const stderr_failed = !bytesMatch(actual.stderr, case.stderr, case.stderr_match);
+    const status_failed = !statusMatches(actual.status, case.status, case.status_match);
+
+    if (!stdout_failed and !stderr_failed and !status_failed) return false;
+
+    if (!print_diff) {
+        printFailureHeader(path, suite_name, case.name);
+        return true;
     }
-    if (!bytesMatch(actual.stderr, case.stderr, case.stderr_match)) {
-        failed = true;
-        printBytesMismatch(path, suite_name, case.name, shell_name, "stderr", case.stderr, actual.stderr);
+
+    printFailureHeader(path, suite_name, case.name);
+    std.debug.print("  target: {s}\n", .{shell_name});
+    if (stdout_failed) {
+        try printExactBytesMismatch(allocator, "stdout", case.stdout, actual.stdout);
     }
-    if (!statusMatches(actual.status, case.status, case.status_match)) {
-        failed = true;
+    if (stderr_failed) {
+        try printBytesExpectationMismatch(allocator, "stderr", case.stderr, case.stderr_match, actual.stderr);
+    }
+    if (status_failed) {
         switch (case.status_match) {
             .exact => std.debug.print(
-                "{s}: {s}: {s}: {s}: status mismatch: expected {d}, got {d}\n",
-                .{ path, suite_name, case.name, shell_name, case.status, actual.status },
+                "  status mismatch: expected {d}, got {d}\n",
+                .{ case.status, actual.status },
             ),
             .nonzero => std.debug.print(
-                "{s}: {s}: {s}: {s}: status mismatch: expected nonzero, got {d}\n",
-                .{ path, suite_name, case.name, shell_name, actual.status },
+                "  status mismatch: expected nonzero, got {d}\n",
+                .{actual.status},
             ),
         }
     }
-    return if (failed) 1 else 0;
+    return true;
 }
 
 fn bytesMatch(actual: []const u8, expected: []const u8, expectation: BytesExpectation) bool {
@@ -501,25 +582,147 @@ fn statusMatches(actual: u8, expected: u8, expectation: StatusExpectation) bool 
     };
 }
 
-fn printBytesMismatch(
+fn printFailureHeader(
     path: []const u8,
     suite_name: []const u8,
     case_name: []const u8,
-    shell_name: []const u8,
+) void {
+    std.debug.print("FAIL {s} › {s} › {s}\n", .{ path, suite_name, case_name });
+}
+
+fn printBytesExpectationMismatch(
+    allocator: std.mem.Allocator,
+    stream: []const u8,
+    expected: []const u8,
+    expectation: BytesExpectation,
+    actual: []const u8,
+) !void {
+    switch (expectation) {
+        .exact => try printExactBytesMismatch(allocator, stream, expected, actual),
+        .any => {},
+        .nonempty => std.debug.print(
+            "  {s} mismatch: expected nonempty, got {d} byte(s)\n",
+            .{ stream, actual.len },
+        ),
+    }
+}
+
+const DiffLine = struct {
+    text: []const u8,
+};
+
+fn printExactBytesMismatch(
+    allocator: std.mem.Allocator,
     stream: []const u8,
     expected: []const u8,
     actual: []const u8,
-) void {
+) !void {
     std.debug.print(
-        "{s}: {s}: {s}: {s}: {s} mismatch\nexpected:\n{s}\nactual:\n{s}\n",
-        .{ path, suite_name, case_name, shell_name, stream, expected, actual },
+        "  {s} mismatch (- expected, + actual):\n  --- expected {s} ({d} byte(s))\n  +++ actual {s} ({d} byte(s))\n",
+        .{ stream, stream, expected.len, stream, actual.len },
+    );
+    try printUnifiedDiff(allocator, expected, actual);
+}
+
+fn printUnifiedDiff(allocator: std.mem.Allocator, expected: []const u8, actual: []const u8) !void {
+    const expected_lines = try splitDiffLines(allocator, expected);
+    defer allocator.free(expected_lines);
+    const actual_lines = try splitDiffLines(allocator, actual);
+    defer allocator.free(actual_lines);
+
+    const cell_count = (expected_lines.len + 1) * (actual_lines.len + 1);
+    if (cell_count > 200_000) {
+        printFullBytesFallback(expected, actual);
+        return;
+    }
+
+    var lcs = try allocator.alloc(usize, cell_count);
+    defer allocator.free(lcs);
+    @memset(lcs, 0);
+
+    const width = actual_lines.len + 1;
+    var expected_index = expected_lines.len;
+    while (expected_index > 0) {
+        expected_index -= 1;
+        var actual_index = actual_lines.len;
+        while (actual_index > 0) {
+            actual_index -= 1;
+            const cell = expected_index * width + actual_index;
+            if (std.mem.eql(u8, expected_lines[expected_index].text, actual_lines[actual_index].text)) {
+                lcs[cell] = lcs[(expected_index + 1) * width + actual_index + 1] + 1;
+            } else {
+                lcs[cell] = @max(
+                    lcs[(expected_index + 1) * width + actual_index],
+                    lcs[expected_index * width + actual_index + 1],
+                );
+            }
+        }
+    }
+
+    std.debug.print("  @@\n", .{});
+    expected_index = 0;
+    var actual_index: usize = 0;
+    while (expected_index < expected_lines.len and actual_index < actual_lines.len) {
+        if (std.mem.eql(u8, expected_lines[expected_index].text, actual_lines[actual_index].text)) {
+            printDiffLine(' ', expected_lines[expected_index].text);
+            expected_index += 1;
+            actual_index += 1;
+        } else if (lcs[(expected_index + 1) * width + actual_index] >=
+            lcs[expected_index * width + actual_index + 1])
+        {
+            printDiffLine('-', expected_lines[expected_index].text);
+            expected_index += 1;
+        } else {
+            printDiffLine('+', actual_lines[actual_index].text);
+            actual_index += 1;
+        }
+    }
+    while (expected_index < expected_lines.len) : (expected_index += 1) {
+        printDiffLine('-', expected_lines[expected_index].text);
+    }
+    while (actual_index < actual_lines.len) : (actual_index += 1) {
+        printDiffLine('+', actual_lines[actual_index].text);
+    }
+
+    if (expected.len != 0 and !std.mem.endsWith(u8, expected, "\n")) {
+        std.debug.print("  \\ expected has no trailing newline\n", .{});
+    }
+    if (actual.len != 0 and !std.mem.endsWith(u8, actual, "\n")) {
+        std.debug.print("  \\ actual has no trailing newline\n", .{});
+    }
+}
+
+fn splitDiffLines(allocator: std.mem.Allocator, bytes: []const u8) ![]DiffLine {
+    var lines: std.ArrayList(DiffLine) = .empty;
+    defer lines.deinit(allocator);
+
+    var start: usize = 0;
+    while (start < bytes.len) {
+        const end = if (std.mem.indexOfScalarPos(u8, bytes, start, '\n')) |newline| newline else bytes.len;
+        try lines.append(allocator, .{ .text = bytes[start..end] });
+        start = if (end < bytes.len) end + 1 else end;
+    }
+
+    return lines.toOwnedSlice(allocator);
+}
+
+fn printDiffLine(prefix: u8, line: []const u8) void {
+    std.debug.print("  {c}{s}\n", .{ prefix, line });
+}
+
+fn printFullBytesFallback(expected: []const u8, actual: []const u8) void {
+    std.debug.print(
+        "  @@ output too large for line diff\n  expected:\n{s}\n  actual:\n{s}\n",
+        .{ expected, actual },
     );
 }
 
 fn writeUsage(io: std.Io) !void {
     const usage =
-        \\usage: conformance-harness (--rush PATH | --shell SHELL [--shell-arg ARG...]) --mode MODE [FILE...]
+        \\usage: conformance-harness (--rush PATH | --shell SHELL [--shell-arg ARG...]) --mode MODE [--case TEXT] [--diff] [FILE...]
         \\modes: posix, bash
+        \\--case TEXT: run cases whose names contain TEXT; implies --diff
+        \\--diff: print unified stdout/stderr diffs for failures
         \\
     ;
     var buffer: [256]u8 = undefined;
