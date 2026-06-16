@@ -356,6 +356,21 @@
             .status = 0,
         },
         .{
+            .name = "here document can be combined with output redirection",
+            .script =
+            \\cat >out <<EOF
+            \\hi
+            \\EOF
+            \\cat out
+            ,
+            .stdout =
+            \\hi
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "here document body expands when delimiter is unquoted",
             .script =
             \\x=value

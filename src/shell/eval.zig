@@ -2055,19 +2055,28 @@ fn evaluatePlanWithInput(
     if (readonly_assignment) |name| try buffers.addBuiltinDiagnostic(name, "readonly variable");
     try appendPlanExpansionOutput(effective_plan, &buffers);
 
+    var fd_redirections = if (here_doc_input != null)
+        try redirectionsWithoutHereDocs(evaluator.allocator, effective_plan.redirections)
+    else
+        null;
+    defer if (fd_redirections) |*redirections| redirections.deinit(evaluator.allocator);
+    const redirections_to_apply = if (fd_redirections) |redirections|
+        redirections.plan
+    else
+        effective_plan.redirections;
+
     var applied_redirections: ?redirection_plan.AppliedRedirections = null;
     defer if (applied_redirections) |*applied| {
         applied.restore();
         applied.deinit();
     };
-    if (hasRedirections(effective_plan) and
-        here_doc_input == null and
+    if (redirections_to_apply.steps.len != 0 and
         effective_plan.class() != .external and
         effective_plan.class() != .function)
     {
-        try flushBuffersForRedirectionTargets(&buffers, effective_plan.redirections);
+        try flushBuffersForRedirectionTargets(&buffers, redirections_to_apply);
         const fd_port = evaluator.fd_port orelse return error.Unimplemented;
-        const apply_result = try effective_plan.redirections.apply(evaluator.allocator, fd_port);
+        const apply_result = try redirections_to_apply.apply(evaluator.allocator, fd_port);
         switch (apply_result) {
             .applied => |applied| applied_redirections = applied,
             .failure => |failure| {
@@ -5521,6 +5530,25 @@ fn evaluateExternal(
     defer evaluator.allocator.free(argv);
 
     if (semanticHereDocInput(plan.redirections)) |stdin| {
+        var fd_redirections = try redirectionsWithoutHereDocs(evaluator.allocator, plan.redirections);
+        defer fd_redirections.deinit(evaluator.allocator);
+
+        var applied_redirections: ?redirection_plan.AppliedRedirections = null;
+        defer if (applied_redirections) |*applied| {
+            applied.restore();
+            applied.deinit();
+        };
+        if (fd_redirections.plan.steps.len != 0) {
+            const apply_result = try fd_redirections.plan.apply(evaluator.allocator, fd_port);
+            switch (apply_result) {
+                .applied => |applied| applied_redirections = applied,
+                .failure => |failure| {
+                    try buffers.addBuiltinDiagnostic(plan.argv[0], redirectionFailureMessage(failure));
+                    return 1;
+                },
+            }
+        }
+
         var run_result = runExternalProcess(
             evaluator,
             process_port,
@@ -5537,8 +5565,14 @@ fn evaluateExternal(
         };
         defer run_result.deinit();
 
-        try buffers.stdout.appendSlice(buffers.allocator, run_result.stdout);
-        if (evaluator.external_stdio == .capture or evaluator.external_stdio == .inherit) {
+        if (redirectionTargetsDescriptor(plan.redirections, 1)) {
+            if (!writeAllDescriptor(1, run_result.stdout)) return error.Unimplemented;
+        } else {
+            try buffers.stdout.appendSlice(buffers.allocator, run_result.stdout);
+        }
+        if (redirectionTargetsDescriptor(plan.redirections, 2)) {
+            if (!writeAllDescriptor(2, run_result.stderr)) return error.Unimplemented;
+        } else if (evaluator.external_stdio == .capture or evaluator.external_stdio == .inherit) {
             try buffers.stderr.appendSlice(buffers.allocator, run_result.stderr);
         }
         return normalizeWaitStatus(run_result.status);
@@ -5779,12 +5813,61 @@ fn semanticHereDocInput(plan: redirection_plan.RedirectionPlan) ?[]const u8 {
     for (plan.steps) |step| {
         switch (step.effect) {
             .here_doc => |here_doc| {
-                if (here_doc.target == 0) input = here_doc.data.bytes;
+                if (here_doc.target != 0) return null;
+                input = here_doc.data.bytes;
             },
-            .open_path, .duplicate, .close => return null,
+            .open_path, .duplicate, .close => if (step.target() == 0) return null,
         }
     }
     return input;
+}
+
+const FdRedirectionPlan = struct {
+    plan: redirection_plan.RedirectionPlan,
+    steps: []redirection_plan.RedirectionStep,
+    rollback_steps: []redirection_plan.RestorationStep,
+
+    fn deinit(self: *FdRedirectionPlan, allocator: std.mem.Allocator) void {
+        allocator.free(self.steps);
+        allocator.free(self.rollback_steps);
+        self.* = undefined;
+    }
+};
+
+fn redirectionsWithoutHereDocs(
+    allocator: std.mem.Allocator,
+    plan: redirection_plan.RedirectionPlan,
+) EvalError!FdRedirectionPlan {
+    plan.validate();
+    var count: usize = 0;
+    for (plan.steps) |step| {
+        if (step.effect != .here_doc) count += 1;
+    }
+
+    const steps = try allocator.alloc(redirection_plan.RedirectionStep, count);
+    errdefer allocator.free(steps);
+    const rollback_steps = try allocator.alloc(redirection_plan.RestorationStep, count);
+    errdefer allocator.free(rollback_steps);
+
+    var index: usize = 0;
+    for (plan.steps) |step| {
+        if (step.effect == .here_doc) continue;
+        steps[index] = .{ .ordinal = index, .effect = step.effect };
+        rollback_steps[index] = .{ .ordinal = index, .target = step.target() };
+        index += 1;
+    }
+    const filtered: FdRedirectionPlan = .{
+        .plan = .{
+            .steps = steps,
+            .rollback_steps = rollback_steps,
+            .failure_consequence = plan.failure_consequence,
+            .self_duplicate_noop = plan.self_duplicate_noop,
+        },
+        .steps = steps,
+        .rollback_steps = rollback_steps,
+    };
+    filtered.plan.validate();
+    return filtered;
 }
 
 fn redirectionTargetsDescriptor(plan: redirection_plan.RedirectionPlan, descriptor: runtime.fd.Descriptor) bool {
