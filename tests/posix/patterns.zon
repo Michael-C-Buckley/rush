@@ -178,6 +178,21 @@
             .status = 0,
         },
         .{
+            .name = "case character classes match multibyte alphabetic characters",
+            .script =
+            \\case å in
+            \\    [[:alpha:]]) printf '<%s>\n' alpha ;;
+            \\    *) printf '<%s>\n' bad ;;
+            \\esac
+            ,
+            .stdout =
+            \\<alpha>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "case bracket expressions can include literal bracket characters",
             .script =
             \\case ']' in

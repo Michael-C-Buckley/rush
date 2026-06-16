@@ -6738,7 +6738,7 @@ fn matchBracket(
             break;
         }
         first_expression = false;
-        if (matchBracketCharacterClass(pattern, special, index, text[text_index])) |class| {
+        if (matchBracketCharacterClass(pattern, special, index, text[text_index..text_end])) |class| {
             if (class.ok) matched = true;
             index = class.end_index;
             continue;
@@ -6767,7 +6767,7 @@ fn matchBracketCharacterClass(
     pattern: []const u8,
     special: ?[]const bool,
     index: usize,
-    text: u8,
+    text: []const u8,
 ) ?BracketCharacterClassMatch {
     if (index + 3 >= pattern.len or pattern[index] != '[' or pattern[index + 1] != ':') return null;
 
@@ -6792,20 +6792,61 @@ fn globPatternBytesAreSpecial(special: ?[]const bool, start: usize, end: usize) 
     return true;
 }
 
-fn bracketCharacterClassMatches(class_name: []const u8, text: u8) ?bool {
-    if (std.mem.eql(u8, class_name, "alnum")) return std.ascii.isAlphanumeric(text);
-    if (std.mem.eql(u8, class_name, "alpha")) return std.ascii.isAlphabetic(text);
-    if (std.mem.eql(u8, class_name, "blank")) return text == ' ' or text == '\t';
-    if (std.mem.eql(u8, class_name, "cntrl")) return std.ascii.isControl(text);
-    if (std.mem.eql(u8, class_name, "digit")) return std.ascii.isDigit(text);
-    if (std.mem.eql(u8, class_name, "graph")) return std.ascii.isGraphical(text);
-    if (std.mem.eql(u8, class_name, "lower")) return std.ascii.isLower(text);
-    if (std.mem.eql(u8, class_name, "print")) return std.ascii.isPrint(text);
-    if (std.mem.eql(u8, class_name, "punct")) return std.ascii.isPunctuation(text);
-    if (std.mem.eql(u8, class_name, "space")) return std.ascii.isWhitespace(text);
-    if (std.mem.eql(u8, class_name, "upper")) return std.ascii.isUpper(text);
-    if (std.mem.eql(u8, class_name, "xdigit")) return std.ascii.isHex(text);
+fn bracketCharacterClassMatches(class_name: []const u8, text: []const u8) ?bool {
+    if (text.len == 1) {
+        const byte = text[0];
+        if (std.mem.eql(u8, class_name, "alnum")) return std.ascii.isAlphanumeric(byte);
+        if (std.mem.eql(u8, class_name, "alpha")) return std.ascii.isAlphabetic(byte);
+        if (std.mem.eql(u8, class_name, "blank")) return byte == ' ' or byte == '\t';
+        if (std.mem.eql(u8, class_name, "cntrl")) return std.ascii.isControl(byte);
+        if (std.mem.eql(u8, class_name, "digit")) return std.ascii.isDigit(byte);
+        if (std.mem.eql(u8, class_name, "graph")) return std.ascii.isGraphical(byte);
+        if (std.mem.eql(u8, class_name, "lower")) return std.ascii.isLower(byte);
+        if (std.mem.eql(u8, class_name, "print")) return std.ascii.isPrint(byte);
+        if (std.mem.eql(u8, class_name, "punct")) return std.ascii.isPunctuation(byte);
+        if (std.mem.eql(u8, class_name, "space")) return std.ascii.isWhitespace(byte);
+        if (std.mem.eql(u8, class_name, "upper")) return std.ascii.isUpper(byte);
+        if (std.mem.eql(u8, class_name, "xdigit")) return std.ascii.isHex(byte);
+    }
+
+    const codepoint = decodeUtf8Character(text) orelse return false;
+    if (std.mem.eql(u8, class_name, "alnum")) return isLatin1Alphabetic(codepoint);
+    if (std.mem.eql(u8, class_name, "alpha")) return isLatin1Alphabetic(codepoint);
+    if (std.mem.eql(u8, class_name, "lower")) return isLatin1Lowercase(codepoint);
+    if (std.mem.eql(u8, class_name, "upper")) return isLatin1Uppercase(codepoint);
+    if (std.mem.eql(u8, class_name, "graph")) return true;
+    if (std.mem.eql(u8, class_name, "print")) return true;
+    if (std.mem.eql(u8, class_name, "blank")) return false;
+    if (std.mem.eql(u8, class_name, "cntrl")) return false;
+    if (std.mem.eql(u8, class_name, "digit")) return false;
+    if (std.mem.eql(u8, class_name, "punct")) return false;
+    if (std.mem.eql(u8, class_name, "space")) return false;
+    if (std.mem.eql(u8, class_name, "xdigit")) return false;
     return null;
+}
+
+fn decodeUtf8Character(text: []const u8) ?u21 {
+    return switch (text.len) {
+        1 => text[0],
+        2 => std.unicode.utf8Decode2(text[0..2].*) catch null,
+        3 => std.unicode.utf8Decode3(text[0..3].*) catch null,
+        4 => std.unicode.utf8Decode4(text[0..4].*) catch null,
+        else => null,
+    };
+}
+
+fn isLatin1Alphabetic(codepoint: u21) bool {
+    return isLatin1Uppercase(codepoint) or isLatin1Lowercase(codepoint);
+}
+
+fn isLatin1Uppercase(codepoint: u21) bool {
+    return (codepoint >= 0x00C0 and codepoint <= 0x00D6) or
+        (codepoint >= 0x00D8 and codepoint <= 0x00DE);
+}
+
+fn isLatin1Lowercase(codepoint: u21) bool {
+    return (codepoint >= 0x00DF and codepoint <= 0x00F6) or
+        (codepoint >= 0x00F8 and codepoint <= 0x00FF);
 }
 
 pub fn expandTilde(allocator: std.mem.Allocator, raw: []const u8, env: EnvLookup) ![]const u8 {
