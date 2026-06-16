@@ -5173,6 +5173,9 @@ fn appendUnquotedAt(
 ) !void {
     for (positionals, 0..) |param, index| {
         try appendSplitText(allocator, fields, current, param, ifs);
+        if (param.len == 0 and index + 1 < positionals.len and ifs.len != 0 and !ifsContainsWhitespace(ifs)) {
+            try fields.append(allocator, try current.toOwnedSlice(allocator));
+        }
         if (index + 1 < positionals.len and current.items.len != 0) {
             try fields.append(allocator, try current.toOwnedSlice(allocator));
         }
@@ -6062,6 +6065,10 @@ fn isIfsChar(ifs: []const u8, c: u8) bool {
 
 fn isIfsWhitespace(ifs: []const u8, c: u8) bool {
     return (c == ' ' or c == '\t' or c == '\n') and isIfsChar(ifs, c);
+}
+
+fn ifsContainsWhitespace(ifs: []const u8) bool {
+    return isIfsChar(ifs, ' ') or isIfsChar(ifs, '\t') or isIfsChar(ifs, '\n');
 }
 
 const PathnameExpansionOptions = struct {

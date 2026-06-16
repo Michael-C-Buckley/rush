@@ -1030,6 +1030,23 @@
             .status = 0,
         },
         .{
+            .name = "unquoted at preserves empty fields before later fields with non-whitespace IFS",
+            .script =
+            \\set -- '' a '' b
+            \\IFS=,
+            \\printf '<%s>\n' $@
+            ,
+            .stdout =
+            \\<>
+            \\<a>
+            \\<>
+            \\<b>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "pathname expansion expands matching fields in sorted order",
             .script =
             \\: >b.txt
