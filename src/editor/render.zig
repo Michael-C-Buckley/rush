@@ -397,10 +397,16 @@ fn completionFlashAt(flash: ?CompletionFlash, start: usize, end: usize) bool {
 
 pub fn completionFlashForCursor(text: []const u8, cursor: usize) CompletionFlash {
     if (text.len == 0) return .{ .start = 0, .end = 0 };
-    var start = @min(cursor, text.len);
-    while (start > 0 and !std.ascii.isWhitespace(text[start - 1])) : (start -= 1) {}
     var end = @min(cursor, text.len);
-    while (end < text.len and !std.ascii.isWhitespace(text[end])) : (end += 1) {}
+    if (end < text.len and !std.ascii.isWhitespace(text[end])) {
+        var start = end;
+        while (start > 0 and !std.ascii.isWhitespace(text[start - 1])) : (start -= 1) {}
+        while (end < text.len and !std.ascii.isWhitespace(text[end])) : (end += 1) {}
+        return .{ .start = start, .end = end };
+    }
+    while (end > 0 and std.ascii.isWhitespace(text[end - 1])) : (end -= 1) {}
+    var start = end;
+    while (start > 0 and !std.ascii.isWhitespace(text[start - 1])) : (start -= 1) {}
     if (start == end and start != 0) start -= 1;
     return .{ .start = start, .end = end };
 }

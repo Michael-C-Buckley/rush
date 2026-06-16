@@ -2413,12 +2413,12 @@ test "line session leaves ambiguous and empty completions unchanged" {
 test "line session flashes current word when completion has empty handled candidates" {
     var session = try LineSession.init(std.testing.allocator, "$ ");
     defer session.deinit();
-    try session.editor.buffer.replace("git add");
+    try session.editor.buffer.replace("git add ");
 
     try session.applyCompletion(.{ .ambiguous = &.{} });
     const flashed = try session.render(std.testing.allocator, .{ .synchronized_output = false });
     defer std.testing.allocator.free(flashed);
-    try std.testing.expect(std.mem.indexOf(u8, flashed, "git \x1b[38;5;0m\x1b[48;5;7madd\x1b[49m\x1b[39m") != null);
+    try std.testing.expect(std.mem.indexOf(u8, flashed, "git \x1b[38;5;0m\x1b[48;5;7madd\x1b[49m\x1b[39m ") != null);
 }
 
 test "line session flashes current word when completion has no candidates" {
