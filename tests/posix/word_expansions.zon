@@ -509,6 +509,18 @@
             .status = 0,
         },
         .{
+            .name = "command substitution discards null bytes from captured output",
+            .script =
+            \\printf '<%s>\n' "$(printf 'a\0b')"
+            ,
+            .stdout =
+            \\<ab>
+            \\
+            ,
+            .stderr_match = .any,
+            .status = 0,
+        },
+        .{
             .name = "unquoted command substitution output is field split after newline preservation",
             .script =
             \\set -- $(printf 'a\nb\n')

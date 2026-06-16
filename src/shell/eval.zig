@@ -2983,9 +2983,9 @@ fn commandSubstitutionResultFromOutcome(
     errdefer result.deinit();
 
     const trimmed = trimCommandSubstitutionOutput(command_outcome.stdout.items);
-    try result.output.appendSlice(allocator, trimmed);
-    std.debug.assert(result.output.items.len == trimmed.len);
-    if (trimmed.len != 0) std.debug.assert(result.output.items.ptr != command_outcome.stdout.items.ptr);
+    try appendCommandSubstitutionOutput(allocator, &result.output, trimmed);
+    std.debug.assert(result.output.items.len <= trimmed.len);
+    if (result.output.items.len != 0) std.debug.assert(result.output.items.ptr != command_outcome.stdout.items.ptr);
 
     try result.stderr.appendSlice(allocator, command_outcome.stderr.items);
     for (command_outcome.diagnostics.items) |diagnostic| {
@@ -3004,6 +3004,17 @@ fn trimCommandSubstitutionOutput(output_bytes: []const u8) []const u8 {
     std.debug.assert(end <= output_bytes.len);
     if (end != 0) std.debug.assert(output_bytes[end - 1] != '\n');
     return output_bytes[0..end];
+}
+
+fn appendCommandSubstitutionOutput(
+    allocator: std.mem.Allocator,
+    output: *std.ArrayList(u8),
+    bytes: []const u8,
+) !void {
+    for (bytes) |byte| {
+        if (byte == 0) continue;
+        try output.append(allocator, byte);
+    }
 }
 
 fn assertCommandSubstitutionContext(substitution_context: context.EvalContext) void {
