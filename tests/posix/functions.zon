@@ -234,5 +234,20 @@
             .stderr = "",
             .status = 1,
         },
+        .{
+            .name = "guarded function definition in unselected case arm is not evaluated",
+            .script =
+            \\case x in
+            \\    x) printf 'selected\n' ;;
+            \\    *) false || foo() { printf 'unselected\n'; }; foo ;;
+            \\esac
+            ,
+            .stdout =
+            \\selected
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
     },
 }

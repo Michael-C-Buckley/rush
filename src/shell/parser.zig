@@ -1528,6 +1528,14 @@ const CommandSubstitutionScanner = struct {
                 self.command_position = false;
                 return;
             }
+            if (self.command_position and (std.mem.eql(u8, word, "if") or
+                std.mem.eql(u8, word, "while") or
+                std.mem.eql(u8, word, "until") or
+                std.mem.eql(u8, word, "!")))
+            {
+                self.command_position = true;
+                return;
+            }
             if (std.mem.eql(u8, word, "then") or std.mem.eql(u8, word, "do") or
                 std.mem.eql(u8, word, "else") or std.mem.eql(u8, word, "elif"))
             {
@@ -5725,6 +5733,14 @@ test "parser scans case pattern parens inside command substitution" {
     var optional = try parse(std.testing.allocator, "echo \"$(case x in (x) echo optional ;; esac)\"", .{});
     defer optional.deinit();
     try std.testing.expectEqual(@as(usize, 0), optional.diagnostics.len);
+
+    var if_condition = try parse(
+        std.testing.allocator,
+        "echo \"$(if case x in x) true ;; esac; then echo ok; fi)\"",
+        .{},
+    );
+    defer if_condition.deinit();
+    try std.testing.expectEqual(@as(usize, 0), if_condition.diagnostics.len);
 }
 
 test "parser scans extglob groups inside command substitution" {

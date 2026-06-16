@@ -225,6 +225,28 @@
             .status = 0,
         },
         .{
+            .name = "AND-OR list preserves left output before right output",
+            .script =
+            \\! printf 'left\n' || printf 'right\n'
+            ,
+            .stdout =
+            \\left
+            \\right
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "AND-OR list output flows through a pipeline",
+            .script =
+            \\{ ! printf 'a' || printf 'b'; } | sed 's/a/X/'
+            ,
+            .stdout = "Xb",
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "brace group can be a pipeline component",
             .script =
             \\{ printf 'ok\n'; } | cat
@@ -361,6 +383,37 @@
             \\b
             \\
             ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "for command preserves body pipeline output before next iteration output",
+            .script =
+            \\for x in a b
+            \\do
+            \\    printf '%s\n' "$x"
+            \\    printf 'body\n' | cat
+            \\done
+            ,
+            .stdout =
+            \\a
+            \\body
+            \\b
+            \\body
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "for command output flows through a pipeline",
+            .script =
+            \\for x in a
+            \\do
+            \\    printf 'a'
+            \\done | sed 's/a/X/'
+            ,
+            .stdout = "X",
             .stderr = "",
             .status = 0,
         },
@@ -746,6 +799,27 @@
             .status = 0,
         },
         .{
+            .name = "if command preserves condition output before selected body output",
+            .script =
+            \\if case x in
+            \\    x) printf 'condition\n' ;;
+            \\esac
+            \\then
+            \\    for word in body
+            \\    do
+            \\        printf '%s\n' "$word"
+            \\    done
+            \\fi
+            ,
+            .stdout =
+            \\condition
+            \\body
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "if command uses the selected elif body status",
             .script =
             \\if false
@@ -844,6 +918,18 @@
             \\pipeline-true
             \\
             ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "if command output flows through a pipeline",
+            .script =
+            \\if printf 'a'
+            \\then
+            \\    printf 'b'
+            \\fi | sed 's/a/X/'
+            ,
+            .stdout = "Xb",
             .stderr = "",
             .status = 0,
         },

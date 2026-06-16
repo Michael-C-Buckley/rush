@@ -546,7 +546,7 @@ const SourceLowerer = struct {
             .simple => |plan| .{ .simple = plan },
             .compound => |plan| .{ .compound = plan },
             .pipeline => |plan| .{ .pipeline = plan },
-            .failure => error.Unimplemented,
+            .failure => |trap_failure| .{ .failure = trap_failure },
         };
     }
 
@@ -634,12 +634,6 @@ const SourceLowerer = struct {
                 "background commands are not supported by the semantic trap resolver",
                 "background commands are not supported by semantic source lowering",
             )).failure };
-            if (statement.kind == .function_definition and statement.op_before != .sequence) {
-                return .{ .failure = (try self.unsupportedShapeFailure(
-                    "dynamically guarded function definitions stay on the old executor",
-                    "dynamically guarded function definitions stay on the old executor",
-                )).failure };
-            }
             if (index == 0) {
                 std.debug.assert(statement.op_before == .sequence);
                 continue;
@@ -1635,12 +1629,9 @@ const SourceLowerer = struct {
                 "command substitution parse error: {s}",
                 .{diagnostic.message},
             );
-        const plan = command_plan.classifyExpandedSimpleCommand(.{
-            .command = .{ .argv = &[_][]const u8{message} },
-            .target = .subshell,
-        });
-        plan.validate();
-        return .{ .simple = plan };
+        const trap_failure: TrapActionFailure = .{ .kind = .parse_error, .message = message };
+        trap_failure.validate();
+        return .{ .failure = trap_failure };
     }
 
     fn incompleteSourceFailure(self: *SourceLowerer) !TrapActionBodyPayload {
@@ -1796,6 +1787,7 @@ pub const CommandSubstitutionBodyPayload = union(enum) {
     simple: command_plan.CommandPlan,
     compound: command_plan.CompoundCommandPlan,
     pipeline: pipeline_plan.PipelinePlan,
+    failure: TrapActionFailure,
 
     fn validate(self: CommandSubstitutionBodyPayload) void {
         switch (self) {
@@ -1811,6 +1803,7 @@ pub const CommandSubstitutionBodyPayload = union(enum) {
                 plan.validate();
                 for (plan.stages, 0..) |_, index| std.debug.assert(plan.stageTarget(index) != .current_shell);
             },
+            .failure => |failure| failure.validate(),
         }
     }
 };
@@ -1847,12 +1840,13 @@ pub const CommandSubstitutionBody = union(enum) {
     simple: command_plan.CommandPlan,
     compound: command_plan.CompoundCommandPlan,
     pipeline: pipeline_plan.PipelinePlan,
+    failure: TrapActionFailure,
     owned: OwnedCommandSubstitutionBody,
 
     pub fn deinit(self: *CommandSubstitutionBody) void {
         switch (self.*) {
             .owned => |*owned| owned.deinit(),
-            .simple, .compound, .pipeline => {},
+            .simple, .compound, .pipeline, .failure => {},
         }
         self.* = undefined;
     }
@@ -1862,6 +1856,7 @@ pub const CommandSubstitutionBody = union(enum) {
             .simple => |plan| (CommandSubstitutionBodyPayload{ .simple = plan }).validate(),
             .compound => |plan| (CommandSubstitutionBodyPayload{ .compound = plan }).validate(),
             .pipeline => |plan| (CommandSubstitutionBodyPayload{ .pipeline = plan }).validate(),
+            .failure => |failure| (CommandSubstitutionBodyPayload{ .failure = failure }).validate(),
             .owned => |owned| owned.validate(),
         }
     }
@@ -3108,6 +3103,12 @@ fn evaluateCommandSubstitutionBody(
             plan,
         ),
         .pipeline => |plan| evaluatePipelinePlan(evaluator, substitution_state, substitution_context, plan),
+        .failure => |failure| trapActionFailureOutcome(
+            evaluator.allocator,
+            substitution_context,
+            failure,
+            substitution_state.*,
+        ),
         .owned => |owned| evaluateCommandSubstitutionBodyPayload(
             evaluator,
             substitution_state,
@@ -3141,6 +3142,12 @@ fn evaluateCommandSubstitutionBodyPayload(
             plan,
         ),
         .pipeline => |plan| evaluatePipelinePlan(evaluator, substitution_state, substitution_context, plan),
+        .failure => |failure| trapActionFailureOutcome(
+            evaluator.allocator,
+            substitution_context,
+            failure,
+            substitution_state.*,
+        ),
     };
 }
 
@@ -4835,6 +4842,20 @@ fn flushBuffersForRedirectionTargetsBetweenCommands(
     try flushBuffersForRedirectionTargets(buffers, redirections);
 }
 
+fn flushBufferedCommandOutput(buffers: *EvaluationBuffers, eval_context: context.EvalContext) EvalError!void {
+    eval_context.validate();
+    if (eval_context.target != .current_shell) return;
+    if (eval_context.command_substitution_depth != 0) return;
+    if (buffers.stdout.items.len != 0) {
+        if (!writeAllDescriptor(1, buffers.stdout.items)) return error.Unimplemented;
+        buffers.stdout.items.len = 0;
+    }
+    if (buffers.stderr.items.len != 0) {
+        if (!writeAllDescriptor(2, buffers.stderr.items)) return error.Unimplemented;
+        buffers.stderr.items.len = 0;
+    }
+}
+
 fn flushBuffersForSourceRedirectionTargets(
     buffers: *EvaluationBuffers,
     eval_context: context.EvalContext,
@@ -5019,6 +5040,7 @@ fn evaluateAndOrList(
         result = .{ .status = child_outcome.status, .control_flow = child_outcome.control_flow };
         if (bashAssignmentErrorOutcomeAbortsSourceLine(eval_context, child_outcome)) break;
         if (child_outcome.control_flow != .normal) break;
+        try flushBufferedCommandOutput(buffers, eval_context);
     }
     return result;
 }
@@ -5068,6 +5090,7 @@ fn evaluateIfClause(
             diagnostics_before,
             condition,
         )) return condition;
+        try flushBufferedCommandOutput(buffers, eval_context);
         if (condition.status == 0) return evaluateStatementList(
             evaluator,
             shell_state,
@@ -5130,12 +5153,14 @@ fn evaluateLoop(
             .stop => return normalEvaluation(0),
             .repeat => {
                 result = normalEvaluation(body.status);
+                try flushBufferedCommandOutput(buffers, eval_context);
                 continue;
             },
             .propagate => |flow| return .{ .status = flow.status(body.status), .control_flow = flow },
             .other => {
                 if (body.control_flow != .normal) return body;
                 result = normalEvaluation(body.status);
+                try flushBufferedCommandOutput(buffers, eval_context);
             },
         }
     }
@@ -5182,12 +5207,14 @@ fn evaluateForLoop(
             .stop => return normalEvaluation(0),
             .repeat => {
                 result = normalEvaluation(body.status);
+                try flushBufferedCommandOutput(buffers, eval_context);
                 continue;
             },
             .propagate => |flow| return .{ .status = flow.status(body.status), .control_flow = flow },
             .other => {
                 if (body.control_flow != .normal) return body;
                 result = normalEvaluation(body.status);
+                try flushBufferedCommandOutput(buffers, eval_context);
             },
         }
     }
