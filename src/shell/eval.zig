@@ -8307,6 +8307,16 @@ fn evaluateCommandLookup(
         return normalEvaluation(0);
     }
 
+    if (std.mem.findScalar(u8, name, '/') != null) {
+        const port = evaluator.fs_port orelse return normalEvaluation(1);
+        if (externalCandidate(port, name) != .executable) return normalEvaluation(1);
+        switch (format) {
+            .terse => try buffers.stdout.print(buffers.allocator, "{s}\n", .{name}),
+            .verbose => try buffers.stdout.print(buffers.allocator, "{s} is {s}\n", .{ name, name }),
+        }
+        return normalEvaluation(0);
+    }
+
     var lookup_state = if (use_default_path) shell_state.clone(evaluator.allocator) catch |err| switch (err) {
         error.ReadonlyVariable => unreachable,
         error.OutOfMemory => return error.OutOfMemory,

@@ -423,6 +423,22 @@
             .status = 0,
         },
         .{
+            .name = "command -v reports nonzero when a pathname is not executable",
+            .script =
+            \\rm -f command-v-not-executable
+            \\: >command-v-not-executable
+            \\command -v ./command-v-not-executable >/dev/null 2>/dev/null
+            \\case $? in 0) printf 'zero\n';; *) printf 'nonzero\n';; esac
+            \\rm -f command-v-not-executable
+            ,
+            .stdout =
+            \\nonzero
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "command -V reports zero for found names and nonzero for missing names",
             .script =
             \\command -V command >/dev/null
