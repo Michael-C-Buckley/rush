@@ -221,9 +221,6 @@ pub const VariableAttributes = struct {
     readonly: bool = false,
 };
 
-pub const VariableMutationError = error{
-    ReadonlyVariable,
-};
 
 pub const Variable = struct {
     value: []const u8,

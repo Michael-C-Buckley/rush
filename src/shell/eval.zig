@@ -9682,10 +9682,6 @@ fn isAliasName(name: []const u8) bool {
     return true;
 }
 
-fn containsString(values: []const []const u8, needle: []const u8) bool {
-    for (values) |value| if (std.mem.eql(u8, value, needle)) return true;
-    return false;
-}
 
 const VariableDeclarationMode = enum { exported, readonly };
 

@@ -32,9 +32,6 @@ const completion_progress_start = "\x1b]9;4;3\x07";
 const completion_progress_stop = "\x1b]9;4;0\x07";
 const completion_progress_delay_ms = 500;
 
-pub const DriverEvent = union(enum) {
-    tty_read_ready,
-};
 
 pub const TerminalEvent = terminal.Event;
 pub const ColorScheme = terminal.ColorScheme;
@@ -147,18 +144,6 @@ pub const ReadLineResult = union(enum) {
 
 const completion_flash_ms = 80;
 
-pub fn readLineFromTty(allocator: std.mem.Allocator, io: std.Io, options: ReadLineOptions) !?[]const u8 {
-    if (comptime (builtin.is_test or builtin.os.tag == .windows)) return error.Unsupported;
-
-    var session = try TerminalSession.init(allocator, io);
-    defer session.deinit();
-    return switch (try session.readLine(options)) {
-        .submitted => |line| line,
-        .canceled => try allocator.dupe(u8, ""),
-        .interrupted => error.Interrupted,
-        .eof => null,
-    };
-}
 
 pub const TerminalSession = struct {
     allocator: std.mem.Allocator,

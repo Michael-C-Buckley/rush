@@ -2331,17 +2331,6 @@ pub fn candidateQueryForInput(allocator: std.mem.Allocator, source: []const u8, 
     return decodeShellCompletionSlice(allocator, source, candidate.replace_start, candidate.replace_end);
 }
 
-pub fn candidateReplacementForInput(
-    allocator: std.mem.Allocator,
-    source: []const u8,
-    candidate: Candidate,
-) ![]const u8 {
-    std.debug.assert(candidate.replace_start <= candidate.replace_end);
-    std.debug.assert(candidate.replace_end <= source.len);
-    const replacement = try candidateReplacementAndSuffixForInput(allocator, source, candidate);
-    if (replacement.suffix) |suffix| allocator.free(suffix);
-    return replacement.text;
-}
 
 const CandidateReplacement = struct {
     text: []const u8,
@@ -2364,9 +2353,6 @@ fn candidateReplacementAndSuffixForInput(
     );
 }
 
-pub fn decodeShellWordForCompletion(allocator: std.mem.Allocator, word: []const u8) ![]const u8 {
-    return decodeShellCompletionSlice(allocator, word, 0, word.len);
-}
 
 const ShellQuote = enum {
     unquoted,

@@ -442,9 +442,6 @@ pub fn lowerSimpleCommands(allocator: std.mem.Allocator, parsed: parser.ParseRes
     };
 }
 
-pub fn lowerParsedList(allocator: std.mem.Allocator, parsed: parser.ParseResult, list_node: parser.Node) !Program {
-    return lowerListNode(allocator, parsed, list_node, list_node.span);
-}
 
 fn lowerListNode(
     allocator: std.mem.Allocator,
@@ -1294,25 +1291,6 @@ fn lowerIfCommand(allocator: std.mem.Allocator, parsed: parser.ParseResult, node
     };
 }
 
-fn isReservedPosition(parsed: parser.ParseResult, start: usize, token_index: usize) bool {
-    if (token_index == start) return true;
-    var index = token_index;
-    while (index > start) {
-        index -= 1;
-        const token = parsed.tokens[index];
-        // Newlines are both trivia and list separators; check separators
-        // first so a reserved word at the start of a line is recognized.
-        if (isListSeparatorToken(token.kind)) return true;
-        if (token.kind.isTrivia()) continue;
-        const lexeme = if (token.kind == .word) token.lexeme(parsed.source) else "";
-        return std.mem.eql(u8, lexeme, "then") or
-            std.mem.eql(u8, lexeme, "else") or
-            std.mem.eql(u8, lexeme, "elif") or
-            std.mem.eql(u8, lexeme, "do") or
-            std.mem.eql(u8, lexeme, "in");
-    }
-    return true;
-}
 
 fn isListSeparatorToken(kind: parser.TokenKind) bool {
     return switch (kind) {

@@ -1465,28 +1465,7 @@ fn semanticFunctionBodyProgramUnsupported(
     return null;
 }
 
-fn semanticProgramHasCompoundRedirections(program: ir.Program) bool {
-    for (program.if_commands) |command| if (command.redirections.len != 0) return true;
-    for (program.loop_commands) |command| if (command.redirections.len != 0) return true;
-    for (program.for_commands) |command| if (command.redirections.len != 0) return true;
-    for (program.case_commands) |command| if (command.redirections.len != 0) return true;
-    for (program.brace_groups) |group| if (group.redirections.len != 0) return true;
-    for (program.subshells) |subshell| if (subshell.redirections.len != 0) return true;
-    return false;
-}
 
-fn semanticProgramHasLoopDependentExpansion(program: ir.Program) bool {
-    for (program.for_commands) |command| {
-        if (!command.use_positionals) {
-            for (command.words) |word| if (wordUsesUnsupportedForWordExpansion(word.raw)) return true;
-        }
-    }
-    for (program.loop_commands) |command| {
-        if (std.mem.indexOfScalar(u8, command.condition, '$') != null) return true;
-        if (std.mem.indexOfScalar(u8, command.body, '$') != null) return true;
-    }
-    return false;
-}
 
 fn wordUsesUnsupportedForWordExpansion(raw: []const u8) bool {
     return std.mem.indexOf(u8, raw, "$(") != null or
@@ -1513,21 +1492,6 @@ fn semanticAsyncStatementPreflightUnsupported(program: ir.Program, statement: ir
     };
 }
 
-fn semanticPipelinePreflightUnsupported(program: ir.Program, pipeline: ir.Pipeline) ?[]const u8 {
-    std.debug.assert(program.commands.len != 0 or pipeline.command_indexes.len == 0);
-    if (pipeline.stage_spans.len == 0) {
-        return "semantic executor production preflight keeps empty pipelines unsupported outside the switched slice";
-    }
-    if (pipeline.command_indexes.len > pipeline.stage_spans.len)
-        return "semantic executor production preflight keeps malformed pipelines " ++
-            "unsupported outside the switched slice";
-    for (pipeline.stage_spans) |stage_span| {
-        if (wordUsesUnsupportedProductionExpansion(stage_span.slice(program.source)))
-            return "semantic executor production preflight found an expansion shape outside the switched slice";
-    }
-    for (pipeline.command_indexes) |command_index| std.debug.assert(command_index < program.commands.len);
-    return null;
-}
 
 fn commandUsesUnsupportedSemanticBuiltin(command: ir.SimpleCommand, allow_interactive_declarations: bool) bool {
     if (command.argv.len == 0) return false;
@@ -2617,15 +2581,6 @@ test "semantic non-interactive invocation executes compound pipeline stages" {
     }
 }
 
-fn expectBackgroundStatusAndPidLine(prefix: []const u8, line: []const u8) !void {
-    var fields = std.mem.splitScalar(u8, line, ':');
-    try std.testing.expectEqualStrings(prefix, fields.next() orelse return error.ExpectedBackgroundLinePrefix);
-    try std.testing.expectEqualStrings("0", fields.next() orelse return error.ExpectedBackgroundStatus);
-    const pid_text = fields.next() orelse return error.ExpectedBackgroundPid;
-    try std.testing.expect(fields.next() == null);
-    const pid = try std.fmt.parseUnsigned(usize, pid_text, 10);
-    try std.testing.expect(pid != 0);
-}
 test "semantic non-interactive invocation executes simple command redirections" {
     const path = "rush-semantic-simple-redirection.tmp";
     try deleteFileIfExists(std.testing.io, path);

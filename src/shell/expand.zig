@@ -2204,92 +2204,6 @@ pub fn expandWordPattern(allocator: std.mem.Allocator, raw: []const u8, options:
     return expandPatternWord(allocator, tilde_expanded, options);
 }
 
-pub fn expandWordPatterns(allocator: std.mem.Allocator, raw: []const u8, options: Options) !ExpansionPatterns {
-    const tilde_expanded = try expandTilde(allocator, raw, options.env);
-    defer allocator.free(tilde_expanded);
-
-    var parts = try parseWordParts(allocator, tilde_expanded);
-    defer parts.deinit();
-
-    var fields: std.ArrayList(ExpansionPattern) = .empty;
-    errdefer {
-        for (fields.items) |*field| field.deinit(allocator);
-        fields.deinit(allocator);
-    }
-    var current_text: std.ArrayList(u8) = .empty;
-    defer current_text.deinit(allocator);
-    var current_special: std.ArrayList(bool) = .empty;
-    defer current_special.deinit(allocator);
-    var force_current_field = false;
-
-    const ifs = options.env.get("IFS") orelse " \t\n";
-    for (parts.parts) |part| {
-        if (part.kind == .parameter) {
-            const parameter = part.value(parts.raw);
-            if (std.mem.eql(u8, parameter, "@")) {
-                try appendUnquotedAtPattern(
-                    allocator,
-                    &fields,
-                    &current_text,
-                    &current_special,
-                    options.positionals,
-                    ifs,
-                );
-                continue;
-            }
-            if (std.mem.eql(u8, parameter, "*")) {
-                if (ifs.len == 0) {
-                    try appendUnquotedAtPattern(
-                        allocator,
-                        &fields,
-                        &current_text,
-                        &current_special,
-                        options.positionals,
-                        ifs,
-                    );
-                    continue;
-                }
-                const joined = try joinPositionalsWithIfs(allocator, options.positionals, ifs);
-                defer allocator.free(joined);
-                try appendSplitPatternText(allocator, &fields, &current_text, &current_special, joined, ifs, true);
-                continue;
-            }
-
-            var rendered = try renderParameterSegmented(allocator, parameter, options);
-            defer rendered.deinit(allocator);
-            if (rendered.force_field) force_current_field = true;
-            try appendSplitPatternSegmentedText(allocator, &fields, &current_text, &current_special, rendered, ifs);
-            continue;
-        }
-
-        const rendered = try renderPart(allocator, parts.raw, part, options);
-        defer allocator.free(rendered);
-        switch (part.kind) {
-            .unquoted => try appendPatternBytes(allocator, &current_text, &current_special, rendered, true),
-            .escaped => try appendPatternBytes(allocator, &current_text, &current_special, rendered, false),
-            .single_quoted, .dollar_single_quoted, .double_quoted => {
-                force_current_field = true;
-                try appendPatternBytes(allocator, &current_text, &current_special, rendered, false);
-            },
-            .arithmetic, .command_substitution => try appendSplitPatternText(
-                allocator,
-                &fields,
-                &current_text,
-                &current_special,
-                rendered,
-                ifs,
-                true,
-            ),
-            .parameter => unreachable,
-        }
-    }
-
-    if (current_text.items.len != 0 or force_current_field) {
-        try appendCurrentPatternField(allocator, &fields, &current_text, &current_special);
-    }
-
-    return .{ .items = try fields.toOwnedSlice(allocator) };
-}
 
 fn expandPatternWord(allocator: std.mem.Allocator, raw: []const u8, options: Options) !ExpansionPattern {
     var parts = try parseWordParts(allocator, raw);
@@ -6385,9 +6299,6 @@ pub fn patternTextMatches(pattern: []const u8, text: []const u8, options: Patter
     return globMatchesAt(pattern, null, options, 0, text, 0);
 }
 
-pub fn patternMatches(pattern: ExpansionPattern, text: []const u8, options: PatternMatchOptions) bool {
-    return globPatternMatchesWithOptions(pattern, text, options);
-}
 
 fn globMatches(pattern: []const u8, text: []const u8) bool {
     return globMatchesAt(pattern, null, .{}, 0, text, 0);
