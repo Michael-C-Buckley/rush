@@ -6416,16 +6416,20 @@ fn evaluateExternalWithProcessEnvironment(
         };
         defer run_result.deinit();
 
+        var frame = OutputFrame.initOutcomeCapture(buffers);
+        defer frame.deinit();
         if (redirectionTargetsDescriptor(plan.redirections, 1)) {
-            if (!writeAllDescriptor(1, run_result.stdout)) return error.Unimplemented;
-        } else {
-            try buffers.stdout.appendSlice(buffers.allocator, run_result.stdout);
+            try frame.routing.setDestination(1, .{ .host_descriptor = 1 });
         }
         if (redirectionTargetsDescriptor(plan.redirections, 2)) {
-            if (!writeAllDescriptor(2, run_result.stderr)) return error.Unimplemented;
+            try frame.routing.setDestination(2, .{ .host_descriptor = 2 });
         } else if (evaluator.external_stdio == .capture or evaluator.external_stdio == .inherit) {
-            try buffers.stderr.appendSlice(buffers.allocator, run_result.stderr);
+            try frame.routing.setDestination(2, .outcome_stderr_capture);
+        } else {
+            try frame.routing.setDestination(2, .closed);
         }
+        try frame.write(1, run_result.stdout);
+        try frame.write(2, run_result.stderr);
         return normalizeWaitStatus(run_result.status);
     }
 
@@ -6654,22 +6658,28 @@ fn runExternalWithPipelineInputWithProcessEnvironment(
     };
     defer run_result.deinit();
 
+    var frame = OutputFrame.initOutcomeCapture(buffers);
+    defer frame.deinit();
     if (redirectionTargetsDescriptor(plan.redirections, 1)) {
-        if (!writeAllDescriptor(1, run_result.stdout)) {
-            try buffers.addBuiltinDiagnostic(plan.argv[0], "bad file descriptor");
-            return 1;
-        }
-    } else {
-        try buffers.stdout.appendSlice(buffers.allocator, run_result.stdout);
+        try frame.routing.setDestination(1, .{ .host_descriptor = 1 });
     }
     if (redirectionTargetsDescriptor(plan.redirections, 2)) {
-        if (!writeAllDescriptor(2, run_result.stderr)) {
+        try frame.routing.setDestination(2, .{ .host_descriptor = 2 });
+    }
+    frame.write(1, run_result.stdout) catch |err| switch (err) {
+        error.Unimplemented => {
             try buffers.addBuiltinDiagnostic(plan.argv[0], "bad file descriptor");
             return 1;
-        }
-    } else {
-        try buffers.stderr.appendSlice(buffers.allocator, run_result.stderr);
-    }
+        },
+        else => |e| return e,
+    };
+    frame.write(2, run_result.stderr) catch |err| switch (err) {
+        error.Unimplemented => {
+            try buffers.addBuiltinDiagnostic(plan.argv[0], "bad file descriptor");
+            return 1;
+        },
+        else => |e| return e,
+    };
     return normalizeWaitStatus(run_result.status);
 }
 
