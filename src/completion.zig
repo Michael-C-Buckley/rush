@@ -1745,6 +1745,7 @@ fn appendFunctionProviderCandidates(
         .{},
     );
     try provider_shell_state.putVariable("rush_completion_value_position", value_position, .{});
+    try provider_shell_state.putVariable("rush_completion_prefix", semantic.prefix, .{});
 
     const argv = [_][]const u8{function_name};
     var result = try runner.runHiddenShellStateCommandWithExtensionHandlers(
@@ -3122,6 +3123,10 @@ test "manifest completion uses dynamic option providers" {
         .name = "__rush_complete_tool_options",
         .source_body =
         \\
+        \\case "$rush_completion_prefix" in
+        \\  -D*) ;;
+        \\  *) return ;;
+        \\esac
         \\rush_complete candidate -Doptimize=ReleaseSafe --kind option --description 'dynamic option' --priority 20
         \\rush_complete candidate -Dtarget= --kind option --description 'dynamic target option'
         \\

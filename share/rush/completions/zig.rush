@@ -26,6 +26,11 @@ __rush_complete_zig_build_steps() {
 }
 
 __rush_complete_zig_build_options() {
+  case "${rush_completion_prefix-}" in
+    -D*) ;;
+    *) return ;;
+  esac
+
   tmp="${TMPDIR:-/tmp}/rush-zig-build-help.$$"
   zig build --help > "$tmp" 2>/dev/null || : > "$tmp"
   in_project_options=false
@@ -82,51 +87,11 @@ __rush_complete_zig_build_options() {
   done < "$tmp"
   rm -f "$tmp"
 
-  case "${rush_completion_prefix-}" in
-    -D*)
-      if test "$project_option_count" = 0; then
-        rush_complete candidate -Doptimize= --kind option --description 'optimization mode' --no-space
-        rush_complete candidate -Doptimize=Debug --kind option --description 'debug build'
-        rush_complete candidate -Doptimize=ReleaseSafe --kind option --description 'safe release build'
-        rush_complete candidate -Doptimize=ReleaseFast --kind option --description 'fast release build'
-        rush_complete candidate -Doptimize=ReleaseSmall --kind option --description 'small release build'
-      fi
-      return
-      ;;
-  esac
-
-  rush_complete candidate --help --kind option --description 'print help and exit'
-  rush_complete candidate -h --kind option --description 'print help and exit'
-  rush_complete candidate --list-steps --kind option --description 'print available steps'
-  rush_complete candidate -l --kind option --description 'print available steps'
-  rush_complete candidate --prefix --kind option --description 'where to install files'
-  rush_complete candidate -p --kind option --description 'where to install files'
-  rush_complete candidate --prefix-lib-dir --kind option --description 'where to install libraries'
-  rush_complete candidate --prefix-exe-dir --kind option --description 'where to install executables'
-  rush_complete candidate --prefix-include-dir --kind option --description 'where to install C header files'
-  rush_complete candidate --release --kind option --description 'request release mode'
-  rush_complete candidate --verbose --kind option --description 'print commands before executing them'
-  rush_complete candidate --color --kind option --description 'enable or disable colored errors'
-  rush_complete candidate --error-style --kind option --description 'control how build errors are printed'
-  rush_complete candidate --multiline-errors --kind option --description 'control multi-line error formatting'
-  rush_complete candidate --summary --kind option --description 'control build summary printing'
-  rush_complete candidate -j --kind option --description 'limit concurrent jobs'
-  rush_complete candidate --maxrss --kind option --description 'limit memory usage'
-  rush_complete candidate --skip-oom-steps --kind option --description 'skip steps that would exceed --maxrss'
-  rush_complete candidate --test-timeout --kind option --description 'limit unit test execution time'
-  rush_complete candidate --watch --kind option --description 'continuously rebuild when source files are modified'
-  rush_complete candidate --debounce --kind option --description 'delay before rebuilding after a file change'
-  rush_complete candidate --webui --kind option --description 'enable the web interface'
-  rush_complete candidate --fuzz --kind option --description 'search continuously for unit test failures'
-  rush_complete candidate --time-report --kind option --description 'force full rebuild and report compilation time'
-  rush_complete candidate -fincremental --kind option --description 'enable incremental compilation'
-  rush_complete candidate -fno-incremental --kind option --description 'disable incremental compilation'
-  rush_complete candidate --fetch --kind option --description 'fetch dependency tree and exit'
-  rush_complete candidate --fork --kind option --description 'override a project from dependency tree'
-  rush_complete candidate --build-file --kind option --description 'override path to build.zig'
-  rush_complete candidate --cache-dir --kind option --description 'override local Zig cache directory'
-  rush_complete candidate --global-cache-dir --kind option --description 'override global Zig cache directory'
-  rush_complete candidate --zig-lib-dir --kind option --description 'override Zig lib directory'
-  rush_complete candidate --build-runner --kind option --description 'override path to build runner'
-  rush_complete candidate --seed --kind option --description 'shuffle dependency traversal order'
+  if test "$project_option_count" = 0; then
+    rush_complete candidate -Doptimize= --kind option --description 'optimization mode' --no-space
+    rush_complete candidate -Doptimize=Debug --kind option --description 'debug build'
+    rush_complete candidate -Doptimize=ReleaseSafe --kind option --description 'safe release build'
+    rush_complete candidate -Doptimize=ReleaseFast --kind option --description 'fast release build'
+    rush_complete candidate -Doptimize=ReleaseSmall --kind option --description 'small release build'
+  fi
 }
