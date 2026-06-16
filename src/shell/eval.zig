@@ -6971,6 +6971,12 @@ fn evaluateCd(
         try resolveLogicalCdPath(buffers.allocator, base_pwd, target);
     defer if (logical_target) |path| buffers.allocator.free(path);
     const change_target = logical_target orelse target;
+    if (old_pwd.len != 0 and shell_state.isVariableReadonly("OLDPWD")) {
+        return builtinStatusError(buffers, 1, "cd", "OLDPWD: readonly variable");
+    }
+    if (shell_state.isVariableReadonly("PWD")) {
+        return builtinStatusError(buffers, 1, "cd", "PWD: readonly variable");
+    }
     fs_port.changeCwd(runtime.fs.ChangeCwdRequest.init(change_target)) catch return builtinStatusError(
         buffers,
         1,

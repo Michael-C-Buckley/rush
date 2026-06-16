@@ -75,6 +75,19 @@
             .status = 0,
         },
         .{
+            .name = "cd with readonly PWD does not abort the parent shell",
+            .script =
+            \\( readonly PWD; cd . 2>/dev/null )
+            \\printf 'after\n'
+            ,
+            .stdout =
+            \\after
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "pwd -L preserves logical paths and pwd -P resolves physical paths",
             .script =
             \\mkdir real
