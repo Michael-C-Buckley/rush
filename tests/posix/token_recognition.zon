@@ -217,6 +217,20 @@
             .status = 0,
         },
         .{
+            .name = "aliases defined inside a compound command do not affect its remaining body",
+            .script =
+            \\if true; then alias late='printf "%s\n" bad'; late 2>/dev/null; printf '<%s>\n' "$?"; fi
+            \\printf 'done\n'
+            ,
+            .stdout =
+            \\<127>
+            \\done
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "digits separated from redirection operators remain command arguments",
             .script =
             \\printf '%s\n' 2 >out

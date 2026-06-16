@@ -355,6 +355,9 @@ fn runSemanticAliasTimingCommandString(
                 defer alias_snapshot.deinit();
                 parser_resolver.expand_aliases = shell_state.shopts.enabled(.expand_aliases);
                 parser_resolver.alias_state = &alias_snapshot;
+                const previous_evaluator_alias_state = evaluator.alias_state;
+                evaluator.alias_state = &alias_snapshot;
+                defer evaluator.alias_state = previous_evaluator_alias_state;
                 var execution = try runSemanticLoweredProgram(
                     allocator,
                     aliased,
@@ -645,6 +648,9 @@ fn runSemanticAliasTimingShellStateScript(
                 defer alias_snapshot.deinit();
                 parser_resolver.expand_aliases = shell_state.shopts.enabled(.expand_aliases);
                 parser_resolver.alias_state = &alias_snapshot;
+                const previous_evaluator_alias_state = evaluator.alias_state;
+                evaluator.alias_state = &alias_snapshot;
+                defer evaluator.alias_state = previous_evaluator_alias_state;
                 var execution = try runSemanticLoweredProgram(
                     allocator,
                     aliased,

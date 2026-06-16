@@ -65,6 +65,7 @@ pub const Evaluator = struct {
     builtin_definitions: []const builtin.Builtin = default_builtins.default_registry,
     extension_handler_context: ?*anyopaque = null,
     extension_handler_lookup: ?*const fn (?*anyopaque, []const u8) ?extension_api.HandlerSpec = null,
+    alias_state: ?*state.ShellState = null,
     history_entries: []const CommandHistoryEntry = &.{},
 
     pub fn init(allocator: std.mem.Allocator) Evaluator {
@@ -4594,6 +4595,7 @@ fn evaluateSourceStatement(
     parser_resolver.features = evaluator.features;
     parser_resolver.arg_zero = evaluator.arg_zero;
     parser_resolver.expand_aliases = shell_state.shopts.enabled(.expand_aliases);
+    parser_resolver.alias_state = evaluator.alias_state;
     const resolver = parser_resolver.resolver();
     var body = (resolver.resolve(
         evaluator.allocator,
@@ -4854,6 +4856,7 @@ fn evaluateStatementListSource(
     parser_resolver.features = evaluator.features;
     parser_resolver.arg_zero = evaluator.arg_zero;
     parser_resolver.expand_aliases = shell_state.shopts.enabled(.expand_aliases);
+    parser_resolver.alias_state = evaluator.alias_state;
     const resolver = parser_resolver.resolver();
     var body = (resolver.resolve(
         evaluator.allocator,
