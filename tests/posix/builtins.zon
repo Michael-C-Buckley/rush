@@ -225,6 +225,21 @@
             .status = 0,
         },
         .{
+            .name = "read keeps non-whitespace IFS delimiters in the last variable remainder",
+            .script =
+            \\printf ':a::b:\n' | {
+            \\    IFS=: read -r first second rest
+            \\    printf '<%s>|<%s>|<%s>\n' "$first" "$second" "$rest"
+            \\}
+            ,
+            .stdout =
+            \\<>|<a>|<:b:>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "read treats multibyte IFS delimiters as single characters",
             .script =
             \\printf 'aåbåc\n' | {

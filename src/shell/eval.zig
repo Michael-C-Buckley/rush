@@ -9094,7 +9094,7 @@ fn assignReadFields(
         cursor = skipReadIfsWhitespace(line, escaped, cursor, ifs);
         const start = cursor;
         if (index + 1 == names.len) {
-            const end = trimReadFieldSeparatorEnd(line, escaped, start, ifs);
+            const end = trimReadIfsWhitespaceEnd(line, escaped, start, ifs);
             try state_delta.assignVariable(name, line[start..end], .{});
             return;
         }
@@ -9211,22 +9211,6 @@ fn trimReadIfsWhitespaceEnd(
     while (end > start) {
         const previous = previousReadCharacterIndex(line, end);
         if (!isReadIfsWhitespaceAt(line, escaped, previous, ifs)) break;
-        end = previous;
-    }
-    return end;
-}
-
-fn trimReadFieldSeparatorEnd(
-    line: []const u8,
-    escaped: ?[]const bool,
-    start: usize,
-    ifs: []const u8,
-) usize {
-    var end = line.len;
-    while (end > start) {
-        const previous = previousReadCharacterIndex(line, end);
-        const separator = readIfsSeparatorAt(line, escaped, previous, ifs) orelse break;
-        if (previous + separator.width != end) break;
         end = previous;
     }
     return end;
