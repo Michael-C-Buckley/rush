@@ -184,9 +184,24 @@
             \\    [[:alpha:]]) printf '<%s>\n' alpha ;;
             \\    *) printf '<%s>\n' bad ;;
             \\esac
+            \\case λ in
+            \\    [[:lower:]]) printf '<%s>\n' greek-lower ;;
+            \\    *) printf '<%s>\n' bad ;;
+            \\esac
+            \\case Ж in
+            \\    [[:upper:]]) printf '<%s>\n' cyrillic-upper ;;
+            \\    *) printf '<%s>\n' bad ;;
+            \\esac
+            \\case 中 in
+            \\    [[:alpha:]]) printf '<%s>\n' cjk-alpha ;;
+            \\    *) printf '<%s>\n' bad ;;
+            \\esac
             ,
             .stdout =
             \\<alpha>
+            \\<greek-lower>
+            \\<cyrillic-upper>
+            \\<cjk-alpha>
             \\
             ,
             .stderr = "",

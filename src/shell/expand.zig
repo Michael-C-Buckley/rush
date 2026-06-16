@@ -6810,10 +6810,10 @@ fn bracketCharacterClassMatches(class_name: []const u8, text: []const u8) ?bool 
     }
 
     const codepoint = decodeUtf8Character(text) orelse return false;
-    if (std.mem.eql(u8, class_name, "alnum")) return isLatin1Alphabetic(codepoint);
-    if (std.mem.eql(u8, class_name, "alpha")) return isLatin1Alphabetic(codepoint);
-    if (std.mem.eql(u8, class_name, "lower")) return isLatin1Lowercase(codepoint);
-    if (std.mem.eql(u8, class_name, "upper")) return isLatin1Uppercase(codepoint);
+    if (std.mem.eql(u8, class_name, "alnum")) return isUnicodeAlphabetic(codepoint);
+    if (std.mem.eql(u8, class_name, "alpha")) return isUnicodeAlphabetic(codepoint);
+    if (std.mem.eql(u8, class_name, "lower")) return isUnicodeLowercase(codepoint);
+    if (std.mem.eql(u8, class_name, "upper")) return isUnicodeUppercase(codepoint);
     if (std.mem.eql(u8, class_name, "graph")) return true;
     if (std.mem.eql(u8, class_name, "print")) return true;
     if (std.mem.eql(u8, class_name, "blank")) return false;
@@ -6835,18 +6835,24 @@ fn decodeUtf8Character(text: []const u8) ?u21 {
     };
 }
 
-fn isLatin1Alphabetic(codepoint: u21) bool {
-    return isLatin1Uppercase(codepoint) or isLatin1Lowercase(codepoint);
+fn isUnicodeAlphabetic(codepoint: u21) bool {
+    return isUnicodeUppercase(codepoint) or
+        isUnicodeLowercase(codepoint) or
+        (codepoint >= 0x4E00 and codepoint <= 0x9FFF);
 }
 
-fn isLatin1Uppercase(codepoint: u21) bool {
+fn isUnicodeUppercase(codepoint: u21) bool {
     return (codepoint >= 0x00C0 and codepoint <= 0x00D6) or
-        (codepoint >= 0x00D8 and codepoint <= 0x00DE);
+        (codepoint >= 0x00D8 and codepoint <= 0x00DE) or
+        (codepoint >= 0x0391 and codepoint <= 0x03A9 and codepoint != 0x03A2) or
+        (codepoint >= 0x0410 and codepoint <= 0x042F);
 }
 
-fn isLatin1Lowercase(codepoint: u21) bool {
+fn isUnicodeLowercase(codepoint: u21) bool {
     return (codepoint >= 0x00DF and codepoint <= 0x00F6) or
-        (codepoint >= 0x00F8 and codepoint <= 0x00FF);
+        (codepoint >= 0x00F8 and codepoint <= 0x00FF) or
+        (codepoint >= 0x03B1 and codepoint <= 0x03C9) or
+        (codepoint >= 0x0430 and codepoint <= 0x044F);
 }
 
 fn isUnicodePunctuation(codepoint: u21) bool {
