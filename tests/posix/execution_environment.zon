@@ -204,6 +204,34 @@
             .status = 0,
         },
         .{
+            .name = "command substitution stderr merge captures semantic pipeline side output",
+            .script =
+            \\x=$(exec 2>&1; { printf 'err\n' >&2; printf out; } | cat)
+            \\printf '<%s>\n' "$x"
+            ,
+            .stdout =
+            \\<err
+            \\out>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "command substitution stderr merge captures pattern side output outside nested result",
+            .script =
+            \\x=$(exec 2>&1; case y in "$(printf 'pattern\n' >&2; printf y)") printf value ;; esac)
+            \\printf '<%s>\n' "$x"
+            ,
+            .stdout =
+            \\<pattern
+            \\value>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "nested command substitutions isolate inner mutations from outer substitutions",
             .script =
             \\printf '<%s>\n' "$(x=outer-sub; printf '%s' "$(x=inner-sub; printf '%s' "$x")"; printf ':%s' "$x")"

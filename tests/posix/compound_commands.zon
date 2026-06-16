@@ -79,6 +79,23 @@
             .status = 0,
         },
         .{
+            .name = "subshell exec redirection operand side output remains ordered and isolated",
+            .script =
+            \\exec 2>&1
+            \\( exec >"$(printf out; printf 'redir\n' >&2)"; printf 'inner\n' )
+            \\printf 'after\n'
+            \\cat out
+            ,
+            .stdout =
+            \\redir
+            \\after
+            \\inner
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "exec redirection inside subshell does not affect following commands",
             .script =
             \\( exec >out; printf hidden )

@@ -76,6 +76,20 @@
             .status = 0,
         },
         .{
+            .name = "last semantic pipeline stage preserves argv substitution side output order",
+            .script =
+            \\exec 2>&1
+            \\printf 'input\n' | { read x; printf '%s\n' "$(printf 'arg\n' >&2; printf "$x")"; }
+            ,
+            .stdout =
+            \\arg
+            \\input
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "pipeline supplies input to exec replacement command",
             .script =
             \\printf hi | exec sh -c 'cat; exit 6'

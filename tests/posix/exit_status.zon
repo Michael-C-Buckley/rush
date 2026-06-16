@@ -332,6 +332,22 @@
             .status_match = .nonzero,
         },
         .{
+            .name = "readonly assignment preserves command substitution side output before error",
+            .script =
+            \\exec 2>&1
+            \\readonly v
+            \\v=$(printf 'err\n' >&2; printf value)
+            \\printf 'after\n'
+            ,
+            .stdout =
+            \\err
+            \\v: readonly variable
+            \\
+            ,
+            .stderr = "",
+            .status_match = .nonzero,
+        },
+        .{
             .name = "readonly assign-default expansion errors exit",
             .script =
             \\x=

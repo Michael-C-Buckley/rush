@@ -2865,6 +2865,34 @@ test "hidden shell state commands do not read terminal stdin" {
     try std.testing.expectEqualStrings("", result.stderr);
 }
 
+test "hidden shell state commands keep multi-statement function output captured" {
+    var shell_state = shell.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    try shell_state.putFunction(.{
+        .name = "hidden_output_probe",
+        .source_body =
+        \\printf 'first\n'
+        \\printf 'second\n'
+        ,
+    });
+
+    var result = try runHiddenShellStateCommandWithExtensionHandlers(
+        std.testing.allocator,
+        std.testing.io,
+        &shell_state,
+        &.{"hidden_output_probe"},
+        "rush",
+        .{},
+        .capture,
+        .{},
+    );
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("first\nsecond\n", result.stdout);
+    try std.testing.expectEqualStrings("", result.stderr);
+}
+
 test "hidden shell state external pipelines capture output without terminal stdin" {
     var adapter = runtime.posix.Adapter.init(std.testing.io);
     const pipe = try adapter.fdPort().pipe(.{});
