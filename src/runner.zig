@@ -831,7 +831,8 @@ fn runSemanticLoweredProgram(
         if (!should_run) continue;
 
         const statement_end = semanticStatementSourceEnd(program, statement_index, script.len);
-        const statement_script = std.mem.trim(u8, script[statement.span.start..statement_end], " \t\r\n;");
+        const statement_script = try semanticStatementSource(allocator, program, statement_index, script.len);
+        defer allocator.free(statement_script);
         std.debug.assert(statement_script.len != 0);
         var statement_context = eval_context;
         if (statement_index + 1 < program.statements.len) {
@@ -1282,6 +1283,111 @@ fn semanticStatementSourceEnd(program: ir.Program, statement_index: usize, scrip
     return script_len;
 }
 
+fn semanticStatementSource(
+    allocator: std.mem.Allocator,
+    program: ir.Program,
+    statement_index: usize,
+    script_len: usize,
+) ![]const u8 {
+    std.debug.assert(statement_index < program.statements.len);
+    const statement = program.statements[statement_index];
+    const statement_end = semanticStatementSourceEnd(program, statement_index, script_len);
+    const base = std.mem.trim(u8, program.source[statement.span.start..statement_end], " \t\r\n;");
+    var source: std.ArrayList(u8) = .empty;
+    errdefer source.deinit(allocator);
+    try source.appendSlice(allocator, base);
+    try appendSemanticHereDocRanges(allocator, &source, program, statement, statement_end);
+    return source.toOwnedSlice(allocator);
+}
+
+fn appendSemanticHereDocRanges(
+    allocator: std.mem.Allocator,
+    source: *std.ArrayList(u8),
+    program: ir.Program,
+    statement: ir.Statement,
+    base_end: usize,
+) !void {
+    switch (statement.kind) {
+        .pipeline => {
+            const pipeline = program.pipelines[statement.index];
+            for (pipeline.command_indexes) |command_index| {
+                try appendSemanticRedirectionHereDocRanges(
+                    allocator,
+                    source,
+                    program,
+                    program.commands[command_index].redirections,
+                    base_end,
+                );
+            }
+        },
+        .if_command => try appendSemanticRedirectionHereDocRanges(
+            allocator,
+            source,
+            program,
+            program.if_commands[statement.index].redirections,
+            base_end,
+        ),
+        .loop_command => try appendSemanticRedirectionHereDocRanges(
+            allocator,
+            source,
+            program,
+            program.loop_commands[statement.index].redirections,
+            base_end,
+        ),
+        .for_command => try appendSemanticRedirectionHereDocRanges(
+            allocator,
+            source,
+            program,
+            program.for_commands[statement.index].redirections,
+            base_end,
+        ),
+        .case_command => try appendSemanticRedirectionHereDocRanges(
+            allocator,
+            source,
+            program,
+            program.case_commands[statement.index].redirections,
+            base_end,
+        ),
+        .function_definition => try appendSemanticRedirectionHereDocRanges(
+            allocator,
+            source,
+            program,
+            program.function_definitions[statement.index].redirections,
+            base_end,
+        ),
+        .brace_group => try appendSemanticRedirectionHereDocRanges(
+            allocator,
+            source,
+            program,
+            program.brace_groups[statement.index].redirections,
+            base_end,
+        ),
+        .subshell => try appendSemanticRedirectionHereDocRanges(
+            allocator,
+            source,
+            program,
+            program.subshells[statement.index].redirections,
+            base_end,
+        ),
+        .bash_test_command => {},
+    }
+}
+
+fn appendSemanticRedirectionHereDocRanges(
+    allocator: std.mem.Allocator,
+    source: *std.ArrayList(u8),
+    program: ir.Program,
+    redirections: []const ir.Redirection,
+    base_end: usize,
+) !void {
+    for (redirections) |redirection| {
+        const range = redirection.here_doc_range orelse continue;
+        if (range.start < base_end) continue;
+        if (source.items.len != 0 and source.items[source.items.len - 1] != '\n') try source.append(allocator, '\n');
+        try source.appendSlice(allocator, program.source[range.start..range.end]);
+    }
+}
+
 fn semanticStatementHasHereDoc(program: ir.Program, statement: ir.Statement) bool {
     switch (statement.kind) {
         .pipeline => {
@@ -1291,17 +1397,48 @@ fn semanticStatementHasHereDoc(program: ir.Program, statement: ir.Statement) boo
             }
             return false;
         },
-        .if_command => return semanticRedirectionsHaveHereDoc(program.if_commands[statement.index].redirections),
-        .loop_command => return semanticRedirectionsHaveHereDoc(program.loop_commands[statement.index].redirections),
-        .for_command => return semanticRedirectionsHaveHereDoc(program.for_commands[statement.index].redirections),
+        .if_command => return semanticIfCommandHasHereDoc(program.if_commands[statement.index]),
+        .loop_command => return semanticLoopCommandHasHereDoc(program.loop_commands[statement.index]),
+        .for_command => return semanticForCommandHasHereDoc(program.for_commands[statement.index]),
         .case_command => return semanticRedirectionsHaveHereDoc(program.case_commands[statement.index].redirections),
         .function_definition => return semanticRedirectionsHaveHereDoc(
             program.function_definitions[statement.index].redirections,
         ),
-        .brace_group => return semanticRedirectionsHaveHereDoc(program.brace_groups[statement.index].redirections),
-        .subshell => return semanticRedirectionsHaveHereDoc(program.subshells[statement.index].redirections),
+        .brace_group => return semanticBraceGroupHasHereDoc(program.brace_groups[statement.index]),
+        .subshell => return semanticSubshellHasHereDoc(program.subshells[statement.index]),
         .bash_test_command => return false,
     }
+}
+
+fn semanticIfCommandHasHereDoc(command: ir.IfCommand) bool {
+    if (semanticRedirectionsHaveHereDoc(command.redirections)) return true;
+    for (command.branches) |branch| {
+        if (semanticSourceMayHaveHereDoc(branch.condition) or semanticSourceMayHaveHereDoc(branch.body)) return true;
+    }
+    if (command.else_body) |body| if (semanticSourceMayHaveHereDoc(body)) return true;
+    return false;
+}
+
+fn semanticLoopCommandHasHereDoc(command: ir.LoopCommand) bool {
+    return semanticRedirectionsHaveHereDoc(command.redirections) or
+        semanticSourceMayHaveHereDoc(command.condition) or
+        semanticSourceMayHaveHereDoc(command.body);
+}
+
+fn semanticForCommandHasHereDoc(command: ir.ForCommand) bool {
+    return semanticRedirectionsHaveHereDoc(command.redirections) or semanticSourceMayHaveHereDoc(command.body);
+}
+
+fn semanticBraceGroupHasHereDoc(group: ir.BraceGroup) bool {
+    return semanticRedirectionsHaveHereDoc(group.redirections) or semanticSourceMayHaveHereDoc(group.body);
+}
+
+fn semanticSubshellHasHereDoc(subshell: ir.Subshell) bool {
+    return semanticRedirectionsHaveHereDoc(subshell.redirections) or semanticSourceMayHaveHereDoc(subshell.body);
+}
+
+fn semanticSourceMayHaveHereDoc(source: []const u8) bool {
+    return std.mem.indexOf(u8, source, "<<") != null;
 }
 
 fn semanticCommandHasHereDoc(command: ir.SimpleCommand) bool {

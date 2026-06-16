@@ -726,9 +726,13 @@ const SourceLowerer = struct {
 
         const stages = try self.allocator.alloc(pipeline_plan.PipelineStagePlan, pipeline.stage_spans.len);
         for (pipeline.stage_spans, 0..) |stage_span, index| {
-            const source = program.source[stage_span.start..stage_span.end];
             const stage_target: context.ExecutionTarget = if (pipeline.stage_spans.len == 1) target else .subshell;
-            const lowered = try self.lowerPipelineStageSource(source, stage_target);
+            const lowered = if (pipeline.command_indexes.len == pipeline.stage_spans.len)
+                try self.lowerPipelineSimpleStage(program.commands[pipeline.command_indexes[index]], stage_target)
+            else blk: {
+                const source = program.source[stage_span.start..stage_span.end];
+                break :blk try self.lowerPipelineStageSource(source, stage_target);
+            };
             stages[index] = switch (lowered) {
                 .failure => |trap_failure| return .{ .failure = trap_failure },
                 .stage => |stage| stage,
@@ -747,6 +751,18 @@ const SourceLowerer = struct {
         stage: pipeline_plan.PipelineStagePlan,
         failure: TrapActionFailure,
     };
+
+    fn lowerPipelineSimpleStage(
+        self: *SourceLowerer,
+        command: ir.SimpleCommand,
+        target: context.ExecutionTarget,
+    ) !PipelineStageLowering {
+        const lowered = try self.lowerIrSimpleCommand(command, target);
+        return switch (lowered) {
+            .plan => |plan| .{ .stage = .{ .simple = plan } },
+            .failure => |trap_failure| .{ .failure = trap_failure },
+        };
+    }
 
     fn lowerPipelineStageSource(
         self: *SourceLowerer,
@@ -5851,13 +5867,23 @@ fn runExternalWithPipelineInputWithProcessEnvironment(
     var invocation = try ExternalInvocation.init(evaluator.allocator, shell_state, plan, resolution, process_overlay);
     defer invocation.deinit(evaluator.allocator);
 
+    var fd_redirections = if (semanticHereDocInput(plan.redirections) != null)
+        try redirectionsWithoutHereDocs(evaluator.allocator, plan.redirections)
+    else
+        null;
+    defer if (fd_redirections) |*redirections| redirections.deinit(evaluator.allocator);
+    const redirections_to_apply = if (fd_redirections) |redirections|
+        redirections.plan
+    else
+        plan.redirections;
+
     var applied_redirections: ?redirection_plan.AppliedRedirections = null;
     defer if (applied_redirections) |*applied| {
         applied.restore();
         applied.deinit();
     };
-    if (hasRedirections(plan)) {
-        const apply_result = try plan.redirections.apply(evaluator.allocator, fd_port);
+    if (redirections_to_apply.steps.len != 0 or redirections_to_apply.rollback_steps.len != 0) {
+        const apply_result = try redirections_to_apply.apply(evaluator.allocator, fd_port);
         switch (apply_result) {
             .applied => |applied| applied_redirections = applied,
             .failure => |failure| {
@@ -5870,7 +5896,7 @@ fn runExternalWithPipelineInputWithProcessEnvironment(
     var run_result = invocation.run(
         evaluator,
         process_port,
-        buffers.stdin.takeRemaining(),
+        semanticHereDocInput(plan.redirections) orelse buffers.stdin.takeRemaining(),
     ) catch |err| switch (err) {
         error.OutOfMemory => return error.OutOfMemory,
         else => |run_err| {

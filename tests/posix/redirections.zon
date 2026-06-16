@@ -480,5 +480,62 @@
             .stderr = "",
             .status = 0,
         },
+        .{
+            .name = "here document feeds a simple pipeline stage",
+            .script =
+            \\cat <<EOF | cat
+            \\hello
+            \\EOF
+            ,
+            .stdout =
+            \\hello
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "here document feeds an and-or list command",
+            .script =
+            \\cat <<EOF && echo yes
+            \\hello
+            \\EOF
+            ,
+            .stdout =
+            \\hello
+            \\yes
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "here document feeds a loop body command",
+            .script =
+            \\for i in 1; do cat <<EOF; done
+            \\hello
+            \\EOF
+            ,
+            .stdout =
+            \\hello
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "here document feeds a brace group body command",
+            .script =
+            \\{ cat <<EOF; }
+            \\hello
+            \\EOF
+            ,
+            .stdout =
+            \\hello
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
     },
 }
