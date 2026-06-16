@@ -200,6 +200,10 @@
             \\    [[:alnum:]]) printf '<%s>\n' cyrillic-alnum ;;
             \\    *) printf '<%s>\n' bad ;;
             \\esac
+            \\case Ⅷ in
+            \\    [[:alnum:]]) printf '<%s>\n' bad ;;
+            \\    *) printf '<%s>\n' roman-not-alnum ;;
+            \\esac
             ,
             .stdout =
             \\<alpha>
@@ -207,6 +211,7 @@
             \\<cyrillic-upper>
             \\<cjk-alpha>
             \\<cyrillic-alnum>
+            \\<roman-not-alnum>
             \\
             ,
             .stderr = "",

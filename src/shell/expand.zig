@@ -6809,7 +6809,7 @@ fn bracketCharacterClassMatches(class_name: []const u8, text: []const u8) ?bool 
     }
 
     const category = unicodeGeneralCategory(text) orelse return false;
-    if (std.mem.eql(u8, class_name, "alnum")) return isUnicodeLetter(category) or isUnicodeNumber(category);
+    if (std.mem.eql(u8, class_name, "alnum")) return isUnicodeLetter(category) or isUnicodeDecimalDigit(category);
     if (std.mem.eql(u8, class_name, "alpha")) return isUnicodeLetter(category);
     if (std.mem.eql(u8, class_name, "lower")) return category == .letter_lowercase;
     if (std.mem.eql(u8, class_name, "upper")) return category == .letter_uppercase;
@@ -6847,14 +6847,8 @@ fn isUnicodeLetter(category: uucode.types.GeneralCategory) bool {
     };
 }
 
-fn isUnicodeNumber(category: uucode.types.GeneralCategory) bool {
-    return switch (category) {
-        .number_decimal_digit,
-        .number_letter,
-        .number_other,
-        => true,
-        else => false,
-    };
+fn isUnicodeDecimalDigit(category: uucode.types.GeneralCategory) bool {
+    return category == .number_decimal_digit;
 }
 
 fn isUnicodeSeparator(category: uucode.types.GeneralCategory) bool {
