@@ -6819,7 +6819,7 @@ fn bracketCharacterClassMatches(class_name: []const u8, text: []const u8) ?bool 
     if (std.mem.eql(u8, class_name, "blank")) return false;
     if (std.mem.eql(u8, class_name, "cntrl")) return false;
     if (std.mem.eql(u8, class_name, "digit")) return false;
-    if (std.mem.eql(u8, class_name, "punct")) return false;
+    if (std.mem.eql(u8, class_name, "punct")) return isUnicodePunctuation(codepoint);
     if (std.mem.eql(u8, class_name, "space")) return false;
     if (std.mem.eql(u8, class_name, "xdigit")) return false;
     return null;
@@ -6847,6 +6847,15 @@ fn isLatin1Uppercase(codepoint: u21) bool {
 fn isLatin1Lowercase(codepoint: u21) bool {
     return (codepoint >= 0x00DF and codepoint <= 0x00F6) or
         (codepoint >= 0x00F8 and codepoint <= 0x00FF);
+}
+
+fn isUnicodePunctuation(codepoint: u21) bool {
+    return (codepoint >= 0x2000 and codepoint <= 0x206F) or
+        (codepoint >= 0x2E00 and codepoint <= 0x2E7F) or
+        (codepoint >= 0x3000 and codepoint <= 0x303F) or
+        (codepoint >= 0xFE10 and codepoint <= 0xFE1F) or
+        (codepoint >= 0xFE30 and codepoint <= 0xFE4F) or
+        (codepoint >= 0xFF00 and codepoint <= 0xFF65);
 }
 
 pub fn expandTilde(allocator: std.mem.Allocator, raw: []const u8, env: EnvLookup) ![]const u8 {

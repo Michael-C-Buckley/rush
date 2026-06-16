@@ -193,6 +193,21 @@
             .status = 0,
         },
         .{
+            .name = "case character classes match multibyte punctuation characters",
+            .script =
+            \\case … in
+            \\    [[:punct:]]) printf '<%s>\n' punct ;;
+            \\    *) printf '<%s>\n' bad ;;
+            \\esac
+            ,
+            .stdout =
+            \\<punct>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "case bracket expressions can include literal bracket characters",
             .script =
             \\case ']' in
