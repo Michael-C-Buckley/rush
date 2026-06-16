@@ -987,18 +987,24 @@ const SourceLowerer = struct {
         }
         const redirections = try self.lowerRedirections(command.redirections, .regular_command);
         if (redirections == .failure) return .{ .failure = redirections.failure };
+        var expansion_outputs: ExpansionOutputAccumulator = .{};
+        defer ExpansionOutputAccumulator.deinit(self.allocator, &expansion_outputs);
         const words = if (command.use_positionals) command_plan.ForWords.positional_parameters else blk: {
             var explicit: std.ArrayList([]const u8) = .empty;
             errdefer explicit.deinit(self.allocator);
             for (command.words) |word| {
                 const fields = switch (try self.expandFields(word.raw, target)) {
                     .failure => |trap_failure| return .{ .failure = trap_failure },
-                    .result => |fields| fields,
+                    .result => |expanded| blk_fields: {
+                        try ExpansionOutputAccumulator.appendOwned(self.allocator, &expansion_outputs, expanded.output);
+                        break :blk_fields expanded.result;
+                    },
                 };
                 try explicit.appendSlice(self.allocator, fields.fields);
             }
             break :blk command_plan.ForWords{ .explicit = try explicit.toOwnedSlice(self.allocator) };
         };
+        const expansion_output = try ExpansionOutputAccumulator.toOwned(self.allocator, &expansion_outputs);
         const name = try self.allocator.dupe(u8, command.name);
         const source_backed = self.owner.expand_aliases;
         const body_source: ?[]const u8 = if (source_backed)
@@ -1018,6 +1024,7 @@ const SourceLowerer = struct {
             .body = .{ .for_loop = .{
                 .variable_name = name,
                 .words = words,
+                .expansion_output = expansion_output,
                 .body_source = body_source,
                 .body = body,
             } },
@@ -1037,10 +1044,7 @@ const SourceLowerer = struct {
         for (command.arms, 0..) |arm, arm_index| {
             const patterns = try self.allocator.alloc([]const u8, arm.patterns.len);
             for (arm.patterns, 0..) |pattern, pattern_index| {
-                patterns[pattern_index] = switch (try self.expandCasePattern(pattern.raw, target)) {
-                    .failure => |trap_failure| return .{ .failure = trap_failure },
-                    .value => |value| value,
-                };
+                patterns[pattern_index] = try self.allocator.dupe(u8, pattern.raw);
             }
             const body_result = try self.lowerStatementListSource(arm.body, target);
             const body = switch (body_result) {
@@ -1049,19 +1053,24 @@ const SourceLowerer = struct {
             };
             arms[arm_index] = .{
                 .patterns = patterns,
+                .patterns_expanded = false,
                 .body = body,
                 .fallthrough = arm.fallthrough,
                 .test_next = arm.test_next,
             };
         }
-        const word = switch (try self.expandScalar(command.word.raw, target)) {
+        const expanded_word = switch (try self.expandScalar(command.word.raw, target)) {
             .failure => |trap_failure| return .{ .failure = trap_failure },
             .value => |value| value,
         };
         const plan: command_plan.CompoundCommandPlan = .{
             .target = target,
             .redirections = redirections.plan,
-            .body = .{ .case_clause = .{ .word = word, .arms = arms } },
+            .body = .{ .case_clause = .{
+                .word = expanded_word.value,
+                .word_expansion_output = expanded_word.output,
+                .arms = arms,
+            } },
         };
         plan.validate();
         return .{ .compound = plan };
@@ -1281,25 +1290,135 @@ const SourceLowerer = struct {
         failure: TrapActionFailure,
     };
 
-    const ExpandedFieldsLowering = union(enum) {
-        fields: redirection_plan.ExpandedFields,
+    const HereDocLowering = union(enum) {
+        data: HereDocValue,
         failure: TrapActionFailure,
     };
 
-    const HereDocLowering = union(enum) {
+    const HereDocValue = struct {
         data: []const u8,
+        output: redirection_plan.ExpansionOutput = .{},
+    };
+
+    const RedirectionFieldsValue = struct {
+        fields: redirection_plan.ExpandedFields,
+        output: redirection_plan.ExpansionOutput = .{},
+    };
+
+    const ExpandedFieldsLowering = union(enum) {
+        fields: RedirectionFieldsValue,
         failure: TrapActionFailure,
+    };
+
+    const ScalarExpansionValue = struct {
+        value: []const u8,
+        output: command_plan.ExpansionOutput = .{},
     };
 
     const ScalarExpansionLowering = union(enum) {
-        value: []const u8,
+        value: ScalarExpansionValue,
         failure: TrapActionFailure,
     };
 
-    const WordExpansionLowering = union(enum) {
+    const WordExpansionValue = struct {
         result: expand.ExpansionResult,
+        output: command_plan.ExpansionOutput = .{},
+    };
+
+    const WordExpansionLowering = union(enum) {
+        result: WordExpansionValue,
         failure: TrapActionFailure,
     };
+
+    const ExpansionOutputAccumulator = struct {
+        stderr: std.ArrayList(u8) = .empty,
+        diagnostics: std.ArrayList([]const u8) = .empty,
+
+        fn appendOwned(
+            allocator: std.mem.Allocator,
+            self: *ExpansionOutputAccumulator,
+            output: command_plan.ExpansionOutput,
+        ) !void {
+            output.validate();
+            errdefer freeExpansionOutput(allocator, output);
+            try self.stderr.appendSlice(allocator, output.stderr);
+            try self.diagnostics.appendSlice(allocator, output.diagnostics);
+            allocator.free(output.stderr);
+            allocator.free(output.diagnostics);
+        }
+
+        fn toOwned(
+            allocator: std.mem.Allocator,
+            self: *ExpansionOutputAccumulator,
+        ) !command_plan.ExpansionOutput {
+            const stderr = try self.stderr.toOwnedSlice(allocator);
+            errdefer allocator.free(stderr);
+            const diagnostics = try self.diagnostics.toOwnedSlice(allocator);
+            return .{ .stderr = stderr, .diagnostics = diagnostics };
+        }
+
+        fn deinit(allocator: std.mem.Allocator, self: *ExpansionOutputAccumulator) void {
+            self.stderr.deinit(allocator);
+            for (self.diagnostics.items) |message| allocator.free(message);
+            self.diagnostics.deinit(allocator);
+            self.* = undefined;
+        }
+    };
+
+    fn freeExpansionOutput(allocator: std.mem.Allocator, output: command_plan.ExpansionOutput) void {
+        allocator.free(output.stderr);
+        for (output.diagnostics) |message| allocator.free(message);
+        allocator.free(output.diagnostics);
+    }
+
+    fn captureExpansionOutput(
+        self: *SourceLowerer,
+        expansion_context: CommandSubstitutionExpansionContext,
+    ) !command_plan.ExpansionOutput {
+        expansion_context.validate();
+        const stderr = try self.allocator.dupe(u8, expansion_context.stderr.items);
+        errdefer self.allocator.free(stderr);
+        const diagnostics = try self.allocator.alloc([]const u8, expansion_context.diagnostics.items.len);
+        errdefer self.allocator.free(diagnostics);
+        var initialized: usize = 0;
+        errdefer for (diagnostics[0..initialized]) |message| self.allocator.free(message);
+        for (expansion_context.diagnostics.items, 0..) |diagnostic, index| {
+            diagnostics[index] = try self.allocator.dupe(u8, diagnostic.message);
+            initialized += 1;
+        }
+        const output: command_plan.ExpansionOutput = .{ .stderr = stderr, .diagnostics = diagnostics };
+        output.validate();
+        return output;
+    }
+
+    fn captureRedirectionExpansionOutput(
+        self: *SourceLowerer,
+        expansion_context: CommandSubstitutionExpansionContext,
+    ) !redirection_plan.ExpansionOutput {
+        expansion_context.validate();
+        const stderr: redirection_plan.DataSlice = .{
+            .bytes = try self.allocator.dupe(u8, expansion_context.stderr.items),
+            .ownership = .owned_by_plan,
+        };
+        errdefer self.allocator.free(stderr.bytes);
+        const diagnostics = try self.allocator.alloc(
+            redirection_plan.DataSlice,
+            expansion_context.diagnostics.items.len,
+        );
+        errdefer self.allocator.free(diagnostics);
+        var initialized: usize = 0;
+        errdefer for (diagnostics[0..initialized]) |diagnostic| self.allocator.free(diagnostic.bytes);
+        for (expansion_context.diagnostics.items, 0..) |diagnostic, index| {
+            diagnostics[index] = .{
+                .bytes = try self.allocator.dupe(u8, diagnostic.message),
+                .ownership = .owned_by_plan,
+            };
+            initialized += 1;
+        }
+        const output: redirection_plan.ExpansionOutput = .{ .stderr = stderr, .diagnostics = diagnostics };
+        output.validate();
+        return output;
+    }
 
     fn lowerRedirections(
         self: *SourceLowerer,
@@ -1347,10 +1466,10 @@ const SourceLowerer = struct {
 
         if (operator == .here_doc) {
             const body = redirection.here_doc orelse "";
-            const data = if (redirection.here_doc_quoted) try self.allocator.dupe(
+            const here_doc = if (redirection.here_doc_quoted) HereDocValue{ .data = try self.allocator.dupe(
                 u8,
                 body,
-            ) else switch (try self.expandHereDocForRedirection(
+            ) } else switch (try self.expandHereDocForRedirection(
                 body,
                 self.eval_context.target,
             )) {
@@ -1360,19 +1479,24 @@ const SourceLowerer = struct {
             return .{ .spec = .{
                 .descriptor = descriptor,
                 .operator = operator,
-                .operand = .{ .here_doc = .{ .bytes = data } },
+                .operand = .{ .here_doc = .{ .bytes = here_doc.data, .ownership = .owned_by_plan } },
+                .expansion_output = here_doc.output,
             } };
         }
 
         const target_word = redirection.target orelse return .{ .failure = try self.malformedRedirectionFailure() };
-        const fields = switch (try self.expandFieldsForRedirection(target_word.raw, self.eval_context.target)) {
+        const expanded_fields = switch (try self.expandFieldsForRedirection(
+            target_word.raw,
+            self.eval_context.target,
+        )) {
             .fields => |fields| fields,
             .failure => |trap_failure| return .{ .failure = trap_failure },
         };
         return .{ .spec = .{
             .descriptor = descriptor,
             .operator = operator,
-            .operand = .{ .fields = fields },
+            .operand = .{ .fields = expanded_fields.fields },
+            .expansion_output = expanded_fields.output,
         } };
     }
 
@@ -1417,8 +1541,15 @@ const SourceLowerer = struct {
             return .{ .failure = try cloneTrapActionFailure(self.allocator, trap_failure) };
         }
         const fields = try self.allocator.alloc([]const u8, 1);
+        errdefer {
+            self.allocator.free(field);
+            self.allocator.free(fields);
+        }
         fields[0] = field;
-        return .{ .fields = .{ .fields = fields, .ownership = .owned_by_plan } };
+        return .{ .fields = .{
+            .fields = .{ .fields = fields, .ownership = .owned_by_plan },
+            .output = try self.captureRedirectionExpansionOutput(command_substitutions.context),
+        } };
     }
 
     fn expandHereDocForRedirection(
@@ -1452,7 +1583,10 @@ const SourceLowerer = struct {
         if (command_substitutions.context.fatal_failure) |trap_failure| {
             return .{ .failure = try cloneTrapActionFailure(self.allocator, trap_failure) };
         }
-        return .{ .data = data };
+        return .{ .data = .{
+            .data = data,
+            .output = try self.captureRedirectionExpansionOutput(command_substitutions.context),
+        } };
     }
 
     fn expansionFailure(self: *SourceLowerer, expansion_failure: shell_expand.ExpansionFailure) !TrapActionFailure {
@@ -1555,19 +1689,17 @@ const SourceLowerer = struct {
         });
         defer expansion.deinit();
         const value = expansion.expandWordScalar(raw) catch |err| {
-            if (expansion.classifyError(err)) |expansion_failure| return .{
-                .value = try std.fmt.allocPrint(
-                    self.allocator,
-                    "{s}: {s}",
-                    .{ expansion_failure.name, expansion_failure.message },
-                ),
-            };
+            if (expansion.classifyError(err)) |expansion_failure|
+                return .{ .failure = try self.expansionFailure(expansion_failure) };
             return err;
         };
         if (command_substitutions.context.fatal_failure) |trap_failure| {
             return .{ .failure = try cloneTrapActionFailure(self.allocator, trap_failure) };
         }
-        return .{ .value = value };
+        return .{ .value = .{
+            .value = value,
+            .output = try self.captureExpansionOutput(command_substitutions.context),
+        } };
     }
 
     fn expandCasePattern(
@@ -1594,19 +1726,17 @@ const SourceLowerer = struct {
         });
         defer expansion.deinit();
         const value = expansion.expandCasePattern(raw) catch |err| {
-            if (expansion.classifyError(err)) |expansion_failure| return .{
-                .value = try std.fmt.allocPrint(
-                    self.allocator,
-                    "{s}: {s}",
-                    .{ expansion_failure.name, expansion_failure.message },
-                ),
-            };
+            if (expansion.classifyError(err)) |expansion_failure|
+                return .{ .failure = try self.expansionFailure(expansion_failure) };
             return err;
         };
         if (command_substitutions.context.fatal_failure) |trap_failure| {
             return .{ .failure = try cloneTrapActionFailure(self.allocator, trap_failure) };
         }
-        return .{ .value = value };
+        return .{ .value = .{
+            .value = value,
+            .output = try self.captureExpansionOutput(command_substitutions.context),
+        } };
     }
 
     fn expandFields(
@@ -1639,7 +1769,10 @@ const SourceLowerer = struct {
         if (command_substitutions.context.fatal_failure) |trap_failure| {
             return .{ .failure = try cloneTrapActionFailure(self.allocator, trap_failure) };
         }
-        return .{ .result = result };
+        return .{ .result = .{
+            .result = result,
+            .output = try self.captureExpansionOutput(command_substitutions.context),
+        } };
     }
 
     fn expandHereDoc(self: *SourceLowerer, text: []const u8, target: context.ExecutionTarget) ![]const u8 {
@@ -2322,29 +2455,24 @@ fn evaluatePlanWithInput(
     defer buffers.deinit();
     if (readonly_assignment) |name| try buffers.addBuiltinDiagnostic(name, "readonly variable");
     try appendPlanExpansionOutput(effective_plan, &buffers);
-
-    var fd_redirections = if (here_doc_input != null)
-        try redirectionsWithoutHereDocs(evaluator.allocator, effective_plan.redirections)
-    else
-        null;
-    defer if (fd_redirections) |*redirections| redirections.deinit(evaluator.allocator);
-    const redirections_to_apply = if (fd_redirections) |redirections|
-        redirections.plan
-    else
-        effective_plan.redirections;
+    try flushCurrentShellBufferedCommandOutput(&buffers, eval_context);
 
     var applied_redirections: ?redirection_plan.AppliedRedirections = null;
     defer if (applied_redirections) |*applied| {
         applied.restore();
         applied.deinit();
     };
-    if (redirections_to_apply.steps.len != 0 and
+    if (effective_plan.redirections.steps.len != 0 and
         effective_plan.class() != .external and
         effective_plan.class() != .function)
     {
-        try flushBuffersForRedirectionTargets(&buffers, redirections_to_apply);
-        const fd_port = evaluator.fd_port orelse return error.Unimplemented;
-        const apply_result = try redirections_to_apply.apply(evaluator.allocator, fd_port);
+        const apply_result = try applyRedirectionsEmittingExpansionOutput(
+            evaluator.*,
+            &buffers,
+            .{},
+            effective_plan.redirections,
+            redirectionExpansionModeForContext(eval_context),
+        );
         switch (apply_result) {
             .applied => |applied| applied_redirections = applied,
             .failure => |failure| {
@@ -2537,6 +2665,16 @@ fn flushBuffersToInheritedDescriptors(buffers: *EvaluationBuffers) EvalError!voi
     var frame = OutputFrame.initInherited(buffers);
     defer frame.deinit();
     try frame.flushPendingStandardDescriptors();
+}
+
+fn flushCurrentShellBufferedCommandOutput(
+    buffers: *EvaluationBuffers,
+    eval_context: context.EvalContext,
+) EvalError!void {
+    eval_context.validate();
+    if (eval_context.target != .current_shell) return;
+    if (eval_context.command_substitution_depth != 0) return;
+    try flushBuffersToInheritedDescriptors(buffers);
 }
 
 const OutputDestination = union(enum) {
@@ -3068,6 +3206,88 @@ fn flushBufferedRedirectionOutput(
     try frame.flushPendingDescriptor(2);
 }
 
+const RedirectionExpansionOutputMode = enum {
+    inherited,
+    command_substitution,
+};
+
+fn redirectionExpansionModeForContext(eval_context: context.EvalContext) RedirectionExpansionOutputMode {
+    eval_context.validate();
+    return if (eval_context.command_substitution_depth != 0) .command_substitution else .inherited;
+}
+
+fn redirectionExpansionModeForExternal(external_stdio: ExternalStdio) RedirectionExpansionOutputMode {
+    return switch (external_stdio) {
+        .capture => .command_substitution,
+        .capture_stdout, .inherit_output, .inherit => .inherited,
+    };
+}
+
+fn redirectionExpansionOutputFrame(
+    buffers: *EvaluationBuffers,
+    mode: RedirectionExpansionOutputMode,
+) OutputFrame {
+    return switch (mode) {
+        .inherited => OutputFrame.initInherited(buffers),
+        .command_substitution => OutputFrame.initCommandSubstitution(buffers),
+    };
+}
+
+fn applyRedirectionsEmittingExpansionOutput(
+    evaluator: Evaluator,
+    buffers: *EvaluationBuffers,
+    already_applied: redirection_plan.RedirectionPlan,
+    redirections: redirection_plan.RedirectionPlan,
+    mode: RedirectionExpansionOutputMode,
+) EvalError!redirection_plan.ApplyResult {
+    already_applied.validate();
+    redirections.validate();
+    const fd_port = evaluator.fd_port orelse return error.Unimplemented;
+
+    var frame = redirectionExpansionOutputFrame(buffers, mode);
+    defer frame.deinit();
+    if (evaluator.scoped_exec_redirections) |scoped_redirections| {
+        for (scoped_redirections.items) |scoped| {
+            try frame.applyRedirectionsFlushingRouteChanges(scoped.redirections);
+        }
+    }
+    try frame.applyRedirectionsFlushingRouteChanges(already_applied);
+
+    var applied = redirection_plan.AppliedRedirections.init(
+        buffers.allocator,
+        fd_port,
+        redirections.self_duplicate_noop,
+    );
+    errdefer {
+        applied.restore();
+        applied.deinit();
+    }
+
+    for (redirections.steps, 0..) |step, index| {
+        step.validate();
+        try appendRedirectionExpansionOutputToFrame(step.expansion_output, &frame);
+        switch (step.target()) {
+            1 => try frame.flushPendingDescriptor(1),
+            2 => try frame.flushPendingDescriptor(2),
+            else => {},
+        }
+        if (try applied.applyStep(step)) |detail| {
+            applied.restore();
+            applied.deinit();
+            return .{ .failure = .{
+                .step_index = index,
+                .target = step.target(),
+                .detail = detail,
+                .consequence = redirections.failure_consequence,
+            } };
+        }
+        try frame.routingRef().applyRedirectionStep(step);
+    }
+
+    applied.validateActive();
+    return .{ .applied = applied };
+}
+
 fn applyOutputRoutingRedirections(
     evaluator: Evaluator,
     routing: *OutputRouting,
@@ -3122,11 +3342,33 @@ fn flushBufferToDestination(
 
 fn appendPlanExpansionOutput(plan: command_plan.CommandPlan, buffers: *EvaluationBuffers) !void {
     plan.validate();
+    try appendExpansionOutput(
+        .{ .stderr = plan.expansion_stderr, .diagnostics = plan.expansion_diagnostics },
+        buffers,
+    );
+}
+
+fn appendExpansionOutput(output: command_plan.ExpansionOutput, buffers: *EvaluationBuffers) !void {
+    output.validate();
     var frame = OutputFrame.initOutcomeCapture(buffers);
     defer frame.deinit();
-    if (plan.expansion_stderr.len != 0) try frame.write(2, plan.expansion_stderr);
-    for (plan.expansion_diagnostics) |message| {
+    if (output.stderr.len != 0) try frame.write(2, output.stderr);
+    for (output.diagnostics) |message| {
         try buffers.diagnostics.append(buffers.allocator, try buffers.allocator.dupe(u8, message));
+    }
+}
+
+fn appendRedirectionExpansionOutputToFrame(
+    output: redirection_plan.ExpansionOutput,
+    frame: *OutputFrame,
+) !void {
+    output.validate();
+    if (output.stderr.bytes.len != 0) try frame.write(2, output.stderr.bytes);
+    for (output.diagnostics) |diagnostic| {
+        try frame.buffers.diagnostics.append(
+            frame.buffers.allocator,
+            try frame.buffers.allocator.dupe(u8, diagnostic.bytes),
+        );
     }
 }
 
@@ -3179,8 +3421,13 @@ fn evaluateCompoundPlanWithInput(
         applied.deinit();
     };
     if (hasCompoundRedirections(plan)) {
-        const fd_port = evaluator.fd_port orelse return error.Unimplemented;
-        const apply_result = try plan.redirections.apply(evaluator.allocator, fd_port);
+        const apply_result = try applyRedirectionsEmittingExpansionOutput(
+            evaluator.*,
+            &buffers,
+            .{},
+            plan.redirections,
+            redirectionExpansionModeForContext(eval_context),
+        );
         switch (apply_result) {
             .applied => |applied| applied_redirections = applied,
             .failure => |failure| {
@@ -3288,7 +3535,8 @@ pub fn evaluatePipelinePlan(
     if (plan.strategy == .single_stage) {
         state_delta = try evaluateSingleStagePipeline(evaluator, shell_state, eval_context, plan, statuses, &buffers);
     } else switch (plan.strategy) {
-        .external_only_real => if (capturedExternalMode(evaluator.external_stdio) != null)
+        .external_only_real => if (capturedExternalMode(evaluator.external_stdio) != null or
+            pipelineHasExpansionOutput(plan))
             try evaluateFallbackPipeline(evaluator, shell_state.*, eval_context, plan, statuses, &buffers)
         else
             try evaluateExternalOnlyRealPipeline(evaluator, shell_state.*, plan, statuses, &buffers),
@@ -4330,8 +4578,13 @@ fn applySingleStageBackgroundRedirections(
         },
     };
 
-    const fd_port = evaluator.fd_port orelse return error.Unimplemented;
-    const apply_result = try redirections.apply(evaluator.allocator, fd_port);
+    const apply_result = try applyRedirectionsEmittingExpansionOutput(
+        evaluator.*,
+        buffers,
+        .{},
+        redirections,
+        .inherited,
+    );
     switch (apply_result) {
         .applied => |applied| {
             applied_redirections.* = applied;
@@ -4394,7 +4647,6 @@ fn startBackgroundSingleExternal(
     shell_state.validate();
     plan.validate();
     std.debug.assert(plan.class() == .external);
-    const fd_port = evaluator.fd_port orelse return error.Unimplemented;
     const process_port = evaluator.process_port orelse return error.Unimplemented;
     const resolution = switch (plan.classification) {
         .external => |external| external,
@@ -4410,7 +4662,13 @@ fn startBackgroundSingleExternal(
         applied.deinit();
     };
     if (hasRedirections(plan)) {
-        const apply_result = try plan.redirections.apply(evaluator.allocator, fd_port);
+        const apply_result = try applyRedirectionsEmittingExpansionOutput(
+            evaluator.*,
+            buffers,
+            .{},
+            plan.redirections,
+            .inherited,
+        );
         switch (apply_result) {
             .applied => |applied| applied_redirections = applied,
             .failure => |failure| {
@@ -4560,7 +4818,8 @@ fn evaluateFallbackPipeline(
     std.debug.assert(
         plan.strategy == .semantic_in_memory or
             plan.strategy == .mixed_in_memory or
-            (plan.strategy == .external_only_real and capturedExternalMode(evaluator.external_stdio) != null),
+            (plan.strategy == .external_only_real and
+                (capturedExternalMode(evaluator.external_stdio) != null or pipelineHasExpansionOutput(plan))),
     );
     std.debug.assert(plan.stages.len > 1);
 
@@ -4601,6 +4860,7 @@ fn evaluateFallbackPipeline(
         const stage_control_flow = stage_outcome.effectiveControlFlow();
         statuses[index] = stage_control_flow.status(stage_outcome.status);
         try appendPipelineStageBuffers(buffers, stage_outcome, PipelineStageOutputRoute.forStage(is_last_stage));
+        try flushCurrentShellBufferedCommandOutput(buffers, eval_context);
         stage_outcome.applyToShellState(&stage_state, .{}) catch |err| switch (err) {
             error.OutOfMemory => return error.OutOfMemory,
             error.ReadonlyVariable => unreachable,
@@ -4645,6 +4905,21 @@ fn pipelineStdoutInherits(external_stdio: ExternalStdio) bool {
         .inherit, .inherit_output => true,
         .capture, .capture_stdout => false,
     };
+}
+
+fn pipelineHasExpansionOutput(plan: pipeline_plan.PipelinePlan) bool {
+    plan.validate();
+    for (plan.stages) |stage| {
+        switch (stage) {
+            .simple => |simple| if (simple.expansion_stderr.len != 0 or
+                simple.expansion_diagnostics.len != 0)
+            {
+                return true;
+            },
+            .compound => {},
+        }
+    }
+    return false;
 }
 
 fn descriptorIsOpen(descriptor: runtime.fd.Descriptor) bool {
@@ -5001,6 +5276,7 @@ fn evaluateExternalPipelineStage(
 
     var stage_buffers = EvaluationBuffers.init(evaluator.allocator, input);
     defer stage_buffers.deinit();
+    try appendPlanExpansionOutput(plan, &stage_buffers);
 
     const status = try runExternalWithPipelineInput(evaluator, shell_state.*, plan, resolution, &stage_buffers);
     state_delta.setLastStatus(status);
@@ -5476,6 +5752,7 @@ fn evaluateStatementList(
                 }
                 if (child_control_flow == .normal) result = trap_result;
             }
+            try flushCurrentShellBufferedCommandOutput(buffers, eval_context);
             if (child_control_flow != .normal) break;
         }
         return result;
@@ -5520,6 +5797,7 @@ fn evaluateStatementList(
             }
             if (child_control_flow == .normal) result = trap_result;
         }
+        try flushCurrentShellBufferedCommandOutput(buffers, eval_context);
         if (bashAssignmentErrorAbortsSourceLine(eval_context, entry.plan, child_outcome)) {
             abort_bash_line = statementSourceLine(entry.plan);
         }
@@ -5613,7 +5891,7 @@ fn flushBuffersForStatementRedirections(
             eval_context,
             compound.redirections,
         ),
-        .pipeline => {},
+        .pipeline => try flushCurrentShellBufferedCommandOutput(buffers, eval_context),
         .source => |source| try flushBuffersForSourceRedirectionTargets(buffers, eval_context, source),
         .ir_source => |source| try flushBuffersForIrSourceRedirectionTargets(buffers, eval_context, source),
     }
@@ -5813,6 +6091,7 @@ fn evaluateAndOrList(
             }
             if (child_control_flow == .normal) result = trap_result;
         }
+        try flushCurrentShellBufferedCommandOutput(buffers, eval_context);
         if (bashAssignmentErrorOutcomeAbortsSourceLine(eval_context, child_outcome)) break;
         if (child_control_flow != .normal) break;
     }
@@ -5922,6 +6201,7 @@ fn evaluateLoop(
             try evaluateStatementListSource(evaluator, shell_state, loop_context, source, buffers)
         else
             try evaluateStatementList(evaluator, shell_state, loop_context, loop.body, buffers);
+        try flushCurrentShellBufferedCommandOutput(buffers, eval_context);
         switch (consumeLoopControl(body.control_flow)) {
             .stop => return normalEvaluation(0),
             .repeat => {
@@ -5945,6 +6225,8 @@ fn evaluateForLoop(
     buffers: *EvaluationBuffers,
 ) EvalError!SimpleEvalResult {
     for_plan.validate();
+    try appendExpansionOutput(for_plan.expansion_output, buffers);
+    try flushCurrentShellBufferedCommandOutput(buffers, eval_context);
     const loop_context = eval_context.enterLoop();
     var positional_words: ?[][]const u8 = null;
     defer if (positional_words) |words| freeForLoopWords(evaluator.allocator, words);
@@ -5974,6 +6256,7 @@ fn evaluateForLoop(
             try evaluateStatementListSource(evaluator, shell_state, loop_context, source, buffers)
         else
             try evaluateStatementList(evaluator, shell_state, loop_context, for_plan.body, buffers);
+        try flushCurrentShellBufferedCommandOutput(buffers, eval_context);
         switch (consumeLoopControl(body.control_flow)) {
             .stop => return normalEvaluation(0),
             .repeat => {
@@ -6131,6 +6414,70 @@ fn evaluateTrapActionBodyWithInput(
     };
 }
 
+const CasePatternEvaluation = union(enum) {
+    matched: bool,
+    failure: TrapActionFailure,
+};
+
+fn evaluateCasePattern(
+    evaluator: *Evaluator,
+    shell_state: *state.ShellState,
+    eval_context: context.EvalContext,
+    raw_pattern: []const u8,
+    case_word: []const u8,
+    buffers: *EvaluationBuffers,
+) EvalError!CasePatternEvaluation {
+    shell_state.validate();
+    eval_context.validate();
+    std.debug.assert(std.mem.findScalar(u8, raw_pattern, 0) == null);
+    std.debug.assert(std.mem.findScalar(u8, case_word, 0) == null);
+
+    const arena = try evaluator.allocator.create(std.heap.ArenaAllocator);
+    defer evaluator.allocator.destroy(arena);
+    arena.* = std.heap.ArenaAllocator.init(evaluator.allocator);
+    defer arena.deinit();
+
+    var parser_resolver = ParserBackedSourceResolver.init(evaluator);
+    parser_resolver.features = evaluator.features;
+    parser_resolver.arg_zero = evaluator.arg_zero;
+    parser_resolver.expand_aliases = shell_state.shopts.enabled(.expand_aliases);
+    parser_resolver.alias_state = evaluator.alias_state;
+
+    var lowerer: SourceLowerer = .{
+        .allocator = arena.allocator(),
+        .owner = &parser_resolver,
+        .shell_state = shell_state,
+        .eval_context = eval_context,
+        .signal = null,
+        .local_functions = .empty,
+    };
+
+    const expanded_pattern = lowerer.expandCasePattern(raw_pattern, eval_context.target) catch |err| switch (err) {
+        error.OutOfMemory => return error.OutOfMemory,
+        else => return error.Unimplemented,
+    };
+    const value = switch (expanded_pattern) {
+        .failure => |failure| return .{ .failure = try cloneTrapActionFailure(evaluator.allocator, failure) },
+        .value => |expanded| expanded,
+    };
+    try appendExpansionOutput(value.output, buffers);
+    try flushCurrentShellBufferedCommandOutput(buffers, eval_context);
+    return .{ .matched = casePatternMatches(value.value, case_word) };
+}
+
+fn simpleResultFromTrapActionFailure(
+    evaluator: *Evaluator,
+    shell_state: state.ShellState,
+    eval_context: context.EvalContext,
+    failure: TrapActionFailure,
+    buffers: *EvaluationBuffers,
+) EvalError!SimpleEvalResult {
+    var failure_outcome = try trapActionFailureOutcome(evaluator.allocator, eval_context, failure, shell_state);
+    defer failure_outcome.deinit();
+    try appendOutcomeBuffers(buffers, failure_outcome);
+    return .{ .status = failure_outcome.status, .control_flow = failure_outcome.effectiveControlFlow() };
+}
+
 fn evaluateCaseClause(
     evaluator: *Evaluator,
     shell_state: *state.ShellState,
@@ -6139,15 +6486,48 @@ fn evaluateCaseClause(
     buffers: *EvaluationBuffers,
 ) EvalError!SimpleEvalResult {
     case_plan.validate();
+    try appendExpansionOutput(case_plan.word_expansion_output, buffers);
+    try flushCurrentShellBufferedCommandOutput(buffers, eval_context);
     var matched = false;
     var status: outcome.ExitStatus = 0;
     var control_flow: outcome.ControlFlow = .normal;
     for (case_plan.arms) |arm| {
         if (!matched) {
-            for (arm.patterns) |pattern| {
-                if (casePatternMatches(pattern, case_plan.word)) {
-                    matched = true;
-                    break;
+            for (arm.patterns, 0..) |pattern, pattern_index| {
+                if (arm.patterns_expanded) {
+                    if (arm.pattern_expansion_outputs.len != 0) {
+                        try appendExpansionOutput(arm.pattern_expansion_outputs[pattern_index], buffers);
+                        try flushCurrentShellBufferedCommandOutput(buffers, eval_context);
+                    }
+                    if (casePatternMatches(pattern, case_plan.word)) {
+                        matched = true;
+                        break;
+                    }
+                } else {
+                    const pattern_result = try evaluateCasePattern(
+                        evaluator,
+                        shell_state,
+                        eval_context,
+                        pattern,
+                        case_plan.word,
+                        buffers,
+                    );
+                    switch (pattern_result) {
+                        .matched => |pattern_matched| if (pattern_matched) {
+                            matched = true;
+                            break;
+                        },
+                        .failure => |failure| {
+                            defer evaluator.allocator.free(failure.message);
+                            return simpleResultFromTrapActionFailure(
+                                evaluator,
+                                shell_state.*,
+                                eval_context,
+                                failure,
+                                buffers,
+                            );
+                        },
+                    }
                 }
             }
         }
@@ -6334,8 +6714,13 @@ fn evaluateFunction(
         applied.deinit();
     };
     if (hasRedirections(plan)) {
-        const fd_port = evaluator.fd_port orelse return error.Unimplemented;
-        const apply_result = try plan.redirections.apply(evaluator.allocator, fd_port);
+        const apply_result = try applyRedirectionsEmittingExpansionOutput(
+            evaluator.*,
+            buffers,
+            .{},
+            plan.redirections,
+            redirectionExpansionModeForContext(eval_context),
+        );
         switch (apply_result) {
             .applied => |applied| call_redirections = applied,
             .failure => |failure| {
@@ -6351,8 +6736,13 @@ fn evaluateFunction(
         applied.deinit();
     };
     if (definition.redirections.steps.len != 0 or definition.redirections.rollback_steps.len != 0) {
-        const fd_port = evaluator.fd_port orelse return error.Unimplemented;
-        const apply_result = try definition.redirections.apply(evaluator.allocator, fd_port);
+        const apply_result = try applyRedirectionsEmittingExpansionOutput(
+            evaluator.*,
+            buffers,
+            plan.redirections,
+            definition.redirections,
+            redirectionExpansionModeForContext(eval_context),
+        );
         switch (apply_result) {
             .applied => |applied| definition_redirections = applied,
             .failure => |failure| {
@@ -6805,16 +7195,20 @@ fn evaluateExternalWithProcessEnvironment(
     }
 
     if (semanticHereDocInput(plan.redirections)) |stdin| {
-        var fd_redirections = try redirectionsWithoutHereDocs(evaluator.allocator, plan.redirections);
-        defer fd_redirections.deinit(evaluator.allocator);
-
         var applied_redirections: ?redirection_plan.AppliedRedirections = null;
         defer if (applied_redirections) |*applied| {
             applied.restore();
             applied.deinit();
         };
-        if (fd_redirections.plan.steps.len != 0) {
-            const apply_result = try fd_redirections.plan.apply(evaluator.allocator, fd_port);
+        if (capturedExternalMode(evaluator.external_stdio) == null) try flushBuffersToInheritedDescriptors(buffers);
+        if (plan.redirections.steps.len != 0) {
+            const apply_result = try applyRedirectionsEmittingExpansionOutput(
+                evaluator.*,
+                buffers,
+                .{},
+                plan.redirections,
+                redirectionExpansionModeForExternal(evaluator.external_stdio),
+            );
             switch (apply_result) {
                 .applied => |applied| applied_redirections = applied,
                 .failure => |failure| {
@@ -6880,7 +7274,13 @@ fn evaluateExternalWithProcessEnvironment(
         applied.deinit();
     };
     if (hasRedirections(plan)) {
-        const apply_result = try plan.redirections.apply(evaluator.allocator, fd_port);
+        const apply_result = try applyRedirectionsEmittingExpansionOutput(
+            evaluator.*,
+            buffers,
+            .{},
+            plan.redirections,
+            redirectionExpansionModeForExternal(evaluator.external_stdio),
+        );
         switch (apply_result) {
             .applied => |applied| applied_redirections = applied,
             .failure => |failure| {
@@ -6936,6 +7336,7 @@ fn evaluateCapturedExternal(
     plan.validate();
     std.debug.assert(plan.argv.len != 0);
     std.debug.assert(invocation.argv.len != 0);
+    _ = fd_port;
 
     var applied_redirections: ?redirection_plan.AppliedRedirections = null;
     defer if (applied_redirections) |*applied| {
@@ -6943,7 +7344,16 @@ fn evaluateCapturedExternal(
         applied.deinit();
     };
     if (hasRedirections(plan)) {
-        const apply_result = try plan.redirections.apply(evaluator.allocator, fd_port);
+        const apply_result = try applyRedirectionsEmittingExpansionOutput(
+            evaluator.*,
+            buffers,
+            .{},
+            plan.redirections,
+            switch (capture_mode) {
+                .stdout => .inherited,
+                .stdout_and_stderr => .command_substitution,
+            },
+        );
         switch (apply_result) {
             .applied => |applied| applied_redirections = applied,
             .failure => |failure| {
@@ -7026,29 +7436,25 @@ fn runExternalWithPipelineInputWithProcessEnvironment(
     const shell_state_before = shellStateMutationFingerprint(shell_state);
     defer std.debug.assert(shellStateMutationFingerprint(shell_state) == shell_state_before);
 
-    const fd_port = evaluator.fd_port orelse return error.Unimplemented;
     const process_port = evaluator.process_port orelse return error.Unimplemented;
 
     var invocation = try ExternalInvocation.init(evaluator.allocator, shell_state, plan, resolution, process_overlay);
     defer invocation.deinit(evaluator.allocator);
-
-    var fd_redirections = if (semanticHereDocInput(plan.redirections) != null)
-        try redirectionsWithoutHereDocs(evaluator.allocator, plan.redirections)
-    else
-        null;
-    defer if (fd_redirections) |*redirections| redirections.deinit(evaluator.allocator);
-    const redirections_to_apply = if (fd_redirections) |redirections|
-        redirections.plan
-    else
-        plan.redirections;
 
     var applied_redirections: ?redirection_plan.AppliedRedirections = null;
     defer if (applied_redirections) |*applied| {
         applied.restore();
         applied.deinit();
     };
-    if (redirections_to_apply.steps.len != 0 or redirections_to_apply.rollback_steps.len != 0) {
-        const apply_result = try redirections_to_apply.apply(evaluator.allocator, fd_port);
+    if (capturedExternalMode(evaluator.external_stdio) == null) try flushBuffersToInheritedDescriptors(buffers);
+    if (plan.redirections.steps.len != 0 or plan.redirections.rollback_steps.len != 0) {
+        const apply_result = try applyRedirectionsEmittingExpansionOutput(
+            evaluator.*,
+            buffers,
+            .{},
+            plan.redirections,
+            redirectionExpansionModeForExternal(evaluator.external_stdio),
+        );
         switch (apply_result) {
             .applied => |applied| applied_redirections = applied,
             .failure => |failure| {
@@ -7156,7 +7562,7 @@ fn redirectionsWithoutHereDocs(
     var index: usize = 0;
     for (plan.steps) |step| {
         if (step.effect == .here_doc) continue;
-        steps[index] = .{ .ordinal = index, .effect = step.effect };
+        steps[index] = .{ .ordinal = index, .effect = step.effect, .expansion_output = step.expansion_output };
         rollback_steps[index] = .{ .ordinal = index, .target = step.target() };
         index += 1;
     }

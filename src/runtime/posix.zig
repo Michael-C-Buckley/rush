@@ -521,18 +521,34 @@ fn sendSignal(context: *anyopaque, request: runtime_signal.SendRequest) runtime_
 }
 
 fn runtimeSignalHandler(posix_signal: std.posix.SIG) callconv(.c) void {
-    runtime_signal.recordCaughtSignal(@intCast(@intFromEnum(posix_signal)));
+    const runtime_number = runtimeNumberFromPosixSignal(posix_signal) orelse return;
+    runtime_signal.recordCaughtSignal(runtime_number);
 }
 
 fn posixSignalFromRuntimeNumber(number: runtime_signal.Number) ?std.posix.SIG {
     runtime_signal.assertValidNumber(number);
-    inline for (supported_runtime_signals) |posix_signal| {
-        if (number == @as(runtime_signal.Number, @intCast(@intFromEnum(posix_signal)))) return posix_signal;
-    }
-    return null;
+    return switch (number) {
+        1 => .HUP,
+        2 => .INT,
+        3 => .QUIT,
+        10 => .USR1,
+        12 => .USR2,
+        15 => .TERM,
+        else => null,
+    };
 }
 
-const supported_runtime_signals = [_]std.posix.SIG{ .HUP, .INT, .QUIT, .TERM, .USR1, .USR2 };
+fn runtimeNumberFromPosixSignal(posix_signal: std.posix.SIG) ?runtime_signal.Number {
+    return switch (posix_signal) {
+        .HUP => 1,
+        .INT => 2,
+        .QUIT => 3,
+        .USR1 => 10,
+        .USR2 => 12,
+        .TERM => 15,
+        else => null,
+    };
+}
 
 fn terminalGetProcessGroup(terminal: fd.Descriptor) process.JobControlError!std.posix.pid_t {
     fd.assertValidDescriptor(terminal);
@@ -1013,16 +1029,27 @@ test "runtime posix adapter exposes signal configure and poll port" {
     var previous: std.posix.Sigaction = undefined;
     std.posix.sigaction(.TERM, &action, &previous);
     defer std.posix.sigaction(.TERM, &previous, null);
+    var previous_usr1: std.posix.Sigaction = undefined;
+    std.posix.sigaction(.USR1, &action, &previous_usr1);
+    defer std.posix.sigaction(.USR1, &previous_usr1, null);
 
     var adapter = Adapter.init(std.testing.io);
     const signal_port = adapter.signalPort();
-    const term_number: runtime_signal.Number = @intCast(@intFromEnum(std.posix.SIG.TERM));
+    const term_number: runtime_signal.Number = 15;
     try signal_port.configure(.{ .signal = term_number, .disposition = .caught });
 
     runtimeSignalHandler(.TERM);
 
     const event = (try signal_port.poll()).?;
     try std.testing.expectEqual(term_number, event.signal);
+    try std.testing.expectEqual(@as(?runtime_signal.Event, null), try signal_port.poll());
+
+    const usr1_number: runtime_signal.Number = 10;
+    try signal_port.configure(.{ .signal = usr1_number, .disposition = .caught });
+    runtimeSignalHandler(.USR1);
+
+    const usr1_event = (try signal_port.poll()).?;
+    try std.testing.expectEqual(usr1_number, usr1_event.signal);
     try std.testing.expectEqual(@as(?runtime_signal.Event, null), try signal_port.poll());
 }
 

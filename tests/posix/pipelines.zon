@@ -48,6 +48,34 @@
             .status = 0,
         },
         .{
+            .name = "external pipeline stage preserves argv substitution side output",
+            .script =
+            \\exec 2>&1
+            \\printf 'x\n' | sed "$(printf 's/x/y/'; printf 'arg-err\n' >&2)"
+            ,
+            .stdout =
+            \\arg-err
+            \\y
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "semantic pipeline stage preserves pattern substitution side output order",
+            .script =
+            \\exec 2>&1
+            \\case y in "$(printf 'pattern\n' >&2; printf y)") printf 'body\n' ;; esac | cat
+            ,
+            .stdout =
+            \\pattern
+            \\body
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "pipeline supplies input to exec replacement command",
             .script =
             \\printf hi | exec sh -c 'cat; exit 6'

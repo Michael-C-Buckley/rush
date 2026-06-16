@@ -683,6 +683,68 @@
             .status = 0,
         },
         .{
+            .name = "case command does not run command substitutions in patterns after the first match",
+            .script =
+            \\rm -f marker
+            \\case x in
+            \\    x) printf 'match\n' ;;
+            \\    "$(touch marker; printf y)") printf 'bad\n' ;;
+            \\esac
+            \\test ! -e marker && printf 'no-marker\n'
+            ,
+            .stdout =
+            \\match
+            \\no-marker
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "case command expands tested pattern command substitutions in order",
+            .script =
+            \\exec 2>&1
+            \\case y in
+            \\    x) printf 'bad\n' ;;
+            \\    "$(printf 'pattern\n' >&2; printf y)") printf 'body\n' ;;
+            \\esac
+            ,
+            .stdout =
+            \\pattern
+            \\body
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "case command word expansion error exits before matching",
+            .script =
+            \\unset missing
+            \\case ${missing:?need it} in
+            \\    *) printf 'bad\n' ;;
+            \\esac
+            \\printf 'after\n'
+            ,
+            .stdout = "",
+            .stderr_match = .nonempty,
+            .status_match = .nonzero,
+        },
+        .{
+            .name = "case command tested pattern expansion error exits before body",
+            .script =
+            \\unset missing
+            \\case y in
+            \\    x) printf 'bad-x\n' ;;
+            \\    ${missing:?need it}) printf 'bad-missing\n' ;;
+            \\esac
+            \\printf 'after\n'
+            ,
+            .stdout = "",
+            .stderr_match = .nonempty,
+            .status_match = .nonzero,
+        },
+        .{
             .name = "case command does not expand commands in an unselected clause",
             .script =
             \\case a in
@@ -1071,6 +1133,26 @@
             .status = 0,
         },
         .{
+            .name = "while command preserves body output before next condition output",
+            .script =
+            \\exec 2>&1
+            \\n=0
+            \\while case y in "$(printf 'condition\n' >&2; printf y)") test "$n" -lt 1 ;; esac
+            \\do
+            \\    n=1
+            \\    printf 'body\n'
+            \\done
+            ,
+            .stdout =
+            \\condition
+            \\body
+            \\condition
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "while command status is the last completed body status",
             .script =
             \\i=0
@@ -1250,6 +1332,26 @@
             \\body:2
             \\body:3
             \\after:4
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "until command preserves body output before next condition output",
+            .script =
+            \\exec 2>&1
+            \\n=0
+            \\until case y in "$(printf 'condition\n' >&2; printf y)") test "$n" -ge 1 ;; esac
+            \\do
+            \\    n=1
+            \\    printf 'body\n'
+            \\done
+            ,
+            .stdout =
+            \\condition
+            \\body
+            \\condition
             \\
             ,
             .stderr = "",

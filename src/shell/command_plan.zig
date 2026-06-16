@@ -141,9 +141,19 @@ pub const ForWords = union(enum) {
     }
 };
 
+pub const ExpansionOutput = struct {
+    stderr: []const u8 = "",
+    diagnostics: []const []const u8 = &.{},
+
+    pub fn validate(self: ExpansionOutput) void {
+        validateExpansionOutput(self.stderr, self.diagnostics);
+    }
+};
+
 pub const ForPlan = struct {
     variable_name: []const u8,
     words: ForWords = .positional_parameters,
+    expansion_output: ExpansionOutput = .{},
     /// Parser-backed loop body source. When present, the loop body is lowered
     /// for each iteration after the loop variable has been assigned.
     body_source: ?[]const u8 = null,
@@ -152,6 +162,7 @@ pub const ForPlan = struct {
     pub fn validate(self: ForPlan) void {
         state.assertValidVariableName(self.variable_name);
         self.words.validate();
+        self.expansion_output.validate();
         if (self.body_source) |source| std.debug.assert(std.mem.indexOfScalar(u8, source, 0) == null);
         self.body.validate();
     }
@@ -159,24 +170,32 @@ pub const ForPlan = struct {
 
 pub const CaseArm = struct {
     patterns: []const []const u8,
+    patterns_expanded: bool = true,
+    pattern_expansion_outputs: []const ExpansionOutput = &.{},
     body: StatementList,
     fallthrough: bool = false,
     test_next: bool = false,
 
     pub fn validate(self: CaseArm) void {
         std.debug.assert(self.patterns.len != 0);
+        if (!self.patterns_expanded) std.debug.assert(self.pattern_expansion_outputs.len == 0);
+        std.debug.assert(self.pattern_expansion_outputs.len == 0 or
+            self.pattern_expansion_outputs.len == self.patterns.len);
         std.debug.assert(!(self.fallthrough and self.test_next));
         for (self.patterns) |pattern| std.debug.assert(std.mem.indexOfScalar(u8, pattern, 0) == null);
+        for (self.pattern_expansion_outputs) |expansion_output| expansion_output.validate();
         self.body.validate();
     }
 };
 
 pub const CasePlan = struct {
     word: []const u8,
+    word_expansion_output: ExpansionOutput = .{},
     arms: []const CaseArm,
 
     pub fn validate(self: CasePlan) void {
         std.debug.assert(std.mem.indexOfScalar(u8, self.word, 0) == null);
+        self.word_expansion_output.validate();
         for (self.arms) |arm| arm.validate();
     }
 };
@@ -802,6 +821,14 @@ fn validateRedirections(redirections: redirection_plan.RedirectionPlan) void {
     redirections.validate();
 }
 
+fn validateExpansionOutput(stderr: []const u8, diagnostics: []const []const u8) void {
+    std.debug.assert(std.mem.indexOfScalar(u8, stderr, 0) == null);
+    for (diagnostics) |message| {
+        std.debug.assert(message.len != 0);
+        std.debug.assert(std.mem.indexOfScalar(u8, message, 0) == null);
+    }
+}
+
 fn assertUniqueFunctionNames(functions: []const FunctionDefinition) void {
     for (functions, 0..) |left, left_index| {
         left.validate();
@@ -1271,16 +1298,25 @@ fn cloneForPlanWithMode(
     errdefer allocator.free(variable_name);
     const words = try cloneForWords(allocator, plan.words);
     errdefer freeForWords(allocator, words);
+    const expansion_output = try cloneExpansionOutput(allocator, plan.expansion_output);
+    errdefer freeExpansionOutput(allocator, expansion_output);
     const body_source = if (plan.body_source) |source| try allocator.dupe(u8, source) else null;
     errdefer if (body_source) |source| allocator.free(source);
     const body = try cloneStatementListWithMode(allocator, plan.body, mode);
     errdefer freeStatementList(allocator, body);
-    return .{ .variable_name = variable_name, .words = words, .body_source = body_source, .body = body };
+    return .{
+        .variable_name = variable_name,
+        .words = words,
+        .expansion_output = expansion_output,
+        .body_source = body_source,
+        .body = body,
+    };
 }
 
 fn freeForPlan(allocator: std.mem.Allocator, plan: ForPlan) void {
     allocator.free(plan.variable_name);
     freeForWords(allocator, plan.words);
+    freeExpansionOutput(allocator, plan.expansion_output);
     if (plan.body_source) |source| allocator.free(source);
     freeStatementList(allocator, plan.body);
 }
@@ -1325,6 +1361,8 @@ fn cloneCasePlanWithMode(
     plan.validate();
     const word = try allocator.dupe(u8, plan.word);
     errdefer allocator.free(word);
+    const word_expansion_output = try cloneExpansionOutput(allocator, plan.word_expansion_output);
+    errdefer freeExpansionOutput(allocator, word_expansion_output);
     const arms = try allocator.alloc(CaseArm, plan.arms.len);
     errdefer allocator.free(arms);
     var initialized: usize = 0;
@@ -1333,13 +1371,35 @@ fn cloneCasePlanWithMode(
         arms[index] = try cloneCaseArmWithMode(allocator, arm, mode);
         initialized += 1;
     }
-    return .{ .word = word, .arms = arms };
+    return .{
+        .word = word,
+        .word_expansion_output = word_expansion_output,
+        .arms = arms,
+    };
 }
 
 fn freeCasePlan(allocator: std.mem.Allocator, plan: CasePlan) void {
     allocator.free(plan.word);
+    freeExpansionOutput(allocator, plan.word_expansion_output);
     for (plan.arms) |arm| freeCaseArm(allocator, arm);
     allocator.free(plan.arms);
+}
+
+fn cloneExpansionOutput(
+    allocator: std.mem.Allocator,
+    output: ExpansionOutput,
+) std.mem.Allocator.Error!ExpansionOutput {
+    output.validate();
+    const stderr = try allocator.dupe(u8, output.stderr);
+    errdefer allocator.free(stderr);
+    const diagnostics = try cloneArgv(allocator, output.diagnostics);
+    errdefer freeArgv(allocator, diagnostics);
+    return .{ .stderr = stderr, .diagnostics = diagnostics };
+}
+
+fn freeExpansionOutput(allocator: std.mem.Allocator, output: ExpansionOutput) void {
+    allocator.free(output.stderr);
+    freeArgv(allocator, output.diagnostics);
 }
 
 fn cloneCaseArm(allocator: std.mem.Allocator, arm: CaseArm) std.mem.Allocator.Error!CaseArm {
@@ -1360,15 +1420,45 @@ fn cloneCaseArmWithMode(
         patterns[index] = try allocator.dupe(u8, pattern);
         initialized += 1;
     }
+    const pattern_expansion_outputs = try clonePatternExpansionOutputs(allocator, arm.pattern_expansion_outputs);
+    errdefer freePatternExpansionOutputs(allocator, pattern_expansion_outputs);
     const body = try cloneStatementListWithMode(allocator, arm.body, mode);
     errdefer freeStatementList(allocator, body);
-    return .{ .patterns = patterns, .body = body, .fallthrough = arm.fallthrough, .test_next = arm.test_next };
+    return .{
+        .patterns = patterns,
+        .patterns_expanded = arm.patterns_expanded,
+        .pattern_expansion_outputs = pattern_expansion_outputs,
+        .body = body,
+        .fallthrough = arm.fallthrough,
+        .test_next = arm.test_next,
+    };
 }
 
 fn freeCaseArm(allocator: std.mem.Allocator, arm: CaseArm) void {
     for (arm.patterns) |pattern| allocator.free(pattern);
     allocator.free(arm.patterns);
+    freePatternExpansionOutputs(allocator, arm.pattern_expansion_outputs);
     freeStatementList(allocator, arm.body);
+}
+
+fn clonePatternExpansionOutputs(
+    allocator: std.mem.Allocator,
+    outputs: []const ExpansionOutput,
+) std.mem.Allocator.Error![]const ExpansionOutput {
+    const owned = try allocator.alloc(ExpansionOutput, outputs.len);
+    errdefer allocator.free(owned);
+    var initialized: usize = 0;
+    errdefer for (owned[0..initialized]) |output| freeExpansionOutput(allocator, output);
+    for (outputs, 0..) |output, index| {
+        owned[index] = try cloneExpansionOutput(allocator, output);
+        initialized += 1;
+    }
+    return owned;
+}
+
+fn freePatternExpansionOutputs(allocator: std.mem.Allocator, outputs: []const ExpansionOutput) void {
+    for (outputs) |output| freeExpansionOutput(allocator, output);
+    allocator.free(outputs);
 }
 
 fn clonePipelinePlan(allocator: std.mem.Allocator, plan: PipelinePlan) std.mem.Allocator.Error!PipelinePlan {

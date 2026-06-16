@@ -171,6 +171,21 @@
             .status = 0,
         },
         .{
+            .name = "redirection operand command substitution stderr precedes later redirections",
+            .script =
+            \\exec 2>&1
+            \\: >$(printf out; printf 'err\n' >&2) 2>later
+            \\printf 'later=<%s>\n' "$(cat later)"
+            ,
+            .stdout =
+            \\err
+            \\later=<>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "exec redirection order preserves duplicated stderr route before stdout redirect",
             .script =
             \\( exec 2>&1 >out; printf 'err\n' >&2 )
@@ -547,6 +562,56 @@
             \\<value>
             \\<command>
             \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "here document command substitution stderr precedes body output",
+            .script =
+            \\exec 2>&1
+            \\cat <<EOF
+            \\$(printf hi; printf err >&2)
+            \\EOF
+            ,
+            .stdout =
+            \\errhi
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "here document expansion stderr sees earlier redirections",
+            .script =
+            \\cat 2>err <<EOF
+            \\$(printf hi; printf err >&2)
+            \\EOF
+            \\printf '\nERR:'
+            \\cat err
+            ,
+            .stdout =
+            \\hi
+            \\
+            \\ERR:err
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "here document expansion stderr precedes later redirections",
+            .script =
+            \\exec 2>&1
+            \\cat <<EOF 2>err
+            \\$(printf hi; printf err >&2)
+            \\EOF
+            \\printf '\nERR:'
+            \\cat err
+            ,
+            .stdout =
+            \\errhi
+            \\
+            \\ERR:
             ,
             .stderr = "",
             .status = 0,

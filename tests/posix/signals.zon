@@ -125,6 +125,21 @@
             .status = 0,
         },
         .{
+            .name = "pending USR1 trap uses the platform signal number",
+            .script =
+            \\trap 'printf "trap\n"' USR1
+            \\kill -USR1 $$
+            \\printf 'after\n'
+            ,
+            .stdout =
+            \\trap
+            \\after
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "trap registered inside loop catches later signal in same body",
             .script =
             \\for word in once

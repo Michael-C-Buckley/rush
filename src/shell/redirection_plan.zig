@@ -39,6 +39,19 @@ pub const DataSlice = struct {
     }
 };
 
+pub const ExpansionOutput = struct {
+    stderr: DataSlice = .{ .bytes = "" },
+    diagnostics: []const DataSlice = &.{},
+
+    pub fn validate(self: ExpansionOutput) void {
+        self.stderr.validateAllowingEmpty();
+        for (self.diagnostics) |diagnostic| {
+            diagnostic.validate();
+            std.debug.assert(diagnostic.bytes.len != 0);
+        }
+    }
+};
+
 pub const ExpandedFields = struct {
     fields: []const []const u8,
     ownership: Ownership = .borrowed,
@@ -131,10 +144,12 @@ pub const RedirectionSpec = struct {
     descriptor: ?fd.Descriptor = null,
     operator: RedirectionOperator,
     operand: ExpandedOperand,
+    expansion_output: ExpansionOutput = .{},
 
     pub fn validate(self: RedirectionSpec) void {
         if (self.descriptor) |descriptor| fd.assertValidDescriptor(descriptor);
         self.operand.validate();
+        self.expansion_output.validate();
     }
 };
 
@@ -215,6 +230,7 @@ pub const RedirectionEffect = union(enum) {
 pub const RedirectionStep = struct {
     ordinal: usize,
     effect: RedirectionEffect,
+    expansion_output: ExpansionOutput = .{},
 
     pub fn openPath(
         ordinal: usize,
@@ -255,6 +271,7 @@ pub const RedirectionStep = struct {
 
     pub fn validate(self: RedirectionStep) void {
         self.effect.validate();
+        self.expansion_output.validate();
     }
 };
 
@@ -399,9 +416,13 @@ pub const RedirectionPlan = struct {
 
 fn cloneStep(allocator: std.mem.Allocator, step: RedirectionStep) std.mem.Allocator.Error!RedirectionStep {
     step.validate();
+    const effect = try cloneEffect(allocator, step.effect);
+    errdefer freeEffectData(allocator, effect);
+    const expansion_output = try cloneExpansionOutput(allocator, step.expansion_output);
     const cloned: RedirectionStep = .{
         .ordinal = step.ordinal,
-        .effect = try cloneEffect(allocator, step.effect),
+        .effect = effect,
+        .expansion_output = expansion_output,
     };
     cloned.validate();
     return cloned;
@@ -421,11 +442,22 @@ fn cloneEffect(allocator: std.mem.Allocator, effect: RedirectionEffect) std.mem.
         },
         .here_doc => |step| blk: {
             const data = try cloneDataSlice(allocator, step.data);
-            break :blk .{ .here_doc = .{ .target = step.target, .data = data } };
+            break :blk .{ .here_doc = .{
+                .target = step.target,
+                .data = data,
+            } };
         },
         .duplicate => |step| .{ .duplicate = step },
         .close => |step| .{ .close = step },
     };
+}
+
+fn freeEffectData(allocator: std.mem.Allocator, effect: RedirectionEffect) void {
+    switch (effect) {
+        .open_path => |open_step| freeDataSlice(allocator, open_step.path),
+        .here_doc => |here_doc_step| freeDataSlice(allocator, here_doc_step.data),
+        .duplicate, .close => {},
+    }
 }
 
 fn cloneDataSlice(allocator: std.mem.Allocator, data: DataSlice) std.mem.Allocator.Error!DataSlice {
@@ -437,15 +469,33 @@ fn cloneDataSlice(allocator: std.mem.Allocator, data: DataSlice) std.mem.Allocat
 }
 
 fn freeStepData(allocator: std.mem.Allocator, step: RedirectionStep) void {
-    switch (step.effect) {
-        .open_path => |open_step| freeDataSlice(allocator, open_step.path),
-        .here_doc => |here_doc_step| freeDataSlice(allocator, here_doc_step.data),
-        .duplicate, .close => {},
-    }
+    freeEffectData(allocator, step.effect);
+    freeExpansionOutput(allocator, step.expansion_output);
 }
 
 fn freeDataSlice(allocator: std.mem.Allocator, data: DataSlice) void {
     if (data.ownership == .owned_by_plan) allocator.free(data.bytes);
+}
+
+fn cloneExpansionOutput(allocator: std.mem.Allocator, output: ExpansionOutput) std.mem.Allocator.Error!ExpansionOutput {
+    output.validate();
+    const stderr = try cloneDataSlice(allocator, output.stderr);
+    errdefer freeDataSlice(allocator, stderr);
+    const diagnostics = try allocator.alloc(DataSlice, output.diagnostics.len);
+    errdefer allocator.free(diagnostics);
+    var initialized: usize = 0;
+    errdefer for (diagnostics[0..initialized]) |diagnostic| freeDataSlice(allocator, diagnostic);
+    for (output.diagnostics, 0..) |diagnostic, index| {
+        diagnostics[index] = try cloneDataSlice(allocator, diagnostic);
+        initialized += 1;
+    }
+    return .{ .stderr = stderr, .diagnostics = diagnostics };
+}
+
+fn freeExpansionOutput(allocator: std.mem.Allocator, output: ExpansionOutput) void {
+    freeDataSlice(allocator, output.stderr);
+    for (output.diagnostics) |diagnostic| freeDataSlice(allocator, diagnostic);
+    allocator.free(output.diagnostics);
 }
 
 pub const PlanResult = union(enum) {
@@ -489,7 +539,7 @@ pub const AppliedRedirections = struct {
     saved: std.ArrayList(SavedDescriptor) = .empty,
     active: bool = true,
 
-    fn init(allocator: std.mem.Allocator, port: fd.Port, self_duplicate_noop: bool) AppliedRedirections {
+    pub fn init(allocator: std.mem.Allocator, port: fd.Port, self_duplicate_noop: bool) AppliedRedirections {
         return .{ .allocator = allocator, .port = port, .self_duplicate_noop = self_duplicate_noop };
     }
 
@@ -533,12 +583,12 @@ pub const AppliedRedirections = struct {
         self.active = false;
     }
 
-    fn validateActive(self: AppliedRedirections) void {
+    pub fn validateActive(self: AppliedRedirections) void {
         std.debug.assert(self.active);
         for (self.saved.items) |saved| saved.validate();
     }
 
-    fn applyStep(self: *AppliedRedirections, step: RedirectionStep) std.mem.Allocator.Error!?ApplyFailureDetail {
+    pub fn applyStep(self: *AppliedRedirections, step: RedirectionStep) std.mem.Allocator.Error!?ApplyFailureDetail {
         std.debug.assert(self.active);
         step.validate();
         return switch (step.effect) {
@@ -658,7 +708,7 @@ fn stepFromSpec(
     const target = spec.descriptor orelse spec.operator.defaultDescriptor();
     fd.assertValidDescriptor(target);
 
-    return switch (spec.operator) {
+    var result = switch (spec.operator) {
         .input => pathOpenStep(spec.operand, ordinal, target, .{
             .access = .read_only,
             .close_on_exec = true,
@@ -690,8 +740,13 @@ fn stepFromSpec(
         .duplicate_input,
         .duplicate_output,
         => duplicateOrCloseStep(spec.operand, ordinal, target, consequence),
-        .here_doc => hereDocStep(spec.operand, ordinal, target, consequence),
+        .here_doc => hereDocStep(spec.operand, spec.expansion_output, ordinal, target, consequence),
     };
+    if (result == .step) {
+        result.step.expansion_output = spec.expansion_output;
+        result.step.validate();
+    }
+    return result;
 }
 
 fn pathOpenStep(
@@ -760,10 +815,12 @@ fn duplicateOrCloseStep(
 
 fn hereDocStep(
     operand: ExpandedOperand,
+    expansion_output: ExpansionOutput,
     ordinal: usize,
     target: fd.Descriptor,
     consequence: FailureConsequence,
 ) StepOrFailure {
+    expansion_output.validate();
     const data = switch (operand) {
         .here_doc => |data| data,
         .fields => |fields| return .{ .failure = .{
@@ -774,7 +831,11 @@ fn hereDocStep(
     };
     const step: RedirectionStep = .{
         .ordinal = ordinal,
-        .effect = .{ .here_doc = .{ .target = target, .data = data } },
+        .effect = .{ .here_doc = .{
+            .target = target,
+            .data = data,
+        } },
+        .expansion_output = expansion_output,
     };
     step.validate();
     return .{ .step = step };
