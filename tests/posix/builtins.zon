@@ -225,6 +225,21 @@
             .status = 0,
         },
         .{
+            .name = "read treats multibyte IFS delimiters as single characters",
+            .script =
+            \\printf 'aåbåc\n' | {
+            \\    IFS=å read -r first second third
+            \\    printf '<%s>|<%s>|<%s>\n' "$first" "$second" "$third"
+            \\}
+            ,
+            .stdout =
+            \\<a>|<b>|<c>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "read with mixed IFS preserves non-whitespace empty fields",
             .script =
             \\printf ' x:: y : z \n' | {
