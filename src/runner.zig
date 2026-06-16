@@ -1413,13 +1413,11 @@ fn appendSemanticHereDocRanges(
             program.case_commands[statement.index].redirections,
             base_end,
         ),
-        .function_definition => try appendSemanticRedirectionHereDocRanges(
-            allocator,
-            source,
-            program,
-            program.function_definitions[statement.index].redirections,
-            base_end,
-        ),
+        .function_definition => {
+            const definition = program.function_definitions[statement.index];
+            try appendSemanticRedirectionHereDocRanges(allocator, source, program, definition.redirections, base_end);
+            try appendSemanticEmbeddedHereDocRanges(allocator, source, definition.body);
+        },
         .brace_group => try appendSemanticRedirectionHereDocRanges(
             allocator,
             source,
@@ -1450,6 +1448,21 @@ fn appendSemanticRedirectionHereDocRanges(
         if (range.start < base_end) continue;
         if (source.items.len != 0 and source.items[source.items.len - 1] != '\n') try source.append(allocator, '\n');
         try source.appendSlice(allocator, program.source[range.start..range.end]);
+    }
+}
+
+fn appendSemanticEmbeddedHereDocRanges(
+    allocator: std.mem.Allocator,
+    source: *std.ArrayList(u8),
+    body: []const u8,
+) !void {
+    if (std.mem.indexOf(u8, body, "<<") == null) return;
+    var parsed = try parser.parse(allocator, body, .{});
+    defer parsed.deinit();
+    var body_program = try ir.lowerSimpleCommands(allocator, parsed);
+    defer body_program.deinit();
+    for (body_program.commands) |command| {
+        try appendSemanticRedirectionHereDocRanges(allocator, source, body_program, command.redirections, 0);
     }
 }
 

@@ -814,6 +814,16 @@ fn isFunctionBodyNode(kind: parser.NodeKind) bool {
 fn collectHereDocRanges(allocator: std.mem.Allocator, parsed: parser.ParseResult) !std.ArrayList(parser.Span) {
     var ranges: std.ArrayList(parser.Span) = .empty;
     errdefer ranges.deinit(allocator);
+    try collectDirectHereDocRanges(allocator, parsed, &ranges);
+    try collectFunctionBodyHereDocRanges(allocator, parsed, &ranges);
+    return ranges;
+}
+
+fn collectDirectHereDocRanges(
+    allocator: std.mem.Allocator,
+    parsed: parser.ParseResult,
+    ranges: *std.ArrayList(parser.Span),
+) !void {
     var processed_lines: std.ArrayList(usize) = .empty;
     defer processed_lines.deinit(allocator);
 
@@ -841,7 +851,88 @@ fn collectHereDocRanges(allocator: std.mem.Allocator, parsed: parser.ParseResult
             body_start = extraction.range.end;
         }
     }
-    return ranges;
+}
+
+fn collectFunctionBodyHereDocRanges(
+    allocator: std.mem.Allocator,
+    parsed: parser.ParseResult,
+    ranges: *std.ArrayList(parser.Span),
+) !void {
+    for (parsed.nodes) |node| {
+        if (node.kind != .function_definition) continue;
+        const function_body = functionBodyTokenRange(parsed, node) orelse continue;
+        const body_start = sourceStart(parsed, function_body.start);
+        const body_end = sourceEnd(parsed, function_body.end);
+        const body = parsed.source[body_start..body_end];
+        if (std.mem.indexOf(u8, body, "<<") == null) continue;
+
+        const function_line = sourceLineBounds(parsed.source, node.span.start);
+        if (function_line.end >= parsed.source.len) continue;
+        const tail_start = function_line.end + 1;
+        var synthetic: std.ArrayList(u8) = .empty;
+        defer synthetic.deinit(allocator);
+        try synthetic.appendSlice(allocator, body);
+        if (synthetic.items.len == 0 or synthetic.items[synthetic.items.len - 1] != '\n') {
+            try synthetic.append(allocator, '\n');
+        }
+        const tail_offset = synthetic.items.len;
+        try synthetic.appendSlice(allocator, parsed.source[tail_start..]);
+
+        var reparsed = try parser.parse(allocator, synthetic.items, .{});
+        defer reparsed.deinit();
+        var synthetic_ranges: std.ArrayList(parser.Span) = .empty;
+        defer synthetic_ranges.deinit(allocator);
+        try collectDirectHereDocRanges(allocator, reparsed, &synthetic_ranges);
+        for (synthetic_ranges.items) |range| {
+            if (range.start < tail_offset) continue;
+            try ranges.append(allocator, .init(
+                tail_start + (range.start - tail_offset),
+                tail_start + (range.end - tail_offset),
+            ));
+        }
+    }
+}
+
+const FunctionBodyTokenRange = struct {
+    start: usize,
+    end: usize,
+};
+
+fn functionBodyTokenRange(parsed: parser.ParseResult, node: parser.Node) ?FunctionBodyTokenRange {
+    std.debug.assert(node.kind == .function_definition);
+    var body_node: ?parser.Node = null;
+    var open_brace: ?usize = null;
+    var close_brace: ?usize = null;
+    for (parsed.nodeChildren(node)) |child| switch (child) {
+        .node => |node_id| {
+            const child_node = parsed.nodes[node_id.index()];
+            if (body_node == null and isFunctionBodyNode(child_node.kind)) body_node = child_node;
+        },
+        .token => {},
+    };
+    for (node.token_start..node.token_end) |token_index| {
+        const token = parsed.tokens[token_index];
+        if (token.kind != .word) continue;
+        const lexeme = token.lexeme(parsed.source);
+        if (open_brace == null and std.mem.eql(u8, lexeme, "{")) {
+            open_brace = token_index;
+        } else if (std.mem.eql(u8, lexeme, "}")) {
+            close_brace = token_index;
+        }
+    }
+    const start = if (open_brace) |index|
+        index + 1
+    else if (body_node) |body|
+        body.token_start
+    else
+        node.token_end;
+    const end = if (open_brace != null)
+        close_brace orelse node.token_end
+    else if (body_node) |body|
+        body.token_end
+    else
+        node.token_end;
+    return .{ .start = start, .end = end };
 }
 
 fn spanStartsInRanges(span: parser.Span, ranges: []const parser.Span) bool {
@@ -1036,7 +1127,7 @@ fn lowerFunctionDefinition(
         for (redirections.items) |redirection| freeRedirection(allocator, redirection);
         redirections.deinit(allocator);
     }
-    const body = try ownedBodySource(allocator, parsed, body_start, body_end);
+    const body = try ownedFunctionBodySource(allocator, parsed, node, body_start, body_end);
     errdefer allocator.free(body);
 
     return .{
@@ -1045,6 +1136,39 @@ fn lowerFunctionDefinition(
         .body = body,
         .redirections = try redirections.toOwnedSlice(allocator),
     };
+}
+
+fn ownedFunctionBodySource(
+    allocator: std.mem.Allocator,
+    parsed: parser.ParseResult,
+    function_node: parser.Node,
+    token_start: usize,
+    token_end: usize,
+) ![]const u8 {
+    const body_start = sourceStart(parsed, token_start);
+    const body_end = sourceEnd(parsed, token_end);
+    const body = parsed.source[body_start..body_end];
+    if (std.mem.indexOf(u8, body, "<<") == null) return ownedSourceWithHereDocs(
+        allocator,
+        parsed,
+        body_start,
+        body_end,
+    );
+
+    const function_line = sourceLineBounds(parsed.source, function_node.span.start);
+    var synthetic: std.ArrayList(u8) = .empty;
+    defer synthetic.deinit(allocator);
+    try synthetic.appendSlice(allocator, body);
+    if (synthetic.items.len == 0 or synthetic.items[synthetic.items.len - 1] != '\n') {
+        try synthetic.append(allocator, '\n');
+    }
+    if (function_line.end < parsed.source.len) {
+        try synthetic.appendSlice(allocator, parsed.source[function_line.end + 1 ..]);
+    }
+
+    var reparsed = try parser.parse(allocator, synthetic.items, .{});
+    defer reparsed.deinit();
+    return ownedSourceWithHereDocs(allocator, reparsed, 0, body.len);
 }
 
 fn lowerCaseCommand(allocator: std.mem.Allocator, parsed: parser.ParseResult, node: parser.Node) !CaseCommand {

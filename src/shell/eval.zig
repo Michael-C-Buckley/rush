@@ -758,12 +758,11 @@ const SourceLowerer = struct {
                 program.case_commands[statement.index].redirections,
                 base_end,
             ),
-            .function_definition => try self.appendRedirectionHereDocRanges(
-                source,
-                program,
-                program.function_definitions[statement.index].redirections,
-                base_end,
-            ),
+            .function_definition => {
+                const definition = program.function_definitions[statement.index];
+                try self.appendRedirectionHereDocRanges(source, program, definition.redirections, base_end);
+                try self.appendEmbeddedHereDocRanges(source, definition.body);
+            },
             .brace_group => try self.appendRedirectionHereDocRanges(
                 source,
                 program,
@@ -794,6 +793,17 @@ const SourceLowerer = struct {
                 try source.append(self.allocator, '\n');
             }
             try source.appendSlice(self.allocator, program.source[range.start..range.end]);
+        }
+    }
+
+    fn appendEmbeddedHereDocRanges(self: *SourceLowerer, source: *std.ArrayList(u8), body: []const u8) !void {
+        if (std.mem.indexOf(u8, body, "<<") == null) return;
+        var parsed = try parser.parse(self.allocator, body, .{ .features = self.owner.features });
+        defer parsed.deinit();
+        var body_program = try ir.lowerSimpleCommands(self.allocator, parsed);
+        defer body_program.deinit();
+        for (body_program.commands) |command| {
+            try self.appendRedirectionHereDocRanges(source, body_program, command.redirections, 0);
         }
     }
 

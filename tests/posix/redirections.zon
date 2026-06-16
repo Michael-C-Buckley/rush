@@ -572,6 +572,20 @@
             .status = 0,
         },
         .{
+            .name = "here document feeds a function body command before same-line invocation",
+            .script =
+            \\f() { cat <<EOF; }; f
+            \\hello
+            \\EOF
+            ,
+            .stdout =
+            \\hello
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "here document feeds a loop body command",
             .script =
             \\for i in 1; do cat <<EOF; done
