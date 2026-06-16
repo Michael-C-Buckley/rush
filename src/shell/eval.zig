@@ -2549,8 +2549,6 @@ const OutputRouting = struct {
     }
 };
 
-const BufferedDescriptorDestination = OutputDestination;
-
 pub const RunnerOutputWriteResult = struct {
     stdout_failed: bool = false,
     stderr_failed: bool = false,
@@ -2902,12 +2900,12 @@ fn applyOutputRoutingRedirections(
     try routing.applyRedirections(redirections);
 }
 
-const BufferedOutputStream = enum { stdout, stderr };
+const OutputStream = enum { stdout, stderr };
 
 fn flushBufferToDestination(
     buffers: *EvaluationBuffers,
-    stream: BufferedOutputStream,
-    destination: BufferedDescriptorDestination,
+    stream: OutputStream,
+    destination: OutputDestination,
 ) EvalError!void {
     destination.validate();
     const bytes = switch (stream) {
