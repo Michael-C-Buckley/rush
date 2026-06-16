@@ -3187,7 +3187,7 @@ fn runSemanticCommandSubstitution(
 
     expansion_context.last_status = result.status;
     expansion_context.last_control_flow = result.control_flow;
-    if (commandSubstitutionHasExpansionDiagnostic(result)) {
+    if (commandSubstitutionHasSideOutput(result)) {
         try expansion_context.stderr.appendSlice(expansion_context.evaluator.allocator, result.stderr.items);
         for (result.diagnostics.items) |diagnostic| {
             const owned_message = try expansion_context.evaluator.allocator.dupe(u8, diagnostic.message);
@@ -3205,12 +3205,9 @@ fn runSemanticCommandSubstitution(
     return owned_output;
 }
 
-fn commandSubstitutionHasExpansionDiagnostic(result: CommandSubstitutionResult) bool {
+fn commandSubstitutionHasSideOutput(result: CommandSubstitutionResult) bool {
     result.validate();
-    for (result.diagnostics.items) |diagnostic| {
-        if (std.mem.indexOf(u8, diagnostic.message, "expansion error:") != null) return true;
-    }
-    return false;
+    return result.stderr.items.len != 0 or result.diagnostics.items.len != 0;
 }
 
 fn evaluateSingleStagePipeline(

@@ -113,6 +113,22 @@
             .status = 0,
         },
         .{
+            .name = "command substitution preserves stderr outside captured stdout",
+            .script =
+            \\x=$(printf out; printf 'err\n' >&2)
+            \\printf '<%s>\n' "$x"
+            ,
+            .stdout =
+            \\<out>
+            \\
+            ,
+            .stderr =
+            \\err
+            \\
+            ,
+            .status = 0,
+        },
+        .{
             .name = "double quotes preserve arithmetic expansion results as one field",
             .script =
             \\printf '<%s>\n' "$((1 + 2))"
