@@ -1054,11 +1054,7 @@ const TrapActionLowerer = struct {
 
         var expanded = expansion.expandSimpleCommand(assignment_words, argv_words) catch |err| {
             if (expansion.classifyError(err)) |expansion_failure| {
-                const message = try std.fmt.allocPrint(
-                    self.allocator,
-                    "trap {s}: expansion error: {s}: {s}",
-                    .{ self.signal.name(), expansion_failure.name, expansion_failure.message },
-                );
+                const message = try self.formatExpansionFailureMessage(expansion_failure);
                 const trap_failure: TrapActionFailure = .{
                     .kind = .expansion_error,
                     .status = statusForExpansionFailure(self.owner.features, expansion_failure),
@@ -1351,11 +1347,7 @@ const TrapActionLowerer = struct {
     fn expansionFailure(self: *TrapActionLowerer, expansion_failure: shell_expand.ExpansionFailure) !TrapActionFailure {
         const trap_failure: TrapActionFailure = .{
             .kind = .expansion_error,
-            .message = try std.fmt.allocPrint(
-                self.allocator,
-                "trap {s}: expansion error: {s}: {s}",
-                .{ self.signal.name(), expansion_failure.name, expansion_failure.message },
-            ),
+            .message = try self.formatExpansionFailureMessage(expansion_failure),
             .bash_arithmetic_expansion = self.owner.bashMode() and
                 expansion_failure.kind == .arithmetic_expansion,
             .bash_arithmetic_readonly_assignment = self.owner.bashMode() and
@@ -1364,6 +1356,24 @@ const TrapActionLowerer = struct {
         };
         trap_failure.validate();
         return trap_failure;
+    }
+
+    fn formatExpansionFailureMessage(
+        self: *TrapActionLowerer,
+        expansion_failure: shell_expand.ExpansionFailure,
+    ) ![]const u8 {
+        if (self.shell_state.trap_execution != .idle) {
+            return std.fmt.allocPrint(
+                self.allocator,
+                "trap {s}: expansion error: {s}: {s}",
+                .{ self.signal.name(), expansion_failure.name, expansion_failure.message },
+            );
+        }
+        return std.fmt.allocPrint(
+            self.allocator,
+            "expansion error: {s}: {s}",
+            .{ expansion_failure.name, expansion_failure.message },
+        );
     }
 
     fn resolveExternal(

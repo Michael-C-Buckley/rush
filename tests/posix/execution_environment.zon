@@ -157,7 +157,7 @@
             \\end
             ,
             .stderr =
-            \\trap TERM: expansion error: parameter: parameter not set
+            \\expansion error: parameter: parameter not set
             \\
             ,
             .status = 0,

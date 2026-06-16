@@ -111,6 +111,19 @@
             .status_match = .nonzero,
         },
         .{
+            .name = "parameter expansion diagnostics do not use trap context outside traps",
+            .script =
+            \\unset missing
+            \\printf '%s\n' ${missing?'need it'}
+            ,
+            .stdout = "",
+            .stderr =
+            \\expansion error: missing: need it
+            \\
+            ,
+            .status = 1,
+        },
+        .{
             .name = "parameter expansion colon question mark errors for null parameters",
             .script =
             \\x=
