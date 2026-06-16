@@ -2902,6 +2902,28 @@ test "manifest completion loads git subcommands lazily" {
     try expectCandidate(candidates, "cherry-pick", .subcommand);
 }
 
+test "git manifest completion orders common subcommands by priority" {
+    var completion_state = State.init(std.testing.allocator);
+    defer completion_state.deinit();
+    try loadManifestFile(std.testing.allocator, std.testing.io, &completion_state, "share/rush/completions/git.json");
+
+    var shell_state = shell_state_mod.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    const source = "git st";
+    const application = try manifestApplication(
+        std.testing.allocator,
+        std.testing.io,
+        &completion_state,
+        shell_state,
+        source,
+        source.len,
+    );
+    defer application.deinit(std.testing.allocator);
+
+    try std.testing.expectEqualStrings("status", application.ambiguous[0].value);
+    try std.testing.expectEqualStrings("stash", application.ambiguous[1].value);
+}
+
 test "manifest completion returns root options" {
     var completion_state = State.init(std.testing.allocator);
     defer completion_state.deinit();

@@ -506,7 +506,7 @@ pub fn runHiddenShellStateCommandWithExtensionHandlers(
     evaluator.features = features;
     evaluator.arg_zero = arg_zero;
     evaluator.io = io;
-    evaluator.read_stdin_from_fd = true;
+    evaluator.read_stdin_from_fd = false;
     evaluator.external_stdio = external_stdio;
     extension_handlers.apply(&evaluator);
 
@@ -3022,6 +3022,95 @@ test "runScript reports misplaced reserved words before execution" {
     try std.testing.expect(std.mem.indexOf(u8, result.stderr, "misplaced reserved word") != null);
     try std.testing.expect(std.mem.indexOf(u8, result.stderr, "echo after") == null);
 }
+
+test "hidden shell state commands do not read terminal stdin" {
+    var adapter = runtime.posix.Adapter.init(std.testing.io);
+    const pipe = try adapter.fdPort().pipe(.{});
+    const read_file: std.Io.File = .{ .handle = pipe.read, .flags = .{ .nonblocking = false } };
+    const write_file: std.Io.File = .{ .handle = pipe.write, .flags = .{ .nonblocking = false } };
+
+    defer read_file.close(std.testing.io);
+    var write_open = true;
+    defer if (write_open) write_file.close(std.testing.io);
+
+    try writeFileAll(write_file, "terminal-input\n");
+    write_file.close(std.testing.io);
+    write_open = false;
+
+    var guard = try StdinGuard.replaceWith(read_file);
+    defer guard.restore();
+
+    var shell_state = shell.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    try shell_state.putFunction(.{
+        .name = "hidden_read_probe",
+        .source_body =
+        \\if read value; then
+        \\  printf 'read:%s\n' "$value"
+        \\else
+        \\  printf 'empty\n'
+        \\fi
+        ,
+    });
+
+    var result = try runHiddenShellStateCommandWithExtensionHandlers(
+        std.testing.allocator,
+        std.testing.io,
+        &shell_state,
+        &.{"hidden_read_probe"},
+        "rush",
+        .{},
+        .capture,
+        .{},
+    );
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("empty\n", result.stdout);
+    try std.testing.expectEqualStrings("", result.stderr);
+}
+
+test "hidden shell state external pipelines capture output without terminal stdin" {
+    var adapter = runtime.posix.Adapter.init(std.testing.io);
+    const pipe = try adapter.fdPort().pipe(.{});
+    const read_file: std.Io.File = .{ .handle = pipe.read, .flags = .{ .nonblocking = false } };
+    const write_file: std.Io.File = .{ .handle = pipe.write, .flags = .{ .nonblocking = false } };
+
+    defer read_file.close(std.testing.io);
+    var write_open = true;
+    defer if (write_open) write_file.close(std.testing.io);
+
+    try writeFileAll(write_file, "terminal-input\n");
+    write_file.close(std.testing.io);
+    write_open = false;
+
+    var guard = try StdinGuard.replaceWith(read_file);
+    defer guard.restore();
+
+    var shell_state = shell.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    try shell_state.putFunction(.{
+        .name = "hidden_external_pipeline_probe",
+        .source_body = "/bin/cat | /usr/bin/wc -c",
+    });
+
+    var result = try runHiddenShellStateCommandWithExtensionHandlers(
+        std.testing.allocator,
+        std.testing.io,
+        &shell_state,
+        &.{"hidden_external_pipeline_probe"},
+        "rush",
+        .{},
+        .capture,
+        .{},
+    );
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("       0\n", result.stdout);
+    try std.testing.expectEqualStrings("", result.stderr);
+}
+
 test "non-interactive aliases affect later complete commands" {
     var result = try runScript(std.testing.allocator, std.testing.io,
         \\alias say='echo script-alias-ok'

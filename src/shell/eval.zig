@@ -2508,7 +2508,10 @@ pub fn evaluatePipelinePlan(
     if (plan.strategy == .single_stage) {
         state_delta = try evaluateSingleStagePipeline(evaluator, shell_state, eval_context, plan, statuses, &buffers);
     } else switch (plan.strategy) {
-        .external_only_real => try evaluateExternalOnlyRealPipeline(evaluator, shell_state.*, plan, statuses, &buffers),
+        .external_only_real => if (capturedExternalMode(evaluator.external_stdio) != null)
+            try evaluateFallbackPipeline(evaluator, shell_state.*, eval_context, plan, statuses, &buffers)
+        else
+            try evaluateExternalOnlyRealPipeline(evaluator, shell_state.*, plan, statuses, &buffers),
         .semantic_in_memory, .mixed_in_memory => try evaluateFallbackPipeline(
             evaluator,
             shell_state.*,
@@ -3599,7 +3602,11 @@ fn evaluateFallbackPipeline(
     eval_context.validate();
     plan.validate();
     plan.validateStatusCount(statuses);
-    std.debug.assert(plan.strategy == .semantic_in_memory or plan.strategy == .mixed_in_memory);
+    std.debug.assert(
+        plan.strategy == .semantic_in_memory or
+            plan.strategy == .mixed_in_memory or
+            (plan.strategy == .external_only_real and capturedExternalMode(evaluator.external_stdio) != null),
+    );
     std.debug.assert(plan.stages.len > 1);
 
     var next_stdin: std.ArrayList(u8) = .empty;
