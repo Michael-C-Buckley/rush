@@ -377,6 +377,32 @@ __rush_complete_git_context_reset_args() {
   fi
 }
 
+__rush_complete_git_rebase_action_option() {
+  rush_complete candidate "$1" --kind option --description "$2" --priority "$3"
+}
+
+__rush_complete_git_rebase_action_options() {
+  __rush_complete_git_rebase_action_option --continue 'continue the current rebase' 40
+  __rush_complete_git_rebase_action_option --abort 'abort the current rebase' 40
+  __rush_complete_git_rebase_action_option --skip 'skip current patch and continue' 35
+  __rush_complete_git_rebase_action_option --quit 'abort rebase but keep HEAD where it is' 30
+  __rush_complete_git_rebase_action_option --interactive 'make a list of commits to rebase' 25
+  __rush_complete_git_rebase_action_option --onto 'rebase onto new base' 20
+  __rush_complete_git_rebase_action_option --autostash 'automatically stash before operation' 10
+  __rush_complete_git_rebase_action_option --rebase-merges 'preserve merge commits' 10
+}
+
+__rush_complete_git_context_rebase_args() {
+  if test "$rush_completion_options_terminated" = true; then
+    __rush_complete_git_refs
+  else
+    if test "$rush_completion_argument_index" = 0; then
+      __rush_complete_git_rebase_action_options
+    fi
+    __rush_complete_git_refs
+  fi
+}
+
 __rush_complete_git_context_clean_paths() {
   if rush_complete option-present --short X; then
     __rush_complete_git_ignored_clean_paths

@@ -18,6 +18,7 @@
       "git.switch-arguments": { "function": "__rush_complete_git_context_switch_args" },
       "git.restore-paths": { "function": "__rush_complete_git_context_restore_paths" },
       "git.reset-arguments": { "function": "__rush_complete_git_context_reset_args" },
+      "git.rebase-arguments": { "function": "__rush_complete_git_context_rebase_args" },
       "git.clean-paths": { "function": "__rush_complete_git_context_clean_paths" },
       "git.branch-arguments": { "function": "__rush_complete_git_context_branch_args" },
       "git.push-arguments": { "function": "__rush_complete_git_context_push_args" },
@@ -791,28 +792,41 @@
           { "long": "continue", "description": "continue the current rebase" },
           { "long": "skip", "description": "skip current patch and continue" },
           { "long": "quit", "description": "abort rebase but keep HEAD where it is" },
+          { "long": "edit-todo", "description": "edit the todo list during an interactive rebase" },
+          { "long": "show-current-patch", "description": "show the current patch in an interactive rebase" },
           { "long": "interactive", "short": "i", "description": "make a list of commits to rebase" },
           { "long": "onto", "value": { "name": "newbase", "provider": "git.refs" }, "description": "rebase onto new base" },
           { "long": "keep-base", "description": "use merge-base of upstream and branch as upstream" },
           { "long": "root", "description": "rebase all commits reachable from branch" },
+          { "long": "rebase-merges", "short": "r", "description": "preserve merge commits" },
+          { "long": "no-rebase-merges", "description": "flatten merge commits" },
           { "long": "autosquash", "description": "move fixup and squash commits automatically" },
           { "long": "no-autosquash", "description": "do not move fixup and squash commits automatically" },
           { "long": "autostash", "description": "automatically stash before operation" },
           { "long": "no-autostash", "description": "do not automatically stash before operation" },
+          { "long": "fork-point", "description": "use reflog to find a better common ancestor" },
+          { "long": "no-fork-point", "description": "do not use reflog to find a common ancestor" },
+          { "long": "empty", "value": { "name": "mode", "provider": { "values": ["drop", "keep", "stop", "ask"] } }, "description": "handle commits that become empty" },
           { "long": "stat", "description": "show diffstat of upstream changes" },
           { "long": "no-stat", "description": "do not show diffstat of upstream changes" },
           { "long": "merge", "short": "m", "description": "use merging strategies to rebase" },
           { "long": "apply", "description": "use applying strategies to rebase" },
           { "long": "strategy", "short": "s", "value": { "name": "strategy", "provider": "git.merge-strategies" }, "description": "use given merge strategy" },
+          { "long": "strategy-option", "short": "X", "value": { "name": "option" }, "description": "pass option through to the merge strategy" },
           { "long": "exec", "short": "x", "value": { "name": "command" }, "description": "run command after each picked commit" },
+          { "long": "gpg-sign", "short": "S", "value": { "name": "keyid" }, "description": "GPG-sign commits" },
+          { "long": "no-gpg-sign", "description": "do not GPG-sign commits" },
           { "long": "reschedule-failed-exec", "description": "reschedule failed exec commands" },
           { "long": "no-reschedule-failed-exec", "description": "do not reschedule failed exec commands" },
           { "long": "update-refs", "description": "update refs that point to rebased commits" },
-          { "long": "no-update-refs", "description": "do not update refs that point to rebased commits" }
+          { "long": "no-update-refs", "description": "do not update refs that point to rebased commits" },
+          { "long": "quiet", "priority": 5, "short": "q", "description": "be quiet" },
+          { "long": "verbose", "priority": 5, "short": "v", "description": "be verbose" }
         ],
         "arguments": {
           "states": [
-            { "name": "upstream", "index": 0, "repeatable": true, "provider": "git.refs", "description": "upstream or branch to rebase" }
+            { "name": "upstream", "index": 0, "provider": "git.rebase-arguments", "description": "upstream to rebase onto" },
+            { "name": "branch", "index": 1, "provider": "git.refs", "description": "branch to rebase" }
           ]
         }
       },
