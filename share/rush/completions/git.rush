@@ -450,7 +450,7 @@ __rush_complete_git_rebase_recent_commits() {
       relative="HEAD~$index"
     fi
     if test -n "$subject"; then
-      description="$relative  $subject"
+      description="$(printf '%-7s %s' "$relative" "$subject")"
     else
       description="$relative"
     fi
