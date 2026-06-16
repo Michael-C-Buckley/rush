@@ -196,12 +196,17 @@
             \\    [[:alpha:]]) printf '<%s>\n' cjk-alpha ;;
             \\    *) printf '<%s>\n' bad ;;
             \\esac
+            \\case Ж in
+            \\    [[:alnum:]]) printf '<%s>\n' cyrillic-alnum ;;
+            \\    *) printf '<%s>\n' bad ;;
+            \\esac
             ,
             .stdout =
             \\<alpha>
             \\<greek-lower>
             \\<cyrillic-upper>
             \\<cjk-alpha>
+            \\<cyrillic-alnum>
             \\
             ,
             .stderr = "",
@@ -214,9 +219,29 @@
             \\    [[:punct:]]) printf '<%s>\n' punct ;;
             \\    *) printf '<%s>\n' bad ;;
             \\esac
+            \\case — in
+            \\    [[:punct:]]) printf '<%s>\n' dash ;;
+            \\    *) printf '<%s>\n' bad ;;
+            \\esac
             ,
             .stdout =
             \\<punct>
+            \\<dash>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "case character classes match multibyte separator characters",
+            .script =
+            \\case ' ' in
+            \\    [[:space:]]) printf '<%s>\n' space ;;
+            \\    *) printf '<%s>\n' bad ;;
+            \\esac
+            ,
+            .stdout =
+            \\<space>
             \\
             ,
             .stderr = "",

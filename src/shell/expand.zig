@@ -4,6 +4,7 @@
 //! can be added later without baking it into parsing or execution IR.
 
 const std = @import("std");
+const uucode = @import("uucode");
 const zig_builtin = @import("builtin");
 const compat = @import("compat.zig");
 const parser = @import("parser.zig");
@@ -2211,7 +2212,6 @@ pub fn expandWordPattern(allocator: std.mem.Allocator, raw: []const u8, options:
     defer allocator.free(tilde_expanded);
     return expandPatternWord(allocator, tilde_expanded, options);
 }
-
 
 fn expandPatternWord(allocator: std.mem.Allocator, raw: []const u8, options: Options) !ExpansionPattern {
     var parts = try parseWordParts(allocator, raw);
@@ -6377,7 +6377,6 @@ pub fn patternTextMatches(pattern: []const u8, text: []const u8, options: Patter
     return globMatchesAt(pattern, null, options, 0, text, 0);
 }
 
-
 fn globMatches(pattern: []const u8, text: []const u8) bool {
     return globMatchesAt(pattern, null, .{}, 0, text, 0);
 }
@@ -6809,59 +6808,89 @@ fn bracketCharacterClassMatches(class_name: []const u8, text: []const u8) ?bool 
         if (std.mem.eql(u8, class_name, "xdigit")) return std.ascii.isHex(byte);
     }
 
-    const codepoint = decodeUtf8Character(text) orelse return false;
-    if (std.mem.eql(u8, class_name, "alnum")) return isUnicodeAlphabetic(codepoint);
-    if (std.mem.eql(u8, class_name, "alpha")) return isUnicodeAlphabetic(codepoint);
-    if (std.mem.eql(u8, class_name, "lower")) return isUnicodeLowercase(codepoint);
-    if (std.mem.eql(u8, class_name, "upper")) return isUnicodeUppercase(codepoint);
-    if (std.mem.eql(u8, class_name, "graph")) return true;
-    if (std.mem.eql(u8, class_name, "print")) return true;
+    const category = unicodeGeneralCategory(text) orelse return false;
+    if (std.mem.eql(u8, class_name, "alnum")) return isUnicodeLetter(category) or isUnicodeNumber(category);
+    if (std.mem.eql(u8, class_name, "alpha")) return isUnicodeLetter(category);
+    if (std.mem.eql(u8, class_name, "lower")) return category == .letter_lowercase;
+    if (std.mem.eql(u8, class_name, "upper")) return category == .letter_uppercase;
+    if (std.mem.eql(u8, class_name, "graph")) return !isUnicodeSeparator(category) and !isUnicodeOther(category);
+    if (std.mem.eql(u8, class_name, "print")) return !isUnicodeOther(category);
     if (std.mem.eql(u8, class_name, "blank")) return false;
-    if (std.mem.eql(u8, class_name, "cntrl")) return false;
-    if (std.mem.eql(u8, class_name, "digit")) return false;
-    if (std.mem.eql(u8, class_name, "punct")) return isUnicodePunctuation(codepoint);
-    if (std.mem.eql(u8, class_name, "space")) return false;
+    if (std.mem.eql(u8, class_name, "cntrl")) return category == .other_control;
+    if (std.mem.eql(u8, class_name, "digit")) return category == .number_decimal_digit;
+    if (std.mem.eql(u8, class_name, "punct")) return isUnicodePunctuation(category);
+    if (std.mem.eql(u8, class_name, "space")) return isUnicodeSeparator(category);
     if (std.mem.eql(u8, class_name, "xdigit")) return false;
     return null;
 }
 
-fn decodeUtf8Character(text: []const u8) ?u21 {
-    return switch (text.len) {
+fn unicodeGeneralCategory(text: []const u8) ?uucode.types.GeneralCategory {
+    const codepoint = switch (text.len) {
         1 => text[0],
-        2 => std.unicode.utf8Decode2(text[0..2].*) catch null,
-        3 => std.unicode.utf8Decode3(text[0..3].*) catch null,
-        4 => std.unicode.utf8Decode4(text[0..4].*) catch null,
-        else => null,
+        2 => std.unicode.utf8Decode2(text[0..2].*) catch return null,
+        3 => std.unicode.utf8Decode3(text[0..3].*) catch return null,
+        4 => std.unicode.utf8Decode4(text[0..4].*) catch return null,
+        else => return null,
+    };
+    return uucode.get(.general_category, codepoint);
+}
+
+fn isUnicodeLetter(category: uucode.types.GeneralCategory) bool {
+    return switch (category) {
+        .letter_uppercase,
+        .letter_lowercase,
+        .letter_titlecase,
+        .letter_modifier,
+        .letter_other,
+        => true,
+        else => false,
     };
 }
 
-fn isUnicodeAlphabetic(codepoint: u21) bool {
-    return isUnicodeUppercase(codepoint) or
-        isUnicodeLowercase(codepoint) or
-        (codepoint >= 0x4E00 and codepoint <= 0x9FFF);
+fn isUnicodeNumber(category: uucode.types.GeneralCategory) bool {
+    return switch (category) {
+        .number_decimal_digit,
+        .number_letter,
+        .number_other,
+        => true,
+        else => false,
+    };
 }
 
-fn isUnicodeUppercase(codepoint: u21) bool {
-    return (codepoint >= 0x00C0 and codepoint <= 0x00D6) or
-        (codepoint >= 0x00D8 and codepoint <= 0x00DE) or
-        (codepoint >= 0x0391 and codepoint <= 0x03A9 and codepoint != 0x03A2) or
-        (codepoint >= 0x0410 and codepoint <= 0x042F);
+fn isUnicodeSeparator(category: uucode.types.GeneralCategory) bool {
+    return switch (category) {
+        .separator_space,
+        .separator_line,
+        .separator_paragraph,
+        => true,
+        else => false,
+    };
 }
 
-fn isUnicodeLowercase(codepoint: u21) bool {
-    return (codepoint >= 0x00DF and codepoint <= 0x00F6) or
-        (codepoint >= 0x00F8 and codepoint <= 0x00FF) or
-        (codepoint >= 0x03B1 and codepoint <= 0x03C9) or
-        (codepoint >= 0x0430 and codepoint <= 0x044F);
+fn isUnicodeOther(category: uucode.types.GeneralCategory) bool {
+    return switch (category) {
+        .other_control,
+        .other_format,
+        .other_surrogate,
+        .other_private_use,
+        .other_not_assigned,
+        => true,
+        else => false,
+    };
 }
 
-fn isUnicodePunctuation(codepoint: u21) bool {
-    return (codepoint >= 0x2000 and codepoint <= 0x206F) or
-        (codepoint >= 0x2E00 and codepoint <= 0x2E7F) or
-        (codepoint >= 0x3000 and codepoint <= 0x303F) or
-        (codepoint >= 0xFE10 and codepoint <= 0xFE1F) or
-        (codepoint >= 0xFE30 and codepoint <= 0xFE4F) or
-        (codepoint >= 0xFF00 and codepoint <= 0xFF65);
+fn isUnicodePunctuation(category: uucode.types.GeneralCategory) bool {
+    return switch (category) {
+        .punctuation_connector,
+        .punctuation_dash,
+        .punctuation_open,
+        .punctuation_close,
+        .punctuation_initial_quote,
+        .punctuation_final_quote,
+        .punctuation_other,
+        => true,
+        else => false,
+    };
 }
 
 pub fn expandTilde(allocator: std.mem.Allocator, raw: []const u8, env: EnvLookup) ![]const u8 {
