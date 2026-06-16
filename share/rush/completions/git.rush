@@ -92,6 +92,7 @@ __rush_complete_git_remote_branches() {
 
 __rush_complete_git_refs() {
   __rush_complete_git_branches
+  __rush_complete_git_remote_branches
   __rush_complete_git_tags
 }
 
