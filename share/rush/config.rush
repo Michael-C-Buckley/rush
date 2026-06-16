@@ -97,10 +97,10 @@ rush_style() {
 
   if test "$rush_color_scheme" = light; then
     rush_style_completion_selected="bg=$(color blend "$rush_color_background" "$rush_color_blue" 20)"
-    rush_style_completion_flash="fg=$(color blend "$rush_color_foreground" "$rush_color_background" 15),bg=$(color blend "$rush_color_background" "$rush_color_foreground" 12)"
+    rush_style_completion_flash="fg=$rush_color_foreground,bg=$(color blend "$rush_color_yellow" "$rush_color_background" 25),bold"
   else
     rush_style_completion_selected="bg=$(color blend "$rush_color_background" "$rush_color_blue" 38)"
-    rush_style_completion_flash="fg=$(color blend "$rush_color_foreground" "$rush_color_background" 15),bg=$(color blend "$rush_color_background" "$rush_color_foreground" 12)"
+    rush_style_completion_flash="fg=$rush_color_background,bg=$(color blend "$rush_color_yellow" "$rush_color_foreground" 20),bold"
   fi
 }
 
