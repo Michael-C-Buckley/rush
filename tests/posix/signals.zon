@@ -88,6 +88,19 @@
             .status = 0,
         },
         .{
+            .name = "aliases defined inside an EXIT trap do not affect its remaining action",
+            .script =
+            \\trap 'alias late="printf late\\n"; late 2>/dev/null; printf "status:%s\n" "$?"' EXIT
+            \\:
+            ,
+            .stdout =
+            \\status:127
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "trap dash resets the EXIT trap to its default action",
             .script =
             \\trap 'printf "%s\n" bad' 0

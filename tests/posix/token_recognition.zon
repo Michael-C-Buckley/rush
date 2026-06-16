@@ -108,6 +108,21 @@
             .status = 0,
         },
         .{
+            .name = "alias substitution applies to later complete commands in dot scripts",
+            .script =
+            \\script=./rush-alias-dot-script.tmp
+            \\printf '%s\n' "alias hi='printf \"%s\\n\" alias'" hi >"$script"
+            \\. "$script"
+            \\rm -f "$script"
+            ,
+            .stdout =
+            \\alias
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "alias substitution does not apply to ordinary arguments",
             .script =
             \\alias hi='printf "%s\n" alias'

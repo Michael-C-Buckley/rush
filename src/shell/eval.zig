@@ -2583,6 +2583,16 @@ pub fn executePendingTraps(
         registered.validate();
         if (registered.kind() == .ignore) continue;
 
+        var alias_snapshot = working_state.clone(evaluator.allocator) catch |err| switch (err) {
+            error.OutOfMemory => return error.OutOfMemory,
+            error.ReadonlyVariable => unreachable,
+        };
+        defer alias_snapshot.deinit();
+
+        const previous_alias_state = evaluator.alias_state;
+        evaluator.alias_state = &alias_snapshot;
+        defer evaluator.alias_state = previous_alias_state;
+
         var body = (resolver.resolve(
             evaluator.allocator,
             registered.action,
@@ -6641,9 +6651,83 @@ fn evaluateSourcedText(
     };
     defer working_state.deinit();
 
-    const result = try evaluateStatementListSource(evaluator, &working_state, eval_context, source, buffers);
+    const result = try evaluateSourcedTextChunks(evaluator, &working_state, eval_context, source, buffers);
     try appendShellStateDiff(shell_state, working_state, state_delta);
     return result;
+}
+
+fn evaluateSourcedTextChunks(
+    evaluator: *Evaluator,
+    shell_state: *state.ShellState,
+    eval_context: context.EvalContext,
+    source: []const u8,
+    buffers: *EvaluationBuffers,
+) EvalError!SimpleEvalResult {
+    shell_state.validate();
+    eval_context.validate();
+    var result = normalEvaluation(0);
+    var start = skipSourcedTextChunkSeparators(source, 0);
+    while (start < source.len) {
+        var end = sourcedTextLineEnd(source, start);
+        while (true) {
+            const chunk = std.mem.trim(u8, source[start..end], " \t\r\n;");
+            if (chunk.len == 0) break;
+
+            var alias_snapshot = shell_state.clone(evaluator.allocator) catch |err| switch (err) {
+                error.OutOfMemory => return error.OutOfMemory,
+                error.ReadonlyVariable => unreachable,
+            };
+            defer alias_snapshot.deinit();
+
+            const aliased = parser.expandAliases(evaluator.allocator, chunk, .{
+                .features = evaluator.features.withStrictDiagnostics(),
+                .context = &alias_snapshot,
+                .lookup = lookupSemanticAliasForParser,
+            }) catch |err| switch (err) {
+                error.OutOfMemory => return error.OutOfMemory,
+                else => return error.Unimplemented,
+            };
+            defer evaluator.allocator.free(aliased);
+            var parsed = parser.parse(evaluator.allocator, aliased, .{
+                .features = evaluator.features.withStrictDiagnostics(),
+            }) catch |err| switch (err) {
+                error.OutOfMemory => return error.OutOfMemory,
+                else => return error.Unimplemented,
+            };
+            defer parsed.deinit();
+            if (parsed.diagnostics.len == 0) {
+                const previous_alias_state = evaluator.alias_state;
+                evaluator.alias_state = &alias_snapshot;
+                defer evaluator.alias_state = previous_alias_state;
+                result = try evaluateStatementListSource(evaluator, shell_state, eval_context, chunk, buffers);
+                if (result.control_flow != .normal) return result;
+                break;
+            }
+            if (!parsed.incomplete or end >= source.len) {
+                return evaluateStatementListSource(evaluator, shell_state, eval_context, chunk, buffers);
+            }
+            end = sourcedTextLineEnd(source, end);
+        }
+        start = skipSourcedTextChunkSeparators(source, end);
+    }
+    return result;
+}
+
+fn skipSourcedTextChunkSeparators(source: []const u8, start: usize) usize {
+    var index = start;
+    while (index < source.len and (source[index] == ' ' or
+        source[index] == '\t' or
+        source[index] == '\r' or
+        source[index] == '\n' or
+        source[index] == ';')) index += 1;
+    return index;
+}
+
+fn sourcedTextLineEnd(source: []const u8, start: usize) usize {
+    var index = start;
+    while (index < source.len and source[index] != '\n') index += 1;
+    if (index < source.len) index += 1;
+    return index;
 }
 
 fn evaluateEnv(
