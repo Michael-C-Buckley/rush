@@ -2305,17 +2305,21 @@ fn appendSplitPatternText(
 
     var index: usize = 0;
     while (index < text.len) {
-        const c = text[index];
-        if (!isIfsChar(ifs, c)) {
-            try current_text.append(allocator, c);
-            try current_special.append(allocator, meta_active);
-            index += 1;
+        const separator = ifsSeparatorAt(text, null, index, ifs) orelse {
+            const next = nextCharacterIndex(text, index);
+            try current_text.appendSlice(allocator, text[index..next]);
+            for (text[index..next]) |_| try current_special.append(allocator, meta_active);
+            index = next;
             continue;
-        }
+        };
 
-        if (isIfsWhitespace(ifs, c)) {
-            while (index < text.len and isIfsWhitespace(ifs, text[index])) index += 1;
-            if (index < text.len and isIfsChar(ifs, text[index])) continue;
+        if (separator.whitespace) {
+            while (index < text.len) {
+                const next_separator = ifsSeparatorAt(text, null, index, ifs) orelse break;
+                if (!next_separator.whitespace) break;
+                index += next_separator.width;
+            }
+            if (index < text.len and ifsSeparatorAt(text, null, index, ifs) != null) continue;
             if (current_text.items.len != 0) {
                 try appendCurrentPatternField(allocator, fields, current_text, current_special);
             }
@@ -2323,8 +2327,12 @@ fn appendSplitPatternText(
         }
 
         try appendCurrentPatternField(allocator, fields, current_text, current_special);
-        index += 1;
-        while (index < text.len and isIfsWhitespace(ifs, text[index])) index += 1;
+        index += separator.width;
+        while (index < text.len) {
+            const next_separator = ifsSeparatorAt(text, null, index, ifs) orelse break;
+            if (!next_separator.whitespace) break;
+            index += next_separator.width;
+        }
     }
 }
 
@@ -2345,17 +2353,21 @@ fn appendSplitPatternSegmentedText(
 
     var index: usize = 0;
     while (index < text.text.len) {
-        const c = text.text[index];
-        if (!text.split[index] or !isIfsChar(ifs, c)) {
-            try current_text.append(allocator, c);
-            try current_special.append(allocator, text.split[index]);
-            index += 1;
+        const separator = ifsSeparatorAt(text.text, text.split, index, ifs) orelse {
+            const next = nextCharacterIndex(text.text, index);
+            try current_text.appendSlice(allocator, text.text[index..next]);
+            try current_special.appendSlice(allocator, text.split[index..next]);
+            index = next;
             continue;
-        }
+        };
 
-        if (isIfsWhitespace(ifs, c)) {
-            while (index < text.text.len and text.split[index] and isIfsWhitespace(ifs, text.text[index])) index += 1;
-            if (index < text.text.len and text.split[index] and isIfsChar(ifs, text.text[index])) continue;
+        if (separator.whitespace) {
+            while (index < text.text.len) {
+                const next_separator = ifsSeparatorAt(text.text, text.split, index, ifs) orelse break;
+                if (!next_separator.whitespace) break;
+                index += next_separator.width;
+            }
+            if (index < text.text.len and ifsSeparatorAt(text.text, text.split, index, ifs) != null) continue;
             if (current_text.items.len != 0) {
                 try appendCurrentPatternField(allocator, fields, current_text, current_special);
             }
@@ -2363,8 +2375,12 @@ fn appendSplitPatternSegmentedText(
         }
 
         try appendCurrentPatternField(allocator, fields, current_text, current_special);
-        index += 1;
-        while (index < text.text.len and text.split[index] and isIfsWhitespace(ifs, text.text[index])) index += 1;
+        index += separator.width;
+        while (index < text.text.len) {
+            const next_separator = ifsSeparatorAt(text.text, text.split, index, ifs) orelse break;
+            if (!next_separator.whitespace) break;
+            index += next_separator.width;
+        }
     }
 }
 
@@ -5915,19 +5931,23 @@ fn appendSplitText(
 
     var index: usize = 0;
     while (index < text.len) {
-        const c = text[index];
-        if (!isIfsChar(ifs, c)) {
-            try current.append(allocator, c);
-            index += 1;
+        const separator = ifsSeparatorAt(text, null, index, ifs) orelse {
+            const next = nextCharacterIndex(text, index);
+            try current.appendSlice(allocator, text[index..next]);
+            index = next;
             continue;
-        }
+        };
 
-        if (isIfsWhitespace(ifs, c)) {
-            while (index < text.len and isIfsWhitespace(ifs, text[index])) index += 1;
+        if (separator.whitespace) {
+            while (index < text.len) {
+                const next_separator = ifsSeparatorAt(text, null, index, ifs) orelse break;
+                if (!next_separator.whitespace) break;
+                index += next_separator.width;
+            }
             // IFS white space adjacent to a non-whitespace IFS character is
             // part of that single delimiter (POSIX XCU 2.6.5), handled by the
             // non-whitespace branch below.
-            if (index < text.len and isIfsChar(ifs, text[index])) continue;
+            if (index < text.len and ifsSeparatorAt(text, null, index, ifs) != null) continue;
             if (current.items.len != 0) {
                 try fields.append(allocator, try current.toOwnedSlice(allocator));
             }
@@ -5935,8 +5955,12 @@ fn appendSplitText(
         }
 
         try fields.append(allocator, try current.toOwnedSlice(allocator));
-        index += 1;
-        while (index < text.len and isIfsWhitespace(ifs, text[index])) index += 1;
+        index += separator.width;
+        while (index < text.len) {
+            const next_separator = ifsSeparatorAt(text, null, index, ifs) orelse break;
+            if (!next_separator.whitespace) break;
+            index += next_separator.width;
+        }
     }
 }
 
@@ -5955,18 +5979,22 @@ fn appendSplitSegmentedText(
 
     var index: usize = 0;
     while (index < text.text.len) {
-        const c = text.text[index];
-        if (!text.split[index] or !isIfsChar(ifs, c)) {
-            try current.append(allocator, c);
-            index += 1;
+        const separator = ifsSeparatorAt(text.text, text.split, index, ifs) orelse {
+            const next = nextCharacterIndex(text.text, index);
+            try current.appendSlice(allocator, text.text[index..next]);
+            index = next;
             continue;
-        }
+        };
 
-        if (isIfsWhitespace(ifs, c)) {
-            while (index < text.text.len and text.split[index] and isIfsWhitespace(ifs, text.text[index])) index += 1;
+        if (separator.whitespace) {
+            while (index < text.text.len) {
+                const next_separator = ifsSeparatorAt(text.text, text.split, index, ifs) orelse break;
+                if (!next_separator.whitespace) break;
+                index += next_separator.width;
+            }
             // Quoted bytes terminate the delimiter run: they are data even when
             // they equal IFS characters.
-            if (index < text.text.len and text.split[index] and isIfsChar(ifs, text.text[index])) continue;
+            if (index < text.text.len and ifsSeparatorAt(text.text, text.split, index, ifs) != null) continue;
             if (current.items.len != 0) {
                 try fields.append(allocator, try current.toOwnedSlice(allocator));
             }
@@ -5974,13 +6002,53 @@ fn appendSplitSegmentedText(
         }
 
         try fields.append(allocator, try current.toOwnedSlice(allocator));
-        index += 1;
-        while (index < text.text.len and text.split[index] and isIfsWhitespace(ifs, text.text[index])) index += 1;
+        index += separator.width;
+        while (index < text.text.len) {
+            const next_separator = ifsSeparatorAt(text.text, text.split, index, ifs) orelse break;
+            if (!next_separator.whitespace) break;
+            index += next_separator.width;
+        }
     }
 }
 
 fn isDefaultIfsWhitespace(c: u8) bool {
     return c == ' ' or c == '\t' or c == '\n';
+}
+
+const IfsSeparator = struct { width: usize, whitespace: bool };
+
+fn ifsSeparatorAt(text: []const u8, split: ?[]const bool, index: usize, ifs: []const u8) ?IfsSeparator {
+    std.debug.assert(index < text.len);
+    if (split) |mask| std.debug.assert(mask.len == text.len);
+
+    if (isDefaultIfsWhitespace(text[index]) and isIfsChar(ifs, text[index])) {
+        if (!rangeCanSplit(split, index, index + 1)) return null;
+        return .{ .width = 1, .whitespace = true };
+    }
+
+    var ifs_index: usize = 0;
+    while (ifs_index < ifs.len) : (ifs_index = nextCharacterIndex(ifs, ifs_index)) {
+        const ifs_end = nextCharacterIndex(ifs, ifs_index);
+        const ifs_char = ifs[ifs_index..ifs_end];
+        if (ifs_char.len == 1 and isDefaultIfsWhitespace(ifs_char[0])) continue;
+
+        const text_end = index + ifs_char.len;
+        if (text_end <= text.len and
+            rangeCanSplit(split, index, text_end) and
+            std.mem.eql(u8, text[index..text_end], ifs_char))
+        {
+            return .{ .width = ifs_char.len, .whitespace = false };
+        }
+    }
+    return null;
+}
+
+fn rangeCanSplit(split: ?[]const bool, start: usize, end: usize) bool {
+    if (split) |mask| {
+        std.debug.assert(end <= mask.len);
+        for (mask[start..end]) |enabled| if (!enabled) return false;
+    }
+    return true;
 }
 
 fn isIfsChar(ifs: []const u8, c: u8) bool {

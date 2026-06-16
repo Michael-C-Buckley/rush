@@ -899,6 +899,23 @@
             .status = 0,
         },
         .{
+            .name = "field splitting treats multibyte IFS delimiters as single characters",
+            .script =
+            \\IFS=å
+            \\x='aåb'
+            \\set -- $x
+            \\printf '<%s>\n' "$#" "$@"
+            ,
+            .stdout =
+            \\<2>
+            \\<a>
+            \\<b>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "field splitting with non-whitespace IFS preserves leading and adjacent empty fields",
             .script =
             \\IFS=:
