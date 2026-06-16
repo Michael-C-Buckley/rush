@@ -3367,20 +3367,8 @@ fn startBackgroundSingleExternal(
         else => unreachable,
     };
 
-    var temporary_environment = assignment_runtime.TemporaryEnvironment.init(evaluator.allocator);
-    defer temporary_environment.deinit();
-    if (plan.assignmentEffect() == .temporary) {
-        temporary_environment.appendCommandAssignments(shell_state, plan) catch |err| switch (err) {
-            error.ReadonlyVariable => unreachable,
-            error.OutOfMemory => return error.OutOfMemory,
-        };
-    }
-
-    var environment = try buildExternalEnvironment(evaluator.allocator, shell_state, temporary_environment);
-    defer environment.deinit();
-
-    const argv = try externalArgv(evaluator.allocator, plan, resolution);
-    defer evaluator.allocator.free(argv);
+    var invocation = try ExternalInvocation.init(evaluator.allocator, shell_state, plan, resolution, &.{});
+    defer invocation.deinit(evaluator.allocator);
 
     var applied_redirections: ?redirection_plan.AppliedRedirections = null;
     defer if (applied_redirections) |*applied| {
@@ -3399,12 +3387,7 @@ fn startBackgroundSingleExternal(
     }
 
     const use_process_group = shell_state.options.enabled(.monitor);
-    const child = (process_port.spawn(.{
-        .argv = argv,
-        .environment = &environment,
-        .stdin = .inherit,
-        .stdout = .inherit,
-        .stderr = .inherit,
+    const child = (invocation.spawn(evaluator, process_port, .{
         .process_group = if (use_process_group) 0 else null,
     }) catch |err| switch (err) {
         error.OutOfMemory => return error.OutOfMemory,
@@ -3750,24 +3733,10 @@ fn spawnExternalPipelineStage(
         else => unreachable,
     };
 
-    var temporary_environment = assignment_runtime.TemporaryEnvironment.init(evaluator.allocator);
-    defer temporary_environment.deinit();
-    if (plan.assignmentEffect() == .temporary) {
-        temporary_environment.appendCommandAssignments(shell_state, plan) catch |err| switch (err) {
-            error.ReadonlyVariable => unreachable,
-            error.OutOfMemory => return error.OutOfMemory,
-        };
-    }
+    var invocation = try ExternalInvocation.init(evaluator.allocator, shell_state, plan, resolution, &.{});
+    defer invocation.deinit(evaluator.allocator);
 
-    var environment = try buildExternalEnvironment(evaluator.allocator, shell_state, temporary_environment);
-    defer environment.deinit();
-
-    const argv = try externalArgv(evaluator.allocator, plan, resolution);
-    defer evaluator.allocator.free(argv);
-
-    const result = process_port.spawn(.{
-        .argv = argv,
-        .environment = &environment,
+    const result = invocation.spawn(evaluator, process_port, .{
         .stdin = stdin,
         .stdout = stdout,
         .stderr = .inherit,
@@ -5516,6 +5485,83 @@ fn evaluateExternal(
     return evaluateExternalWithProcessEnvironment(evaluator, shell_state, plan, resolution, &.{}, buffers);
 }
 
+const ExternalInvocation = struct {
+    temporary_environment: assignment_runtime.TemporaryEnvironment,
+    environment: std.process.Environ.Map,
+    argv: [][]const u8,
+
+    fn init(
+        allocator: std.mem.Allocator,
+        shell_state: state.ShellState,
+        plan: command_plan.CommandPlan,
+        resolution: command_plan.ExternalResolution,
+        process_overlay: []const assignment_runtime.ProcessEnvironmentEntry,
+    ) !ExternalInvocation {
+        resolution.validate();
+        std.debug.assert(plan.target == .child_process);
+        std.debug.assert(plan.argv.len != 0);
+        std.debug.assert(std.mem.eql(u8, plan.argv[0], resolution.name));
+        std.debug.assert(plan.assignmentEffect() == .temporary or plan.assignmentEffect() == .none);
+
+        var temporary_environment = assignment_runtime.TemporaryEnvironment.init(allocator);
+        errdefer temporary_environment.deinit();
+        if (plan.assignmentEffect() == .temporary) {
+            temporary_environment.appendCommandAssignments(shell_state, plan) catch |err| switch (err) {
+                error.ReadonlyVariable => unreachable,
+                error.OutOfMemory => return error.OutOfMemory,
+            };
+        }
+
+        var environment = try buildExternalEnvironmentWithProcessOverlay(
+            allocator,
+            shell_state,
+            temporary_environment,
+            process_overlay,
+        );
+        errdefer environment.deinit();
+
+        const argv = try externalArgv(allocator, plan, resolution);
+        errdefer allocator.free(argv);
+
+        return .{
+            .temporary_environment = temporary_environment,
+            .environment = environment,
+            .argv = argv,
+        };
+    }
+
+    fn deinit(self: *ExternalInvocation, allocator: std.mem.Allocator) void {
+        allocator.free(self.argv);
+        self.environment.deinit();
+        self.temporary_environment.deinit();
+    }
+
+    fn run(
+        self: ExternalInvocation,
+        evaluator: *Evaluator,
+        process_port: runtime.process.Port,
+        stdin: []const u8,
+    ) runtime.process.RunError!runtime.process.RunResult {
+        return runExternalProcess(evaluator, process_port, self.argv, &self.environment, stdin);
+    }
+
+    fn spawn(
+        self: ExternalInvocation,
+        evaluator: *Evaluator,
+        process_port: runtime.process.Port,
+        options: ExternalSpawnOptions,
+    ) runtime.process.SpawnError!runtime.process.SpawnResult {
+        return spawnExternalProcess(evaluator, process_port, self.argv, &self.environment, options);
+    }
+};
+
+const ExternalSpawnOptions = struct {
+    stdin: runtime.process.StandardIo = .inherit,
+    stdout: runtime.process.StandardIo = .inherit,
+    stderr: runtime.process.StandardIo = .inherit,
+    process_group: ?runtime.process.ProcessId = null,
+};
+
 fn evaluateExternalWithProcessEnvironment(
     evaluator: *Evaluator,
     shell_state: state.ShellState,
@@ -5524,36 +5570,14 @@ fn evaluateExternalWithProcessEnvironment(
     process_overlay: []const assignment_runtime.ProcessEnvironmentEntry,
     buffers: *EvaluationBuffers,
 ) EvalError!outcome.ExitStatus {
-    resolution.validate();
-    std.debug.assert(plan.target == .child_process);
-    std.debug.assert(plan.argv.len != 0);
-    std.debug.assert(std.mem.eql(u8, plan.argv[0], resolution.name));
-    std.debug.assert(plan.assignmentEffect() == .temporary or plan.assignmentEffect() == .none);
     const shell_state_before = shellStateMutationFingerprint(shell_state);
     defer std.debug.assert(shellStateMutationFingerprint(shell_state) == shell_state_before);
 
     const fd_port = evaluator.fd_port orelse return error.Unimplemented;
     const process_port = evaluator.process_port orelse return error.Unimplemented;
 
-    var temporary_environment = assignment_runtime.TemporaryEnvironment.init(evaluator.allocator);
-    defer temporary_environment.deinit();
-    if (plan.assignmentEffect() == .temporary) {
-        temporary_environment.appendCommandAssignments(shell_state, plan) catch |err| switch (err) {
-            error.ReadonlyVariable => unreachable,
-            error.OutOfMemory => return error.OutOfMemory,
-        };
-    }
-
-    var environment = try buildExternalEnvironmentWithProcessOverlay(
-        evaluator.allocator,
-        shell_state,
-        temporary_environment,
-        process_overlay,
-    );
-    defer environment.deinit();
-
-    const argv = try externalArgv(evaluator.allocator, plan, resolution);
-    defer evaluator.allocator.free(argv);
+    var invocation = try ExternalInvocation.init(evaluator.allocator, shell_state, plan, resolution, process_overlay);
+    defer invocation.deinit(evaluator.allocator);
 
     if (externalNeedsBufferedStdin(plan, buffers)) {
         return runExternalWithPipelineInputWithProcessEnvironment(
@@ -5586,11 +5610,9 @@ fn evaluateExternalWithProcessEnvironment(
             }
         }
 
-        var run_result = runExternalProcess(
+        var run_result = invocation.run(
             evaluator,
             process_port,
-            argv,
-            &environment,
             stdin,
         ) catch |err| switch (err) {
             error.OutOfMemory => return error.OutOfMemory,
@@ -5620,8 +5642,7 @@ fn evaluateExternalWithProcessEnvironment(
         process_port,
         fd_port,
         plan,
-        argv,
-        &environment,
+        invocation,
         buffers,
         capture_mode,
         &.{},
@@ -5652,7 +5673,7 @@ fn evaluateExternalWithProcessEnvironment(
         }
     }
 
-    var child = (spawnExternalProcess(evaluator, process_port, argv, &environment) catch |err| switch (err) {
+    var child = (invocation.spawn(evaluator, process_port, .{}) catch |err| switch (err) {
         error.OutOfMemory => return error.OutOfMemory,
         else => |spawn_err| {
             const failure = spawnFailure(spawn_err);
@@ -5690,15 +5711,14 @@ fn evaluateCapturedExternal(
     process_port: runtime.process.Port,
     fd_port: runtime.fd.Port,
     plan: command_plan.CommandPlan,
-    argv: []const []const u8,
-    environment: *const std.process.Environ.Map,
+    invocation: ExternalInvocation,
     buffers: *EvaluationBuffers,
     capture_mode: CapturedExternalMode,
     stdin: []const u8,
 ) EvalError!outcome.ExitStatus {
     plan.validate();
     std.debug.assert(plan.argv.len != 0);
-    std.debug.assert(argv.len != 0);
+    std.debug.assert(invocation.argv.len != 0);
 
     var applied_redirections: ?redirection_plan.AppliedRedirections = null;
     defer if (applied_redirections) |*applied| {
@@ -5716,11 +5736,9 @@ fn evaluateCapturedExternal(
         }
     }
 
-    var run_result = runExternalProcess(
+    var run_result = invocation.run(
         evaluator,
         process_port,
-        argv,
-        environment,
         stdin,
     ) catch |err| switch (err) {
         error.OutOfMemory => return error.OutOfMemory,
@@ -5768,36 +5786,14 @@ fn runExternalWithPipelineInputWithProcessEnvironment(
     process_overlay: []const assignment_runtime.ProcessEnvironmentEntry,
     buffers: *EvaluationBuffers,
 ) EvalError!outcome.ExitStatus {
-    resolution.validate();
-    std.debug.assert(plan.target == .child_process);
-    std.debug.assert(plan.argv.len != 0);
-    std.debug.assert(std.mem.eql(u8, plan.argv[0], resolution.name));
-    std.debug.assert(plan.assignmentEffect() == .temporary or plan.assignmentEffect() == .none);
     const shell_state_before = shellStateMutationFingerprint(shell_state);
     defer std.debug.assert(shellStateMutationFingerprint(shell_state) == shell_state_before);
 
     const fd_port = evaluator.fd_port orelse return error.Unimplemented;
     const process_port = evaluator.process_port orelse return error.Unimplemented;
 
-    var temporary_environment = assignment_runtime.TemporaryEnvironment.init(evaluator.allocator);
-    defer temporary_environment.deinit();
-    if (plan.assignmentEffect() == .temporary) {
-        temporary_environment.appendCommandAssignments(shell_state, plan) catch |err| switch (err) {
-            error.ReadonlyVariable => unreachable,
-            error.OutOfMemory => return error.OutOfMemory,
-        };
-    }
-
-    var environment = try buildExternalEnvironmentWithProcessOverlay(
-        evaluator.allocator,
-        shell_state,
-        temporary_environment,
-        process_overlay,
-    );
-    defer environment.deinit();
-
-    const argv = try externalArgv(evaluator.allocator, plan, resolution);
-    defer evaluator.allocator.free(argv);
+    var invocation = try ExternalInvocation.init(evaluator.allocator, shell_state, plan, resolution, process_overlay);
+    defer invocation.deinit(evaluator.allocator);
 
     var applied_redirections: ?redirection_plan.AppliedRedirections = null;
     defer if (applied_redirections) |*applied| {
@@ -5815,11 +5811,9 @@ fn runExternalWithPipelineInputWithProcessEnvironment(
         }
     }
 
-    var run_result = runExternalProcess(
+    var run_result = invocation.run(
         evaluator,
         process_port,
-        argv,
-        &environment,
         buffers.stdin.takeRemaining(),
     ) catch |err| switch (err) {
         error.OutOfMemory => return error.OutOfMemory,
@@ -6018,13 +6012,15 @@ fn spawnExternalProcess(
     process_port: runtime.process.Port,
     argv: []const []const u8,
     environment: *const std.process.Environ.Map,
+    options: ExternalSpawnOptions,
 ) runtime.process.SpawnError!runtime.process.SpawnResult {
     return process_port.spawn(.{
         .argv = argv,
         .environment = environment,
-        .stdin = .inherit,
-        .stdout = .inherit,
-        .stderr = .inherit,
+        .stdin = options.stdin,
+        .stdout = options.stdout,
+        .stderr = options.stderr,
+        .process_group = options.process_group,
     }) catch |err| switch (err) {
         error.InvalidExe => {
             const fallback_argv = try shellFallbackArgv(evaluator.allocator, argv);
@@ -6032,21 +6028,14 @@ fn spawnExternalProcess(
             return process_port.spawn(.{
                 .argv = fallback_argv,
                 .environment = environment,
-                .stdin = .inherit,
-                .stdout = .inherit,
-                .stderr = .inherit,
+                .stdin = options.stdin,
+                .stdout = options.stdout,
+                .stderr = options.stderr,
+                .process_group = options.process_group,
             });
         },
         else => |spawn_err| return spawn_err,
     };
-}
-
-fn buildExternalEnvironment(
-    allocator: std.mem.Allocator,
-    shell_state: state.ShellState,
-    temporary_environment: assignment_runtime.TemporaryEnvironment,
-) !std.process.Environ.Map {
-    return buildExternalEnvironmentWithProcessOverlay(allocator, shell_state, temporary_environment, &.{});
 }
 
 fn buildExternalEnvironmentWithProcessOverlay(
