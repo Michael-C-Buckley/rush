@@ -1274,10 +1274,17 @@ pub fn manifestApplication(
 
     var builder: Builder = .{};
     errdefer builder.deinit(allocator);
+    var handled = false;
     switch (semantic.position) {
-        .subcommand => try appendManifestSubcommands(allocator, state.*, &builder, semantic),
-        .option => try appendManifestOptions(allocator, state.*, &builder, semantic),
-        .option_value, .argument => try appendManifestValueProviders(
+        .subcommand => {
+            handled = true;
+            try appendManifestSubcommands(allocator, state.*, &builder, semantic);
+        },
+        .option => {
+            handled = true;
+            try appendManifestOptions(allocator, state.*, &builder, semantic);
+        },
+        .option_value, .argument => handled = try appendManifestValueProviders(
             allocator,
             io,
             state.*,
@@ -1289,7 +1296,15 @@ pub fn manifestApplication(
     }
     const candidates = try builder.finish(allocator);
     defer freeCandidates(allocator, candidates);
-    return applyCandidatesForInputWithPolicy(allocator, source, candidates, .engineDefault());
+    const application = try applyCandidatesForInputWithPolicy(allocator, source, candidates, .engineDefault());
+    return switch (application) {
+        .none => if (handled) try emptyAmbiguousApplication(allocator) else .none,
+        .edit, .ambiguous => application,
+    };
+}
+
+fn emptyAmbiguousApplication(allocator: std.mem.Allocator) !Application {
+    return .{ .ambiguous = try allocator.alloc(Candidate, 0) };
 }
 
 const builtin_os = @import("builtin").os.tag;
@@ -1522,15 +1537,17 @@ fn appendManifestValueProviders(
     shell_state: shell_state_mod.ShellState,
     builder: *Builder,
     semantic: SemanticContext,
-) !void {
+) !bool {
+    var handled = false;
     switch (semantic.position) {
         .option_value => {
-            const option_value = semantic.option_value orelse return;
+            const option_value = semantic.option_value orelse return false;
             for (state.rules.items) |rule| {
                 if (rule.disabled or rule.kind != .dynamic_option_value) continue;
                 if (!ruleMatchesPath(rule, semantic.root, semantic.path)) continue;
                 if (!optionRuleMatchesValue(rule.option, option_value)) continue;
                 if (rule.value_index != option_value.value_index) continue;
+                handled = true;
                 try appendProviderCandidates(allocator, io, shell_state, builder, rule, semantic);
             }
         },
@@ -1538,10 +1555,12 @@ fn appendManifestValueProviders(
             if (rule.disabled or rule.kind != .dynamic_argument) continue;
             if (!ruleMatchesPath(rule, semantic.root, semantic.path)) continue;
             if (!argumentRuleMatches(rule.argument, semantic.argument_index)) continue;
+            handled = true;
             try appendProviderCandidates(allocator, io, shell_state, builder, rule, semantic);
         },
         else => {},
     }
+    return handled;
 }
 
 fn optionRuleMatchesValue(option: Option, value: OptionValue) bool {
@@ -3062,6 +3081,59 @@ test "manifest completion orders static provider values by priority" {
     try std.testing.expectEqual(@as(usize, 2), application.ambiguous.len);
     try std.testing.expectEqualStrings("apricot", application.ambiguous[0].value);
     try std.testing.expectEqualStrings("alpha", application.ambiguous[1].value);
+}
+
+test "manifest completion treats empty dynamic provider as handled" {
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    try tmp.dir.writeFile(std.testing.io, .{
+        .sub_path = "tool.json",
+        .data =
+        \\
+        \\{
+        \\  "manifestVersion": 1,
+        \\  "command": {
+        \\    "name": "tool",
+        \\    "providers": {
+        \\      "tool.values": { "function": "__rush_complete_tool_values" }
+        \\    },
+        \\    "arguments": {
+        \\      "states": [{ "name": "value", "index": 0, "provider": "tool.values" }]
+        \\    }
+        \\  }
+        \\}
+        \\
+        ,
+    });
+    var manifest_path_buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
+    const tmp_root_len = try tmp.dir.realPath(std.testing.io, &manifest_path_buffer);
+    const tmp_root = manifest_path_buffer[0..tmp_root_len];
+    const manifest_path = try std.fs.path.join(std.testing.allocator, &.{ tmp_root, "tool.json" });
+    defer std.testing.allocator.free(manifest_path);
+
+    var completion_state = State.init(std.testing.allocator);
+    defer completion_state.deinit();
+    try loadManifestFile(std.testing.allocator, std.testing.io, &completion_state, manifest_path);
+
+    var shell_state = shell_state_mod.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    try shell_state.putFunction(.{
+        .name = "__rush_complete_tool_values",
+        .source_body = ":",
+    });
+
+    const source = "tool a";
+    const application = try manifestApplication(
+        std.testing.allocator,
+        std.testing.io,
+        &completion_state,
+        shell_state,
+        source,
+        source.len,
+    );
+    defer application.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 0), application.ambiguous.len);
 }
 
 test "manifest completion uses option value provider after root option" {
