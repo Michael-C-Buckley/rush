@@ -218,7 +218,9 @@ pub const ShellExpansion = struct {
             try argv.append(self.allocator, owned);
         }
 
-        const declaration_utility = first_fields.fields.len != 0 and isDeclarationUtility(first_fields.fields[0]);
+        const declaration_utility = first_fields.fields.len != 0 and
+            (isDeclarationUtility(first_fields.fields[0]) or
+                commandInvocationWrapsDeclaration(first_fields.fields, words[1..]));
         for (words[1..]) |word| {
             if (declaration_utility and isAssignmentOperand(word)) {
                 const expanded = try self.expandAssignmentWordScalar(word);
@@ -490,6 +492,20 @@ fn isDeclarationUtility(name: []const u8) bool {
     return std.mem.eql(u8, name, "export") or std.mem.eql(u8, name, "readonly");
 }
 
+fn commandInvocationWrapsDeclaration(first_fields: []const []const u8, operands: []const []const u8) bool {
+    if (first_fields.len != 1 or !std.mem.eql(u8, first_fields[0], "command")) return false;
+    var index: usize = 0;
+    while (index < operands.len) : (index += 1) {
+        const operand = operands[index];
+        if (std.mem.eql(u8, operand, "-p")) continue;
+        if (std.mem.eql(u8, operand, "command")) {
+            return commandInvocationWrapsDeclaration(&.{"command"}, operands[index + 1 ..]);
+        }
+        return isDeclarationUtility(operand);
+    }
+    return false;
+}
+
 fn isAssignmentOperand(word: []const u8) bool {
     const equals = std.mem.indexOfScalar(u8, word, '=') orelse return false;
     return isValidVariableName(word[0..equals]);
@@ -735,6 +751,23 @@ test "ShellExpansion applies assignment tilde expansion to declaration utility o
     try std.testing.expectEqual(@as(usize, 2), command.command.argv.len);
     try std.testing.expectEqualStrings("export", command.command.argv[0]);
     try std.testing.expectEqualStrings("PATH=/tmp:/bin", command.command.argv[1]);
+
+    var wrapped = try adapter.expandSimpleCommand(&.{}, &.{ "command", "export", "PATH=~:/bin" });
+    defer wrapped.deinit();
+
+    try std.testing.expectEqual(@as(usize, 3), wrapped.command.argv.len);
+    try std.testing.expectEqualStrings("command", wrapped.command.argv[0]);
+    try std.testing.expectEqualStrings("export", wrapped.command.argv[1]);
+    try std.testing.expectEqualStrings("PATH=/tmp:/bin", wrapped.command.argv[2]);
+
+    var nested = try adapter.expandSimpleCommand(&.{}, &.{ "command", "command", "readonly", "PATH=~:/bin" });
+    defer nested.deinit();
+
+    try std.testing.expectEqual(@as(usize, 4), nested.command.argv.len);
+    try std.testing.expectEqualStrings("command", nested.command.argv[0]);
+    try std.testing.expectEqualStrings("command", nested.command.argv[1]);
+    try std.testing.expectEqualStrings("readonly", nested.command.argv[2]);
+    try std.testing.expectEqualStrings("PATH=/tmp:/bin", nested.command.argv[3]);
 }
 
 test "ShellExpansion expands assignment words left-to-right without changing argv expansion" {

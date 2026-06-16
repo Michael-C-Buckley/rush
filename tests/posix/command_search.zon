@@ -314,6 +314,20 @@
             .status = 0,
         },
         .{
+            .name = "command utility preserves declaration assignment expansion",
+            .script =
+            \\HOME=/tmp/rush-command-home
+            \\command export COMMAND_EXPORT_TILDE=~
+            \\printf '<%s>\n' "$COMMAND_EXPORT_TILDE"
+            ,
+            .stdout =
+            \\</tmp/rush-command-home>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "command utility preserves regular built-in state effects",
             .script =
             \\start=$PWD
