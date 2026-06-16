@@ -21,7 +21,7 @@
   <p>rush_complete - emit completion candidates and inspect completion context.</p>
 
   <h2 id="synopsis"><a href="#synopsis">SYNOPSIS</a></h2>
-  <pre><span class="cmd">rush_complete</span> candidate <span class="var">value</span> [<span class="opt">--kind</span> <span class="var">kind</span>] [<span class="opt">--description</span> <span class="var">text</span>] [<span class="opt">--no-space</span>]
+  <pre><span class="cmd">rush_complete</span> candidate <span class="var">value</span> [<span class="opt">--kind</span> <span class="var">kind</span>] [<span class="opt">--description</span> <span class="var">text</span>] [<span class="opt">--priority</span> <span class="var">n</span>] [<span class="opt">--no-space</span>]
 <span class="cmd">rush_complete</span> files
 <span class="cmd">rush_complete</span> directories [<span class="opt">--append-slash</span>]
 <span class="cmd">rush_complete</span> option-present (<span class="opt">--long</span> <span class="var">name</span> | <span class="opt">--short</span> <span class="var">name</span>)
@@ -34,7 +34,7 @@
 
   <h2 id="commands"><a href="#commands">COMMANDS</a></h2>
   <dl>
-    <dt><code>candidate</code></dt><dd>Add one candidate. Supported kinds include <code>plain</code>, <code>file</code>, <code>directory</code>, <code>subcommand</code>, <code>option</code>, <code>variable</code>, <code>function</code>, <code>command</code>, and <code>builtin</code>.</dd>
+    <dt><code>candidate</code></dt><dd>Add one candidate. Supported kinds include <code>plain</code>, <code>file</code>, <code>directory</code>, <code>subcommand</code>, <code>option</code>, <code>variable</code>, <code>function</code>, <code>command</code>, and <code>builtin</code>. <code>--priority</code> accepts a signed 8-bit integer. Higher values prefer a candidate among otherwise comparable matches; Rush still performs final query-aware ordering. Omit it for priority <code>0</code>, use small positive bands for contextual preference, and negative values are allowed specifically to derank fallback candidates.</dd>
     <dt><code>files</code></dt><dd>Add path candidates matching the current completion prefix.</dd>
     <dt><code>directories</code></dt><dd>Add directory candidates matching the current completion prefix.</dd>
     <dt><code>option-present</code></dt><dd>Exit zero when the selected option is present in the parsed command line.</dd>

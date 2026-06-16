@@ -43,6 +43,7 @@
   <span class="str">"name"</span>: <span class="comment">string or non-empty string array</span>,
   <span class="str">"aliases"</span>: <span class="comment">array of additional names</span>,
   <span class="str">"description"</span>: <span class="comment">string</span>,
+  <span class="str">"priority"</span>: <span class="comment">integer relevance hint</span>,
   <span class="str">"hidden"</span>: <span class="comment">boolean</span>,
   <span class="str">"deprecated"</span>: <span class="comment">boolean or string</span>,
   <span class="str">"platforms"</span>: <span class="comment">array of platform ids</span>,
@@ -70,10 +71,13 @@
     <span class="str">"provider"</span>: <span class="str">"builtin.directories"</span>
   },
   <span class="str">"repeatable"</span>: <span class="kw">true</span>,
+  <span class="str">"priority"</span>: <span class="kw">10</span>,
   <span class="str">"description"</span>: <span class="str">"run from path"</span>
 }</pre>
 
   <p><code>spellings</code> is for literal option tokens that do not fit short or long sugar, such as single-dash long options or plus-prefixed toggles. <code>value</code> may be one value object or an array of value objects for multi-word option values.</p>
+
+  <p><code>priority</code> is a signed 8-bit integer relevance hint accepted on commands, options, and static enum values. Higher values prefer a candidate among otherwise comparable matches; Rush still performs final query-aware ordering. Omit it for the default priority <code>0</code>. Use small bands consistently: <code>1</code>-<code>9</code> for a slight preference, <code>10</code>-<code>49</code> for strong context, <code>50</code>-<code>99</code> for exceptional context such as the current branch or active target, and negative values are allowed specifically to derank fallback candidates.</p>
 
   <h2 id="providers"><a href="#providers">Providers</a></h2>
 
@@ -82,6 +86,8 @@
   <pre>{ <span class="str">"function"</span>: <span class="str">"__rush_complete_git_branches"</span> }
 { <span class="str">"builtin"</span>: <span class="str">"directories"</span> }
 { <span class="str">"values"</span>: [<span class="str">"auto"</span>, <span class="str">"always"</span>, <span class="str">"never"</span>] }</pre>
+
+  <p>Static enum values may be strings or objects with <code>value</code>, <code>display</code>, <code>description</code>, <code>tag</code>, <code>suffix</code>, <code>removableSuffix</code>, <code>priority</code>, and <code>noSpace</code>. Higher <code>priority</code> values prefer a candidate among otherwise comparable matches; Rush still performs final query-aware ordering.</p>
 
   <p>Provider references may be a single provider id, an inline provider object, or an ordered array of provider references.</p>
 

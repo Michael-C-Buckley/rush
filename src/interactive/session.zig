@@ -379,7 +379,14 @@ test "interactive completion lazily loads user manifest and companion script" {
     });
     try tmp.dir.writeFile(std.testing.io, .{
         .sub_path = "rush/completions/foo.rush",
-        .data = "__rush_complete_foo_values() { rush_complete candidate branch --kind plain --description dynamic; }\n",
+        .data =
+        \\
+        \\__rush_complete_foo_values() {
+        \\  rush_complete candidate branch --kind plain --description dynamic
+        \\  rush_complete candidate brown --kind plain --description dynamic --priority 10
+        \\}
+        \\
+        ,
     });
     var tmp_root_buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
     const tmp_root_len = try tmp.dir.realPath(std.testing.io, &tmp_root_buffer);
@@ -419,7 +426,9 @@ test "interactive completion lazily loads user manifest and companion script" {
         dynamic_source.len,
     );
     defer dynamic_application.deinit(std.testing.allocator);
-    try std.testing.expectEqualStrings("branch", dynamic_application.edit.replacement);
+    try std.testing.expectEqual(@as(usize, 2), dynamic_application.ambiguous.len);
+    try std.testing.expectEqualStrings("brown", dynamic_application.ambiguous[0].value);
+    try std.testing.expectEqualStrings("branch", dynamic_application.ambiguous[1].value);
 }
 
 fn drainInteractiveSemanticJobNotifications(

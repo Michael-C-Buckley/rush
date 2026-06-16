@@ -438,6 +438,7 @@ pub const StaticProviderValue = struct {
     tag: ?[]const u8 = null,
     suffix: ?[]const u8 = null,
     removable_suffix: bool = false,
+    priority: i8 = 0,
     append_space: bool = true,
 };
 
@@ -446,6 +447,7 @@ pub const Rule = struct {
     path: []const []const u8 = &.{},
     kind: RuleKind,
     value: ?[]const u8 = null,
+    priority: i8 = 0,
     provider_kind: ProviderKind = .function,
     static_values: []const StaticProviderValue = &.{},
     option: Option = .{},
@@ -760,6 +762,7 @@ pub const State = struct {
             .root = try self.allocator.dupe(u8, rule.root),
             .kind = rule.kind,
             .value = if (rule.value) |value| try self.allocator.dupe(u8, value) else null,
+            .priority = rule.priority,
             .provider_kind = rule.provider_kind,
             .option = .{
                 .long = if (rule.option.long) |long| try self.allocator.dupe(u8, long) else null,
@@ -1454,6 +1457,7 @@ fn appendManifestSubcommands(
         try builder.appendCandidateIfMissing(allocator, .{
             .value = value,
             .description = rule.description,
+            .priority = rule.priority,
             .kind = .subcommand,
             .replace_start = semantic.replace_start,
             .replace_end = semantic.replace_end,
@@ -1501,6 +1505,7 @@ fn optionCandidate(rule: Rule, spelling: []const u8, semantic: SemanticContext) 
     return .{
         .value = spelling,
         .description = rule.description,
+        .priority = rule.priority,
         .kind = .option,
         .option = rule.option,
         .replace_start = semantic.replace_start,
@@ -1565,19 +1570,23 @@ fn appendProviderCandidates(
     semantic: SemanticContext,
 ) !void {
     switch (rule.provider_kind) {
-        .static_enum => for (rule.static_values) |value| try builder.appendCandidateIfMissing(allocator, .{
-            .value = value.value,
-            .display = value.display,
-            .description = value.description orelse rule.description,
-            .tag = value.tag orelse rule.tag,
-            .suffix = value.suffix,
-            .removable_suffix = value.removable_suffix,
-            .kind = .plain,
-            .replace_start = semantic.replace_start,
-            .replace_end = semantic.replace_end,
-            .append_space = value.append_space,
-            .provider_order = rule.provider_order,
-        }),
+        .static_enum => for (rule.static_values, 0..) |value, source_order| {
+            try builder.appendCandidateIfMissing(allocator, .{
+                .value = value.value,
+                .display = value.display,
+                .description = value.description orelse rule.description,
+                .tag = value.tag orelse rule.tag,
+                .suffix = value.suffix,
+                .removable_suffix = value.removable_suffix,
+                .priority = value.priority,
+                .kind = .plain,
+                .replace_start = semantic.replace_start,
+                .replace_end = semantic.replace_end,
+                .append_space = value.append_space,
+                .provider_order = rule.provider_order,
+                .source_order = source_order,
+            });
+        },
         .builtin_files => {
             const candidates = try pathCandidatesWithOptions(
                 allocator,
@@ -1697,7 +1706,12 @@ fn appendFunctionProviderCandidates(
 
     const candidates = try provider_state.takeCandidates();
     defer editor_completion.freeCandidates(allocator, candidates);
-    for (candidates) |candidate| try builder.appendCandidateIfMissing(allocator, candidate);
+    for (candidates) |candidate| {
+        var provider_candidate = candidate;
+        if (provider_candidate.tag == null) provider_candidate.tag = rule.tag;
+        if (provider_candidate.provider_order == null) provider_candidate.provider_order = rule.provider_order;
+        try builder.appendCandidateIfMissing(allocator, provider_candidate);
+    }
 }
 
 fn providerExtensionLookup(context: ?*anyopaque, name: []const u8) ?extension_api.HandlerSpec {
@@ -1741,6 +1755,13 @@ fn jsonInteger(value: std.json.Value) ?i64 {
         .integer => |integer| integer,
         else => null,
     };
+}
+
+fn jsonPriority(value: std.json.Value) i8 {
+    const integer = jsonInteger(value) orelse return 0;
+    if (integer < std.math.minInt(i8)) return std.math.minInt(i8);
+    if (integer > std.math.maxInt(i8)) return std.math.maxInt(i8);
+    return @intCast(integer);
 }
 
 fn jsonBool(value: std.json.Value) ?bool {
@@ -1800,11 +1821,32 @@ fn registerSubcommandNames(
     provider_order: usize,
 ) !void {
     const description = if (command_object.get("description")) |value| jsonString(value) else null;
+    const priority = if (command_object.get("priority")) |value| jsonPriority(value) else 0;
     const name_value = command_object.get("name") orelse return;
-    try registerCommandNameValue(allocator, state, root, path, name_value, description, source, provider_order);
+    try registerCommandNameValue(
+        allocator,
+        state,
+        root,
+        path,
+        name_value,
+        description,
+        priority,
+        source,
+        provider_order,
+    );
     if (command_object.get("aliases")) |aliases_value| switch (aliases_value) {
         .array => |aliases| for (aliases.items) |alias| {
-            try registerCommandNameValue(allocator, state, root, path, alias, description, source, provider_order);
+            try registerCommandNameValue(
+                allocator,
+                state,
+                root,
+                path,
+                alias,
+                description,
+                priority,
+                source,
+                provider_order,
+            );
         },
         else => {},
     };
@@ -1817,6 +1859,7 @@ fn registerCommandNameValue(
     path: []const []const u8,
     name_value: std.json.Value,
     description: ?[]const u8,
+    priority: i8,
     source: RuleSource,
     provider_order: usize,
 ) !void {
@@ -1827,6 +1870,7 @@ fn registerCommandNameValue(
             .kind = .subcommand,
             .value = name,
             .description = description,
+            .priority = priority,
             .provider_order = provider_order,
             .source = source,
         }),
@@ -1836,6 +1880,7 @@ fn registerCommandNameValue(
             .kind = .subcommand,
             .value = name,
             .description = description,
+            .priority = priority,
             .provider_order = provider_order,
             .source = source,
         }),
@@ -1881,6 +1926,7 @@ fn registerManifestOptions(
                 false,
         };
         const description = if (option_object.get("description")) |value| jsonString(value) else null;
+        const priority = if (option_object.get("priority")) |value| jsonPriority(value) else 0;
         if (option_object.get("value")) |value_object| option.value_count = optionValueCount(value_object);
         try state.registerRule(.{
             .root = root,
@@ -1888,6 +1934,7 @@ fn registerManifestOptions(
             .kind = .option,
             .option = option,
             .description = description,
+            .priority = priority,
             .provider_order = index,
             .source = source,
         });
@@ -2081,6 +2128,7 @@ fn parseStaticProviderValues(allocator: std.mem.Allocator, values: std.json.Valu
                 .tag = if (object.get("tag")) |value| jsonString(value) else null,
                 .suffix = if (object.get("suffix")) |value| jsonString(value) else null,
                 .removable_suffix = if (object.get("removableSuffix")) |value| jsonBool(value) orelse false else false,
+                .priority = if (object.get("priority")) |value| jsonPriority(value) else 0,
                 .append_space = if (object.get("noSpace")) |value| !(jsonBool(value) orelse false) else true,
             },
             else => .{ .value = "" },
@@ -2331,7 +2379,6 @@ pub fn candidateQueryForInput(allocator: std.mem.Allocator, source: []const u8, 
     return decodeShellCompletionSlice(allocator, source, candidate.replace_start, candidate.replace_end);
 }
 
-
 const CandidateReplacement = struct {
     text: []const u8,
     suffix: ?[]const u8 = null,
@@ -2352,7 +2399,6 @@ fn candidateReplacementAndSuffixForInput(
         candidate.append_space,
     );
 }
-
 
 const ShellQuote = enum {
     unquoted,
@@ -2560,6 +2606,7 @@ fn cloneStaticProviderValues(
             .tag = if (value.tag) |tag| try allocator.dupe(u8, tag) else null,
             .suffix = if (value.suffix) |suffix| try allocator.dupe(u8, suffix) else null,
             .removable_suffix = value.removable_suffix,
+            .priority = value.priority,
             .append_space = value.append_space,
         };
         initialized += 1;
@@ -2875,6 +2922,124 @@ test "manifest completion returns root options" {
 
     const edit = application.edit;
     try std.testing.expectEqualStrings("--help", edit.replacement);
+}
+
+test "manifest completion orders subcommands and options by priority" {
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    try tmp.dir.writeFile(std.testing.io, .{
+        .sub_path = "tool.json",
+        .data =
+        \\
+        \\{
+        \\  "manifestVersion": 1,
+        \\  "command": {
+        \\    "name": "tool",
+        \\    "subcommands": [
+        \\      { "name": "alpha", "description": "alpha command" },
+        \\      { "name": "apricot", "description": "apricot command", "priority": 10 },
+        \\      {
+        \\        "name": "run",
+        \\        "options": [
+        \\          { "long": "alpha", "description": "alpha option" },
+        \\          { "long": "apricot", "description": "apricot option", "priority": 10 }
+        \\        ]
+        \\      }
+        \\    ]
+        \\  }
+        \\}
+        \\
+        ,
+    });
+    var manifest_path_buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
+    const tmp_root_len = try tmp.dir.realPath(std.testing.io, &manifest_path_buffer);
+    const tmp_root = manifest_path_buffer[0..tmp_root_len];
+    const manifest_path = try std.fs.path.join(std.testing.allocator, &.{ tmp_root, "tool.json" });
+    defer std.testing.allocator.free(manifest_path);
+
+    var completion_state = State.init(std.testing.allocator);
+    defer completion_state.deinit();
+    try loadManifestFile(std.testing.allocator, std.testing.io, &completion_state, manifest_path);
+
+    var shell_state = shell_state_mod.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    const subcommand_source = "tool a";
+    const subcommand_application = try manifestApplication(
+        std.testing.allocator,
+        std.testing.io,
+        &completion_state,
+        shell_state,
+        subcommand_source,
+        subcommand_source.len,
+    );
+    defer subcommand_application.deinit(std.testing.allocator);
+    try std.testing.expectEqualStrings("apricot", subcommand_application.ambiguous[0].value);
+    try std.testing.expectEqualStrings("alpha", subcommand_application.ambiguous[1].value);
+
+    const option_source = "tool run --a";
+    const option_application = try manifestApplication(
+        std.testing.allocator,
+        std.testing.io,
+        &completion_state,
+        shell_state,
+        option_source,
+        option_source.len,
+    );
+    defer option_application.deinit(std.testing.allocator);
+    try std.testing.expectEqualStrings("--apricot", option_application.ambiguous[0].value);
+    try std.testing.expectEqualStrings("--alpha", option_application.ambiguous[1].value);
+}
+
+test "manifest completion orders static provider values by priority" {
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    try tmp.dir.writeFile(std.testing.io, .{
+        .sub_path = "tool.json",
+        .data =
+        \\
+        \\{
+        \\  "manifestVersion": 1,
+        \\  "command": {
+        \\    "name": "tool",
+        \\    "providers": {
+        \\      "tool.values": {
+        \\        "values": ["alpha", { "value": "apricot", "priority": 10 }]
+        \\      }
+        \\    },
+        \\    "arguments": {
+        \\      "states": [{ "name": "value", "index": 0, "provider": "tool.values" }]
+        \\    }
+        \\  }
+        \\}
+        \\
+        ,
+    });
+    var manifest_path_buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
+    const tmp_root_len = try tmp.dir.realPath(std.testing.io, &manifest_path_buffer);
+    const tmp_root = manifest_path_buffer[0..tmp_root_len];
+    const manifest_path = try std.fs.path.join(std.testing.allocator, &.{ tmp_root, "tool.json" });
+    defer std.testing.allocator.free(manifest_path);
+
+    var completion_state = State.init(std.testing.allocator);
+    defer completion_state.deinit();
+    try loadManifestFile(std.testing.allocator, std.testing.io, &completion_state, manifest_path);
+
+    var shell_state = shell_state_mod.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    const source = "tool a";
+    const application = try manifestApplication(
+        std.testing.allocator,
+        std.testing.io,
+        &completion_state,
+        shell_state,
+        source,
+        source.len,
+    );
+    defer application.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 2), application.ambiguous.len);
+    try std.testing.expectEqualStrings("apricot", application.ambiguous[0].value);
+    try std.testing.expectEqualStrings("alpha", application.ambiguous[1].value);
 }
 
 test "manifest completion uses option value provider after root option" {

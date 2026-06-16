@@ -123,12 +123,14 @@ pub const Candidate = struct {
     tag: ?[]const u8 = null,
     suffix: ?[]const u8 = null,
     removable_suffix: bool = false,
+    priority: i8 = 0,
     kind: Kind = .plain,
     option: ?Option = null,
     replace_start: usize,
     replace_end: usize,
     append_space: bool = true,
     provider_order: ?usize = null,
+    source_order: ?usize = null,
 };
 
 pub const MatchRank = enum(u8) {
@@ -302,17 +304,25 @@ pub fn sortCandidates(candidates: []Candidate) void {
 }
 
 fn lessThanCandidate(_: void, a: Candidate, b: Candidate) bool {
-    const a_provider_order = candidateProviderOrder(a);
-    const b_provider_order = candidateProviderOrder(b);
-    if (a_provider_order != b_provider_order) return a_provider_order < b_provider_order;
+    if (a.priority != b.priority) return a.priority > b.priority;
     const a_class = candidateSortClass(a);
     const b_class = candidateSortClass(b);
     if (a_class != b_class) return a_class < b_class;
+    const a_provider_order = candidateProviderOrder(a);
+    const b_provider_order = candidateProviderOrder(b);
+    if (a_provider_order != b_provider_order) return a_provider_order < b_provider_order;
+    const a_source_order = candidateSourceOrder(a);
+    const b_source_order = candidateSourceOrder(b);
+    if (a_source_order != b_source_order) return a_source_order < b_source_order;
     return std.mem.lessThan(u8, candidateSortKey(a), candidateSortKey(b));
 }
 
 fn candidateProviderOrder(candidate: Candidate) usize {
     return candidate.provider_order orelse std.math.maxInt(usize);
+}
+
+fn candidateSourceOrder(candidate: Candidate) usize {
+    return candidate.source_order orelse std.math.maxInt(usize);
 }
 
 fn candidateSortClass(candidate: Candidate) u8 {
@@ -334,6 +344,20 @@ fn candidateSortKey(candidate: Candidate) []const u8 {
         }
     }
     return candidate.display orelse candidate.value;
+}
+
+test "candidate sorting uses priority and source order before lexical fallback" {
+    var candidates = [_]Candidate{
+        .{ .value = "alpha", .replace_start = 0, .replace_end = 0, .source_order = 1 },
+        .{ .value = "zebra", .priority = 10, .replace_start = 0, .replace_end = 0, .source_order = 2 },
+        .{ .value = "beta", .replace_start = 0, .replace_end = 0, .source_order = 0 },
+    };
+
+    sortCandidates(&candidates);
+
+    try std.testing.expectEqualStrings("zebra", candidates[0].value);
+    try std.testing.expectEqualStrings("beta", candidates[1].value);
+    try std.testing.expectEqualStrings("alpha", candidates[2].value);
 }
 
 pub fn candidateInsertText(candidate: Candidate) []const u8 {

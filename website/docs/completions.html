@@ -22,6 +22,7 @@
     <dt><code>name.rush</code></dt><dd>Optional provider functions used by <code>{ "function": "..." }</code> manifest providers.</dd>
   </dl>
   <p>Files are loaded lazily when completing that command. System completions load before user completions. User completions live in <code>$XDG_CONFIG_HOME/rush/completions</code>, or <code>~/.config/rush/completions</code> when <code>XDG_CONFIG_HOME</code> is unset.</p>
+  <p>Manifest-authored commands, options, and static enum values may set <code>priority</code> as a signed 8-bit integer relevance hint. Higher values prefer a candidate among otherwise comparable matches; Rush still performs final query-aware ordering. Omit it for the default priority <code>0</code>; prefer small bands such as <code>1</code>-<code>9</code> for slight preference, <code>10</code>-<code>49</code> for strong context, <code>50</code>-<code>99</code> for exceptional context, and negative values are allowed specifically to derank fallback candidates.</p>
 
   <h2 id="minimal-static-completion"><a href="#minimal-static-completion">Minimal static completion</a></h2>
   <pre>{
@@ -68,7 +69,7 @@
       test -n <span class="str">"$target"</span> &amp;&amp; rush_complete candidate <span class="str">"$target"</span> --kind plain --description target
     done
 }</pre>
-  <p>Function providers run asynchronously from the editor's point of view. Rush runs them hidden with captured output and cloned shell state, so slow providers do not block terminal drawing or leak output to the screen.</p>
+  <p>Function providers run asynchronously from the editor's point of view. Rush runs them hidden with captured output and cloned shell state, so slow providers do not block terminal drawing or leak output to the screen. Provider functions should be read-only and side-effect-free because they may be canceled, superseded, or invoked repeatedly while the user edits. Emit the best candidates first, and use <code>rush_complete candidate --priority N</code> with the same priority scale when a candidate should be preferred among otherwise comparable matches.</p>
 
   <h2 id="completion-context"><a href="#completion-context">Completion context</a></h2>
   <pre>__rush_complete_tool_values() {

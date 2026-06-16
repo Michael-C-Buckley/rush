@@ -34,6 +34,7 @@ pub const State = struct {
     parsed_options: []const ParsedOption,
     operands: []const ParsedOperand,
     candidates: std.ArrayList(editor_completion.Candidate) = .empty,
+    next_source_order: usize = 0,
 
     pub fn init(
         allocator: std.mem.Allocator,
@@ -106,6 +107,7 @@ fn evaluateCandidate(state: *State, invocation: *api.Invocation) !api.Evaluation
         .value = try state.allocator.dupe(u8, argv[2]),
         .replace_start = state.replace_start,
         .replace_end = state.replace_end,
+        .source_order = state.next_source_order,
     };
     errdefer freeCandidateFields(state.allocator, candidate);
     var index: usize = 3;
@@ -135,6 +137,12 @@ fn evaluateCandidate(state: *State, invocation: *api.Invocation) !api.Evaluation
             index += 1;
             if (index >= argv.len) return api.EvaluationResult.normal(try usage(invocation));
             candidate.suffix = try state.allocator.dupe(u8, argv[index]);
+        } else if (std.mem.eql(u8, arg, "--priority")) {
+            index += 1;
+            if (index >= argv.len) return api.EvaluationResult.normal(try usage(invocation));
+            candidate.priority = std.fmt.parseInt(i8, argv[index], 10) catch {
+                return api.EvaluationResult.normal(try usage(invocation));
+            };
         } else if (std.mem.eql(u8, arg, "--no-space")) {
             candidate.append_space = false;
         } else {
@@ -143,6 +151,7 @@ fn evaluateCandidate(state: *State, invocation: *api.Invocation) !api.Evaluation
         index += 1;
     }
     try state.candidates.append(state.allocator, candidate);
+    state.next_source_order += 1;
     return api.EvaluationResult.normal(0);
 }
 

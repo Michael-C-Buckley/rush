@@ -36,6 +36,11 @@
         "description": {
           "type": "string"
         },
+        "priority": {
+          "type": "integer",
+          "minimum": -128,
+          "maximum": 127
+        },
         "hidden": {
           "type": "boolean"
         },
@@ -130,6 +135,11 @@
         },
         "description": {
           "type": "string"
+        },
+        "priority": {
+          "type": "integer",
+          "minimum": -128,
+          "maximum": 127
         },
         "value": {
           "$ref": "#/$defs/optionValue"
@@ -477,6 +487,11 @@
             "tag": { "$ref": "#/$defs/name" },
             "suffix": { "type": "string" },
             "removableSuffix": { "type": "boolean" },
+            "priority": {
+              "type": "integer",
+              "minimum": -128,
+              "maximum": 127
+            },
             "noSpace": { "type": "boolean" }
           }
         }
