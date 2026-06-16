@@ -2554,37 +2554,107 @@ pub const RunnerOutputWriteResult = struct {
     stderr_failed: bool = false,
 };
 
-pub fn routeRunnerOutcomeOutput(
+pub const RunnerOutput = struct {
+    stdout: []u8,
+    stderr: []u8,
+};
+
+pub const RunnerOutputFrame = struct {
     allocator: std.mem.Allocator,
-    live: bool,
-    stdout: *std.ArrayList(u8),
-    stderr: *std.ArrayList(u8),
-    stdout_bytes: []const u8,
-    stderr_bytes: []const u8,
-) !RunnerOutputWriteResult {
-    if (!live) {
-        try stdout.appendSlice(allocator, stdout_bytes);
-        try stderr.appendSlice(allocator, stderr_bytes);
-        return .{};
+    input: *EvaluationInput,
+    buffers: *EvaluationBuffers,
+    routing: OutputRouting,
+
+    pub fn init(allocator: std.mem.Allocator, live: bool) !RunnerOutputFrame {
+        const input = try allocator.create(EvaluationInput);
+        errdefer allocator.destroy(input);
+        input.* = EvaluationInput.empty();
+
+        const buffers = try allocator.create(EvaluationBuffers);
+        errdefer allocator.destroy(buffers);
+        buffers.* = EvaluationBuffers.init(allocator, input);
+        errdefer buffers.deinit();
+
+        const initial_mode: OutputRouting.InitialMode = if (live) .inherited else .outcome_capture;
+        return .{
+            .allocator = allocator,
+            .input = input,
+            .buffers = buffers,
+            .routing = OutputRouting.init(allocator, initial_mode),
+        };
     }
 
-    var input = EvaluationInput.empty();
-    var buffers = EvaluationBuffers.init(allocator, &input);
-    defer buffers.deinit();
-    var frame = OutputFrame.initInherited(&buffers);
-    defer frame.deinit();
+    pub fn deinit(self: *RunnerOutputFrame) void {
+        self.routing.deinit();
+        self.buffers.deinit();
+        self.allocator.destroy(self.buffers);
+        self.allocator.destroy(self.input);
+        self.* = undefined;
+    }
 
-    var result: RunnerOutputWriteResult = .{};
-    frame.write(1, stdout_bytes) catch |err| switch (err) {
-        error.Unimplemented => result.stdout_failed = true,
-        else => |e| return e,
-    };
-    frame.write(2, stderr_bytes) catch |err| switch (err) {
-        error.Unimplemented => result.stderr_failed = true,
-        else => |e| return e,
-    };
-    return result;
-}
+    pub fn writeOutcome(
+        self: *RunnerOutputFrame,
+        stdout_bytes: []const u8,
+        stderr_bytes: []const u8,
+    ) !RunnerOutputWriteResult {
+        var frame = self.outputFrame();
+        defer frame.deinit();
+
+        var result: RunnerOutputWriteResult = .{};
+        frame.write(1, stdout_bytes) catch |err| switch (err) {
+            error.Unimplemented => result.stdout_failed = true,
+            else => |e| return e,
+        };
+        frame.write(2, stderr_bytes) catch |err| switch (err) {
+            error.Unimplemented => result.stderr_failed = true,
+            else => |e| return e,
+        };
+        return result;
+    }
+
+    pub fn flushPending(self: *RunnerOutputFrame) !RunnerOutputWriteResult {
+        var frame = self.outputFrame();
+        defer frame.deinit();
+
+        var result: RunnerOutputWriteResult = .{};
+        frame.flushPendingDescriptor(1) catch |err| switch (err) {
+            error.Unimplemented => result.stdout_failed = true,
+            else => |e| return e,
+        };
+        frame.flushPendingDescriptor(2) catch |err| switch (err) {
+            error.Unimplemented => result.stderr_failed = true,
+            else => |e| return e,
+        };
+        return result;
+    }
+
+    pub fn flushPendingInheritedExternal(self: *RunnerOutputFrame) !RunnerOutputWriteResult {
+        var frame = OutputFrame.initInherited(self.buffers);
+        defer frame.deinit();
+
+        var result: RunnerOutputWriteResult = .{};
+        frame.flushPendingDescriptor(1) catch |err| switch (err) {
+            error.Unimplemented => result.stdout_failed = true,
+            else => |e| return e,
+        };
+        frame.flushPendingDescriptor(2) catch |err| switch (err) {
+            error.Unimplemented => result.stderr_failed = true,
+            else => |e| return e,
+        };
+        return result;
+    }
+
+    pub fn finish(self: *RunnerOutputFrame) !RunnerOutput {
+        const stdout = try self.buffers.stdout.toOwnedSlice(self.allocator);
+        errdefer self.allocator.free(stdout);
+        const stderr = try self.buffers.stderr.toOwnedSlice(self.allocator);
+        return .{ .stdout = stdout, .stderr = stderr };
+    }
+
+    fn outputFrame(self: *RunnerOutputFrame) OutputFrame {
+        return OutputFrame.initBorrowed(self.buffers, &self.routing);
+    }
+};
 
 const OutputFrame = struct {
     buffers: *EvaluationBuffers,

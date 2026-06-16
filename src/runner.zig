@@ -325,10 +325,8 @@ fn runSemanticAliasTimingCommandString(
     parser_resolver.arg_zero = invocation.arg_zero;
     const eval_context = invocation.evalContext(.current_shell);
 
-    var stdout: std.ArrayList(u8) = .empty;
-    errdefer stdout.deinit(allocator);
-    var stderr: std.ArrayList(u8) = .empty;
-    errdefer stderr.deinit(allocator);
+    var output_frame = try shell.eval.RunnerOutputFrame.init(allocator, evaluator.commit_exec_redirections);
+    defer output_frame.deinit();
     var status: shell.ExitStatus = 0;
     var start = skipSemanticChunkSeparators(script, 0);
     var stop_for_pending_exit = false;
@@ -372,8 +370,7 @@ fn runSemanticAliasTimingCommandString(
                 switch (execution) {
                     .unsupported => |message| return semanticUnsupported(allocator, message),
                     .output => |output| {
-                        try stdout.appendSlice(allocator, output.stdout);
-                        try stderr.appendSlice(allocator, output.stderr);
+                        _ = try output_frame.writeOutcome(output.stdout, output.stderr);
                         status = output.status;
                     },
                 }
@@ -390,20 +387,19 @@ fn runSemanticAliasTimingCommandString(
     }
 
     try appendSemanticExitTrap(
-        allocator,
-        &stdout,
-        &stderr,
+        &output_frame,
         &status,
         &evaluator,
         &shell_state,
         eval_context,
         parser_resolver.resolver(),
     );
+    const runner_output = try output_frame.finish();
     return .{ .output = .{
         .allocator = allocator,
         .status = status,
-        .stdout = try stdout.toOwnedSlice(allocator),
-        .stderr = try stderr.toOwnedSlice(allocator),
+        .stdout = runner_output.stdout,
+        .stderr = runner_output.stderr,
     } };
 }
 
@@ -623,10 +619,8 @@ fn runSemanticAliasTimingShellStateScript(
     parser_resolver.arg_zero = invocation.arg_zero;
     const eval_context = invocation.evalContext(.current_shell);
 
-    var stdout: std.ArrayList(u8) = .empty;
-    errdefer stdout.deinit(allocator);
-    var stderr: std.ArrayList(u8) = .empty;
-    errdefer stderr.deinit(allocator);
+    var output_frame = try shell.eval.RunnerOutputFrame.init(allocator, evaluator.commit_exec_redirections);
+    defer output_frame.deinit();
     var status = shell_state.last_status;
     var start = skipSemanticChunkSeparators(script, 0);
     var stop_for_pending_exit = false;
@@ -672,8 +666,7 @@ fn runSemanticAliasTimingShellStateScript(
                 switch (execution) {
                     .unsupported => |message| return semanticUnsupported(allocator, message),
                     .output => |output| {
-                        try stdout.appendSlice(allocator, output.stdout);
-                        try stderr.appendSlice(allocator, output.stderr);
+                        _ = try output_frame.writeOutcome(output.stdout, output.stderr);
                         status = output.status;
                     },
                 }
@@ -689,10 +682,13 @@ fn runSemanticAliasTimingShellStateScript(
         start = skipSemanticChunkSeparators(script, end);
     }
 
-    const out = try stdout.toOwnedSlice(allocator);
-    errdefer allocator.free(out);
-    const err = try stderr.toOwnedSlice(allocator);
-    return .{ .output = .{ .allocator = allocator, .status = status, .stdout = out, .stderr = err } };
+    const runner_output = try output_frame.finish();
+    return .{ .output = .{
+        .allocator = allocator,
+        .status = status,
+        .stdout = runner_output.stdout,
+        .stderr = runner_output.stderr,
+    } };
 }
 
 pub fn runInteractiveCommandString(
@@ -799,13 +795,8 @@ fn runSemanticLoweredProgram(
     shell_state.validate();
     if (stdin_script_file == null) std.debug.assert(stdin_script_source_offset == 0);
 
-    var accumulated_stdout: std.ArrayList(u8) = .empty;
-    var accumulated_stderr: std.ArrayList(u8) = .empty;
-    var release_accumulated = false;
-    defer if (!release_accumulated) {
-        accumulated_stdout.deinit(allocator);
-        accumulated_stderr.deinit(allocator);
-    };
+    var output_frame = try shell.eval.RunnerOutputFrame.init(allocator, evaluator.commit_exec_redirections);
+    defer output_frame.deinit();
 
     var status: shell.ExitStatus = 0;
     var control_flow: shell.ControlFlow = .normal;
@@ -866,7 +857,8 @@ fn runSemanticLoweredProgram(
         }
         const body_failed = semanticBodyIsStoppingFailure(body, eval_context.features);
         if (evaluator.external_stdio == .inherit and semanticBodyUsesInheritedExternal(body)) {
-            try flushAccumulatedOutput(allocator, &accumulated_stdout, &accumulated_stderr);
+            const flush_result = try output_frame.flushPendingInheritedExternal();
+            if (flush_result.stdout_failed or flush_result.stderr_failed) return error.Unimplemented;
         }
 
         var command_outcome = if (statement.async_after) blk: {
@@ -904,11 +896,7 @@ fn runSemanticLoweredProgram(
         defer command_outcome.deinit();
 
         command_outcome.validateForContext(eval_context);
-        const write_result = try appendOrWriteOutput(
-            allocator,
-            evaluator.*,
-            &accumulated_stdout,
-            &accumulated_stderr,
+        const write_result = try output_frame.writeOutcome(
             command_outcome.stdout.items,
             command_outcome.stderr.items,
         );
@@ -921,9 +909,7 @@ fn runSemanticLoweredProgram(
         try command_outcome.applyToShellState(shell_state, .{ .record_exit_control_flow = true });
         try configureRuntimeTrapMutations(evaluator, shell_state.*, command_outcome.state_delta);
         try appendPendingRuntimeTrapOutcome(
-            allocator,
-            &accumulated_stdout,
-            &accumulated_stderr,
+            &output_frame,
             &status,
             &control_flow,
             evaluator,
@@ -937,24 +923,19 @@ fn runSemanticLoweredProgram(
     control_flow.validate();
     var final_status = control_flow.status(status);
     if (run_exit_trap) try appendSemanticExitTrap(
-        allocator,
-        &accumulated_stdout,
-        &accumulated_stderr,
+        &output_frame,
         &final_status,
         evaluator,
         shell_state,
         eval_context,
         source_resolver.resolver(),
     );
-    const stdout = try accumulated_stdout.toOwnedSlice(allocator);
-    errdefer allocator.free(stdout);
-    const stderr = try accumulated_stderr.toOwnedSlice(allocator);
-    release_accumulated = true;
+    const runner_output = try output_frame.finish();
     return .{ .output = .{
         .allocator = allocator,
         .status = final_status,
-        .stdout = stdout,
-        .stderr = stderr,
+        .stdout = runner_output.stdout,
+        .stderr = runner_output.stderr,
     } };
 }
 
@@ -1000,9 +981,7 @@ fn configureRuntimeTrapMutations(
 }
 
 fn appendPendingRuntimeTrapOutcome(
-    allocator: std.mem.Allocator,
-    stdout: *std.ArrayList(u8),
-    stderr: *std.ArrayList(u8),
+    output_frame: *shell.eval.RunnerOutputFrame,
     status: *shell.ExitStatus,
     control_flow: *shell.ControlFlow,
     evaluator: *shell.eval.Evaluator,
@@ -1030,11 +1009,7 @@ fn appendPendingRuntimeTrapOutcome(
         resolver,
     )) orelse return;
     defer trap_outcome.deinit();
-    _ = try appendOrWriteOutput(
-        allocator,
-        evaluator.*,
-        stdout,
-        stderr,
+    _ = try output_frame.writeOutcome(
         trap_outcome.stdout.items,
         trap_outcome.stderr.items,
     );
@@ -1110,9 +1085,7 @@ fn semanticBackgroundPipelineFromPipeline(plan: shell.PipelinePlan) SemanticBack
 }
 
 fn appendSemanticExitTrap(
-    allocator: std.mem.Allocator,
-    stdout: *std.ArrayList(u8),
-    stderr: *std.ArrayList(u8),
+    output_frame: *shell.eval.RunnerOutputFrame,
     status: *shell.ExitStatus,
     evaluator: *shell.eval.Evaluator,
     shell_state: *shell.ShellState,
@@ -1129,11 +1102,7 @@ fn appendSemanticExitTrap(
         resolver,
     )) orelse return;
     defer trap_outcome.deinit();
-    _ = try appendOrWriteOutput(
-        allocator,
-        evaluator.*,
-        stdout,
-        stderr,
+    _ = try output_frame.writeOutcome(
         trap_outcome.stdout.items,
         trap_outcome.stderr.items,
     );
@@ -1560,43 +1529,7 @@ fn semanticCommandUsesInheritedExternal(plan: shell.CommandPlan) bool {
     return plan.class() == .external;
 }
 
-fn flushAccumulatedOutput(
-    allocator: std.mem.Allocator,
-    stdout: *std.ArrayList(u8),
-    stderr: *std.ArrayList(u8),
-) !void {
-    const result = try shell.eval.routeRunnerOutcomeOutput(
-        allocator,
-        true,
-        stdout,
-        stderr,
-        stdout.items,
-        stderr.items,
-    );
-    if (result.stdout_failed or result.stderr_failed) return error.Unimplemented;
-    stdout.items.len = 0;
-    stderr.items.len = 0;
-}
-
 const OutputWriteResult = shell.eval.RunnerOutputWriteResult;
-
-fn appendOrWriteOutput(
-    allocator: std.mem.Allocator,
-    evaluator: shell.eval.Evaluator,
-    stdout: *std.ArrayList(u8),
-    stderr: *std.ArrayList(u8),
-    stdout_bytes: []const u8,
-    stderr_bytes: []const u8,
-) !OutputWriteResult {
-    return shell.eval.routeRunnerOutcomeOutput(
-        allocator,
-        evaluator.commit_exec_redirections,
-        stdout,
-        stderr,
-        stdout_bytes,
-        stderr_bytes,
-    );
-}
 
 fn applyOutputWriteResult(command_outcome: *shell.CommandOutcome, result: OutputWriteResult) void {
     command_outcome.validate();
