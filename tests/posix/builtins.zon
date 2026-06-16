@@ -582,6 +582,19 @@
             .status = 0,
         },
         .{
+            .name = "exec command replacement does not run the shell EXIT trap",
+            .script =
+            \\( trap 'printf trap\\n' EXIT; exec sh -c 'exit 7'; printf 'bad\n' )
+            \\printf 'status:%s\n' "$?"
+            ,
+            .stdout =
+            \\status:7
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "unalias -a removes all alias definitions",
             .script =
             \\alias a='printf a' b='printf b'

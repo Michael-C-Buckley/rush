@@ -6175,7 +6175,7 @@ fn evaluateBuiltin(
     if (std.mem.eql(u8, definition.name, "continue")) {
         return evaluateLoopControl(eval_context, plan.argv, .continue_loop, buffers);
     }
-    if (std.mem.eql(u8, definition.name, "exec")) return evaluateExec(evaluator, shell_state, plan, buffers);
+    if (std.mem.eql(u8, definition.name, "exec")) return evaluateExec(evaluator, shell_state, plan, state_delta, buffers);
     if (std.mem.eql(u8, definition.name, "exit")) return evaluateExit(shell_state, plan.argv, buffers);
     if (std.mem.eql(u8, definition.name, "return")) {
         return evaluateReturn(shell_state, eval_context, plan.argv, buffers);
@@ -8154,6 +8154,7 @@ fn evaluateExec(
     evaluator: *Evaluator,
     shell_state: state.ShellState,
     plan: command_plan.CommandPlan,
+    state_delta: *delta.StateDelta,
     buffers: *EvaluationBuffers,
 ) EvalError!SimpleEvalResult {
     const argv = plan.argv;
@@ -8183,6 +8184,7 @@ fn evaluateExec(
         .target = .child_process,
     });
     const status = try evaluateExternal(evaluator, shell_state, target_plan, resolution, buffers);
+    try state_delta.setTrap(state.TrapSignal.EXIT.name(), null);
     return .{ .status = status, .control_flow = .{ .exit = status } };
 }
 
