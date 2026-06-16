@@ -35,6 +35,21 @@
             .status = 0,
         },
         .{
+            .name = "subshell restores physical current directory used by later redirections",
+            .script =
+            \\pwd >before
+            \\( cd / )
+            \\pwd >after
+            \\cmp -s before after && printf 'restored\n'
+            ,
+            .stdout =
+            \\restored
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "subshell redirection applies to the grouped compound-list",
             .script =
             \\( printf 'one\n'; printf 'two\n' ) >out
@@ -60,6 +75,17 @@
             \\group
             \\
             ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "exec redirection inside subshell does not affect following commands",
+            .script =
+            \\( exec >out; printf hidden )
+            \\printf after
+            \\cat out
+            ,
+            .stdout = "afterhidden",
             .stderr = "",
             .status = 0,
         },

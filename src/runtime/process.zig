@@ -342,6 +342,7 @@ pub const RunRequest = struct {
     argv: []const []const u8,
     cwd: Cwd = .inherit,
     environment: ?*const std.process.Environ.Map = null,
+    stdin_stdio: StandardIo = .pipe,
     stdin: []const u8 = &.{},
 
     /// `argv`, `environment`, `stdin`, and path slices are borrowed only until
@@ -358,6 +359,11 @@ pub const RunRequest = struct {
         std.debug.assert(self.argv.len != 0);
         std.debug.assert(self.argv[0].len != 0);
         self.cwd.validate();
+        self.stdin_stdio.validate();
+        switch (self.stdin_stdio) {
+            .pipe => {},
+            .inherit, .fd, .ignore, .close => std.debug.assert(self.stdin.len == 0),
+        }
     }
 };
 

@@ -47,6 +47,11 @@ pub const CommandHistoryEntry = struct {
     }
 };
 
+const ScopedExecRedirection = struct {
+    applied: redirection_plan.AppliedRedirections,
+    redirections: redirection_plan.RedirectionPlan,
+};
+
 pub const Evaluator = struct {
     allocator: std.mem.Allocator,
     fd_port: ?runtime.fd.Port = null,
@@ -61,7 +66,7 @@ pub const Evaluator = struct {
     read_stdin_from_fd: bool = false,
     external_stdio: ExternalStdio = .inherit,
     commit_exec_redirections: bool = false,
-    scoped_exec_redirections: ?*std.ArrayList(redirection_plan.AppliedRedirections) = null,
+    scoped_exec_redirections: ?*std.ArrayList(ScopedExecRedirection) = null,
     builtin_definitions: []const builtin.Builtin = default_builtins.default_registry,
     extension_handler_context: ?*anyopaque = null,
     extension_handler_lookup: ?*const fn (?*anyopaque, []const u8) ?extension_api.HandlerSpec = null,
@@ -2100,6 +2105,27 @@ const EvaluationBuffers = struct {
     }
 };
 
+const CwdGuard = struct {
+    fs_port: ?runtime.fs.Port = null,
+    buffer: [std.Io.Dir.max_path_bytes]u8 = undefined,
+    path: []const u8 = &.{},
+
+    fn capture(self: *CwdGuard, evaluator: *Evaluator) void {
+        std.debug.assert(self.fs_port == null);
+        const fs_port = evaluator.fs_port orelse return;
+        const cwd = fs_port.getCwd(runtime.fs.GetCwdRequest.init(&self.buffer)) catch return;
+        self.fs_port = fs_port;
+        self.path = cwd.path;
+    }
+
+    fn restore(self: *CwdGuard) void {
+        const fs_port = self.fs_port orelse return;
+        // ziglint-ignore: Z026 best-effort cwd restoration while unwinding isolated shell evaluation
+        fs_port.changeCwd(runtime.fs.ChangeCwdRequest.init(self.path)) catch {};
+        self.* = .{};
+    }
+};
+
 pub fn evaluatePlan(
     evaluator: *Evaluator,
     shell_state: *state.ShellState,
@@ -2231,19 +2257,18 @@ fn evaluatePlanWithInput(
         .none => {},
         .permanent => if (applied_redirections) |*applied| applied.commit(),
         .scoped => if (applied_redirections) |applied| {
-            try evaluator.scoped_exec_redirections.?.append(evaluator.allocator, applied);
+            try evaluator.scoped_exec_redirections.?.append(evaluator.allocator, .{
+                .applied = applied,
+                .redirections = effective_plan.redirections,
+            });
             applied_redirections = null;
         },
     }
-    if (applied_redirections != null and effective_plan.class() != .external and effective_plan.class() != .function) {
-        if (redirectionTargetsDescriptor(effective_plan.redirections, 1)) {
-            if (!writeAllDescriptor(1, buffers.stdout.items)) return error.Unimplemented;
-            buffers.stdout.items.len = 0;
-        }
-        if (redirectionTargetsDescriptor(effective_plan.redirections, 2)) {
-            if (!writeAllDescriptor(2, buffers.stderr.items)) return error.Unimplemented;
-            buffers.stderr.items.len = 0;
-        }
+    if ((applied_redirections != null or hasScopedExecRedirections(evaluator.*)) and
+        effective_plan.class() != .external and
+        effective_plan.class() != .function)
+    {
+        try flushBufferedRedirectionOutput(evaluator.*, &buffers, effective_plan.redirections, eval_context);
     }
     state_delta.setLastStatus(result.status);
     assertCommandDeltaCompatible(effective_plan, state_delta);
@@ -2352,7 +2377,11 @@ fn execRedirectionCommitMode(
     if (result.status != 0 or result.control_flow != .normal) return .none;
     if (plan.argv.len != 1) return .none;
     if (!std.mem.eql(u8, plan.argv[0], "exec")) return .none;
-    if (eval_context.command_substitution_depth != 0 and evaluator.scoped_exec_redirections != null) return .scoped;
+    if ((eval_context.command_substitution_depth != 0 or eval_context.target.isIsolatedFromParent()) and
+        evaluator.scoped_exec_redirections != null)
+    {
+        return .scoped;
+    }
     if (!evaluator.commit_exec_redirections) return .none;
     if (evaluator.external_stdio != .inherit) return .none;
     return .permanent;
@@ -2383,6 +2412,153 @@ fn flushBuffersForRedirectionTargets(
     if (redirectionTargetsDescriptor(redirections, 2) and buffers.stderr.items.len != 0) {
         if (!writeAllDescriptor(2, buffers.stderr.items)) return error.Unimplemented;
         buffers.stderr.items.len = 0;
+    }
+}
+
+const BufferedDescriptorDestination = union(enum) {
+    captured_stdout,
+    side_stderr,
+    descriptor: runtime.fd.Descriptor,
+    closed,
+
+    fn validate(self: BufferedDescriptorDestination) void {
+        switch (self) {
+            .captured_stdout, .side_stderr, .closed => {},
+            .descriptor => |descriptor| runtime.fd.assertValidDescriptor(descriptor),
+        }
+    }
+};
+
+const BufferedDescriptorBinding = struct {
+    descriptor: runtime.fd.Descriptor,
+    destination: BufferedDescriptorDestination,
+
+    fn validate(self: BufferedDescriptorBinding) void {
+        runtime.fd.assertValidDescriptor(self.descriptor);
+        self.destination.validate();
+    }
+};
+
+const BufferedDescriptorRouting = struct {
+    allocator: std.mem.Allocator,
+    captured_stdout: bool,
+    bindings: std.ArrayList(BufferedDescriptorBinding) = .empty,
+
+    fn init(allocator: std.mem.Allocator, captured_stdout: bool) BufferedDescriptorRouting {
+        return .{ .allocator = allocator, .captured_stdout = captured_stdout };
+    }
+
+    fn deinit(self: *BufferedDescriptorRouting) void {
+        self.bindings.deinit(self.allocator);
+        self.* = undefined;
+    }
+
+    fn destination(self: BufferedDescriptorRouting, descriptor: runtime.fd.Descriptor) BufferedDescriptorDestination {
+        runtime.fd.assertValidDescriptor(descriptor);
+        for (self.bindings.items) |binding| {
+            binding.validate();
+            if (binding.descriptor == descriptor) return binding.destination;
+        }
+        if (!self.captured_stdout) return .{ .descriptor = descriptor };
+        return switch (descriptor) {
+            1 => .captured_stdout,
+            2 => .side_stderr,
+            else => .{ .descriptor = descriptor },
+        };
+    }
+
+    fn setDestination(
+        self: *BufferedDescriptorRouting,
+        descriptor: runtime.fd.Descriptor,
+        dest: BufferedDescriptorDestination,
+    ) !void {
+        runtime.fd.assertValidDescriptor(descriptor);
+        dest.validate();
+        for (self.bindings.items) |*binding| {
+            binding.validate();
+            if (binding.descriptor == descriptor) {
+                binding.destination = dest;
+                return;
+            }
+        }
+        try self.bindings.append(self.allocator, .{ .descriptor = descriptor, .destination = dest });
+    }
+};
+
+fn flushBufferedRedirectionOutput(
+    evaluator: Evaluator,
+    buffers: *EvaluationBuffers,
+    redirections: redirection_plan.RedirectionPlan,
+    eval_context: context.EvalContext,
+) EvalError!void {
+    redirections.validate();
+    eval_context.validate();
+    if (eval_context.command_substitution_depth == 0 and !hasScopedExecRedirections(evaluator)) {
+        return flushBuffersForRedirectionTargets(buffers, redirections);
+    }
+
+    var routing = BufferedDescriptorRouting.init(buffers.allocator, eval_context.command_substitution_depth != 0);
+    defer routing.deinit();
+    if (evaluator.scoped_exec_redirections) |scoped_redirections| {
+        for (scoped_redirections.items) |scoped| try applyBufferedRoutingRedirections(&routing, scoped.redirections);
+    }
+    try applyBufferedRoutingRedirections(&routing, redirections);
+
+    try flushBufferToDestination(buffers, .stdout, routing.destination(1));
+    try flushBufferToDestination(buffers, .stderr, routing.destination(2));
+}
+
+fn applyBufferedRoutingRedirections(
+    routing: *BufferedDescriptorRouting,
+    redirections: redirection_plan.RedirectionPlan,
+) EvalError!void {
+    redirections.validate();
+    for (redirections.steps) |step| {
+        switch (step.effect) {
+            .duplicate => |duplicate| try routing.setDestination(
+                duplicate.target,
+                routing.destination(duplicate.source),
+            ),
+            .close => |close| try routing.setDestination(close.target, .closed),
+            .open_path, .here_doc => try routing.setDestination(step.target(), .{ .descriptor = step.target() }),
+        }
+    }
+}
+
+const BufferedOutputStream = enum { stdout, stderr };
+
+fn flushBufferToDestination(
+    buffers: *EvaluationBuffers,
+    stream: BufferedOutputStream,
+    destination: BufferedDescriptorDestination,
+) EvalError!void {
+    destination.validate();
+    const bytes = switch (stream) {
+        .stdout => buffers.stdout.items,
+        .stderr => buffers.stderr.items,
+    };
+    if (bytes.len == 0) return;
+
+    switch (destination) {
+        .captured_stdout => if (stream == .stderr) {
+            try buffers.stdout.appendSlice(buffers.allocator, bytes);
+            buffers.stderr.items.len = 0;
+        },
+        .side_stderr => if (stream == .stdout) {
+            try buffers.stderr.insertSlice(buffers.allocator, 0, bytes);
+            buffers.stdout.items.len = 0;
+        },
+        .descriptor => |descriptor| {
+            if (!writeAllDescriptor(descriptor, bytes)) return error.Unimplemented;
+            switch (stream) {
+                .stdout => buffers.stdout.items.len = 0,
+                .stderr => buffers.stderr.items.len = 0,
+            }
+        },
+        .closed => switch (stream) {
+            .stdout => buffers.stdout.items.len = 0,
+            .stderr => buffers.stderr.items.len = 0,
+        },
     }
 }
 
@@ -2423,6 +2599,19 @@ fn evaluateCompoundPlanWithInput(
 
     var buffers = EvaluationBuffers.init(evaluator.allocator, input);
     defer buffers.deinit();
+
+    var cwd_guard: CwdGuard = .{};
+    if (plan.target.isIsolatedFromParent()) cwd_guard.capture(evaluator);
+    defer cwd_guard.restore();
+
+    var scoped_exec_redirections: std.ArrayList(ScopedExecRedirection) = .empty;
+    defer scoped_exec_redirections.deinit(evaluator.allocator);
+    const previous_scoped_exec_redirections = evaluator.scoped_exec_redirections;
+    if (plan.target.isIsolatedFromParent()) evaluator.scoped_exec_redirections = &scoped_exec_redirections;
+    defer if (plan.target.isIsolatedFromParent()) {
+        restoreScopedExecRedirections(&scoped_exec_redirections);
+        evaluator.scoped_exec_redirections = previous_scoped_exec_redirections;
+    };
 
     var applied_redirections: ?redirection_plan.AppliedRedirections = null;
     defer if (applied_redirections) |*applied| {
@@ -2490,14 +2679,7 @@ fn evaluateCompoundPlanWithInput(
     }
 
     if (applied_redirections != null) {
-        if (redirectionTargetsDescriptor(plan.redirections, 1)) {
-            if (!writeAllDescriptor(1, buffers.stdout.items)) return error.Unimplemented;
-            buffers.stdout.items.len = 0;
-        }
-        if (redirectionTargetsDescriptor(plan.redirections, 2)) {
-            if (!writeAllDescriptor(2, buffers.stderr.items)) return error.Unimplemented;
-            buffers.stderr.items.len = 0;
-        }
+        try flushBufferedRedirectionOutput(evaluator.*, &buffers, plan.redirections, eval_context);
     }
 
     return commandOutcomeFromBuffers(
@@ -2826,7 +3008,7 @@ fn evaluateCommandSubstitutionInState(
     evaluator.external_stdio = .capture;
     defer evaluator.external_stdio = previous_external_stdio;
 
-    var scoped_exec_redirections: std.ArrayList(redirection_plan.AppliedRedirections) = .empty;
+    var scoped_exec_redirections: std.ArrayList(ScopedExecRedirection) = .empty;
     defer scoped_exec_redirections.deinit(evaluator.allocator);
     const previous_scoped_exec_redirections = evaluator.scoped_exec_redirections;
     evaluator.scoped_exec_redirections = &scoped_exec_redirections;
@@ -2834,6 +3016,10 @@ fn evaluateCommandSubstitutionInState(
         restoreScopedExecRedirections(&scoped_exec_redirections);
         evaluator.scoped_exec_redirections = previous_scoped_exec_redirections;
     }
+
+    var cwd_guard: CwdGuard = .{};
+    cwd_guard.capture(evaluator);
+    defer cwd_guard.restore();
 
     var body_outcome = try evaluateCommandSubstitutionBody(evaluator, substitution_state, substitution_context, body);
     defer body_outcome.deinit();
@@ -2853,12 +3039,12 @@ fn evaluateCommandSubstitutionInState(
     return result;
 }
 
-fn restoreScopedExecRedirections(scoped_redirections: *std.ArrayList(redirection_plan.AppliedRedirections)) void {
+fn restoreScopedExecRedirections(scoped_redirections: *std.ArrayList(ScopedExecRedirection)) void {
     var index = scoped_redirections.items.len;
     while (index != 0) {
         index -= 1;
-        scoped_redirections.items[index].restore();
-        scoped_redirections.items[index].deinit();
+        scoped_redirections.items[index].applied.restore();
+        scoped_redirections.items[index].applied.deinit();
     }
     scoped_redirections.clearRetainingCapacity();
 }
@@ -3656,6 +3842,9 @@ fn evaluateFallbackPipeline(
         std.debug.assert(stage_target != .current_shell);
         var stage_state = try workingStateForPipelineStage(evaluator.allocator, parent_state, stage_target);
         defer stage_state.deinit();
+        var cwd_guard: CwdGuard = .{};
+        cwd_guard.capture(evaluator);
+        defer cwd_guard.restore();
 
         const stage_context = pipelineStageContext(eval_context, stage_target, true);
         var stage_input = EvaluationInput.init(next_stdin.items);
@@ -3995,6 +4184,16 @@ fn evaluatePipelineStageWithInput(
     eval_context.validate();
     stage.validate();
     input.validate();
+
+    var scoped_exec_redirections: std.ArrayList(ScopedExecRedirection) = .empty;
+    defer scoped_exec_redirections.deinit(evaluator.allocator);
+    const previous_scoped_exec_redirections = evaluator.scoped_exec_redirections;
+    if (eval_context.target.isIsolatedFromParent()) evaluator.scoped_exec_redirections = &scoped_exec_redirections;
+    defer if (eval_context.target.isIsolatedFromParent()) {
+        restoreScopedExecRedirections(&scoped_exec_redirections);
+        evaluator.scoped_exec_redirections = previous_scoped_exec_redirections;
+    };
+
     return switch (stage) {
         .simple => |simple| evaluatePlanWithInput(evaluator, shell_state, eval_context, simple, input),
         .compound => |compound| evaluateCompoundPlanWithInput(evaluator, shell_state, eval_context, compound, input),
@@ -5741,7 +5940,17 @@ const ExternalInvocation = struct {
         process_port: runtime.process.Port,
         stdin: []const u8,
     ) runtime.process.RunError!runtime.process.RunResult {
-        return runExternalProcess(evaluator, process_port, self.argv, &self.environment, stdin);
+        return self.runWithStdin(evaluator, process_port, stdin, .pipe);
+    }
+
+    fn runWithStdin(
+        self: ExternalInvocation,
+        evaluator: *Evaluator,
+        process_port: runtime.process.Port,
+        stdin: []const u8,
+        stdin_stdio: runtime.process.StandardIo,
+    ) runtime.process.RunError!runtime.process.RunResult {
+        return runExternalProcessWithStdin(evaluator, process_port, self.argv, &self.environment, stdin, stdin_stdio);
     }
 
     fn spawn(
@@ -5935,10 +6144,16 @@ fn evaluateCapturedExternal(
         }
     }
 
-    var run_result = invocation.run(
+    const use_redirected_stdin = stdin.len == 0 and redirectionOrScopedExecTargetsDescriptor(evaluator.*, plan, 0);
+    const stdin_stdio: runtime.process.StandardIo = if (use_redirected_stdin)
+        .inherit
+    else
+        .pipe;
+    var run_result = invocation.runWithStdin(
         evaluator,
         process_port,
         stdin,
+        stdin_stdio,
     ) catch |err| switch (err) {
         error.OutOfMemory => return error.OutOfMemory,
         else => |run_err| {
@@ -5949,22 +6164,46 @@ fn evaluateCapturedExternal(
     };
     defer run_result.deinit();
 
-    if (redirectionTargetsDescriptor(plan.redirections, 1)) {
-        if (!writeAllDescriptor(1, run_result.stdout)) return error.Unimplemented;
-    } else {
-        try buffers.stdout.appendSlice(buffers.allocator, run_result.stdout);
-    }
-    switch (capture_mode) {
-        .stdout => if (redirectionTargetsDescriptor(plan.redirections, 2)) {
-            if (!writeAllDescriptor(2, run_result.stderr)) return error.Unimplemented;
-        },
-        .stdout_and_stderr => if (redirectionTargetsDescriptor(plan.redirections, 2)) {
-            if (!writeAllDescriptor(2, run_result.stderr)) return error.Unimplemented;
-        } else {
-            try buffers.stderr.appendSlice(buffers.allocator, run_result.stderr);
-        },
-    }
+    try appendCapturedExternalOutput(evaluator.*, buffers, plan, capture_mode, run_result.stdout, run_result.stderr);
     return normalizeWaitStatus(run_result.status);
+}
+
+fn appendCapturedExternalOutput(
+    evaluator: Evaluator,
+    buffers: *EvaluationBuffers,
+    plan: command_plan.CommandPlan,
+    capture_mode: CapturedExternalMode,
+    stdout: []const u8,
+    stderr: []const u8,
+) EvalError!void {
+    plan.validate();
+    switch (capture_mode) {
+        .stdout => {
+            if (redirectionOrScopedExecTargetsDescriptor(evaluator, plan, 1)) {
+                if (!writeAllDescriptor(1, stdout)) return error.Unimplemented;
+            } else {
+                try buffers.stdout.appendSlice(buffers.allocator, stdout);
+            }
+            if (redirectionOrScopedExecTargetsDescriptor(evaluator, plan, 2)) {
+                if (!writeAllDescriptor(2, stderr)) return error.Unimplemented;
+            }
+        },
+        .stdout_and_stderr => {
+            try buffers.stdout.appendSlice(buffers.allocator, stdout);
+            try buffers.stderr.appendSlice(buffers.allocator, stderr);
+
+            var routing = BufferedDescriptorRouting.init(buffers.allocator, true);
+            defer routing.deinit();
+            if (evaluator.scoped_exec_redirections) |scoped_redirections| {
+                for (scoped_redirections.items) |scoped| {
+                    try applyBufferedRoutingRedirections(&routing, scoped.redirections);
+                }
+            }
+            try applyBufferedRoutingRedirections(&routing, plan.redirections);
+            try flushBufferToDestination(buffers, .stdout, routing.destination(1));
+            try flushBufferToDestination(buffers, .stderr, routing.destination(2));
+        },
+    }
 }
 
 fn runExternalWithPipelineInput(
@@ -6078,7 +6317,9 @@ fn semanticHereDocInput(plan: redirection_plan.RedirectionPlan) ?[]const u8 {
                 if (here_doc.target != 0) return null;
                 input = here_doc.data.bytes;
             },
-            .open_path, .duplicate, .close => if (step.target() == 0) return null,
+            .open_path, .duplicate, .close => {
+                if (step.target() == 0) input = null;
+            },
         }
     }
     return input;
@@ -6139,6 +6380,26 @@ fn redirectionTargetsDescriptor(plan: redirection_plan.RedirectionPlan, descript
     return false;
 }
 
+fn redirectionOrScopedExecTargetsDescriptor(
+    evaluator: Evaluator,
+    plan: command_plan.CommandPlan,
+    descriptor: runtime.fd.Descriptor,
+) bool {
+    plan.validate();
+    runtime.fd.assertValidDescriptor(descriptor);
+    if (redirectionTargetsDescriptor(plan.redirections, descriptor)) return true;
+    const scoped_redirections = evaluator.scoped_exec_redirections orelse return false;
+    for (scoped_redirections.items) |scoped| {
+        if (redirectionTargetsDescriptor(scoped.redirections, descriptor)) return true;
+    }
+    return false;
+}
+
+fn hasScopedExecRedirections(evaluator: Evaluator) bool {
+    const scoped_redirections = evaluator.scoped_exec_redirections orelse return false;
+    return scoped_redirections.items.len != 0;
+}
+
 fn externalNeedsBufferedStdin(plan: command_plan.CommandPlan, buffers: *EvaluationBuffers) bool {
     plan.validate();
     buffers.stdin.validate();
@@ -6196,10 +6457,22 @@ fn runExternalProcess(
     environment: *const std.process.Environ.Map,
     stdin: []const u8,
 ) runtime.process.RunError!runtime.process.RunResult {
+    return runExternalProcessWithStdin(evaluator, process_port, argv, environment, stdin, .pipe);
+}
+
+fn runExternalProcessWithStdin(
+    evaluator: *Evaluator,
+    process_port: runtime.process.Port,
+    argv: []const []const u8,
+    environment: *const std.process.Environ.Map,
+    stdin: []const u8,
+    stdin_stdio: runtime.process.StandardIo,
+) runtime.process.RunError!runtime.process.RunResult {
     return process_port.run(.{
         .allocator = evaluator.allocator,
         .argv = argv,
         .environment = environment,
+        .stdin_stdio = stdin_stdio,
         .stdin = stdin,
     }) catch |err| switch (err) {
         error.InvalidExe => {
@@ -6209,6 +6482,7 @@ fn runExternalProcess(
                 .allocator = evaluator.allocator,
                 .argv = fallback_argv,
                 .environment = environment,
+                .stdin_stdio = stdin_stdio,
                 .stdin = stdin,
             });
         },
@@ -8965,6 +9239,7 @@ fn evaluateRead(
         if (shell_state.isVariableReadonly(name)) return builtinUsageError(buffers, "read", "readonly variable");
     }
 
+    const ifs = lookupCommandVariableValue(shell_state, plan, "IFS") orelse " \t\n";
     const raw_line = if (preserve_backslashes)
         try readSingleRawReadLine(evaluator, buffers, delimiter)
     else
@@ -8976,10 +9251,15 @@ fn evaluateRead(
         try readLineWithEscapesProcessed(evaluator, buffers, delimiter);
     defer if (escaped_line) |line| line.deinit(evaluator.allocator);
     const read_line = if (preserve_backslashes)
-        if (raw_line) |line| line.bytes else return 1
-    else if (escaped_line) |line| line.bytes else return 1;
+        if (raw_line) |line| line.bytes else {
+            try assignReadFields("", null, argv[name_index..], ifs, state_delta);
+            return 1;
+        }
+    else if (escaped_line) |line| line.bytes else {
+        try assignReadFields("", null, argv[name_index..], ifs, state_delta);
+        return 1;
+    };
     const escaped_separators = if (escaped_line) |line| line.escaped else null;
-    const ifs = lookupCommandVariableValue(shell_state, plan, "IFS") orelse " \t\n";
     try assignReadFields(read_line, escaped_separators, argv[name_index..], ifs, state_delta);
     const complete = if (preserve_backslashes) raw_line.?.delimiter_found else escaped_line.?.delimiter_found;
     return if (complete) 0 else 1;

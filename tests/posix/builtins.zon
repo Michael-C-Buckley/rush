@@ -299,6 +299,24 @@
             .status = 0,
         },
         .{
+            .name = "read clears variables at end of file without bytes",
+            .script =
+            \\printf x >in
+            \\while IFS= read -r line || [ -n "$line" ]
+            \\do
+            \\    printf '<%s>\n' "$line"
+            \\done <in
+            \\printf 'after=<%s>\n' "$line"
+            ,
+            .stdout =
+            \\<x>
+            \\after=<>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "read -d uses the first delimiter byte",
             .script =
             \\printf 'ab:cd' | { read -r -d : value; printf '<%s>:<%s>\n' "$value" "$?"; }
@@ -696,6 +714,47 @@
             \\inner
             \\after:outer
             \\export-invalid
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "exec redirection without command persists inside command substitution stdin",
+            .script =
+            \\printf x >in
+            \\out=$(exec <in; cat)
+            \\printf '<%s>\n' "$out"
+            ,
+            .stdout =
+            \\<x>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "exec redirection without command persists inside command substitution stdout",
+            .script =
+            \\out=$(exec >file; printf hidden; printf visible >&2)
+            \\printf 'out=<%s>\n' "$out"
+            \\cat file
+            ,
+            .stdout =
+            \\out=<>
+            \\hidden
+            ,
+            .stderr = "visible",
+            .status = 0,
+        },
+        .{
+            .name = "exec redirection without command persists inside command substitution stderr",
+            .script =
+            \\out=$(exec 2>&1; printf err >&2)
+            \\printf '<%s>\n' "$out"
+            ,
+            .stdout =
+            \\<err>
             \\
             ,
             .stderr = "",

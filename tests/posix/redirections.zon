@@ -171,6 +171,34 @@
             .status = 0,
         },
         .{
+            .name = "command substitution captures stderr duplicated to stdout before stdout redirect",
+            .script =
+            \\exec 3>&1
+            \\out=$( { printf out; printf err >&2; } 2>&1 1>&3 )
+            \\printf ' captured=<%s>\n' "$out"
+            ,
+            .stdout =
+            \\out captured=<err>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "command substitution external command reads redirected stdin",
+            .script =
+            \\printf file >in
+            \\out=$(cat <in)
+            \\printf '<%s>\n' "$out"
+            ,
+            .stdout =
+            \\<file>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "duplicate redirection from a closed source descriptor fails before command execution",
             .script =
             \\exec 3>&2 2>&-
@@ -272,6 +300,20 @@
             ,
             .stderr = "",
             .stderr_match = .nonempty,
+            .status = 0,
+        },
+        .{
+            .name = "noclobber allows output redirection to existing non-regular files",
+            .script =
+            \\set -C
+            \\printf ok >/dev/null
+            \\printf '<%s>\n' "$?"
+            ,
+            .stdout =
+            \\<0>
+            \\
+            ,
+            .stderr = "",
             .status = 0,
         },
         .{
@@ -389,6 +431,42 @@
             .stdout =
             \\hi
             \\<0>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "here document redirection overrides earlier stdin close in the same command",
+            .script =
+            \\cat 0<&- <<EOF
+            \\hi
+            \\EOF
+            \\printf '<%s>\n' "$?"
+            ,
+            .stdout =
+            \\hi
+            \\<0>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "ordered input redirections choose between file and here document",
+            .script =
+            \\printf file >in
+            \\cat <<EOF <in
+            \\hi
+            \\EOF
+            \\printf '\n'
+            \\cat <in <<EOF
+            \\hi
+            \\EOF
+            ,
+            .stdout =
+            \\file
+            \\hi
             \\
             ,
             .stderr = "",

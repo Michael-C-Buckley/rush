@@ -543,7 +543,7 @@ pub const AppliedRedirections = struct {
         step.validate();
         return switch (step.effect) {
             .open_path => |open_step| try self.applyOpenPath(open_step),
-            .here_doc => .unsupported_here_doc,
+            .here_doc => |here_doc_step| if (here_doc_step.target == 0) null else .unsupported_here_doc,
             .duplicate => |duplicate_step| try self.applyDuplicate(duplicate_step),
             .close => |close_step| try self.applyClose(close_step),
         };

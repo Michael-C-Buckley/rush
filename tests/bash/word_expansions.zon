@@ -125,6 +125,19 @@
             .status = 0,
         },
         .{
+            .name = "whole positional length expansions count positional parameters",
+            .script =
+            \\set -- a bb ccc
+            \\printf '%s:%s\n' "${#*}" "${#@}"
+            ,
+            .stdout =
+            \\3:3
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "arithmetic assignment to readonly variable fails without exiting by default",
             .script =
             \\readonly i=1

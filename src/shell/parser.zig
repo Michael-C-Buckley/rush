@@ -2622,6 +2622,9 @@ const SyntaxParser = struct {
 
         const name_token = self.current();
         const name = name_token.lexeme(self.source);
+        if (isAliasReservedWord(name)) {
+            try self.appendParseError(name_token.span, "function name cannot be a reserved word");
+        }
         if (shell_builtin.isSpecialBuiltin(name)) {
             try self.appendParseError(name_token.span, "function name cannot be a special built-in");
         }
@@ -4686,6 +4689,16 @@ test "parser rejects function definitions named after special built-ins" {
     try std.testing.expectEqual(DiagnosticKind.parse_error, result.diagnostics[0].kind);
     try expectSpan(.init(0, 6), result.diagnostics[0].span);
     try std.testing.expectEqualStrings("function name cannot be a special built-in", result.diagnostics[0].message);
+}
+
+test "parser rejects function definitions named after reserved words" {
+    var result = try parse(std.testing.allocator, "if() { echo bad; }", .{});
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(usize, 1), result.diagnostics.len);
+    try std.testing.expectEqual(DiagnosticKind.parse_error, result.diagnostics[0].kind);
+    try expectSpan(.init(0, 2), result.diagnostics[0].span);
+    try std.testing.expectEqualStrings("function name cannot be a reserved word", result.diagnostics[0].message);
 }
 
 test "parser keeps nested brace groups inside POSIX function definitions" {

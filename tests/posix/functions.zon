@@ -39,6 +39,17 @@
             .status = 2,
         },
         .{
+            .name = "function definition rejects reserved word names",
+            .script =
+            \\if() { printf 'bad\n'; }
+            \\printf 'after\n'
+            ,
+            .stdout = "",
+            .stderr_match = .nonempty,
+            .status = 0,
+            .status_match = .nonzero,
+        },
+        .{
             .name = "function invocation status is last command status",
             .script =
             \\foo() { true; false; }

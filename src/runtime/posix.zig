@@ -77,15 +77,75 @@ fn adapterFromContext(context: *anyopaque) *Adapter {
 }
 
 fn open(context: *anyopaque, request: fd.OpenRequest) fd.OpenError!fd.OpenResult {
-    _ = context;
+    const adapter = adapterFromContext(context);
     request.validate();
+    const descriptor = openDescriptor(request) catch |err| switch (err) {
+        error.PathAlreadyExists => try openExistingNonRegularNoclobberTarget(adapter.io, request),
+        else => |open_err| return open_err,
+    };
+    return .{ .descriptor = descriptor };
+}
+
+fn openDescriptor(request: fd.OpenRequest) fd.OpenError!fd.Descriptor {
+    request.validate();
+    const path_z = try std.posix.toPosixPath(request.path);
+    while (true) {
+        const rc = std.c.openat(
+            request.directory,
+            &path_z,
+            request.options.toPosixFlags(),
+            request.options.mode,
+        );
+        switch (std.c.errno(rc)) {
+            .SUCCESS => return @intCast(rc),
+            .INTR => continue,
+
+            .FAULT => unreachable,
+            .INVAL => return error.BadPathName,
+            .BADF => unreachable,
+            .ACCES, .ROFS => return error.AccessDenied,
+            .FBIG, .OVERFLOW => return error.FileTooBig,
+            .ISDIR => return error.IsDir,
+            .LOOP => return error.SymLinkLoop,
+            .MFILE => return error.ProcessFdQuotaExceeded,
+            .NAMETOOLONG => return error.NameTooLong,
+            .NFILE => return error.SystemFdQuotaExceeded,
+            .NODEV, .NXIO => return error.NoDevice,
+            .NOENT, .SRCH => return error.FileNotFound,
+            .NOMEM => return error.SystemResources,
+            .NOSPC => return error.NoSpaceLeft,
+            .NOTDIR => return error.NotDir,
+            .PERM => return error.PermissionDenied,
+            .EXIST => return error.PathAlreadyExists,
+            .BUSY => return error.DeviceBusy,
+            .OPNOTSUPP => return error.FileLocksUnsupported,
+            .AGAIN => return error.WouldBlock,
+            .TXTBSY => return error.FileBusy,
+            .ILSEQ => return error.BadPathName,
+            else => return error.Unexpected,
+        }
+    }
+}
+
+fn openExistingNonRegularNoclobberTarget(io: std.Io, request: fd.OpenRequest) fd.OpenError!fd.Descriptor {
+    request.validate();
+    if (!request.options.exclusive or !request.options.create) return error.PathAlreadyExists;
+
+    var options = request.options;
+    options.exclusive = false;
+    options.truncate = false;
     const descriptor = try std.posix.openat(
         request.directory,
         request.path,
-        request.options.toPosixFlags(),
-        request.options.mode,
+        options.toPosixFlags(),
+        options.mode,
     );
-    return .{ .descriptor = descriptor };
+    errdefer closeDescriptor(descriptor) catch {};
+
+    const file: std.Io.File = .{ .handle = descriptor, .flags = .{ .nonblocking = false } };
+    const file_stat = file.stat(io) catch return error.Unexpected;
+    if (file_stat.kind == .file) return error.PathAlreadyExists;
+    return descriptor;
 }
 
 fn close(context: *anyopaque, request: fd.CloseRequest) fd.CloseError!void {
@@ -537,29 +597,37 @@ fn run(context: *anyopaque, request: process.RunRequest) process.RunError!proces
         .argv = request.argv,
         .cwd = request.cwd.toStdCwd(),
         .environ_map = request.environment,
-        .stdin = .pipe,
+        .stdin = request.stdin_stdio.toStdIo(),
         .stdout = .pipe,
         .stderr = .pipe,
     });
 
-    std.debug.assert(child.stdin != null);
     std.debug.assert(child.stdout != null);
     std.debug.assert(child.stderr != null);
 
     var stdin_writer: StdinWriter = .{
         .io = adapter.io,
-        .file = child.stdin.?,
+        .file = undefined,
         .bytes = request.stdin,
     };
-    child.stdin = null;
-    var stdin_thread = std.Thread.spawn(.{}, StdinWriter.run, .{&stdin_writer}) catch |err| {
-        child.kill(adapter.io);
-        return err;
-    };
-    var stdin_joined = false;
+    var stdin_thread: ?std.Thread = null;
+    var stdin_joined = true;
+    if (switch (request.stdin_stdio) {
+        .pipe => true,
+        .inherit, .fd, .ignore, .close => false,
+    }) {
+        std.debug.assert(child.stdin != null);
+        stdin_writer.file = child.stdin.?;
+        child.stdin = null;
+        stdin_thread = std.Thread.spawn(.{}, StdinWriter.run, .{&stdin_writer}) catch |err| {
+            child.kill(adapter.io);
+            return err;
+        };
+        stdin_joined = false;
+    } else std.debug.assert(child.stdin == null);
     defer {
         child.kill(adapter.io);
-        if (!stdin_joined) stdin_thread.join();
+        if (!stdin_joined) stdin_thread.?.join();
     }
 
     var multi_reader_buffer: std.Io.File.MultiReader.Buffer(2) = undefined;
@@ -579,9 +647,11 @@ fn run(context: *anyopaque, request: process.RunRequest) process.RunError!proces
     try multi_reader.checkAnyError();
 
     const term = try child.wait(adapter.io);
-    stdin_thread.join();
-    stdin_joined = true;
-    if (stdin_writer.err) |err| return err;
+    if (stdin_thread) |thread| {
+        thread.join();
+        stdin_joined = true;
+        if (stdin_writer.err) |err| return err;
+    }
 
     const stdout_slice = try multi_reader.toOwnedSlice(0);
     errdefer request.allocator.free(stdout_slice);

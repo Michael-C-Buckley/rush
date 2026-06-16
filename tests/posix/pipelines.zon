@@ -53,6 +53,21 @@
             .status = 0,
         },
         .{
+            .name = "pipeline stage restores physical current directory used by later redirections",
+            .script =
+            \\pwd >before
+            \\cd / | :
+            \\pwd >after
+            \\cmp -s before after && printf 'restored\n'
+            ,
+            .stdout =
+            \\restored
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "pipeline connects stdout but leaves stderr independent",
             .script =
             \\{ printf 'out\n'; printf 'err\n' >&2; } | cat

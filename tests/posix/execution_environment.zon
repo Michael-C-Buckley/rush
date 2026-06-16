@@ -113,6 +113,21 @@
             .status = 0,
         },
         .{
+            .name = "command substitution restores physical current directory used by later redirections",
+            .script =
+            \\pwd >before
+            \\unused=$(cd /)
+            \\pwd >after
+            \\cmp -s before after && printf 'restored\n'
+            ,
+            .stdout =
+            \\restored
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "command substitution applies redirections within the substitution",
             .script =
             \\printf '<%s>\n' "$(printf hidden >cmdsub.out; printf visible)"

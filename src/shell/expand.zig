@@ -1087,6 +1087,30 @@ fn renderParameter(
     if (parsed.operator == .none and isWholePositionalParameterName(parsed.name)) {
         return renderWholePositionalsJoined(allocator, parsed.name, options);
     }
+    if (parsed.operator == .length and isWholePositionalParameterName(parsed.name)) {
+        return std.fmt.allocPrint(allocator, "{d}", .{options.positionals.len});
+    }
+    if (isWholePositionalParameterName(parsed.name) and parameterOperatorUsesWord(parsed.operator)) {
+        const usable = wholeArrayHasUsableValue(parsed.name, options, parsed.colon);
+        switch (parsed.operator) {
+            .default_value => {
+                if (usable) return renderWholePositionalsJoined(allocator, parsed.name, options);
+                return expandParameterWord(allocator, parsed.word, options, in_double_quotes);
+            },
+            .assign_default => {
+                return parameterAssignmentInvalid(allocator, options, parsed.name);
+            },
+            .alternate_value => {
+                if (!usable) return allocator.alloc(u8, 0);
+                return expandParameterWord(allocator, parsed.word, options, in_double_quotes);
+            },
+            .error_if_unset => {
+                if (usable) return renderWholePositionalsJoined(allocator, parsed.name, options);
+                return parameterExpansionError(allocator, options, parsed.name, parsed.word, in_double_quotes);
+            },
+            else => unreachable,
+        }
+    }
 
     const digit_name = isDigitParameterName(parsed.name);
     const value = if (digit_name)
@@ -1751,6 +1775,27 @@ fn arrayHasUsableValue(name: []const u8, options: Options, colon: bool) bool {
     return parameterHasUsableValue(options.arrays.len(name) != 0, false, colon);
 }
 
+fn wholeArrayHasUsableValue(name: []const u8, options: Options, colon: bool) bool {
+    if (!isWholePositionalParameterName(name)) return arrayHasUsableValue(name, options, colon);
+    if (!colon) return options.positionals.len != 0;
+    for (options.positionals) |param| if (param.len != 0) return true;
+    return false;
+}
+
+fn parameterOperatorUsesWord(operator: ParameterOperator) bool {
+    return switch (operator) {
+        .default_value, .assign_default, .alternate_value, .error_if_unset => true,
+        .none,
+        .length,
+        .remove_small_suffix,
+        .remove_large_suffix,
+        .remove_small_prefix,
+        .remove_large_prefix,
+        .invalid,
+        => false,
+    };
+}
+
 fn parameterExpansionError(
     allocator: std.mem.Allocator,
     options: Options,
@@ -2167,6 +2212,11 @@ fn specialParameterValue(name: []const u8, options: Options) ?[]const u8 {
 
 fn isWholePositionalParameterName(name: []const u8) bool {
     return std.mem.eql(u8, name, "@") or std.mem.eql(u8, name, "*");
+}
+
+fn positionalWholeKind(name: []const u8) ParameterArrayWholeKind {
+    std.debug.assert(isWholePositionalParameterName(name));
+    return if (std.mem.eql(u8, name, "@")) .at else .star;
 }
 
 fn digitParameterValue(name: []const u8, options: Options) ?[]const u8 {
@@ -4206,6 +4256,22 @@ fn appendParameterWordOperatorUnquoted(
     options: Options,
     ifs: []const u8,
 ) anyerror!void {
+    if (isWholePositionalParameterName(parsed.name) and parsed.operator == .assign_default) {
+        return parameterAssignmentInvalid(allocator, options, parsed.name);
+    }
+    if (isWholePositionalParameterName(parsed.name)) return appendUnquotedWholeArrayWordOperation(
+        allocator,
+        fields,
+        current,
+        force_current_field,
+        quoted_glob,
+        parsed.name,
+        positionalWholeKind(parsed.name),
+        .{ .kind = parsed.operator, .colon = parsed.colon, .word = parsed.word },
+        options,
+        ifs,
+    );
+
     const value = try parameterExpressionValue(allocator, parsed, options);
     const is_set = value != null;
     const is_null = if (value) |text| text.len == 0 else true;
@@ -4723,6 +4789,22 @@ fn appendParameterWordOperatorQuoted(
     options: Options,
     ifs: []const u8,
 ) anyerror!void {
+    if (isWholePositionalParameterName(parsed.name) and parsed.operator == .assign_default) {
+        return parameterAssignmentInvalid(allocator, options, parsed.name);
+    }
+    if (isWholePositionalParameterName(parsed.name)) return appendQuotedWholeArrayWordOperation(
+        allocator,
+        fields,
+        current,
+        force_current_field,
+        quoted_glob,
+        parsed.name,
+        positionalWholeKind(parsed.name),
+        .{ .kind = parsed.operator, .colon = parsed.colon, .word = parsed.word },
+        options,
+        ifs,
+    );
+
     const value = try parameterExpressionValue(allocator, parsed, options);
     const is_set = value != null;
     const is_null = if (value) |text| text.len == 0 else true;
@@ -5249,7 +5331,7 @@ fn appendUnquotedWholeArrayWordOperation(
     options: Options,
     ifs: []const u8,
 ) anyerror!void {
-    const usable = arrayHasUsableValue(name, options, operation.colon);
+    const usable = wholeArrayHasUsableValue(name, options, operation.colon);
     switch (operation.kind) {
         .default_value => {
             if (usable) return appendUnquotedWholeArrayValues(allocator, fields, current, name, whole, options, ifs);
@@ -5286,6 +5368,12 @@ fn appendUnquotedWholeArrayValues(
     options: Options,
     ifs: []const u8,
 ) !void {
+    if (isWholePositionalParameterName(name)) {
+        return switch (whole) {
+            .at => try appendUnquotedAt(allocator, fields, current, options.positionals, ifs),
+            .star => try appendUnquotedStar(allocator, fields, current, options.positionals, ifs),
+        };
+    }
     switch (whole) {
         .at => try appendUnquotedArrayValues(allocator, fields, current, name, options, ifs),
         .star => try appendUnquotedArrayValuesStar(allocator, fields, current, name, options, ifs),
@@ -5592,7 +5680,7 @@ fn appendQuotedWholeArrayWordOperation(
     options: Options,
     ifs: []const u8,
 ) anyerror!void {
-    const usable = arrayHasUsableValue(name, options, operation.colon);
+    const usable = wholeArrayHasUsableValue(name, options, operation.colon);
     switch (operation.kind) {
         .default_value => {
             if (usable) return appendQuotedWholeArrayValues(
@@ -5661,6 +5749,20 @@ fn appendQuotedWholeArrayValues(
     options: Options,
     ifs: []const u8,
 ) !void {
+    if (isWholePositionalParameterName(name)) {
+        return switch (whole) {
+            .at => try appendQuotedAt(
+                allocator,
+                fields,
+                current,
+                force_current_field,
+                quoted_glob,
+                options.positionals,
+                true,
+            ),
+            .star => try appendQuotedStar(allocator, current, quoted_glob, options.positionals, ifs),
+        };
+    }
     switch (whole) {
         .at => try appendQuotedArrayValues(allocator, fields, current, force_current_field, quoted_glob, name, options),
         .star => try appendQuotedArrayValuesStar(allocator, current, quoted_glob, name, options, ifs),
@@ -7528,6 +7630,34 @@ test "parameter expansion supports POSIX operators" {
     const lengths = try expandWordScalar(std.testing.allocator, "${#USER}:${#MISSING}:${#EMPTY}", .{ .env = test_env });
     defer std.testing.allocator.free(lengths);
     try std.testing.expectEqualStrings("9:0:0", lengths);
+
+    const params = [_][]const u8{ "a", "bb", "ccc" };
+    const whole_positional_lengths = try expandWordScalar(
+        std.testing.allocator,
+        "${#*}:${#@}",
+        .{ .positionals = &params },
+    );
+    defer std.testing.allocator.free(whole_positional_lengths);
+    try std.testing.expectEqualStrings("3:3", whole_positional_lengths);
+
+    const whole_positional_alternate = try expandWordScalar(
+        std.testing.allocator,
+        "${@:+alternate}:${*:+alternate}",
+        .{ .positionals = &params },
+    );
+    defer std.testing.allocator.free(whole_positional_alternate);
+    try std.testing.expectEqualStrings("alternate:alternate", whole_positional_alternate);
+
+    var quoted_at_alternate = try expandWord(
+        std.testing.allocator,
+        "\"${@:+$@}\"",
+        .{ .positionals = &params },
+    );
+    defer quoted_at_alternate.deinit();
+    try std.testing.expectEqual(@as(usize, 3), quoted_at_alternate.fields.len);
+    try std.testing.expectEqualStrings("a", quoted_at_alternate.fields[0]);
+    try std.testing.expectEqualStrings("bb", quoted_at_alternate.fields[1]);
+    try std.testing.expectEqualStrings("ccc", quoted_at_alternate.fields[2]);
 
     const hash_special = try expandWordScalar(
         std.testing.allocator,

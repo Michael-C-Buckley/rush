@@ -862,6 +862,25 @@
             .status = 0,
         },
         .{
+            .name = "quoted positional alternate expansion preserves at fields",
+            .script =
+            \\set -- 'a b' c
+            \\printf '[%s]\n' "${@:+$@}"
+            \\printf '<%s>\n' "${@:+x}"
+            \\printf '[%s]\n' "${@:-x}"
+            ,
+            .stdout =
+            \\[a b]
+            \\[c]
+            \\<x>
+            \\[a b]
+            \\[c]
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "field splitting uses default delimiters when IFS is unset",
             .script = "unset IFS\nx='a b\tc\nd'\nset -- $x\nprintf '<%s>\\n' \"$#\" \"$@\"\n",
             .stdout =
