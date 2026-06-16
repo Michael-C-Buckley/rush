@@ -1124,7 +1124,7 @@ fn renderParameter(
             return allocator.alloc(u8, 0);
         },
         .length => {
-            if (value) |text| return std.fmt.allocPrint(allocator, "{d}", .{text.len});
+            if (value) |text| return std.fmt.allocPrint(allocator, "{d}", .{parameterValueLength(text)});
             if (options.nounset and !isNounsetExemptParameter(parsed.name)) return error.NounsetParameter;
             return allocator.dupe(u8, "0");
         },
@@ -1773,6 +1773,10 @@ fn parameterExpansionError(
     return error.ParameterExpansionFailed;
 }
 
+fn parameterValueLength(value: []const u8) usize {
+    return std.unicode.utf8CountCodepoints(value) catch value.len;
+}
+
 fn renderArrayElementLength(
     allocator: std.mem.Allocator,
     name: []const u8,
@@ -1787,7 +1791,9 @@ fn renderArrayElementLength(
         if (!options.arrays.exists(name)) return allocator.dupe(u8, "0");
         return badArraySubscriptExpansion(allocator, options, diagnostic_name);
     } else std.math.cast(usize, value) orelse return badArraySubscriptExpansion(allocator, options, diagnostic_name);
-    if (options.arrays.get(name, index)) |array_value| return std.fmt.allocPrint(allocator, "{d}", .{array_value.len});
+    if (options.arrays.get(name, index)) |array_value| {
+        return std.fmt.allocPrint(allocator, "{d}", .{parameterValueLength(array_value)});
+    }
     if (options.nounset) return error.NounsetParameter;
     return allocator.dupe(u8, "0");
 }

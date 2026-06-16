@@ -163,6 +163,19 @@
             .status = 0,
         },
         .{
+            .name = "parameter expansion string length counts multibyte characters",
+            .script =
+            \\x=åßç
+            \\printf '%s\n' "${#x}"
+            ,
+            .stdout =
+            \\3
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "parameter expansion removes shortest and longest suffix patterns",
             .script =
             \\x=posix/src/std
