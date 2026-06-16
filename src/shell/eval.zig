@@ -2093,10 +2093,9 @@ const EvaluationBuffers = struct {
         std.debug.assert(command.len != 0);
         std.debug.assert(message.len != 0);
 
-        try self.stderr.print(self.allocator, "{s}: {s}\n", .{ command, message });
-        const diagnostic = try std.fmt.allocPrint(self.allocator, "{s}: {s}", .{ command, message });
-        errdefer self.allocator.free(diagnostic);
-        try self.diagnostics.append(self.allocator, diagnostic);
+        var frame = OutputFrame.initOutcomeCapture(self);
+        defer frame.deinit();
+        try frame.addBuiltinDiagnostic(command, message);
     }
 };
 
@@ -2400,72 +2399,104 @@ fn flushBuffersForRedirectionTargets(
     redirections: redirection_plan.RedirectionPlan,
 ) EvalError!void {
     redirections.validate();
-    if (redirectionTargetsDescriptor(redirections, 1) and buffers.stdout.items.len != 0) {
-        if (!writeAllDescriptor(1, buffers.stdout.items)) return error.Unimplemented;
-        buffers.stdout.items.len = 0;
-    }
-    if (redirectionTargetsDescriptor(redirections, 2) and buffers.stderr.items.len != 0) {
-        if (!writeAllDescriptor(2, buffers.stderr.items)) return error.Unimplemented;
-        buffers.stderr.items.len = 0;
-    }
+    var frame = OutputFrame.initInherited(buffers);
+    defer frame.deinit();
+    try frame.applyRedirectionsFlushingRouteChanges(redirections);
 }
 
-const BufferedDescriptorDestination = union(enum) {
-    captured_stdout,
-    side_stderr,
-    descriptor: runtime.fd.Descriptor,
+fn flushBeforeHostBypass(buffers: *EvaluationBuffers) EvalError!void {
+    var frame = OutputFrame.initInherited(buffers);
+    defer frame.deinit();
+    try frame.flushPendingDescriptor(1);
+    try frame.flushPendingDescriptor(2);
+}
+
+const OutputDestination = union(enum) {
+    outcome_stdout_capture,
+    outcome_stderr_capture,
+    pipeline_stdout_capture,
+    command_substitution_stdout_capture,
+    command_substitution_stderr_capture,
+    host_descriptor: runtime.fd.Descriptor,
     closed,
 
-    fn validate(self: BufferedDescriptorDestination) void {
+    fn validate(self: OutputDestination) void {
         switch (self) {
-            .captured_stdout, .side_stderr, .closed => {},
-            .descriptor => |descriptor| runtime.fd.assertValidDescriptor(descriptor),
+            .outcome_stdout_capture,
+            .outcome_stderr_capture,
+            .pipeline_stdout_capture,
+            .command_substitution_stdout_capture,
+            .command_substitution_stderr_capture,
+            .closed,
+            => {},
+            .host_descriptor => |descriptor| runtime.fd.assertValidDescriptor(descriptor),
         }
     }
 };
 
-const BufferedDescriptorBinding = struct {
+const OutputBinding = struct {
     descriptor: runtime.fd.Descriptor,
-    destination: BufferedDescriptorDestination,
+    destination: OutputDestination,
 
-    fn validate(self: BufferedDescriptorBinding) void {
+    fn validate(self: OutputBinding) void {
         runtime.fd.assertValidDescriptor(self.descriptor);
         self.destination.validate();
     }
 };
 
-const BufferedDescriptorRouting = struct {
-    allocator: std.mem.Allocator,
-    captured_stdout: bool,
-    bindings: std.ArrayList(BufferedDescriptorBinding) = .empty,
+const OutputRouting = struct {
+    const InitialMode = enum {
+        outcome_capture,
+        inherited,
+        command_substitution,
+    };
 
-    fn init(allocator: std.mem.Allocator, captured_stdout: bool) BufferedDescriptorRouting {
-        return .{ .allocator = allocator, .captured_stdout = captured_stdout };
+    allocator: std.mem.Allocator,
+    initial_mode: InitialMode,
+    bindings: std.ArrayList(OutputBinding) = .empty,
+
+    fn init(allocator: std.mem.Allocator, initial_mode: InitialMode) OutputRouting {
+        return .{ .allocator = allocator, .initial_mode = initial_mode };
     }
 
-    fn deinit(self: *BufferedDescriptorRouting) void {
+    fn initCommandSubstitution(allocator: std.mem.Allocator) OutputRouting {
+        return init(allocator, .command_substitution);
+    }
+
+    fn initBuffered(allocator: std.mem.Allocator, captured_stdout: bool) OutputRouting {
+        return init(allocator, if (captured_stdout) .command_substitution else .inherited);
+    }
+
+    fn deinit(self: *OutputRouting) void {
         self.bindings.deinit(self.allocator);
         self.* = undefined;
     }
 
-    fn destination(self: BufferedDescriptorRouting, descriptor: runtime.fd.Descriptor) BufferedDescriptorDestination {
+    fn destination(self: OutputRouting, descriptor: runtime.fd.Descriptor) OutputDestination {
         runtime.fd.assertValidDescriptor(descriptor);
         for (self.bindings.items) |binding| {
             binding.validate();
             if (binding.descriptor == descriptor) return binding.destination;
         }
-        if (!self.captured_stdout) return .{ .descriptor = descriptor };
-        return switch (descriptor) {
-            1 => .captured_stdout,
-            2 => .side_stderr,
-            else => .{ .descriptor = descriptor },
+        return switch (self.initial_mode) {
+            .outcome_capture => switch (descriptor) {
+                1 => .outcome_stdout_capture,
+                2 => .outcome_stderr_capture,
+                else => .{ .host_descriptor = descriptor },
+            },
+            .inherited => .{ .host_descriptor = descriptor },
+            .command_substitution => switch (descriptor) {
+                1 => .command_substitution_stdout_capture,
+                2 => .command_substitution_stderr_capture,
+                else => .{ .host_descriptor = descriptor },
+            },
         };
     }
 
     fn setDestination(
-        self: *BufferedDescriptorRouting,
+        self: *OutputRouting,
         descriptor: runtime.fd.Descriptor,
-        dest: BufferedDescriptorDestination,
+        dest: OutputDestination,
     ) !void {
         runtime.fd.assertValidDescriptor(descriptor);
         dest.validate();
@@ -2478,7 +2509,289 @@ const BufferedDescriptorRouting = struct {
         }
         try self.bindings.append(self.allocator, .{ .descriptor = descriptor, .destination = dest });
     }
+
+    fn applyRedirectionStep(self: *OutputRouting, step: redirection_plan.RedirectionStep) !void {
+        step.validate();
+        switch (step.effect) {
+            .duplicate => |duplicate| try self.setDestination(duplicate.target, self.destination(duplicate.source)),
+            .close => |close| try self.setDestination(close.target, .closed),
+            .open_path, .here_doc => try self.setDestination(step.target(), .{ .host_descriptor = step.target() }),
+        }
+    }
+
+    fn applyRedirections(self: *OutputRouting, redirections: redirection_plan.RedirectionPlan) !void {
+        redirections.validate();
+        for (redirections.steps) |step| try self.applyRedirectionStep(step);
+    }
 };
+
+const BufferedDescriptorDestination = OutputDestination;
+const BufferedDescriptorRouting = OutputRouting;
+
+pub const RunnerOutputWriteResult = struct {
+    stdout_failed: bool = false,
+    stderr_failed: bool = false,
+};
+
+pub fn routeRunnerOutcomeOutput(
+    allocator: std.mem.Allocator,
+    live: bool,
+    stdout: *std.ArrayList(u8),
+    stderr: *std.ArrayList(u8),
+    stdout_bytes: []const u8,
+    stderr_bytes: []const u8,
+) !RunnerOutputWriteResult {
+    if (!live) {
+        try stdout.appendSlice(allocator, stdout_bytes);
+        try stderr.appendSlice(allocator, stderr_bytes);
+        return .{};
+    }
+
+    var input = EvaluationInput.empty();
+    var buffers = EvaluationBuffers.init(allocator, &input);
+    defer buffers.deinit();
+    var frame = OutputFrame.initInherited(&buffers);
+    defer frame.deinit();
+
+    var result: RunnerOutputWriteResult = .{};
+    frame.write(1, stdout_bytes) catch |err| switch (err) {
+        error.Unimplemented => result.stdout_failed = true,
+        else => |e| return e,
+    };
+    frame.write(2, stderr_bytes) catch |err| switch (err) {
+        error.Unimplemented => result.stderr_failed = true,
+        else => |e| return e,
+    };
+    return result;
+}
+
+const OutputFrame = struct {
+    buffers: *EvaluationBuffers,
+    routing: OutputRouting,
+
+    fn initOutcomeCapture(buffers: *EvaluationBuffers) OutputFrame {
+        return .{ .buffers = buffers, .routing = OutputRouting.init(buffers.allocator, .outcome_capture) };
+    }
+
+    fn initInherited(buffers: *EvaluationBuffers) OutputFrame {
+        return .{ .buffers = buffers, .routing = OutputRouting.init(buffers.allocator, .inherited) };
+    }
+
+    fn initCommandSubstitution(buffers: *EvaluationBuffers) OutputFrame {
+        return .{ .buffers = buffers, .routing = OutputRouting.initCommandSubstitution(buffers.allocator) };
+    }
+
+    fn initBuffered(buffers: *EvaluationBuffers, captured_stdout: bool) OutputFrame {
+        return .{ .buffers = buffers, .routing = OutputRouting.initBuffered(buffers.allocator, captured_stdout) };
+    }
+
+    fn deinit(self: *OutputFrame) void {
+        self.routing.deinit();
+        self.* = undefined;
+    }
+
+    fn write(self: *OutputFrame, descriptor: runtime.fd.Descriptor, bytes: []const u8) !void {
+        runtime.fd.assertValidDescriptor(descriptor);
+        if (bytes.len == 0) return;
+
+        switch (self.routing.destination(descriptor)) {
+            .outcome_stdout_capture,
+            .pipeline_stdout_capture,
+            .command_substitution_stdout_capture,
+            => try self.buffers.stdout.appendSlice(self.buffers.allocator, bytes),
+            .outcome_stderr_capture,
+            .command_substitution_stderr_capture,
+            => try self.buffers.stderr.appendSlice(self.buffers.allocator, bytes),
+            .host_descriptor => |host_descriptor| {
+                if (!writeAllDescriptor(host_descriptor, bytes)) return error.Unimplemented;
+            },
+            .closed => {},
+        }
+    }
+
+    fn flushPendingDescriptor(self: *OutputFrame, descriptor: runtime.fd.Descriptor) EvalError!void {
+        runtime.fd.assertValidDescriptor(descriptor);
+        switch (descriptor) {
+            1 => try flushBufferToDestination(self.buffers, .stdout, self.routing.destination(descriptor)),
+            2 => try flushBufferToDestination(self.buffers, .stderr, self.routing.destination(descriptor)),
+            else => {},
+        }
+    }
+
+    fn applyRedirectionsFlushingRouteChanges(
+        self: *OutputFrame,
+        redirections: redirection_plan.RedirectionPlan,
+    ) EvalError!void {
+        redirections.validate();
+        // Flush buffered bytes before each descriptor's logical route changes. This is a transition helper, not
+        // a final-route flush; callers must ensure the process fd state already matches the bytes being flushed.
+        for (redirections.steps) |step| {
+            step.validate();
+            switch (step.target()) {
+                1 => try self.flushPendingDescriptor(1),
+                2 => try self.flushPendingDescriptor(2),
+                else => {},
+            }
+            try self.routing.applyRedirectionStep(step);
+        }
+    }
+
+    fn addDiagnostic(self: *OutputFrame, diagnostic: []const u8, stderr_text: []const u8) !void {
+        std.debug.assert(diagnostic.len != 0);
+        std.debug.assert(stderr_text.len != 0);
+
+        try self.write(2, stderr_text);
+        const diagnostic_copy = try self.buffers.allocator.dupe(u8, diagnostic);
+        errdefer self.buffers.allocator.free(diagnostic_copy);
+        try self.buffers.diagnostics.append(self.buffers.allocator, diagnostic_copy);
+    }
+
+    fn addBuiltinDiagnostic(self: *OutputFrame, command: []const u8, message: []const u8) !void {
+        std.debug.assert(command.len != 0);
+        std.debug.assert(message.len != 0);
+
+        const stderr_text = try std.fmt.allocPrint(self.buffers.allocator, "{s}: {s}\n", .{ command, message });
+        defer self.buffers.allocator.free(stderr_text);
+        const diagnostic = try std.fmt.allocPrint(self.buffers.allocator, "{s}: {s}", .{ command, message });
+        defer self.buffers.allocator.free(diagnostic);
+
+        try self.addDiagnostic(diagnostic, stderr_text);
+    }
+};
+
+test "output routing defaults inherited descriptors to host descriptors" {
+    var routing = OutputRouting.init(std.testing.allocator, .inherited);
+    defer routing.deinit();
+
+    const stdout_destination: OutputDestination = .{ .host_descriptor = 1 };
+    const stderr_destination: OutputDestination = .{ .host_descriptor = 2 };
+    try std.testing.expectEqual(stdout_destination, routing.destination(1));
+    try std.testing.expectEqual(stderr_destination, routing.destination(2));
+}
+
+test "output routing defaults command substitution descriptors to captures" {
+    var routing = OutputRouting.initCommandSubstitution(std.testing.allocator);
+    defer routing.deinit();
+
+    try std.testing.expectEqual(OutputDestination.command_substitution_stdout_capture, routing.destination(1));
+    try std.testing.expectEqual(OutputDestination.command_substitution_stderr_capture, routing.destination(2));
+}
+
+test "output routing applies redirections in order" {
+    const stderr_to_stdout_then_stdout_file_steps = [_]redirection_plan.RedirectionStep{
+        redirection_plan.RedirectionStep.duplicate(0, 2, 1),
+        redirection_plan.RedirectionStep.openPath(1, 1, "out", .{ .access = .write_only, .create = true }),
+    };
+    const stderr_to_stdout_then_stdout_file_plan: redirection_plan.RedirectionPlan = .{
+        .steps = &stderr_to_stdout_then_stdout_file_steps,
+    };
+    var stderr_to_stdout_then_stdout_file = OutputRouting.initCommandSubstitution(std.testing.allocator);
+    defer stderr_to_stdout_then_stdout_file.deinit();
+    try stderr_to_stdout_then_stdout_file.applyRedirections(stderr_to_stdout_then_stdout_file_plan);
+
+    const stdout_file_then_stderr_to_stdout_steps = [_]redirection_plan.RedirectionStep{
+        redirection_plan.RedirectionStep.openPath(0, 1, "out", .{ .access = .write_only, .create = true }),
+        redirection_plan.RedirectionStep.duplicate(1, 2, 1),
+    };
+    const stdout_file_then_stderr_to_stdout_plan: redirection_plan.RedirectionPlan = .{
+        .steps = &stdout_file_then_stderr_to_stdout_steps,
+    };
+    var stdout_file_then_stderr_to_stdout = OutputRouting.initCommandSubstitution(std.testing.allocator);
+    defer stdout_file_then_stderr_to_stdout.deinit();
+    try stdout_file_then_stderr_to_stdout.applyRedirections(stdout_file_then_stderr_to_stdout_plan);
+
+    const file_destination: OutputDestination = .{ .host_descriptor = 1 };
+    try std.testing.expectEqual(file_destination, stderr_to_stdout_then_stdout_file.destination(1));
+    try std.testing.expectEqual(
+        OutputDestination.command_substitution_stdout_capture,
+        stderr_to_stdout_then_stdout_file.destination(2),
+    );
+    try std.testing.expectEqual(file_destination, stdout_file_then_stderr_to_stdout.destination(1));
+    try std.testing.expectEqual(file_destination, stdout_file_then_stderr_to_stdout.destination(2));
+}
+
+test "output routing duplicate copies current source destination" {
+    const steps = [_]redirection_plan.RedirectionStep{redirection_plan.RedirectionStep.duplicate(0, 1, 2)};
+    const plan: redirection_plan.RedirectionPlan = .{ .steps = &steps };
+    var routing = OutputRouting.initCommandSubstitution(std.testing.allocator);
+    defer routing.deinit();
+
+    try routing.applyRedirections(plan);
+
+    try std.testing.expectEqual(OutputDestination.command_substitution_stderr_capture, routing.destination(1));
+}
+
+test "output routing close marks destination closed" {
+    const steps = [_]redirection_plan.RedirectionStep{redirection_plan.RedirectionStep.close(0, 1)};
+    const plan: redirection_plan.RedirectionPlan = .{ .steps = &steps };
+    var routing = OutputRouting.init(std.testing.allocator, .inherited);
+    defer routing.deinit();
+
+    try routing.applyRedirections(plan);
+
+    try std.testing.expectEqual(OutputDestination.closed, routing.destination(1));
+}
+
+test "output frame outcome capture writes stdout and stderr buffers" {
+    var input = EvaluationInput.empty();
+    var buffers = EvaluationBuffers.init(std.testing.allocator, &input);
+    defer buffers.deinit();
+
+    var frame = OutputFrame.initOutcomeCapture(&buffers);
+    defer frame.deinit();
+    try frame.write(1, "out");
+    try frame.write(2, "err");
+
+    try std.testing.expectEqualStrings("out", buffers.stdout.items);
+    try std.testing.expectEqualStrings("err", buffers.stderr.items);
+}
+
+test "output frame diagnostic helper writes stderr and structured diagnostic" {
+    var input = EvaluationInput.empty();
+    var buffers = EvaluationBuffers.init(std.testing.allocator, &input);
+    defer buffers.deinit();
+
+    var frame = OutputFrame.initOutcomeCapture(&buffers);
+    defer frame.deinit();
+    try frame.addBuiltinDiagnostic("cmd", "failed");
+
+    try std.testing.expectEqualStrings("cmd: failed\n", buffers.stderr.items);
+    try std.testing.expectEqual(@as(usize, 1), buffers.diagnostics.items.len);
+    try std.testing.expectEqualStrings("cmd: failed", buffers.diagnostics.items[0]);
+}
+
+test "output frame closed destination discards output" {
+    var input = EvaluationInput.empty();
+    var buffers = EvaluationBuffers.init(std.testing.allocator, &input);
+    defer buffers.deinit();
+
+    var frame = OutputFrame.initOutcomeCapture(&buffers);
+    defer frame.deinit();
+    try frame.routing.setDestination(1, .closed);
+    try frame.write(1, "discarded");
+
+    try std.testing.expectEqualStrings("", buffers.stdout.items);
+    try std.testing.expectEqualStrings("", buffers.stderr.items);
+}
+
+test "output frame flushes pending descriptor before route change" {
+    var input = EvaluationInput.empty();
+    var buffers = EvaluationBuffers.init(std.testing.allocator, &input);
+    defer buffers.deinit();
+
+    var frame = OutputFrame.initCommandSubstitution(&buffers);
+    defer frame.deinit();
+    try frame.routing.setDestination(1, .command_substitution_stderr_capture);
+    try buffers.stdout.appendSlice(std.testing.allocator, "pending");
+
+    const steps = [_]redirection_plan.RedirectionStep{redirection_plan.RedirectionStep.close(0, 1)};
+    const plan: redirection_plan.RedirectionPlan = .{ .steps = &steps };
+    try frame.applyRedirectionsFlushingRouteChanges(plan);
+
+    try std.testing.expectEqualStrings("", buffers.stdout.items);
+    try std.testing.expectEqualStrings("pending", buffers.stderr.items);
+    try std.testing.expectEqual(OutputDestination.closed, frame.routing.destination(1));
+}
 
 fn flushBufferedRedirectionOutput(
     evaluator: Evaluator,
@@ -2492,32 +2805,39 @@ fn flushBufferedRedirectionOutput(
         return flushBuffersForRedirectionTargets(buffers, redirections);
     }
 
-    var routing = BufferedDescriptorRouting.init(buffers.allocator, eval_context.command_substitution_depth != 0);
-    defer routing.deinit();
-    if (evaluator.scoped_exec_redirections) |scoped_redirections| {
-        for (scoped_redirections.items) |scoped| try applyBufferedRoutingRedirections(&routing, scoped.redirections);
-    }
-    try applyBufferedRoutingRedirections(&routing, redirections);
+    const command_substitution_capture = eval_context.command_substitution_depth != 0;
+    var frame = OutputFrame.initBuffered(
+        buffers,
+        command_substitution_capture,
+    );
+    defer frame.deinit();
 
-    try flushBufferToDestination(buffers, .stdout, routing.destination(1));
-    try flushBufferToDestination(buffers, .stderr, routing.destination(2));
+    if (!command_substitution_capture) {
+        if (evaluator.scoped_exec_redirections) |scoped_redirections| {
+            for (scoped_redirections.items) |scoped| {
+                try frame.applyRedirectionsFlushingRouteChanges(scoped.redirections);
+            }
+        }
+        try frame.applyRedirectionsFlushingRouteChanges(redirections);
+        return;
+    }
+
+    if (evaluator.scoped_exec_redirections) |scoped_redirections| {
+        for (scoped_redirections.items) |scoped| {
+            try applyBufferedRoutingRedirections(&frame.routing, scoped.redirections);
+        }
+    }
+    try applyBufferedRoutingRedirections(&frame.routing, redirections);
+
+    try frame.flushPendingDescriptor(1);
+    try frame.flushPendingDescriptor(2);
 }
 
 fn applyBufferedRoutingRedirections(
     routing: *BufferedDescriptorRouting,
     redirections: redirection_plan.RedirectionPlan,
 ) EvalError!void {
-    redirections.validate();
-    for (redirections.steps) |step| {
-        switch (step.effect) {
-            .duplicate => |duplicate| try routing.setDestination(
-                duplicate.target,
-                routing.destination(duplicate.source),
-            ),
-            .close => |close| try routing.setDestination(close.target, .closed),
-            .open_path, .here_doc => try routing.setDestination(step.target(), .{ .descriptor = step.target() }),
-        }
-    }
+    try routing.applyRedirections(redirections);
 }
 
 const BufferedOutputStream = enum { stdout, stderr };
@@ -2535,21 +2855,22 @@ fn flushBufferToDestination(
     if (bytes.len == 0) return;
 
     switch (destination) {
-        .captured_stdout => if (stream == .stderr) {
+        .command_substitution_stdout_capture => if (stream == .stderr) {
             try buffers.stdout.appendSlice(buffers.allocator, bytes);
             buffers.stderr.items.len = 0;
         },
-        .side_stderr => if (stream == .stdout) {
+        .command_substitution_stderr_capture => if (stream == .stdout) {
             try buffers.stderr.insertSlice(buffers.allocator, 0, bytes);
             buffers.stdout.items.len = 0;
         },
-        .descriptor => |descriptor| {
+        .host_descriptor => |descriptor| {
             if (!writeAllDescriptor(descriptor, bytes)) return error.Unimplemented;
             switch (stream) {
                 .stdout => buffers.stdout.items.len = 0,
                 .stderr => buffers.stderr.items.len = 0,
             }
         },
+        .outcome_stdout_capture, .outcome_stderr_capture, .pipeline_stdout_capture => {},
         .closed => switch (stream) {
             .stdout => buffers.stdout.items.len = 0,
             .stderr => buffers.stderr.items.len = 0,
@@ -2559,7 +2880,9 @@ fn flushBufferToDestination(
 
 fn appendPlanExpansionOutput(plan: command_plan.CommandPlan, buffers: *EvaluationBuffers) !void {
     plan.validate();
-    if (plan.expansion_stderr.len != 0) try buffers.stderr.appendSlice(buffers.allocator, plan.expansion_stderr);
+    var frame = OutputFrame.initOutcomeCapture(buffers);
+    defer frame.deinit();
+    if (plan.expansion_stderr.len != 0) try frame.write(2, plan.expansion_stderr);
     for (plan.expansion_diagnostics) |message| {
         try buffers.diagnostics.append(buffers.allocator, try buffers.allocator.dupe(u8, message));
     }
@@ -3069,14 +3392,34 @@ fn appendCommandSubstitutionExitTrap(
     )) orelse return;
     defer trap_outcome.deinit();
 
-    try command_outcome.appendStdout(trap_outcome.stdout.items);
-    try command_outcome.appendStderr(trap_outcome.stderr.items);
-    for (trap_outcome.diagnostics.items) |diagnostic| try command_outcome.addDiagnostic(diagnostic.message);
+    try appendCommandSubstitutionExitTrapOutput(command_outcome, trap_outcome);
     visible_status.* = trap_outcome.status;
     trap_outcome.applyToShellState(substitution_state, .{}) catch |err| switch (err) {
         error.ReadonlyVariable => return error.Unimplemented,
         error.OutOfMemory => return error.OutOfMemory,
     };
+}
+
+fn appendCommandSubstitutionExitTrapOutput(
+    command_outcome: *outcome.CommandOutcome,
+    trap_outcome: outcome.CommandOutcome,
+) EvalError!void {
+    command_outcome.validate();
+    trap_outcome.validate();
+
+    try appendCommandSubstitutionCapturedOutput(command_outcome, trap_outcome.stdout.items, trap_outcome.stderr.items);
+    for (trap_outcome.diagnostics.items) |diagnostic| try command_outcome.addDiagnostic(diagnostic.message);
+}
+
+fn appendCommandSubstitutionCapturedOutput(
+    command_outcome: *outcome.CommandOutcome,
+    substitution_stdout: []const u8,
+    side_stderr: []const u8,
+) EvalError!void {
+    command_outcome.validate();
+
+    try command_outcome.appendStdout(substitution_stdout);
+    try command_outcome.appendStderr(side_stderr);
 }
 
 fn evaluateCommandSubstitutionBody(
@@ -3875,17 +4218,26 @@ fn evaluateFallbackPipeline(
 
         if (is_last_stage) flushInheritedPipelineStdout(evaluator.*, &stage_outcome);
         statuses[index] = stage_outcome.control_flow.status(stage_outcome.status);
-        try appendPipelineStageBuffers(buffers, stage_outcome, is_last_stage);
+        try appendPipelineStageBuffers(buffers, stage_outcome, PipelineStageOutputRoute.forStage(is_last_stage));
         stage_outcome.applyToShellState(&stage_state, .{}) catch |err| switch (err) {
             error.OutOfMemory => return error.OutOfMemory,
             error.ReadonlyVariable => unreachable,
         };
 
         if (!is_last_stage) {
-            next_stdin.clearRetainingCapacity();
-            try next_stdin.appendSlice(evaluator.allocator, stage_outcome.stdout.items);
+            try transferPipelineStdoutToNextStdin(evaluator.allocator, &next_stdin, stage_outcome);
         }
     }
+}
+
+fn transferPipelineStdoutToNextStdin(
+    allocator: std.mem.Allocator,
+    next_stdin: *std.ArrayList(u8),
+    stage_outcome: outcome.CommandOutcome,
+) !void {
+    stage_outcome.validate();
+    next_stdin.clearRetainingCapacity();
+    try next_stdin.appendSlice(allocator, stage_outcome.stdout.items);
 }
 
 fn flushInheritedPipelineStdout(evaluator: Evaluator, stage_outcome: *outcome.CommandOutcome) void {
@@ -4842,20 +5194,6 @@ fn flushBuffersForRedirectionTargetsBetweenCommands(
     try flushBuffersForRedirectionTargets(buffers, redirections);
 }
 
-fn flushBufferedCommandOutput(buffers: *EvaluationBuffers, eval_context: context.EvalContext) EvalError!void {
-    eval_context.validate();
-    if (eval_context.target != .current_shell) return;
-    if (eval_context.command_substitution_depth != 0) return;
-    if (buffers.stdout.items.len != 0) {
-        if (!writeAllDescriptor(1, buffers.stdout.items)) return error.Unimplemented;
-        buffers.stdout.items.len = 0;
-    }
-    if (buffers.stderr.items.len != 0) {
-        if (!writeAllDescriptor(2, buffers.stderr.items)) return error.Unimplemented;
-        buffers.stderr.items.len = 0;
-    }
-}
-
 fn flushBuffersForSourceRedirectionTargets(
     buffers: *EvaluationBuffers,
     eval_context: context.EvalContext,
@@ -4864,14 +5202,10 @@ fn flushBuffersForSourceRedirectionTargets(
     eval_context.validate();
     source.validate();
     if (eval_context.command_substitution_depth != 0) return;
-    if (source.targets_stdout and buffers.stdout.items.len != 0) {
-        if (!writeAllDescriptor(1, buffers.stdout.items)) return error.Unimplemented;
-        buffers.stdout.items.len = 0;
-    }
-    if (source.targets_stderr and buffers.stderr.items.len != 0) {
-        if (!writeAllDescriptor(2, buffers.stderr.items)) return error.Unimplemented;
-        buffers.stderr.items.len = 0;
-    }
+    var frame = OutputFrame.initInherited(buffers);
+    defer frame.deinit();
+    if (source.targets_stdout) try frame.flushPendingDescriptor(1);
+    if (source.targets_stderr) try frame.flushPendingDescriptor(2);
 }
 
 fn flushBuffersForIrSourceRedirectionTargets(
@@ -4882,14 +5216,10 @@ fn flushBuffersForIrSourceRedirectionTargets(
     eval_context.validate();
     source.validate();
     if (eval_context.command_substitution_depth != 0) return;
-    if (source.targets_stdout and buffers.stdout.items.len != 0) {
-        if (!writeAllDescriptor(1, buffers.stdout.items)) return error.Unimplemented;
-        buffers.stdout.items.len = 0;
-    }
-    if (source.targets_stderr and buffers.stderr.items.len != 0) {
-        if (!writeAllDescriptor(2, buffers.stderr.items)) return error.Unimplemented;
-        buffers.stderr.items.len = 0;
-    }
+    var frame = OutputFrame.initInherited(buffers);
+    defer frame.deinit();
+    if (source.targets_stdout) try frame.flushPendingDescriptor(1);
+    if (source.targets_stderr) try frame.flushPendingDescriptor(2);
 }
 
 fn rawRedirectionsTargetDescriptor(redirections: []const ir.Redirection, descriptor: runtime.fd.Descriptor) bool {
@@ -5040,7 +5370,6 @@ fn evaluateAndOrList(
         result = .{ .status = child_outcome.status, .control_flow = child_outcome.control_flow };
         if (bashAssignmentErrorOutcomeAbortsSourceLine(eval_context, child_outcome)) break;
         if (child_outcome.control_flow != .normal) break;
-        try flushBufferedCommandOutput(buffers, eval_context);
     }
     return result;
 }
@@ -5090,7 +5419,6 @@ fn evaluateIfClause(
             diagnostics_before,
             condition,
         )) return condition;
-        try flushBufferedCommandOutput(buffers, eval_context);
         if (condition.status == 0) return evaluateStatementList(
             evaluator,
             shell_state,
@@ -5153,14 +5481,12 @@ fn evaluateLoop(
             .stop => return normalEvaluation(0),
             .repeat => {
                 result = normalEvaluation(body.status);
-                try flushBufferedCommandOutput(buffers, eval_context);
                 continue;
             },
             .propagate => |flow| return .{ .status = flow.status(body.status), .control_flow = flow },
             .other => {
                 if (body.control_flow != .normal) return body;
                 result = normalEvaluation(body.status);
-                try flushBufferedCommandOutput(buffers, eval_context);
             },
         }
     }
@@ -5207,14 +5533,12 @@ fn evaluateForLoop(
             .stop => return normalEvaluation(0),
             .repeat => {
                 result = normalEvaluation(body.status);
-                try flushBufferedCommandOutput(buffers, eval_context);
                 continue;
             },
             .propagate => |flow| return .{ .status = flow.status(body.status), .control_flow = flow },
             .other => {
                 if (body.control_flow != .normal) return body;
                 result = normalEvaluation(body.status);
-                try flushBufferedCommandOutput(buffers, eval_context);
             },
         }
     }
@@ -5470,14 +5794,28 @@ fn appendOutcomeBuffers(buffers: *EvaluationBuffers, command_outcome: outcome.Co
     }
 }
 
+const PipelineStageOutputRoute = enum {
+    pipeline_data_only,
+    parent_output,
+
+    fn forStage(is_last_stage: bool) PipelineStageOutputRoute {
+        return if (is_last_stage) .parent_output else .pipeline_data_only;
+    }
+};
+
 fn appendPipelineStageBuffers(
     buffers: *EvaluationBuffers,
     command_outcome: outcome.CommandOutcome,
-    include_stdout: bool,
+    route: PipelineStageOutputRoute,
 ) !void {
     command_outcome.validate();
-    if (include_stdout) try buffers.stdout.appendSlice(buffers.allocator, command_outcome.stdout.items);
-    try buffers.stderr.appendSlice(buffers.allocator, command_outcome.stderr.items);
+    var frame = OutputFrame.initOutcomeCapture(buffers);
+    defer frame.deinit();
+    switch (route) {
+        .pipeline_data_only => {},
+        .parent_output => try frame.write(1, command_outcome.stdout.items),
+    }
+    try frame.write(2, command_outcome.stderr.items);
     for (command_outcome.diagnostics.items) |diagnostic| {
         const owned_message = try buffers.allocator.dupe(u8, diagnostic.message);
         errdefer buffers.allocator.free(owned_message);
@@ -5535,14 +5873,7 @@ fn evaluateFunction(
     const shell_state_before = shellStateMutationFingerprint(shell_state.*);
     defer std.debug.assert(shellStateMutationFingerprint(shell_state.*) == shell_state_before);
 
-    if (functionRedirectionsTargetDescriptor(plan, definition, 1) and buffers.stdout.items.len != 0) {
-        if (!writeAllDescriptor(1, buffers.stdout.items)) return error.Unimplemented;
-        buffers.stdout.items.len = 0;
-    }
-    if (functionRedirectionsTargetDescriptor(plan, definition, 2) and buffers.stderr.items.len != 0) {
-        if (!writeAllDescriptor(2, buffers.stderr.items)) return error.Unimplemented;
-        buffers.stderr.items.len = 0;
-    }
+    try flushBuffersForFunctionRedirectionTargets(buffers, plan, definition);
 
     var call_redirections: ?redirection_plan.AppliedRedirections = null;
     defer if (call_redirections) |*applied| {
@@ -5613,30 +5944,25 @@ fn evaluateFunction(
     }
 
     if (call_redirections != null or definition_redirections != null) {
-        if (functionRedirectionsTargetDescriptor(plan, definition, 1)) {
-            if (!writeAllDescriptor(1, buffers.stdout.items)) return error.Unimplemented;
-            buffers.stdout.items.len = 0;
-        }
-        if (functionRedirectionsTargetDescriptor(plan, definition, 2)) {
-            if (!writeAllDescriptor(2, buffers.stderr.items)) return error.Unimplemented;
-            buffers.stderr.items.len = 0;
-        }
+        try flushBuffersForFunctionRedirectionTargets(buffers, plan, definition);
     }
 
     try appendFunctionFrameDelta(shell_state.*, frame_state, function_frame, state_delta);
     return result;
 }
 
-fn functionRedirectionsTargetDescriptor(
+fn flushBuffersForFunctionRedirectionTargets(
+    buffers: *EvaluationBuffers,
     call_plan: command_plan.CommandPlan,
     definition: command_plan.FunctionDefinition,
-    descriptor: runtime.fd.Descriptor,
-) bool {
+) EvalError!void {
     call_plan.validate();
     definition.validate();
-    runtime.fd.assertValidDescriptor(descriptor);
-    return redirectionTargetsDescriptor(call_plan.redirections, descriptor) or
-        redirectionTargetsDescriptor(definition.redirections, descriptor);
+
+    var frame = OutputFrame.initInherited(buffers);
+    defer frame.deinit();
+    try frame.applyRedirectionsFlushingRouteChanges(call_plan.redirections);
+    try frame.applyRedirectionsFlushingRouteChanges(definition.redirections);
 }
 
 fn evaluateFunctionSourceBody(
@@ -6083,14 +6409,7 @@ fn evaluateExternalWithProcessEnvironment(
         &.{},
     );
 
-    if (buffers.stdout.items.len != 0) {
-        if (!writeAllDescriptor(1, buffers.stdout.items)) return error.Unimplemented;
-        buffers.stdout.items.len = 0;
-    }
-    if (buffers.stderr.items.len != 0) {
-        if (!writeAllDescriptor(2, buffers.stderr.items)) return error.Unimplemented;
-        buffers.stderr.items.len = 0;
-    }
+    try flushBeforeHostBypass(buffers);
 
     var applied_redirections: ?redirection_plan.AppliedRedirections = null;
     defer if (applied_redirections) |*applied| {
@@ -6206,29 +6525,32 @@ fn appendCapturedExternalOutput(
     plan.validate();
     switch (capture_mode) {
         .stdout => {
+            var frame = OutputFrame.initOutcomeCapture(buffers);
+            defer frame.deinit();
             if (redirectionOrScopedExecTargetsDescriptor(evaluator, plan, 1)) {
-                if (!writeAllDescriptor(1, stdout)) return error.Unimplemented;
-            } else {
-                try buffers.stdout.appendSlice(buffers.allocator, stdout);
+                try frame.routing.setDestination(1, .{ .host_descriptor = 1 });
             }
             if (redirectionOrScopedExecTargetsDescriptor(evaluator, plan, 2)) {
-                if (!writeAllDescriptor(2, stderr)) return error.Unimplemented;
+                try frame.routing.setDestination(2, .{ .host_descriptor = 2 });
+            } else {
+                try frame.routing.setDestination(2, .closed);
             }
+            try frame.write(1, stdout);
+            try frame.write(2, stderr);
         },
         .stdout_and_stderr => {
-            try buffers.stdout.appendSlice(buffers.allocator, stdout);
-            try buffers.stderr.appendSlice(buffers.allocator, stderr);
-
-            var routing = BufferedDescriptorRouting.init(buffers.allocator, true);
-            defer routing.deinit();
+            var frame = OutputFrame.initCommandSubstitution(buffers);
+            defer frame.deinit();
+            try frame.write(1, stdout);
+            try frame.write(2, stderr);
             if (evaluator.scoped_exec_redirections) |scoped_redirections| {
                 for (scoped_redirections.items) |scoped| {
-                    try applyBufferedRoutingRedirections(&routing, scoped.redirections);
+                    try applyBufferedRoutingRedirections(&frame.routing, scoped.redirections);
                 }
             }
-            try applyBufferedRoutingRedirections(&routing, plan.redirections);
-            try flushBufferToDestination(buffers, .stdout, routing.destination(1));
-            try flushBufferToDestination(buffers, .stderr, routing.destination(2));
+            try applyBufferedRoutingRedirections(&frame.routing, plan.redirections);
+            try frame.flushPendingDescriptor(1);
+            try frame.flushPendingDescriptor(2);
         },
     }
 }
@@ -6321,12 +6643,13 @@ fn runExternalWithPipelineInputWithProcessEnvironment(
 }
 
 fn evaluateNotFound(not_found: command_plan.NotFound, buffers: *EvaluationBuffers) EvalError!outcome.ExitStatus {
+    var frame = OutputFrame.initOutcomeCapture(buffers);
+    defer frame.deinit();
     if (not_found.name.len == 0) {
-        try buffers.stderr.appendSlice(buffers.allocator, ": command not found\n");
-        try buffers.diagnostics.append(buffers.allocator, try buffers.allocator.dupe(u8, ": command not found"));
+        try frame.addDiagnostic(": command not found", ": command not found\n");
         return 127;
     }
-    try buffers.addBuiltinDiagnostic(not_found.name, "command not found");
+    try frame.addBuiltinDiagnostic(not_found.name, "command not found");
     return 127;
 }
 

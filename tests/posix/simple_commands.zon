@@ -15,6 +15,19 @@
             .status = 0,
         },
         .{
+            .name = "semantic output before and after external command preserves order",
+            .script =
+            \\printf a
+            \\cat <<'EOF'
+            \\b
+            \\EOF
+            \\printf c
+            ,
+            .stdout = "ab\nc",
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "assignment-only command affects current environment",
             .script =
             \\x=hello

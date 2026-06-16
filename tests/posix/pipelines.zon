@@ -15,6 +15,27 @@
             .status = 0,
         },
         .{
+            .name = "pipeline in sequence keeps only final stage stdout in parent stream",
+            .script =
+            \\printf a; printf b | cat; printf c
+            ,
+            .stdout = "abc",
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "pipeline in command substitution captures stdout away from host",
+            .script =
+            \\v=$(printf x | cat); printf '<%s>\n' "$v"
+            ,
+            .stdout =
+            \\<x>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "pipeline connects multiple commands left to right",
             .script =
             \\printf '%s\n' one two | sed -n '2p' | cat

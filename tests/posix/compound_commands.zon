@@ -647,6 +647,23 @@
             .status = 0,
         },
         .{
+            .name = "case command does not expand commands in an unselected clause",
+            .script =
+            \\case a in
+            \\    a) printf 'ok\n' ;;
+            \\    *) printf '%s\n' "${MISSING:?bad}" ;;
+            \\esac
+            \\printf 'after:%s\n' "$?"
+            ,
+            .stdout =
+            \\ok
+            \\after:0
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "case command matches alternate patterns in a clause",
             .script =
             \\case c in

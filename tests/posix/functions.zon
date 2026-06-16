@@ -249,5 +249,36 @@
             .stderr = "",
             .status = 0,
         },
+        .{
+            .name = "function definition in unselected if body is not defined",
+            .script =
+            \\if false
+            \\then
+            \\    foo() { printf 'bad\n'; }
+            \\fi
+            \\foo 2>/dev/null
+            \\printf '<%s>\n' "$?"
+            ,
+            .stdout =
+            \\<127>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "and-if guarded function definition is not defined when skipped",
+            .script =
+            \\false && foo() { printf 'bad\n'; }
+            \\foo 2>/dev/null
+            \\printf '<%s>\n' "$?"
+            ,
+            .stdout =
+            \\<127>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
     },
 }

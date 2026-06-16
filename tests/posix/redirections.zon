@@ -171,6 +171,20 @@
             .status = 0,
         },
         .{
+            .name = "exec redirection order preserves duplicated stderr route before stdout redirect",
+            .script =
+            \\( exec 2>&1 >out; printf 'err\n' >&2 )
+            \\printf 'out=<%s>\n' "$(cat out)"
+            ,
+            .stdout =
+            \\err
+            \\out=<>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "command substitution captures stderr duplicated to stdout before stdout redirect",
             .script =
             \\exec 3>&1

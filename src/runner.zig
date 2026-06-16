@@ -866,7 +866,7 @@ fn runSemanticLoweredProgram(
         }
         const body_failed = semanticBodyIsStoppingFailure(body, eval_context.features);
         if (evaluator.external_stdio == .inherit and semanticBodyUsesInheritedExternal(body)) {
-            try flushAccumulatedOutput(&accumulated_stdout, &accumulated_stderr);
+            try flushAccumulatedOutput(allocator, &accumulated_stdout, &accumulated_stderr);
         }
 
         var command_outcome = if (statement.async_after) blk: {
@@ -1560,21 +1560,25 @@ fn semanticCommandUsesInheritedExternal(plan: shell.CommandPlan) bool {
     return plan.class() == .external;
 }
 
-fn flushAccumulatedOutput(stdout: *std.ArrayList(u8), stderr: *std.ArrayList(u8)) !void {
-    if (stdout.items.len != 0) {
-        if (!writeAllDescriptor(1, stdout.items)) return error.Unimplemented;
-        stdout.items.len = 0;
-    }
-    if (stderr.items.len != 0) {
-        if (!writeAllDescriptor(2, stderr.items)) return error.Unimplemented;
-        stderr.items.len = 0;
-    }
+fn flushAccumulatedOutput(
+    allocator: std.mem.Allocator,
+    stdout: *std.ArrayList(u8),
+    stderr: *std.ArrayList(u8),
+) !void {
+    const result = try shell.eval.routeRunnerOutcomeOutput(
+        allocator,
+        true,
+        stdout,
+        stderr,
+        stdout.items,
+        stderr.items,
+    );
+    if (result.stdout_failed or result.stderr_failed) return error.Unimplemented;
+    stdout.items.len = 0;
+    stderr.items.len = 0;
 }
 
-const OutputWriteResult = struct {
-    stdout_failed: bool = false,
-    stderr_failed: bool = false,
-};
+const OutputWriteResult = shell.eval.RunnerOutputWriteResult;
 
 fn appendOrWriteOutput(
     allocator: std.mem.Allocator,
@@ -1584,16 +1588,14 @@ fn appendOrWriteOutput(
     stdout_bytes: []const u8,
     stderr_bytes: []const u8,
 ) !OutputWriteResult {
-    if (evaluator.commit_exec_redirections) {
-        var result: OutputWriteResult = .{};
-        if (stdout_bytes.len != 0 and !writeAllDescriptor(1, stdout_bytes)) result.stdout_failed = true;
-        if (stderr_bytes.len != 0 and !writeAllDescriptor(2, stderr_bytes)) result.stderr_failed = true;
-        return result;
-    }
-
-    try stdout.appendSlice(allocator, stdout_bytes);
-    try stderr.appendSlice(allocator, stderr_bytes);
-    return .{};
+    return shell.eval.routeRunnerOutcomeOutput(
+        allocator,
+        evaluator.commit_exec_redirections,
+        stdout,
+        stderr,
+        stdout_bytes,
+        stderr_bytes,
+    );
 }
 
 fn applyOutputWriteResult(command_outcome: *shell.CommandOutcome, result: OutputWriteResult) void {
@@ -1603,17 +1605,6 @@ fn applyOutputWriteResult(command_outcome: *shell.CommandOutcome, result: Output
     if (command_outcome.status != 0) return;
     command_outcome.status = 1;
     if (command_outcome.state_delta.last_status != null) command_outcome.state_delta.last_status = 1;
-}
-
-fn writeAllDescriptor(descriptor: runtime.fd.Descriptor, bytes: []const u8) bool {
-    runtime.fd.assertValidDescriptor(descriptor);
-    var index: usize = 0;
-    while (index < bytes.len) {
-        const written = std.c.write(descriptor, bytes[index..].ptr, bytes.len - index);
-        if (written <= 0) return false;
-        index += @intCast(written);
-    }
-    return true;
 }
 
 fn semanticPipelineUnsupportedMessage(plan: shell.PipelinePlan, legacy_fallback_gates: bool) ?[]const u8 {

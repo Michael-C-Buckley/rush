@@ -746,10 +746,18 @@ pub fn cloneFunctionDefinition(
     allocator: std.mem.Allocator,
     definition: FunctionDefinition,
 ) std.mem.Allocator.Error!FunctionDefinition {
+    return cloneFunctionDefinitionWithMode(allocator, definition, .persist_ir_source_as_source);
+}
+
+fn cloneFunctionDefinitionWithMode(
+    allocator: std.mem.Allocator,
+    definition: FunctionDefinition,
+    mode: StatementCloneMode,
+) std.mem.Allocator.Error!FunctionDefinition {
     definition.validate();
     const owned_name = try allocator.dupe(u8, definition.name);
     errdefer allocator.free(owned_name);
-    const owned_body = try cloneStatementList(allocator, definition.body);
+    const owned_body = try cloneStatementListWithMode(allocator, definition.body, mode);
     errdefer freeStatementList(allocator, owned_body);
     const owned_source_body = if (definition.source_body) |source_body| try allocator.dupe(u8, source_body) else null;
     errdefer if (owned_source_body) |source_body| allocator.free(source_body);
@@ -814,7 +822,20 @@ fn assertUniqueExternalNames(externals: []const ExternalResolution) void {
     }
 }
 
+const StatementCloneMode = enum {
+    preserve_ir_source,
+    persist_ir_source_as_source,
+};
+
 fn cloneStatementList(allocator: std.mem.Allocator, list: StatementList) std.mem.Allocator.Error!StatementList {
+    return cloneStatementListWithMode(allocator, list, .preserve_ir_source);
+}
+
+fn cloneStatementListWithMode(
+    allocator: std.mem.Allocator,
+    list: StatementList,
+    mode: StatementCloneMode,
+) std.mem.Allocator.Error!StatementList {
     list.validate();
     if (list.commands.len != 0) {
         const commands = try allocator.alloc(CommandPlan, list.commands.len);
@@ -822,7 +843,7 @@ fn cloneStatementList(allocator: std.mem.Allocator, list: StatementList) std.mem
         var initialized: usize = 0;
         errdefer for (commands[0..initialized]) |command| freeCommandPlan(allocator, command);
         for (list.commands, 0..) |command, index| {
-            commands[index] = try cloneCommandPlan(allocator, command);
+            commands[index] = try cloneCommandPlanWithMode(allocator, command, mode);
             initialized += 1;
         }
         return .{ .commands = commands };
@@ -833,7 +854,11 @@ fn cloneStatementList(allocator: std.mem.Allocator, list: StatementList) std.mem
     var initialized: usize = 0;
     errdefer for (statements[0..initialized]) |entry| freeStatementPlan(allocator, entry.plan);
     for (list.statements, 0..) |entry, index| {
-        statements[index] = .{ .op_before = entry.op_before, .plan = try cloneStatementPlan(allocator, entry.plan) };
+        statements[index] = .{ .op_before = entry.op_before, .plan = try cloneStatementPlanWithMode(
+            allocator,
+            entry.plan,
+            mode,
+        ) };
         initialized += 1;
     }
     return .{ .statements = statements };
@@ -847,13 +872,26 @@ fn freeStatementList(allocator: std.mem.Allocator, list: StatementList) void {
 }
 
 fn cloneStatementPlan(allocator: std.mem.Allocator, plan: StatementPlan) std.mem.Allocator.Error!StatementPlan {
+    return cloneStatementPlanWithMode(allocator, plan, .preserve_ir_source);
+}
+
+fn cloneStatementPlanWithMode(
+    allocator: std.mem.Allocator,
+    plan: StatementPlan,
+    mode: StatementCloneMode,
+) std.mem.Allocator.Error!StatementPlan {
     plan.validate();
     return switch (plan) {
-        .simple => |simple| .{ .simple = try cloneCommandPlan(allocator, simple) },
-        .compound => |compound| .{ .compound = try cloneCompoundCommandPlan(allocator, compound) },
-        .pipeline => |pipeline| .{ .pipeline = try clonePipelinePlan(allocator, pipeline) },
+        .simple => |simple| .{ .simple = try cloneCommandPlanWithMode(allocator, simple, mode) },
+        .compound => |compound| .{ .compound = try cloneCompoundCommandPlanWithMode(allocator, compound, mode) },
+        .pipeline => |pipeline| .{ .pipeline = try clonePipelinePlanWithMode(allocator, pipeline, mode) },
         .source => |source| .{ .source = try cloneSourceStatementPlan(allocator, source) },
-        .ir_source => |source| .{ .source = try cloneIrStatementPlanAsSource(allocator, source) },
+        .ir_source => |source| switch (mode) {
+            .preserve_ir_source => .{ .ir_source = source },
+            // Function definitions stored in ShellState must not retain pointers into
+            // a transient parser-backed IR arena; persist the auditable source fallback.
+            .persist_ir_source_as_source => .{ .source = try persistIrStatementPlanAsSource(allocator, source) },
+        },
     };
 }
 
@@ -885,7 +923,7 @@ fn freeSourceStatementPlan(allocator: std.mem.Allocator, plan: SourceStatementPl
     allocator.free(plan.source);
 }
 
-fn cloneIrStatementPlanAsSource(
+fn persistIrStatementPlanAsSource(
     allocator: std.mem.Allocator,
     plan: IrStatementPlan,
 ) std.mem.Allocator.Error!SourceStatementPlan {
@@ -900,6 +938,14 @@ fn cloneIrStatementPlanAsSource(
 }
 
 fn cloneCommandPlan(allocator: std.mem.Allocator, plan: CommandPlan) std.mem.Allocator.Error!CommandPlan {
+    return cloneCommandPlanWithMode(allocator, plan, .preserve_ir_source);
+}
+
+fn cloneCommandPlanWithMode(
+    allocator: std.mem.Allocator,
+    plan: CommandPlan,
+    mode: StatementCloneMode,
+) std.mem.Allocator.Error!CommandPlan {
     plan.validate();
     const assignments = try cloneAssignments(allocator, plan.assignments);
     errdefer freeAssignments(allocator, assignments);
@@ -911,7 +957,7 @@ fn cloneCommandPlan(allocator: std.mem.Allocator, plan: CommandPlan) std.mem.All
     errdefer allocator.free(expansion_stderr);
     const expansion_diagnostics = try cloneArgv(allocator, plan.expansion_diagnostics);
     errdefer freeArgv(allocator, expansion_diagnostics);
-    const classification = try cloneClassification(allocator, plan.classification, argv);
+    const classification = try cloneClassificationWithMode(allocator, plan.classification, argv, mode);
     errdefer freeClassification(allocator, classification);
     const owned: CommandPlan = .{
         .target = plan.target,
@@ -991,15 +1037,24 @@ fn cloneClassification(
     classification: Classification,
     cloned_argv: []const []const u8,
 ) std.mem.Allocator.Error!Classification {
+    return cloneClassificationWithMode(allocator, classification, cloned_argv, .preserve_ir_source);
+}
+
+fn cloneClassificationWithMode(
+    allocator: std.mem.Allocator,
+    classification: Classification,
+    cloned_argv: []const []const u8,
+    mode: StatementCloneMode,
+) std.mem.Allocator.Error!Classification {
     return switch (classification) {
         .empty => .{ .empty = {} },
         .assignment_only => .{ .assignment_only = {} },
         .special_builtin => |definition| .{ .special_builtin = definition },
         .regular_builtin => |definition| .{ .regular_builtin = definition },
         .function_definition => |definition| .{
-            .function_definition = try cloneFunctionDefinition(allocator, definition),
+            .function_definition = try cloneFunctionDefinitionWithMode(allocator, definition, mode),
         },
-        .function => |definition| .{ .function = try cloneFunctionDefinition(allocator, definition) },
+        .function => |definition| .{ .function = try cloneFunctionDefinitionWithMode(allocator, definition, mode) },
         .external => |resolution| .{ .external = try cloneExternalResolution(allocator, resolution) },
         .not_found => .{ .not_found = .{ .name = cloned_argv[0] } },
     };
@@ -1031,10 +1086,18 @@ fn cloneCompoundCommandPlan(
     allocator: std.mem.Allocator,
     plan: CompoundCommandPlan,
 ) std.mem.Allocator.Error!CompoundCommandPlan {
+    return cloneCompoundCommandPlanWithMode(allocator, plan, .preserve_ir_source);
+}
+
+fn cloneCompoundCommandPlanWithMode(
+    allocator: std.mem.Allocator,
+    plan: CompoundCommandPlan,
+    mode: StatementCloneMode,
+) std.mem.Allocator.Error!CompoundCommandPlan {
     plan.validate();
     var redirections = try plan.redirections.clone(allocator);
     errdefer redirections.deinit();
-    const body = try cloneCompoundBody(allocator, plan.body);
+    const body = try cloneCompoundBodyWithMode(allocator, plan.body, mode);
     errdefer freeCompoundBody(allocator, body);
     return .{ .target = plan.target, .redirections = redirections, .body = body };
 }
@@ -1046,18 +1109,30 @@ fn freeCompoundCommandPlan(allocator: std.mem.Allocator, plan: CompoundCommandPl
 }
 
 fn cloneCompoundBody(allocator: std.mem.Allocator, body: CompoundBody) std.mem.Allocator.Error!CompoundBody {
+    return cloneCompoundBodyWithMode(allocator, body, .preserve_ir_source);
+}
+
+fn cloneCompoundBodyWithMode(
+    allocator: std.mem.Allocator,
+    body: CompoundBody,
+    mode: StatementCloneMode,
+) std.mem.Allocator.Error!CompoundBody {
     body.validate();
     return switch (body) {
-        .sequence => |list| .{ .sequence = try cloneStatementList(allocator, list) },
-        .and_or_list => |and_or| .{ .and_or_list = try cloneAndOrPlan(allocator, and_or) },
-        .negation => |negation| .{ .negation = .{ .body = try cloneStatementList(allocator, negation.body) } },
-        .brace_group => |list| .{ .brace_group = try cloneStatementList(allocator, list) },
-        .subshell => |list| .{ .subshell = try cloneStatementList(allocator, list) },
-        .if_clause => |if_plan| .{ .if_clause = try cloneIfPlan(allocator, if_plan) },
-        .while_loop => |loop| .{ .while_loop = try cloneLoopPlan(allocator, loop) },
-        .until_loop => |loop| .{ .until_loop = try cloneLoopPlan(allocator, loop) },
-        .for_loop => |for_plan| .{ .for_loop = try cloneForPlan(allocator, for_plan) },
-        .case_clause => |case_plan| .{ .case_clause = try cloneCasePlan(allocator, case_plan) },
+        .sequence => |list| .{ .sequence = try cloneStatementListWithMode(allocator, list, mode) },
+        .and_or_list => |and_or| .{ .and_or_list = try cloneAndOrPlanWithMode(allocator, and_or, mode) },
+        .negation => |negation| .{ .negation = .{ .body = try cloneStatementListWithMode(
+            allocator,
+            negation.body,
+            mode,
+        ) } },
+        .brace_group => |list| .{ .brace_group = try cloneStatementListWithMode(allocator, list, mode) },
+        .subshell => |list| .{ .subshell = try cloneStatementListWithMode(allocator, list, mode) },
+        .if_clause => |if_plan| .{ .if_clause = try cloneIfPlanWithMode(allocator, if_plan, mode) },
+        .while_loop => |loop| .{ .while_loop = try cloneLoopPlanWithMode(allocator, loop, mode) },
+        .until_loop => |loop| .{ .until_loop = try cloneLoopPlanWithMode(allocator, loop, mode) },
+        .for_loop => |for_plan| .{ .for_loop = try cloneForPlanWithMode(allocator, for_plan, mode) },
+        .case_clause => |case_plan| .{ .case_clause = try cloneCasePlanWithMode(allocator, case_plan, mode) },
     };
 }
 
@@ -1077,6 +1152,14 @@ fn freeCompoundBody(allocator: std.mem.Allocator, body: CompoundBody) void {
 }
 
 fn cloneAndOrPlan(allocator: std.mem.Allocator, plan: AndOrPlan) std.mem.Allocator.Error!AndOrPlan {
+    return cloneAndOrPlanWithMode(allocator, plan, .preserve_ir_source);
+}
+
+fn cloneAndOrPlanWithMode(
+    allocator: std.mem.Allocator,
+    plan: AndOrPlan,
+    mode: StatementCloneMode,
+) std.mem.Allocator.Error!AndOrPlan {
     plan.validate();
     const commands = try allocator.alloc(AndOrCommand, plan.commands.len);
     errdefer allocator.free(commands);
@@ -1085,7 +1168,7 @@ fn cloneAndOrPlan(allocator: std.mem.Allocator, plan: AndOrPlan) std.mem.Allocat
     for (plan.commands, 0..) |command, index| {
         commands[index] = .{
             .operator = command.operator,
-            .command = try cloneCommandPlan(allocator, command.command),
+            .command = try cloneCommandPlanWithMode(allocator, command.command, mode),
         };
         initialized += 1;
     }
@@ -1098,25 +1181,41 @@ fn freeAndOrPlan(allocator: std.mem.Allocator, plan: AndOrPlan) void {
 }
 
 fn cloneIfPlan(allocator: std.mem.Allocator, plan: IfPlan) std.mem.Allocator.Error!IfPlan {
+    return cloneIfPlanWithMode(allocator, plan, .preserve_ir_source);
+}
+
+fn cloneIfPlanWithMode(
+    allocator: std.mem.Allocator,
+    plan: IfPlan,
+    mode: StatementCloneMode,
+) std.mem.Allocator.Error!IfPlan {
     plan.validate();
     const branches = try allocator.alloc(IfBranch, plan.branches.len);
     errdefer allocator.free(branches);
     var initialized: usize = 0;
     errdefer for (branches[0..initialized]) |branch| freeIfBranch(allocator, branch);
     for (plan.branches, 0..) |branch, index| {
-        branches[index] = try cloneIfBranch(allocator, branch);
+        branches[index] = try cloneIfBranchWithMode(allocator, branch, mode);
         initialized += 1;
     }
-    const else_body = try cloneStatementList(allocator, plan.else_body);
+    const else_body = try cloneStatementListWithMode(allocator, plan.else_body, mode);
     errdefer freeStatementList(allocator, else_body);
     return .{ .branches = branches, .else_body = else_body };
 }
 
 fn cloneIfBranch(allocator: std.mem.Allocator, branch: IfBranch) std.mem.Allocator.Error!IfBranch {
+    return cloneIfBranchWithMode(allocator, branch, .preserve_ir_source);
+}
+
+fn cloneIfBranchWithMode(
+    allocator: std.mem.Allocator,
+    branch: IfBranch,
+    mode: StatementCloneMode,
+) std.mem.Allocator.Error!IfBranch {
     branch.validate();
-    const condition = try cloneStatementList(allocator, branch.condition);
+    const condition = try cloneStatementListWithMode(allocator, branch.condition, mode);
     errdefer freeStatementList(allocator, condition);
-    const body = try cloneStatementList(allocator, branch.body);
+    const body = try cloneStatementListWithMode(allocator, branch.body, mode);
     return .{ .condition = condition, .body = body };
 }
 
@@ -1132,14 +1231,22 @@ fn freeIfBranch(allocator: std.mem.Allocator, branch: IfBranch) void {
 }
 
 fn cloneLoopPlan(allocator: std.mem.Allocator, plan: LoopPlan) std.mem.Allocator.Error!LoopPlan {
+    return cloneLoopPlanWithMode(allocator, plan, .preserve_ir_source);
+}
+
+fn cloneLoopPlanWithMode(
+    allocator: std.mem.Allocator,
+    plan: LoopPlan,
+    mode: StatementCloneMode,
+) std.mem.Allocator.Error!LoopPlan {
     plan.validate();
     const condition_source = if (plan.condition_source) |source| try allocator.dupe(u8, source) else null;
     errdefer if (condition_source) |source| allocator.free(source);
-    const condition = try cloneStatementList(allocator, plan.condition);
+    const condition = try cloneStatementListWithMode(allocator, plan.condition, mode);
     errdefer freeStatementList(allocator, condition);
     const body_source = if (plan.body_source) |source| try allocator.dupe(u8, source) else null;
     errdefer if (body_source) |source| allocator.free(source);
-    const body = try cloneStatementList(allocator, plan.body);
+    const body = try cloneStatementListWithMode(allocator, plan.body, mode);
     return .{ .condition_source = condition_source, .condition = condition, .body_source = body_source, .body = body };
 }
 
@@ -1151,6 +1258,14 @@ fn freeLoopPlan(allocator: std.mem.Allocator, plan: LoopPlan) void {
 }
 
 fn cloneForPlan(allocator: std.mem.Allocator, plan: ForPlan) std.mem.Allocator.Error!ForPlan {
+    return cloneForPlanWithMode(allocator, plan, .preserve_ir_source);
+}
+
+fn cloneForPlanWithMode(
+    allocator: std.mem.Allocator,
+    plan: ForPlan,
+    mode: StatementCloneMode,
+) std.mem.Allocator.Error!ForPlan {
     plan.validate();
     const variable_name = try allocator.dupe(u8, plan.variable_name);
     errdefer allocator.free(variable_name);
@@ -1158,7 +1273,7 @@ fn cloneForPlan(allocator: std.mem.Allocator, plan: ForPlan) std.mem.Allocator.E
     errdefer freeForWords(allocator, words);
     const body_source = if (plan.body_source) |source| try allocator.dupe(u8, source) else null;
     errdefer if (body_source) |source| allocator.free(source);
-    const body = try cloneStatementList(allocator, plan.body);
+    const body = try cloneStatementListWithMode(allocator, plan.body, mode);
     errdefer freeStatementList(allocator, body);
     return .{ .variable_name = variable_name, .words = words, .body_source = body_source, .body = body };
 }
@@ -1199,6 +1314,14 @@ fn freeForWords(allocator: std.mem.Allocator, words: ForWords) void {
 }
 
 fn cloneCasePlan(allocator: std.mem.Allocator, plan: CasePlan) std.mem.Allocator.Error!CasePlan {
+    return cloneCasePlanWithMode(allocator, plan, .preserve_ir_source);
+}
+
+fn cloneCasePlanWithMode(
+    allocator: std.mem.Allocator,
+    plan: CasePlan,
+    mode: StatementCloneMode,
+) std.mem.Allocator.Error!CasePlan {
     plan.validate();
     const word = try allocator.dupe(u8, plan.word);
     errdefer allocator.free(word);
@@ -1207,7 +1330,7 @@ fn cloneCasePlan(allocator: std.mem.Allocator, plan: CasePlan) std.mem.Allocator
     var initialized: usize = 0;
     errdefer for (arms[0..initialized]) |arm| freeCaseArm(allocator, arm);
     for (plan.arms, 0..) |arm, index| {
-        arms[index] = try cloneCaseArm(allocator, arm);
+        arms[index] = try cloneCaseArmWithMode(allocator, arm, mode);
         initialized += 1;
     }
     return .{ .word = word, .arms = arms };
@@ -1220,6 +1343,14 @@ fn freeCasePlan(allocator: std.mem.Allocator, plan: CasePlan) void {
 }
 
 fn cloneCaseArm(allocator: std.mem.Allocator, arm: CaseArm) std.mem.Allocator.Error!CaseArm {
+    return cloneCaseArmWithMode(allocator, arm, .preserve_ir_source);
+}
+
+fn cloneCaseArmWithMode(
+    allocator: std.mem.Allocator,
+    arm: CaseArm,
+    mode: StatementCloneMode,
+) std.mem.Allocator.Error!CaseArm {
     arm.validate();
     const patterns = try allocator.alloc([]const u8, arm.patterns.len);
     errdefer allocator.free(patterns);
@@ -1229,7 +1360,7 @@ fn cloneCaseArm(allocator: std.mem.Allocator, arm: CaseArm) std.mem.Allocator.Er
         patterns[index] = try allocator.dupe(u8, pattern);
         initialized += 1;
     }
-    const body = try cloneStatementList(allocator, arm.body);
+    const body = try cloneStatementListWithMode(allocator, arm.body, mode);
     errdefer freeStatementList(allocator, body);
     return .{ .patterns = patterns, .body = body, .fallthrough = arm.fallthrough, .test_next = arm.test_next };
 }
@@ -1241,13 +1372,21 @@ fn freeCaseArm(allocator: std.mem.Allocator, arm: CaseArm) void {
 }
 
 fn clonePipelinePlan(allocator: std.mem.Allocator, plan: PipelinePlan) std.mem.Allocator.Error!PipelinePlan {
+    return clonePipelinePlanWithMode(allocator, plan, .preserve_ir_source);
+}
+
+fn clonePipelinePlanWithMode(
+    allocator: std.mem.Allocator,
+    plan: PipelinePlan,
+    mode: StatementCloneMode,
+) std.mem.Allocator.Error!PipelinePlan {
     plan.validate();
     const stages = try allocator.alloc(PipelineStagePlan, plan.stages.len);
     errdefer allocator.free(stages);
     var initialized: usize = 0;
     errdefer for (stages[0..initialized]) |stage| freePipelineStagePlan(allocator, stage);
     for (plan.stages, 0..) |stage, index| {
-        stages[index] = try clonePipelineStagePlan(allocator, stage);
+        stages[index] = try clonePipelineStagePlanWithMode(allocator, stage, mode);
         initialized += 1;
     }
     return PipelinePlan.init(stages, .{
@@ -1266,10 +1405,18 @@ fn clonePipelineStagePlan(
     allocator: std.mem.Allocator,
     stage: PipelineStagePlan,
 ) std.mem.Allocator.Error!PipelineStagePlan {
+    return clonePipelineStagePlanWithMode(allocator, stage, .preserve_ir_source);
+}
+
+fn clonePipelineStagePlanWithMode(
+    allocator: std.mem.Allocator,
+    stage: PipelineStagePlan,
+    mode: StatementCloneMode,
+) std.mem.Allocator.Error!PipelineStagePlan {
     stage.validate();
     return switch (stage) {
-        .simple => |simple| .{ .simple = try cloneCommandPlan(allocator, simple) },
-        .compound => |compound| .{ .compound = try cloneCompoundCommandPlan(allocator, compound) },
+        .simple => |simple| .{ .simple = try cloneCommandPlanWithMode(allocator, simple, mode) },
+        .compound => |compound| .{ .compound = try cloneCompoundCommandPlanWithMode(allocator, compound, mode) },
     };
 }
 
@@ -1461,6 +1608,74 @@ test "CommandPlan lookup precedence is special builtin function regular builtin 
         .lookup = lookup,
     });
     try std.testing.expectEqual(CommandClass.external, path_command.class());
+}
+
+test "cloneStatementPlan preserves lazy IR source by default" {
+    var statements = [_]ir.Statement{.{
+        .kind = .pipeline,
+        .index = 0,
+        .span = .{ .start = 0, .end = 4 },
+    }};
+    const program: ir.Program = .{
+        .allocator = std.testing.allocator,
+        .source = "echo ok",
+        .commands = &.{},
+        .pipelines = &.{},
+        .statements = &statements,
+    };
+    const original: StatementPlan = .{ .ir_source = .{
+        .target = .current_shell,
+        .program = &program,
+        .statement_index = 0,
+        .fallback_source = "echo ok",
+    } };
+
+    const cloned = try cloneStatementPlan(std.testing.allocator, original);
+    defer freeStatementPlan(std.testing.allocator, cloned);
+
+    switch (cloned) {
+        .ir_source => |source| {
+            try std.testing.expectEqual(&program, source.program);
+            try std.testing.expectEqual(@as(usize, 0), source.statement_index);
+            try std.testing.expectEqualStrings("echo ok", source.fallback_source);
+        },
+        else => return error.TestUnexpectedResult,
+    }
+}
+
+test "cloneFunctionDefinition persists lazy IR body as source fallback" {
+    var statements = [_]ir.Statement{.{
+        .kind = .pipeline,
+        .index = 0,
+        .span = .{ .start = 0, .end = 4 },
+    }};
+    const program: ir.Program = .{
+        .allocator = std.testing.allocator,
+        .source = "echo ok",
+        .commands = &.{},
+        .pipelines = &.{},
+        .statements = &statements,
+    };
+    const entries = [_]StatementListEntry{.{ .plan = .{ .ir_source = .{
+        .target = .current_shell,
+        .program = &program,
+        .statement_index = 0,
+        .fallback_source = "echo ok",
+    } } }};
+    const definition: FunctionDefinition = .{
+        .name = "fn",
+        .body = .{ .statements = &entries },
+    };
+
+    const cloned = try cloneFunctionDefinition(std.testing.allocator, definition);
+    defer freeFunctionDefinition(std.testing.allocator, cloned);
+
+    try std.testing.expectEqualStrings("fn", cloned.name);
+    try std.testing.expectEqual(@as(usize, 1), cloned.body.statements.len);
+    switch (cloned.body.statements[0].plan) {
+        .source => |source| try std.testing.expectEqualStrings("echo ok", source.source),
+        else => return error.TestUnexpectedResult,
+    }
 }
 
 test "CommandPlan classification matrix is deterministic over command and lookup snapshots" {
