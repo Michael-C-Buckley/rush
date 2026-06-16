@@ -330,6 +330,45 @@
             .status = 0,
         },
         .{
+            .name = "external pipeline stage with closed stdout reports command failure",
+            .script =
+            \\printf x | cat >&-
+            \\printf 'status:%s\n' "$?"
+            ,
+            .stdout =
+            \\status:1
+            \\
+            ,
+            .stderr_match = .nonempty,
+            .status = 0,
+        },
+        .{
+            .name = "external pipeline stage can redirect stdout to a file",
+            .script =
+            \\printf x | cat >out
+            \\cat out
+            \\printf 'status:%s\n' "$?"
+            ,
+            .stdout =
+            \\xstatus:0
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "external pipeline stage can redirect stderr in a longer pipeline",
+            .script =
+            \\printf x | cat 2>/dev/null | wc -c
+            ,
+            .stdout =
+            \\       1
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "input duplication can close standard input",
             .script = "cat <&-",
             .stdout = "",

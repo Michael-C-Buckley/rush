@@ -5833,12 +5833,18 @@ fn runExternalWithPipelineInputWithProcessEnvironment(
     defer run_result.deinit();
 
     if (redirectionTargetsDescriptor(plan.redirections, 1)) {
-        if (!writeAllDescriptor(1, run_result.stdout)) return error.Unimplemented;
+        if (!writeAllDescriptor(1, run_result.stdout)) {
+            try buffers.addBuiltinDiagnostic(plan.argv[0], "bad file descriptor");
+            return 1;
+        }
     } else {
         try buffers.stdout.appendSlice(buffers.allocator, run_result.stdout);
     }
     if (redirectionTargetsDescriptor(plan.redirections, 2)) {
-        if (!writeAllDescriptor(2, run_result.stderr)) return error.Unimplemented;
+        if (!writeAllDescriptor(2, run_result.stderr)) {
+            try buffers.addBuiltinDiagnostic(plan.argv[0], "bad file descriptor");
+            return 1;
+        }
     } else {
         try buffers.stderr.appendSlice(buffers.allocator, run_result.stderr);
     }
