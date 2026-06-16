@@ -40,6 +40,19 @@
             .status = 0,
         },
         .{
+            .name = "pipeline supplies input through command utility external dispatch",
+            .script =
+            \\printf hi | command cat
+            \\printf 'status:%s\n' "$?"
+            ,
+            .stdout =
+            \\histatus:0
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "pipeline connects stdout but leaves stderr independent",
             .script =
             \\{ printf 'out\n'; printf 'err\n' >&2; } | cat

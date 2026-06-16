@@ -5529,6 +5529,10 @@ fn evaluateExternal(
     const argv = try externalArgv(evaluator.allocator, plan, resolution);
     defer evaluator.allocator.free(argv);
 
+    if (externalNeedsBufferedStdin(plan, buffers)) {
+        return runExternalWithPipelineInput(evaluator, shell_state, plan, resolution, buffers);
+    }
+
     if (semanticHereDocInput(plan.redirections)) |stdin| {
         var fd_redirections = try redirectionsWithoutHereDocs(evaluator.allocator, plan.redirections);
         defer fd_redirections.deinit(evaluator.allocator);
@@ -5875,6 +5879,12 @@ fn redirectionTargetsDescriptor(plan: redirection_plan.RedirectionPlan, descript
     runtime.fd.assertValidDescriptor(descriptor);
     for (plan.steps) |step| if (step.target() == descriptor) return true;
     return false;
+}
+
+fn externalNeedsBufferedStdin(plan: command_plan.CommandPlan, buffers: *EvaluationBuffers) bool {
+    plan.validate();
+    buffers.stdin.validate();
+    return buffers.stdin.remaining().len != 0 and !redirectionTargetsDescriptor(plan.redirections, 0);
 }
 
 fn writeAllDescriptor(descriptor: runtime.fd.Descriptor, bytes: []const u8) bool {
@@ -8183,10 +8193,10 @@ fn evaluateExec(
         .lookup = .{ .externals = &.{resolution} },
         .target = .child_process,
     });
-    const status = if (buffers.stdin.remaining().len == 0)
-        try evaluateExternal(evaluator, shell_state, target_plan, resolution, buffers)
+    const status = if (externalNeedsBufferedStdin(target_plan, buffers))
+        try runExternalWithPipelineInput(evaluator, shell_state, target_plan, resolution, buffers)
     else
-        try runExternalWithPipelineInput(evaluator, shell_state, target_plan, resolution, buffers);
+        try evaluateExternal(evaluator, shell_state, target_plan, resolution, buffers);
     try state_delta.setTrap(state.TrapSignal.EXIT.name(), null);
     return .{ .status = status, .control_flow = .{ .exit = status } };
 }
