@@ -6200,7 +6200,7 @@ fn evaluateBuiltin(
     }
     if (std.mem.eql(u8, definition.name, "env")) {
         return normalEvaluation(
-            try evaluateEnv(evaluator.allocator, shell_state, plan, &buffers.stdout, buffers),
+            try evaluateEnv(evaluator, shell_state, plan, &buffers.stdout, buffers),
         );
     }
     if (std.mem.eql(u8, definition.name, "pwd")) {
@@ -6824,7 +6824,7 @@ fn sourcedTextLineEnd(source: []const u8, start: usize) usize {
 }
 
 fn evaluateEnv(
-    allocator: std.mem.Allocator,
+    evaluator: *Evaluator,
     shell_state: state.ShellState,
     plan: command_plan.CommandPlan,
     stdout: *std.ArrayList(u8),
@@ -6833,9 +6833,10 @@ fn evaluateEnv(
     std.debug.assert(plan.argv.len != 0);
     std.debug.assert(std.mem.eql(u8, plan.argv[0], "env"));
 
-    if (plan.argv.len != 1) return builtinUsageError(buffers, "env", "arguments are not supported by semantic env");
+    var index: usize = 1;
+    if (index < plan.argv.len and std.mem.eql(u8, plan.argv[index], "--")) index += 1;
 
-    var temporary_environment = assignment_runtime.TemporaryEnvironment.init(allocator);
+    var temporary_environment = assignment_runtime.TemporaryEnvironment.init(evaluator.allocator);
     defer temporary_environment.deinit();
     if (plan.assignmentEffect() == .temporary) {
         temporary_environment.appendCommandAssignments(shell_state, plan) catch |err| switch (err) {
@@ -6844,10 +6845,31 @@ fn evaluateEnv(
         };
     }
 
-    var environment = try buildExternalEnvironment(allocator, shell_state, temporary_environment);
+    if (index < plan.argv.len) {
+        if (std.mem.indexOfScalar(u8, plan.argv[index], '=') != null) {
+            return builtinUsageError(buffers, "env", "assignment operands are not supported by semantic env");
+        }
+        const command: command_plan.ExpandedSimpleCommand = .{
+            .argv = plan.argv[index..],
+            .last_command_substitution_status = plan.last_command_substitution_status,
+        };
+        const external = try resolveExternalForEvaluation(evaluator.allocator, evaluator.fs_port, shell_state, command);
+        defer if (external) |resolution| evaluator.allocator.free(resolution.path);
+        const resolution = external orelse return evaluateNotFound(.{ .name = command.argv[0] }, buffers);
+        const target_plan = command_plan.classifyExpandedSimpleCommand(.{
+            .command = command,
+            .lookup = .{ .externals = &.{resolution} },
+            .target = .child_process,
+        });
+        return evaluateExternal(evaluator, shell_state, target_plan, resolution, buffers);
+    }
+
+    var environment = try buildExternalEnvironment(evaluator.allocator, shell_state, temporary_environment);
     defer environment.deinit();
     var iterator = environment.iterator();
-    while (iterator.next()) |entry| try stdout.print(allocator, "{s}={s}\n", .{ entry.key_ptr.*, entry.value_ptr.* });
+    while (iterator.next()) |entry| {
+        try stdout.print(evaluator.allocator, "{s}={s}\n", .{ entry.key_ptr.*, entry.value_ptr.* });
+    }
     return 0;
 }
 
