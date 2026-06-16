@@ -2072,13 +2072,18 @@ const EvaluationInput = struct {
 const EvaluationBuffers = struct {
     allocator: std.mem.Allocator,
     stdin: *EvaluationInput,
+    routing: OutputRouting,
     stdout: std.ArrayList(u8) = .empty,
     stderr: std.ArrayList(u8) = .empty,
     diagnostics: std.ArrayList([]const u8) = .empty,
 
     fn init(allocator: std.mem.Allocator, stdin: *EvaluationInput) EvaluationBuffers {
         stdin.validate();
-        return .{ .allocator = allocator, .stdin = stdin };
+        return .{
+            .allocator = allocator,
+            .stdin = stdin,
+            .routing = OutputRouting.init(allocator, .outcome_capture),
+        };
     }
 
     fn deinit(self: *EvaluationBuffers) void {
@@ -2086,14 +2091,19 @@ const EvaluationBuffers = struct {
         self.stderr.deinit(self.allocator);
         for (self.diagnostics.items) |message| self.allocator.free(message);
         self.diagnostics.deinit(self.allocator);
+        self.routing.deinit();
         self.* = undefined;
+    }
+
+    fn outputFrame(self: *EvaluationBuffers) OutputFrame {
+        return OutputFrame.initBorrowed(self, &self.routing);
     }
 
     fn addBuiltinDiagnostic(self: *EvaluationBuffers, command: []const u8, message: []const u8) !void {
         std.debug.assert(command.len != 0);
         std.debug.assert(message.len != 0);
 
-        var frame = OutputFrame.initOutcomeCapture(self);
+        var frame = self.outputFrame();
         defer frame.deinit();
         try frame.addBuiltinDiagnostic(command, message);
     }
@@ -2568,9 +2578,18 @@ pub fn routeRunnerOutcomeOutput(
 const OutputFrame = struct {
     buffers: *EvaluationBuffers,
     routing: OutputRouting,
+    borrowed_routing: ?*OutputRouting = null,
 
     fn initOutcomeCapture(buffers: *EvaluationBuffers) OutputFrame {
         return .{ .buffers = buffers, .routing = OutputRouting.init(buffers.allocator, .outcome_capture) };
+    }
+
+    fn initBorrowed(buffers: *EvaluationBuffers, routing: *OutputRouting) OutputFrame {
+        return .{
+            .buffers = buffers,
+            .routing = OutputRouting.init(buffers.allocator, .outcome_capture),
+            .borrowed_routing = routing,
+        };
     }
 
     fn initInherited(buffers: *EvaluationBuffers) OutputFrame {
@@ -2586,15 +2605,19 @@ const OutputFrame = struct {
     }
 
     fn deinit(self: *OutputFrame) void {
-        self.routing.deinit();
+        if (self.borrowed_routing == null) self.routing.deinit();
         self.* = undefined;
+    }
+
+    fn routingRef(self: *OutputFrame) *OutputRouting {
+        return self.borrowed_routing orelse &self.routing;
     }
 
     fn write(self: *OutputFrame, descriptor: runtime.fd.Descriptor, bytes: []const u8) !void {
         runtime.fd.assertValidDescriptor(descriptor);
         if (bytes.len == 0) return;
 
-        switch (self.routing.destination(descriptor)) {
+        switch (self.routingRef().destination(descriptor)) {
             .outcome_stdout_capture,
             .pipeline_stdout_capture,
             .command_substitution_stdout_capture,
@@ -2612,8 +2635,8 @@ const OutputFrame = struct {
     fn flushPendingDescriptor(self: *OutputFrame, descriptor: runtime.fd.Descriptor) EvalError!void {
         runtime.fd.assertValidDescriptor(descriptor);
         switch (descriptor) {
-            1 => try flushBufferToDestination(self.buffers, .stdout, self.routing.destination(descriptor)),
-            2 => try flushBufferToDestination(self.buffers, .stderr, self.routing.destination(descriptor)),
+            1 => try flushBufferToDestination(self.buffers, .stdout, self.routingRef().destination(descriptor)),
+            2 => try flushBufferToDestination(self.buffers, .stderr, self.routingRef().destination(descriptor)),
             else => {},
         }
     }
@@ -2632,7 +2655,7 @@ const OutputFrame = struct {
                 2 => try self.flushPendingDescriptor(2),
                 else => {},
             }
-            try self.routing.applyRedirectionStep(step);
+            try self.routingRef().applyRedirectionStep(step);
         }
     }
 
@@ -2744,6 +2767,20 @@ test "output frame outcome capture writes stdout and stderr buffers" {
 
     try std.testing.expectEqualStrings("out", buffers.stdout.items);
     try std.testing.expectEqualStrings("err", buffers.stderr.items);
+}
+
+test "evaluation buffers output frame uses carried routing" {
+    var input = EvaluationInput.empty();
+    var buffers = EvaluationBuffers.init(std.testing.allocator, &input);
+    defer buffers.deinit();
+
+    try buffers.routing.setDestination(1, .outcome_stderr_capture);
+    var frame = buffers.outputFrame();
+    defer frame.deinit();
+    try frame.write(1, "routed");
+
+    try std.testing.expectEqualStrings("", buffers.stdout.items);
+    try std.testing.expectEqualStrings("routed", buffers.stderr.items);
 }
 
 test "output frame diagnostic helper writes stderr and structured diagnostic" {
@@ -5785,8 +5822,10 @@ fn applyOutcomeToWorkingState(
 
 fn appendOutcomeBuffers(buffers: *EvaluationBuffers, command_outcome: outcome.CommandOutcome) !void {
     command_outcome.validate();
-    try buffers.stdout.appendSlice(buffers.allocator, command_outcome.stdout.items);
-    try buffers.stderr.appendSlice(buffers.allocator, command_outcome.stderr.items);
+    var frame = buffers.outputFrame();
+    defer frame.deinit();
+    try frame.write(1, command_outcome.stdout.items);
+    try frame.write(2, command_outcome.stderr.items);
     for (command_outcome.diagnostics.items) |diagnostic| {
         const owned_message = try buffers.allocator.dupe(u8, diagnostic.message);
         errdefer buffers.allocator.free(owned_message);
