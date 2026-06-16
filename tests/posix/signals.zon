@@ -105,6 +105,44 @@
             .status = 0,
         },
         .{
+            .name = "pending trap runs before next command inside loop body",
+            .script =
+            \\trap 'printf "trap\n"' TERM
+            \\for word in a b
+            \\do
+            \\    kill -TERM $$
+            \\    printf 'body:%s\n' "$word"
+            \\done
+            ,
+            .stdout =
+            \\trap
+            \\body:a
+            \\trap
+            \\body:b
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "trap registered inside loop catches later signal in same body",
+            .script =
+            \\for word in once
+            \\do
+            \\    trap 'printf "trap:%s\n" "$word"' TERM
+            \\    kill -TERM $$
+            \\    printf 'body:%s\n' "$word"
+            \\done
+            ,
+            .stdout =
+            \\trap:once
+            \\body:once
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "subshell EXIT trap runs before the subshell status is observed",
             .script =
             \\( trap 'printf "trap:%s\n" "$?"' EXIT; exit 3 )

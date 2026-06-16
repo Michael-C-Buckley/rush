@@ -3519,6 +3519,72 @@ pub fn executePendingTraps(
     );
 }
 
+fn configureRuntimeTrapMutations(
+    evaluator: *Evaluator,
+    shell_state: state.ShellState,
+    state_delta: delta.StateDelta,
+) EvalError!void {
+    shell_state.validate();
+    if (!state_delta.target.allowsShellStateCommit()) return;
+    if (!shell_state.acceptsExecutionTarget(state_delta.target)) return;
+    if (evaluator.signal_port == null) return;
+
+    for (state_delta.trap_mutations.items) |mutation| {
+        const signal = state.TrapSignal.fromName(mutation.name) orelse continue;
+        if (!signal.isRuntimeSignal()) continue;
+        try configureRuntimeTrapSignal(evaluator, shell_state, signal);
+    }
+}
+
+fn runCurrentShellRuntimeTrapBoundary(
+    evaluator: *Evaluator,
+    shell_state: *state.ShellState,
+    eval_context: context.EvalContext,
+    buffers: *EvaluationBuffers,
+) EvalError!?SimpleEvalResult {
+    shell_state.validate();
+    eval_context.validate();
+    if (eval_context.target != .current_shell) return null;
+    if (!shell_state.acceptsExecutionTarget(.current_shell)) return null;
+    if (shell_state.trap_execution != .idle) return null;
+
+    if (evaluator.signal_port != null) {
+        if (try observeRuntimeSignal(evaluator, shell_state, eval_context)) |observed| {
+            var observation = observed;
+            defer observation.deinit();
+            try appendOutcomeBuffers(buffers, observation.command_outcome);
+            try applyOutcomeToWorkingState(
+                shell_state,
+                &observation.command_outcome,
+                observation.command_outcome.state_delta.target,
+            );
+            const signal_control_flow = observation.command_outcome.effectiveControlFlow();
+            if (signal_control_flow != .normal) {
+                return .{ .status = observation.command_outcome.status, .control_flow = signal_control_flow };
+            }
+        }
+    }
+
+    if (shell_state.pending_traps.items.len == 0 and shell_state.pending_exit == null) return null;
+
+    var parser_resolver = ParserBackedSourceResolver.init(evaluator);
+    parser_resolver.features = evaluator.features;
+    parser_resolver.arg_zero = evaluator.arg_zero;
+    parser_resolver.expand_aliases = shell_state.shopts.enabled(.expand_aliases);
+    parser_resolver.alias_state = evaluator.alias_state;
+    var trap_outcome = (try executePendingTraps(
+        evaluator,
+        shell_state,
+        eval_context,
+        parser_resolver.resolver(),
+    )) orelse return null;
+    defer trap_outcome.deinit();
+
+    try appendOutcomeBuffers(buffers, trap_outcome);
+    try applyOutcomeToWorkingState(shell_state, &trap_outcome, trap_outcome.state_delta.target);
+    return .{ .status = trap_outcome.status, .control_flow = trap_outcome.effectiveControlFlow() };
+}
+
 pub fn evaluateCommandSubstitution(
     evaluator: *Evaluator,
     parent_state: *state.ShellState,
@@ -5399,9 +5465,17 @@ fn evaluateStatementList(
 
             try appendOutcomeBuffers(buffers, child_outcome);
             try applyOutcomeToWorkingState(shell_state, &child_outcome, child_plan.target);
+            try configureRuntimeTrapMutations(evaluator, shell_state.*, child_outcome.state_delta);
 
             const child_control_flow = child_outcome.effectiveControlFlow();
             result = .{ .status = child_outcome.status, .control_flow = child_control_flow };
+            if (try runCurrentShellRuntimeTrapBoundary(evaluator, shell_state, eval_context, buffers)) |trap_result| {
+                if (trap_result.control_flow != .normal) {
+                    result = trap_result;
+                    break;
+                }
+                if (child_control_flow == .normal) result = trap_result;
+            }
             if (child_control_flow != .normal) break;
         }
         return result;
@@ -5435,9 +5509,17 @@ fn evaluateStatementList(
 
         try appendOutcomeBuffers(buffers, child_outcome);
         try applyOutcomeToWorkingState(shell_state, &child_outcome, child_outcome.state_delta.target);
+        try configureRuntimeTrapMutations(evaluator, shell_state.*, child_outcome.state_delta);
 
         const child_control_flow = child_outcome.effectiveControlFlow();
         result = .{ .status = child_outcome.status, .control_flow = child_control_flow };
+        if (try runCurrentShellRuntimeTrapBoundary(evaluator, shell_state, eval_context, buffers)) |trap_result| {
+            if (trap_result.control_flow != .normal) {
+                result = trap_result;
+                break;
+            }
+            if (child_control_flow == .normal) result = trap_result;
+        }
         if (bashAssignmentErrorAbortsSourceLine(eval_context, entry.plan, child_outcome)) {
             abort_bash_line = statementSourceLine(entry.plan);
         }
@@ -5720,9 +5802,17 @@ fn evaluateAndOrList(
 
         try appendOutcomeBuffers(buffers, child_outcome);
         try applyOutcomeToWorkingState(shell_state, &child_outcome, entry.command.target);
+        try configureRuntimeTrapMutations(evaluator, shell_state.*, child_outcome.state_delta);
 
         const child_control_flow = child_outcome.effectiveControlFlow();
         result = .{ .status = child_outcome.status, .control_flow = child_control_flow };
+        if (try runCurrentShellRuntimeTrapBoundary(evaluator, shell_state, eval_context, buffers)) |trap_result| {
+            if (trap_result.control_flow != .normal) {
+                result = trap_result;
+                break;
+            }
+            if (child_control_flow == .normal) result = trap_result;
+        }
         if (bashAssignmentErrorOutcomeAbortsSourceLine(eval_context, child_outcome)) break;
         if (child_control_flow != .normal) break;
     }
