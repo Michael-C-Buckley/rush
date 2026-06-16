@@ -4234,7 +4234,7 @@ pub fn trapActionFailureOutcome(
     } else if (bashArithmeticExpansionFailureIsCommandFailure(eval_context, failure, shell_state)) blk: {
         break :blk if (eval_context.observesErrexit()) .{ .exit = failure.status } else .normal;
     } else switch (failure.kind) {
-        .expansion_error => if (eval_context.interactive or shell_state.trap_execution != .idle)
+        .expansion_error => if (eval_context.interactive)
             .normal
         else
             .{ .exit = failure.status },
@@ -13486,7 +13486,8 @@ test "semantic parser trap resolver reports redirection expansion failures as tr
     )).?;
     defer trap_outcome.deinit();
 
-    try std.testing.expectEqual(@as(outcome.ExitStatus, 41), trap_outcome.status);
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 2), trap_outcome.status);
+    try std.testing.expectEqual(@as(outcome.ControlFlow, .{ .exit = 2 }), trap_outcome.control_flow);
     try std.testing.expect(trap_outcome.diagnostics.items.len != 0);
     try std.testing.expect(std.mem.indexOf(
         u8,
@@ -13495,7 +13496,7 @@ test "semantic parser trap resolver reports redirection expansion failures as tr
     ) != null);
     try std.testing.expect(std.mem.indexOf(u8, trap_outcome.stderr.items, "parameter not set") != null);
     try trap_outcome.commitDelta(&shell_state, .current_shell);
-    try std.testing.expectEqual(@as(state.ExitStatus, 41), shell_state.last_status);
+    try std.testing.expectEqual(@as(state.ExitStatus, 2), shell_state.last_status);
 }
 
 test "semantic parser trap resolver reports bad descriptor redirects as trap diagnostics" {

@@ -44,6 +44,17 @@
             .status = 0,
         },
         .{
+            .name = "trap action expansion error exits before following commands",
+            .script =
+            \\trap 'echo ${missing:?need}' TERM
+            \\kill -TERM $$
+            \\echo after
+            ,
+            .stdout = "",
+            .stderr_match = .nonempty,
+            .status_match = .nonzero,
+        },
+        .{
             .name = "subshell EXIT trap runs before the subshell status is observed",
             .script =
             \\( trap 'printf "trap:%s\n" "$?"' EXIT; exit 3 )
