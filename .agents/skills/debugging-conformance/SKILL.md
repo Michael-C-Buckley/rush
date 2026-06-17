@@ -8,12 +8,19 @@ description: "Investigates Rush shell conformance mismatches. Use when comparing
 Use this workflow for POSIX conformance failures and behavior differences between
 Rush and the primary reference shells.
 
+Before running reduced scripts, build Rush once so all ad hoc comparisons use the
+same binary:
+
+```bash
+zig build
+```
+
 ## Reference Shells
 
 For POSIX comparisons, use exactly these targets:
 
 ```bash
-zig build run -- --posix -c 'SCRIPT'
+./zig-out/bin/rush --posix -c 'SCRIPT'
 dash -c 'SCRIPT'
 bash --posix -c 'SCRIPT'
 zsh --emulate sh -f -c 'SCRIPT'
@@ -27,7 +34,7 @@ cat >"$tmp_script" <<'SH'
 SCRIPT GOES HERE
 SH
 
-zig build run -- --posix "$tmp_script"
+./zig-out/bin/rush --posix "$tmp_script"
 dash "$tmp_script"
 bash --posix "$tmp_script"
 zsh --emulate sh -f "$tmp_script"
@@ -45,7 +52,7 @@ For non-POSIX Rush behavior, current stable GNU Bash is the primary extension
 reference:
 
 ```bash
-zig build run -- -c 'SCRIPT'
+./zig-out/bin/rush -c 'SCRIPT'
 bash -c 'SCRIPT'
 ```
 
@@ -99,8 +106,14 @@ changes behavior.
      user-visible regression case.
 6. Implement the fix with the smallest scoped change that follows existing
    shell/runtime ownership boundaries.
-7. Rerun the reduced script against Rush and the three reference shells.
-8. Rerun the relevant conformance target, for example:
+7. Rebuild Rush so subsequent script comparisons exercise the updated binary:
+
+```bash
+zig build
+```
+
+8. Rerun the reduced script against Rush and the three reference shells.
+9. Rerun the relevant conformance target, for example:
 
 ```bash
 zig build conformance -- --mode posix tests/posix/FILE.zon
