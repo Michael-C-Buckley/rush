@@ -2438,6 +2438,13 @@ const EvaluationBuffers = struct {
         defer frame.deinit();
         try frame.addBuiltinDiagnostic(command, message);
     }
+
+    fn addDiagnosticMessage(self: *EvaluationBuffers, message: []const u8) !void {
+        std.debug.assert(message.len != 0);
+        var frame = self.outputFrame();
+        defer frame.deinit();
+        try frame.diagnosticStore().append(message);
+    }
 };
 
 const CwdGuard = struct {
@@ -3087,6 +3094,23 @@ const OutputFrame = struct {
     }
 
     fn write(self: *OutputFrame, descriptor: runtime.fd.Descriptor, bytes: []const u8) !void {
+        try self.buffers.frame.writeFd(self.writer(), descriptor, bytes);
+    }
+
+    fn writer(self: *OutputFrame) execution_frame.OutputWriter {
+        return .{ .context = self, .write_fn = writeRouted };
+    }
+
+    fn diagnosticStore(self: *OutputFrame) execution_frame.DiagnosticStore {
+        return .{ .context = self, .append_fn = appendDiagnosticOnly };
+    }
+
+    fn writeRouted(
+        context_ptr: *anyopaque,
+        descriptor: runtime.fd.Descriptor,
+        bytes: []const u8,
+    ) execution_frame.OutputWriteError!void {
+        const self: *OutputFrame = @ptrCast(@alignCast(context_ptr));
         runtime.fd.assertValidDescriptor(descriptor);
         if (bytes.len == 0) return;
 
@@ -3103,6 +3127,13 @@ const OutputFrame = struct {
             },
             .closed => {},
         }
+    }
+
+    fn appendDiagnosticOnly(context_ptr: *anyopaque, diagnostic: []const u8) execution_frame.OutputWriteError!void {
+        const self: *OutputFrame = @ptrCast(@alignCast(context_ptr));
+        const diagnostic_copy = try self.buffers.allocator.dupe(u8, diagnostic);
+        errdefer self.buffers.allocator.free(diagnostic_copy);
+        try self.buffers.diagnostics.append(self.buffers.allocator, diagnostic_copy);
     }
 
     fn flushPendingDescriptor(self: *OutputFrame, descriptor: runtime.fd.Descriptor) EvalError!void {
@@ -3144,10 +3175,7 @@ const OutputFrame = struct {
         std.debug.assert(diagnostic.len != 0);
         std.debug.assert(stderr_text.len != 0);
 
-        try self.write(2, stderr_text);
-        const diagnostic_copy = try self.buffers.allocator.dupe(u8, diagnostic);
-        errdefer self.buffers.allocator.free(diagnostic_copy);
-        try self.buffers.diagnostics.append(self.buffers.allocator, diagnostic_copy);
+        try self.buffers.frame.emitDiagnostic(self.writer(), self.diagnosticStore(), diagnostic, stderr_text);
     }
 
     fn addBuiltinDiagnostic(self: *OutputFrame, command: []const u8, message: []const u8) !void {
@@ -3714,7 +3742,7 @@ fn appendExpansionOutput(
     defer frame.deinit();
     if (output.stderr.len != 0) try frame.write(2, output.stderr);
     for (output.diagnostics) |message| {
-        try buffers.diagnostics.append(buffers.allocator, try buffers.allocator.dupe(u8, message));
+        try buffers.addDiagnosticMessage(message);
     }
 }
 
@@ -3725,10 +3753,7 @@ fn appendRedirectionExpansionOutputToFrame(
     output.validate();
     if (output.stderr.bytes.len != 0) try frame.write(2, output.stderr.bytes);
     for (output.diagnostics) |diagnostic| {
-        try frame.buffers.diagnostics.append(
-            frame.buffers.allocator,
-            try frame.buffers.allocator.dupe(u8, diagnostic.bytes),
-        );
+        try frame.buffers.addDiagnosticMessage(diagnostic.bytes);
     }
 }
 
@@ -7243,9 +7268,7 @@ fn appendOutcomeBuffers(buffers: *EvaluationBuffers, command_outcome: outcome.Co
     try frame.write(2, command_outcome.stderr.items);
     try buffers.pipeline_stdout.appendSlice(buffers.allocator, command_outcome.pipeline_stdout.items);
     for (command_outcome.diagnostics.items) |diagnostic| {
-        const owned_message = try buffers.allocator.dupe(u8, diagnostic.message);
-        errdefer buffers.allocator.free(owned_message);
-        try buffers.diagnostics.append(buffers.allocator, owned_message);
+        try buffers.addDiagnosticMessage(diagnostic.message);
     }
 }
 
@@ -7274,9 +7297,7 @@ fn appendPipelineStageBuffers(
     }
     try frame.write(2, command_outcome.stderr.items);
     for (command_outcome.diagnostics.items) |diagnostic| {
-        const owned_message = try buffers.allocator.dupe(u8, diagnostic.message);
-        errdefer buffers.allocator.free(owned_message);
-        try buffers.diagnostics.append(buffers.allocator, owned_message);
+        try buffers.addDiagnosticMessage(diagnostic.message);
     }
 }
 

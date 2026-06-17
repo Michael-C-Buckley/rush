@@ -459,6 +459,55 @@ pub const ExecutionFrame = struct {
         self.spec.validate();
         self.parent.validate();
     }
+
+    pub fn writeFd(
+        self: *ExecutionFrame,
+        writer: OutputWriter,
+        descriptor: fd.Descriptor,
+        bytes: []const u8,
+    ) OutputWriteError!void {
+        self.validate();
+        fd.assertValidDescriptor(descriptor);
+        if (bytes.len == 0) return;
+        try writer.write(descriptor, bytes);
+    }
+
+    pub fn emitDiagnostic(
+        self: *ExecutionFrame,
+        writer: OutputWriter,
+        store: DiagnosticStore,
+        diagnostic: []const u8,
+        stderr_text: []const u8,
+    ) OutputWriteError!void {
+        self.validate();
+        std.debug.assert(diagnostic.len != 0);
+        std.debug.assert(stderr_text.len != 0);
+        try self.writeFd(writer, 2, stderr_text);
+        try store.append(diagnostic);
+    }
+};
+
+pub const OutputWriteError = error{ OutOfMemory, Unimplemented };
+
+pub const OutputWriter = struct {
+    context: *anyopaque,
+    write_fn: *const fn (*anyopaque, fd.Descriptor, []const u8) OutputWriteError!void,
+
+    pub fn write(self: OutputWriter, descriptor: fd.Descriptor, bytes: []const u8) OutputWriteError!void {
+        fd.assertValidDescriptor(descriptor);
+        if (bytes.len == 0) return;
+        try self.write_fn(self.context, descriptor, bytes);
+    }
+};
+
+pub const DiagnosticStore = struct {
+    context: *anyopaque,
+    append_fn: *const fn (*anyopaque, []const u8) OutputWriteError!void,
+
+    pub fn append(self: DiagnosticStore, diagnostic: []const u8) OutputWriteError!void {
+        std.debug.assert(diagnostic.len != 0);
+        try self.append_fn(self.context, diagnostic);
+    }
 };
 
 pub const ParentBoundary = union(enum) {
