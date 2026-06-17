@@ -1,0 +1,141 @@
+.{
+    .name = "Semantic boundary interactions",
+    .mode = .posix,
+    .cases = .{
+        .{
+            .name = "boundary matrix redirection order stdout then stderr merge",
+            .script =
+            \\{ printf '%s\n' out; printf '%s\n' err >&2; } >out 2>&1
+            \\cat out
+            ,
+            .stdout =
+            \\out
+            \\err
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "boundary matrix redirection order stderr merge before stdout file",
+            .script =
+            \\{ printf '%s\n' out; printf '%s\n' err >&2; } 2>&1 >out
+            \\cat out
+            ,
+            .stdout =
+            \\err
+            \\out
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "boundary matrix pipeline separates data from side output",
+            .script =
+            \\{ printf '%s\n' data; printf '%s\n' side >&2; } | cat
+            ,
+            .stdout =
+            \\data
+            \\
+            ,
+            .stderr =
+            \\side
+            \\
+            ,
+            .status = 0,
+        },
+        .{
+            .name = "boundary matrix command substitution captures stdout only",
+            .script =
+            \\v=$(printf '%s\n' value; printf '%s\n' side >&2)
+            \\printf '<%s>\n' "$v"
+            ,
+            .stdout =
+            \\<value>
+            \\
+            ,
+            .stderr =
+            \\side
+            \\
+            ,
+            .status = 0,
+        },
+        .{
+            .name = "boundary matrix nested command substitution preserves side output",
+            .script =
+            \\v=$(printf '<%s>\n' "$(printf '%s' inner; printf '%s\n' side >&2)")
+            \\printf '%s\n' "$v"
+            ,
+            .stdout =
+            \\<inner>
+            \\
+            ,
+            .stderr =
+            \\side
+            \\
+            ,
+            .status = 0,
+        },
+        .{
+            .name = "boundary matrix compound here-doc loop supplies frame stdin",
+            .script =
+            \\while read x; do printf '<%s>\n' "$x"; done <<EOF
+            \\one
+            \\two
+            \\EOF
+            ,
+            .stdout =
+            \\<one>
+            \\<two>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "boundary matrix read builtin consumes pipeline stdin",
+            .script =
+            \\printf '%s\n' pipe-data | { read x; printf '<%s>\n' "$x"; }
+            ,
+            .stdout =
+            \\<pipe-data>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "boundary matrix trap checkpoint runs inside loop before next command",
+            .script =
+            \\trap 'printf "%s\n" trap' TERM
+            \\i=0
+            \\while [ "$i" -eq 0 ]; do
+            \\    i=1
+            \\    kill -TERM $$
+            \\    printf '%s\n' body
+            \\done
+            ,
+            .stdout =
+            \\trap
+            \\body
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "boundary matrix command substitution captures trap stdout",
+            .script =
+            \\v=$(trap 'printf "%s" trap' 0; :)
+            \\printf '<%s>\n' "$v"
+            ,
+            .stdout =
+            \\<trap>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+    },
+}
