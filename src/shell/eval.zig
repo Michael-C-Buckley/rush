@@ -232,21 +232,97 @@ fn commandSubstitutionStderrEndpoint(parent_frame: execution_frame.ExecutionFram
 }
 
 fn pipelineStageExecutionFrame(
+    allocator: std.mem.Allocator,
     parent_frame: *execution_frame.ExecutionFrame,
     stage_target: context.ExecutionTarget,
     is_last_stage: bool,
-) execution_frame.ExecutionFrame {
+    previous_stdin: []const u8,
+    redirections: redirection_plan.RedirectionPlan,
+) EvalError!execution_frame.ExecutionFrame {
     parent_frame.validate();
+    redirections.validate();
     std.debug.assert(stage_target != .current_shell);
-    return parent_frame.child(.{
+    const stdin: execution_frame.InputEndpoint = if (previous_stdin.len != 0)
+        .{ .bytes = previous_stdin }
+    else
+        pipelineStageInheritedInput(parent_frame.*);
+    const stdout = pipelineStageOutputEndpoint(parent_frame.*, is_last_stage);
+    const stderr = pipelineStageErrorEndpoint(parent_frame.*);
+    var frame = parent_frame.child(.{
         .kind = .pipeline_stage,
         .eval_target = stage_target,
-        .stdout = .{ .capture = if (is_last_stage) .side_stdout else .pipeline_data },
-        .captures = .{ .channels = if (is_last_stage) &.{.side_stdout} else &.{.pipeline_data} },
+        .stdin = stdin,
+        .stdout = stdout,
+        .stderr = stderr,
+        .captures = pipelineStageCaptures(stdout, stderr),
         .mutation_policy = if (stage_target == .subshell) .commit_within_subshell else .discard_at_boundary,
         .trap_policy = .isolated_child,
         .failure_policy = .contain_fatal_at_boundary,
     });
+    try frame.spec.fd_table.bindInput(allocator, 0, stdin);
+    try frame.spec.fd_table.bindOutput(allocator, 1, stdout);
+    try frame.spec.fd_table.bindOutput(allocator, 2, stderr);
+    try frame.spec.fd_table.applyRedirectionPlan(allocator, redirections);
+    frame.validate();
+    return frame;
+}
+
+fn pipelineStageInheritedInput(parent_frame: execution_frame.ExecutionFrame) execution_frame.InputEndpoint {
+    parent_frame.validate();
+    return switch (parent_frame.spec.fd_table.endpoint(0)) {
+        .input => |input| input,
+        .closed => .closed,
+        .output => parent_frame.spec.stdin,
+    };
+}
+
+fn pipelineStageOutputEndpoint(
+    parent_frame: execution_frame.ExecutionFrame,
+    is_last_stage: bool,
+) execution_frame.OutputEndpoint {
+    parent_frame.validate();
+    if (!is_last_stage) return .{ .capture = .pipeline_data };
+    return switch (parent_frame.spec.fd_table.endpoint(1)) {
+        .output => |output| output,
+        .closed => .discard,
+        .input => parent_frame.spec.stdout,
+    };
+}
+
+fn pipelineStageErrorEndpoint(parent_frame: execution_frame.ExecutionFrame) execution_frame.OutputEndpoint {
+    parent_frame.validate();
+    return switch (parent_frame.spec.fd_table.endpoint(2)) {
+        .output => |output| output,
+        .closed => .discard,
+        .input => parent_frame.spec.stderr,
+    };
+}
+
+fn pipelineStageCaptures(
+    stdout: execution_frame.OutputEndpoint,
+    stderr: execution_frame.OutputEndpoint,
+) execution_frame.Captures {
+    stdout.validate();
+    stderr.validate();
+    const stdout_channel = stdout.captureChannel();
+    const stderr_channel = stderr.captureChannel();
+    if (stdout_channel) |out_channel| {
+        if (stderr_channel) |err_channel| {
+            if (out_channel == err_channel) return .{ .channels = &.{out_channel} };
+            return .{ .channels = &.{ out_channel, err_channel } };
+        }
+        return .{ .channels = &.{out_channel} };
+    }
+    if (stderr_channel) |err_channel| return .{ .channels = &.{err_channel} };
+    return .{};
+}
+
+fn pipelineStageRedirections(stage: pipeline_plan.PipelineStagePlan) redirection_plan.RedirectionPlan {
+    stage.validate();
+    return switch (stage) {
+        .simple => |plan| plan.redirections,
+        .compound => |plan| plan.redirections,
+    };
 }
 
 pub const TrapActionBodyPayload = union(enum) {
@@ -5365,7 +5441,15 @@ fn evaluateFallbackPipeline(
 
         const stage_context = pipelineStageContext(eval_context, stage_target, true);
         var stage_input = EvaluationInput.init(next_stdin.items);
-        var stage_frame = pipelineStageExecutionFrame(buffers.frame, stage_target, is_last_stage);
+        var stage_frame = try pipelineStageExecutionFrame(
+            evaluator.allocator,
+            buffers.frame,
+            stage_target,
+            is_last_stage,
+            next_stdin.items,
+            pipelineStageRedirections(stage),
+        );
+        defer stage_frame.spec.fd_table.deinit(evaluator.allocator);
         var stage_outcome = blk: {
             const previous_pipeline_stdout_capture = evaluator.pipeline_stdout_capture;
             evaluator.pipeline_stdout_capture = !is_last_stage;
@@ -16212,6 +16296,59 @@ test "semantic command substitution frame inherits parent stdin and stderr endpo
         execution_frame.MutationPolicy.discard_at_boundary,
         substitution_frame.spec.mutation_policy,
     );
+}
+
+test "fallback pipeline stage frames model stdin stdout stderr and redirection order" {
+    var parent_frame = rootExecutionFrame(context.EvalContext.forTarget(.current_shell));
+    try parent_frame.spec.fd_table.bindOutput(std.testing.allocator, 2, .{ .capture = .side_stderr });
+    defer parent_frame.spec.fd_table.deinit(std.testing.allocator);
+
+    const stderr_to_stdout = [_]redirection_plan.RedirectionStep{
+        redirection_plan.RedirectionStep.duplicate(0, 2, 1),
+    };
+    const first_redirections: redirection_plan.RedirectionPlan = .{ .steps = &stderr_to_stdout };
+    var first = try pipelineStageExecutionFrame(
+        std.testing.allocator,
+        &parent_frame,
+        .subshell,
+        false,
+        "",
+        first_redirections,
+    );
+    defer first.spec.fd_table.deinit(std.testing.allocator);
+
+    try std.testing.expect(first.spec.captures.contains(.pipeline_data));
+    try expectFrameOutputCapture(first.spec.fd_table.endpoint(1), .pipeline_data);
+    try expectFrameOutputCapture(first.spec.fd_table.endpoint(2), .pipeline_data);
+
+    var last = try pipelineStageExecutionFrame(
+        std.testing.allocator,
+        &parent_frame,
+        .subshell,
+        true,
+        "from-first",
+        .{},
+    );
+    defer last.spec.fd_table.deinit(std.testing.allocator);
+
+    switch (last.spec.fd_table.endpoint(0)) {
+        .input => |input| switch (input) {
+            .bytes => |bytes| try std.testing.expectEqualStrings("from-first", bytes),
+            else => return error.ExpectedByteStdinEndpoint,
+        },
+        else => return error.ExpectedInputEndpoint,
+    }
+    try expectFrameOutputCapture(last.spec.fd_table.endpoint(2), .side_stderr);
+}
+
+fn expectFrameOutputCapture(
+    endpoint: execution_frame.FdEndpoint,
+    channel: execution_frame.CaptureChannel,
+) !void {
+    switch (endpoint) {
+        .output => |output| try std.testing.expectEqual(execution_frame.OutputEndpoint{ .capture = channel }, output),
+        else => return error.ExpectedOutputEndpoint,
+    }
 }
 
 test "semantic command substitution captures external command stdout" {

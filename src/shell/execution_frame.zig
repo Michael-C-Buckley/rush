@@ -429,7 +429,6 @@ pub const BoundarySpec = struct {
         } else {
             std.debug.assert(self.eval_target != .current_shell or self.kind == .external_command);
         }
-        if (self.kind == .pipeline_stage) std.debug.assert(!self.stdout.isInheritStdout());
         if (self.kind == .command_substitution) {
             std.debug.assert(self.eval_target == .subshell);
             std.debug.assert(self.trap_policy == .command_substitution);
