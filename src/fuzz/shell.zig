@@ -715,6 +715,7 @@ const FuzzFdRuntime = struct {
             .duplicate_fn = duplicate,
             .duplicate_to_fn = duplicateTo,
             .pipe_fn = pipe,
+            .write_fn = writeAll,
             .is_tty_fn = isTty,
         };
     }
@@ -782,6 +783,12 @@ const FuzzFdRuntime = struct {
             .read = self.allocateDescriptor(self.allocateIdentity()),
             .write = self.allocateDescriptor(self.allocateIdentity()),
         };
+    }
+
+    fn writeAll(context: *anyopaque, request: fd.WriteRequest) fd.WriteError!void {
+        const self = fromContext(context);
+        request.validate();
+        if (self.identity(request.descriptor) == null) return error.BadFileDescriptor;
     }
 
     fn isTty(context: *anyopaque, request: fd.IsTtyRequest) fd.IsTtyError!fd.IsTtyResult {

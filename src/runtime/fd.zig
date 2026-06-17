@@ -15,6 +15,7 @@ pub const Operation = enum {
     duplicate,
     duplicate_to,
     pipe,
+    write,
     is_tty,
 };
 
@@ -161,6 +162,15 @@ pub const PipeResult = struct {
     }
 };
 
+pub const WriteRequest = struct {
+    descriptor: Descriptor,
+    bytes: []const u8,
+
+    pub fn validate(self: WriteRequest) void {
+        assertValidDescriptor(self.descriptor);
+    }
+};
+
 pub const IsTtyRequest = struct {
     descriptor: Descriptor,
 
@@ -198,6 +208,11 @@ pub const PipeError = error{
     Unsupported,
     Unexpected,
 };
+pub const WriteError = error{
+    BadFileDescriptor,
+    BrokenPipe,
+    Unexpected,
+};
 pub const IsTtyError = error{Unexpected};
 
 pub const OpenFn = *const fn (*anyopaque, OpenRequest) OpenError!OpenResult;
@@ -205,6 +220,7 @@ pub const CloseFn = *const fn (*anyopaque, CloseRequest) CloseError!void;
 pub const DuplicateFn = *const fn (*anyopaque, DuplicateRequest) DuplicateError!DuplicateResult;
 pub const DuplicateToFn = *const fn (*anyopaque, DuplicateToRequest) DuplicateError!void;
 pub const PipeFn = *const fn (*anyopaque, PipeRequest) PipeError!PipeResult;
+pub const WriteFn = *const fn (*anyopaque, WriteRequest) WriteError!void;
 pub const IsTtyFn = *const fn (*anyopaque, IsTtyRequest) IsTtyError!IsTtyResult;
 
 pub const Port = struct {
@@ -214,6 +230,7 @@ pub const Port = struct {
     duplicate_fn: DuplicateFn,
     duplicate_to_fn: DuplicateToFn,
     pipe_fn: PipeFn,
+    write_fn: WriteFn,
     is_tty_fn: IsTtyFn,
 
     pub fn open(self: Port, request: OpenRequest) OpenError!OpenResult {
@@ -245,6 +262,11 @@ pub const Port = struct {
         const result = try self.pipe_fn(self.context, request);
         result.validate();
         return result;
+    }
+
+    pub fn writeAll(self: Port, request: WriteRequest) WriteError!void {
+        request.validate();
+        try self.write_fn(self.context, request);
     }
 
     pub fn isTty(self: Port, request: IsTtyRequest) IsTtyError!IsTtyResult {

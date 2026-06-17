@@ -30,6 +30,7 @@ pub const Adapter = struct {
             .duplicate_fn = duplicate,
             .duplicate_to_fn = duplicateTo,
             .pipe_fn = pipe,
+            .write_fn = writeAll,
             .is_tty_fn = isTty,
         };
     }
@@ -213,6 +214,24 @@ fn pipe(context: *anyopaque, request: fd.PipeRequest) fd.PipeError!fd.PipeResult
     };
 
     return .{ .read = descriptors[0], .write = descriptors[1] };
+}
+
+fn writeAll(context: *anyopaque, request: fd.WriteRequest) fd.WriteError!void {
+    _ = context;
+    request.validate();
+    var index: usize = 0;
+    while (index < request.bytes.len) {
+        const written = std.c.write(request.descriptor, request.bytes[index..].ptr, request.bytes.len - index);
+        if (written < 0) {
+            return switch (std.posix.errno(written)) {
+                .BADF => error.BadFileDescriptor,
+                .PIPE => error.BrokenPipe,
+                else => error.Unexpected,
+            };
+        }
+        if (written == 0) return error.Unexpected;
+        index += @intCast(written);
+    }
 }
 
 fn isTty(context: *anyopaque, request: fd.IsTtyRequest) fd.IsTtyError!fd.IsTtyResult {

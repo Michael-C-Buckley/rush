@@ -389,7 +389,7 @@ pub const RedirectionPlan = struct {
     ) std.mem.Allocator.Error!ApplyResult {
         self.validate();
 
-        var applied = AppliedRedirections.init(allocator, port, self.self_duplicate_noop);
+        var applied = FdTransaction.init(allocator, port, self.self_duplicate_noop);
         errdefer {
             applied.restore();
             applied.deinit();
@@ -506,7 +506,8 @@ pub const ApplyFailureDetail = union(enum) {
     open: fd.OpenError,
     close: fd.CloseError,
     duplicate: fd.DuplicateError,
-    unsupported_here_doc,
+    pipe: fd.PipeError,
+    write: fd.WriteError,
 };
 
 pub const ApplyFailure = struct {
@@ -612,10 +613,31 @@ pub const FdTransaction = struct {
         step.validate();
         return switch (step.effect) {
             .open_path => |open_step| try self.applyOpenPath(open_step),
-            .here_doc => |here_doc_step| if (here_doc_step.target == 0) null else .unsupported_here_doc,
+            .here_doc => |here_doc_step| try self.applyHereDoc(here_doc_step),
             .duplicate => |duplicate_step| try self.applyDuplicate(duplicate_step),
             .close => |close_step| try self.applyClose(close_step),
         };
+    }
+
+    fn applyHereDoc(self: *FdTransaction, step: HereDocStep) std.mem.Allocator.Error!?ApplyFailureDetail {
+        step.validate();
+        if (try self.saveTarget(step.target)) |failure| return failure;
+
+        const pipe_result = self.port.pipe(.{ .close_on_exec = true }) catch |err| return .{ .pipe = err };
+        errdefer {
+            closeOpened(self.port, pipe_result.read) catch {};
+            closeOpened(self.port, pipe_result.write) catch {};
+        }
+
+        self.port.writeAll(.{ .descriptor = pipe_result.write, .bytes = step.data.bytes }) catch |err| {
+            return .{ .write = err };
+        };
+        closeOpened(self.port, pipe_result.write) catch |err| return .{ .close = err };
+
+        if (pipe_result.read == step.target) return null;
+        self.port.duplicateTo(.{ .source = pipe_result.read, .target = step.target }) catch |err| return .{ .duplicate = err };
+        closeOpened(self.port, pipe_result.read) catch |err| return .{ .close = err };
+        return null;
     }
 
     fn applyOpenPath(self: *FdTransaction, step: OpenPathStep) std.mem.Allocator.Error!?ApplyFailureDetail {
@@ -706,10 +728,6 @@ pub const FdTransaction = struct {
         return null;
     }
 };
-
-// Compatibility name for evaluator call sites while the transaction model is
-// being moved through the rest of the executor.
-pub const AppliedRedirections = FdTransaction;
 
 fn closeOpened(port: fd.Port, descriptor: fd.Descriptor) fd.CloseError!void {
     fd.assertValidDescriptor(descriptor);
@@ -1037,6 +1055,7 @@ const FakeFdRuntime = struct {
             .duplicate_fn = duplicate,
             .duplicate_to_fn = duplicateTo,
             .pipe_fn = pipe,
+            .write_fn = writeAll,
             .is_tty_fn = isTty,
         };
     }
@@ -1108,6 +1127,12 @@ const FakeFdRuntime = struct {
         const read = self.next(0);
         const write = self.next(0);
         return .{ .read = read, .write = write };
+    }
+
+    fn writeAll(context: *anyopaque, request: fd.WriteRequest) fd.WriteError!void {
+        const self = fromContext(context);
+        request.validate();
+        if (!self.isOpen(request.descriptor)) return error.BadFileDescriptor;
     }
 
     fn isTty(context: *anyopaque, request: fd.IsTtyRequest) fd.IsTtyError!fd.IsTtyResult {

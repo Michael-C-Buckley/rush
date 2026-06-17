@@ -60,7 +60,7 @@ pub const CommandHistoryEntry = struct {
 };
 
 const ScopedExecRedirection = struct {
-    applied: ?redirection_plan.AppliedRedirections = null,
+    applied: ?redirection_plan.FdTransaction = null,
     redirections: redirection_plan.RedirectionPlan,
 
     fn restoreAndDeinit(self: *ScopedExecRedirection) void {
@@ -2714,7 +2714,6 @@ const EvaluationBuffers = struct {
     allocator: std.mem.Allocator,
     stdin: *EvaluationInput,
     frame: *execution_frame.ExecutionFrame,
-    routing: OutputRouting,
     propagated_failure: ?outcome.PropagatedFailure = null,
     stdout: std.ArrayList(u8) = .empty,
     stderr: std.ArrayList(u8) = .empty,
@@ -2732,7 +2731,6 @@ const EvaluationBuffers = struct {
             .allocator = allocator,
             .stdin = stdin,
             .frame = frame,
-            .routing = OutputRouting.init(allocator, .outcome_capture),
         };
     }
 
@@ -2742,29 +2740,25 @@ const EvaluationBuffers = struct {
         self.pipeline_stdout.deinit(self.allocator);
         for (self.diagnostics.items) |message| self.allocator.free(message);
         self.diagnostics.deinit(self.allocator);
-        self.routing.deinit();
         self.* = undefined;
     }
 
-    fn outputFrame(self: *EvaluationBuffers) OutputFrame {
-        return OutputFrame.initBorrowed(self, &self.routing);
-    }
-
-    fn useFrameFdTableRouting(self: *EvaluationBuffers, eval_context: context.EvalContext) !void {
+    fn outputFrame(self: *EvaluationBuffers) !OutputFrame {
         self.frame.validate();
-        eval_context.validate();
-        const command_substitution_context = eval_context.command_substitution_depth != 0 or
-            frameWithinCommandSubstitution(self.frame.*);
-        try self.routing.setDestination(1, outputDestinationForFrameEndpointInContext(
+        var routing = OutputRouting.init(self.allocator, .outcome_capture);
+        errdefer routing.deinit();
+        const command_substitution_context = frameWithinCommandSubstitution(self.frame.*);
+        try routing.setDestination(1, outputDestinationForFrameEndpointInContext(
             1,
             self.frame.spec.fd_table.endpoint(1),
             command_substitution_context,
         ));
-        try self.routing.setDestination(2, outputDestinationForFrameEndpointInContext(
+        try routing.setDestination(2, outputDestinationForFrameEndpointInContext(
             2,
             self.frame.spec.fd_table.endpoint(2),
             command_substitution_context,
         ));
+        return OutputFrame.initOwnedRouting(self, routing);
     }
 
     fn useFrameFdTableInput(
@@ -2794,14 +2788,14 @@ const EvaluationBuffers = struct {
         std.debug.assert(command.len != 0);
         std.debug.assert(message.len != 0);
 
-        var frame = self.outputFrame();
+        var frame = try self.outputFrame();
         defer frame.deinit();
         try frame.addBuiltinDiagnostic(command, message);
     }
 
     fn addDiagnosticMessage(self: *EvaluationBuffers, message: []const u8) !void {
         std.debug.assert(message.len != 0);
-        var frame = self.outputFrame();
+        var frame = try self.outputFrame();
         defer frame.deinit();
         try frame.diagnosticStore().append(message);
     }
@@ -2939,7 +2933,6 @@ fn evaluatePlanWithInput(
             var failure_input = EvaluationInput.empty();
             var buffers = EvaluationBuffers.init(evaluator.allocator, &failure_input, frame);
             defer buffers.deinit();
-            if (frame.spec.kind == .pipeline_stage) try buffers.useFrameFdTableRouting(eval_context);
             try appendPlanExpansionOutput(evaluator.*, eval_context, plan, &buffers);
             try buffers.addBuiltinDiagnostic(name, "readonly variable");
 
@@ -2994,7 +2987,6 @@ fn evaluatePlanWithInput(
     );
     defer buffers.deinit();
     buffers.useFrameFdTableInput(&frame_input, input);
-    if (frameRoutesPipelineData(command_frame)) try buffers.useFrameFdTableRouting(eval_context);
     if (readonly_assignment) |name| try buffers.addBuiltinDiagnostic(name, "readonly variable");
     try appendPlanExpansionOutput(evaluator.*, eval_context, effective_plan, &buffers);
     try flushCurrentShellBufferedCommandOutput(&buffers, eval_context, evaluator.external_stdio);
@@ -3003,7 +2995,7 @@ fn evaluatePlanWithInput(
         .stderr = buffers.stderr.items.len,
     };
 
-    var applied_redirections: ?redirection_plan.AppliedRedirections = null;
+    var applied_redirections: ?redirection_plan.FdTransaction = null;
     defer if (applied_redirections) |*applied| {
         applied.restore();
         applied.deinit();
@@ -3236,7 +3228,7 @@ fn compoundPlanOwnsScopedExecRedirections(
 
 fn appendScopedExecRedirection(
     evaluator: *Evaluator,
-    applied: redirection_plan.AppliedRedirections,
+    applied: redirection_plan.FdTransaction,
     redirections: redirection_plan.RedirectionPlan,
 ) EvalError!void {
     redirections.validate();
@@ -3310,7 +3302,6 @@ fn flushCurrentShellBufferedCommandOutput(
     eval_context.validate();
     if (eval_context.target != .current_shell) return;
     if (eval_context.command_substitution_depth != 0) return;
-    if (!routingTargetsInheritedStandardDescriptors(buffers.routing)) return;
     if (!frameTargetsInheritedStandardDescriptors(buffers.frame.*)) return;
     var frame = OutputFrame.initInherited(buffers);
     defer frame.deinit();
@@ -3319,20 +3310,6 @@ fn flushCurrentShellBufferedCommandOutput(
         .capture_stdout => try frame.flushPendingDescriptor(2),
         .inherit_output, .inherit => try frame.flushPendingStandardDescriptors(),
     }
-}
-
-fn routingTargetsInheritedStandardDescriptors(routing: OutputRouting) bool {
-    const stdout_inherited = switch (routing.destination(1)) {
-        .host_descriptor => |descriptor| descriptor == 1,
-        .outcome_stdout_capture => true,
-        else => false,
-    };
-    const stderr_inherited = switch (routing.destination(2)) {
-        .host_descriptor => |descriptor| descriptor == 2,
-        .outcome_stderr_capture => true,
-        else => false,
-    };
-    return stdout_inherited or stderr_inherited;
 }
 
 fn frameTargetsInheritedStandardDescriptors(frame: execution_frame.ExecutionFrame) bool {
@@ -3887,14 +3864,15 @@ test "output frame outcome capture writes stdout and stderr buffers" {
     try std.testing.expectEqualStrings("err", buffers.stderr.items);
 }
 
-test "evaluation buffers output frame uses carried routing" {
+test "evaluation buffers output frame derives routing from fd table" {
     var input = EvaluationInput.empty();
     var execution_frame_value = rootExecutionFrame(context.EvalContext.forTarget(.current_shell));
+    try execution_frame_value.spec.fd_table.bindOutput(std.testing.allocator, 1, .{ .capture = .side_stderr });
+    defer execution_frame_value.spec.fd_table.deinit(std.testing.allocator);
     var buffers = EvaluationBuffers.init(std.testing.allocator, &input, &execution_frame_value);
     defer buffers.deinit();
 
-    try buffers.routing.setDestination(1, .outcome_stderr_capture);
-    var frame = buffers.outputFrame();
+    var frame = try buffers.outputFrame();
     defer frame.deinit();
     try frame.write(1, "routed");
 
@@ -4074,7 +4052,7 @@ fn emitSemanticRedirectionTransforms(
     redirections: redirection_plan.RedirectionPlan,
 ) EvalError!void {
     redirections.validate();
-    var frame = buffers.outputFrame();
+    var frame = try buffers.outputFrame();
     defer frame.deinit();
     if (evaluator.scoped_exec_redirections) |scoped_redirections| {
         for (scoped_redirections.items) |scoped| {
@@ -4113,7 +4091,7 @@ fn applyRedirectionsEmittingExpansionOutput(
     }
     try frame.applyRedirectionsFlushingRouteChanges(already_applied);
 
-    var applied = redirection_plan.AppliedRedirections.init(
+    var applied = redirection_plan.FdTransaction.init(
         buffers.allocator,
         fd_port,
         redirections.self_duplicate_noop,
@@ -4397,8 +4375,6 @@ fn evaluateCompoundPlanWithInput(
     );
     defer buffers.deinit();
     buffers.useFrameFdTableInput(&frame_input, input);
-    if (frameRoutesPipelineData(command_frame)) try buffers.useFrameFdTableRouting(eval_context);
-
     var cwd_guard: CwdGuard = .{};
     if (plan.target.isIsolatedFromParent()) cwd_guard.capture(evaluator);
     defer cwd_guard.restore();
@@ -4421,7 +4397,7 @@ fn evaluateCompoundPlanWithInput(
         evaluator.scoped_exec_redirections = previous_scoped_exec_redirections;
     };
 
-    var applied_redirections: ?redirection_plan.AppliedRedirections = null;
+    var applied_redirections: ?redirection_plan.FdTransaction = null;
     defer if (applied_redirections) |*applied| {
         applied.restore();
         applied.deinit();
@@ -4740,8 +4716,6 @@ fn executePendingTrapsWithFrame(
     var input = EvaluationInput.empty();
     var buffers = EvaluationBuffers.init(evaluator.allocator, &input, &trap_frame);
     defer buffers.deinit();
-    try buffers.useFrameFdTableRouting(eval_context);
-
     const pending_count = shell_state.pending_traps.items.len;
     const preserved_status = shell_state.last_status;
     var result: SimpleEvalResult = .{ .status = preserved_status };
@@ -5616,7 +5590,7 @@ fn startBackgroundSemanticPipeline(
     const process_port = evaluator.process_port orelse return error.Unimplemented;
     const use_process_group = shell_state.options.enabled(.monitor);
 
-    var applied_redirections: ?redirection_plan.AppliedRedirections = null;
+    var applied_redirections: ?redirection_plan.FdTransaction = null;
     defer if (applied_redirections) |*applied| {
         applied.restore();
         applied.deinit();
@@ -5719,7 +5693,7 @@ fn applySingleStageBackgroundRedirections(
     evaluator: *Evaluator,
     plan: pipeline_plan.PipelinePlan,
     buffers: *EvaluationBuffers,
-    applied_redirections: *?redirection_plan.AppliedRedirections,
+    applied_redirections: *?redirection_plan.FdTransaction,
 ) EvalError!?bool {
     plan.validate();
     std.debug.assert(plan.strategy == .background_deferred);
@@ -5815,7 +5789,7 @@ fn startBackgroundSingleExternal(
     var invocation = try ExternalInvocation.init(evaluator.allocator, shell_state, plan, resolution, &.{});
     defer invocation.deinit(evaluator.allocator);
 
-    var applied_redirections: ?redirection_plan.AppliedRedirections = null;
+    var applied_redirections: ?redirection_plan.FdTransaction = null;
     defer if (applied_redirections) |*applied| {
         applied.restore();
         applied.deinit();
@@ -6513,7 +6487,6 @@ fn evaluateExternalPipelineStage(
 
     var stage_buffers = EvaluationBuffers.init(evaluator.allocator, input, frame);
     defer stage_buffers.deinit();
-    try stage_buffers.useFrameFdTableRouting(eval_context);
     try appendPlanExpansionOutput(evaluator.*, eval_context, plan, &stage_buffers);
 
     const status = try runExternalWithPipelineInput(evaluator, shell_state.*, plan, resolution, &stage_buffers);
@@ -8056,7 +8029,7 @@ fn appendOutcomeBuffers(buffers: *EvaluationBuffers, command_outcome: outcome.Co
         }
         return;
     }
-    var frame = buffers.outputFrame();
+    var frame = try buffers.outputFrame();
     defer frame.deinit();
     try frame.write(1, command_outcome.stdout.items);
     try frame.write(2, command_outcome.stderr.items);
@@ -8147,7 +8120,7 @@ fn evaluateFunction(
 
     try flushBuffersForFunctionRedirectionTargets(buffers, plan, definition);
 
-    var call_redirections: ?redirection_plan.AppliedRedirections = null;
+    var call_redirections: ?redirection_plan.FdTransaction = null;
     defer if (call_redirections) |*applied| {
         applied.restore();
         applied.deinit();
@@ -8169,7 +8142,7 @@ fn evaluateFunction(
         }
     }
 
-    var definition_redirections: ?redirection_plan.AppliedRedirections = null;
+    var definition_redirections: ?redirection_plan.FdTransaction = null;
     defer if (definition_redirections) |*applied| {
         applied.restore();
         applied.deinit();
@@ -8633,8 +8606,8 @@ fn evaluateExternalWithProcessEnvironment(
         );
     }
 
-    if (semanticHereDocInput(plan.redirections)) |stdin| {
-        var applied_redirections: ?redirection_plan.AppliedRedirections = null;
+    if (semanticHereDocStdinSource(plan.redirections)) |stdin_source| {
+        var applied_redirections: ?redirection_plan.FdTransaction = null;
         defer if (applied_redirections) |*applied| {
             applied.restore();
             applied.deinit();
@@ -8660,7 +8633,7 @@ fn evaluateExternalWithProcessEnvironment(
         var run_result = invocation.run(
             evaluator,
             process_port,
-            stdin,
+            stdin_source.bytes(),
         ) catch |err| switch (err) {
             error.OutOfMemory => return error.OutOfMemory,
             else => |run_err| {
@@ -8672,7 +8645,7 @@ fn evaluateExternalWithProcessEnvironment(
         defer run_result.deinit();
 
         var frame = if (buffers.frame.spec.kind == .pipeline_stage)
-            buffers.outputFrame()
+            try buffers.outputFrame()
         else
             OutputFrame.initOutcomeCapture(buffers);
         defer frame.deinit();
@@ -8714,7 +8687,7 @@ fn evaluateExternalWithProcessEnvironment(
 
     try flushBuffersToInheritedDescriptors(buffers);
 
-    var applied_redirections: ?redirection_plan.AppliedRedirections = null;
+    var applied_redirections: ?redirection_plan.FdTransaction = null;
     defer if (applied_redirections) |*applied| {
         applied.restore();
         applied.deinit();
@@ -8784,7 +8757,7 @@ fn evaluateCapturedExternal(
     std.debug.assert(invocation.argv.len != 0);
     _ = fd_port;
 
-    var applied_redirections: ?redirection_plan.AppliedRedirections = null;
+    var applied_redirections: ?redirection_plan.FdTransaction = null;
     defer if (applied_redirections) |*applied| {
         applied.restore();
         applied.deinit();
@@ -8845,7 +8818,7 @@ fn appendCapturedExternalOutput(
     switch (capture_mode) {
         .stdout => {
             var frame = if (buffers.frame.spec.kind == .pipeline_stage)
-                buffers.outputFrame()
+                try buffers.outputFrame()
             else
                 OutputFrame.initOutcomeCapture(buffers);
             defer frame.deinit();
@@ -8858,7 +8831,7 @@ fn appendCapturedExternalOutput(
         },
         .stdout_and_stderr => {
             var frame = if (buffers.frame.spec.kind == .pipeline_stage)
-                buffers.outputFrame()
+                try buffers.outputFrame()
             else
                 OutputFrame.initCommandSubstitution(buffers);
             defer frame.deinit();
@@ -8897,7 +8870,7 @@ fn runExternalWithPipelineInputWithProcessEnvironment(
     var invocation = try ExternalInvocation.init(evaluator.allocator, shell_state, plan, resolution, process_overlay);
     defer invocation.deinit(evaluator.allocator);
 
-    var applied_redirections: ?redirection_plan.AppliedRedirections = null;
+    var applied_redirections: ?redirection_plan.FdTransaction = null;
     defer if (applied_redirections) |*applied| {
         applied.restore();
         applied.deinit();
@@ -8925,7 +8898,7 @@ fn runExternalWithPipelineInputWithProcessEnvironment(
     var run_result = invocation.run(
         evaluator,
         process_port,
-        semanticHereDocInput(plan.redirections) orelse buffers.stdin.takeRemaining(),
+        if (semanticHereDocStdinSource(plan.redirections)) |source| source.bytes() else buffers.stdin.takeRemaining(),
     ) catch |err| switch (err) {
         error.OutOfMemory => return error.OutOfMemory,
         else => |run_err| {
@@ -8938,7 +8911,7 @@ fn runExternalWithPipelineInputWithProcessEnvironment(
     defer run_result.deinit();
 
     var frame = if (buffers.frame.spec.kind == .pipeline_stage)
-        buffers.outputFrame()
+        try buffers.outputFrame()
     else
         OutputFrame.initOutcomeCapture(buffers);
     defer frame.deinit();
@@ -8978,69 +8951,31 @@ fn hasRedirections(plan: command_plan.CommandPlan) bool {
     return plan.redirections.steps.len != 0 or plan.redirections.rollback_steps.len != 0;
 }
 
-fn semanticHereDocInput(plan: redirection_plan.RedirectionPlan) ?[]const u8 {
+const StdinSource = union(enum) {
+    here_doc: []const u8,
+
+    fn bytes(self: StdinSource) []const u8 {
+        return switch (self) {
+            .here_doc => |data| data,
+        };
+    }
+};
+
+fn semanticHereDocStdinSource(plan: redirection_plan.RedirectionPlan) ?StdinSource {
     plan.validate();
-    var input: ?[]const u8 = null;
+    var source: ?StdinSource = null;
     for (plan.steps) |step| {
         switch (step.effect) {
             .here_doc => |here_doc| {
                 if (here_doc.target != 0) return null;
-                input = here_doc.data.bytes;
+                source = .{ .here_doc = here_doc.data.bytes };
             },
             .open_path, .duplicate, .close => {
-                if (step.target() == 0) input = null;
+                if (step.target() == 0) source = null;
             },
         }
     }
-    return input;
-}
-
-const FdRedirectionPlan = struct {
-    plan: redirection_plan.RedirectionPlan,
-    steps: []redirection_plan.RedirectionStep,
-    rollback_steps: []redirection_plan.RestorationStep,
-
-    fn deinit(self: *FdRedirectionPlan, allocator: std.mem.Allocator) void {
-        allocator.free(self.steps);
-        allocator.free(self.rollback_steps);
-        self.* = undefined;
-    }
-};
-
-fn redirectionsWithoutHereDocs(
-    allocator: std.mem.Allocator,
-    plan: redirection_plan.RedirectionPlan,
-) EvalError!FdRedirectionPlan {
-    plan.validate();
-    var count: usize = 0;
-    for (plan.steps) |step| {
-        if (step.effect != .here_doc) count += 1;
-    }
-
-    const steps = try allocator.alloc(redirection_plan.RedirectionStep, count);
-    errdefer allocator.free(steps);
-    const rollback_steps = try allocator.alloc(redirection_plan.RestorationStep, count);
-    errdefer allocator.free(rollback_steps);
-
-    var index: usize = 0;
-    for (plan.steps) |step| {
-        if (step.effect == .here_doc) continue;
-        steps[index] = .{ .ordinal = index, .effect = step.effect, .expansion_output = step.expansion_output };
-        rollback_steps[index] = .{ .ordinal = index, .target = step.target() };
-        index += 1;
-    }
-    const filtered: FdRedirectionPlan = .{
-        .plan = .{
-            .steps = steps,
-            .rollback_steps = rollback_steps,
-            .failure_consequence = plan.failure_consequence,
-            .self_duplicate_noop = plan.self_duplicate_noop,
-        },
-        .steps = steps,
-        .rollback_steps = rollback_steps,
-    };
-    filtered.plan.validate();
-    return filtered;
+    return source;
 }
 
 fn redirectionTargetsDescriptor(plan: redirection_plan.RedirectionPlan, descriptor: runtime.fd.Descriptor) bool {
@@ -9290,7 +9225,12 @@ fn redirectionFailureMessage(failure: redirection_plan.ApplyFailure) []const u8 
             error.BadFileDescriptor => "bad file descriptor",
             else => "redirection duplicate failed",
         },
-        .unsupported_here_doc => "unsupported here-document redirection",
+        .pipe => "here-document pipe failed",
+        .write => |err| switch (err) {
+            error.BadFileDescriptor => "bad file descriptor",
+            error.BrokenPipe => "here-document pipe closed",
+            else => "here-document write failed",
+        },
     };
 }
 
@@ -13407,7 +13347,7 @@ fn evaluateEchoRouted(
     defer stdout.deinit(allocator);
     var status = try evaluateEcho(allocator, argv, &stdout);
     if (stdout.items.len != 0 and buffers.frame.spec.fd_table.endpoint(1) == .closed) status = 1;
-    var frame = buffers.outputFrame();
+    var frame = try buffers.outputFrame();
     defer frame.deinit();
     try frame.write(1, stdout.items);
     return status;
@@ -15653,6 +15593,7 @@ test "semantic evaluator routes test -t through fd runtime port" {
                 .duplicate_fn = duplicate,
                 .duplicate_to_fn = duplicateTo,
                 .pipe_fn = pipe,
+                .write_fn = writeAll,
                 .is_tty_fn = isTty,
             };
         }
@@ -15681,6 +15622,10 @@ test "semantic evaluator routes test -t through fd runtime port" {
         }
 
         fn pipe(_: *anyopaque, _: runtime.fd.PipeRequest) runtime.fd.PipeError!runtime.fd.PipeResult {
+            unreachable;
+        }
+
+        fn writeAll(_: *anyopaque, _: runtime.fd.WriteRequest) runtime.fd.WriteError!void {
             unreachable;
         }
 
@@ -17543,6 +17488,7 @@ const FakeExternalRuntime = struct {
             .duplicate_fn = duplicate,
             .duplicate_to_fn = duplicateTo,
             .pipe_fn = pipe,
+            .write_fn = writeAll,
             .is_tty_fn = isTty,
         };
     }
@@ -17698,6 +17644,12 @@ const FakeExternalRuntime = struct {
         const write = self.allocateDescriptor(0);
         self.recordFdOperation(.{ .pipe = .{ .read = read, .write = write } });
         return .{ .read = read, .write = write };
+    }
+
+    fn writeAll(opaque_context: *anyopaque, request: runtime.fd.WriteRequest) runtime.fd.WriteError!void {
+        const self = fromContext(opaque_context);
+        request.validate();
+        if (!self.isOpen(request.descriptor)) return error.BadFileDescriptor;
     }
 
     fn isTty(
