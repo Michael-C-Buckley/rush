@@ -75,7 +75,6 @@ pub const Evaluator = struct {
     io: ?std.Io = null,
     read_stdin_from_fd: bool = false,
     external_stdio: ExternalStdio = .inherit,
-    pipeline_stdout_capture: bool = false,
     commit_exec_redirections: bool = false,
     scoped_exec_redirections: ?*std.ArrayList(ScopedExecRedirection) = null,
     builtin_definitions: []const builtin.Builtin = default_builtins.default_registry,
@@ -208,7 +207,7 @@ fn commandSubstitutionCaptures(stderr: execution_frame.OutputEndpoint) execution
     stderr.validate();
     if (stderr.captureChannel()) |channel| {
         if (channel == .command_substitution_stdout) return execution_frame.Captures.commandSubstitution();
-        return .{ .channels = &.{ .command_substitution_stdout, channel } };
+        return captureSet(.command_substitution_stdout, channel);
     }
     return execution_frame.Captures.commandSubstitution();
 }
@@ -308,13 +307,49 @@ fn pipelineStageCaptures(
     const stderr_channel = stderr.captureChannel();
     if (stdout_channel) |out_channel| {
         if (stderr_channel) |err_channel| {
-            if (out_channel == err_channel) return .{ .channels = &.{out_channel} };
-            return .{ .channels = &.{ out_channel, err_channel } };
+            return if (out_channel == err_channel)
+                captureSet(out_channel, null)
+            else
+                captureSet(out_channel, err_channel);
         }
-        return .{ .channels = &.{out_channel} };
+        return captureSet(out_channel, null);
     }
-    if (stderr_channel) |err_channel| return .{ .channels = &.{err_channel} };
+    if (stderr_channel) |err_channel| return captureSet(err_channel, null);
     return .{};
+}
+
+fn captureSet(
+    first: execution_frame.CaptureChannel,
+    second: ?execution_frame.CaptureChannel,
+) execution_frame.Captures {
+    return switch (first) {
+        .side_stdout => switch (second orelse return .{ .channels = &.{.side_stdout} }) {
+            .side_stdout => .{ .channels = &.{.side_stdout} },
+            .side_stderr => .{ .channels = &.{ .side_stdout, .side_stderr } },
+            .pipeline_data => .{ .channels = &.{ .side_stdout, .pipeline_data } },
+            .command_substitution_stdout => .{ .channels = &.{ .side_stdout, .command_substitution_stdout } },
+        },
+        .side_stderr => switch (second orelse return .{ .channels = &.{.side_stderr} }) {
+            .side_stdout => .{ .channels = &.{ .side_stderr, .side_stdout } },
+            .side_stderr => .{ .channels = &.{.side_stderr} },
+            .pipeline_data => .{ .channels = &.{ .side_stderr, .pipeline_data } },
+            .command_substitution_stdout => .{ .channels = &.{ .side_stderr, .command_substitution_stdout } },
+        },
+        .pipeline_data => switch (second orelse return .{ .channels = &.{.pipeline_data} }) {
+            .side_stdout => .{ .channels = &.{ .pipeline_data, .side_stdout } },
+            .side_stderr => .{ .channels = &.{ .pipeline_data, .side_stderr } },
+            .pipeline_data => .{ .channels = &.{.pipeline_data} },
+            .command_substitution_stdout => .{ .channels = &.{ .pipeline_data, .command_substitution_stdout } },
+        },
+        .command_substitution_stdout => switch (second orelse
+            return .{ .channels = &.{.command_substitution_stdout} })
+        {
+            .side_stdout => .{ .channels = &.{ .command_substitution_stdout, .side_stdout } },
+            .side_stderr => .{ .channels = &.{ .command_substitution_stdout, .side_stderr } },
+            .pipeline_data => .{ .channels = &.{ .command_substitution_stdout, .pipeline_data } },
+            .command_substitution_stdout => .{ .channels = &.{.command_substitution_stdout} },
+        },
+    };
 }
 
 fn pipelineStageRedirections(stage: pipeline_plan.PipelineStagePlan) redirection_plan.RedirectionPlan {
@@ -2537,6 +2572,12 @@ const EvaluationBuffers = struct {
         return OutputFrame.initBorrowed(self, &self.routing);
     }
 
+    fn useFrameFdTableRouting(self: *EvaluationBuffers) !void {
+        self.frame.validate();
+        try self.routing.setDestination(1, outputDestinationForFrameEndpoint(1, self.frame.spec.fd_table.endpoint(1)));
+        try self.routing.setDestination(2, outputDestinationForFrameEndpoint(2, self.frame.spec.fd_table.endpoint(2)));
+    }
+
     fn addBuiltinDiagnostic(self: *EvaluationBuffers, command: []const u8, message: []const u8) !void {
         std.debug.assert(command.len != 0);
         std.debug.assert(message.len != 0);
@@ -2553,6 +2594,36 @@ const EvaluationBuffers = struct {
         try frame.diagnosticStore().append(message);
     }
 };
+
+fn outputDestinationForFrameEndpoint(
+    descriptor: runtime.fd.Descriptor,
+    endpoint: execution_frame.FdEndpoint,
+) OutputDestination {
+    runtime.fd.assertValidDescriptor(descriptor);
+    endpoint.validate();
+    return switch (endpoint) {
+        .output => |output| switch (output) {
+            .inherit_stdout => .{ .host_descriptor = 1 },
+            .inherit_stderr => .{ .host_descriptor = 2 },
+            .fd => |host_descriptor| .{ .host_descriptor = host_descriptor },
+            .pipe_write => |host_descriptor| .{ .host_descriptor = host_descriptor },
+            .path => .{ .host_descriptor = descriptor },
+            .capture => |channel| outputDestinationForCaptureChannel(channel),
+            .discard => .closed,
+        },
+        .closed => .closed,
+        .input => .closed,
+    };
+}
+
+fn outputDestinationForCaptureChannel(channel: execution_frame.CaptureChannel) OutputDestination {
+    return switch (channel) {
+        .side_stdout => .outcome_stdout_capture,
+        .side_stderr => .outcome_stderr_capture,
+        .pipeline_data => .pipeline_data_capture,
+        .command_substitution_stdout => .command_substitution_stdout_capture,
+    };
+}
 
 const CwdGuard = struct {
     fs_port: ?runtime.fs.Port = null,
@@ -2620,6 +2691,7 @@ fn evaluatePlanWithInput(
             var failure_input = EvaluationInput.empty();
             var buffers = EvaluationBuffers.init(evaluator.allocator, &failure_input, frame);
             defer buffers.deinit();
+            if (frame.spec.kind == .pipeline_stage) try buffers.useFrameFdTableRouting();
             try appendPlanExpansionOutput(evaluator.*, eval_context, plan, &buffers);
             try buffers.addBuiltinDiagnostic(name, "readonly variable");
 
@@ -2669,6 +2741,7 @@ fn evaluatePlanWithInput(
         frame,
     );
     defer buffers.deinit();
+    if (frame.spec.kind == .pipeline_stage) try buffers.useFrameFdTableRouting();
     if (readonly_assignment) |name| try buffers.addBuiltinDiagnostic(name, "readonly variable");
     try appendPlanExpansionOutput(evaluator.*, eval_context, effective_plan, &buffers);
     try flushCurrentShellBufferedCommandOutput(&buffers, eval_context, evaluator.external_stdio);
@@ -2732,8 +2805,7 @@ fn evaluatePlanWithInput(
             applied_redirections = null;
         },
     }
-    if ((evaluator.pipeline_stdout_capture or
-        applied_redirections != null or
+    if ((applied_redirections != null or
         hasScopedExecRedirections(evaluator.*)) and
         effective_plan.class() != .external and
         effective_plan.class() != .function)
@@ -2745,6 +2817,14 @@ fn evaluatePlanWithInput(
             eval_context,
             routed_prefix,
         );
+    }
+    if (frame.spec.kind == .pipeline_stage and
+        effective_plan.class() != .external and
+        effective_plan.class() != .function)
+    {
+        var output_frame = buffers.outputFrame();
+        defer output_frame.deinit();
+        try output_frame.flushPendingStandardDescriptors();
     }
     state_delta.setLastStatus(result.status);
     assertCommandDeltaCompatible(effective_plan, state_delta);
@@ -2953,7 +3033,7 @@ fn flushCurrentShellBufferedCommandOutput(
 const OutputDestination = union(enum) {
     outcome_stdout_capture,
     outcome_stderr_capture,
-    pipeline_stdout_capture,
+    pipeline_data_capture,
     command_substitution_stdout_capture,
     command_substitution_stderr_capture,
     host_descriptor: runtime.fd.Descriptor,
@@ -2963,7 +3043,7 @@ const OutputDestination = union(enum) {
         switch (self) {
             .outcome_stdout_capture,
             .outcome_stderr_capture,
-            .pipeline_stdout_capture,
+            .pipeline_data_capture,
             .command_substitution_stdout_capture,
             .command_substitution_stderr_capture,
             .closed,
@@ -3225,7 +3305,7 @@ const OutputFrame = struct {
             .outcome_stdout_capture,
             .command_substitution_stdout_capture,
             => try self.buffers.stdout.appendSlice(self.buffers.allocator, bytes),
-            .pipeline_stdout_capture => try self.buffers.pipeline_stdout.appendSlice(self.buffers.allocator, bytes),
+            .pipeline_data_capture => try self.buffers.pipeline_stdout.appendSlice(self.buffers.allocator, bytes),
             .outcome_stderr_capture,
             .command_substitution_stderr_capture,
             => try self.buffers.stderr.appendSlice(self.buffers.allocator, bytes),
@@ -3491,8 +3571,7 @@ fn flushBufferedRedirectionOutput(
     redirections.validate();
     eval_context.validate();
     routed_prefix.validate(buffers.*);
-    if (!evaluator.pipeline_stdout_capture and
-        eval_context.command_substitution_depth == 0 and
+    if (eval_context.command_substitution_depth == 0 and
         !hasScopedExecRedirections(evaluator))
     {
         std.debug.assert(routed_prefix.stdout == 0);
@@ -3501,27 +3580,6 @@ fn flushBufferedRedirectionOutput(
     }
 
     const command_substitution_capture = eval_context.command_substitution_depth != 0;
-    if (evaluator.pipeline_stdout_capture) {
-        if (routed_prefix.stdout == 0 and routed_prefix.stderr == 0) {
-            var frame = if (command_substitution_capture)
-                OutputFrame.initCommandSubstitution(buffers)
-            else
-                OutputFrame.initOutcomeCapture(buffers);
-            defer frame.deinit();
-            try applyPipelineStageOutputRouting(evaluator, &frame.routing, redirections);
-            try frame.flushPendingStandardDescriptors();
-        } else {
-            try flushBufferedRedirectionOutputAfterPrefix(
-                evaluator,
-                buffers,
-                redirections,
-                eval_context,
-                routed_prefix,
-            );
-        }
-        return;
-    }
-
     var frame = if (command_substitution_capture)
         OutputFrame.initCommandSubstitution(buffers)
     else
@@ -3575,11 +3633,7 @@ fn flushBufferedRedirectionOutputAfterPrefix(
     else
         OutputFrame.initOutcomeCapture(buffers);
     defer frame.deinit();
-    if (evaluator.pipeline_stdout_capture) {
-        try applyPipelineStageOutputRouting(evaluator, &frame.routing, redirections);
-    } else {
-        try applyOutputRoutingRedirections(evaluator, &frame.routing, redirections);
-    }
+    try applyOutputRoutingRedirections(evaluator, &frame.routing, redirections);
     try frame.write(1, stdout_tail);
     try frame.write(2, stderr_tail);
 }
@@ -3688,21 +3742,6 @@ fn applyOutputRoutingScopedRedirections(
     try routing.applyRedirections(redirections);
 }
 
-fn applyPipelineStageOutputRouting(
-    evaluator: Evaluator,
-    routing: *OutputRouting,
-    redirections: redirection_plan.RedirectionPlan,
-) EvalError!void {
-    redirections.validate();
-    if (evaluator.scoped_exec_redirections) |scoped_redirections| {
-        for (scoped_redirections.items) |scoped| {
-            try routing.applyRedirections(scoped.redirections);
-        }
-    }
-    try routing.setDestination(1, .pipeline_stdout_capture);
-    try routing.applyRedirections(redirections);
-}
-
 const OutputStream = enum { stdout, stderr };
 
 const RoutedOutputPrefix = struct {
@@ -3736,7 +3775,7 @@ fn flushBufferToDestination(
             try buffers.stderr.insertSlice(buffers.allocator, 0, bytes);
             buffers.stdout.items.len = 0;
         },
-        .pipeline_stdout_capture => {
+        .pipeline_data_capture => {
             try buffers.pipeline_stdout.appendSlice(buffers.allocator, bytes);
             switch (stream) {
                 .stdout => buffers.stdout.items.len = 0,
@@ -3789,7 +3828,7 @@ fn appendBytesToDestination(
         .outcome_stdout_capture,
         .command_substitution_stdout_capture,
         => try buffers.stdout.appendSlice(buffers.allocator, bytes),
-        .pipeline_stdout_capture => try buffers.pipeline_stdout.appendSlice(buffers.allocator, bytes),
+        .pipeline_data_capture => try buffers.pipeline_stdout.appendSlice(buffers.allocator, bytes),
         .outcome_stderr_capture,
         .command_substitution_stderr_capture,
         => try buffers.stderr.appendSlice(buffers.allocator, bytes),
@@ -3804,22 +3843,14 @@ fn commandExpansionOutputFrame(
     buffers: *EvaluationBuffers,
 ) EvalError!OutputFrame {
     eval_context.validate();
-    var frame = if (evaluator.pipeline_stdout_capture and eval_context.command_substitution_depth != 0)
-        OutputFrame.initCommandSubstitution(buffers)
-    else if (evaluator.pipeline_stdout_capture)
-        OutputFrame.initOutcomeCapture(buffers)
-    else if (eval_context.command_substitution_depth != 0)
+    var frame = if (eval_context.command_substitution_depth != 0)
         OutputFrame.initCommandSubstitution(buffers)
     else if (eval_context.pipeline_depth != 0)
         OutputFrame.initInherited(buffers)
     else
         OutputFrame.initOutcomeCapture(buffers);
     errdefer frame.deinit();
-    if (evaluator.pipeline_stdout_capture) {
-        try applyPipelineStageOutputRouting(evaluator, &frame.routing, .{});
-    } else {
-        try applyOutputRoutingRedirections(evaluator, &frame.routing, .{});
-    }
+    try applyOutputRoutingRedirections(evaluator, &frame.routing, .{});
     return frame;
 }
 
@@ -4419,10 +4450,6 @@ fn evaluateCommandSubstitutionInState(
     const previous_external_stdio = evaluator.external_stdio;
     evaluator.external_stdio = .capture;
     defer evaluator.external_stdio = previous_external_stdio;
-
-    const previous_pipeline_stdout_capture = evaluator.pipeline_stdout_capture;
-    evaluator.pipeline_stdout_capture = false;
-    defer evaluator.pipeline_stdout_capture = previous_pipeline_stdout_capture;
 
     var scoped_exec_redirections: std.ArrayList(ScopedExecRedirection) = .empty;
     defer scoped_exec_redirections.deinit(evaluator.allocator);
@@ -5450,29 +5477,24 @@ fn evaluateFallbackPipeline(
             pipelineStageRedirections(stage),
         );
         defer stage_frame.spec.fd_table.deinit(evaluator.allocator);
-        var stage_outcome = blk: {
-            const previous_pipeline_stdout_capture = evaluator.pipeline_stdout_capture;
-            evaluator.pipeline_stdout_capture = !is_last_stage;
-            defer evaluator.pipeline_stdout_capture = previous_pipeline_stdout_capture;
-            break :blk if (stage.isExternal())
-                try evaluateExternalPipelineStage(
-                    evaluator,
-                    &stage_state,
-                    stage_context,
-                    stageWithTarget(stage, stage_target),
-                    &stage_input,
-                    &stage_frame,
-                )
-            else
-                try evaluatePipelineStageWithInput(
-                    evaluator,
-                    &stage_state,
-                    stage_context,
-                    stageWithTarget(stage, stage_target),
-                    &stage_input,
-                    &stage_frame,
-                );
-        };
+        var stage_outcome = if (stage.isExternal())
+            try evaluateExternalPipelineStage(
+                evaluator,
+                &stage_state,
+                stage_context,
+                stageWithTarget(stage, stage_target),
+                &stage_input,
+                &stage_frame,
+            )
+        else
+            try evaluatePipelineStageWithInput(
+                evaluator,
+                &stage_state,
+                stage_context,
+                stageWithTarget(stage, stage_target),
+                &stage_input,
+                &stage_frame,
+            );
         defer stage_outcome.deinit();
 
         if (is_last_stage) flushInheritedPipelineStdout(evaluator.*, &stage_outcome);
@@ -5915,6 +5937,7 @@ fn evaluateExternalPipelineStage(
 
     var stage_buffers = EvaluationBuffers.init(evaluator.allocator, input, frame);
     defer stage_buffers.deinit();
+    try stage_buffers.useFrameFdTableRouting();
     try appendPlanExpansionOutput(evaluator.*, eval_context, plan, &stage_buffers);
 
     const status = try runExternalWithPipelineInput(evaluator, shell_state.*, plan, resolution, &stage_buffers);
@@ -7430,7 +7453,8 @@ fn appendPipelineStageBuffers(
     var frame = OutputFrame.initOutcomeCapture(buffers);
     defer frame.deinit();
     switch (route) {
-        .pipeline_data_only, .parent_output => try frame.write(1, command_outcome.stdout.items),
+        .pipeline_data_only => {},
+        .parent_output => try frame.write(1, command_outcome.stdout.items),
     }
     try frame.write(2, command_outcome.stderr.items);
     for (command_outcome.diagnostics.items) |diagnostic| {
@@ -8014,14 +8038,17 @@ fn evaluateExternalWithProcessEnvironment(
         };
         defer run_result.deinit();
 
-        var frame = OutputFrame.initOutcomeCapture(buffers);
+        var frame = if (buffers.frame.spec.kind == .pipeline_stage)
+            buffers.outputFrame()
+        else
+            OutputFrame.initOutcomeCapture(buffers);
         defer frame.deinit();
-        if (evaluator.pipeline_stdout_capture) {
-            try applyPipelineStageOutputRouting(evaluator.*, &frame.routing, plan.redirections);
-        } else if (evaluator.external_stdio != .capture and evaluator.external_stdio != .inherit) {
+        if (buffers.frame.spec.kind != .pipeline_stage and
+            evaluator.external_stdio != .capture and evaluator.external_stdio != .inherit)
+        {
             try frame.routing.setDestination(2, .closed);
             try applyOutputRoutingRedirections(evaluator.*, &frame.routing, plan.redirections);
-        } else {
+        } else if (buffers.frame.spec.kind != .pipeline_stage) {
             try applyOutputRoutingRedirections(evaluator.*, &frame.routing, plan.redirections);
         }
         writeExternalRunOutput(&frame, 1, run_result.stdout) catch |err| switch (err) {
@@ -8184,11 +8211,12 @@ fn appendCapturedExternalOutput(
     plan.validate();
     switch (capture_mode) {
         .stdout => {
-            var frame = OutputFrame.initOutcomeCapture(buffers);
+            var frame = if (buffers.frame.spec.kind == .pipeline_stage)
+                buffers.outputFrame()
+            else
+                OutputFrame.initOutcomeCapture(buffers);
             defer frame.deinit();
-            if (evaluator.pipeline_stdout_capture) {
-                try applyPipelineStageOutputRouting(evaluator, &frame.routing, plan.redirections);
-            } else {
+            if (buffers.frame.spec.kind != .pipeline_stage) {
                 try frame.routing.setDestination(2, .closed);
                 try applyOutputRoutingRedirections(evaluator, &frame.routing, plan.redirections);
             }
@@ -8196,11 +8224,12 @@ fn appendCapturedExternalOutput(
             try frame.write(2, stderr);
         },
         .stdout_and_stderr => {
-            var frame = OutputFrame.initCommandSubstitution(buffers);
+            var frame = if (buffers.frame.spec.kind == .pipeline_stage)
+                buffers.outputFrame()
+            else
+                OutputFrame.initCommandSubstitution(buffers);
             defer frame.deinit();
-            if (evaluator.pipeline_stdout_capture) {
-                try applyPipelineStageOutputRouting(evaluator, &frame.routing, plan.redirections);
-            } else {
+            if (buffers.frame.spec.kind != .pipeline_stage) {
                 try applyOutputRoutingRedirections(evaluator, &frame.routing, plan.redirections);
             }
             try frame.write(1, stdout);
@@ -8273,11 +8302,12 @@ fn runExternalWithPipelineInputWithProcessEnvironment(
     };
     defer run_result.deinit();
 
-    var frame = OutputFrame.initOutcomeCapture(buffers);
+    var frame = if (buffers.frame.spec.kind == .pipeline_stage)
+        buffers.outputFrame()
+    else
+        OutputFrame.initOutcomeCapture(buffers);
     defer frame.deinit();
-    if (evaluator.pipeline_stdout_capture) {
-        try applyPipelineStageOutputRouting(evaluator.*, &frame.routing, plan.redirections);
-    } else {
+    if (buffers.frame.spec.kind != .pipeline_stage) {
         try applyOutputRoutingRedirections(evaluator.*, &frame.routing, plan.redirections);
     }
     writeExternalRunOutput(&frame, 1, run_result.stdout) catch |err| switch (err) {
