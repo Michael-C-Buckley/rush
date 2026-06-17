@@ -275,6 +275,68 @@ fn pipelineStageInheritedInput(parent_frame: execution_frame.ExecutionFrame) exe
     };
 }
 
+fn semanticCommandExecutionFrame(
+    allocator: std.mem.Allocator,
+    parent_frame: *execution_frame.ExecutionFrame,
+    target: context.ExecutionTarget,
+    redirections: redirection_plan.RedirectionPlan,
+) EvalError!execution_frame.ExecutionFrame {
+    parent_frame.validate();
+    redirections.validate();
+    var fd_table = try parent_frame.spec.fd_table.clone(allocator);
+    errdefer fd_table.deinit(allocator);
+    try fd_table.applyRedirectionPlan(allocator, redirections);
+    const stdin: execution_frame.InputEndpoint = switch (fd_table.endpoint(0)) {
+        .input => |input| input,
+        .closed => .closed,
+        .output => parent_frame.spec.stdin,
+    };
+    const stdout: execution_frame.OutputEndpoint = switch (fd_table.endpoint(1)) {
+        .output => |output| output,
+        .closed => .discard,
+        .input => parent_frame.spec.stdout,
+    };
+    const stderr: execution_frame.OutputEndpoint = switch (fd_table.endpoint(2)) {
+        .output => |output| output,
+        .closed => .discard,
+        .input => parent_frame.spec.stderr,
+    };
+    const spec: execution_frame.BoundarySpec = .{
+        .kind = if (parent_frame.spec.kind == .pipeline_stage)
+            .pipeline_stage
+        else if (target == .current_shell)
+            .top_level
+        else
+            .subshell,
+        .eval_target = target,
+        .stdin = stdin,
+        .stdout = stdout,
+        .stderr = stderr,
+        .fd_table = fd_table,
+        .captures = semanticCommandCaptures(parent_frame.*, stdout, stderr),
+        .mutation_policy = if (target == .current_shell) .commit_to_parent_shell else .commit_within_subshell,
+        .trap_policy = parent_frame.spec.trap_policy,
+        .failure_policy = parent_frame.spec.failure_policy,
+    };
+    return parent_frame.child(spec);
+}
+
+fn semanticCommandCaptures(
+    parent_frame: execution_frame.ExecutionFrame,
+    stdout: execution_frame.OutputEndpoint,
+    stderr: execution_frame.OutputEndpoint,
+) execution_frame.Captures {
+    parent_frame.validate();
+    stdout.validate();
+    stderr.validate();
+    if (parent_frame.spec.kind == .pipeline_stage) return pipelineStageCaptures(stdout, stderr);
+    const stdout_channel = stdout.captureChannel();
+    const stderr_channel = stderr.captureChannel();
+    if (stdout_channel) |out_channel| return captureSet(out_channel, stderr_channel);
+    if (stderr_channel) |err_channel| return captureSet(err_channel, null);
+    return .{};
+}
+
 fn pipelineStageOutputEndpoint(
     parent_frame: execution_frame.ExecutionFrame,
     is_last_stage: bool,
@@ -2616,6 +2678,29 @@ const EvaluationBuffers = struct {
         try self.routing.setDestination(2, outputDestinationForFrameEndpoint(2, self.frame.spec.fd_table.endpoint(2)));
     }
 
+    fn useFrameFdTableInput(
+        self: *EvaluationBuffers,
+        frame_input: *EvaluationInput,
+        inherited_input: *EvaluationInput,
+    ) void {
+        self.frame.validate();
+        frame_input.validate();
+        inherited_input.validate();
+        switch (self.frame.spec.fd_table.endpoint(0)) {
+            .input => |endpoint| switch (endpoint) {
+                .bytes => |bytes| {
+                    frame_input.* = EvaluationInput.init(bytes);
+                    self.stdin = frame_input;
+                },
+                .inherit_stdin, .path, .fd, .pipe_read => self.stdin = inherited_input,
+                .closed => self.stdin = frame_input,
+            },
+            .closed => self.stdin = frame_input,
+            .output => self.stdin = inherited_input,
+        }
+        self.stdin.validate();
+    }
+
     fn addBuiltinDiagnostic(self: *EvaluationBuffers, command: []const u8, message: []const u8) !void {
         std.debug.assert(command.len != 0);
         std.debug.assert(message.len != 0);
@@ -2769,16 +2854,21 @@ fn evaluatePlanWithInput(
         };
     }
 
-    var here_doc_input = if (semanticHereDocInput(effective_plan.redirections)) |bytes|
-        EvaluationInput.init(bytes)
-    else
-        null;
+    var command_frame = try semanticCommandExecutionFrame(
+        evaluator.allocator,
+        frame,
+        effective_plan.target,
+        effective_plan.redirections,
+    );
+    defer command_frame.spec.fd_table.deinit(evaluator.allocator);
+    var frame_input = EvaluationInput.empty();
     var buffers = EvaluationBuffers.init(
         evaluator.allocator,
-        if (here_doc_input) |*here_doc| here_doc else input,
-        frame,
+        input,
+        &command_frame,
     );
     defer buffers.deinit();
+    buffers.useFrameFdTableInput(&frame_input, input);
     if (frame.spec.kind == .pipeline_stage) try buffers.useFrameFdTableRouting();
     if (readonly_assignment) |name| try buffers.addBuiltinDiagnostic(name, "readonly variable");
     try appendPlanExpansionOutput(evaluator.*, eval_context, effective_plan, &buffers);
@@ -4002,16 +4092,16 @@ fn evaluateCompoundPlanWithInput(
     var state_delta = delta.StateDelta.init(evaluator.allocator, plan.target);
     errdefer state_delta.deinit();
 
-    var here_doc_input = if (semanticHereDocInput(plan.redirections)) |bytes|
-        EvaluationInput.init(bytes)
-    else
-        null;
+    var command_frame = try semanticCommandExecutionFrame(evaluator.allocator, frame, plan.target, plan.redirections);
+    defer command_frame.spec.fd_table.deinit(evaluator.allocator);
+    var frame_input = EvaluationInput.empty();
     var buffers = EvaluationBuffers.init(
         evaluator.allocator,
-        if (here_doc_input) |*here_doc| here_doc else input,
-        frame,
+        input,
+        &command_frame,
     );
     defer buffers.deinit();
+    buffers.useFrameFdTableInput(&frame_input, input);
 
     var cwd_guard: CwdGuard = .{};
     if (plan.target.isIsolatedFromParent()) cwd_guard.capture(evaluator);
