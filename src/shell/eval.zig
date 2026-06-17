@@ -1529,8 +1529,9 @@ const SourceLowerer = struct {
         command.validate();
         expansion_context.validate();
 
+        var output: command_plan.ExpansionOutput = .{};
         if (expansion_context.stderr.items.len != 0) {
-            command.expansion_stderr = try allocator.dupe(u8, expansion_context.stderr.items);
+            output.stderr = try allocator.dupe(u8, expansion_context.stderr.items);
         }
         if (expansion_context.diagnostics.items.len != 0) {
             const diagnostics = try allocator.alloc([]const u8, expansion_context.diagnostics.items.len);
@@ -1543,8 +1544,9 @@ const SourceLowerer = struct {
                 diagnostics[index] = try allocator.dupe(u8, diagnostic.message);
                 diagnostics_owned += 1;
             }
-            command.expansion_diagnostics = diagnostics;
+            output.diagnostics = diagnostics;
         }
+        command.expansion_output = output;
         command.validate();
     }
 
@@ -4028,12 +4030,7 @@ fn appendPlanExpansionOutput(
     buffers: *EvaluationBuffers,
 ) !void {
     plan.validate();
-    try appendExpansionOutput(
-        evaluator,
-        eval_context,
-        .{ .stderr = plan.expansion_stderr, .diagnostics = plan.expansion_diagnostics },
-        buffers,
-    );
+    try appendExpansionOutput(evaluator, eval_context, plan.expansion_output, buffers);
 }
 
 fn appendExpansionOutput(
@@ -5813,8 +5810,8 @@ fn pipelineHasExpansionOutput(plan: pipeline_plan.PipelinePlan) bool {
     plan.validate();
     for (plan.stages) |stage| {
         switch (stage) {
-            .simple => |simple| if (simple.expansion_stderr.len != 0 or
-                simple.expansion_diagnostics.len != 0)
+            .simple => |simple| if (simple.expansion_output.stderr.len != 0 or
+                simple.expansion_output.diagnostics.len != 0)
             {
                 return true;
             },
