@@ -3672,7 +3672,11 @@ fn evaluateCompoundPlanWithInput(
     var state_delta = delta.StateDelta.init(evaluator.allocator, plan.target);
     errdefer state_delta.deinit();
 
-    var buffers = EvaluationBuffers.init(evaluator.allocator, input);
+    var here_doc_input = if (semanticHereDocInput(plan.redirections)) |bytes|
+        EvaluationInput.init(bytes)
+    else
+        null;
+    var buffers = EvaluationBuffers.init(evaluator.allocator, if (here_doc_input) |*here_doc| here_doc else input);
     defer buffers.deinit();
 
     var cwd_guard: CwdGuard = .{};

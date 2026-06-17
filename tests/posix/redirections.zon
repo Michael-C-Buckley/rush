@@ -841,6 +841,22 @@
             .status = 0,
         },
         .{
+            .name = "here document feeds a loop condition command",
+            .script =
+            \\while read value; do printf 'in=%s\n' "$value"; done <<EOF
+            \\new
+            \\EOF
+            \\printf 'out=%s\n' "$value"
+            ,
+            .stdout =
+            \\in=new
+            \\out=
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "here document inside loop body is not executed as source",
             .script =
             \\i=0
