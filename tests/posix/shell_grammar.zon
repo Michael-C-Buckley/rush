@@ -171,6 +171,26 @@
             .status = 2,
         },
         .{
+            .name = "case pattern list rejects newline before closing parenthesis",
+            .script =
+            \\case x in x
+            \\) printf 'bad\n' ;; esac
+            ,
+            .stdout = "",
+            .stderr_match = .nonempty,
+            .status = 2,
+        },
+        .{
+            .name = "case pattern list rejects newline after pattern separator",
+            .script =
+            \\case x in x|
+            \\y) printf 'bad\n' ;; esac
+            ,
+            .stdout = "",
+            .stderr_match = .nonempty,
+            .status = 2,
+        },
+        .{
             .name = "complete commands may end with semicolon terminators",
             .script =
             \\printf '<one>\n';

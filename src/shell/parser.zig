@@ -2834,6 +2834,7 @@ const SyntaxParser = struct {
         var saw_pattern_end = false;
         var expect_case_pattern = true;
         var diagnosed_empty_case_pattern = false;
+        var diagnosed_case_pattern_newline = false;
 
         while (!self.at(.eof)) {
             if (self.at(.dsemicolon) or self.at(.semicolon_amp) or self.at(.semicolon_amp_amp)) break;
@@ -2853,6 +2854,14 @@ const SyntaxParser = struct {
                 } else if (self.current().kind != .left_paren or item_children.items.len != 0) {
                     expect_case_pattern = false;
                 }
+            }
+            if (self.features.strict_posix and self.current().kind == .newline and !diagnosed_case_pattern_newline) {
+                try self.diagnostics.append(self.allocator, .{
+                    .kind = .parse_error,
+                    .span = self.current().span,
+                    .message = "newline is not allowed in a case pattern list",
+                });
+                diagnosed_case_pattern_newline = true;
             }
             try self.appendCurrentTokenChildTo(&item_children);
             if (self.previousToken().kind == .right_paren) {
