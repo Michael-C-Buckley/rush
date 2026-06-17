@@ -2791,7 +2791,7 @@ const SyntaxParser = struct {
                     try self.appendCurrentTokenChildTo(&case_children);
                     continue;
                 }
-                if (self.atWord("esac") and !self.esacStartsCaseItemPatternAtItemStart()) break;
+                if (self.atWord("esac")) break;
                 const item = try self.parseCaseItem();
                 try case_children.append(self.allocator, .{ .node = item });
             }
@@ -2926,15 +2926,6 @@ const SyntaxParser = struct {
             if (isListSeparator(kind) or kind == .eof) return false;
         }
         return false;
-    }
-
-    fn esacStartsCaseItemPatternAtItemStart(self: SyntaxParser) bool {
-        if (!self.esacStartsCaseItemPattern()) return false;
-        if (self.right_paren_list_terminator_depth == 0) return true;
-
-        var index = self.index + 1;
-        while (index < self.tokens.len and self.tokens[index].kind.isTrivia()) : (index += 1) {}
-        return index >= self.tokens.len or self.tokens[index].kind != .right_paren;
     }
 
     fn parseBashTestCommand(self: *SyntaxParser) !NodeId {

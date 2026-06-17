@@ -162,6 +162,15 @@
             .status = 2,
         },
         .{
+            .name = "case item cannot start with unquoted esac reserved word",
+            .script =
+            \\case x in esac) printf 'bad\n' ;; x) printf 'bad\n' ;; esac
+            ,
+            .stdout = "",
+            .stderr_match = .nonempty,
+            .status = 2,
+        },
+        .{
             .name = "complete commands may end with semicolon terminators",
             .script =
             \\printf '<one>\n';
