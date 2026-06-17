@@ -89,6 +89,10 @@ pub fn build(b: *std.Build) void {
     );
     const exe_tests = b.addTest(.{
         .root_module = test_module,
+        .test_runner = .{
+            .path = .{ .cwd_relative = b.pathJoin(&.{ b.graph.zig_lib_directory.path.?, "compiler/test_runner.zig" }) },
+            .mode = .simple,
+        },
     });
     test_step.dependOn(&b.addRunArtifact(exe_tests).step);
 

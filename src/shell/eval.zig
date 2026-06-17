@@ -282,7 +282,10 @@ fn pipelineStageOutputEndpoint(
     parent_frame.validate();
     if (!is_last_stage) return .{ .capture = .pipeline_data };
     return switch (parent_frame.spec.fd_table.endpoint(1)) {
-        .output => |output| output,
+        .output => |output| switch (output) {
+            .inherit_stdout => .{ .capture = .side_stdout },
+            else => output,
+        },
         .closed => .discard,
         .input => parent_frame.spec.stdout,
     };
@@ -291,7 +294,10 @@ fn pipelineStageOutputEndpoint(
 fn pipelineStageErrorEndpoint(parent_frame: execution_frame.ExecutionFrame) execution_frame.OutputEndpoint {
     parent_frame.validate();
     return switch (parent_frame.spec.fd_table.endpoint(2)) {
-        .output => |output| output,
+        .output => |output| switch (output) {
+            .inherit_stderr => .{ .capture = .side_stderr },
+            else => output,
+        },
         .closed => .discard,
         .input => parent_frame.spec.stderr,
     };
@@ -2818,14 +2824,7 @@ fn evaluatePlanWithInput(
             routed_prefix,
         );
     }
-    if (frame.spec.kind == .pipeline_stage and
-        effective_plan.class() != .external and
-        effective_plan.class() != .function)
-    {
-        var output_frame = buffers.outputFrame();
-        defer output_frame.deinit();
-        try output_frame.flushPendingStandardDescriptors();
-    }
+    if (frame.spec.kind == .pipeline_stage) try routeDirectPipelineStageBuffers(&buffers);
     state_delta.setLastStatus(result.status);
     assertCommandDeltaCompatible(effective_plan, state_delta);
     const decision = if (specialBuiltinStatusOnly(effective_plan, result, buffers))
@@ -3027,6 +3026,39 @@ fn flushCurrentShellBufferedCommandOutput(
         .capture => {},
         .capture_stdout => try frame.flushPendingDescriptor(2),
         .inherit_output, .inherit => try frame.flushPendingStandardDescriptors(),
+    }
+}
+
+fn routeDirectPipelineStageBuffers(buffers: *EvaluationBuffers) EvalError!void {
+    buffers.frame.validate();
+    std.debug.assert(buffers.frame.spec.kind == .pipeline_stage);
+
+    try routeDirectPipelineStageBuffer(buffers, 1, &buffers.stdout);
+    try routeDirectPipelineStageBuffer(buffers, 2, &buffers.stderr);
+}
+
+fn routeDirectPipelineStageBuffer(
+    buffers: *EvaluationBuffers,
+    descriptor: runtime.fd.Descriptor,
+    source: *std.ArrayList(u8),
+) EvalError!void {
+    runtime.fd.assertValidDescriptor(descriptor);
+    if (source.items.len == 0) return;
+
+    switch (buffers.frame.spec.fd_table.endpoint(descriptor)) {
+        .output => |output| switch (output) {
+            .capture => |channel| switch (channel) {
+                .pipeline_data => {
+                    try buffers.pipeline_stdout.appendSlice(buffers.allocator, source.items);
+                    source.items.len = 0;
+                },
+                .side_stdout, .side_stderr, .command_substitution_stdout => {},
+            },
+            .discard => source.items.len = 0,
+            .inherit_stdout, .inherit_stderr, .fd, .pipe_write, .path => {},
+        },
+        .closed => source.items.len = 0,
+        .input => source.items.len = 0,
     }
 }
 
@@ -5497,6 +5529,8 @@ fn evaluateFallbackPipeline(
             );
         defer stage_outcome.deinit();
 
+        if (!is_last_stage) try routePipelineStageOutcome(evaluator.allocator, &stage_outcome, stage_frame);
+
         if (is_last_stage) flushInheritedPipelineStdout(evaluator.*, &stage_outcome);
         const stage_control_flow = stage_outcome.effectiveControlFlow();
         statuses[index] = stage_control_flow.status(stage_outcome.status);
@@ -5526,6 +5560,52 @@ fn transferPipelineStdoutToNextStdin(
     stage_outcome.validate();
     next_stdin.clearRetainingCapacity();
     try next_stdin.appendSlice(allocator, stage_outcome.pipeline_stdout.items);
+}
+
+fn routePipelineStageOutcome(
+    allocator: std.mem.Allocator,
+    stage_outcome: *outcome.CommandOutcome,
+    frame: execution_frame.ExecutionFrame,
+) EvalError!void {
+    stage_outcome.validate();
+    frame.validate();
+    std.debug.assert(frame.spec.kind == .pipeline_stage);
+
+    try routePipelineStageOutcomeBuffer(
+        allocator,
+        frame.spec.fd_table.endpoint(1),
+        &stage_outcome.stdout,
+        &stage_outcome.pipeline_stdout,
+    );
+    try routePipelineStageOutcomeBuffer(
+        allocator,
+        frame.spec.fd_table.endpoint(2),
+        &stage_outcome.stderr,
+        &stage_outcome.pipeline_stdout,
+    );
+}
+
+fn routePipelineStageOutcomeBuffer(
+    allocator: std.mem.Allocator,
+    endpoint: execution_frame.FdEndpoint,
+    source: *std.ArrayList(u8),
+    pipeline_stdout: *std.ArrayList(u8),
+) EvalError!void {
+    endpoint.validate();
+    if (source.items.len == 0) return;
+
+    switch (endpoint) {
+        .output => |output| switch (output) {
+            .capture => |channel| if (channel == .pipeline_data) {
+                try pipeline_stdout.appendSlice(allocator, source.items);
+                source.items.len = 0;
+            },
+            .discard => source.items.len = 0,
+            .inherit_stdout, .inherit_stderr, .fd, .pipe_write, .path => {},
+        },
+        .closed => source.items.len = 0,
+        .input => source.items.len = 0,
+    }
 }
 
 fn flushInheritedPipelineStdout(evaluator: Evaluator, stage_outcome: *outcome.CommandOutcome) void {
@@ -8269,7 +8349,9 @@ fn runExternalWithPipelineInputWithProcessEnvironment(
         applied.restore();
         applied.deinit();
     };
-    if (capturedExternalMode(evaluator.external_stdio) == null) try flushBuffersToInheritedDescriptors(buffers);
+    if (capturedExternalMode(evaluator.external_stdio) == null and buffers.frame.spec.kind != .pipeline_stage) {
+        try flushBuffersToInheritedDescriptors(buffers);
+    }
     if (plan.redirections.steps.len != 0 or plan.redirections.rollback_steps.len != 0) {
         const apply_result = try applyRedirectionsEmittingExpansionOutput(
             evaluator.*,

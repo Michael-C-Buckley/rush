@@ -275,7 +275,7 @@ fn runSemanticCommandStringInternal(
     evaluator.arg_zero = invocation.arg_zero;
     evaluator.io = io;
     evaluator.read_stdin_from_fd = true;
-    evaluator.external_stdio = external_stdio;
+    evaluator.external_stdio = semanticEvaluatorExternalStdio(external_stdio, live_stdio);
     evaluator.commit_exec_redirections = live_stdio and external_stdio == .inherit;
     var parser_resolver = shell.ParserBackedSourceResolver.init(&evaluator);
     parser_resolver.features = invocation.features;
@@ -294,6 +294,17 @@ fn runSemanticCommandStringInternal(
         invocation.stdin_script_source_offset,
         true,
     );
+}
+
+fn semanticEvaluatorExternalStdio(
+    external_stdio: runtime.ExternalStdio,
+    live_stdio: bool,
+) runtime.ExternalStdio {
+    if (live_stdio) return external_stdio;
+    return switch (external_stdio) {
+        .inherit => .capture,
+        else => external_stdio,
+    };
 }
 
 fn runSemanticAliasTimingCommandString(
