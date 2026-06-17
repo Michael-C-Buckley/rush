@@ -515,6 +515,7 @@ pub const ApplyFailure = struct {
     target: fd.Descriptor,
     detail: ApplyFailureDetail,
     consequence: FailureConsequence,
+    diagnostic_emitted: bool = false,
 };
 
 pub const ApplyResult = union(enum) {
@@ -593,8 +594,8 @@ pub const FdTransaction = struct {
         if (!self.active) return;
         for (self.saved.items) |saved| {
             saved.validate();
-            // ziglint-ignore: Z026 best-effort cleanup after committed redirections
             switch (saved.state) {
+                // ziglint-ignore: Z026 best-effort cleanup after committed redirections
                 .saved => |saved_descriptor| self.port.close(.{ .descriptor = saved_descriptor }) catch {},
                 .originally_closed => {},
             }
@@ -635,7 +636,8 @@ pub const FdTransaction = struct {
         closeOpened(self.port, pipe_result.write) catch |err| return .{ .close = err };
 
         if (pipe_result.read == step.target) return null;
-        self.port.duplicateTo(.{ .source = pipe_result.read, .target = step.target }) catch |err| return .{ .duplicate = err };
+        self.port.duplicateTo(.{ .source = pipe_result.read, .target = step.target }) catch |err|
+            return .{ .duplicate = err };
         closeOpened(self.port, pipe_result.read) catch |err| return .{ .close = err };
         return null;
     }

@@ -190,6 +190,7 @@ pub const CaseArm = struct {
 
 pub const CasePlan = struct {
     word: []const u8,
+    word_expanded: bool = true,
     word_expansion_output: ExpansionOutput = .{},
     arms: []const CaseArm,
 
@@ -1363,6 +1364,7 @@ fn cloneCasePlanWithMode(
     }
     return .{
         .word = word,
+        .word_expanded = plan.word_expanded,
         .word_expansion_output = word_expansion_output,
         .arms = arms,
     };
