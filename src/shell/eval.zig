@@ -4293,9 +4293,28 @@ pub fn executePendingTraps(
     eval_context: context.EvalContext,
     resolver: TrapActionResolver,
 ) EvalError!?outcome.CommandOutcome {
+    var frame = rootExecutionFrame(eval_context);
+    defer frame.spec.fd_table.deinit(evaluator.allocator);
+    try frame.spec.fd_table.bindOutput(evaluator.allocator, 1, .{ .capture = .side_stdout });
+    try frame.spec.fd_table.bindOutput(evaluator.allocator, 2, .{ .capture = .side_stderr });
+    frame.spec.stdout = .{ .capture = .side_stdout };
+    frame.spec.stderr = .{ .capture = .side_stderr };
+    frame.spec.captures = captureSet(.side_stdout, .side_stderr);
+    frame.validate();
+    return executePendingTrapsWithFrame(evaluator, shell_state, eval_context, resolver, &frame);
+}
+
+fn executePendingTrapsWithFrame(
+    evaluator: *Evaluator,
+    shell_state: *state.ShellState,
+    eval_context: context.EvalContext,
+    resolver: TrapActionResolver,
+    parent_frame: *execution_frame.ExecutionFrame,
+) EvalError!?outcome.CommandOutcome {
     shell_state.validate();
     eval_context.validate();
     resolver.validate();
+    parent_frame.validate();
     std.debug.assert(eval_context.target.allowsShellStateCommit());
     std.debug.assert(shell_state.acceptsExecutionTarget(eval_context.target));
     std.debug.assert(shell_state.trap_execution == .idle);
@@ -4325,10 +4344,12 @@ pub fn executePendingTraps(
     };
     defer working_state.deinit();
 
+    var trap_frame = try trapHandlerExecutionFrame(evaluator.allocator, parent_frame, eval_context.target);
+    defer trap_frame.spec.fd_table.deinit(evaluator.allocator);
     var input = EvaluationInput.empty();
-    var frame = rootExecutionFrame(eval_context);
-    var buffers = EvaluationBuffers.init(evaluator.allocator, &input, &frame);
+    var buffers = EvaluationBuffers.init(evaluator.allocator, &input, &trap_frame);
     defer buffers.deinit();
+    try buffers.useFrameFdTableRouting();
 
     const pending_count = shell_state.pending_traps.items.len;
     const preserved_status = shell_state.last_status;
@@ -4361,7 +4382,7 @@ pub fn executePendingTraps(
             else => return error.Unimplemented,
         }) orelse return error.Unimplemented;
         defer body.deinit();
-        var action_outcome = try evaluateTrapActionBody(evaluator, &working_state, eval_context, body, &frame);
+        var action_outcome = try evaluateTrapActionBody(evaluator, &working_state, eval_context, body, &trap_frame);
         defer action_outcome.deinit();
 
         try appendOutcomeBuffers(&buffers, action_outcome);
@@ -4396,6 +4417,30 @@ pub fn executePendingTraps(
         control_flow,
         &buffers,
     );
+}
+
+fn trapHandlerExecutionFrame(
+    allocator: std.mem.Allocator,
+    parent_frame: *execution_frame.ExecutionFrame,
+    target: context.ExecutionTarget,
+) EvalError!execution_frame.ExecutionFrame {
+    parent_frame.validate();
+    std.debug.assert(target.allowsShellStateCommit());
+    var fd_table = try parent_frame.spec.fd_table.clone(allocator);
+    errdefer fd_table.deinit(allocator);
+    const spec: execution_frame.BoundarySpec = .{
+        .kind = .trap_handler,
+        .eval_target = target,
+        .stdin = parent_frame.spec.stdin,
+        .stdout = parent_frame.spec.stdout,
+        .stderr = parent_frame.spec.stderr,
+        .fd_table = fd_table,
+        .captures = parent_frame.spec.captures,
+        .mutation_policy = if (target == .current_shell) .commit_to_parent_shell else .commit_within_subshell,
+        .trap_policy = .isolated_child,
+        .failure_policy = .propagate_fatal_to_parent,
+    };
+    return parent_frame.child(spec);
 }
 
 fn configureRuntimeTrapMutations(
@@ -4451,11 +4496,12 @@ fn runCurrentShellRuntimeTrapBoundary(
     parser_resolver.arg_zero = evaluator.arg_zero;
     parser_resolver.expand_aliases = shell_state.shopts.enabled(.expand_aliases);
     parser_resolver.alias_state = evaluator.alias_state;
-    var trap_outcome = (try executePendingTraps(
+    var trap_outcome = (try executePendingTrapsWithFrame(
         evaluator,
         shell_state,
         eval_context,
         parser_resolver.resolver(),
+        buffers.frame,
     )) orelse return null;
     defer trap_outcome.deinit();
 
@@ -6512,11 +6558,12 @@ fn appendSubshellExitTrap(
     parser_resolver.features = evaluator.features;
     parser_resolver.arg_zero = evaluator.arg_zero;
     parser_resolver.expand_aliases = shell_state.shopts.enabled(.expand_aliases);
-    var trap_outcome = (try executePendingTraps(
+    var trap_outcome = (try executePendingTrapsWithFrame(
         evaluator,
         shell_state,
         eval_context,
         parser_resolver.resolver(),
+        buffers.frame,
     )) orelse return;
     defer trap_outcome.deinit();
 

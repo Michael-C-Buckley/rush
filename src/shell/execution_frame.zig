@@ -30,6 +30,7 @@ pub const BoundaryKind = enum {
     subshell,
     pipeline_stage,
     command_substitution,
+    trap_handler,
     external_command,
 
     pub fn isParentVisible(self: BoundaryKind) bool {
@@ -42,6 +43,7 @@ pub const BoundaryKind = enum {
             .subshell,
             .pipeline_stage,
             .command_substitution,
+            .trap_handler,
             .external_command,
             => false,
         };
@@ -250,6 +252,20 @@ pub const FdTable = struct {
         self.* = undefined;
     }
 
+    pub fn clone(self: FdTable, allocator: std.mem.Allocator) !FdTable {
+        self.validate();
+        const bindings = try allocator.dupe(FdBinding, self.bindings.items);
+        errdefer allocator.free(bindings);
+        var redirections = try self.redirections.clone(allocator);
+        errdefer redirections.deinit();
+        var table: FdTable = .{
+            .bindings = std.ArrayList(FdBinding).fromOwnedSlice(bindings),
+            .redirections = redirections,
+        };
+        table.validate();
+        return table;
+    }
+
     pub fn bind(
         self: *FdTable,
         allocator: std.mem.Allocator,
@@ -398,7 +414,7 @@ pub const Captures = struct {
             std.debug.assert(!self.contains(.pipeline_data));
         }
         if (self.contains(.pipeline_data)) {
-            std.debug.assert(spec.kind == .pipeline_stage);
+            std.debug.assert(spec.kind == .pipeline_stage or spec.kind == .trap_handler);
             std.debug.assert(spec.stdout.captureChannel() == .pipeline_data or spec.stdout.isPipeWrite());
             std.debug.assert(!spec.stdout.isInheritStdout());
         }
@@ -426,11 +442,17 @@ pub const BoundarySpec = struct {
         self.fd_table.validate();
         self.captures.validateFor(self);
 
-        std.debug.assert(self.kind.isParentVisible() == self.mutation_policy.allowsParentMutation());
+        if (self.kind != .trap_handler) {
+            std.debug.assert(self.kind.isParentVisible() == self.mutation_policy.allowsParentMutation());
+        }
         if (self.mutation_policy.allowsParentMutation()) {
             std.debug.assert(self.eval_target == .current_shell);
         } else {
             std.debug.assert(self.eval_target != .current_shell or self.kind == .external_command);
+        }
+        if (self.kind == .trap_handler) {
+            std.debug.assert(self.eval_target.allowsShellStateCommit());
+            std.debug.assert(self.trap_policy == .isolated_child);
         }
         if (self.kind == .command_substitution) {
             std.debug.assert(self.eval_target == .subshell);
