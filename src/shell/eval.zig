@@ -2,6 +2,17 @@
 //!
 //! Evaluation will consume side-effect-free plans, call runtime ports for host
 //! effects when needed, and return `CommandOutcome` data.
+//!
+//! The active `ExecutionFrame` owns semantic stdin/stdout/stderr endpoints,
+//! redirection transforms, capture channels, mutation policy, trap policy, and
+//! fatal-failure propagation. `EvaluationBuffers`, `OutputFrame`, and
+//! `OutputRouting` are private adapter state only: they materialize frame writes
+//! into `CommandOutcome` buffers or host descriptors while runtime adapters still
+//! own irreversible fd/process effects.
+//!
+//! New evaluation code should take an `ExecutionFrame` at semantic boundaries and
+//! route reads, writes, diagnostics, traps, and propagated failures through that
+//! frame rather than inspecting ambient pipeline or command-substitution depth.
 
 const std = @import("std");
 const assignment_runtime = @import("assignment.zig");
@@ -2606,10 +2617,6 @@ const EvaluationInput = struct {
         self.cursor = self.bytes.len;
         self.validate();
         return bytes;
-    }
-
-    fn readLine(self: *EvaluationInput) ?[]const u8 {
-        return self.readUntil('\n');
     }
 
     fn readUntil(self: *EvaluationInput, delimiter: u8) ?[]const u8 {

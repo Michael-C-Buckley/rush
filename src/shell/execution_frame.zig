@@ -704,6 +704,30 @@ test "fd table duplicates pipeline stdout capture into stderr" {
     try expectOutputCapture(table.endpoint(2), .pipeline_data);
 }
 
+test "fd table clone owns bindings and preserves endpoint snapshots" {
+    var original: FdTable = .{};
+    defer original.deinit(std.testing.allocator);
+    try original.bindInput(std.testing.allocator, 0, .{ .bytes = "original\n" });
+    try original.bindOutput(std.testing.allocator, 1, .{ .capture = .pipeline_data });
+
+    var clone = try original.clone(std.testing.allocator);
+    defer clone.deinit(std.testing.allocator);
+
+    try original.bindInput(std.testing.allocator, 0, .inherit_stdin);
+    try original.bindOutput(std.testing.allocator, 1, .inherit_stdout);
+    try original.bindOutput(std.testing.allocator, 2, .inherit_stderr);
+
+    const steps = [_]redirection_plan.RedirectionStep{redirection_plan.RedirectionStep.duplicate(0, 2, 1)};
+    const plan: redirection_plan.RedirectionPlan = .{ .steps = &steps };
+    try clone.applyRedirectionPlan(std.testing.allocator, plan);
+
+    try expectInputBytes(clone.endpoint(0), "original\n");
+    try expectOutputCapture(clone.endpoint(1), .pipeline_data);
+    try expectOutputCapture(clone.endpoint(2), .pipeline_data);
+    const original_stderr: FdEndpoint = .{ .output = .inherit_stderr };
+    try std.testing.expectEqual(original_stderr, original.endpoint(2));
+}
+
 test "fd table applies here-doc bytes and closes descriptors" {
     const steps = [_]redirection_plan.RedirectionStep{
         .{ .ordinal = 0, .effect = .{ .here_doc = .{ .target = 0, .data = .{ .bytes = "body\n" } } } },
