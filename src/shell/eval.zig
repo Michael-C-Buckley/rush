@@ -882,9 +882,13 @@ const SourceLowerer = struct {
                 .and_if => .and_if,
                 .or_if => .or_if,
             };
+            const eager_plan = switch (try self.lowerStatementListEntryPlan(program, statement, target)) {
+                .plan => |plan| plan,
+                .failure => |trap_failure| return .{ .failure = trap_failure },
+            };
             statements[index] = .{
                 .op_before = op_before,
-                .plan = .{ .ir_source = .{
+                .plan = eager_plan orelse .{ .ir_source = .{
                     .target = target,
                     .program = program_ref,
                     .statement_index = index,
@@ -898,6 +902,35 @@ const SourceLowerer = struct {
         const list: command_plan.StatementList = .{ .statements = statements };
         list.validate();
         return .{ .list = list };
+    }
+
+    const StatementListEntryLowering = union(enum) {
+        plan: ?command_plan.StatementPlan,
+        failure: TrapActionFailure,
+    };
+
+    fn lowerStatementListEntryPlan(
+        self: *SourceLowerer,
+        program: ir.Program,
+        statement: ir.Statement,
+        target: context.ExecutionTarget,
+    ) !StatementListEntryLowering {
+        return switch (statement.kind) {
+            .brace_group,
+            .subshell,
+            .if_command,
+            .loop_command,
+            .for_command,
+            .case_command,
+            .function_definition,
+            => switch (try self.lowerSingleStatement(program, statement, target)) {
+                .compound => |plan| .{ .plan = .{ .compound = plan } },
+                .simple => |plan| .{ .plan = .{ .simple = plan } },
+                .pipeline => |plan| .{ .plan = .{ .pipeline = plan } },
+                .failure => |trap_failure| .{ .failure = trap_failure },
+            },
+            .pipeline, .bash_test_command => .{ .plan = null },
+        };
     }
 
     fn statementSource(self: *SourceLowerer, program: ir.Program, statement_index: usize) ![]const u8 {
@@ -3019,6 +3052,7 @@ fn flushCurrentShellBufferedCommandOutput(
     eval_context.validate();
     if (eval_context.target != .current_shell) return;
     if (eval_context.command_substitution_depth != 0) return;
+    if (!routingTargetsInheritedStandardDescriptors(buffers.routing)) return;
     var frame = OutputFrame.initInherited(buffers);
     defer frame.deinit();
     switch (external_stdio) {
@@ -3026,6 +3060,18 @@ fn flushCurrentShellBufferedCommandOutput(
         .capture_stdout => try frame.flushPendingDescriptor(2),
         .inherit_output, .inherit => try frame.flushPendingStandardDescriptors(),
     }
+}
+
+fn routingTargetsInheritedStandardDescriptors(routing: OutputRouting) bool {
+    const stdout_inherited = switch (routing.destination(1)) {
+        .host_descriptor => |descriptor| descriptor == 1,
+        else => false,
+    };
+    const stderr_inherited = switch (routing.destination(2)) {
+        .host_descriptor => |descriptor| descriptor == 2,
+        else => false,
+    };
+    return stdout_inherited or stderr_inherited;
 }
 
 fn routeDirectPipelineStageBuffers(buffers: *EvaluationBuffers) EvalError!void {

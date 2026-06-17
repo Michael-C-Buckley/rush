@@ -301,7 +301,10 @@ pub const FdTable = struct {
     ) !void {
         plan.validate();
         for (plan.steps) |step| try self.applyRedirectionStep(allocator, step);
-        self.redirections = plan;
+        var owned_plan = try plan.clone(allocator);
+        errdefer owned_plan.deinit();
+        self.redirections.deinit();
+        self.redirections = owned_plan;
         self.validate();
     }
 
