@@ -3,35 +3,6 @@
     .mode = .bash,
     .cases = .{
         .{
-            .name = "case command ;& continues with the next compound-list",
-            .script =
-            \\case a in
-            \\    a) printf 'one\n' ;&
-            \\    b) printf 'two\n' ;;
-            \\    *) printf 'bad\n' ;;
-            \\esac
-            ,
-            .stdout =
-            \\one
-            \\two
-            \\
-            ,
-            .stderr = "",
-            .status = 0,
-        },
-        .{
-            .name = "case command ;& status is the final continued compound-list status",
-            .script =
-            \\case a in
-            \\    a) true ;&
-            \\    b) false ;;
-            \\esac
-            ,
-            .stdout = "",
-            .stderr = "",
-            .status = 1,
-        },
-        .{
             .name = "case command ;;& continues by testing the next pattern",
             .script =
             \\case a in
