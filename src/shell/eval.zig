@@ -15,6 +15,7 @@ const consequence = @import("consequence.zig");
 const context = @import("context.zig");
 const delta = @import("delta.zig");
 const expand = @import("expand.zig");
+const execution_frame = @import("execution_frame.zig");
 const ir = @import("ir.zig");
 const outcome = @import("outcome.zig");
 const parser = @import("parser.zig");
@@ -156,6 +157,65 @@ pub const Evaluator = struct {
 
 fn currentProcessId() runtime.process.ProcessId {
     return @intCast(std.c.getpid());
+}
+
+fn rootExecutionFrame(eval_context: context.EvalContext) execution_frame.ExecutionFrame {
+    eval_context.validate();
+    return execution_frame.ExecutionFrame.init(rootBoundarySpec(eval_context));
+}
+
+fn rootBoundarySpec(eval_context: context.EvalContext) execution_frame.BoundarySpec {
+    eval_context.validate();
+    return switch (eval_context.target) {
+        .current_shell => .{
+            .kind = .top_level,
+            .eval_target = .current_shell,
+            .mutation_policy = .commit_to_parent_shell,
+        },
+        .subshell => .{
+            .kind = .subshell,
+            .eval_target = .subshell,
+            .mutation_policy = .commit_within_subshell,
+            .failure_policy = .contain_fatal_at_boundary,
+        },
+        .child_process => .{
+            .kind = .external_command,
+            .eval_target = .child_process,
+            .mutation_policy = .discard_at_boundary,
+            .trap_policy = .isolated_child,
+            .failure_policy = .contain_fatal_at_boundary,
+        },
+    };
+}
+
+fn commandSubstitutionExecutionFrame() execution_frame.ExecutionFrame {
+    return execution_frame.ExecutionFrame.init(.{
+        .kind = .command_substitution,
+        .eval_target = .subshell,
+        .stdout = .{ .capture = .command_substitution_stdout },
+        .captures = execution_frame.Captures.commandSubstitution(),
+        .mutation_policy = .commit_within_subshell,
+        .trap_policy = .command_substitution,
+        .failure_policy = .propagate_fatal_to_parent,
+    });
+}
+
+fn pipelineStageExecutionFrame(
+    parent_frame: *execution_frame.ExecutionFrame,
+    stage_target: context.ExecutionTarget,
+    is_last_stage: bool,
+) execution_frame.ExecutionFrame {
+    parent_frame.validate();
+    std.debug.assert(stage_target != .current_shell);
+    return parent_frame.child(.{
+        .kind = .pipeline_stage,
+        .eval_target = stage_target,
+        .stdout = .{ .capture = if (is_last_stage) .side_stdout else .pipeline_data },
+        .captures = .{ .channels = if (is_last_stage) &.{.side_stdout} else &.{.pipeline_data} },
+        .mutation_policy = if (stage_target == .subshell) .commit_within_subshell else .discard_at_boundary,
+        .trap_policy = .isolated_child,
+        .failure_policy = .contain_fatal_at_boundary,
+    });
 }
 
 pub const TrapActionBodyPayload = union(enum) {
@@ -2333,6 +2393,7 @@ const EvaluationInput = struct {
 const EvaluationBuffers = struct {
     allocator: std.mem.Allocator,
     stdin: *EvaluationInput,
+    frame: *execution_frame.ExecutionFrame,
     routing: OutputRouting,
     propagated_failure: ?outcome.PropagatedFailure = null,
     stdout: std.ArrayList(u8) = .empty,
@@ -2340,11 +2401,17 @@ const EvaluationBuffers = struct {
     pipeline_stdout: std.ArrayList(u8) = .empty,
     diagnostics: std.ArrayList([]const u8) = .empty,
 
-    fn init(allocator: std.mem.Allocator, stdin: *EvaluationInput) EvaluationBuffers {
+    fn init(
+        allocator: std.mem.Allocator,
+        stdin: *EvaluationInput,
+        frame: *execution_frame.ExecutionFrame,
+    ) EvaluationBuffers {
         stdin.validate();
+        frame.validate();
         return .{
             .allocator = allocator,
             .stdin = stdin,
+            .frame = frame,
             .routing = OutputRouting.init(allocator, .outcome_capture),
         };
     }
@@ -2401,7 +2468,8 @@ pub fn evaluatePlan(
     plan: command_plan.CommandPlan,
 ) EvalError!outcome.CommandOutcome {
     var input = EvaluationInput.empty();
-    return evaluatePlanWithInput(evaluator, shell_state, eval_context, plan, &input);
+    var frame = rootExecutionFrame(eval_context);
+    return evaluatePlanWithInput(evaluator, shell_state, eval_context, plan, &input, &frame);
 }
 
 fn evaluatePlanWithInput(
@@ -2410,11 +2478,13 @@ fn evaluatePlanWithInput(
     eval_context: context.EvalContext,
     plan: command_plan.CommandPlan,
     input: *EvaluationInput,
+    frame: *execution_frame.ExecutionFrame,
 ) EvalError!outcome.CommandOutcome {
     shell_state.validate();
     eval_context.validate();
     plan.validate();
     input.validate();
+    frame.validate();
     std.debug.assert(plan.target == eval_context.target);
     if (plan.target.allowsShellStateCommit()) std.debug.assert(shell_state.acceptsExecutionTarget(plan.target));
 
@@ -2434,7 +2504,7 @@ fn evaluatePlanWithInput(
             state_delta.setLastStatus(status);
 
             var failure_input = EvaluationInput.empty();
-            var buffers = EvaluationBuffers.init(evaluator.allocator, &failure_input);
+            var buffers = EvaluationBuffers.init(evaluator.allocator, &failure_input, frame);
             defer buffers.deinit();
             try appendPlanExpansionOutput(evaluator.*, eval_context, plan, &buffers);
             try buffers.addBuiltinDiagnostic(name, "readonly variable");
@@ -2479,7 +2549,11 @@ fn evaluatePlanWithInput(
         EvaluationInput.init(bytes)
     else
         null;
-    var buffers = EvaluationBuffers.init(evaluator.allocator, if (here_doc_input) |*here_doc| here_doc else input);
+    var buffers = EvaluationBuffers.init(
+        evaluator.allocator,
+        if (here_doc_input) |*here_doc| here_doc else input,
+        frame,
+    );
     defer buffers.deinit();
     if (readonly_assignment) |name| try buffers.addBuiltinDiagnostic(name, "readonly variable");
     try appendPlanExpansionOutput(evaluator.*, eval_context, effective_plan, &buffers);
@@ -2890,6 +2964,7 @@ pub const RunnerOutputMode = enum {
 pub const RunnerOutputFrame = struct {
     allocator: std.mem.Allocator,
     input: *EvaluationInput,
+    execution_frame_value: *execution_frame.ExecutionFrame,
     buffers: *EvaluationBuffers,
     routing: OutputRouting,
 
@@ -2898,9 +2973,13 @@ pub const RunnerOutputFrame = struct {
         errdefer allocator.destroy(input);
         input.* = EvaluationInput.empty();
 
+        const execution_frame_value = try allocator.create(execution_frame.ExecutionFrame);
+        errdefer allocator.destroy(execution_frame_value);
+        execution_frame_value.* = rootExecutionFrame(context.EvalContext.forTarget(.current_shell));
+
         const buffers = try allocator.create(EvaluationBuffers);
         errdefer allocator.destroy(buffers);
-        buffers.* = EvaluationBuffers.init(allocator, input);
+        buffers.* = EvaluationBuffers.init(allocator, input, execution_frame_value);
         errdefer buffers.deinit();
 
         const initial_mode: OutputRouting.InitialMode = switch (mode) {
@@ -2910,6 +2989,7 @@ pub const RunnerOutputFrame = struct {
         return .{
             .allocator = allocator,
             .input = input,
+            .execution_frame_value = execution_frame_value,
             .buffers = buffers,
             .routing = OutputRouting.init(allocator, initial_mode),
         };
@@ -2919,6 +2999,7 @@ pub const RunnerOutputFrame = struct {
         self.routing.deinit();
         self.buffers.deinit();
         self.allocator.destroy(self.buffers);
+        self.allocator.destroy(self.execution_frame_value);
         self.allocator.destroy(self.input);
         self.* = undefined;
     }
@@ -3102,7 +3183,8 @@ fn writeOutcomeToInheritedDescriptors(
     stderr_bytes: []const u8,
 ) EvalError!void {
     var input = EvaluationInput.empty();
-    var buffers = EvaluationBuffers.init(allocator, &input);
+    var execution_frame_value = rootExecutionFrame(context.EvalContext.forTarget(.current_shell));
+    var buffers = EvaluationBuffers.init(allocator, &input, &execution_frame_value);
     defer buffers.deinit();
 
     var frame = OutputFrame.initInherited(&buffers);
@@ -3186,7 +3268,8 @@ test "output routing close marks destination closed" {
 
 test "output frame outcome capture writes stdout and stderr buffers" {
     var input = EvaluationInput.empty();
-    var buffers = EvaluationBuffers.init(std.testing.allocator, &input);
+    var execution_frame_value = rootExecutionFrame(context.EvalContext.forTarget(.current_shell));
+    var buffers = EvaluationBuffers.init(std.testing.allocator, &input, &execution_frame_value);
     defer buffers.deinit();
 
     var frame = OutputFrame.initOutcomeCapture(&buffers);
@@ -3200,7 +3283,8 @@ test "output frame outcome capture writes stdout and stderr buffers" {
 
 test "evaluation buffers output frame uses carried routing" {
     var input = EvaluationInput.empty();
-    var buffers = EvaluationBuffers.init(std.testing.allocator, &input);
+    var execution_frame_value = rootExecutionFrame(context.EvalContext.forTarget(.current_shell));
+    var buffers = EvaluationBuffers.init(std.testing.allocator, &input, &execution_frame_value);
     defer buffers.deinit();
 
     try buffers.routing.setDestination(1, .outcome_stderr_capture);
@@ -3214,7 +3298,8 @@ test "evaluation buffers output frame uses carried routing" {
 
 test "output frame diagnostic helper writes stderr and structured diagnostic" {
     var input = EvaluationInput.empty();
-    var buffers = EvaluationBuffers.init(std.testing.allocator, &input);
+    var execution_frame_value = rootExecutionFrame(context.EvalContext.forTarget(.current_shell));
+    var buffers = EvaluationBuffers.init(std.testing.allocator, &input, &execution_frame_value);
     defer buffers.deinit();
 
     var frame = OutputFrame.initOutcomeCapture(&buffers);
@@ -3228,7 +3313,8 @@ test "output frame diagnostic helper writes stderr and structured diagnostic" {
 
 test "output frame closed destination discards output" {
     var input = EvaluationInput.empty();
-    var buffers = EvaluationBuffers.init(std.testing.allocator, &input);
+    var execution_frame_value = rootExecutionFrame(context.EvalContext.forTarget(.current_shell));
+    var buffers = EvaluationBuffers.init(std.testing.allocator, &input, &execution_frame_value);
     defer buffers.deinit();
 
     var frame = OutputFrame.initOutcomeCapture(&buffers);
@@ -3242,7 +3328,8 @@ test "output frame closed destination discards output" {
 
 test "output frame flushes pending descriptor before route change" {
     var input = EvaluationInput.empty();
-    var buffers = EvaluationBuffers.init(std.testing.allocator, &input);
+    var execution_frame_value = rootExecutionFrame(context.EvalContext.forTarget(.current_shell));
+    var buffers = EvaluationBuffers.init(std.testing.allocator, &input, &execution_frame_value);
     defer buffers.deinit();
 
     var frame = OutputFrame.initCommandSubstitution(&buffers);
@@ -3652,7 +3739,8 @@ pub fn evaluateCompoundPlan(
     plan: command_plan.CompoundCommandPlan,
 ) EvalError!outcome.CommandOutcome {
     var input = EvaluationInput.empty();
-    return evaluateCompoundPlanWithInput(evaluator, shell_state, eval_context, plan, &input);
+    var frame = rootExecutionFrame(eval_context);
+    return evaluateCompoundPlanWithInput(evaluator, shell_state, eval_context, plan, &input, &frame);
 }
 
 fn evaluateCompoundPlanWithInput(
@@ -3661,11 +3749,13 @@ fn evaluateCompoundPlanWithInput(
     eval_context: context.EvalContext,
     plan: command_plan.CompoundCommandPlan,
     input: *EvaluationInput,
+    frame: *execution_frame.ExecutionFrame,
 ) EvalError!outcome.CommandOutcome {
     shell_state.validate();
     eval_context.validate();
     plan.validate();
     input.validate();
+    frame.validate();
     std.debug.assert(plan.target == eval_context.target);
     if (plan.target == .current_shell) std.debug.assert(shell_state.acceptsExecutionTarget(.current_shell));
 
@@ -3676,7 +3766,11 @@ fn evaluateCompoundPlanWithInput(
         EvaluationInput.init(bytes)
     else
         null;
-    var buffers = EvaluationBuffers.init(evaluator.allocator, if (here_doc_input) |*here_doc| here_doc else input);
+    var buffers = EvaluationBuffers.init(
+        evaluator.allocator,
+        if (here_doc_input) |*here_doc| here_doc else input,
+        frame,
+    );
     defer buffers.deinit();
 
     var cwd_guard: CwdGuard = .{};
@@ -3794,9 +3888,21 @@ pub fn evaluatePipelinePlan(
     eval_context: context.EvalContext,
     plan: pipeline_plan.PipelinePlan,
 ) EvalError!outcome.CommandOutcome {
+    var frame = rootExecutionFrame(eval_context);
+    return evaluatePipelinePlanWithFrame(evaluator, shell_state, eval_context, plan, &frame);
+}
+
+fn evaluatePipelinePlanWithFrame(
+    evaluator: *Evaluator,
+    shell_state: *state.ShellState,
+    eval_context: context.EvalContext,
+    plan: pipeline_plan.PipelinePlan,
+    frame: *execution_frame.ExecutionFrame,
+) EvalError!outcome.CommandOutcome {
     shell_state.validate();
     eval_context.validate();
     plan.validate();
+    frame.validate();
     std.debug.assert(eval_context.target.allowsShellStateCommit());
     std.debug.assert(shell_state.acceptsExecutionTarget(eval_context.target));
 
@@ -3808,7 +3914,7 @@ pub fn evaluatePipelinePlan(
     );
 
     var input = EvaluationInput.empty();
-    var buffers = EvaluationBuffers.init(evaluator.allocator, &input);
+    var buffers = EvaluationBuffers.init(evaluator.allocator, &input, frame);
     defer buffers.deinit();
 
     const statuses = try evaluator.allocator.alloc(outcome.ExitStatus, plan.stages.len);
@@ -3980,7 +4086,8 @@ pub fn executePendingTraps(
     defer working_state.deinit();
 
     var input = EvaluationInput.empty();
-    var buffers = EvaluationBuffers.init(evaluator.allocator, &input);
+    var frame = rootExecutionFrame(eval_context);
+    var buffers = EvaluationBuffers.init(evaluator.allocator, &input, &frame);
     defer buffers.deinit();
 
     const pending_count = shell_state.pending_traps.items.len;
@@ -4014,7 +4121,7 @@ pub fn executePendingTraps(
             else => return error.Unimplemented,
         }) orelse return error.Unimplemented;
         defer body.deinit();
-        var action_outcome = try evaluateTrapActionBody(evaluator, &working_state, eval_context, body);
+        var action_outcome = try evaluateTrapActionBody(evaluator, &working_state, eval_context, body, &frame);
         defer action_outcome.deinit();
 
         try appendOutcomeBuffers(&buffers, action_outcome);
@@ -4300,20 +4407,37 @@ fn evaluateCommandSubstitutionBody(
     substitution_context.validate();
     assertCommandSubstitutionContext(substitution_context);
     body.validate();
+    var frame = commandSubstitutionExecutionFrame();
     return switch (body) {
-        .simple => |plan| evaluatePlan(
+        .simple => |plan| blk: {
+            var input = EvaluationInput.empty();
+            break :blk evaluatePlanWithInput(
             evaluator,
             substitution_state,
             substitution_context.withTarget(plan.target),
             plan,
-        ),
-        .compound => |plan| evaluateCompoundPlan(
+            &input,
+            &frame,
+        );
+        },
+        .compound => |plan| blk: {
+            var input = EvaluationInput.empty();
+            break :blk evaluateCompoundPlanWithInput(
             evaluator,
             substitution_state,
             substitution_context.withTarget(plan.target),
             plan,
+            &input,
+            &frame,
+        );
+        },
+        .pipeline => |plan| evaluatePipelinePlanWithFrame(
+            evaluator,
+            substitution_state,
+            substitution_context,
+            plan,
+            &frame,
         ),
-        .pipeline => |plan| evaluatePipelinePlan(evaluator, substitution_state, substitution_context, plan),
         .failure => |failure| trapActionFailureOutcome(
             evaluator.allocator,
             substitution_context,
@@ -4339,20 +4463,37 @@ fn evaluateCommandSubstitutionBodyPayload(
     substitution_context.validate();
     assertCommandSubstitutionContext(substitution_context);
     body.validate();
+    var frame = commandSubstitutionExecutionFrame();
     return switch (body) {
-        .simple => |plan| evaluatePlan(
+        .simple => |plan| blk: {
+            var input = EvaluationInput.empty();
+            break :blk evaluatePlanWithInput(
             evaluator,
             substitution_state,
             substitution_context.withTarget(plan.target),
             plan,
-        ),
-        .compound => |plan| evaluateCompoundPlan(
+            &input,
+            &frame,
+        );
+        },
+        .compound => |plan| blk: {
+            var input = EvaluationInput.empty();
+            break :blk evaluateCompoundPlanWithInput(
             evaluator,
             substitution_state,
             substitution_context.withTarget(plan.target),
             plan,
+            &input,
+            &frame,
+        );
+        },
+        .pipeline => |plan| evaluatePipelinePlanWithFrame(
+            evaluator,
+            substitution_state,
+            substitution_context,
+            plan,
+            &frame,
         ),
-        .pipeline => |plan| evaluatePipelinePlan(evaluator, substitution_state, substitution_context, plan),
         .failure => |failure| trapActionFailureOutcome(
             evaluator.allocator,
             substitution_context,
@@ -4646,7 +4787,8 @@ fn evaluateBackgroundPipelinePlan(
     std.debug.assert(shell_state.acceptsExecutionTarget(eval_context.target));
 
     var input = EvaluationInput.empty();
-    var buffers = EvaluationBuffers.init(evaluator.allocator, &input);
+    var frame = rootExecutionFrame(eval_context);
+    var buffers = EvaluationBuffers.init(evaluator.allocator, &input, &frame);
     defer buffers.deinit();
 
     var state_delta = delta.StateDelta.init(evaluator.allocator, eval_context.target);
@@ -5145,6 +5287,7 @@ fn evaluateFallbackPipeline(
 
         const stage_context = pipelineStageContext(eval_context, stage_target, true);
         var stage_input = EvaluationInput.init(next_stdin.items);
+        var stage_frame = pipelineStageExecutionFrame(buffers.frame, stage_target, is_last_stage);
         var stage_outcome = blk: {
             const previous_pipeline_stdout_capture = evaluator.pipeline_stdout_capture;
             evaluator.pipeline_stdout_capture = !is_last_stage;
@@ -5156,6 +5299,7 @@ fn evaluateFallbackPipeline(
                     stage_context,
                     stageWithTarget(stage, stage_target),
                     &stage_input,
+                    &stage_frame,
                 )
             else
                 try evaluatePipelineStageWithInput(
@@ -5164,6 +5308,7 @@ fn evaluateFallbackPipeline(
                     stage_context,
                     stageWithTarget(stage, stage_target),
                     &stage_input,
+                    &stage_frame,
                 );
         };
         defer stage_outcome.deinit();
@@ -5510,7 +5655,8 @@ fn evaluatePipelineStage(
     stage: pipeline_plan.PipelineStagePlan,
 ) EvalError!outcome.CommandOutcome {
     var input = EvaluationInput.empty();
-    return evaluatePipelineStageWithInput(evaluator, shell_state, eval_context, stage, &input);
+    var frame = rootExecutionFrame(eval_context);
+    return evaluatePipelineStageWithInput(evaluator, shell_state, eval_context, stage, &input, &frame);
 }
 
 fn evaluatePipelineStageWithInput(
@@ -5519,11 +5665,13 @@ fn evaluatePipelineStageWithInput(
     eval_context: context.EvalContext,
     stage: pipeline_plan.PipelineStagePlan,
     input: *EvaluationInput,
+    frame: *execution_frame.ExecutionFrame,
 ) EvalError!outcome.CommandOutcome {
     shell_state.validate();
     eval_context.validate();
     stage.validate();
     input.validate();
+    frame.validate();
 
     var scoped_exec_redirections: std.ArrayList(ScopedExecRedirection) = .empty;
     defer scoped_exec_redirections.deinit(evaluator.allocator);
@@ -5543,8 +5691,15 @@ fn evaluatePipelineStageWithInput(
     };
 
     return switch (stage) {
-        .simple => |simple| evaluatePlanWithInput(evaluator, shell_state, eval_context, simple, input),
-        .compound => |compound| evaluateCompoundPlanWithInput(evaluator, shell_state, eval_context, compound, input),
+        .simple => |simple| evaluatePlanWithInput(evaluator, shell_state, eval_context, simple, input, frame),
+        .compound => |compound| evaluateCompoundPlanWithInput(
+            evaluator,
+            shell_state,
+            eval_context,
+            compound,
+            input,
+            frame,
+        ),
     };
 }
 
@@ -5554,11 +5709,13 @@ fn evaluateExternalPipelineStage(
     eval_context: context.EvalContext,
     stage: pipeline_plan.PipelineStagePlan,
     input: *EvaluationInput,
+    frame: *execution_frame.ExecutionFrame,
 ) EvalError!outcome.CommandOutcome {
     shell_state.validate();
     eval_context.validate();
     stage.validate();
     input.validate();
+    frame.validate();
     std.debug.assert(eval_context.target == .child_process);
     const plan = switch (stage) {
         .simple => |simple| simple,
@@ -5594,7 +5751,7 @@ fn evaluateExternalPipelineStage(
         };
     }
 
-    var stage_buffers = EvaluationBuffers.init(evaluator.allocator, input);
+    var stage_buffers = EvaluationBuffers.init(evaluator.allocator, input, frame);
     defer stage_buffers.deinit();
     try appendPlanExpansionOutput(evaluator.*, eval_context, plan, &stage_buffers);
 
@@ -5609,17 +5766,39 @@ fn evaluateTrapActionBody(
     shell_state: *state.ShellState,
     eval_context: context.EvalContext,
     body: TrapActionBody,
+    frame: *execution_frame.ExecutionFrame,
 ) EvalError!outcome.CommandOutcome {
     shell_state.validate();
     eval_context.validate();
     body.validate();
+    frame.validate();
     std.debug.assert(eval_context.target.allowsShellStateCommit());
     return switch (body) {
-        .simple => |plan| evaluatePlan(evaluator, shell_state, eval_context.withTarget(plan.target), plan),
-        .compound => |plan| evaluateCompoundPlan(evaluator, shell_state, eval_context.withTarget(plan.target), plan),
-        .pipeline => |plan| evaluatePipelinePlan(evaluator, shell_state, eval_context, plan),
+        .simple => |plan| blk: {
+            var input = EvaluationInput.empty();
+            break :blk evaluatePlanWithInput(
+                evaluator,
+                shell_state,
+                eval_context.withTarget(plan.target),
+                plan,
+                &input,
+                frame,
+            );
+        },
+        .compound => |plan| blk: {
+            var input = EvaluationInput.empty();
+            break :blk evaluateCompoundPlanWithInput(
+                evaluator,
+                shell_state,
+                eval_context.withTarget(plan.target),
+                plan,
+                &input,
+                frame,
+            );
+        },
+        .pipeline => |plan| evaluatePipelinePlanWithFrame(evaluator, shell_state, eval_context, plan, frame),
         .failure => |failure| trapActionFailureOutcome(evaluator.allocator, eval_context, failure, shell_state.*),
-        .owned => |owned| evaluateTrapActionBodyPayload(evaluator, shell_state, eval_context, owned.body),
+        .owned => |owned| evaluateTrapActionBodyPayload(evaluator, shell_state, eval_context, owned.body, frame),
     };
 }
 
@@ -5628,15 +5807,37 @@ fn evaluateTrapActionBodyPayload(
     shell_state: *state.ShellState,
     eval_context: context.EvalContext,
     body: TrapActionBodyPayload,
+    frame: *execution_frame.ExecutionFrame,
 ) EvalError!outcome.CommandOutcome {
     shell_state.validate();
     eval_context.validate();
     body.validate();
+    frame.validate();
     std.debug.assert(eval_context.target.allowsShellStateCommit());
     return switch (body) {
-        .simple => |plan| evaluatePlan(evaluator, shell_state, eval_context.withTarget(plan.target), plan),
-        .compound => |plan| evaluateCompoundPlan(evaluator, shell_state, eval_context.withTarget(plan.target), plan),
-        .pipeline => |plan| evaluatePipelinePlan(evaluator, shell_state, eval_context, plan),
+        .simple => |plan| blk: {
+            var input = EvaluationInput.empty();
+            break :blk evaluatePlanWithInput(
+                evaluator,
+                shell_state,
+                eval_context.withTarget(plan.target),
+                plan,
+                &input,
+                frame,
+            );
+        },
+        .compound => |plan| blk: {
+            var input = EvaluationInput.empty();
+            break :blk evaluateCompoundPlanWithInput(
+                evaluator,
+                shell_state,
+                eval_context.withTarget(plan.target),
+                plan,
+                &input,
+                frame,
+            );
+        },
+        .pipeline => |plan| evaluatePipelinePlanWithFrame(evaluator, shell_state, eval_context, plan, frame),
         .failure => |failure| trapActionFailureOutcome(evaluator.allocator, eval_context, failure, shell_state.*),
     };
 }
@@ -6066,6 +6267,7 @@ fn evaluateStatementList(
                 eval_context.withTarget(child_plan.target),
                 child_plan,
                 buffers.stdin,
+                buffers.frame,
             );
             defer child_outcome.deinit();
 
@@ -6111,7 +6313,14 @@ fn evaluateStatementList(
         }
 
         try flushBuffersForStatementRedirections(buffers, child_context, entry.plan, evaluator.external_stdio);
-        var child_outcome = try evaluateStatementPlan(evaluator, shell_state, child_context, entry.plan, buffers.stdin);
+        var child_outcome = try evaluateStatementPlan(
+            evaluator,
+            shell_state,
+            child_context,
+            entry.plan,
+            buffers.stdin,
+            buffers.frame,
+        );
         defer child_outcome.deinit();
 
         try appendOutcomeBuffers(buffers, child_outcome);
@@ -6311,11 +6520,13 @@ fn evaluateStatementPlan(
     eval_context: context.EvalContext,
     plan: command_plan.StatementPlan,
     input: *EvaluationInput,
+    frame: *execution_frame.ExecutionFrame,
 ) EvalError!outcome.CommandOutcome {
     shell_state.validate();
     eval_context.validate();
     plan.validate();
     input.validate();
+    frame.validate();
     return switch (plan) {
         .simple => |simple| evaluatePlanWithInput(
             evaluator,
@@ -6323,6 +6534,7 @@ fn evaluateStatementPlan(
             eval_context.withTarget(simple.target),
             simple,
             input,
+            frame,
         ),
         .compound => |compound| evaluateCompoundPlanWithInput(
             evaluator,
@@ -6330,8 +6542,9 @@ fn evaluateStatementPlan(
             eval_context.withTarget(compound.target),
             compound,
             input,
+            frame,
         ),
-        .pipeline => |pipeline| evaluatePipelinePlan(evaluator, shell_state, eval_context, pipeline),
+        .pipeline => |pipeline| evaluatePipelinePlanWithFrame(evaluator, shell_state, eval_context, pipeline, frame),
         .source => |source| evaluateSourceStatement(evaluator, shell_state, eval_context, source, input),
         .ir_source => |source| evaluateIrSourceStatement(evaluator, shell_state, eval_context, source, input),
     };
@@ -6431,6 +6644,7 @@ fn evaluateAndOrList(
             child_context,
             entry.command,
             buffers.stdin,
+            buffers.frame,
         );
         defer child_outcome.deinit();
 
@@ -6776,6 +6990,7 @@ fn evaluateTrapActionBodyWithInput(
 ) EvalError!outcome.CommandOutcome {
     body.validate();
     input.validate();
+    var frame = rootExecutionFrame(eval_context);
     return switch (body) {
         .simple => |plan| evaluatePlanWithInput(
             evaluator,
@@ -6783,6 +6998,7 @@ fn evaluateTrapActionBodyWithInput(
             eval_context.withTarget(plan.target),
             plan,
             input,
+            &frame,
         ),
         .compound => |plan| evaluateCompoundPlanWithInput(
             evaluator,
@@ -6790,8 +7006,9 @@ fn evaluateTrapActionBodyWithInput(
             eval_context.withTarget(plan.target),
             plan,
             input,
+            &frame,
         ),
-        .pipeline => |plan| evaluatePipelinePlan(evaluator, shell_state, eval_context, plan),
+        .pipeline => |plan| evaluatePipelinePlanWithFrame(evaluator, shell_state, eval_context, plan, &frame),
         .owned => |owned| switch (owned.body) {
             .simple => |plan| evaluatePlanWithInput(
                 evaluator,
@@ -6799,6 +7016,7 @@ fn evaluateTrapActionBodyWithInput(
                 eval_context.withTarget(plan.target),
                 plan,
                 input,
+                &frame,
             ),
             .compound => |plan| evaluateCompoundPlanWithInput(
                 evaluator,
@@ -6806,8 +7024,9 @@ fn evaluateTrapActionBodyWithInput(
                 eval_context.withTarget(plan.target),
                 plan,
                 input,
+                &frame,
             ),
-            .pipeline => |plan| evaluatePipelinePlan(evaluator, shell_state, eval_context, plan),
+            .pipeline => |plan| evaluatePipelinePlanWithFrame(evaluator, shell_state, eval_context, plan, &frame),
             .failure => |failure| trapActionFailureOutcome(evaluator.allocator, eval_context, failure, shell_state.*),
         },
         .failure => |failure| trapActionFailureOutcome(evaluator.allocator, eval_context, failure, shell_state.*),
@@ -14808,7 +15027,8 @@ test "semantic evaluator uses command substitution status for assignment-only co
     defer shell_state.deinit();
     var evaluator = Evaluator.init(std.testing.allocator);
     var input = EvaluationInput.empty();
-    var buffers = EvaluationBuffers.init(std.testing.allocator, &input);
+    var execution_frame_value = rootExecutionFrame(context.EvalContext.forTarget(.current_shell));
+    var buffers = EvaluationBuffers.init(std.testing.allocator, &input, &execution_frame_value);
     defer buffers.deinit();
 
     const result = try evaluateStatementListSource(
@@ -14995,7 +15215,8 @@ test "semantic evaluator sources empty files as successful no-op scripts" {
     defer shell_state.deinit();
     var evaluator = Evaluator.init(std.testing.allocator);
     var input = EvaluationInput.empty();
-    var buffers = EvaluationBuffers.init(std.testing.allocator, &input);
+    var execution_frame_value = rootExecutionFrame(context.EvalContext.forTarget(.current_shell));
+    var buffers = EvaluationBuffers.init(std.testing.allocator, &input, &execution_frame_value);
     defer buffers.deinit();
 
     const result = try evaluateStatementListSource(
@@ -15288,7 +15509,8 @@ test "semantic parser trap resolver classifies same-list function calls" {
         else => return error.ExpectedSourceStatement,
     }
 
-    var call_outcome = try evaluateTrapActionBody(&evaluator, &shell_state, eval_context, body);
+    var frame = rootExecutionFrame(eval_context);
+    var call_outcome = try evaluateTrapActionBody(&evaluator, &shell_state, eval_context, body, &frame);
     defer call_outcome.deinit();
     try std.testing.expectEqual(@as(outcome.ExitStatus, 0), call_outcome.status);
     try std.testing.expectEqualStrings("hi\n", call_outcome.stdout.items);
@@ -15334,7 +15556,8 @@ test "semantic parser trap resolver uses lazy IR for alias-disabled while loops"
     try std.testing.expect(loop.condition.statements.len != 0);
     try std.testing.expect(loop.body.statements.len != 0);
 
-    var outcome_body = try evaluateTrapActionBody(&evaluator, &shell_state, eval_context, body);
+    var frame = rootExecutionFrame(eval_context);
+    var outcome_body = try evaluateTrapActionBody(&evaluator, &shell_state, eval_context, body, &frame);
     defer outcome_body.deinit();
     try std.testing.expectEqual(@as(outcome.ExitStatus, 0), outcome_body.status);
     try std.testing.expectEqualStrings("0\n1\n", outcome_body.stdout.items);
@@ -15370,7 +15593,8 @@ test "semantic parser trap resolver uses lazy IR for alias-disabled for loops" {
     try std.testing.expect(for_plan.body_source == null);
     try std.testing.expect(for_plan.body.statements.len != 0);
 
-    var outcome_body = try evaluateTrapActionBody(&evaluator, &shell_state, eval_context, body);
+    var frame = rootExecutionFrame(eval_context);
+    var outcome_body = try evaluateTrapActionBody(&evaluator, &shell_state, eval_context, body, &frame);
     defer outcome_body.deinit();
     try std.testing.expectEqual(@as(outcome.ExitStatus, 0), outcome_body.status);
     try std.testing.expectEqualStrings("a\nb\n", outcome_body.stdout.items);
@@ -17672,12 +17896,14 @@ test "semantic evaluator reads through custom delimiters" {
         "value",
     } } });
 
+    var frame = rootExecutionFrame(context.EvalContext.forTarget(.current_shell));
     var result = try evaluatePlanWithInput(
         &evaluator,
         &shell_state,
         context.EvalContext.forTarget(.current_shell),
         plan,
         &input,
+        &frame,
     );
     defer result.deinit();
     try std.testing.expectEqual(@as(outcome.ExitStatus, 0), result.status);
