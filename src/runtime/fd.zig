@@ -75,7 +75,6 @@ pub const OpenRequest = struct {
     }
 
     pub fn validate(self: OpenRequest) void {
-        std.debug.assert(self.path.len != 0);
         if (self.directory != current_working_directory) assertValidDescriptor(self.directory);
         self.options.validate();
     }

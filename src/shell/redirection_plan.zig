@@ -168,7 +168,6 @@ pub const OpenPathStep = struct {
     pub fn validate(self: OpenPathStep) void {
         fd.assertValidDescriptor(self.target);
         self.path.validate();
-        std.debug.assert(self.path.bytes.len != 0);
         self.options.validate();
         std.debug.assert(!self.noclobber or self.options.exclusive);
     }
@@ -844,7 +843,6 @@ fn hereDocStep(
 fn singleField(fields: ExpandedFields) ?[]const u8 {
     fields.validate();
     if (fields.fields.len != 1) return null;
-    if (fields.fields[0].len == 0) return null;
     return fields.fields[0];
 }
 

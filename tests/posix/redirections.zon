@@ -379,6 +379,18 @@
             .status = 0,
         },
         .{
+            .name = "quoted empty redirection operand is a single pathname",
+            .script =
+            \\name=
+            \\if : >"$name"; then printf 'created\n'; else printf 'failed\n'; fi
+            ,
+            .stdout = "",
+            .stderr = "",
+            .stderr_match = .nonempty,
+            .status = 0,
+            .status_match = .nonzero,
+        },
+        .{
             .name = "input redirection failure makes the command fail",
             .script = "cat <missing",
             .stdout = "",
