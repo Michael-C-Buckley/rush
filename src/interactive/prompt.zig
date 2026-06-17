@@ -73,7 +73,7 @@ pub fn render(
         plan,
     ) catch return renderStatic(allocator, shell_state);
     defer result.deinit();
-    if (result.status != 0 or result.control_flow != .normal or builder.bytes.items.len == 0) {
+    if (result.status != 0 or result.effectiveControlFlow() != .normal or builder.bytes.items.len == 0) {
         return renderStatic(allocator, shell_state);
     }
     return builder.toOwnedSlice();

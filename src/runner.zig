@@ -922,7 +922,7 @@ fn runSemanticLoweredProgram(
         );
         applyOutputWriteResult(&command_outcome, write_result);
         status = command_outcome.status;
-        control_flow = command_outcome.control_flow;
+        control_flow = command_outcome.effectiveControlFlow();
         if (bashAssignmentErrorAbortsSourceLine(eval_context.features, statement_source, command_outcome)) {
             abort_bash_line = semanticSourceLine(script, statement.span.start);
         }
@@ -976,7 +976,7 @@ fn bashAssignmentErrorAbortsSourceLine(
     command_outcome.validate();
     if (!features.isBash()) return false;
     if (std.mem.indexOfScalar(u8, statement_script, '=') == null) return false;
-    if (command_outcome.status != 1 or command_outcome.control_flow != .normal) return false;
+    if (command_outcome.status != 1 or command_outcome.effectiveControlFlow() != .normal) return false;
     for (command_outcome.diagnostics.items) |diagnostic| {
         if (std.mem.endsWith(u8, diagnostic.message, ": readonly variable")) return true;
         if (std.mem.indexOf(u8, diagnostic.message, "expansion error: arithmetic:") != null) return true;
@@ -1018,7 +1018,7 @@ fn appendPendingRuntimeTrapOutcome(
         defer observation.deinit();
         try observation.command_outcome.applyToShellState(shell_state, .{ .record_exit_control_flow = true });
         status.* = observation.command_outcome.status;
-        control_flow.* = observation.command_outcome.control_flow;
+        control_flow.* = observation.command_outcome.effectiveControlFlow();
         if (control_flow.* != .normal) return;
     }
 
@@ -1034,7 +1034,7 @@ fn appendPendingRuntimeTrapOutcome(
         trap_outcome.stderr.items,
     );
     status.* = trap_outcome.status;
-    control_flow.* = trap_outcome.control_flow;
+    control_flow.* = trap_outcome.effectiveControlFlow();
     try trap_outcome.applyToShellState(shell_state, .{ .record_exit_control_flow = true });
 }
 
@@ -1558,7 +1558,7 @@ fn runnerOutputMode(commit_exec_redirections: bool) shell.eval.RunnerOutputMode 
 fn applyOutputWriteResult(command_outcome: *shell.CommandOutcome, result: OutputWriteResult) void {
     command_outcome.validate();
     if (!result.stdout_failed and !result.stderr_failed) return;
-    if (command_outcome.control_flow != .normal) return;
+    if (command_outcome.effectiveControlFlow() != .normal) return;
     if (command_outcome.status != 0) return;
     command_outcome.status = 1;
     if (command_outcome.state_delta.last_status != null) command_outcome.state_delta.last_status = 1;
