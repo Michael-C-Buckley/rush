@@ -462,16 +462,21 @@ pub const PipelinePlan = struct {
     }
 
     pub fn stageTarget(self: PipelinePlan, index: usize) context.ExecutionTarget {
-        self.validateStagesOnly();
+        std.debug.assert(self.stages.len != 0);
         std.debug.assert(index < self.stages.len);
-        const stage = self.stages[index];
-        if (self.stages.len == 1) return stage.target();
-        if (stage.isExternal()) return .child_process;
+        if (self.stages.len == 1) return switch (self.stages[index]) {
+            .simple => |plan| plan.target,
+            .compound => |plan| plan.target,
+        };
+        if (switch (self.stages[index]) {
+            .simple => |plan| plan.class() == .external,
+            .compound => false,
+        }) return .child_process;
         return .subshell;
     }
 
     pub fn validateStatusCount(self: PipelinePlan, statuses: []const state.ExitStatus) void {
-        self.validate();
+        std.debug.assert(self.stages.len != 0);
         std.debug.assert(statuses.len == self.stages.len);
     }
 

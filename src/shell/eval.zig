@@ -438,7 +438,6 @@ pub const OwnedTrapActionBody = struct {
     }
 
     fn deinit(self: *OwnedTrapActionBody) void {
-        self.validate();
         self.arena.deinit();
         self.allocator.destroy(self.arena);
         self.* = undefined;
