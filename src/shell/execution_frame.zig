@@ -74,15 +74,27 @@ pub const FailurePolicy = enum {
 pub const InputEndpoint = union(enum) {
     inherit_stdin,
     bytes: []const u8,
+    path: FileInputEndpoint,
     fd: fd.Descriptor,
     pipe_read: fd.Descriptor,
     closed,
 
     pub fn validate(self: InputEndpoint) void {
         switch (self) {
+            .path => |path| path.validate(),
             .fd, .pipe_read => |descriptor| fd.assertValidDescriptor(descriptor),
             .inherit_stdin, .bytes, .closed => {},
         }
+    }
+};
+
+pub const FileInputEndpoint = struct {
+    path: []const u8,
+    options: fd.OpenOptions,
+
+    pub fn validate(self: FileInputEndpoint) void {
+        self.options.validate();
+        std.debug.assert(self.options.access != .write_only);
     }
 };
 
@@ -103,6 +115,7 @@ pub const CaptureChannel = enum {
 pub const OutputEndpoint = union(enum) {
     inherit_stdout,
     inherit_stderr,
+    path: FileOutputEndpoint,
     fd: fd.Descriptor,
     pipe_write: fd.Descriptor,
     capture: CaptureChannel,
@@ -110,6 +123,7 @@ pub const OutputEndpoint = union(enum) {
 
     pub fn validate(self: OutputEndpoint) void {
         switch (self) {
+            .path => |path| path.validate(),
             .fd, .pipe_write => |descriptor| fd.assertValidDescriptor(descriptor),
             .inherit_stdout, .inherit_stderr, .capture, .discard => {},
         }
@@ -118,26 +132,75 @@ pub const OutputEndpoint = union(enum) {
     pub fn isCapture(self: OutputEndpoint) bool {
         return switch (self) {
             .capture => true,
-            .inherit_stdout, .inherit_stderr, .fd, .pipe_write, .discard => false,
+            .inherit_stdout, .inherit_stderr, .path, .fd, .pipe_write, .discard => false,
         };
     }
 
     pub fn captureChannel(self: OutputEndpoint) ?CaptureChannel {
         return switch (self) {
             .capture => |channel| channel,
-            .inherit_stdout, .inherit_stderr, .fd, .pipe_write, .discard => null,
+            .inherit_stdout, .inherit_stderr, .path, .fd, .pipe_write, .discard => null,
         };
     }
 
     pub fn isPipeWrite(self: OutputEndpoint) bool {
         return switch (self) {
             .pipe_write => true,
-            .inherit_stdout, .inherit_stderr, .fd, .capture, .discard => false,
+            .inherit_stdout, .inherit_stderr, .path, .fd, .capture, .discard => false,
         };
     }
 
     pub fn isInheritStdout(self: OutputEndpoint) bool {
         return self == .inherit_stdout;
+    }
+};
+
+fn expectOutputPath(endpoint: FdEndpoint, path: []const u8) !void {
+    switch (endpoint) {
+        .output => |output| switch (output) {
+            .path => |file| try std.testing.expectEqualStrings(path, file.path),
+            else => return error.ExpectedOutputPath,
+        },
+        else => return error.ExpectedOutputEndpoint,
+    }
+}
+
+fn expectOutputCapture(endpoint: FdEndpoint, channel: CaptureChannel) !void {
+    switch (endpoint) {
+        .output => |output| switch (output) {
+            .capture => |capture| try std.testing.expectEqual(channel, capture),
+            else => return error.ExpectedOutputCapture,
+        },
+        else => return error.ExpectedOutputEndpoint,
+    }
+}
+
+fn expectInputBytes(endpoint: FdEndpoint, bytes: []const u8) !void {
+    switch (endpoint) {
+        .input => |input| switch (input) {
+            .bytes => |actual| try std.testing.expectEqualStrings(bytes, actual),
+            else => return error.ExpectedInputBytes,
+        },
+        else => return error.ExpectedInputEndpoint,
+    }
+}
+
+fn expectClosed(endpoint: FdEndpoint) !void {
+    switch (endpoint) {
+        .closed => {},
+        else => return error.ExpectedClosedEndpoint,
+    }
+}
+
+pub const FileOutputEndpoint = struct {
+    path: []const u8,
+    options: fd.OpenOptions,
+    noclobber: bool = false,
+
+    pub fn validate(self: FileOutputEndpoint) void {
+        self.options.validate();
+        std.debug.assert(self.options.access != .read_only);
+        std.debug.assert(!self.noclobber or self.options.exclusive);
     }
 };
 
@@ -178,19 +241,121 @@ pub const CapturedBytes = struct {
 /// ordered transforms of this table; this task only records the pre/post shape
 /// needed for later evaluator migration.
 pub const FdTable = struct {
-    bindings: []const FdBinding = &.{},
+    bindings: std.ArrayList(FdBinding) = .empty,
     redirections: redirection_plan.RedirectionPlan = .{},
 
+    pub fn deinit(self: *FdTable, allocator: std.mem.Allocator) void {
+        self.bindings.deinit(allocator);
+        self.redirections.deinit();
+        self.* = undefined;
+    }
+
+    pub fn bind(
+        self: *FdTable,
+        allocator: std.mem.Allocator,
+        descriptor: fd.Descriptor,
+        fd_endpoint: FdEndpoint,
+    ) !void {
+        fd.assertValidDescriptor(descriptor);
+        fd_endpoint.validate();
+        if (self.bindingIndex(descriptor)) |index| {
+            self.bindings.items[index] = .{ .descriptor = descriptor, .endpoint = fd_endpoint };
+        } else {
+            try self.bindings.append(allocator, .{ .descriptor = descriptor, .endpoint = fd_endpoint });
+        }
+        self.validate();
+    }
+
+    pub fn bindInput(
+        self: *FdTable,
+        allocator: std.mem.Allocator,
+        descriptor: fd.Descriptor,
+        input_endpoint: InputEndpoint,
+    ) !void {
+        try self.bind(allocator, descriptor, .{ .input = input_endpoint });
+    }
+
+    pub fn bindOutput(
+        self: *FdTable,
+        allocator: std.mem.Allocator,
+        descriptor: fd.Descriptor,
+        output_endpoint: OutputEndpoint,
+    ) !void {
+        try self.bind(allocator, descriptor, .{ .output = output_endpoint });
+    }
+
+    pub fn close(self: *FdTable, allocator: std.mem.Allocator, descriptor: fd.Descriptor) !void {
+        try self.bind(allocator, descriptor, .closed);
+    }
+
+    pub fn endpoint(self: FdTable, descriptor: fd.Descriptor) FdEndpoint {
+        fd.assertValidDescriptor(descriptor);
+        if (self.bindingIndex(descriptor)) |index| return self.bindings.items[index].endpoint;
+        return defaultEndpoint(descriptor);
+    }
+
+    pub fn applyRedirectionPlan(
+        self: *FdTable,
+        allocator: std.mem.Allocator,
+        plan: redirection_plan.RedirectionPlan,
+    ) !void {
+        plan.validate();
+        for (plan.steps) |step| try self.applyRedirectionStep(allocator, step);
+        self.redirections = plan;
+        self.validate();
+    }
+
+    pub fn applyRedirectionStep(
+        self: *FdTable,
+        allocator: std.mem.Allocator,
+        step: redirection_plan.RedirectionStep,
+    ) !void {
+        step.validate();
+        switch (step.effect) {
+            .open_path => |open| switch (open.options.access) {
+                .read_only => try self.bindInput(allocator, open.target, .{ .path = .{
+                    .path = open.path.bytes,
+                    .options = open.options,
+                } }),
+                .write_only, .read_write => try self.bindOutput(allocator, open.target, .{ .path = .{
+                    .path = open.path.bytes,
+                    .options = open.options,
+                    .noclobber = open.noclobber,
+                } }),
+            },
+            .here_doc => |here_doc| try self.bindInput(allocator, here_doc.target, .{ .bytes = here_doc.data.bytes }),
+            .duplicate => |duplicate| try self.bind(allocator, duplicate.target, self.endpoint(duplicate.source)),
+            .close => |close_step| try self.close(allocator, close_step.target),
+        }
+    }
+
     pub fn validate(self: FdTable) void {
-        for (self.bindings, 0..) |binding, index| {
+        for (self.bindings.items, 0..) |binding, index| {
             binding.validate();
-            for (self.bindings[0..index]) |previous| {
+            for (self.bindings.items[0..index]) |previous| {
                 std.debug.assert(previous.descriptor != binding.descriptor);
             }
         }
         self.redirections.validate();
     }
+
+    fn bindingIndex(self: FdTable, descriptor: fd.Descriptor) ?usize {
+        fd.assertValidDescriptor(descriptor);
+        for (self.bindings.items, 0..) |binding, index| {
+            if (binding.descriptor == descriptor) return index;
+        }
+        return null;
+    }
 };
+
+fn defaultEndpoint(descriptor: fd.Descriptor) FdEndpoint {
+    return switch (descriptor) {
+        0 => .{ .input = .inherit_stdin },
+        1 => .{ .output = .inherit_stdout },
+        2 => .{ .output = .inherit_stderr },
+        else => .closed,
+    };
+}
 
 pub const Captures = struct {
     channels: []const CaptureChannel = &.{},
@@ -404,13 +569,81 @@ test "command substitution stdout is private capture" {
 }
 
 test "fd table endpoints validate distinct descriptor bindings" {
-    const bindings = [_]FdBinding{
-        .{ .descriptor = 0, .endpoint = .{ .input = .inherit_stdin } },
-        .{ .descriptor = 1, .endpoint = .{ .output = .inherit_stdout } },
-        .{ .descriptor = 2, .endpoint = .{ .output = .inherit_stderr } },
-    };
-    const table: FdTable = .{ .bindings = &bindings };
+    var table: FdTable = .{};
+    defer table.deinit(std.testing.allocator);
+    try table.bindInput(std.testing.allocator, 0, .inherit_stdin);
+    try table.bindOutput(std.testing.allocator, 1, .inherit_stdout);
+    try table.bindOutput(std.testing.allocator, 2, .inherit_stderr);
     table.validate();
+}
+
+test "fd table applies ordered output redirection before stderr duplication" {
+    const steps = [_]redirection_plan.RedirectionStep{
+        redirection_plan.RedirectionStep.openPath(0, 1, "out", .{
+            .access = .write_only,
+            .create = true,
+            .truncate = true,
+        }),
+        redirection_plan.RedirectionStep.duplicate(1, 2, 1),
+    };
+    const plan: redirection_plan.RedirectionPlan = .{ .steps = &steps };
+
+    var table: FdTable = .{};
+    defer table.deinit(std.testing.allocator);
+    try table.applyRedirectionPlan(std.testing.allocator, plan);
+
+    try expectOutputPath(table.endpoint(1), "out");
+    try expectOutputPath(table.endpoint(2), "out");
+}
+
+test "fd table duplicates stderr before later stdout file redirection" {
+    const steps = [_]redirection_plan.RedirectionStep{
+        redirection_plan.RedirectionStep.duplicate(0, 2, 1),
+        redirection_plan.RedirectionStep.openPath(1, 1, "out", .{
+            .access = .write_only,
+            .create = true,
+            .truncate = true,
+        }),
+    };
+    const plan: redirection_plan.RedirectionPlan = .{ .steps = &steps };
+
+    var table: FdTable = .{};
+    defer table.deinit(std.testing.allocator);
+    try table.applyRedirectionPlan(std.testing.allocator, plan);
+
+    const inherited_stdout: FdEndpoint = .{ .output = .inherit_stdout };
+    try std.testing.expectEqual(inherited_stdout, table.endpoint(2));
+    try expectOutputPath(table.endpoint(1), "out");
+}
+
+test "fd table duplicates pipeline stdout capture into stderr" {
+    var table: FdTable = .{};
+    defer table.deinit(std.testing.allocator);
+    try table.bindOutput(std.testing.allocator, 1, .{ .capture = .pipeline_data });
+
+    const steps = [_]redirection_plan.RedirectionStep{
+        redirection_plan.RedirectionStep.duplicate(0, 2, 1),
+    };
+    const plan: redirection_plan.RedirectionPlan = .{ .steps = &steps };
+    try table.applyRedirectionPlan(std.testing.allocator, plan);
+
+    try expectOutputCapture(table.endpoint(1), .pipeline_data);
+    try expectOutputCapture(table.endpoint(2), .pipeline_data);
+}
+
+test "fd table applies here-doc bytes and closes descriptors" {
+    const steps = [_]redirection_plan.RedirectionStep{
+        .{ .ordinal = 0, .effect = .{ .here_doc = .{ .target = 0, .data = .{ .bytes = "body\n" } } } },
+        redirection_plan.RedirectionStep.close(1, 1),
+    };
+    const plan: redirection_plan.RedirectionPlan = .{ .steps = &steps };
+
+    var table: FdTable = .{};
+    defer table.deinit(std.testing.allocator);
+    try table.applyRedirectionPlan(std.testing.allocator, plan);
+
+    try expectInputBytes(table.endpoint(0), "body\n");
+    try expectClosed(table.endpoint(1));
 }
 
 test "boundary outcomes keep fatal failures separate from ordinary statuses" {
