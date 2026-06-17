@@ -46,6 +46,19 @@
             .status = 0,
         },
         .{
+            .name = "boundary matrix descriptor merge feeds side output to pipeline",
+            .script =
+            \\{ printf '%s\n' data; printf '%s\n' side >&2; } 2>&1 | sed 's/^/[p]/'
+            ,
+            .stdout =
+            \\[p]data
+            \\[p]side
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "boundary matrix command substitution captures stdout only",
             .script =
             \\v=$(printf '%s\n' value; printf '%s\n' side >&2)

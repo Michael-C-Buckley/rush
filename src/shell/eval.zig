@@ -348,6 +348,24 @@ fn semanticCommandCaptures(
     return .{};
 }
 
+fn frameRoutesPipelineData(frame: execution_frame.ExecutionFrame) bool {
+    frame.validate();
+    return frame.spec.captures.contains(.pipeline_data) or
+        frameOutputEndpointCaptures(frame.spec.fd_table.endpoint(1), .pipeline_data) or
+        frameOutputEndpointCaptures(frame.spec.fd_table.endpoint(2), .pipeline_data);
+}
+
+fn frameOutputEndpointCaptures(
+    endpoint: execution_frame.FdEndpoint,
+    channel: execution_frame.CaptureChannel,
+) bool {
+    endpoint.validate();
+    return switch (endpoint) {
+        .output => |output| output.captureChannel() == channel,
+        .input, .closed => false,
+    };
+}
+
 fn pipelineStageOutputEndpoint(
     parent_frame: execution_frame.ExecutionFrame,
     is_last_stage: bool,
@@ -2878,7 +2896,7 @@ fn evaluatePlanWithInput(
     );
     defer buffers.deinit();
     buffers.useFrameFdTableInput(&frame_input, input);
-    if (frame.spec.kind == .pipeline_stage) try buffers.useFrameFdTableRouting();
+    if (frameRoutesPipelineData(command_frame)) try buffers.useFrameFdTableRouting();
     if (readonly_assignment) |name| try buffers.addBuiltinDiagnostic(name, "readonly variable");
     try appendPlanExpansionOutput(evaluator.*, eval_context, effective_plan, &buffers);
     try flushCurrentShellBufferedCommandOutput(&buffers, eval_context, evaluator.external_stdio);
@@ -2896,29 +2914,39 @@ fn evaluatePlanWithInput(
         effective_plan.class() != .external and
         effective_plan.class() != .function)
     {
-        const apply_result = try applyRedirectionsEmittingExpansionOutput(
-            evaluator.*,
-            &buffers,
-            .{},
-            effective_plan.redirections,
-            redirectionExpansionModeForContext(eval_context),
-        );
-        switch (apply_result) {
-            .applied => |applied| applied_redirections = applied,
-            .failure => |failure| {
-                const command_name = if (effective_plan.argv.len == 0) "redirection" else effective_plan.argv[0];
-                try addRedirectionFailureDiagnostic(&buffers, command_name, failure);
-                const redirection_result = evaluationFromRedirectionFailure(shell_state.options, eval_context, failure);
-                state_delta.setLastStatus(redirection_result.status);
-                return try commandOutcomeFromBuffers(
-                    evaluator.allocator,
-                    eval_context,
-                    redirection_result.status,
-                    state_delta,
-                    redirection_result.control_flow,
-                    &buffers,
-                );
-            },
+        if (frameRoutesPipelineData(command_frame) and
+            !redirectionPlanNeedsRuntimeFdEffects(effective_plan.redirections))
+        {
+            try emitSemanticRedirectionTransforms(evaluator.*, &buffers, effective_plan.redirections);
+        } else {
+            const apply_result = try applyRedirectionsEmittingExpansionOutput(
+                evaluator.*,
+                &buffers,
+                .{},
+                effective_plan.redirections,
+                redirectionExpansionModeForContext(eval_context),
+            );
+            switch (apply_result) {
+                .applied => |applied| applied_redirections = applied,
+                .failure => |failure| {
+                    const command_name = if (effective_plan.argv.len == 0) "redirection" else effective_plan.argv[0];
+                    try addRedirectionFailureDiagnostic(&buffers, command_name, failure);
+                    const redirection_result = evaluationFromRedirectionFailure(
+                        shell_state.options,
+                        eval_context,
+                        failure,
+                    );
+                    state_delta.setLastStatus(redirection_result.status);
+                    return try commandOutcomeFromBuffers(
+                        evaluator.allocator,
+                        eval_context,
+                        redirection_result.status,
+                        state_delta,
+                        redirection_result.control_flow,
+                        &buffers,
+                    );
+                },
+            }
         }
     }
 
@@ -2955,7 +2983,7 @@ fn evaluatePlanWithInput(
             routed_prefix,
         );
     }
-    if (frame.spec.kind == .pipeline_stage) try routeDirectPipelineStageBuffers(&buffers);
+    if (frameRoutesPipelineData(command_frame)) try routeDirectPipelineStageBuffers(&buffers);
     state_delta.setLastStatus(result.status);
     assertCommandDeltaCompatible(effective_plan, state_delta);
     const decision = if (specialBuiltinStatusOnly(effective_plan, result, buffers))
@@ -3175,7 +3203,7 @@ fn routingTargetsInheritedStandardDescriptors(routing: OutputRouting) bool {
 
 fn routeDirectPipelineStageBuffers(buffers: *EvaluationBuffers) EvalError!void {
     buffers.frame.validate();
-    std.debug.assert(buffers.frame.spec.kind == .pipeline_stage);
+    std.debug.assert(frameRoutesPipelineData(buffers.frame.*));
 
     try routeDirectPipelineStageBuffer(buffers, 1, &buffers.stdout);
     try routeDirectPipelineStageBuffer(buffers, 2, &buffers.stderr);
@@ -3841,6 +3869,43 @@ fn redirectionExpansionOutputFrame(
     };
 }
 
+fn redirectionPlanNeedsRuntimeFdEffects(redirections: redirection_plan.RedirectionPlan) bool {
+    redirections.validate();
+    for (redirections.steps) |step| {
+        step.validate();
+        switch (step.effect) {
+            .open_path => return true,
+            .here_doc, .duplicate, .close => {},
+        }
+    }
+    return false;
+}
+
+fn emitSemanticRedirectionTransforms(
+    evaluator: Evaluator,
+    buffers: *EvaluationBuffers,
+    redirections: redirection_plan.RedirectionPlan,
+) EvalError!void {
+    redirections.validate();
+    var frame = buffers.outputFrame();
+    defer frame.deinit();
+    if (evaluator.scoped_exec_redirections) |scoped_redirections| {
+        for (scoped_redirections.items) |scoped| {
+            try frame.applyRedirectionsFlushingRouteChanges(scoped.redirections);
+        }
+    }
+    for (redirections.steps) |step| {
+        step.validate();
+        try appendRedirectionExpansionOutputToFrame(step.expansion_output, &frame);
+        switch (step.target()) {
+            1 => try frame.flushPendingDescriptor(1),
+            2 => try frame.flushPendingDescriptor(2),
+            else => {},
+        }
+        try frame.routingRef().applyRedirectionStep(step);
+    }
+}
+
 fn applyRedirectionsEmittingExpansionOutput(
     evaluator: Evaluator,
     buffers: *EvaluationBuffers,
@@ -4106,6 +4171,7 @@ fn evaluateCompoundPlanWithInput(
     );
     defer buffers.deinit();
     buffers.useFrameFdTableInput(&frame_input, input);
+    if (frameRoutesPipelineData(command_frame)) try buffers.useFrameFdTableRouting();
 
     var cwd_guard: CwdGuard = .{};
     if (plan.target.isIsolatedFromParent()) cwd_guard.capture(evaluator);
@@ -4135,34 +4201,38 @@ fn evaluateCompoundPlanWithInput(
         applied.deinit();
     };
     if (hasCompoundRedirections(plan)) {
-        const apply_result = try applyRedirectionsEmittingExpansionOutput(
-            evaluator.*,
-            &buffers,
-            .{},
-            plan.redirections,
-            redirectionExpansionModeForContext(eval_context),
-        );
-        switch (apply_result) {
-            .applied => |applied| applied_redirections = applied,
-            .failure => |failure| {
-                const status = consequence.statusForRedirectionFailure(failure.consequence);
-                const decision = consequence.decideForRedirectionFailure(
-                    shell_state.options,
-                    eval_context,
-                    failure.consequence,
-                    status,
-                );
-                try addRedirectionFailureDiagnostic(&buffers, plan.kindName(), failure);
-                state_delta.setLastStatus(status);
-                return try commandOutcomeFromBuffers(
-                    evaluator.allocator,
-                    eval_context,
-                    status,
-                    state_delta,
-                    decision.control_flow,
-                    &buffers,
-                );
-            },
+        if (frameRoutesPipelineData(command_frame) and !redirectionPlanNeedsRuntimeFdEffects(plan.redirections)) {
+            try emitSemanticRedirectionTransforms(evaluator.*, &buffers, plan.redirections);
+        } else {
+            const apply_result = try applyRedirectionsEmittingExpansionOutput(
+                evaluator.*,
+                &buffers,
+                .{},
+                plan.redirections,
+                redirectionExpansionModeForContext(eval_context),
+            );
+            switch (apply_result) {
+                .applied => |applied| applied_redirections = applied,
+                .failure => |failure| {
+                    const status = consequence.statusForRedirectionFailure(failure.consequence);
+                    const decision = consequence.decideForRedirectionFailure(
+                        shell_state.options,
+                        eval_context,
+                        failure.consequence,
+                        status,
+                    );
+                    try addRedirectionFailureDiagnostic(&buffers, plan.kindName(), failure);
+                    state_delta.setLastStatus(status);
+                    return try commandOutcomeFromBuffers(
+                        evaluator.allocator,
+                        eval_context,
+                        status,
+                        state_delta,
+                        decision.control_flow,
+                        &buffers,
+                    );
+                },
+            }
         }
     }
 
@@ -4205,6 +4275,7 @@ fn evaluateCompoundPlanWithInput(
     if (applied_redirections != null) {
         try flushBufferedRedirectionOutput(evaluator.*, &buffers, plan.redirections, eval_context, .{});
     }
+    if (frameRoutesPipelineData(command_frame)) try routeDirectPipelineStageBuffers(&buffers);
 
     return commandOutcomeFromBuffers(
         evaluator.allocator,
@@ -6996,8 +7067,8 @@ fn evaluateStatementPlan(
             frame,
         ),
         .pipeline => |pipeline| evaluatePipelinePlanWithFrame(evaluator, shell_state, eval_context, pipeline, frame),
-        .source => |source| evaluateSourceStatement(evaluator, shell_state, eval_context, source, input),
-        .ir_source => |source| evaluateIrSourceStatement(evaluator, shell_state, eval_context, source, input),
+        .source => |source| evaluateSourceStatement(evaluator, shell_state, eval_context, source, input, frame),
+        .ir_source => |source| evaluateIrSourceStatement(evaluator, shell_state, eval_context, source, input, frame),
     };
 }
 
@@ -7007,11 +7078,13 @@ fn evaluateSourceStatement(
     eval_context: context.EvalContext,
     source_plan: command_plan.SourceStatementPlan,
     input: *EvaluationInput,
+    frame: *execution_frame.ExecutionFrame,
 ) EvalError!outcome.CommandOutcome {
     shell_state.validate();
     eval_context.validate();
     source_plan.validate();
     input.validate();
+    frame.validate();
     std.debug.assert(source_plan.target == eval_context.target or
         (source_plan.target == .current_shell and eval_context.target == .subshell));
 
@@ -7031,7 +7104,7 @@ fn evaluateSourceStatement(
     }) orelse return error.Unimplemented;
     defer body.deinit();
 
-    return evaluateTrapActionBodyWithInput(evaluator, shell_state, eval_context, body, input);
+    return evaluateTrapActionBodyWithInputInFrame(evaluator, shell_state, eval_context, body, input, frame);
 }
 
 fn evaluateIrSourceStatement(
@@ -7040,11 +7113,13 @@ fn evaluateIrSourceStatement(
     eval_context: context.EvalContext,
     source_plan: command_plan.IrStatementPlan,
     input: *EvaluationInput,
+    frame: *execution_frame.ExecutionFrame,
 ) EvalError!outcome.CommandOutcome {
     shell_state.validate();
     eval_context.validate();
     source_plan.validate();
     input.validate();
+    frame.validate();
     std.debug.assert(source_plan.target == eval_context.target or
         (source_plan.target == .current_shell and eval_context.target == .subshell));
 
@@ -7065,7 +7140,7 @@ fn evaluateIrSourceStatement(
     });
     defer body.deinit();
 
-    return evaluateTrapActionBodyWithInput(evaluator, shell_state, eval_context, body, input);
+    return evaluateTrapActionBodyWithInputInFrame(evaluator, shell_state, eval_context, body, input, frame);
 }
 
 fn evaluateAndOrList(
@@ -7442,6 +7517,20 @@ fn evaluateTrapActionBodyWithInput(
     body.validate();
     input.validate();
     var frame = rootExecutionFrame(eval_context);
+    return evaluateTrapActionBodyWithInputInFrame(evaluator, shell_state, eval_context, body, input, &frame);
+}
+
+fn evaluateTrapActionBodyWithInputInFrame(
+    evaluator: *Evaluator,
+    shell_state: *state.ShellState,
+    eval_context: context.EvalContext,
+    body: TrapActionBody,
+    input: *EvaluationInput,
+    frame: *execution_frame.ExecutionFrame,
+) EvalError!outcome.CommandOutcome {
+    body.validate();
+    input.validate();
+    frame.validate();
     return switch (body) {
         .simple => |plan| evaluatePlanWithInput(
             evaluator,
@@ -7449,7 +7538,7 @@ fn evaluateTrapActionBodyWithInput(
             eval_context.withTarget(plan.target),
             plan,
             input,
-            &frame,
+            frame,
         ),
         .compound => |plan| evaluateCompoundPlanWithInput(
             evaluator,
@@ -7457,9 +7546,9 @@ fn evaluateTrapActionBodyWithInput(
             eval_context.withTarget(plan.target),
             plan,
             input,
-            &frame,
+            frame,
         ),
-        .pipeline => |plan| evaluatePipelinePlanWithFrame(evaluator, shell_state, eval_context, plan, &frame),
+        .pipeline => |plan| evaluatePipelinePlanWithFrame(evaluator, shell_state, eval_context, plan, frame),
         .owned => |owned| switch (owned.body) {
             .simple => |plan| evaluatePlanWithInput(
                 evaluator,
@@ -7467,7 +7556,7 @@ fn evaluateTrapActionBodyWithInput(
                 eval_context.withTarget(plan.target),
                 plan,
                 input,
-                &frame,
+                frame,
             ),
             .compound => |plan| evaluateCompoundPlanWithInput(
                 evaluator,
@@ -7475,9 +7564,9 @@ fn evaluateTrapActionBodyWithInput(
                 eval_context.withTarget(plan.target),
                 plan,
                 input,
-                &frame,
+                frame,
             ),
-            .pipeline => |plan| evaluatePipelinePlanWithFrame(evaluator, shell_state, eval_context, plan, &frame),
+            .pipeline => |plan| evaluatePipelinePlanWithFrame(evaluator, shell_state, eval_context, plan, frame),
             .failure => |failure| trapActionFailureOutcome(evaluator.allocator, eval_context, failure, shell_state.*),
         },
         .failure => |failure| trapActionFailureOutcome(evaluator.allocator, eval_context, failure, shell_state.*),
