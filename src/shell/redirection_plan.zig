@@ -517,39 +517,53 @@ pub const ApplyFailure = struct {
 };
 
 pub const ApplyResult = union(enum) {
-    applied: AppliedRedirections,
+    applied: FdTransaction,
     failure: ApplyFailure,
 };
 
-const SavedDescriptor = struct {
-    target: fd.Descriptor,
-    saved: ?fd.Descriptor,
+const SavedDescriptorState = union(enum) {
+    originally_closed,
+    saved: fd.Descriptor,
 
-    fn validate(self: SavedDescriptor) void {
-        fd.assertValidDescriptor(self.target);
-        if (self.saved) |saved| fd.assertValidDescriptor(saved);
+    fn validate(self: SavedDescriptorState) void {
+        switch (self) {
+            .originally_closed => {},
+            .saved => |descriptor| fd.assertValidDescriptor(descriptor),
+        }
     }
 };
 
-pub const AppliedRedirections = struct {
+const shell_internal_fd_min: fd.Descriptor = 10;
+
+const SavedDescriptor = struct {
+    target: fd.Descriptor,
+    state: SavedDescriptorState,
+
+    fn validate(self: SavedDescriptor) void {
+        fd.assertValidDescriptor(self.target);
+        self.state.validate();
+    }
+};
+
+pub const FdTransaction = struct {
     allocator: std.mem.Allocator,
     port: fd.Port,
     self_duplicate_noop: bool = false,
     saved: std.ArrayList(SavedDescriptor) = .empty,
     active: bool = true,
 
-    pub fn init(allocator: std.mem.Allocator, port: fd.Port, self_duplicate_noop: bool) AppliedRedirections {
+    pub fn init(allocator: std.mem.Allocator, port: fd.Port, self_duplicate_noop: bool) FdTransaction {
         return .{ .allocator = allocator, .port = port, .self_duplicate_noop = self_duplicate_noop };
     }
 
-    pub fn deinit(self: *AppliedRedirections) void {
+    pub fn deinit(self: *FdTransaction) void {
         std.debug.assert(!self.active);
         std.debug.assert(self.saved.items.len == 0);
         self.saved.deinit(self.allocator);
         self.* = undefined;
     }
 
-    pub fn restore(self: *AppliedRedirections) void {
+    pub fn restore(self: *FdTransaction) void {
         if (!self.active) return;
 
         var index = self.saved.items.len;
@@ -557,37 +571,43 @@ pub const AppliedRedirections = struct {
             index -= 1;
             const saved = self.saved.items[index];
             saved.validate();
-            if (saved.saved) |saved_descriptor| {
-                // ziglint-ignore: Z026 best-effort restoration cleanup
-                self.port.duplicateTo(.{ .source = saved_descriptor, .target = saved.target }) catch {};
-                // ziglint-ignore: Z026 best-effort restoration cleanup
-                self.port.close(.{ .descriptor = saved_descriptor }) catch {};
-            } else {
-                // ziglint-ignore: Z026 best-effort restoration cleanup
-                self.port.close(.{ .descriptor = saved.target }) catch {};
+            switch (saved.state) {
+                .saved => |saved_descriptor| {
+                    // ziglint-ignore: Z026 best-effort restoration cleanup
+                    self.port.duplicateTo(.{ .source = saved_descriptor, .target = saved.target }) catch {};
+                    // ziglint-ignore: Z026 best-effort restoration cleanup
+                    self.port.close(.{ .descriptor = saved_descriptor }) catch {};
+                },
+                .originally_closed => {
+                    // ziglint-ignore: Z026 best-effort restoration cleanup
+                    self.port.close(.{ .descriptor = saved.target }) catch {};
+                },
             }
         }
         self.saved.clearRetainingCapacity();
         self.active = false;
     }
 
-    pub fn commit(self: *AppliedRedirections) void {
+    pub fn commit(self: *FdTransaction) void {
         if (!self.active) return;
         for (self.saved.items) |saved| {
             saved.validate();
             // ziglint-ignore: Z026 best-effort cleanup after committed redirections
-            if (saved.saved) |saved_descriptor| self.port.close(.{ .descriptor = saved_descriptor }) catch {};
+            switch (saved.state) {
+                .saved => |saved_descriptor| self.port.close(.{ .descriptor = saved_descriptor }) catch {},
+                .originally_closed => {},
+            }
         }
         self.saved.clearRetainingCapacity();
         self.active = false;
     }
 
-    pub fn validateActive(self: AppliedRedirections) void {
+    pub fn validateActive(self: FdTransaction) void {
         std.debug.assert(self.active);
         for (self.saved.items) |saved| saved.validate();
     }
 
-    pub fn applyStep(self: *AppliedRedirections, step: RedirectionStep) std.mem.Allocator.Error!?ApplyFailureDetail {
+    pub fn applyStep(self: *FdTransaction, step: RedirectionStep) std.mem.Allocator.Error!?ApplyFailureDetail {
         std.debug.assert(self.active);
         step.validate();
         return switch (step.effect) {
@@ -598,7 +618,7 @@ pub const AppliedRedirections = struct {
         };
     }
 
-    fn applyOpenPath(self: *AppliedRedirections, step: OpenPathStep) std.mem.Allocator.Error!?ApplyFailureDetail {
+    fn applyOpenPath(self: *FdTransaction, step: OpenPathStep) std.mem.Allocator.Error!?ApplyFailureDetail {
         step.validate();
         if (try self.saveTarget(step.target)) |failure| return failure;
 
@@ -617,7 +637,7 @@ pub const AppliedRedirections = struct {
         return null;
     }
 
-    fn applyDuplicate(self: *AppliedRedirections, step: DuplicateStep) std.mem.Allocator.Error!?ApplyFailureDetail {
+    fn applyDuplicate(self: *FdTransaction, step: DuplicateStep) std.mem.Allocator.Error!?ApplyFailureDetail {
         step.validate();
         if (step.source != step.target) {
             const source = self.port.duplicate(.{
@@ -626,7 +646,10 @@ pub const AppliedRedirections = struct {
             }) catch |err| return .{ .duplicate = err };
             if (source.descriptor == step.target) {
                 if (!self.hasSavedTarget(step.target)) {
-                    self.saved.append(self.allocator, .{ .target = step.target, .saved = null }) catch |err| {
+                    self.saved.append(self.allocator, .{
+                        .target = step.target,
+                        .state = .originally_closed,
+                    }) catch |err| {
                         // ziglint-ignore: Z026 best-effort rollback after allocation failure
                         closeOpened(self.port, source.descriptor) catch {};
                         return err;
@@ -651,31 +674,42 @@ pub const AppliedRedirections = struct {
         return null;
     }
 
-    fn hasSavedTarget(self: AppliedRedirections, target: fd.Descriptor) bool {
+    fn hasSavedTarget(self: FdTransaction, target: fd.Descriptor) bool {
         fd.assertValidDescriptor(target);
         for (self.saved.items) |saved| if (saved.target == target) return true;
         return false;
     }
 
-    fn applyClose(self: *AppliedRedirections, step: CloseStep) std.mem.Allocator.Error!?ApplyFailureDetail {
+    fn applyClose(self: *FdTransaction, step: CloseStep) std.mem.Allocator.Error!?ApplyFailureDetail {
         step.validate();
         if (try self.saveTarget(step.target)) |failure| return failure;
         closeTarget(self.port, step.target) catch |err| return .{ .close = err };
         return null;
     }
 
-    fn saveTarget(self: *AppliedRedirections, target: fd.Descriptor) std.mem.Allocator.Error!?ApplyFailureDetail {
+    fn saveTarget(self: *FdTransaction, target: fd.Descriptor) std.mem.Allocator.Error!?ApplyFailureDetail {
         fd.assertValidDescriptor(target);
         if (self.hasSavedTarget(target)) return null;
-        const saved = self.port.duplicate(.{ .descriptor = target, .close_on_exec = true }) catch |err| switch (err) {
+        const saved = self.port.duplicate(.{
+            .descriptor = target,
+            .close_on_exec = true,
+            .minimum_descriptor = shell_internal_fd_min,
+        }) catch |err| switch (err) {
             error.BadFileDescriptor => null,
             else => |duplicate_err| return .{ .duplicate = duplicate_err },
         };
-        const saved_descriptor = if (saved) |duplicate| duplicate.descriptor else null;
-        try self.saved.append(self.allocator, .{ .target = target, .saved = saved_descriptor });
+        const saved_state: SavedDescriptorState = if (saved) |duplicate|
+            .{ .saved = duplicate.descriptor }
+        else
+            .originally_closed;
+        try self.saved.append(self.allocator, .{ .target = target, .state = saved_state });
         return null;
     }
 };
+
+// Compatibility name for evaluator call sites while the transaction model is
+// being moved through the rest of the executor.
+pub const AppliedRedirections = FdTransaction;
 
 fn closeOpened(port: fd.Port, descriptor: fd.Descriptor) fd.CloseError!void {
     fd.assertValidDescriptor(descriptor);
@@ -1018,17 +1052,19 @@ const FakeFdRuntime = struct {
         self.open_descriptors[@intCast(descriptor)] = open_value;
     }
 
-    fn next(self: *FakeFdRuntime) fd.Descriptor {
+    fn next(self: *FakeFdRuntime, minimum_descriptor: fd.Descriptor) fd.Descriptor {
+        fd.assertValidDescriptor(minimum_descriptor);
         if (self.reuse_low_descriptors) {
-            for (self.open_descriptors[3..], 3..) |is_open, descriptor| {
+            const start: usize = @intCast(@max(@as(fd.Descriptor, 3), minimum_descriptor));
+            for (self.open_descriptors[start..], start..) |is_open, descriptor| {
                 if (is_open) continue;
                 const fd_descriptor: fd.Descriptor = @intCast(descriptor);
                 self.setOpen(fd_descriptor, true);
                 return fd_descriptor;
             }
         }
-        const descriptor = self.next_descriptor;
-        self.next_descriptor += 1;
+        const descriptor = @max(self.next_descriptor, minimum_descriptor);
+        self.next_descriptor = descriptor + 1;
         self.setOpen(descriptor, true);
         return descriptor;
     }
@@ -1041,7 +1077,7 @@ const FakeFdRuntime = struct {
         const self = fromContext(context);
         request.validate();
         if (std.mem.eql(u8, request.path, "missing")) return error.FileNotFound;
-        return .{ .descriptor = self.next() };
+        return .{ .descriptor = self.next(0) };
     }
 
     fn close(context: *anyopaque, request: fd.CloseRequest) fd.CloseError!void {
@@ -1055,7 +1091,7 @@ const FakeFdRuntime = struct {
         const self = fromContext(context);
         request.validate();
         if (!self.isOpen(request.descriptor)) return error.BadFileDescriptor;
-        return .{ .descriptor = self.next() };
+        return .{ .descriptor = self.next(request.minimum_descriptor) };
     }
 
     fn duplicateTo(context: *anyopaque, request: fd.DuplicateToRequest) fd.DuplicateError!void {
@@ -1069,8 +1105,8 @@ const FakeFdRuntime = struct {
     fn pipe(context: *anyopaque, request: fd.PipeRequest) fd.PipeError!fd.PipeResult {
         const self = fromContext(context);
         request.validate();
-        const read = self.next();
-        const write = self.next();
+        const read = self.next(0);
+        const write = self.next(0);
         return .{ .read = read, .write = write };
     }
 

@@ -381,6 +381,7 @@ fn runSemanticAliasTimingCommandString(
                     false,
                 );
                 defer execution.deinit(allocator);
+                parser_resolver.active_frame = null;
                 switch (execution) {
                     .unsupported => |message| return semanticUnsupported(allocator, message),
                     .output => |output| {
@@ -542,7 +543,29 @@ pub fn runHiddenShellStateCommandWithExtensionHandlers(
         .source = .interactive,
         .interactive = true,
     });
-    var outcome = try shell.eval.evaluatePlan(&evaluator, shell_state, eval_context, plan);
+    var hidden_input = shell.EvaluationInput.empty();
+    var hidden_frame = shell.ExecutionFrame.init(.{
+        .kind = .top_level,
+        .eval_target = .current_shell,
+        .stdin = .{ .bytes = "" },
+        .mutation_policy = .commit_to_parent_shell,
+    });
+    try hidden_frame.spec.fd_table.bindInput(allocator, 0, .{ .bytes = "" });
+    try hidden_frame.spec.fd_table.bindOutput(allocator, 1, .{ .capture = .side_stdout });
+    try hidden_frame.spec.fd_table.bindOutput(allocator, 2, .{ .capture = .side_stderr });
+    hidden_frame.spec.stdout = .{ .capture = .side_stdout };
+    hidden_frame.spec.stderr = .{ .capture = .side_stderr };
+    hidden_frame.spec.captures = .{ .channels = &.{ .side_stdout, .side_stderr } };
+    defer hidden_frame.spec.fd_table.deinit(allocator);
+
+    var outcome = try shell.eval.evaluatePlanInFrame(
+        &evaluator,
+        shell_state,
+        eval_context,
+        plan,
+        &hidden_input,
+        &hidden_frame,
+    );
     defer outcome.deinit();
     try outcome.applyToShellState(shell_state, .{});
     return .{
@@ -854,6 +877,7 @@ fn runSemanticLoweredProgram(
             }
         }
         syncSemanticStdinScriptOffset(stdin_script_file, stdin_script_source_offset, script, statement_end);
+        source_resolver.active_frame = output_frame.execution_frame_value;
         var body = if (statement.async_after) body: {
             const statement_script = try statement_fragment.render(allocator, program.source, .{ .trim_syntax = true });
             defer allocator.free(statement_script);
@@ -906,6 +930,7 @@ fn runSemanticLoweredProgram(
             shell_state,
             statement_context,
             body,
+            output_frame.execution_frame_value,
         ) catch |err| switch (err) {
             error.Unimplemented => return semanticUnsupported(
                 allocator,
@@ -1656,46 +1681,12 @@ fn evaluateSemanticComparisonBody(
     shell_state: *shell.ShellState,
     eval_context: shell.EvalContext,
     body: shell.TrapActionBody,
+    frame: *shell.ExecutionFrame,
 ) shell.eval.EvalError!shell.CommandOutcome {
     body.validate();
     eval_context.validate();
-    return switch (body) {
-        .simple => |plan| shell.eval.evaluatePlan(evaluator, shell_state, eval_context.withTarget(plan.target), plan),
-        .compound => |plan| shell.eval.evaluateCompoundPlan(
-            evaluator,
-            shell_state,
-            eval_context.withTarget(plan.target),
-            plan,
-        ),
-        .pipeline => |plan| shell.eval.evaluatePipelinePlan(evaluator, shell_state, eval_context, plan),
-        .owned => |owned| switch (owned.body) {
-            .simple => |plan| shell.eval.evaluatePlan(
-                evaluator,
-                shell_state,
-                eval_context.withTarget(plan.target),
-                plan,
-            ),
-            .compound => |plan| shell.eval.evaluateCompoundPlan(
-                evaluator,
-                shell_state,
-                eval_context.withTarget(plan.target),
-                plan,
-            ),
-            .pipeline => |plan| shell.eval.evaluatePipelinePlan(evaluator, shell_state, eval_context, plan),
-            .failure => |failure| shell.eval.trapActionFailureOutcome(
-                evaluator.allocator,
-                eval_context,
-                failure,
-                shell_state.*,
-            ),
-        },
-        .failure => |failure| shell.eval.trapActionFailureOutcome(
-            evaluator.allocator,
-            eval_context,
-            failure,
-            shell_state.*,
-        ),
-    };
+    frame.validate();
+    return shell.eval.evaluateTrapActionBodyInFrame(evaluator, shell_state, eval_context, body, frame);
 }
 
 pub const CommandResult = struct {

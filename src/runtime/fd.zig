@@ -105,6 +105,7 @@ pub const CloseRequest = struct {
 pub const DuplicateRequest = struct {
     descriptor: Descriptor,
     close_on_exec: bool = false,
+    minimum_descriptor: Descriptor = 0,
 
     pub fn init(descriptor: Descriptor) DuplicateRequest {
         const request: DuplicateRequest = .{ .descriptor = descriptor };
@@ -114,6 +115,7 @@ pub const DuplicateRequest = struct {
 
     pub fn validate(self: DuplicateRequest) void {
         assertValidDescriptor(self.descriptor);
+        assertValidDescriptor(self.minimum_descriptor);
     }
 };
 

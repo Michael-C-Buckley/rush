@@ -76,6 +76,16 @@ pub fn build(b: *std.Build) void {
     run_step.dependOn(&run_cmd.step);
 
     const test_step = b.step("test", "Run unit tests");
+    const test_filter = b.option(
+        []const u8,
+        "test-filter",
+        "Only run unit tests whose name contains this substring",
+    );
+    const test_no_run = b.option(
+        bool,
+        "test-no-run",
+        "Compile unit tests without running the test binary",
+    ) orelse false;
     const test_module = createRushRootModule(
         b,
         target,
@@ -87,10 +97,20 @@ pub fn build(b: *std.Build) void {
         use_system_sqlite,
         .{},
     );
+    const test_filters = if (test_filter) |filter| &[_][]const u8{filter} else &[_][]const u8{};
     const exe_tests = b.addTest(.{
         .root_module = test_module,
+        .filters = test_filters,
+        .test_runner = .{
+            .path = b.path("tests/fd_safe_test_runner.zig"),
+            .mode = .simple,
+        },
     });
-    test_step.dependOn(&b.addRunArtifact(exe_tests).step);
+    if (test_no_run) {
+        test_step.dependOn(&exe_tests.step);
+    } else {
+        test_step.dependOn(&b.addRunArtifact(exe_tests).step);
+    }
 
     const conformance_step = b.step("conformance", "Run shell conformance tests");
     addConformanceTests(b, target, optimize, exe, conformance_step);

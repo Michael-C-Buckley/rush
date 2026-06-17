@@ -310,6 +310,12 @@ pub const FdTable = struct {
         return defaultEndpoint(descriptor);
     }
 
+    pub fn boundEndpoint(self: FdTable, descriptor: fd.Descriptor) ?FdEndpoint {
+        fd.assertValidDescriptor(descriptor);
+        if (self.bindingIndex(descriptor)) |index| return self.bindings.items[index].endpoint;
+        return null;
+    }
+
     pub fn applyRedirectionPlan(
         self: *FdTable,
         allocator: std.mem.Allocator,

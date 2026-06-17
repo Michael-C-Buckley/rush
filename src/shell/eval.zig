@@ -180,6 +180,9 @@ fn rootBoundarySpec(eval_context: context.EvalContext) execution_frame.BoundaryS
         .current_shell => .{
             .kind = .top_level,
             .eval_target = .current_shell,
+            .stdout = .{ .capture = .side_stdout },
+            .stderr = .{ .capture = .side_stderr },
+            .captures = captureSet(.side_stdout, .side_stderr),
             .mutation_policy = .commit_to_parent_shell,
         },
         .subshell => .{
@@ -198,15 +201,32 @@ fn rootBoundarySpec(eval_context: context.EvalContext) execution_frame.BoundaryS
     };
 }
 
-fn commandSubstitutionExecutionFrame(parent_frame: *execution_frame.ExecutionFrame) execution_frame.ExecutionFrame {
+fn commandSubstitutionExecutionFrame(
+    allocator: std.mem.Allocator,
+    parent_frame: *execution_frame.ExecutionFrame,
+) EvalError!execution_frame.ExecutionFrame {
     parent_frame.validate();
+    const stdin = commandSubstitutionInputEndpoint(parent_frame.*);
+    const stdout: execution_frame.OutputEndpoint = .{ .capture = .command_substitution_stdout };
     const stderr = commandSubstitutionStderrEndpoint(parent_frame.*);
+    var fd_table = try parent_frame.spec.fd_table.clone(allocator);
+    errdefer fd_table.deinit(allocator);
+
+    try fd_table.bindInput(allocator, 0, stdin);
+    try fd_table.bindOutput(allocator, 1, stdout);
+    switch (parent_frame.spec.fd_table.endpoint(2)) {
+        .output => |output| try fd_table.bindOutput(allocator, 2, output),
+        .closed => try fd_table.close(allocator, 2),
+        .input => try fd_table.bindOutput(allocator, 2, parent_frame.spec.stderr),
+    }
+
     return parent_frame.child(.{
         .kind = .command_substitution,
         .eval_target = .subshell,
-        .stdin = commandSubstitutionInputEndpoint(parent_frame.*),
-        .stdout = .{ .capture = .command_substitution_stdout },
+        .stdin = stdin,
+        .stdout = stdout,
         .stderr = stderr,
+        .fd_table = fd_table,
         .captures = commandSubstitutionCaptures(stderr),
         .mutation_policy = .discard_at_boundary,
         .trap_policy = .command_substitution,
@@ -258,21 +278,25 @@ fn pipelineStageExecutionFrame(
         pipelineStageInheritedInput(parent_frame.*);
     const stdout = pipelineStageOutputEndpoint(parent_frame.*, is_last_stage);
     const stderr = pipelineStageErrorEndpoint(parent_frame.*);
+    var fd_table = try parent_frame.spec.fd_table.clone(allocator);
+    errdefer fd_table.deinit(allocator);
+    try fd_table.bindInput(allocator, 0, stdin);
+    try fd_table.bindOutput(allocator, 1, stdout);
+    try fd_table.bindOutput(allocator, 2, stderr);
+    try fd_table.applyRedirectionPlan(allocator, redirections);
+
     var frame = parent_frame.child(.{
         .kind = .pipeline_stage,
         .eval_target = stage_target,
         .stdin = stdin,
         .stdout = stdout,
         .stderr = stderr,
+        .fd_table = fd_table,
         .captures = pipelineStageCaptures(stdout, stderr),
         .mutation_policy = if (stage_target == .subshell) .commit_within_subshell else .discard_at_boundary,
         .trap_policy = .isolated_child,
         .failure_policy = .contain_fatal_at_boundary,
     });
-    try frame.spec.fd_table.bindInput(allocator, 0, stdin);
-    try frame.spec.fd_table.bindOutput(allocator, 1, stdout);
-    try frame.spec.fd_table.bindOutput(allocator, 2, stderr);
-    try frame.spec.fd_table.applyRedirectionPlan(allocator, redirections);
     frame.validate();
     return frame;
 }
@@ -297,21 +321,30 @@ fn semanticCommandExecutionFrame(
     var fd_table = try parent_frame.spec.fd_table.clone(allocator);
     errdefer fd_table.deinit(allocator);
     try fd_table.applyRedirectionPlan(allocator, redirections);
-    const stdin: execution_frame.InputEndpoint = switch (fd_table.endpoint(0)) {
+    const stdin: execution_frame.InputEndpoint = switch (fd_table.boundEndpoint(0) orelse
+        @as(execution_frame.FdEndpoint, .{ .input = parent_frame.spec.stdin }))
+    {
         .input => |input| input,
         .closed => .closed,
         .output => parent_frame.spec.stdin,
     };
-    const stdout: execution_frame.OutputEndpoint = switch (fd_table.endpoint(1)) {
+    const stdout: execution_frame.OutputEndpoint = switch (fd_table.boundEndpoint(1) orelse
+        @as(execution_frame.FdEndpoint, .{ .output = parent_frame.spec.stdout }))
+    {
         .output => |output| output,
         .closed => .discard,
         .input => parent_frame.spec.stdout,
     };
-    const stderr: execution_frame.OutputEndpoint = switch (fd_table.endpoint(2)) {
+    const stderr: execution_frame.OutputEndpoint = switch (fd_table.boundEndpoint(2) orelse
+        @as(execution_frame.FdEndpoint, .{ .output = parent_frame.spec.stderr }))
+    {
         .output => |output| output,
         .closed => .discard,
         .input => parent_frame.spec.stderr,
     };
+    try fd_table.bindInput(allocator, 0, stdin);
+    try fd_table.bindOutput(allocator, 1, stdout);
+    try fd_table.bindOutput(allocator, 2, stderr);
     const spec: execution_frame.BoundarySpec = .{
         .kind = if (parent_frame.spec.kind == .pipeline_stage)
             .pipeline_stage
@@ -363,6 +396,16 @@ fn frameOutputEndpointCaptures(
     return switch (endpoint) {
         .output => |output| output.captureChannel() == channel,
         .input, .closed => false,
+    };
+}
+
+fn defaultFrameEndpoint(descriptor: runtime.fd.Descriptor) execution_frame.FdEndpoint {
+    runtime.fd.assertValidDescriptor(descriptor);
+    return switch (descriptor) {
+        0 => .{ .input = .inherit_stdin },
+        1 => .{ .output = .inherit_stdout },
+        2 => .{ .output = .inherit_stderr },
+        else => .{ .output = .{ .fd = descriptor } },
     };
 }
 
@@ -605,6 +648,7 @@ pub const ParserBackedSourceResolver = struct {
     arg_zero: []const u8 = "rush",
     expand_aliases: bool = true,
     alias_state: ?*state.ShellState = null,
+    active_frame: ?*execution_frame.ExecutionFrame = null,
 
     pub fn init(evaluator: *Evaluator) ParserBackedSourceResolver {
         return .{ .evaluator = evaluator };
@@ -672,6 +716,7 @@ pub const ParserBackedSourceResolver = struct {
     pub fn validate(self: ParserBackedSourceResolver) void {
         _ = self.evaluator.allocator;
         std.debug.assert(self.arg_zero.len != 0);
+        if (self.active_frame) |frame| frame.validate();
         for (self.externals) |external| external.validate();
     }
 
@@ -826,6 +871,7 @@ const SourceExpansionCommandSubstitutions = struct {
             expansion_eval_context,
             self.resolver.commandSubstitutionResolver(),
             lowerer.owner.resolver(),
+            lowerer.owner.active_frame,
         );
         self.resolver.expansion_context = &self.context;
     }
@@ -2490,6 +2536,7 @@ pub const CommandSubstitutionExpansionContext = struct {
     eval_context: context.EvalContext,
     resolver: CommandSubstitutionResolver,
     trap_resolver: ?TrapActionResolver = null,
+    parent_frame: ?*execution_frame.ExecutionFrame = null,
     fatal_failure: ?TrapActionFailure = null,
     last_status: ?outcome.ExitStatus = null,
     last_control_flow: outcome.ControlFlow = .normal,
@@ -2503,17 +2550,20 @@ pub const CommandSubstitutionExpansionContext = struct {
         eval_context: context.EvalContext,
         resolver: CommandSubstitutionResolver,
         trap_resolver: ?TrapActionResolver,
+        parent_frame: ?*execution_frame.ExecutionFrame,
     ) CommandSubstitutionExpansionContext {
         shell_state.validate();
         eval_context.validate();
         resolver.validate();
         if (trap_resolver) |resolver_for_traps| resolver_for_traps.validate();
+        if (parent_frame) |frame| frame.validate();
         return .{
             .evaluator = evaluator,
             .shell_state = shell_state,
             .eval_context = eval_context,
             .resolver = resolver,
             .trap_resolver = trap_resolver,
+            .parent_frame = parent_frame,
         };
     }
 
@@ -2547,6 +2597,7 @@ pub const CommandSubstitutionExpansionContext = struct {
         self.eval_context.validate();
         self.resolver.validate();
         if (self.trap_resolver) |resolver_for_traps| resolver_for_traps.validate();
+        if (self.parent_frame) |frame| frame.validate();
         if (self.fatal_failure) |failure| {
             failure.validate();
             std.debug.assert(failure.fatal_noninteractive);
@@ -2606,21 +2657,21 @@ const FunctionFrame = struct {
     }
 };
 
-const EvaluationInput = struct {
+pub const EvaluationInput = struct {
     bytes: []const u8 = &.{},
     cursor: usize = 0,
 
-    fn empty() EvaluationInput {
+    pub fn empty() EvaluationInput {
         return .{};
     }
 
-    fn init(bytes: []const u8) EvaluationInput {
+    pub fn init(bytes: []const u8) EvaluationInput {
         const input: EvaluationInput = .{ .bytes = bytes };
         input.validate();
         return input;
     }
 
-    fn validate(self: EvaluationInput) void {
+    pub fn validate(self: EvaluationInput) void {
         std.debug.assert(self.cursor <= self.bytes.len);
     }
 
@@ -2699,10 +2750,21 @@ const EvaluationBuffers = struct {
         return OutputFrame.initBorrowed(self, &self.routing);
     }
 
-    fn useFrameFdTableRouting(self: *EvaluationBuffers) !void {
+    fn useFrameFdTableRouting(self: *EvaluationBuffers, eval_context: context.EvalContext) !void {
         self.frame.validate();
-        try self.routing.setDestination(1, outputDestinationForFrameEndpoint(1, self.frame.spec.fd_table.endpoint(1)));
-        try self.routing.setDestination(2, outputDestinationForFrameEndpoint(2, self.frame.spec.fd_table.endpoint(2)));
+        eval_context.validate();
+        const command_substitution_context = eval_context.command_substitution_depth != 0 or
+            frameWithinCommandSubstitution(self.frame.*);
+        try self.routing.setDestination(1, outputDestinationForFrameEndpointInContext(
+            1,
+            self.frame.spec.fd_table.endpoint(1),
+            command_substitution_context,
+        ));
+        try self.routing.setDestination(2, outputDestinationForFrameEndpointInContext(
+            2,
+            self.frame.spec.fd_table.endpoint(2),
+            command_substitution_context,
+        ));
     }
 
     fn useFrameFdTableInput(
@@ -2745,24 +2807,49 @@ const EvaluationBuffers = struct {
     }
 };
 
-fn outputDestinationForFrameEndpoint(
+fn outputDestinationForFrameEndpointInContext(
     descriptor: runtime.fd.Descriptor,
     endpoint: execution_frame.FdEndpoint,
+    command_substitution_context: bool,
 ) OutputDestination {
     runtime.fd.assertValidDescriptor(descriptor);
     endpoint.validate();
     return switch (endpoint) {
         .output => |output| switch (output) {
-            .inherit_stdout => .{ .host_descriptor = 1 },
-            .inherit_stderr => .{ .host_descriptor = 2 },
-            .fd => |host_descriptor| .{ .host_descriptor = host_descriptor },
+            .inherit_stdout => if (command_substitution_context)
+                .{ .host_descriptor = 1 }
+            else
+                .{ .host_descriptor = 1 },
+            .inherit_stderr => if (command_substitution_context)
+                .outcome_stderr_capture
+            else
+                .{ .host_descriptor = 2 },
+            .fd => |host_descriptor| if (command_substitution_context) switch (host_descriptor) {
+                1 => .{ .host_descriptor = 1 },
+                2 => .outcome_stderr_capture,
+                else => .{ .host_descriptor = host_descriptor },
+            } else .{ .host_descriptor = host_descriptor },
             .pipe_write => |host_descriptor| .{ .host_descriptor = host_descriptor },
             .path => .{ .host_descriptor = descriptor },
-            .capture => |channel| outputDestinationForCaptureChannel(channel),
+            .capture => |channel| if (command_substitution_context) switch (channel) {
+                .command_substitution_stdout => .command_substitution_stdout_capture,
+                .side_stdout => .{ .host_descriptor = 1 },
+                .side_stderr => .outcome_stderr_capture,
+                .pipeline_data => .pipeline_data_capture,
+            } else outputDestinationForCaptureChannel(channel),
             .discard => .closed,
         },
         .closed => .closed,
         .input => .closed,
+    };
+}
+
+fn frameWithinCommandSubstitution(frame: execution_frame.ExecutionFrame) bool {
+    frame.validate();
+    if (frame.spec.kind == .command_substitution) return true;
+    return switch (frame.parent) {
+        .kind => |kind| kind == .command_substitution,
+        .none => false,
     };
 }
 
@@ -2807,6 +2894,17 @@ pub fn evaluatePlan(
     return evaluatePlanWithInput(evaluator, shell_state, eval_context, plan, &input, &frame);
 }
 
+pub fn evaluatePlanInFrame(
+    evaluator: *Evaluator,
+    shell_state: *state.ShellState,
+    eval_context: context.EvalContext,
+    plan: command_plan.CommandPlan,
+    input: *EvaluationInput,
+    frame: *execution_frame.ExecutionFrame,
+) EvalError!outcome.CommandOutcome {
+    return evaluatePlanWithInput(evaluator, shell_state, eval_context, plan, input, frame);
+}
+
 fn evaluatePlanWithInput(
     evaluator: *Evaluator,
     shell_state: *state.ShellState,
@@ -2841,7 +2939,7 @@ fn evaluatePlanWithInput(
             var failure_input = EvaluationInput.empty();
             var buffers = EvaluationBuffers.init(evaluator.allocator, &failure_input, frame);
             defer buffers.deinit();
-            if (frame.spec.kind == .pipeline_stage) try buffers.useFrameFdTableRouting();
+            if (frame.spec.kind == .pipeline_stage) try buffers.useFrameFdTableRouting(eval_context);
             try appendPlanExpansionOutput(evaluator.*, eval_context, plan, &buffers);
             try buffers.addBuiltinDiagnostic(name, "readonly variable");
 
@@ -2896,7 +2994,7 @@ fn evaluatePlanWithInput(
     );
     defer buffers.deinit();
     buffers.useFrameFdTableInput(&frame_input, input);
-    if (frameRoutesPipelineData(command_frame)) try buffers.useFrameFdTableRouting();
+    if (frameRoutesPipelineData(command_frame)) try buffers.useFrameFdTableRouting(eval_context);
     if (readonly_assignment) |name| try buffers.addBuiltinDiagnostic(name, "readonly variable");
     try appendPlanExpansionOutput(evaluator.*, eval_context, effective_plan, &buffers);
     try flushCurrentShellBufferedCommandOutput(&buffers, eval_context, evaluator.external_stdio);
@@ -2963,15 +3061,23 @@ fn evaluatePlanWithInput(
         &buffers,
     );
     switch (execRedirectionCommitMode(evaluator.*, eval_context, effective_plan, result)) {
-        .none => {},
-        .permanent => if (applied_redirections) |*applied| applied.commit(),
-        .scoped => if (applied_redirections) |applied| {
-            try appendScopedExecRedirection(evaluator, applied, effective_plan.redirections);
-            applied_redirections = null;
+        .none => if (execRedirectionsMutateCurrentFrame(eval_context, effective_plan, result)) {
+            try commitExecRedirectionsToFrame(evaluator.allocator, frame, effective_plan.redirections);
+        },
+        .permanent => {
+            if (applied_redirections) |*applied| applied.commit();
+            try commitExecRedirectionsToFrame(evaluator.allocator, frame, effective_plan.redirections);
+        },
+        .scoped => {
+            if (applied_redirections) |applied| {
+                try appendScopedExecRedirection(evaluator, applied, effective_plan.redirections);
+                applied_redirections = null;
+            }
+            try commitExecRedirectionsToFrame(evaluator.allocator, frame, effective_plan.redirections);
         },
     }
     if ((applied_redirections != null or
-        hasScopedExecRedirections(evaluator.*)) and
+        (hasScopedExecRedirections(evaluator.*) and eval_context.command_substitution_depth == 0)) and
         effective_plan.class() != .external and
         effective_plan.class() != .function)
     {
@@ -3055,6 +3161,20 @@ fn bashEvalUsesTemporaryAssignments(eval_context: context.EvalContext, plan: com
     return std.mem.eql(u8, plan.argv[0], "eval") and plan.class() == .special_builtin;
 }
 
+fn execRedirectionsMutateCurrentFrame(
+    eval_context: context.EvalContext,
+    plan: command_plan.CommandPlan,
+    result: SimpleEvalResult,
+) bool {
+    eval_context.validate();
+    plan.validate();
+    result.control_flow.validate();
+    if (result.status != 0 or result.control_flow != .normal) return false;
+    if (plan.argv.len != 1) return false;
+    if (!std.mem.eql(u8, plan.argv[0], "exec")) return false;
+    return eval_context.target.allowsShellStateCommit();
+}
+
 fn filterReadonlyAssignments(
     allocator: std.mem.Allocator,
     shell_state: state.ShellState,
@@ -3129,6 +3249,17 @@ fn appendScopedExecRedirection(
     });
 }
 
+fn commitExecRedirectionsToFrame(
+    allocator: std.mem.Allocator,
+    frame: *execution_frame.ExecutionFrame,
+    redirections: redirection_plan.RedirectionPlan,
+) EvalError!void {
+    frame.validate();
+    redirections.validate();
+    try frame.spec.fd_table.applyRedirectionPlan(allocator, redirections);
+    frame.validate();
+}
+
 fn inheritScopedExecRedirections(
     allocator: std.mem.Allocator,
     target: *std.ArrayList(ScopedExecRedirection),
@@ -3180,6 +3311,7 @@ fn flushCurrentShellBufferedCommandOutput(
     if (eval_context.target != .current_shell) return;
     if (eval_context.command_substitution_depth != 0) return;
     if (!routingTargetsInheritedStandardDescriptors(buffers.routing)) return;
+    if (!frameTargetsInheritedStandardDescriptors(buffers.frame.*)) return;
     var frame = OutputFrame.initInherited(buffers);
     defer frame.deinit();
     switch (external_stdio) {
@@ -3192,11 +3324,38 @@ fn flushCurrentShellBufferedCommandOutput(
 fn routingTargetsInheritedStandardDescriptors(routing: OutputRouting) bool {
     const stdout_inherited = switch (routing.destination(1)) {
         .host_descriptor => |descriptor| descriptor == 1,
+        .outcome_stdout_capture => true,
         else => false,
     };
     const stderr_inherited = switch (routing.destination(2)) {
         .host_descriptor => |descriptor| descriptor == 2,
+        .outcome_stderr_capture => true,
         else => false,
+    };
+    return stdout_inherited or stderr_inherited;
+}
+
+fn frameTargetsInheritedStandardDescriptors(frame: execution_frame.ExecutionFrame) bool {
+    frame.validate();
+    const stdout_endpoint = frame.spec.fd_table.boundEndpoint(1) orelse
+        @as(execution_frame.FdEndpoint, .{ .output = frame.spec.stdout });
+    const stderr_endpoint = frame.spec.fd_table.boundEndpoint(2) orelse
+        @as(execution_frame.FdEndpoint, .{ .output = frame.spec.stderr });
+    const stdout_inherited = switch (stdout_endpoint) {
+        .output => |output| switch (output) {
+            .inherit_stdout => true,
+            .fd, .pipe_write => |descriptor| descriptor == 1,
+            .inherit_stderr, .path, .capture, .discard => false,
+        },
+        .closed, .input => false,
+    };
+    const stderr_inherited = switch (stderr_endpoint) {
+        .output => |output| switch (output) {
+            .inherit_stderr => true,
+            .fd, .pipe_write => |descriptor| descriptor == 2,
+            .inherit_stdout, .path, .capture, .discard => false,
+        },
+        .closed, .input => false,
     };
     return stdout_inherited or stderr_inherited;
 }
@@ -3374,6 +3533,8 @@ pub const RunnerOutputFrame = struct {
         const execution_frame_value = try allocator.create(execution_frame.ExecutionFrame);
         errdefer allocator.destroy(execution_frame_value);
         execution_frame_value.* = rootExecutionFrame(context.EvalContext.forTarget(.current_shell));
+        errdefer execution_frame_value.spec.fd_table.deinit(allocator);
+        try configureRunnerExecutionFrameForMode(allocator, execution_frame_value, mode);
 
         const buffers = try allocator.create(EvaluationBuffers);
         errdefer allocator.destroy(buffers);
@@ -3396,6 +3557,7 @@ pub const RunnerOutputFrame = struct {
     pub fn deinit(self: *RunnerOutputFrame) void {
         self.routing.deinit();
         self.buffers.deinit();
+        self.execution_frame_value.spec.fd_table.deinit(self.allocator);
         self.allocator.destroy(self.buffers);
         self.allocator.destroy(self.execution_frame_value);
         self.allocator.destroy(self.input);
@@ -3465,6 +3627,10 @@ const OutputFrame = struct {
             .routing = OutputRouting.init(buffers.allocator, .outcome_capture),
             .borrowed_routing = routing,
         };
+    }
+
+    fn initOwnedRouting(buffers: *EvaluationBuffers, routing: OutputRouting) OutputFrame {
+        return .{ .buffers = buffers, .routing = routing };
     }
 
     fn initInherited(buffers: *EvaluationBuffers) OutputFrame {
@@ -3581,6 +3747,27 @@ const OutputFrame = struct {
         try self.addDiagnostic(diagnostic, stderr_text);
     }
 };
+
+fn configureRunnerExecutionFrameForMode(
+    allocator: std.mem.Allocator,
+    frame: *execution_frame.ExecutionFrame,
+    mode: RunnerOutputMode,
+) !void {
+    frame.validate();
+    switch (mode) {
+        .live => {},
+        .capture => {
+            const stdout: execution_frame.OutputEndpoint = .{ .capture = .side_stdout };
+            const stderr: execution_frame.OutputEndpoint = .{ .capture = .side_stderr };
+            try frame.spec.fd_table.bindOutput(allocator, 1, stdout);
+            try frame.spec.fd_table.bindOutput(allocator, 2, stderr);
+            frame.spec.stdout = stdout;
+            frame.spec.stderr = stderr;
+            frame.spec.captures = captureSet(.side_stdout, .side_stderr);
+        },
+    }
+    frame.validate();
+}
 
 fn writeExternalRunOutput(
     frame: *OutputFrame,
@@ -4084,15 +4271,54 @@ fn commandExpansionOutputFrame(
     buffers: *EvaluationBuffers,
 ) EvalError!OutputFrame {
     eval_context.validate();
-    var frame = if (eval_context.command_substitution_depth != 0)
+    const use_active_frame_routing = frameHasNonDefaultStandardOutputRouting(buffers.frame.*);
+    var frame = if (use_active_frame_routing)
+        try activeFrameOutputFrameForExpansion(evaluator.allocator, eval_context, buffers)
+    else if (eval_context.command_substitution_depth != 0)
         OutputFrame.initCommandSubstitution(buffers)
     else if (eval_context.pipeline_depth != 0)
         OutputFrame.initInherited(buffers)
     else
         OutputFrame.initOutcomeCapture(buffers);
     errdefer frame.deinit();
-    try applyOutputRoutingRedirections(evaluator, &frame.routing, .{});
+    if (!use_active_frame_routing) try applyOutputRoutingRedirections(evaluator, &frame.routing, .{});
     return frame;
+}
+
+fn activeFrameOutputFrameForExpansion(
+    allocator: std.mem.Allocator,
+    eval_context: context.EvalContext,
+    buffers: *EvaluationBuffers,
+) EvalError!OutputFrame {
+    eval_context.validate();
+    buffers.frame.validate();
+    var routing = OutputRouting.init(allocator, .outcome_capture);
+    errdefer routing.deinit();
+    const command_substitution_context = eval_context.command_substitution_depth != 0 or
+        frameWithinCommandSubstitution(buffers.frame.*);
+    try routing.setDestination(
+        1,
+        outputDestinationForFrameEndpointInContext(
+            1,
+            buffers.frame.spec.fd_table.endpoint(1),
+            command_substitution_context,
+        ),
+    );
+    try routing.setDestination(
+        2,
+        outputDestinationForFrameEndpointInContext(
+            2,
+            buffers.frame.spec.fd_table.endpoint(2),
+            command_substitution_context,
+        ),
+    );
+    return OutputFrame.initOwnedRouting(buffers, routing);
+}
+
+fn frameHasNonDefaultStandardOutputRouting(frame: execution_frame.ExecutionFrame) bool {
+    frame.validate();
+    return !std.meta.eql(frame.spec.fd_table.endpoint(1), defaultFrameEndpoint(1)) or
+        !std.meta.eql(frame.spec.fd_table.endpoint(2), defaultFrameEndpoint(2));
 }
 
 fn appendPlanExpansionOutput(
@@ -4171,7 +4397,7 @@ fn evaluateCompoundPlanWithInput(
     );
     defer buffers.deinit();
     buffers.useFrameFdTableInput(&frame_input, input);
-    if (frameRoutesPipelineData(command_frame)) try buffers.useFrameFdTableRouting();
+    if (frameRoutesPipelineData(command_frame)) try buffers.useFrameFdTableRouting(eval_context);
 
     var cwd_guard: CwdGuard = .{};
     if (plan.target.isIsolatedFromParent()) cwd_guard.capture(evaluator);
@@ -4514,7 +4740,7 @@ fn executePendingTrapsWithFrame(
     var input = EvaluationInput.empty();
     var buffers = EvaluationBuffers.init(evaluator.allocator, &input, &trap_frame);
     defer buffers.deinit();
-    try buffers.useFrameFdTableRouting();
+    try buffers.useFrameFdTableRouting(eval_context);
 
     const pending_count = shell_state.pending_traps.items.len;
     const preserved_status = shell_state.last_status;
@@ -4661,6 +4887,7 @@ fn runCurrentShellRuntimeTrapBoundary(
     parser_resolver.arg_zero = evaluator.arg_zero;
     parser_resolver.expand_aliases = shell_state.shopts.enabled(.expand_aliases);
     parser_resolver.alias_state = evaluator.alias_state;
+    parser_resolver.active_frame = buffers.frame;
     var trap_outcome = (try executePendingTrapsWithFrame(
         evaluator,
         shell_state,
@@ -4752,7 +4979,8 @@ fn evaluateCommandSubstitutionInState(
     cwd_guard.capture(evaluator);
     defer cwd_guard.restore();
 
-    var substitution_frame = commandSubstitutionExecutionFrame(parent_frame);
+    var substitution_frame = try commandSubstitutionExecutionFrame(evaluator.allocator, parent_frame);
+    defer substitution_frame.spec.fd_table.deinit(evaluator.allocator);
     var body_outcome = try evaluateCommandSubstitutionBody(
         evaluator,
         substitution_state,
@@ -4773,6 +5001,7 @@ fn evaluateCommandSubstitutionInState(
         &body_outcome,
         &visible_status,
         resolver,
+        &substitution_frame,
     );
     const result = try commandSubstitutionResultFromOutcome(evaluator.allocator, visible_status, body_outcome);
     result.validate();
@@ -4812,22 +5041,25 @@ fn appendCommandSubstitutionExitTrap(
     command_outcome: *outcome.CommandOutcome,
     visible_status: *outcome.ExitStatus,
     resolver: TrapActionResolver,
+    frame: *execution_frame.ExecutionFrame,
 ) EvalError!void {
     substitution_state.validate();
     substitution_context.validate();
     assertCommandSubstitutionContext(substitution_context);
     command_outcome.validate();
     resolver.validate();
+    frame.validate();
 
     if (substitution_state.getTrapForSignal(.EXIT) == null) return;
     substitution_state.last_status = visible_status.*;
     try substitution_state.appendPendingTrap(.EXIT);
 
-    var trap_outcome = (try executePendingTraps(
+    var trap_outcome = (try executePendingTrapsWithFrame(
         evaluator,
         substitution_state,
         substitution_context,
         resolver,
+        frame,
     )) orelse return;
     defer trap_outcome.deinit();
 
@@ -5134,14 +5366,16 @@ fn runSemanticCommandSubstitution(
         try expansion_context.recordFailure(failure);
         return allocator.dupe(u8, "");
     }
-    var parent_frame = rootExecutionFrame(previous_eval_context);
+    var root_parent_frame = rootExecutionFrame(previous_eval_context);
+    defer root_parent_frame.spec.fd_table.deinit(expansion_context.evaluator.allocator);
+    const parent_frame = expansion_context.parent_frame orelse &root_parent_frame;
     var result = try evaluateCommandSubstitutionInState(
         expansion_context.evaluator,
         &substitution_state,
         substitution_context,
         body,
         expansion_context.trap_resolver,
-        &parent_frame,
+        parent_frame,
     );
     defer result.deinit();
 
@@ -5190,7 +5424,14 @@ fn evaluateSingleStagePipeline(
     const stage = stageWithTarget(plan.stages[0], stage_target);
     const stage_context = pipelineStageContext(eval_context, stage_target, plan.negated);
 
-    var stage_outcome = try evaluatePipelineStage(evaluator, shell_state, stage_context, stage);
+    var stage_outcome = try evaluatePipelineStageWithInput(
+        evaluator,
+        shell_state,
+        stage_context,
+        stage,
+        buffers.stdin,
+        buffers.frame,
+    );
     defer stage_outcome.deinit();
     try appendOutcomeBuffers(buffers, stage_outcome);
 
@@ -5826,7 +6067,6 @@ fn routePipelineStageOutcome(
     stage_outcome.validate();
     frame.validate();
     std.debug.assert(frame.spec.kind == .pipeline_stage);
-
     try routePipelineStageOutcomeBuffer(
         allocator,
         frame.spec.fd_table.endpoint(1),
@@ -6273,7 +6513,7 @@ fn evaluateExternalPipelineStage(
 
     var stage_buffers = EvaluationBuffers.init(evaluator.allocator, input, frame);
     defer stage_buffers.deinit();
-    try stage_buffers.useFrameFdTableRouting();
+    try stage_buffers.useFrameFdTableRouting(eval_context);
     try appendPlanExpansionOutput(evaluator.*, eval_context, plan, &stage_buffers);
 
     const status = try runExternalWithPipelineInput(evaluator, shell_state.*, plan, resolution, &stage_buffers);
@@ -7452,6 +7692,7 @@ fn evaluateStatementListSource(
     parser_resolver.arg_zero = evaluator.arg_zero;
     parser_resolver.expand_aliases = shell_state.shopts.enabled(.expand_aliases);
     parser_resolver.alias_state = evaluator.alias_state;
+    parser_resolver.active_frame = buffers.frame;
     var body = (parser_resolver.lowerSource(
         evaluator.allocator,
         source,
@@ -7463,22 +7704,18 @@ fn evaluateStatementListSource(
     }) orelse return error.Unimplemented;
     defer body.deinit();
 
-    switch (body) {
-        .compound => |plan| switch (plan.body) {
-            .sequence => |list| return evaluateStatementList(evaluator, shell_state, eval_context, list, buffers),
-            else => {},
-        },
-        .owned => |owned| switch (owned.body) {
-            .compound => |plan| switch (plan.body) {
-                .sequence => |list| return evaluateStatementList(evaluator, shell_state, eval_context, list, buffers),
-                else => {},
-            },
-            .simple, .pipeline, .failure => {},
-        },
-        .simple, .pipeline, .failure => {},
+    if (trapActionStatementSequence(body)) |list| {
+        return evaluateStatementList(evaluator, shell_state, eval_context, list, buffers);
     }
 
-    var body_outcome = try evaluateTrapActionBodyWithInput(evaluator, shell_state, eval_context, body, buffers.stdin);
+    var body_outcome = try evaluateTrapActionBodyWithInputInFrame(
+        evaluator,
+        shell_state,
+        eval_context,
+        body,
+        buffers.stdin,
+        buffers.frame,
+    );
     defer body_outcome.deinit();
 
     try appendOutcomeBuffers(buffers, body_outcome);
@@ -7488,6 +7725,26 @@ fn evaluateStatementListSource(
         try applyOutcomeStatusToWorkingState(shell_state, body_outcome);
     }
     return .{ .status = body_outcome.status, .control_flow = body_outcome.effectiveControlFlow() };
+}
+
+fn trapActionStatementSequence(body: TrapActionBody) ?command_plan.StatementList {
+    body.validate();
+    return switch (body) {
+        .compound => |plan| compoundStatementSequence(plan),
+        .owned => |owned| switch (owned.body) {
+            .compound => |plan| compoundStatementSequence(plan),
+            .simple, .pipeline, .failure => null,
+        },
+        .simple, .pipeline, .failure => null,
+    };
+}
+
+fn compoundStatementSequence(plan: command_plan.CompoundCommandPlan) ?command_plan.StatementList {
+    plan.validate();
+    return switch (plan.body) {
+        .sequence => |list| list,
+        else => null,
+    };
 }
 
 fn trapActionBodyCommitsStateToParent(body: TrapActionBody) bool {
@@ -7571,6 +7828,19 @@ fn evaluateTrapActionBodyWithInputInFrame(
         },
         .failure => |failure| trapActionFailureOutcome(evaluator.allocator, eval_context, failure, shell_state.*),
     };
+}
+
+pub fn evaluateTrapActionBodyInFrame(
+    evaluator: *Evaluator,
+    shell_state: *state.ShellState,
+    eval_context: context.EvalContext,
+    body: TrapActionBody,
+    frame: *execution_frame.ExecutionFrame,
+) EvalError!outcome.CommandOutcome {
+    body.validate();
+    frame.validate();
+    var input = EvaluationInput.empty();
+    return evaluateTrapActionBodyWithInputInFrame(evaluator, shell_state, eval_context, body, &input, frame);
 }
 
 const CasePatternEvaluation = union(enum) {
@@ -7777,6 +8047,15 @@ fn appendOutcomeBuffers(buffers: *EvaluationBuffers, command_outcome: outcome.Co
     if (command_outcome.propagated_failure) |failure| {
         if (buffers.propagated_failure == null) buffers.propagated_failure = failure;
     }
+    if (frameWithinCommandSubstitution(buffers.frame.*)) {
+        try buffers.stdout.appendSlice(buffers.allocator, command_outcome.stdout.items);
+        try buffers.stderr.appendSlice(buffers.allocator, command_outcome.stderr.items);
+        try buffers.pipeline_stdout.appendSlice(buffers.allocator, command_outcome.pipeline_stdout.items);
+        for (command_outcome.diagnostics.items) |diagnostic| {
+            try buffers.addDiagnosticMessage(diagnostic.message);
+        }
+        return;
+    }
     var frame = buffers.outputFrame();
     defer frame.deinit();
     try frame.write(1, command_outcome.stdout.items);
@@ -7808,8 +8087,7 @@ fn appendPipelineStageBuffers(
     var frame = OutputFrame.initOutcomeCapture(buffers);
     defer frame.deinit();
     switch (route) {
-        .pipeline_data_only => {},
-        .parent_output => try frame.write(1, command_outcome.stdout.items),
+        .pipeline_data_only, .parent_output => try frame.write(1, command_outcome.stdout.items),
     }
     try frame.write(2, command_outcome.stderr.items);
     for (command_outcome.diagnostics.items) |diagnostic| {
@@ -9138,12 +9416,10 @@ fn evaluateBuiltin(
         return evaluateReturn(shell_state, eval_context, plan.argv, buffers);
     }
     if (std.mem.eql(u8, definition.name, "echo")) {
-        return normalEvaluation(try evaluateEcho(evaluator.allocator, plan.argv, &buffers.stdout));
+        return normalEvaluation(try evaluateEchoRouted(evaluator.allocator, plan.argv, buffers));
     }
     if (std.mem.eql(u8, definition.name, "printf")) {
-        return normalEvaluation(
-            try evaluatePrintf(evaluator.allocator, plan.argv, &buffers.stdout, &buffers.stderr),
-        );
+        return normalEvaluation(try evaluatePrintfRouted(evaluator.allocator, eval_context, plan.argv, buffers));
     }
     if (std.mem.eql(u8, definition.name, "env")) {
         return normalEvaluation(
@@ -13122,6 +13398,21 @@ fn evaluateEcho(
     return 0;
 }
 
+fn evaluateEchoRouted(
+    allocator: std.mem.Allocator,
+    argv: []const []const u8,
+    buffers: *EvaluationBuffers,
+) !outcome.ExitStatus {
+    var stdout: std.ArrayList(u8) = .empty;
+    defer stdout.deinit(allocator);
+    var status = try evaluateEcho(allocator, argv, &stdout);
+    if (stdout.items.len != 0 and buffers.frame.spec.fd_table.endpoint(1) == .closed) status = 1;
+    var frame = buffers.outputFrame();
+    defer frame.deinit();
+    try frame.write(1, stdout.items);
+    return status;
+}
+
 fn appendEchoOperand(allocator: std.mem.Allocator, stdout: *std.ArrayList(u8), text: []const u8) !bool {
     var index: usize = 0;
     while (index < text.len) {
@@ -13196,6 +13487,53 @@ fn evaluatePrintf(
         argv[format_index],
         argv[format_index + 1 ..],
     );
+    return status;
+}
+
+fn evaluatePrintfRouted(
+    allocator: std.mem.Allocator,
+    eval_context: context.EvalContext,
+    argv: []const []const u8,
+    buffers: *EvaluationBuffers,
+) !outcome.ExitStatus {
+    eval_context.validate();
+    buffers.frame.validate();
+    var stdout: std.ArrayList(u8) = .empty;
+    defer stdout.deinit(allocator);
+    var stderr: std.ArrayList(u8) = .empty;
+    defer stderr.deinit(allocator);
+
+    var status = try evaluatePrintf(allocator, argv, &stdout, &stderr);
+
+    var routing = OutputRouting.init(allocator, .outcome_capture);
+    defer routing.deinit();
+    const command_substitution_context = eval_context.command_substitution_depth != 0 or
+        frameWithinCommandSubstitution(buffers.frame.*);
+    try routing.setDestination(
+        1,
+        outputDestinationForFrameEndpointInContext(
+            1,
+            buffers.frame.spec.fd_table.endpoint(1),
+            command_substitution_context,
+        ),
+    );
+    try routing.setDestination(
+        2,
+        outputDestinationForFrameEndpointInContext(
+            2,
+            buffers.frame.spec.fd_table.endpoint(2),
+            command_substitution_context,
+        ),
+    );
+    if ((stdout.items.len != 0 and routing.destination(1) == .closed) or
+        (stderr.items.len != 0 and routing.destination(2) == .closed))
+    {
+        status = 1;
+    }
+    var frame = OutputFrame.initBorrowed(buffers, &routing);
+    defer frame.deinit();
+    try frame.write(1, stdout.items);
+    try frame.write(2, stderr.items);
     return status;
 }
 
@@ -16668,7 +17006,8 @@ test "semantic command substitution frame inherits parent stdin and stderr endpo
     try parent_frame.spec.fd_table.bindOutput(std.testing.allocator, 2, .{ .capture = .side_stderr });
     defer parent_frame.spec.fd_table.deinit(std.testing.allocator);
 
-    const substitution_frame = commandSubstitutionExecutionFrame(&parent_frame);
+    var substitution_frame = try commandSubstitutionExecutionFrame(std.testing.allocator, &parent_frame);
+    defer substitution_frame.spec.fd_table.deinit(std.testing.allocator);
     switch (substitution_frame.spec.stdin) {
         .bytes => |bytes| try std.testing.expectEqualStrings("stdin", bytes),
         else => return error.ExpectedByteStdinEndpoint,
@@ -16934,6 +17273,7 @@ test "semantic expansion callback evaluates nested command substitutions through
             .context = &resolver,
             .resolveFn = NestedResolver.resolve,
         },
+        null,
         null,
     );
     defer expansion_context.deinit();
@@ -17300,9 +17640,13 @@ const FakeExternalRuntime = struct {
         self.open_descriptors[@intCast(descriptor)] = open_value;
     }
 
-    fn allocateDescriptor(self: *FakeExternalRuntime) runtime.fd.Descriptor {
-        const descriptor = self.next_descriptor;
-        self.next_descriptor += 1;
+    fn allocateDescriptor(
+        self: *FakeExternalRuntime,
+        minimum_descriptor: runtime.fd.Descriptor,
+    ) runtime.fd.Descriptor {
+        runtime.fd.assertValidDescriptor(minimum_descriptor);
+        const descriptor = @max(self.next_descriptor, minimum_descriptor);
+        self.next_descriptor = descriptor + 1;
         self.setOpen(descriptor, true);
         return descriptor;
     }
@@ -17316,7 +17660,7 @@ const FakeExternalRuntime = struct {
         request.validate();
         self.recordFdOperation(.{ .open = request.path });
         if (std.mem.eql(u8, request.path, "missing")) return error.FileNotFound;
-        return .{ .descriptor = self.allocateDescriptor() };
+        return .{ .descriptor = self.allocateDescriptor(0) };
     }
 
     fn close(opaque_context: *anyopaque, request: runtime.fd.CloseRequest) runtime.fd.CloseError!void {
@@ -17335,7 +17679,7 @@ const FakeExternalRuntime = struct {
         request.validate();
         self.recordFdOperation(.{ .duplicate = request.descriptor });
         if (!self.isOpen(request.descriptor)) return error.BadFileDescriptor;
-        return .{ .descriptor = self.allocateDescriptor() };
+        return .{ .descriptor = self.allocateDescriptor(request.minimum_descriptor) };
     }
 
     fn duplicateTo(opaque_context: *anyopaque, request: runtime.fd.DuplicateToRequest) runtime.fd.DuplicateError!void {
@@ -17349,9 +17693,9 @@ const FakeExternalRuntime = struct {
     fn pipe(opaque_context: *anyopaque, request: runtime.fd.PipeRequest) runtime.fd.PipeError!runtime.fd.PipeResult {
         const self = fromContext(opaque_context);
         request.validate();
-        const read = self.allocateDescriptor();
+        const read = self.allocateDescriptor(0);
         errdefer self.setOpen(read, false);
-        const write = self.allocateDescriptor();
+        const write = self.allocateDescriptor(0);
         self.recordFdOperation(.{ .pipe = .{ .read = read, .write = write } });
         return .{ .read = read, .write = write };
     }

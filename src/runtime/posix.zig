@@ -157,9 +157,12 @@ fn close(context: *anyopaque, request: fd.CloseRequest) fd.CloseError!void {
 fn duplicate(context: *anyopaque, request: fd.DuplicateRequest) fd.DuplicateError!fd.DuplicateResult {
     _ = context;
     request.validate();
-    const descriptor = try duplicateDescriptor(request.descriptor);
+    const descriptor = if (request.minimum_descriptor == 0)
+        try duplicateDescriptor(request.descriptor)
+    else
+        try duplicateDescriptorAtLeast(request.descriptor, request.minimum_descriptor, request.close_on_exec);
     errdefer closeDescriptor(descriptor) catch {};
-    if (request.close_on_exec) try setCloseOnExec(descriptor);
+    if (request.close_on_exec and request.minimum_descriptor == 0) try setCloseOnExec(descriptor);
     return .{ .descriptor = descriptor };
 }
 
@@ -895,6 +898,48 @@ fn duplicateDescriptor(descriptor: fd.Descriptor) fd.DuplicateError!fd.Descripto
             .BADF => return error.BadFileDescriptor,
             .INTR => continue,
             .MFILE => return error.ProcessFdQuotaExceeded,
+            else => return error.Unexpected,
+        }
+    }
+}
+
+fn duplicateDescriptorAtLeast(
+    descriptor: fd.Descriptor,
+    minimum_descriptor: fd.Descriptor,
+    close_on_exec: bool,
+) fd.DuplicateError!fd.Descriptor {
+    fd.assertValidDescriptor(descriptor);
+    fd.assertValidDescriptor(minimum_descriptor);
+    if (builtin.os.tag == .linux and !builtin.link_libc) {
+        const command = if (close_on_exec) std.os.linux.F.DUPFD_CLOEXEC else std.os.linux.F.DUPFD;
+        while (true) {
+            const rc = std.os.linux.fcntl(descriptor, command, @intCast(minimum_descriptor));
+            switch (std.os.linux.errno(rc)) {
+                .SUCCESS => return @intCast(rc),
+                .BADF => return error.BadFileDescriptor,
+                .INTR => continue,
+                .MFILE => return error.ProcessFdQuotaExceeded,
+                .INVAL => return error.Unexpected,
+                else => return error.Unexpected,
+            }
+        }
+    }
+    const command: c_int = if (close_on_exec and @hasDecl(std.c.F, "DUPFD_CLOEXEC"))
+        std.c.F.DUPFD_CLOEXEC
+    else
+        std.c.F.DUPFD;
+    while (true) {
+        const rc = std.c.fcntl(descriptor, command, minimum_descriptor);
+        switch (std.c.errno(rc)) {
+            .SUCCESS => {
+                const duplicated: fd.Descriptor = @intCast(rc);
+                if (close_on_exec and command == std.c.F.DUPFD) try setCloseOnExec(duplicated);
+                return duplicated;
+            },
+            .BADF => return error.BadFileDescriptor,
+            .INTR => continue,
+            .MFILE => return error.ProcessFdQuotaExceeded,
+            .INVAL => return error.Unexpected,
             else => return error.Unexpected,
         }
     }

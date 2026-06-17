@@ -45,6 +45,7 @@ pub const CompoundCommandPlan = command_plan.CompoundCommandPlan;
 pub const ControlFlow = outcome.ControlFlow;
 pub const Diagnostic = outcome.Diagnostic;
 pub const EvalContext = context.EvalContext;
+pub const EvaluationInput = eval.EvaluationInput;
 pub const BoundaryKind = execution_frame.BoundaryKind;
 pub const BoundaryOutcome = execution_frame.BoundaryOutcome;
 pub const BoundarySpec = execution_frame.BoundarySpec;
