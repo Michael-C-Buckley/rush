@@ -188,16 +188,47 @@ fn rootBoundarySpec(eval_context: context.EvalContext) execution_frame.BoundaryS
     };
 }
 
-fn commandSubstitutionExecutionFrame() execution_frame.ExecutionFrame {
-    return execution_frame.ExecutionFrame.init(.{
+fn commandSubstitutionExecutionFrame(parent_frame: *execution_frame.ExecutionFrame) execution_frame.ExecutionFrame {
+    parent_frame.validate();
+    const stderr = commandSubstitutionStderrEndpoint(parent_frame.*);
+    return parent_frame.child(.{
         .kind = .command_substitution,
         .eval_target = .subshell,
+        .stdin = commandSubstitutionInputEndpoint(parent_frame.*),
         .stdout = .{ .capture = .command_substitution_stdout },
-        .captures = execution_frame.Captures.commandSubstitution(),
-        .mutation_policy = .commit_within_subshell,
+        .stderr = stderr,
+        .captures = commandSubstitutionCaptures(stderr),
+        .mutation_policy = .discard_at_boundary,
         .trap_policy = .command_substitution,
         .failure_policy = .propagate_fatal_to_parent,
     });
+}
+
+fn commandSubstitutionCaptures(stderr: execution_frame.OutputEndpoint) execution_frame.Captures {
+    stderr.validate();
+    if (stderr.captureChannel()) |channel| {
+        if (channel == .command_substitution_stdout) return execution_frame.Captures.commandSubstitution();
+        return .{ .channels = &.{ .command_substitution_stdout, channel } };
+    }
+    return execution_frame.Captures.commandSubstitution();
+}
+
+fn commandSubstitutionInputEndpoint(parent_frame: execution_frame.ExecutionFrame) execution_frame.InputEndpoint {
+    parent_frame.validate();
+    return switch (parent_frame.spec.fd_table.endpoint(0)) {
+        .input => |input| input,
+        .closed => .closed,
+        .output => parent_frame.spec.stdin,
+    };
+}
+
+fn commandSubstitutionStderrEndpoint(parent_frame: execution_frame.ExecutionFrame) execution_frame.OutputEndpoint {
+    parent_frame.validate();
+    return switch (parent_frame.spec.fd_table.endpoint(2)) {
+        .output => |output| output,
+        .closed => .discard,
+        .input => parent_frame.spec.stderr,
+    };
 }
 
 fn pipelineStageExecutionFrame(
@@ -4282,7 +4313,15 @@ fn evaluateCommandSubstitutionSnapshot(
     defer substitution_state.deinit();
     if (evaluator.features.isBash()) substitution_state.options.set(.errexit, false);
 
-    return evaluateCommandSubstitutionInState(evaluator, &substitution_state, substitution_context, body, null);
+    var parent_frame = rootExecutionFrame(context.EvalContext.forTarget(.current_shell));
+    return evaluateCommandSubstitutionInState(
+        evaluator,
+        &substitution_state,
+        substitution_context,
+        body,
+        null,
+        &parent_frame,
+    );
 }
 
 fn evaluateCommandSubstitutionInState(
@@ -4291,6 +4330,7 @@ fn evaluateCommandSubstitutionInState(
     substitution_context: context.EvalContext,
     body: CommandSubstitutionBody,
     exit_trap_resolver: ?TrapActionResolver,
+    parent_frame: *execution_frame.ExecutionFrame,
 ) EvalError!CommandSubstitutionResult {
     substitution_state.validate();
     substitution_context.validate();
@@ -4298,6 +4338,7 @@ fn evaluateCommandSubstitutionInState(
     std.debug.assert(substitution_state.acceptsExecutionTarget(.subshell));
     body.validate();
     if (exit_trap_resolver) |resolver| resolver.validate();
+    parent_frame.validate();
 
     const previous_external_stdio = evaluator.external_stdio;
     evaluator.external_stdio = .capture;
@@ -4320,7 +4361,14 @@ fn evaluateCommandSubstitutionInState(
     cwd_guard.capture(evaluator);
     defer cwd_guard.restore();
 
-    var body_outcome = try evaluateCommandSubstitutionBody(evaluator, substitution_state, substitution_context, body);
+    var substitution_frame = commandSubstitutionExecutionFrame(parent_frame);
+    var body_outcome = try evaluateCommandSubstitutionBody(
+        evaluator,
+        substitution_state,
+        substitution_context,
+        body,
+        &substitution_frame,
+    );
     defer body_outcome.deinit();
 
     var visible_status = body_outcome.control_flow.status(body_outcome.status);
@@ -4427,12 +4475,13 @@ fn evaluateCommandSubstitutionBody(
     substitution_state: *state.ShellState,
     substitution_context: context.EvalContext,
     body: CommandSubstitutionBody,
+    frame: *execution_frame.ExecutionFrame,
 ) EvalError!outcome.CommandOutcome {
     substitution_state.validate();
     substitution_context.validate();
     assertCommandSubstitutionContext(substitution_context);
     body.validate();
-    var frame = commandSubstitutionExecutionFrame();
+    frame.validate();
     return switch (body) {
         .simple => |plan| blk: {
             var input = EvaluationInput.empty();
@@ -4442,7 +4491,7 @@ fn evaluateCommandSubstitutionBody(
             substitution_context.withTarget(plan.target),
             plan,
             &input,
-            &frame,
+            frame,
         );
         },
         .compound => |plan| blk: {
@@ -4453,7 +4502,7 @@ fn evaluateCommandSubstitutionBody(
             substitution_context.withTarget(plan.target),
             plan,
             &input,
-            &frame,
+            frame,
         );
         },
         .pipeline => |plan| evaluatePipelinePlanWithFrame(
@@ -4461,7 +4510,7 @@ fn evaluateCommandSubstitutionBody(
             substitution_state,
             substitution_context,
             plan,
-            &frame,
+            frame,
         ),
         .failure => |failure| trapActionFailureOutcome(
             evaluator.allocator,
@@ -4474,6 +4523,7 @@ fn evaluateCommandSubstitutionBody(
             substitution_state,
             substitution_context,
             owned.body,
+            frame,
         ),
     };
 }
@@ -4483,12 +4533,13 @@ fn evaluateCommandSubstitutionBodyPayload(
     substitution_state: *state.ShellState,
     substitution_context: context.EvalContext,
     body: CommandSubstitutionBodyPayload,
+    frame: *execution_frame.ExecutionFrame,
 ) EvalError!outcome.CommandOutcome {
     substitution_state.validate();
     substitution_context.validate();
     assertCommandSubstitutionContext(substitution_context);
     body.validate();
-    var frame = commandSubstitutionExecutionFrame();
+    frame.validate();
     return switch (body) {
         .simple => |plan| blk: {
             var input = EvaluationInput.empty();
@@ -4498,7 +4549,7 @@ fn evaluateCommandSubstitutionBodyPayload(
             substitution_context.withTarget(plan.target),
             plan,
             &input,
-            &frame,
+            frame,
         );
         },
         .compound => |plan| blk: {
@@ -4509,7 +4560,7 @@ fn evaluateCommandSubstitutionBodyPayload(
             substitution_context.withTarget(plan.target),
             plan,
             &input,
-            &frame,
+            frame,
         );
         },
         .pipeline => |plan| evaluatePipelinePlanWithFrame(
@@ -4517,7 +4568,7 @@ fn evaluateCommandSubstitutionBodyPayload(
             substitution_state,
             substitution_context,
             plan,
-            &frame,
+            frame,
         ),
         .failure => |failure| trapActionFailureOutcome(
             evaluator.allocator,
@@ -4692,12 +4743,14 @@ fn runSemanticCommandSubstitution(
         try expansion_context.recordFailure(failure);
         return allocator.dupe(u8, "");
     }
+    var parent_frame = rootExecutionFrame(previous_eval_context);
     var result = try evaluateCommandSubstitutionInState(
         expansion_context.evaluator,
         &substitution_state,
         substitution_context,
         body,
         expansion_context.trap_resolver,
+        &parent_frame,
     );
     defer result.deinit();
 
@@ -16138,6 +16191,29 @@ test "semantic command substitution captures owned output and trims only trailin
     try std.testing.expectEqual(@as(state.ExitStatus, 0), shell_state.last_status);
 }
 
+test "semantic command substitution frame inherits parent stdin and stderr endpoints" {
+    var parent_frame = rootExecutionFrame(context.EvalContext.forTarget(.current_shell));
+    try parent_frame.spec.fd_table.bindInput(std.testing.allocator, 0, .{ .bytes = "stdin" });
+    try parent_frame.spec.fd_table.bindOutput(std.testing.allocator, 2, .{ .capture = .side_stderr });
+    defer parent_frame.spec.fd_table.deinit(std.testing.allocator);
+
+    const substitution_frame = commandSubstitutionExecutionFrame(&parent_frame);
+    switch (substitution_frame.spec.stdin) {
+        .bytes => |bytes| try std.testing.expectEqualStrings("stdin", bytes),
+        else => return error.ExpectedByteStdinEndpoint,
+    }
+    const expected_stdout: execution_frame.OutputEndpoint = .{ .capture = .command_substitution_stdout };
+    try std.testing.expectEqual(expected_stdout, substitution_frame.spec.stdout);
+    const expected_stderr: execution_frame.OutputEndpoint = .{ .capture = .side_stderr };
+    try std.testing.expectEqual(expected_stderr, substitution_frame.spec.stderr);
+    try std.testing.expect(substitution_frame.spec.captures.contains(.command_substitution_stdout));
+    try std.testing.expect(substitution_frame.spec.captures.contains(.side_stderr));
+    try std.testing.expectEqual(
+        execution_frame.MutationPolicy.discard_at_boundary,
+        substitution_frame.spec.mutation_policy,
+    );
+}
+
 test "semantic command substitution captures external command stdout" {
     var fake = FakeExternalRuntime.init(std.testing.allocator);
     defer fake.deinit();
@@ -16187,12 +16263,14 @@ test "semantic command substitution runs subshell EXIT trap before trimming capt
         .target = .subshell,
         .body = .{ .sequence = .{ .commands = &commands } },
     };
+    var parent_frame = rootExecutionFrame(context.EvalContext.forTarget(.current_shell));
     var result = try evaluateCommandSubstitutionInState(
         &evaluator,
         &substitution_state,
         context.EvalContext.forTarget(.current_shell).enterCommandSubstitution(),
         .{ .compound = compound },
         simpleTrapResolver(),
+        &parent_frame,
     );
     defer result.deinit();
 
