@@ -115,6 +115,45 @@
             .status = 0,
         },
         .{
+            .name = "command substitution preserves descriptor swap routing",
+            .script =
+            \\v=$(exec 3>&1 1>&2 2>&3; printf out; printf err >&2)
+            \\printf '<%s>\n' "$v"
+            ,
+            .stdout =
+            \\<err>
+            \\
+            ,
+            .stderr = "out",
+            .status = 0,
+        },
+        .{
+            .name = "nested command substitution side output preserves descriptor swap routing",
+            .script =
+            \\v=$(exec 3>&1 1>&2 2>&3; printf "$(printf inner >&2)"; printf outer >&2)
+            \\printf '<%s>\n' "$v"
+            ,
+            .stdout =
+            \\<innerouter>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "pipeline stage side output preserves descriptor swap routing",
+            .script =
+            \\v=$(exec 3>&1 1>&2 2>&3; printf out >&2 | cat; printf err >&2)
+            \\printf '<%s>\n' "$v"
+            ,
+            .stdout =
+            \\<outerr>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "quoted io number is not recognized as a redirection prefix",
             .script =
             \\\2>out

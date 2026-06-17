@@ -94,6 +94,7 @@ pub const CommandOutcome = struct {
     status: ExitStatus,
     stdout: std.ArrayList(u8) = .empty,
     stderr: std.ArrayList(u8) = .empty,
+    pipeline_stdout: std.ArrayList(u8) = .empty,
     diagnostics: std.ArrayList(Diagnostic) = .empty,
     state_delta: delta.StateDelta,
     control_flow: ControlFlow = .normal,
@@ -134,6 +135,7 @@ pub const CommandOutcome = struct {
     pub fn deinit(self: *CommandOutcome) void {
         self.stdout.deinit(self.allocator);
         self.stderr.deinit(self.allocator);
+        self.pipeline_stdout.deinit(self.allocator);
         for (self.diagnostics.items) |diagnostic| {
             self.allocator.free(diagnostic.message);
         }

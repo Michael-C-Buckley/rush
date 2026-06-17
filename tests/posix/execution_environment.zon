@@ -58,6 +58,32 @@
             .status = 0,
         },
         .{
+            .name = "subshell inside command substitution isolates variable changes",
+            .script =
+            \\v=$( (x=sub); printf '%s' "${x-unset}" )
+            \\printf '<%s>\n' "$v"
+            ,
+            .stdout =
+            \\<unset>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "subshell inside command substitution updates status only",
+            .script =
+            \\v=$( (exit 7); printf 'status:%s' "$?" )
+            \\printf '<%s>\n' "$v"
+            ,
+            .stdout =
+            \\<status:7>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "command substitution inherits errexit in POSIX mode",
             .script =
             \\set -e

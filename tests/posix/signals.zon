@@ -202,6 +202,45 @@
             .status = 0,
         },
         .{
+            .name = "command substitution EXIT trap honors scoped exec stderr merge",
+            .script =
+            \\v=$(exec 2>&1; trap 'printf trap >&2' EXIT; :)
+            \\printf '<%s>\n' "$v"
+            ,
+            .stdout =
+            \\<trap>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "command substitution EXIT trap preserves descriptor swap routing",
+            .script =
+            \\v=$(exec 3>&1 1>&2 2>&3; trap 'printf out; printf err >&2' EXIT; :)
+            \\printf '<%s>\n' "$v"
+            ,
+            .stdout =
+            \\<err>
+            \\
+            ,
+            .stderr = "out",
+            .status = 0,
+        },
+        .{
+            .name = "subshell EXIT trap in command substitution does not leak to outer trap",
+            .script =
+            \\v=$( (exec 2>&1; trap 'printf sub >&2' EXIT; :); trap 'printf outer >&2' EXIT; : )
+            \\printf '<%s>\n' "$v"
+            ,
+            .stdout =
+            \\<sub>
+            \\
+            ,
+            .stderr = "outer",
+            .status = 0,
+        },
+        .{
             .name = "aliases defined inside an EXIT trap do not affect its remaining action",
             .script =
             \\trap 'alias late="printf late\\n"; late 2>/dev/null; printf "status:%s\n" "$?"' EXIT
