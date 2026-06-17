@@ -141,10 +141,12 @@ pub const Capabilities = struct {
     ) !void {
         if (self.kitty_keyboard) try output.appendSlice(allocator, vaxis.ctlseqs.csi_u_pop);
         if (self.unicode) try output.appendSlice(allocator, vaxis.ctlseqs.unicode_reset);
+        if (self.color_scheme_updates) try output.appendSlice(allocator, vaxis.ctlseqs.color_scheme_reset);
         if (self.in_band_resize_enabled) try output.appendSlice(allocator, vaxis.ctlseqs.in_band_resize_reset);
         if (self.bracketed_paste) try output.appendSlice(allocator, vaxis.ctlseqs.bp_reset);
         self.kitty_keyboard = false;
         self.unicode = false;
+        self.color_scheme_updates = false;
         self.in_band_resize_enabled = false;
         self.in_band_resize = false;
         self.bracketed_paste = false;
@@ -352,7 +354,12 @@ test "terminal capability application plans writes only on state changes" {
 }
 
 test "terminal capability reset plans active-mode cleanup" {
-    var capabilities: Capabilities = .{ .kitty_keyboard = true, .unicode = true, .bracketed_paste = true };
+    var capabilities: Capabilities = .{
+        .kitty_keyboard = true,
+        .unicode = true,
+        .color_scheme_updates = true,
+        .bracketed_paste = true,
+    };
     var output: std.ArrayList(u8) = .empty;
     defer output.deinit(std.testing.allocator);
 
@@ -360,9 +367,11 @@ test "terminal capability reset plans active-mode cleanup" {
 
     try std.testing.expect(!capabilities.kitty_keyboard);
     try std.testing.expect(!capabilities.unicode);
+    try std.testing.expect(!capabilities.color_scheme_updates);
     try std.testing.expect(!capabilities.bracketed_paste);
     try std.testing.expect(std.mem.indexOf(u8, output.items, vaxis.ctlseqs.csi_u_pop) != null);
     try std.testing.expect(std.mem.indexOf(u8, output.items, vaxis.ctlseqs.unicode_reset) != null);
+    try std.testing.expect(std.mem.indexOf(u8, output.items, vaxis.ctlseqs.color_scheme_reset) != null);
     try std.testing.expect(std.mem.indexOf(u8, output.items, vaxis.ctlseqs.bp_reset) != null);
 }
 
