@@ -13702,6 +13702,7 @@ fn parseTrapSignalNumber(raw: []const u8) ?[]const u8 {
         1 => "HUP",
         2 => "INT",
         3 => "QUIT",
+        14 => "ALRM",
         10 => "USR1",
         12 => "USR2",
         15 => "TERM",

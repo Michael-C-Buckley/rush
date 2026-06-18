@@ -327,6 +327,34 @@
             .status = 0,
         },
         .{
+            .name = "trap accepts ALRM signal name",
+            .script =
+            \\trap 'printf alrm\n' ALRM
+            \\printf '<%s>\n' "$?"
+            \\trap - ALRM
+            ,
+            .stdout =
+            \\<0>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "trap accepts numeric ALRM signal",
+            .script =
+            \\trap 'printf alrm\n' 14
+            \\printf '<%s>\n' "$?"
+            \\trap - 14
+            ,
+            .stdout =
+            \\<0>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "trap returns nonzero for invalid signal names",
             .script =
             \\trap : NOSUCHSIGNAL 2>/dev/null

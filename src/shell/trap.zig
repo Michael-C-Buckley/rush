@@ -10,6 +10,7 @@ pub const Signal = enum {
     HUP,
     INT,
     QUIT,
+    ALRM,
     TERM,
     USR1,
     USR2,
@@ -20,6 +21,7 @@ pub const Signal = enum {
             .HUP => "HUP",
             .INT => "INT",
             .QUIT => "QUIT",
+            .ALRM => "ALRM",
             .TERM => "TERM",
             .USR1 => "USR1",
             .USR2 => "USR2",
@@ -39,6 +41,7 @@ pub const Signal = enum {
             1 => .HUP,
             2 => .INT,
             3 => .QUIT,
+            14 => .ALRM,
             10 => .USR1,
             12 => .USR2,
             15 => .TERM,
@@ -52,6 +55,7 @@ pub const Signal = enum {
             .HUP => 1,
             .INT => 2,
             .QUIT => 3,
+            .ALRM => 14,
             .USR1 => 10,
             .USR2 => 12,
             .TERM => 15,
@@ -84,6 +88,7 @@ const signal_names = [_]SignalName{
     .{ .name = "HUP", .signal = .HUP },
     .{ .name = "INT", .signal = .INT },
     .{ .name = "QUIT", .signal = .QUIT },
+    .{ .name = "ALRM", .signal = .ALRM },
     .{ .name = "TERM", .signal = .TERM },
     .{ .name = "USR1", .signal = .USR1 },
     .{ .name = "USR2", .signal = .USR2 },
@@ -124,7 +129,7 @@ pub fn assertValidName(name_value: []const u8) void {
 }
 
 test "trap signal vocabulary maps names and runtime numbers explicitly" {
-    const signals = [_]Signal{ .EXIT, .HUP, .INT, .QUIT, .TERM, .USR1, .USR2 };
+    const signals = [_]Signal{ .EXIT, .HUP, .INT, .QUIT, .ALRM, .TERM, .USR1, .USR2 };
     for (signals) |signal| {
         signal.validate();
         try std.testing.expectEqual(signal, Signal.fromName(signal.name()).?);
