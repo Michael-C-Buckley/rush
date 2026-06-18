@@ -78,6 +78,19 @@
             .status = 1,
         },
         .{
+            .name = "deep finite function call chain completes",
+            .script =
+            \\f() { if [ "$1" -eq 0 ]; then printf 'ok\n'; else next=$(( $1 - 1 )); f "$next"; fi; }
+            \\f 200
+            ,
+            .stdout =
+            \\ok
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "function operands temporarily replace positional parameters",
             .script =
             \\set -- outer

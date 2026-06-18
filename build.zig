@@ -11,6 +11,8 @@ const compile_check_targets = [_][]const u8{
     "x86_64-netbsd",
 };
 
+const rush_stack_size = 32 * 1024 * 1024;
+
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
@@ -55,6 +57,7 @@ pub fn build(b: *std.Build) void {
         .name = "rush",
         .root_module = exe_module,
     });
+    exe.stack_size = rush_stack_size;
 
     b.installArtifact(exe);
     b.installDirectory(.{
@@ -176,6 +179,7 @@ fn addCompileChecks(
             .name = b.fmt("rush-{s}", .{target_name}),
             .root_module = check_module,
         });
+        check.stack_size = rush_stack_size;
         compile_check_step.dependOn(&check.step);
     }
 }

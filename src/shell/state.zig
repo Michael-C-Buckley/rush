@@ -221,7 +221,6 @@ pub const VariableAttributes = struct {
     readonly: bool = false,
 };
 
-
 pub const Variable = struct {
     value: []const u8,
     exported: bool = false,
@@ -435,6 +434,7 @@ pub const ShellState = struct {
     scope: Scope = .current_shell,
     variables: std.StringHashMapUnmanaged(Variable) = .empty,
     functions: std.StringHashMapUnmanaged(command_plan.FunctionDefinition) = .empty,
+    borrowed_functions: bool = false,
     aliases: std.StringHashMapUnmanaged(Alias) = .empty,
     traps: std.StringHashMapUnmanaged(Trap) = .empty,
     positionals: std.ArrayList([]const u8) = .empty,
@@ -472,12 +472,16 @@ pub const ShellState = struct {
         }
         self.variables.deinit(self.allocator);
 
-        var functions = self.functions.iterator();
-        while (functions.next()) |entry| {
-            self.allocator.free(entry.key_ptr.*);
-            freeFunctionDefinition(self.allocator, entry.value_ptr.*);
+        if (self.borrowed_functions) {
+            self.functions.deinit(self.allocator);
+        } else {
+            var functions = self.functions.iterator();
+            while (functions.next()) |entry| {
+                self.allocator.free(entry.key_ptr.*);
+                freeFunctionDefinition(self.allocator, entry.value_ptr.*);
+            }
+            self.functions.deinit(self.allocator);
         }
-        self.functions.deinit(self.allocator);
 
         var aliases = self.aliases.iterator();
         while (aliases.next()) |entry| {
@@ -529,6 +533,51 @@ pub const ShellState = struct {
 
         var functions = self.functions.iterator();
         while (functions.next()) |entry| try cloned.putFunction(entry.value_ptr.*);
+
+        var aliases = self.aliases.iterator();
+        while (aliases.next()) |entry| try cloned.setAlias(entry.key_ptr.*, entry.value_ptr.value);
+
+        var traps = self.traps.iterator();
+        while (traps.next()) |entry| try cloned.setTrap(entry.key_ptr.*, entry.value_ptr.action);
+
+        try cloned.replacePositionals(self.positionals.items);
+        if (self.logical_cwd.len != 0) try cloned.setLogicalCwd(self.logical_cwd);
+        try cloned.last_pipeline_statuses.appendSlice(allocator, self.last_pipeline_statuses.items);
+        try cloned.pending_traps.appendSlice(allocator, self.pending_traps.items);
+        for (self.background_jobs.items) |job| try cloned.appendBackgroundJobCopy(job);
+        cloned.next_job_id = self.next_job_id;
+        cloned.current_job_id = self.current_job_id;
+        cloned.previous_job_id = self.previous_job_id;
+        cloned.last_background_pid = self.last_background_pid;
+        for (self.pending_job_notifications.items) |notification| try cloned.appendJobNotification(notification);
+
+        cloned.validate();
+        return cloned;
+    }
+
+    pub fn cloneBorrowingFunctions(self: *const ShellState, allocator: std.mem.Allocator) !ShellState {
+        var cloned = ShellState.init(allocator);
+        errdefer cloned.deinit();
+
+        cloned.scope = self.scope;
+        cloned.options = self.options;
+        cloned.shopts = self.shopts;
+        cloned.getopts_cursor = self.getopts_cursor;
+        cloned.last_status = self.last_status;
+        cloned.pending_exit = self.pending_exit;
+        cloned.trap_execution = self.trap_execution;
+        cloned.warned_stopped_jobs_on_exit = self.warned_stopped_jobs_on_exit;
+
+        var variables = self.variables.iterator();
+        while (variables.next()) |entry| {
+            try cloned.putVariable(entry.key_ptr.*, entry.value_ptr.value, .{
+                .exported = entry.value_ptr.exported,
+                .readonly = entry.value_ptr.readonly,
+            });
+        }
+
+        cloned.functions = try self.functions.clone(allocator);
+        cloned.borrowed_functions = true;
 
         var aliases = self.aliases.iterator();
         while (aliases.next()) |entry| try cloned.setAlias(entry.key_ptr.*, entry.value_ptr.value);
@@ -701,6 +750,7 @@ pub const ShellState = struct {
 
     pub fn putFunction(self: *ShellState, definition: command_plan.FunctionDefinition) !void {
         definition.validate();
+        try self.ensureOwnedFunctions();
 
         const owned_key = try self.allocator.dupe(u8, definition.name);
         errdefer self.allocator.free(owned_key);
@@ -720,9 +770,41 @@ pub const ShellState = struct {
     pub fn unsetFunction(self: *ShellState, name: []const u8) void {
         assertValidVariableName(name);
         if (self.functions.fetchRemove(name)) |entry| {
-            self.allocator.free(entry.key);
-            freeFunctionDefinition(self.allocator, entry.value);
+            if (!self.borrowed_functions) {
+                self.allocator.free(entry.key);
+                freeFunctionDefinition(self.allocator, entry.value);
+            }
         }
+        self.validate();
+    }
+
+    fn ensureOwnedFunctions(self: *ShellState) !void {
+        if (!self.borrowed_functions) return;
+
+        var owned: std.StringHashMapUnmanaged(command_plan.FunctionDefinition) = .empty;
+        errdefer {
+            var functions = owned.iterator();
+            while (functions.next()) |entry| {
+                self.allocator.free(entry.key_ptr.*);
+                freeFunctionDefinition(self.allocator, entry.value_ptr.*);
+            }
+            owned.deinit(self.allocator);
+        }
+
+        var functions = self.functions.iterator();
+        while (functions.next()) |entry| {
+            {
+                const owned_key = try self.allocator.dupe(u8, entry.key_ptr.*);
+                errdefer self.allocator.free(owned_key);
+                const owned_definition = try cloneFunctionDefinition(self.allocator, entry.value_ptr.*);
+                errdefer freeFunctionDefinition(self.allocator, owned_definition);
+                try owned.put(self.allocator, owned_key, owned_definition);
+            }
+        }
+
+        self.functions.deinit(self.allocator);
+        self.functions = owned;
+        self.borrowed_functions = false;
         self.validate();
     }
 

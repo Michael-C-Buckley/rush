@@ -3129,8 +3129,8 @@ fn evaluatePlanWithInput(
     }
     if (!simpleCommandOutputAlreadyRouted(effective_plan) and
         (effective_plan.redirections.steps.len != 0 or
-        redirection_guard.hasTransaction() or
-        (hasScopedExecRedirections(evaluator.*) and eval_context.command_substitution_depth == 0)) and
+            redirection_guard.hasTransaction() or
+            (hasScopedExecRedirections(evaluator.*) and eval_context.command_substitution_depth == 0)) and
         effective_plan.class() != .external and
         effective_plan.class() != .function)
     {
@@ -8601,7 +8601,7 @@ fn evaluateFunction(
         }
     }
 
-    var frame_state = shell_state.clone(evaluator.allocator) catch |err| switch (err) {
+    var frame_state = shell_state.cloneBorrowingFunctions(evaluator.allocator) catch |err| switch (err) {
         error.OutOfMemory => return error.OutOfMemory,
         error.ReadonlyVariable => unreachable,
     };
@@ -8738,7 +8738,12 @@ fn appendFunctionFrameDelta(
     }
 
     var after_functions = after.functions.iterator();
-    while (after_functions.next()) |entry| try state_delta.setFunction(entry.value_ptr.*);
+    while (after_functions.next()) |entry| {
+        if (before.getFunction(entry.key_ptr.*)) |previous| {
+            if (functionDefinitionDefinitelyEqual(previous, entry.value_ptr.*)) continue;
+        }
+        try state_delta.setFunction(entry.value_ptr.*);
+    }
 
     var before_functions = before.functions.iterator();
     while (before_functions.next()) |entry| {
@@ -8757,6 +8762,30 @@ fn appendFunctionFrameDelta(
     for (after.background_jobs.items) |job| {
         if (before.findBackgroundJobById(job.id) == null) try state_delta.appendBackgroundJob(job);
     }
+}
+
+fn functionDefinitionDefinitelyEqual(
+    left: command_plan.FunctionDefinition,
+    right: command_plan.FunctionDefinition,
+) bool {
+    left.validate();
+    right.validate();
+    if (!std.mem.eql(u8, left.name, right.name)) return false;
+    if (!redirectionPlansDefinitelyEqual(left.redirections, right.redirections)) return false;
+    if (left.source_body) |left_source| {
+        const right_source = right.source_body orelse return false;
+        return std.mem.eql(u8, left_source, right_source);
+    }
+    return false;
+}
+
+fn redirectionPlansDefinitelyEqual(
+    left: redirection_plan.RedirectionPlan,
+    right: redirection_plan.RedirectionPlan,
+) bool {
+    left.validate();
+    right.validate();
+    return left.steps.len == 0 and right.steps.len == 0;
 }
 
 fn appendShellStateDiff(
