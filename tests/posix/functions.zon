@@ -104,6 +104,20 @@
             .status = 7,
         },
         .{
+            .name = "return accepts numeric arguments above 255",
+            .script =
+            \\foo() { return 256; printf '%s\n' bad; }
+            \\foo
+            \\printf '<%s>\n' "$?"
+            ,
+            .stdout =
+            \\<0>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "return in a dot script called by a function returns from the dot script only",
             .script =
             \\printf 'return 7\nprintf bad\n' >f

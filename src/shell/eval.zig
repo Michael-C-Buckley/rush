@@ -10100,15 +10100,12 @@ fn evaluateReturn(
     if (argv.len > 2) return normalEvaluation(try builtinUsageError(buffers, "return", "too many arguments"));
     const status: outcome.ExitStatus = if (argv.len == 2) blk: {
         const operand = std.mem.trim(u8, argv[1], &std.ascii.whitespace);
-        break :blk std.fmt.parseInt(
-            outcome.ExitStatus,
-            operand,
-            10,
-        ) catch return normalEvaluation(try builtinUsageError(
+        const parsed = std.fmt.parseInt(u64, operand, 10) catch return normalEvaluation(try builtinUsageError(
             buffers,
             "return",
             "numeric argument required",
         ));
+        break :blk @truncate(parsed);
     } else shell_state.last_status;
     const scope: outcome.ReturnScope = if (eval_context.canReturnFromSource()) .sourced_script else .function;
     return .{ .status = status, .control_flow = .{ .return_from_scope = .{ .scope = scope, .status = status } } };

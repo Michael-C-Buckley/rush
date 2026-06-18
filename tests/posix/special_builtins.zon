@@ -333,6 +333,20 @@
             .status = 0,
         },
         .{
+            .name = "return in a dot script accepts numeric arguments above 255",
+            .script =
+            \\printf 'return 256\nprintf bad\n' >file.sh
+            \\. ./file.sh
+            \\printf '<%s>\n' "$?"
+            ,
+            .stdout =
+            \\<0>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "set double dash with no operands clears positional parameters",
             .script =
             \\set -- a b
