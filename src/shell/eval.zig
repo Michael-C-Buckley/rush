@@ -203,18 +203,23 @@ fn rootBoundarySpec(eval_context: context.EvalContext) execution_frame.BoundaryS
 
 fn commandSubstitutionExecutionFrame(
     allocator: std.mem.Allocator,
+    scoped_exec_redirections: ?*std.ArrayList(ScopedExecRedirection),
     parent_frame: *execution_frame.ExecutionFrame,
 ) EvalError!execution_frame.ExecutionFrame {
     parent_frame.validate();
-    const stdin = commandSubstitutionInputEndpoint(parent_frame.*);
-    const stdout: execution_frame.OutputEndpoint = .{ .capture = .command_substitution_stdout };
-    const stderr = commandSubstitutionStderrEndpoint(parent_frame.*);
     var fd_table = try parent_frame.spec.fd_table.clone(allocator);
     errdefer fd_table.deinit(allocator);
+    if (frameStandardDescriptorsAreDefault(parent_frame.*)) if (scoped_exec_redirections) |scoped_list| {
+        for (scoped_list.items) |scoped| try fd_table.applyRedirectionPlan(allocator, scoped.redirections);
+    };
+
+    const stdin = commandSubstitutionInputEndpoint(parent_frame.*, fd_table);
+    const stdout: execution_frame.OutputEndpoint = .{ .capture = .command_substitution_stdout };
+    const stderr = commandSubstitutionStderrEndpoint(parent_frame.*, fd_table);
 
     try fd_table.bindInput(allocator, 0, stdin);
     try fd_table.bindOutput(allocator, 1, stdout);
-    switch (parent_frame.spec.fd_table.endpoint(2)) {
+    switch (fd_table.endpoint(2)) {
         .output => |output| try fd_table.bindOutput(allocator, 2, output),
         .closed => try fd_table.close(allocator, 2),
         .input => try fd_table.bindOutput(allocator, 2, parent_frame.spec.stderr),
@@ -243,18 +248,26 @@ fn commandSubstitutionCaptures(stderr: execution_frame.OutputEndpoint) execution
     return execution_frame.Captures.commandSubstitution();
 }
 
-fn commandSubstitutionInputEndpoint(parent_frame: execution_frame.ExecutionFrame) execution_frame.InputEndpoint {
+fn commandSubstitutionInputEndpoint(
+    parent_frame: execution_frame.ExecutionFrame,
+    fd_table: execution_frame.FdTable,
+) execution_frame.InputEndpoint {
     parent_frame.validate();
-    return switch (parent_frame.spec.fd_table.endpoint(0)) {
+    fd_table.validate();
+    return switch (fd_table.endpoint(0)) {
         .input => |input| input,
         .closed => .closed,
         .output => parent_frame.spec.stdin,
     };
 }
 
-fn commandSubstitutionStderrEndpoint(parent_frame: execution_frame.ExecutionFrame) execution_frame.OutputEndpoint {
+fn commandSubstitutionStderrEndpoint(
+    parent_frame: execution_frame.ExecutionFrame,
+    fd_table: execution_frame.FdTable,
+) execution_frame.OutputEndpoint {
     parent_frame.validate();
-    return switch (parent_frame.spec.fd_table.endpoint(2)) {
+    fd_table.validate();
+    return switch (fd_table.endpoint(2)) {
         .output => |output| output,
         .closed => .discard,
         .input => parent_frame.spec.stderr,
@@ -263,6 +276,7 @@ fn commandSubstitutionStderrEndpoint(parent_frame: execution_frame.ExecutionFram
 
 fn pipelineStageExecutionFrame(
     allocator: std.mem.Allocator,
+    scoped_exec_redirections: ?*std.ArrayList(ScopedExecRedirection),
     parent_frame: *execution_frame.ExecutionFrame,
     stage_target: context.ExecutionTarget,
     is_last_stage: bool,
@@ -272,14 +286,18 @@ fn pipelineStageExecutionFrame(
     parent_frame.validate();
     redirections.validate();
     std.debug.assert(stage_target != .current_shell);
+    var fd_table = try parent_frame.spec.fd_table.clone(allocator);
+    errdefer fd_table.deinit(allocator);
+    if (frameStandardDescriptorsAreDefault(parent_frame.*)) if (scoped_exec_redirections) |scoped_list| {
+        for (scoped_list.items) |scoped| try fd_table.applyRedirectionPlan(allocator, scoped.redirections);
+    };
+
     const stdin: execution_frame.InputEndpoint = if (previous_stdin.len != 0)
         .{ .bytes = previous_stdin }
     else
-        pipelineStageInheritedInput(parent_frame.*);
-    const stdout = pipelineStageOutputEndpoint(parent_frame.*, is_last_stage);
-    const stderr = pipelineStageErrorEndpoint(parent_frame.*);
-    var fd_table = try parent_frame.spec.fd_table.clone(allocator);
-    errdefer fd_table.deinit(allocator);
+        pipelineStageInheritedInput(parent_frame.*, fd_table);
+    const stdout = pipelineStageOutputEndpoint(parent_frame.*, fd_table, is_last_stage);
+    const stderr = pipelineStageErrorEndpoint(parent_frame.*, fd_table);
     try fd_table.bindInput(allocator, 0, stdin);
     try fd_table.bindOutput(allocator, 1, stdout);
     try fd_table.bindOutput(allocator, 2, stderr);
@@ -301,9 +319,13 @@ fn pipelineStageExecutionFrame(
     return frame;
 }
 
-fn pipelineStageInheritedInput(parent_frame: execution_frame.ExecutionFrame) execution_frame.InputEndpoint {
+fn pipelineStageInheritedInput(
+    parent_frame: execution_frame.ExecutionFrame,
+    fd_table: execution_frame.FdTable,
+) execution_frame.InputEndpoint {
     parent_frame.validate();
-    return switch (parent_frame.spec.fd_table.endpoint(0)) {
+    fd_table.validate();
+    return switch (fd_table.endpoint(0)) {
         .input => |input| input,
         .closed => .closed,
         .output => parent_frame.spec.stdin,
@@ -414,11 +436,13 @@ fn defaultFrameEndpoint(descriptor: runtime.fd.Descriptor) execution_frame.FdEnd
 
 fn pipelineStageOutputEndpoint(
     parent_frame: execution_frame.ExecutionFrame,
+    fd_table: execution_frame.FdTable,
     is_last_stage: bool,
 ) execution_frame.OutputEndpoint {
     parent_frame.validate();
+    fd_table.validate();
     if (!is_last_stage) return .{ .capture = .pipeline_data };
-    return switch (parent_frame.spec.fd_table.endpoint(1)) {
+    return switch (fd_table.endpoint(1)) {
         .output => |output| switch (output) {
             .inherit_stdout => .{ .capture = .side_stdout },
             else => output,
@@ -428,9 +452,13 @@ fn pipelineStageOutputEndpoint(
     };
 }
 
-fn pipelineStageErrorEndpoint(parent_frame: execution_frame.ExecutionFrame) execution_frame.OutputEndpoint {
+fn pipelineStageErrorEndpoint(
+    parent_frame: execution_frame.ExecutionFrame,
+    fd_table: execution_frame.FdTable,
+) execution_frame.OutputEndpoint {
     parent_frame.validate();
-    return switch (parent_frame.spec.fd_table.endpoint(2)) {
+    fd_table.validate();
+    return switch (fd_table.endpoint(2)) {
         .output => |output| switch (output) {
             .inherit_stderr => .{ .capture = .side_stderr },
             else => output,
@@ -3097,7 +3125,6 @@ fn evaluatePlanWithInput(
             } else {
                 try appendScopedExecRedirectionPlan(evaluator, effective_plan.redirections);
             }
-            try commitExecRedirectionsToFrame(evaluator.allocator, frame, effective_plan.redirections);
         },
     }
     if (!simpleCommandOutputAlreadyRouted(effective_plan) and
@@ -4659,6 +4686,7 @@ fn evaluateCompoundPlanWithInput(
 
     var redirection_guard = RedirectionGuard.empty(.current_scoped);
     defer redirection_guard.restore();
+    var redirection_output_flushed = false;
     if (hasCompoundRedirections(plan)) {
         if (frameRoutesPipelineData(command_frame) and !redirectionPlanNeedsRuntimeFdEffects(plan.redirections)) {
             try emitSemanticRedirectionTransforms(evaluator.*, &buffers, plan.redirections);
@@ -4695,6 +4723,10 @@ fn evaluateCompoundPlanWithInput(
                 },
             }
         }
+    }
+    if (eval_context.command_substitution_depth != 0 and redirection_guard.hasTransaction()) {
+        try flushBufferedRedirectionOutput(evaluator.*, &buffers, plan.redirections, eval_context, .{});
+        redirection_output_flushed = true;
     }
 
     var working_state = try workingStateForCompound(evaluator.allocator, shell_state.*, plan.target);
@@ -4733,7 +4765,7 @@ fn evaluateCompoundPlanWithInput(
         result.control_flow = decision.control_flow;
     }
 
-    if (redirection_guard.hasTransaction()) {
+    if (redirection_guard.hasTransaction() and !redirection_output_flushed) {
         try flushBufferedRedirectionOutput(evaluator.*, &buffers, plan.redirections, eval_context, .{});
     }
     if (frameRoutesPipelineData(command_frame)) try routeDirectPipelineStageBuffers(&buffers);
@@ -5229,7 +5261,11 @@ fn evaluateCommandSubstitutionInState(
     cwd_guard.capture(evaluator);
     defer cwd_guard.restore();
 
-    var substitution_frame = try commandSubstitutionExecutionFrame(evaluator.allocator, parent_frame);
+    var substitution_frame = try commandSubstitutionExecutionFrame(
+        evaluator.allocator,
+        evaluator.scoped_exec_redirections,
+        parent_frame,
+    );
     defer substitution_frame.spec.fd_table.deinit(evaluator.allocator);
     var body_outcome = try evaluateCommandSubstitutionBody(
         evaluator,
@@ -6258,6 +6294,7 @@ fn evaluateFallbackPipeline(
         var stage_input = EvaluationInput.init(next_stdin.items);
         var stage_frame = try pipelineStageExecutionFrame(
             evaluator.allocator,
+            evaluator.scoped_exec_redirections,
             buffers.frame,
             stage_target,
             is_last_stage,
@@ -17366,7 +17403,7 @@ test "semantic command substitution frame inherits parent stdin and stderr endpo
     try parent_frame.spec.fd_table.bindOutput(std.testing.allocator, 2, .{ .capture = .side_stderr });
     defer parent_frame.spec.fd_table.deinit(std.testing.allocator);
 
-    var substitution_frame = try commandSubstitutionExecutionFrame(std.testing.allocator, &parent_frame);
+    var substitution_frame = try commandSubstitutionExecutionFrame(std.testing.allocator, null, &parent_frame);
     defer substitution_frame.spec.fd_table.deinit(std.testing.allocator);
     switch (substitution_frame.spec.stdin) {
         .bytes => |bytes| try std.testing.expectEqualStrings("stdin", bytes),
@@ -17395,6 +17432,7 @@ test "fallback pipeline stage frames model stdin stdout stderr and redirection o
     const first_redirections: redirection_plan.RedirectionPlan = .{ .steps = &stderr_to_stdout };
     var first = try pipelineStageExecutionFrame(
         std.testing.allocator,
+        null,
         &parent_frame,
         .subshell,
         false,
@@ -17409,6 +17447,7 @@ test "fallback pipeline stage frames model stdin stdout stderr and redirection o
 
     var last = try pipelineStageExecutionFrame(
         std.testing.allocator,
+        null,
         &parent_frame,
         .subshell,
         true,
