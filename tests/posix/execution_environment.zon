@@ -58,6 +58,18 @@
             .status = 0,
         },
         .{
+            .name = "command substitution inherits brace group pipeline input",
+            .script =
+            \\printf input | { x=$(read v; printf 'v=%s' "$v"); printf '<%s>\n' "$x"; }
+            ,
+            .stdout =
+            \\<v=input>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "subshell inside command substitution isolates variable changes",
             .script =
             \\v=$( (x=sub); printf '%s' "${x-unset}" )

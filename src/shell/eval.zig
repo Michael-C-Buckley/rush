@@ -651,6 +651,7 @@ pub const ParserBackedSourceResolver = struct {
     expand_aliases: bool = true,
     alias_state: ?*state.ShellState = null,
     active_frame: ?*execution_frame.ExecutionFrame = null,
+    active_input: ?*EvaluationInput = null,
 
     pub fn init(evaluator: *Evaluator) ParserBackedSourceResolver {
         return .{ .evaluator = evaluator };
@@ -719,6 +720,7 @@ pub const ParserBackedSourceResolver = struct {
         _ = self.evaluator.allocator;
         std.debug.assert(self.arg_zero.len != 0);
         if (self.active_frame) |frame| frame.validate();
+        if (self.active_input) |input| input.validate();
         for (self.externals) |external| external.validate();
     }
 
@@ -874,6 +876,7 @@ const SourceExpansionCommandSubstitutions = struct {
             self.resolver.commandSubstitutionResolver(),
             lowerer.owner.resolver(),
             lowerer.owner.active_frame,
+            lowerer.owner.active_input,
         );
         self.resolver.expansion_context = &self.context;
     }
@@ -2536,6 +2539,7 @@ pub const CommandSubstitutionExpansionContext = struct {
     resolver: CommandSubstitutionResolver,
     trap_resolver: ?TrapActionResolver = null,
     parent_frame: ?*execution_frame.ExecutionFrame = null,
+    parent_input: ?*EvaluationInput = null,
     fatal_failure: ?TrapActionFailure = null,
     last_status: ?outcome.ExitStatus = null,
     last_control_flow: outcome.ControlFlow = .normal,
@@ -2550,12 +2554,14 @@ pub const CommandSubstitutionExpansionContext = struct {
         resolver: CommandSubstitutionResolver,
         trap_resolver: ?TrapActionResolver,
         parent_frame: ?*execution_frame.ExecutionFrame,
+        parent_input: ?*EvaluationInput,
     ) CommandSubstitutionExpansionContext {
         shell_state.validate();
         eval_context.validate();
         resolver.validate();
         if (trap_resolver) |resolver_for_traps| resolver_for_traps.validate();
         if (parent_frame) |frame| frame.validate();
+        if (parent_input) |input| input.validate();
         return .{
             .evaluator = evaluator,
             .shell_state = shell_state,
@@ -2563,6 +2569,7 @@ pub const CommandSubstitutionExpansionContext = struct {
             .resolver = resolver,
             .trap_resolver = trap_resolver,
             .parent_frame = parent_frame,
+            .parent_input = parent_input,
         };
     }
 
@@ -5120,6 +5127,7 @@ fn runCurrentShellRuntimeTrapBoundary(
     parser_resolver.expand_aliases = shell_state.shopts.enabled(.expand_aliases);
     parser_resolver.alias_state = evaluator.alias_state;
     parser_resolver.active_frame = buffers.frame;
+    parser_resolver.active_input = buffers.stdin;
     var trap_outcome = (try executePendingTrapsWithFrame(
         evaluator,
         shell_state,
@@ -5175,6 +5183,7 @@ fn evaluateCommandSubstitutionSnapshot(
         body,
         null,
         &parent_frame,
+        null,
     );
 }
 
@@ -5185,6 +5194,7 @@ fn evaluateCommandSubstitutionInState(
     body: CommandSubstitutionBody,
     exit_trap_resolver: ?TrapActionResolver,
     parent_frame: *execution_frame.ExecutionFrame,
+    parent_input: ?*EvaluationInput,
 ) EvalError!CommandSubstitutionResult {
     substitution_state.validate();
     substitution_context.validate();
@@ -5193,6 +5203,7 @@ fn evaluateCommandSubstitutionInState(
     body.validate();
     if (exit_trap_resolver) |resolver| resolver.validate();
     parent_frame.validate();
+    if (parent_input) |input| input.validate();
 
     const previous_external_stdio = evaluator.external_stdio;
     evaluator.external_stdio = .capture;
@@ -5218,6 +5229,7 @@ fn evaluateCommandSubstitutionInState(
         substitution_state,
         substitution_context,
         body,
+        parent_input,
         &substitution_frame,
     );
     defer body_outcome.deinit();
@@ -5330,16 +5342,19 @@ fn evaluateCommandSubstitutionBody(
     substitution_state: *state.ShellState,
     substitution_context: context.EvalContext,
     body: CommandSubstitutionBody,
+    parent_input: ?*EvaluationInput,
     frame: *execution_frame.ExecutionFrame,
 ) EvalError!outcome.CommandOutcome {
     substitution_state.validate();
     substitution_context.validate();
     assertCommandSubstitutionContext(substitution_context);
     body.validate();
+    if (parent_input) |input| input.validate();
     frame.validate();
     return switch (body) {
         .simple => |plan| blk: {
             var input = EvaluationInput.empty();
+            if (parent_input) |active_input| input = active_input.*;
             break :blk evaluatePlanWithInput(
                 evaluator,
                 substitution_state,
@@ -5351,6 +5366,7 @@ fn evaluateCommandSubstitutionBody(
         },
         .compound => |plan| blk: {
             var input = EvaluationInput.empty();
+            if (parent_input) |active_input| input = active_input.*;
             break :blk evaluateCompoundPlanWithInput(
                 evaluator,
                 substitution_state,
@@ -5378,6 +5394,7 @@ fn evaluateCommandSubstitutionBody(
             substitution_state,
             substitution_context,
             owned.body,
+            parent_input,
             frame,
         ),
     };
@@ -5388,16 +5405,19 @@ fn evaluateCommandSubstitutionBodyPayload(
     substitution_state: *state.ShellState,
     substitution_context: context.EvalContext,
     body: CommandSubstitutionBodyPayload,
+    parent_input: ?*EvaluationInput,
     frame: *execution_frame.ExecutionFrame,
 ) EvalError!outcome.CommandOutcome {
     substitution_state.validate();
     substitution_context.validate();
     assertCommandSubstitutionContext(substitution_context);
     body.validate();
+    if (parent_input) |input| input.validate();
     frame.validate();
     return switch (body) {
         .simple => |plan| blk: {
             var input = EvaluationInput.empty();
+            if (parent_input) |active_input| input = active_input.*;
             break :blk evaluatePlanWithInput(
                 evaluator,
                 substitution_state,
@@ -5409,6 +5429,7 @@ fn evaluateCommandSubstitutionBodyPayload(
         },
         .compound => |plan| blk: {
             var input = EvaluationInput.empty();
+            if (parent_input) |active_input| input = active_input.*;
             break :blk evaluateCompoundPlanWithInput(
                 evaluator,
                 substitution_state,
@@ -5608,6 +5629,7 @@ fn runSemanticCommandSubstitution(
         body,
         expansion_context.trap_resolver,
         parent_frame,
+        expansion_context.parent_input,
     );
     defer result.deinit();
 
@@ -7584,6 +7606,8 @@ fn evaluateSourceStatement(
     parser_resolver.arg_zero = evaluator.arg_zero;
     parser_resolver.expand_aliases = shell_state.shopts.enabled(.expand_aliases);
     parser_resolver.alias_state = evaluator.alias_state;
+    parser_resolver.active_frame = frame;
+    parser_resolver.active_input = input;
     var body = (parser_resolver.lowerSource(
         evaluator.allocator,
         source_plan.source,
@@ -7619,6 +7643,8 @@ fn evaluateIrSourceStatement(
     parser_resolver.arg_zero = evaluator.arg_zero;
     parser_resolver.expand_aliases = shell_state.shopts.enabled(.expand_aliases);
     parser_resolver.alias_state = evaluator.alias_state;
+    parser_resolver.active_frame = frame;
+    parser_resolver.active_input = input;
     var body = (parser_resolver.lowerProgramStatement(
         evaluator.allocator,
         source_plan.program.*,
@@ -7964,6 +7990,7 @@ fn evaluateStatementListSource(
     parser_resolver.expand_aliases = shell_state.shopts.enabled(.expand_aliases);
     parser_resolver.alias_state = evaluator.alias_state;
     parser_resolver.active_frame = buffers.frame;
+    parser_resolver.active_input = buffers.stdin;
     var body = (parser_resolver.lowerSource(
         evaluator.allocator,
         source,
@@ -17462,6 +17489,7 @@ test "semantic command substitution runs subshell EXIT trap before trimming capt
         .{ .compound = compound },
         simpleTrapResolver(),
         &parent_frame,
+        null,
     );
     defer result.deinit();
 
@@ -17601,6 +17629,7 @@ test "semantic expansion callback evaluates nested command substitutions through
             .context = &resolver,
             .resolveFn = NestedResolver.resolve,
         },
+        null,
         null,
         null,
     );
