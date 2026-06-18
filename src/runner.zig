@@ -29,6 +29,7 @@ pub const Options = struct {
     interactive: bool = false,
     arg_zero: []const u8 = "rush",
     source_path: ?[]const u8 = null,
+    command_string_line_diagnostics: bool = false,
     stdin_script_file: ?std.Io.File = null,
     stdin_script_source_offset: usize = 0,
 };
@@ -76,11 +77,14 @@ pub fn loadInvocationScript(
         .arg_zero = invocation.arg_zero,
     };
     switch (invocation.kind) {
-        .command_string => return .{
-            .allocator = allocator,
-            .script = invocation.source,
-            .options = options,
-            .owns_script = false,
+        .command_string => {
+            options.command_string_line_diagnostics = std.mem.indexOfScalar(u8, invocation.source, '\n') != null;
+            return .{
+                .allocator = allocator,
+                .script = invocation.source,
+                .options = options,
+                .owns_script = false,
+            };
         },
         .script_file => {
             const script = try std.Io.Dir.cwd().readFileAlloc(io, invocation.source, allocator, .unlimited);
@@ -153,6 +157,7 @@ pub fn runCommandStringWithEnvironment(
         script,
         invocation,
         options.source_path,
+        options.command_string_line_diagnostics,
         options.external_stdio,
         options.live_stdio,
         environ_map,
@@ -201,6 +206,7 @@ pub fn runSemanticCommandString(
         script,
         invocation,
         null,
+        false,
         external_stdio,
         false,
         environ_map,
@@ -215,6 +221,7 @@ fn runSemanticCommandStringInternal(
     script: []const u8,
     invocation: shell.InvocationContext,
     source_path: ?[]const u8,
+    command_string_line_diagnostics: bool,
     external_stdio: runtime.ExternalStdio,
     live_stdio: bool,
     environ_map: ?*const std.process.Environ.Map,
@@ -247,6 +254,7 @@ fn runSemanticCommandStringInternal(
             script,
             invocation,
             source_path,
+            command_string_line_diagnostics,
             external_stdio,
             live_stdio,
             environ_map,
@@ -263,6 +271,7 @@ fn runSemanticCommandStringInternal(
     if (parsed.diagnostics.len != 0) {
         return .{ .output = try parseDiagnosticsWithOptions(allocator, script, parsed.diagnostics, .{
             .source_path = source_path,
+            .line_number_without_path = command_string_line_diagnostics,
         }) };
     }
 
@@ -281,6 +290,7 @@ fn runSemanticCommandStringInternal(
     var evaluator = shell.eval.Evaluator.initWithRuntimePorts(allocator, runtime.posixPorts(&adapter));
     evaluator.features = invocation.features;
     evaluator.arg_zero = invocation.arg_zero;
+    evaluator.command_string_line_diagnostics = command_string_line_diagnostics;
     evaluator.io = io;
     evaluator.read_stdin_from_fd = true;
     evaluator.external_stdio = semanticEvaluatorExternalStdio(external_stdio, live_stdio);
@@ -322,6 +332,7 @@ fn runSemanticAliasTimingCommandString(
     script: []const u8,
     invocation: shell.InvocationContext,
     source_path: ?[]const u8,
+    command_string_line_diagnostics: bool,
     external_stdio: runtime.ExternalStdio,
     live_stdio: bool,
     environ_map: ?*const std.process.Environ.Map,
@@ -337,6 +348,7 @@ fn runSemanticAliasTimingCommandString(
     var evaluator = shell.eval.Evaluator.initWithRuntimePorts(allocator, runtime.posixPorts(&adapter));
     evaluator.features = invocation.features;
     evaluator.arg_zero = invocation.arg_zero;
+    evaluator.command_string_line_diagnostics = command_string_line_diagnostics;
     evaluator.io = io;
     evaluator.read_stdin_from_fd = true;
     evaluator.external_stdio = external_stdio;
@@ -409,6 +421,7 @@ fn runSemanticAliasTimingCommandString(
                 return .{ .output = try parseDiagnosticsWithOptions(allocator, source, parsed.diagnostics, .{
                     .source_path = source_path,
                     .line_offset = semanticSourceLine(script, start),
+                    .line_number_without_path = command_string_line_diagnostics,
                 }) };
             end = extendSemanticHereDocChunk(script, start, semanticLineEnd(script, end));
         }
@@ -1768,6 +1781,7 @@ pub fn parseDiagnostics(
 const ParseDiagnosticOptions = struct {
     source_path: ?[]const u8 = null,
     line_offset: usize = 0,
+    line_number_without_path: bool = false,
 };
 
 fn parseDiagnosticsWithOptions(
@@ -1783,6 +1797,12 @@ fn parseDiagnosticsWithOptions(
         const line = if (options.source_path) |source_path|
             try std.fmt.allocPrint(allocator, "rush: {s}:{d}: {s}: {s}\n", .{
                 source_path,
+                options.line_offset + diagnosticLineNumber(script, diagnostic.span.start),
+                @tagName(diagnostic.kind),
+                diagnostic.message,
+            })
+        else if (options.line_number_without_path)
+            try std.fmt.allocPrint(allocator, "rush: {d}: {s}: {s}\n", .{
                 options.line_offset + diagnosticLineNumber(script, diagnostic.span.start),
                 @tagName(diagnostic.kind),
                 diagnostic.message,
@@ -2117,6 +2137,96 @@ test "script file parse diagnostics include path and line" {
     try std.testing.expect(std.mem.indexOf(u8, result.stderr, "  echo after 2>\n") != null);
 }
 
+test "multiline command string parse diagnostics include line without path" {
+    const invocation = cli_invocation.parse(&.{
+        "rush", "-c",
+        \\echo before
+        \\echo after 2>
+    }) orelse return error.ExpectedInvocation;
+    var result = try runInvocationForTest(std.testing.allocator, std.testing.io, invocation, null, .capture, false);
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(shell.ExitStatus, 2), result.status);
+    try std.testing.expectEqualStrings("", result.stdout);
+    try std.testing.expect(std.mem.indexOf(
+        u8,
+        result.stderr,
+        "rush: 2: parse_error: missing redirection target\n",
+    ) != null);
+    try std.testing.expect(std.mem.indexOf(u8, result.stderr, "rush: rush:") == null);
+    try std.testing.expect(std.mem.indexOf(u8, result.stderr, "  echo after 2>\n") != null);
+}
+
+test "single-line command string parse diagnostics omit redundant line" {
+    const invocation = cli_invocation.parse(&.{ "rush", "-c", "echo after 2>" }) orelse
+        return error.ExpectedInvocation;
+    var result = try runInvocationForTest(std.testing.allocator, std.testing.io, invocation, null, .capture, false);
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(shell.ExitStatus, 2), result.status);
+    try std.testing.expectEqualStrings("", result.stdout);
+    try std.testing.expect(std.mem.indexOf(
+        u8,
+        result.stderr,
+        "rush: parse_error: missing redirection target\n",
+    ) != null);
+    try std.testing.expect(std.mem.indexOf(u8, result.stderr, "rush: 1: parse_error") == null);
+}
+
+test "multiline command string command-not-found diagnostics include line without path" {
+    const Case = struct {
+        script: []const u8,
+        stdout: []const u8,
+        stderr: []const u8,
+    };
+    const cases = [_]Case{
+        .{
+            .script =
+            \\echo one
+            \\echo two
+            \\no_such_cmd
+            \\echo after
+            ,
+            .stdout = "one\ntwo\nafter\n",
+            .stderr = "3: no_such_cmd: command not found\n",
+        },
+        .{
+            .script =
+            \\echo top
+            \\if true; then
+            \\  echo in
+            \\  no_such_if_cmd
+            \\fi
+            \\echo after
+            ,
+            .stdout = "top\nin\nafter\n",
+            .stderr = "4: no_such_if_cmd: command not found\n",
+        },
+    };
+
+    for (cases) |case| {
+        const invocation = cli_invocation.parse(&.{ "rush", "-c", case.script }) orelse return error.ExpectedInvocation;
+        var result = try runInvocationForTest(std.testing.allocator, std.testing.io, invocation, null, .capture, false);
+        defer result.deinit();
+
+        try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
+        try std.testing.expectEqualStrings(case.stdout, result.stdout);
+        try std.testing.expectEqualStrings(case.stderr, result.stderr);
+        try std.testing.expect(std.mem.indexOf(u8, result.stderr, "rush:") == null);
+    }
+}
+
+test "single-line command string command-not-found diagnostics omit redundant line" {
+    const invocation = cli_invocation.parse(&.{ "rush", "-c", "no_such_cmd" }) orelse
+        return error.ExpectedInvocation;
+    var result = try runInvocationForTest(std.testing.allocator, std.testing.io, invocation, null, .capture, false);
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(shell.ExitStatus, 127), result.status);
+    try std.testing.expectEqualStrings("", result.stdout);
+    try std.testing.expectEqualStrings("no_such_cmd: command not found\n", result.stderr);
+}
+
 test "script file parameter expansion diagnostics in for and case words include path and line" {
     const Case = struct {
         path: []const u8,
@@ -2175,6 +2285,54 @@ test "script file parameter expansion diagnostics in for and case words include 
         defer std.testing.allocator.free(expected);
         try std.testing.expectEqualStrings("before\n", result.stdout);
         try std.testing.expectEqualStrings(expected, result.stderr);
+        try std.testing.expect(result.status != 0);
+    }
+}
+
+test "multiline command string expansion diagnostics include line without path" {
+    const Case = struct {
+        script: []const u8,
+        diagnostic: []const u8,
+    };
+    const cases = [_]Case{
+        .{
+            .script =
+            \\echo before
+            \\unset x
+            \\for i in ${x:?forbad}; do echo "$i"; done
+            \\echo after
+            ,
+            .diagnostic = "3: expansion error: x: forbad\n",
+        },
+        .{
+            .script =
+            \\echo before
+            \\unset x
+            \\case ${x:?casewordbad} in *) echo ok;; esac
+            \\echo after
+            ,
+            .diagnostic = "3: expansion error: x: casewordbad\n",
+        },
+        .{
+            .script =
+            \\echo before
+            \\unset x
+            \\case ok in ${x:?casepatbad}) echo ok;; esac
+            \\echo after
+            ,
+            .diagnostic = "3: expansion error: x: casepatbad\n",
+        },
+    };
+
+    for (cases) |case| {
+        const invocation = cli_invocation.parse(&.{ "rush", "--posix", "-c", case.script }) orelse
+            return error.ExpectedInvocation;
+        var result = try runInvocationForTest(std.testing.allocator, std.testing.io, invocation, null, .capture, false);
+        defer result.deinit();
+
+        try std.testing.expectEqualStrings("before\n", result.stdout);
+        try std.testing.expectEqualStrings(case.diagnostic, result.stderr);
+        try std.testing.expect(std.mem.indexOf(u8, result.stderr, "rush:") == null);
         try std.testing.expect(result.status != 0);
     }
 }

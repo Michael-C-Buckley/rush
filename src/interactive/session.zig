@@ -1671,6 +1671,36 @@ test "interactive command string invocation sources expanded ENV before script" 
     try std.testing.expectEqualStrings("", result.stderr);
 }
 
+test "interactive command string invocation sources user alias config" {
+    const root = "rush-test-alias-config-startup";
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, root ++ "/rush");
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{
+        .sub_path = root ++ "/rush/config.rush",
+        .data = "alias ll='echo listed'\n",
+    });
+
+    var env = std.process.Environ.Map.init(std.testing.allocator);
+    defer env.deinit();
+    try env.put("XDG_CONFIG_HOME", root);
+
+    var result = try runCommandStringWithEnvironment(
+        std.testing.allocator,
+        std.testing.io,
+        "alias ll; ll",
+        .{ .io = std.testing.io, .allow_external = true, .arg_zero = "rush" },
+        &env,
+        &.{},
+        .{ .arg_zero = "rush" },
+        .{},
+    );
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("ll='echo listed'\nlisted\n", result.stdout);
+    try std.testing.expectEqualStrings("", result.stderr);
+}
+
 test "interactive style refresh runs rush_style with rush-owned color scheme" {
     var shell_state = shell.ShellState.init(std.testing.allocator);
     defer shell_state.deinit();

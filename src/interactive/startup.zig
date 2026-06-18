@@ -329,6 +329,16 @@ test "interactive config service sources simple config through semantic ShellSta
     try std.testing.expectEqualStrings("ok", shell_state.getVariable("RUSH_SEMANTIC_CONFIG_SECOND").?.value);
 }
 
+test "interactive config service sources alias definitions through semantic ShellState" {
+    var shell_state = shell.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+
+    try sourceConfigScript(std.testing.allocator, std.testing.io, &shell_state,
+        \\alias ll='echo listed'
+    , "semantic-config-alias-test.rush", "rush");
+    try std.testing.expectEqualStrings("echo listed", shell_state.getAlias("ll").?.value);
+}
+
 const TestAbbrState = struct {
     saw_ll: bool = false,
 };

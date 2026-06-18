@@ -81,6 +81,7 @@ pub const Evaluator = struct {
     signal_port: ?runtime.signal.Port = null,
     features: compat.Features = .{},
     arg_zero: []const u8 = "rush",
+    command_string_line_diagnostics: bool = false,
     shell_pid: runtime.process.ProcessId,
     function_frame: ?*FunctionFrame = null,
     io: ?std.Io = null,
@@ -681,9 +682,13 @@ pub const ParserBackedSourceResolver = struct {
     active_frame: ?*execution_frame.ExecutionFrame = null,
     active_input: ?*EvaluationInput = null,
     source_line_offset: usize = 0,
+    command_string_line_diagnostics: bool = false,
 
     pub fn init(evaluator: *Evaluator) ParserBackedSourceResolver {
-        return .{ .evaluator = evaluator };
+        return .{
+            .evaluator = evaluator,
+            .command_string_line_diagnostics = evaluator.command_string_line_diagnostics,
+        };
     }
 
     pub fn resolver(self: *ParserBackedSourceResolver) TrapActionResolver {
@@ -1844,6 +1849,7 @@ const SourceLowerer = struct {
             return .{ .failure = try cloneTrapActionFailure(self.allocator, trap_failure) };
         }
         expanded.command.last_command_substitution_status = command_substitutions.context.last_status;
+        expanded.command.source_line = self.current_line_number;
         try appendCommandSubstitutionExpansionOutput(self.allocator, &expanded.command, command_substitutions.context);
         const lookup = try self.lookupSnapshot(expanded.command);
         const plan_without_redirections = command_plan.classifyExpandedSimpleCommand(.{
@@ -2278,6 +2284,11 @@ const SourceLowerer = struct {
                 "{s}:{d}: trap {s}: expansion error: {s}: {s}",
                 .{ path, self.current_line_number, signal.name(), expansion_failure.name, expansion_failure.message },
             );
+            if (self.lineNumberForDiagnostics()) |line_number| return std.fmt.allocPrint(
+                self.allocator,
+                "{d}: trap {s}: expansion error: {s}: {s}",
+                .{ line_number, signal.name(), expansion_failure.name, expansion_failure.message },
+            );
             return std.fmt.allocPrint(
                 self.allocator,
                 "trap {s}: expansion error: {s}: {s}",
@@ -2289,6 +2300,11 @@ const SourceLowerer = struct {
             "{s}:{d}: expansion error: {s}: {s}",
             .{ path, self.current_line_number, expansion_failure.name, expansion_failure.message },
         );
+        if (self.lineNumberForDiagnostics()) |line_number| return std.fmt.allocPrint(
+            self.allocator,
+            "{d}: expansion error: {s}: {s}",
+            .{ line_number, expansion_failure.name, expansion_failure.message },
+        );
         return std.fmt.allocPrint(
             self.allocator,
             "expansion error: {s}: {s}",
@@ -2298,6 +2314,13 @@ const SourceLowerer = struct {
 
     fn scriptPathForDiagnostics(self: SourceLowerer) ?[]const u8 {
         return if (self.eval_context.source == .script_file) self.owner.arg_zero else null;
+    }
+
+    fn lineNumberForDiagnostics(self: SourceLowerer) ?usize {
+        return if (self.eval_context.source == .command_string and self.owner.command_string_line_diagnostics)
+            self.current_line_number
+        else
+            null;
     }
 
     fn resolveExternal(
@@ -8486,7 +8509,12 @@ fn evaluateSimpleCommand(
             resolution,
             buffers,
         )),
-        .not_found => |not_found| normalEvaluation(try evaluateNotFound(not_found, buffers)),
+        .not_found => |not_found| normalEvaluation(try evaluateNotFound(
+            evaluator,
+            not_found,
+            plan.source_line,
+            buffers,
+        )),
         .function => |definition| evaluateFunction(
             evaluator,
             shell_state,
@@ -12367,15 +12395,32 @@ fn runExternalWithPipelineInputWithProcessEnvironment(
     return normalizeWaitStatus(run_result.status);
 }
 
-fn evaluateNotFound(not_found: command_plan.NotFound, buffers: *EvaluationBuffers) EvalError!outcome.ExitStatus {
+fn evaluateNotFound(
+    evaluator: *Evaluator,
+    not_found: command_plan.NotFound,
+    source_line: ?usize,
+    buffers: *EvaluationBuffers,
+) EvalError!outcome.ExitStatus {
     var frame = OutputFrame.initOutcomeCapture(buffers);
     defer frame.deinit();
-    if (not_found.name.len == 0) {
-        try frame.addDiagnostic(": command not found", ": command not found\n");
-        return 127;
-    }
-    try frame.addBuiltinDiagnostic(not_found.name, "command not found");
+    const diagnostic = try commandNotFoundDiagnostic(evaluator.allocator, evaluator.*, not_found.name, source_line);
+    defer evaluator.allocator.free(diagnostic);
+    const stderr_text = try std.fmt.allocPrint(evaluator.allocator, "{s}\n", .{diagnostic});
+    defer evaluator.allocator.free(stderr_text);
+    try frame.addDiagnostic(diagnostic, stderr_text);
     return 127;
+}
+
+fn commandNotFoundDiagnostic(
+    allocator: std.mem.Allocator,
+    evaluator: Evaluator,
+    name: []const u8,
+    source_line: ?usize,
+) ![]const u8 {
+    if (evaluator.command_string_line_diagnostics) {
+        if (source_line) |line| return std.fmt.allocPrint(allocator, "{d}: {s}: command not found", .{ line, name });
+    }
+    return std.fmt.allocPrint(allocator, "{s}: command not found", .{name});
 }
 
 fn hasRedirections(plan: command_plan.CommandPlan) bool {
@@ -13476,6 +13521,7 @@ fn evaluateEnv(
             .assignments = plan.assignments,
             .argv = plan.argv[index..],
             .last_command_substitution_status = plan.last_command_substitution_status,
+            .source_line = plan.source_line,
         };
         const external = try resolveExternalForEnvEvaluation(
             evaluator.allocator,
@@ -13485,7 +13531,12 @@ fn evaluateEnv(
             process_overlay.entries.items,
         );
         defer if (external) |resolution| evaluator.allocator.free(resolution.path);
-        const resolution = external orelse return evaluateNotFound(.{ .name = command.argv[0] }, buffers);
+        const resolution = external orelse return evaluateNotFound(
+            evaluator,
+            .{ .name = command.argv[0] },
+            command.source_line,
+            buffers,
+        );
         const target_plan = command_plan.classifyExpandedSimpleCommand(.{
             .command = command,
             .lookup = .{ .externals = &.{resolution} },
@@ -14940,11 +14991,12 @@ fn evaluateExec(
         .assignments = plan.assignments,
         .argv = argv[index..],
         .last_command_substitution_status = plan.last_command_substitution_status,
+        .source_line = plan.source_line,
     };
     const external = try resolveExternalForEvaluation(evaluator.allocator, evaluator.fs_port, shell_state, command);
     defer if (external) |resolution| evaluator.allocator.free(resolution.path);
     const resolution = external orelse {
-        const status = try evaluateNotFound(.{ .name = command.argv[0] }, buffers);
+        const status = try evaluateNotFound(evaluator, .{ .name = command.argv[0] }, command.source_line, buffers);
         return .{ .status = status, .control_flow = .{ .exit = status } };
     };
     const target_plan = command_plan.classifyExpandedSimpleCommand(.{

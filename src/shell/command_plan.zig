@@ -586,11 +586,13 @@ pub const ExpandedSimpleCommand = struct {
     redirections: redirection_plan.RedirectionPlan = .{},
     last_command_substitution_status: ?state.ExitStatus = null,
     expansion_output: ExpansionOutput = .{},
+    source_line: ?usize = null,
 
     pub fn validate(self: ExpandedSimpleCommand) void {
         for (self.assignments) |assignment| assignment.validate();
         validateRedirections(self.redirections);
         self.expansion_output.validate();
+        if (self.source_line) |line| std.debug.assert(line != 0);
     }
 };
 
@@ -660,6 +662,7 @@ pub const CommandPlan = struct {
     redirections: redirection_plan.RedirectionPlan = .{},
     last_command_substitution_status: ?state.ExitStatus = null,
     expansion_output: ExpansionOutput = .{},
+    source_line: ?usize = null,
     classification: Classification,
 
     pub fn classify(request: PlanRequest) CommandPlan {
@@ -687,6 +690,7 @@ pub const CommandPlan = struct {
             .redirections = command.redirections,
             .last_command_substitution_status = command.last_command_substitution_status,
             .expansion_output = command.expansion_output,
+            .source_line = command.source_line,
             .classification = classification,
         };
         plan.validate();
@@ -722,6 +726,7 @@ pub const CommandPlan = struct {
         for (self.assignments) |assignment| assignment.validate();
         validateRedirections(self.redirections);
         self.expansion_output.validate();
+        if (self.source_line) |line| std.debug.assert(line != 0);
 
         switch (self.classification) {
             .empty => {
@@ -1013,6 +1018,7 @@ fn cloneCommandPlanWithMode(
         .redirections = redirections,
         .last_command_substitution_status = plan.last_command_substitution_status,
         .expansion_output = expansion_output,
+        .source_line = plan.source_line,
         .classification = classification,
     };
     owned.validate();
