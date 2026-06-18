@@ -229,6 +229,297 @@ pub const Program = struct {
     }
 };
 
+pub fn cloneProgram(allocator: std.mem.Allocator, program: Program, source: []const u8) !*Program {
+    const clone = try allocator.create(Program);
+    errdefer allocator.destroy(clone);
+    clone.* = .{
+        .allocator = allocator,
+        .source = source,
+        .commands = &.{},
+        .pipelines = &.{},
+    };
+    errdefer clone.deinit();
+
+    clone.commands = try cloneSimpleCommands(allocator, program.commands);
+    clone.pipelines = try clonePipelines(allocator, program.pipelines);
+    clone.if_commands = try cloneIfCommands(allocator, program.if_commands);
+    clone.loop_commands = try cloneLoopCommands(allocator, program.loop_commands);
+    clone.for_commands = try cloneForCommands(allocator, program.for_commands);
+    clone.case_commands = try cloneCaseCommands(allocator, program.case_commands);
+    clone.function_definitions = try cloneFunctionDefinitions(allocator, program.function_definitions);
+    clone.bash_test_commands = try cloneBashTestCommands(allocator, program.bash_test_commands);
+    clone.brace_groups = try cloneBraceGroups(allocator, program.brace_groups);
+    clone.subshells = try cloneSubshells(allocator, program.subshells);
+    clone.statements = try allocator.dupe(Statement, program.statements);
+    return clone;
+}
+
+fn cloneSimpleCommands(allocator: std.mem.Allocator, commands: []const SimpleCommand) ![]SimpleCommand {
+    const clone = try allocator.alloc(SimpleCommand, commands.len);
+    errdefer allocator.free(clone);
+    var initialized: usize = 0;
+    errdefer for (clone[0..initialized]) |command| freeCommand(allocator, command);
+    for (commands, 0..) |command, index| {
+        clone[index] = .{
+            .span = command.span,
+            .assignments = try cloneWords(allocator, command.assignments),
+            .argv = try cloneWords(allocator, command.argv),
+            .redirections = try cloneRedirections(allocator, command.redirections),
+        };
+        initialized += 1;
+    }
+    return clone;
+}
+
+fn clonePipelines(allocator: std.mem.Allocator, pipelines: []const Pipeline) ![]Pipeline {
+    const clone = try allocator.alloc(Pipeline, pipelines.len);
+    errdefer allocator.free(clone);
+    var initialized: usize = 0;
+    errdefer for (clone[0..initialized]) |pipeline| freePipeline(allocator, pipeline);
+    for (pipelines, 0..) |pipeline, index| {
+        clone[index] = .{
+            .span = pipeline.span,
+            .command_indexes = try allocator.dupe(usize, pipeline.command_indexes),
+            .stage_spans = try allocator.dupe(parser.Span, pipeline.stage_spans),
+            .stage_sources = try cloneByteSlices(allocator, pipeline.stage_sources),
+            .op_before = pipeline.op_before,
+            .negated = pipeline.negated,
+            .async_after = pipeline.async_after,
+        };
+        initialized += 1;
+    }
+    return clone;
+}
+
+fn cloneIfCommands(allocator: std.mem.Allocator, commands: []const IfCommand) ![]IfCommand {
+    const clone = try allocator.alloc(IfCommand, commands.len);
+    errdefer allocator.free(clone);
+    var initialized: usize = 0;
+    errdefer for (clone[0..initialized]) |command| freeIfCommand(allocator, command);
+    for (commands, 0..) |command, index| {
+        clone[index] = .{
+            .span = command.span,
+            .branches = try cloneIfBranches(allocator, command.branches),
+            .else_body = if (command.else_body) |body| try allocator.dupe(u8, body) else null,
+            .redirections = try cloneRedirections(allocator, command.redirections),
+        };
+        initialized += 1;
+    }
+    return clone;
+}
+
+fn cloneIfBranches(allocator: std.mem.Allocator, branches: []const IfBranch) ![]IfBranch {
+    const clone = try allocator.alloc(IfBranch, branches.len);
+    errdefer allocator.free(clone);
+    var initialized: usize = 0;
+    errdefer for (clone[0..initialized]) |branch| {
+        allocator.free(branch.condition);
+        allocator.free(branch.body);
+    };
+    for (branches, 0..) |branch, index| {
+        clone[index] = .{
+            .condition = try allocator.dupe(u8, branch.condition),
+            .body = try allocator.dupe(u8, branch.body),
+        };
+        initialized += 1;
+    }
+    return clone;
+}
+
+fn cloneLoopCommands(allocator: std.mem.Allocator, commands: []const LoopCommand) ![]LoopCommand {
+    const clone = try allocator.alloc(LoopCommand, commands.len);
+    errdefer allocator.free(clone);
+    var initialized: usize = 0;
+    errdefer for (clone[0..initialized]) |command| freeLoopCommand(allocator, command);
+    for (commands, 0..) |command, index| {
+        clone[index] = .{
+            .span = command.span,
+            .kind = command.kind,
+            .condition = try allocator.dupe(u8, command.condition),
+            .body = try allocator.dupe(u8, command.body),
+            .redirections = try cloneRedirections(allocator, command.redirections),
+        };
+        initialized += 1;
+    }
+    return clone;
+}
+
+fn cloneForCommands(allocator: std.mem.Allocator, commands: []const ForCommand) ![]ForCommand {
+    const clone = try allocator.alloc(ForCommand, commands.len);
+    errdefer allocator.free(clone);
+    var initialized: usize = 0;
+    errdefer for (clone[0..initialized]) |command| freeForCommand(allocator, command);
+    for (commands, 0..) |command, index| {
+        clone[index] = .{
+            .span = command.span,
+            .name = try allocator.dupe(u8, command.name),
+            .words = try cloneWords(allocator, command.words),
+            .use_positionals = command.use_positionals,
+            .body = try allocator.dupe(u8, command.body),
+            .redirections = try cloneRedirections(allocator, command.redirections),
+        };
+        initialized += 1;
+    }
+    return clone;
+}
+
+fn cloneCaseCommands(allocator: std.mem.Allocator, commands: []const CaseCommand) ![]CaseCommand {
+    const clone = try allocator.alloc(CaseCommand, commands.len);
+    errdefer allocator.free(clone);
+    var initialized: usize = 0;
+    errdefer for (clone[0..initialized]) |command| freeCaseCommand(allocator, command);
+    for (commands, 0..) |command, index| {
+        clone[index] = .{
+            .span = command.span,
+            .word = try cloneWord(allocator, command.word),
+            .arms = try cloneCaseArms(allocator, command.arms),
+            .redirections = try cloneRedirections(allocator, command.redirections),
+        };
+        initialized += 1;
+    }
+    return clone;
+}
+
+fn cloneCaseArms(allocator: std.mem.Allocator, arms: []const CaseArm) ![]CaseArm {
+    const clone = try allocator.alloc(CaseArm, arms.len);
+    errdefer allocator.free(clone);
+    var initialized: usize = 0;
+    errdefer for (clone[0..initialized]) |arm| freeCaseArm(allocator, arm);
+    for (arms, 0..) |arm, index| {
+        clone[index] = .{
+            .patterns = try cloneWords(allocator, arm.patterns),
+            .body = try allocator.dupe(u8, arm.body),
+            .fallthrough = arm.fallthrough,
+            .test_next = arm.test_next,
+        };
+        initialized += 1;
+    }
+    return clone;
+}
+
+fn cloneFunctionDefinitions(
+    allocator: std.mem.Allocator,
+    definitions: []const FunctionDefinition,
+) ![]FunctionDefinition {
+    const clone = try allocator.alloc(FunctionDefinition, definitions.len);
+    errdefer allocator.free(clone);
+    var initialized: usize = 0;
+    errdefer for (clone[0..initialized]) |definition| freeFunctionDefinition(allocator, definition);
+    for (definitions, 0..) |definition, index| {
+        clone[index] = .{
+            .span = definition.span,
+            .name = try allocator.dupe(u8, definition.name),
+            .body = try allocator.dupe(u8, definition.body),
+            .redirections = try cloneRedirections(allocator, definition.redirections),
+        };
+        initialized += 1;
+    }
+    return clone;
+}
+
+fn cloneBashTestCommands(allocator: std.mem.Allocator, commands: []const BashTestCommand) ![]BashTestCommand {
+    const clone = try allocator.alloc(BashTestCommand, commands.len);
+    errdefer allocator.free(clone);
+    var initialized: usize = 0;
+    errdefer for (clone[0..initialized]) |command| freeBashTestCommand(allocator, command);
+    for (commands, 0..) |command, index| {
+        clone[index] = .{
+            .span = command.span,
+            .args = try cloneWords(allocator, command.args),
+        };
+        initialized += 1;
+    }
+    return clone;
+}
+
+fn cloneBraceGroups(allocator: std.mem.Allocator, groups: []const BraceGroup) ![]BraceGroup {
+    const clone = try allocator.alloc(BraceGroup, groups.len);
+    errdefer allocator.free(clone);
+    var initialized: usize = 0;
+    errdefer for (clone[0..initialized]) |group| freeBraceGroup(allocator, group);
+    for (groups, 0..) |group, index| {
+        clone[index] = .{
+            .span = group.span,
+            .body = try allocator.dupe(u8, group.body),
+            .redirections = try cloneRedirections(allocator, group.redirections),
+        };
+        initialized += 1;
+    }
+    return clone;
+}
+
+fn cloneSubshells(allocator: std.mem.Allocator, subshells: []const Subshell) ![]Subshell {
+    const clone = try allocator.alloc(Subshell, subshells.len);
+    errdefer allocator.free(clone);
+    var initialized: usize = 0;
+    errdefer for (clone[0..initialized]) |subshell| freeSubshell(allocator, subshell);
+    for (subshells, 0..) |subshell, index| {
+        clone[index] = .{
+            .span = subshell.span,
+            .body = try allocator.dupe(u8, subshell.body),
+            .redirections = try cloneRedirections(allocator, subshell.redirections),
+        };
+        initialized += 1;
+    }
+    return clone;
+}
+
+fn cloneWords(allocator: std.mem.Allocator, words: []const WordRef) ![]WordRef {
+    const clone = try allocator.alloc(WordRef, words.len);
+    errdefer allocator.free(clone);
+    var initialized: usize = 0;
+    errdefer for (clone[0..initialized]) |word| freeWord(allocator, word);
+    for (words, 0..) |word, index| {
+        clone[index] = try cloneWord(allocator, word);
+        initialized += 1;
+    }
+    return clone;
+}
+
+fn cloneWord(allocator: std.mem.Allocator, word: WordRef) !WordRef {
+    return .{
+        .span = word.span,
+        .raw = try allocator.dupe(u8, word.raw),
+        .text = try allocator.dupe(u8, word.text),
+    };
+}
+
+fn cloneRedirections(allocator: std.mem.Allocator, redirections: []const Redirection) ![]Redirection {
+    const clone = try allocator.alloc(Redirection, redirections.len);
+    errdefer allocator.free(clone);
+    var initialized: usize = 0;
+    errdefer for (clone[0..initialized]) |redirection| freeRedirection(allocator, redirection);
+    for (redirections, 0..) |redirection, index| {
+        clone[index] = .{
+            .span = redirection.span,
+            .io_number = if (redirection.io_number) |word| try cloneWord(allocator, word) else null,
+            .operator = redirection.operator,
+            .target = if (redirection.target) |word| try cloneWord(allocator, word) else null,
+            .here_doc = if (redirection.here_doc) |here_doc| try allocator.dupe(u8, here_doc) else null,
+            .here_doc_range = redirection.here_doc_range,
+            .here_doc_quoted = redirection.here_doc_quoted,
+        };
+        initialized += 1;
+    }
+    return clone;
+}
+
+fn cloneByteSlices(allocator: std.mem.Allocator, slices: []const []const u8) ![]const []const u8 {
+    const clone = try allocator.alloc([]const u8, slices.len);
+    errdefer allocator.free(clone);
+    var initialized: usize = 0;
+    errdefer freeByteSlices(allocator, clone[0..initialized]);
+    for (slices, 0..) |slice, index| {
+        clone[index] = try allocator.dupe(u8, slice);
+        initialized += 1;
+    }
+    return clone;
+}
+
+fn freeByteSlices(allocator: std.mem.Allocator, slices: []const []const u8) void {
+    for (slices) |slice| allocator.free(slice);
+}
+
 pub fn lowerSimpleCommands(allocator: std.mem.Allocator, parsed: parser.ParseResult) !Program {
     var commands: std.ArrayList(SimpleCommand) = .empty;
     var pipelines: std.ArrayList(Pipeline) = .empty;
@@ -2213,6 +2504,12 @@ fn freeSubshell(allocator: std.mem.Allocator, subshell: Subshell) void {
 fn freePipelineStageSources(allocator: std.mem.Allocator, sources: []const []const u8) void {
     for (sources) |source| allocator.free(source);
     allocator.free(sources);
+}
+
+fn freePipeline(allocator: std.mem.Allocator, pipeline: Pipeline) void {
+    allocator.free(pipeline.command_indexes);
+    allocator.free(pipeline.stage_spans);
+    freePipelineStageSources(allocator, pipeline.stage_sources);
 }
 
 fn freeBraceGroup(allocator: std.mem.Allocator, group: BraceGroup) void {

@@ -967,6 +967,10 @@ const SourceLowerer = struct {
         return parser.parse(self.allocator, aliased, .{ .features = self.owner.features.withStrictDiagnostics() });
     }
 
+    fn parseWithoutAliases(self: *SourceLowerer, source: []const u8) !parser.ParseResult {
+        return parser.parse(self.allocator, source, .{ .features = self.owner.features.withStrictDiagnostics() });
+    }
+
     fn lowerProgram(
         self: *SourceLowerer,
         program: ir.Program,
@@ -1511,9 +1515,11 @@ const SourceLowerer = struct {
         else
             try self.allocator.dupe(u8, definition.body);
         errdefer self.allocator.free(source_body);
+        const source_body_program = try self.cacheFunctionBodyProgram(source_body);
         const function_definition: command_plan.FunctionDefinition = .{
             .name = name,
             .source_body = source_body,
+            .source_body_program = source_body_program,
             .redirections = redirections.plan,
         };
         const plan: command_plan.CommandPlan = .{
@@ -1522,6 +1528,100 @@ const SourceLowerer = struct {
         };
         plan.validate();
         return .{ .simple = plan };
+    }
+
+    fn cacheFunctionBodyProgram(
+        self: *SourceLowerer,
+        source_body: []const u8,
+    ) !?*ir.Program {
+        std.debug.assert(std.mem.indexOfScalar(u8, source_body, 0) == null);
+        const parsed = try self.parseWithoutAliases(source_body);
+        if (parsed.diagnostics.len != 0 or parsed.incomplete) return null;
+
+        const program = try ir.lowerSimpleCommands(self.allocator, parsed);
+        if (!try self.functionBodyProgramCacheable(program)) return null;
+
+        const owned_program = try self.allocator.create(ir.Program);
+        owned_program.* = program;
+        return owned_program;
+    }
+
+    fn functionBodySourceCacheable(self: *SourceLowerer, source: []const u8) !bool {
+        std.debug.assert(std.mem.indexOfScalar(u8, source, 0) == null);
+        const parsed = try self.parseWithoutAliases(source);
+        if (parsed.diagnostics.len != 0 or parsed.incomplete) return false;
+
+        const program = try ir.lowerSimpleCommands(self.allocator, parsed);
+        return self.functionBodyProgramCacheable(program);
+    }
+
+    fn functionBodyProgramCacheable(self: *SourceLowerer, program: ir.Program) !bool {
+        for (program.statements) |statement| {
+            if (statement.async_after) return false;
+            if (!try self.functionBodyStatementCacheable(program, statement)) return false;
+        }
+        return true;
+    }
+
+    fn functionBodyStatementCacheable(
+        self: *SourceLowerer,
+        program: ir.Program,
+        statement: ir.Statement,
+    ) !bool {
+        return switch (statement.kind) {
+            .pipeline,
+            .bash_test_command,
+            => true,
+            .if_command => self.functionBodyIfCommandCacheable(program.if_commands[statement.index]),
+            .loop_command => self.functionBodyLoopCommandCacheable(program.loop_commands[statement.index]),
+            .case_command => self.functionBodyCaseCommandCacheable(program.case_commands[statement.index]),
+            .brace_group => self.functionBodyGroupCacheable(
+                program.brace_groups[statement.index].body,
+                program.brace_groups[statement.index].redirections,
+            ),
+            .subshell => self.functionBodyGroupCacheable(
+                program.subshells[statement.index].body,
+                program.subshells[statement.index].redirections,
+            ),
+            .for_command,
+            .function_definition,
+            => false,
+        };
+    }
+
+    fn functionBodyIfCommandCacheable(self: *SourceLowerer, command: ir.IfCommand) !bool {
+        if (command.redirections.len != 0) return false;
+        for (command.branches) |branch| {
+            if (!try self.functionBodySourceCacheable(branch.condition)) return false;
+            if (!try self.functionBodySourceCacheable(branch.body)) return false;
+        }
+        if (command.else_body) |body| {
+            if (!try self.functionBodySourceCacheable(body)) return false;
+        }
+        return true;
+    }
+
+    fn functionBodyLoopCommandCacheable(self: *SourceLowerer, command: ir.LoopCommand) !bool {
+        if (command.redirections.len != 0) return false;
+        if (!try self.functionBodySourceCacheable(command.condition)) return false;
+        return self.functionBodySourceCacheable(command.body);
+    }
+
+    fn functionBodyCaseCommandCacheable(self: *SourceLowerer, command: ir.CaseCommand) !bool {
+        if (command.redirections.len != 0) return false;
+        for (command.arms) |arm| {
+            if (!try self.functionBodySourceCacheable(arm.body)) return false;
+        }
+        return true;
+    }
+
+    fn functionBodyGroupCacheable(
+        self: *SourceLowerer,
+        body: []const u8,
+        redirections: []const ir.Redirection,
+    ) !bool {
+        if (redirections.len != 0) return false;
+        return self.functionBodySourceCacheable(body);
     }
 
     fn lowerStatementListSource(
@@ -8619,7 +8719,9 @@ fn evaluateFunction(
         evaluator.function_frame = previous_frame;
     }
 
-    var result = if (definition.source_body) |source_body| blk: {
+    var result = if (definition.source_body_program) |program| blk: {
+        break :blk try evaluateFunctionProgramBody(evaluator, &frame_state, function_context, program.*, buffers);
+    } else if (definition.source_body) |source_body| blk: {
         break :blk try evaluateFunctionSourceBody(evaluator, &frame_state, function_context, source_body, buffers);
     } else blk: {
         break :blk try evaluateStatementList(evaluator, &frame_state, function_context, definition.body, buffers);
@@ -8669,6 +8771,52 @@ fn evaluateFunctionSourceBody(
     std.debug.assert(function_context.canReturnFromFunction());
     std.debug.assert(std.mem.findScalar(u8, source_body, 0) == null);
     return evaluateStatementListSource(evaluator, frame_state, function_context, source_body, buffers);
+}
+
+fn evaluateFunctionProgramBody(
+    evaluator: *Evaluator,
+    frame_state: *state.ShellState,
+    function_context: context.EvalContext,
+    program: ir.Program,
+    buffers: *EvaluationBuffers,
+) EvalError!SimpleEvalResult {
+    frame_state.validate();
+    function_context.validate();
+    std.debug.assert(function_context.canReturnFromFunction());
+    std.debug.assert(std.mem.findScalar(u8, program.source, 0) == null);
+
+    const arena = try evaluator.allocator.create(std.heap.ArenaAllocator);
+    defer evaluator.allocator.destroy(arena);
+    arena.* = std.heap.ArenaAllocator.init(evaluator.allocator);
+    defer arena.deinit();
+
+    var parser_resolver = ParserBackedSourceResolver.init(evaluator);
+    parser_resolver.features = evaluator.features;
+    parser_resolver.arg_zero = evaluator.arg_zero;
+    parser_resolver.expand_aliases = frame_state.shopts.enabled(.expand_aliases);
+    parser_resolver.alias_state = evaluator.alias_state;
+    parser_resolver.active_frame = buffers.frame;
+    parser_resolver.active_input = buffers.stdin;
+    var lowerer: SourceLowerer = .{
+        .allocator = arena.allocator(),
+        .owner = &parser_resolver,
+        .shell_state = frame_state,
+        .eval_context = function_context,
+        .signal = null,
+        .local_functions = .empty,
+    };
+
+    const lowered = lowerer.lowerStatementList(program, function_context.target) catch |err| switch (err) {
+        error.OutOfMemory => return error.OutOfMemory,
+        else => return error.Unimplemented,
+    };
+    const list = switch (lowered) {
+        .list => |list| list,
+        .failure => |failure| {
+            return simpleResultFromTrapActionFailure(evaluator, frame_state.*, function_context, failure, buffers);
+        },
+    };
+    return evaluateStatementList(evaluator, frame_state, function_context, list, buffers);
 }
 
 fn applyFunctionAssignmentPrefixes(
@@ -16774,6 +16922,7 @@ test "semantic parser trap resolver lowers heterogeneous statement lists and fun
 
     const stored = shell_state.getFunction("fn").?;
     try std.testing.expect(stored.source_body != null);
+    try std.testing.expect(stored.source_body_program != null);
     try std.testing.expectEqual(@as(usize, 0), stored.body.statements.len);
     const lookup_functions = [_]command_plan.FunctionDefinition{stored};
     const call_plan = command_plan.classifyExpandedSimpleCommand(.{

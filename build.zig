@@ -11,7 +11,7 @@ const compile_check_targets = [_][]const u8{
     "x86_64-netbsd",
 };
 
-const rush_stack_size = 32 * 1024 * 1024;
+const rush_stack_size = 128 * 1024 * 1024;
 
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});

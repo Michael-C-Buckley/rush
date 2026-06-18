@@ -81,7 +81,52 @@
             .name = "deep finite function call chain completes",
             .script =
             \\f() { if [ "$1" -eq 0 ]; then printf 'ok\n'; else next=$(( $1 - 1 )); f "$next"; fi; }
-            \\f 200
+            \\f 600
+            ,
+            .stdout =
+            \\ok
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "cached function compound body expands parameters when called",
+            .script =
+            \\f() { if true; then printf '<%s:%s>\n' "$1" "$#"; fi; }
+            \\f inner extra
+            ,
+            .stdout =
+            \\<inner:2>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "function for words expand when called",
+            .script =
+            \\set -- definition
+            \\f() { for x in "$@"; do printf '<%s>\n' "$x"; done; }
+            \\f call1 call2
+            ,
+            .stdout =
+            \\<call1>
+            \\<call2>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "function compound redirections expand when called",
+            .script =
+            \\target=definition
+            \\f() { { printf 'ok\n'; } >"$target"; }
+            \\target=invocation
+            \\f
+            \\cat invocation
+            \\test ! -e definition
             ,
             .stdout =
             \\ok

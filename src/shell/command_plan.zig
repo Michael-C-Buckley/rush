@@ -27,10 +27,13 @@ pub const FunctionDefinition = struct {
     /// Eagerly lowered semantic body used by older unit tests and by manually
     /// constructed semantic plans.
     body: FunctionBody = .{},
-    /// Parser-backed function body source. When present, the body is lowered
-    /// at call time so parameter, variable, glob, and redirection expansion see
-    /// the function invocation state rather than the definition state.
+    /// Alias-expanded parser-backed function body source. Used as the fallback
+    /// body when no cached parsed body is available.
     source_body: ?[]const u8 = null,
+    /// Parsed source body for conservative call-time relowering without
+    /// reparsing the full function body on each invocation. The program source
+    /// is borrowed from `source_body`.
+    source_body_program: ?*ir.Program = null,
     redirections: redirection_plan.RedirectionPlan = .{},
 
     pub fn validate(self: FunctionDefinition) void {
@@ -39,12 +42,17 @@ pub const FunctionDefinition = struct {
         if (self.source_body) |source_body| {
             std.debug.assert(std.mem.indexOfScalar(u8, source_body, 0) == null);
         }
+        if (self.source_body_program) |program| {
+            std.debug.assert(self.source_body != null);
+            std.debug.assert(program.source.len == self.source_body.?.len);
+        }
         validateRedirections(self.redirections);
     }
 
     pub fn hasExecutableBody(self: FunctionDefinition) bool {
         self.validate();
-        return self.source_body != null or self.body.statements.len != 0 or self.body.commands.len != 0;
+        return self.source_body != null or self.source_body_program != null or
+            self.body.statements.len != 0 or self.body.commands.len != 0;
     }
 };
 
@@ -774,12 +782,21 @@ fn cloneFunctionDefinitionWithMode(
     errdefer freeStatementList(allocator, owned_body);
     const owned_source_body = if (definition.source_body) |source_body| try allocator.dupe(u8, source_body) else null;
     errdefer if (owned_source_body) |source_body| allocator.free(source_body);
+    const owned_source_body_program = if (definition.source_body_program) |program|
+        try ir.cloneProgram(allocator, program.*, owned_source_body.?)
+    else
+        null;
+    errdefer if (owned_source_body_program) |program| {
+        program.deinit();
+        allocator.destroy(program);
+    };
     var owned_redirections = try definition.redirections.clone(allocator);
     errdefer owned_redirections.deinit();
     return .{
         .name = owned_name,
         .body = owned_body,
         .source_body = owned_source_body,
+        .source_body_program = owned_source_body_program,
         .redirections = owned_redirections,
     };
 }
@@ -787,6 +804,10 @@ fn cloneFunctionDefinitionWithMode(
 pub fn freeFunctionDefinition(allocator: std.mem.Allocator, definition: FunctionDefinition) void {
     allocator.free(definition.name);
     freeStatementList(allocator, definition.body);
+    if (definition.source_body_program) |program| {
+        program.deinit();
+        allocator.destroy(program);
+    }
     if (definition.source_body) |source_body| allocator.free(source_body);
     var redirections = definition.redirections;
     redirections.deinit();
