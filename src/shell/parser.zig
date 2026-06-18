@@ -1762,10 +1762,12 @@ pub fn parse(allocator: std.mem.Allocator, source: []const u8, options: ParseOpt
         errdefer parser.deinit();
 
         try parser.diagnostics.appendSlice(allocator, lex_result.diagnostics);
+        const lex_diagnostic_count = lex_result.diagnostics.len;
         allocator.free(lex_result.diagnostics);
         lex_result.diagnostics = &.{};
 
         try parser.run();
+        suppressParserDiagnosticsAfterUnterminatedParameterExpansion(&parser.diagnostics, lex_diagnostic_count);
         parser.freePendingHereDocs();
         parser.pending_here_docs.deinit(allocator);
         parser.pending_here_docs = .empty;
@@ -1794,6 +1796,46 @@ pub fn parse(allocator: std.mem.Allocator, source: []const u8, options: ParseOpt
             .incomplete = lex_result.incomplete or parser.incomplete,
         };
     }
+}
+
+fn suppressParserDiagnosticsAfterUnterminatedParameterExpansion(
+    diagnostics: *std.ArrayList(Diagnostic),
+    lex_diagnostic_count: usize,
+) void {
+    std.debug.assert(lex_diagnostic_count <= diagnostics.items.len);
+    const lex_diagnostics = diagnostics.items[0..lex_diagnostic_count];
+    for (lex_diagnostics) |lex_diagnostic| {
+        if (isUnterminatedParameterExpansionDiagnostic(lex_diagnostic)) break;
+    } else return;
+
+    var write_index = lex_diagnostic_count;
+    for (diagnostics.items[lex_diagnostic_count..]) |diagnostic| {
+        var suppress = false;
+        if (diagnostic.kind == .incomplete_input) {
+            for (lex_diagnostics) |lex_diagnostic| {
+                if (isUnterminatedParameterExpansionDiagnostic(lex_diagnostic) and
+                    spanContains(diagnostic.span, lex_diagnostic.span))
+                {
+                    suppress = true;
+                    break;
+                }
+            }
+        }
+        if (!suppress) {
+            diagnostics.items[write_index] = diagnostic;
+            write_index += 1;
+        }
+    }
+    diagnostics.shrinkRetainingCapacity(write_index);
+}
+
+fn isUnterminatedParameterExpansionDiagnostic(diagnostic: Diagnostic) bool {
+    return diagnostic.kind == .incomplete_input and
+        std.mem.eql(u8, diagnostic.message, "unterminated parameter expansion");
+}
+
+fn spanContains(outer: Span, inner: Span) bool {
+    return outer.start <= inner.start and outer.end >= inner.end;
 }
 
 fn appendNewHereDocBodyRanges(allocator: std.mem.Allocator, ranges: *std.ArrayList(Span), nodes: []const Node) !bool {
@@ -5436,6 +5478,31 @@ test "parser reports incomplete POSIX if commands" {
             .kind = .incomplete_input,
             .span = .init(0, 21),
             .message = "missing fi to close if command",
+        }},
+        .incomplete = true,
+    });
+}
+
+test "parser suppresses dependent compound diagnostics after unterminated parameter expansion" {
+    try expectParse("if true; then echo ${foo", .{
+        .tokens = &.{
+            .{ .kind = .word, .span = .init(0, 2) },
+            .{ .kind = .whitespace, .span = .init(2, 3) },
+            .{ .kind = .word, .span = .init(3, 7) },
+            .{ .kind = .semicolon, .span = .init(7, 8) },
+            .{ .kind = .whitespace, .span = .init(8, 9) },
+            .{ .kind = .word, .span = .init(9, 13) },
+            .{ .kind = .whitespace, .span = .init(13, 14) },
+            .{ .kind = .word, .span = .init(14, 18) },
+            .{ .kind = .whitespace, .span = .init(18, 19) },
+            .{ .kind = .word, .span = .init(19, 24) },
+            .{ .kind = .eof, .span = .empty(24) },
+        },
+        .nodes = &.{.{ .kind = .root, .span = .init(0, 24) }},
+        .diagnostics = &.{.{
+            .kind = .incomplete_input,
+            .span = .init(19, 24),
+            .message = "unterminated parameter expansion",
         }},
         .incomplete = true,
     });
