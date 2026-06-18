@@ -782,6 +782,46 @@
             .status = 0,
         },
         .{
+            .name = "here document removes backslash newline after operator",
+            .script = "cat <<\\\nEOF\nhello\nEOF\n",
+            .stdout =
+            \\hello
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "here document removes backslash newline in delimiter word",
+            .script = "cat <<EO\\\nF\nhello\nEOF\n",
+            .stdout =
+            \\hello
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "quoted here document delimiter removes backslash newline",
+            .script = "cat <<\"EO\\\nF\"\n$HOME\nEOF\n",
+            .stdout =
+            \\$HOME
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "here document dash removes backslash newline after operator",
+            .script = "cat <<-\\\nEOF\n\thello\nEOF\n",
+            .stdout =
+            \\hello
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "here document body does not expand when delimiter is quoted",
             .script =
             \\x=value

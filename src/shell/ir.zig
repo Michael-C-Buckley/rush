@@ -2047,11 +2047,30 @@ fn hereDocInfoForNode(allocator: std.mem.Allocator, parsed: parser.ParseResult, 
     if (operator != .dless and operator != .dless_dash) return null;
     const token_index = target_token orelse return null;
     const raw = parsed.tokens[token_index].lexeme(parsed.source);
+    const normalized = try removeLineContinuations(allocator, raw);
+    defer allocator.free(normalized);
     return .{
-        .delimiter = try expand.quoteRemove(allocator, raw),
+        .delimiter = try expand.quoteRemove(allocator, normalized),
         .strip_tabs = operator == .dless_dash,
-        .quoted = wordContainsQuotes(raw),
+        .quoted = wordContainsQuotes(normalized),
     };
+}
+
+fn removeLineContinuations(allocator: std.mem.Allocator, raw: []const u8) ![]const u8 {
+    if (std.mem.indexOf(u8, raw, "\\\n") == null) return allocator.dupe(u8, raw);
+
+    var normalized: std.ArrayList(u8) = .empty;
+    errdefer normalized.deinit(allocator);
+    var index: usize = 0;
+    while (index < raw.len) {
+        if (raw[index] == '\\' and index + 1 < raw.len and raw[index + 1] == '\n') {
+            index += 2;
+            continue;
+        }
+        try normalized.append(allocator, raw[index]);
+        index += 1;
+    }
+    return normalized.toOwnedSlice(allocator);
 }
 
 fn wordContainsQuotes(raw: []const u8) bool {
@@ -2122,8 +2141,12 @@ fn sourceLineBounds(source: []const u8, offset: usize) SourceLine {
 }
 
 fn hereDocBodyStartFromLine(source: []const u8, line: SourceLine) ?usize {
-    if (line.end >= source.len) return null;
-    return line.end + 1;
+    var current = line;
+    while (true) {
+        if (current.end >= source.len) return null;
+        if (!parser.hasTrailingLineContinuation(source[current.start..current.end])) return current.end + 1;
+        current = sourceLineBounds(source, current.end + 1);
+    }
 }
 
 fn containsUsize(items: []const usize, needle: usize) bool {

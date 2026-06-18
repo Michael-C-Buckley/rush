@@ -2132,7 +2132,15 @@ const PendingHereDoc = struct {
 };
 
 fn hereDocDelimiterIsQuoted(raw: []const u8) bool {
-    return std.mem.indexOfAny(u8, raw, "'\"\\") != null;
+    var index: usize = 0;
+    while (index < raw.len) : (index += 1) {
+        if (raw[index] == '\\' and index + 1 < raw.len and raw[index + 1] == '\n') {
+            index += 1;
+            continue;
+        }
+        if (raw[index] == '\'' or raw[index] == '"' or raw[index] == '\\') return true;
+    }
+    return false;
 }
 
 fn hereDocDelimiterFromRaw(allocator: std.mem.Allocator, raw: []const u8) ![]const u8 {
@@ -2142,6 +2150,10 @@ fn hereDocDelimiterFromRaw(allocator: std.mem.Allocator, raw: []const u8) ![]con
     var index: usize = 0;
     while (index < raw.len) : (index += 1) {
         const byte = raw[index];
+        if (byte == '\\' and index + 1 < raw.len and raw[index + 1] == '\n') {
+            index += 1;
+            continue;
+        }
         if (quote) |active| {
             if (byte == active) {
                 quote = null;
