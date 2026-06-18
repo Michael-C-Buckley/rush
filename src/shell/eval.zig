@@ -6108,14 +6108,18 @@ pub fn drainJobNotifications(
     errdefer state_delta.deinit();
     var output: std.ArrayList(u8) = .empty;
     errdefer output.deinit(evaluator.allocator);
+    var notified_done_ids: std.ArrayList(usize) = .empty;
+    defer notified_done_ids.deinit(evaluator.allocator);
 
-    for (refreshed_state.pending_job_notifications.items) |notification| try appendJobNotificationLine(
-        evaluator.allocator,
-        &output,
-        notification,
-    );
+    for (refreshed_state.pending_job_notifications.items) |notification| {
+        try appendJobNotificationLine(evaluator.allocator, &output, notification);
+        if (notification.state == .done) try notified_done_ids.append(evaluator.allocator, notification.job_id);
+    }
     const consumed_count = refreshed_state.pending_job_notifications.items.len;
     if (consumed_count != 0) refreshed_state.consumeJobNotifications(consumed_count);
+    for (notified_done_ids.items) |id| {
+        if (refreshed_state.findBackgroundJobById(id) != null) refreshed_state.removeBackgroundJobById(id);
+    }
     try appendJobTableDiff(shell_state.*, refreshed_state, &state_delta);
 
     var command_outcome = outcome.CommandOutcome.init(evaluator.allocator, shell_state.last_status, state_delta);
@@ -15756,8 +15760,10 @@ fn appendJobTableDiff(before: state.ShellState, after: state.ShellState, state_d
         before.pending_job_notifications.items.len,
         after.pending_job_notifications.items.len,
     );
-    for (after.pending_job_notifications.items[common_notifications..]) |notification|
+    for (after.pending_job_notifications.items[common_notifications..]) |notification| {
+        if (after.findBackgroundJobById(notification.job_id) == null) continue;
         try state_delta.appendJobNotification(notification);
+    }
     if (before.current_job_id != after.current_job_id or before.previous_job_id != after.previous_job_id) {
         state_delta.setJobMarkers(.{
             .current_job_id = after.current_job_id,
@@ -21260,7 +21266,7 @@ test "semantic jobs builtin refreshes stopped and done jobs and drains notificat
     try std.testing.expectEqualStrings("[1] + Done(5) 'sleep' '1'\n", done_jobs.stdout.items);
     try done_jobs.commitDelta(&shell_state, .current_shell);
     try std.testing.expectEqual(@as(usize, 0), shell_state.background_jobs.items.len);
-    try std.testing.expectEqual(@as(usize, 1), shell_state.pending_job_notifications.items.len);
+    try std.testing.expectEqual(@as(usize, 0), shell_state.pending_job_notifications.items.len);
 
     var done_notifications = try drainJobNotifications(
         &evaluator,
@@ -21268,9 +21274,43 @@ test "semantic jobs builtin refreshes stopped and done jobs and drains notificat
         context.EvalContext.forTarget(.current_shell),
     );
     defer done_notifications.deinit();
-    try std.testing.expectEqualStrings("[1] Done(5) 'sleep' '1'\n", done_notifications.stdout.items);
+    try std.testing.expectEqualStrings("", done_notifications.stdout.items);
     try done_notifications.commitDelta(&shell_state, .current_shell);
     try std.testing.expectEqual(@as(usize, 0), shell_state.pending_job_notifications.items.len);
+}
+
+test "semantic drained done job notification removes completed job" {
+    var fake = FakeExternalRuntime.init(std.testing.allocator);
+    defer fake.deinit();
+    var evaluator = Evaluator.initWithExternalPorts(std.testing.allocator, fake.fdPort(), fake.processPort());
+    var shell_state = state.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    shell_state.options.set(.monitor, true);
+
+    try appendSemanticTestJob(&shell_state, 1, 7001, 7001, "sleep 1", .running);
+    fake.setPollWaitStatuses(&.{.{ .exited = 5 }});
+
+    var done_notifications = try drainJobNotifications(
+        &evaluator,
+        &shell_state,
+        context.EvalContext.forTarget(.current_shell),
+    );
+    defer done_notifications.deinit();
+    try std.testing.expectEqualStrings("[1] Done(5) sleep 1\n", done_notifications.stdout.items);
+    try done_notifications.commitDelta(&shell_state, .current_shell);
+    try std.testing.expectEqual(@as(usize, 0), shell_state.background_jobs.items.len);
+    try std.testing.expectEqual(@as(usize, 0), shell_state.pending_job_notifications.items.len);
+
+    const jobs_plan = command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{"jobs"} } });
+    var jobs_result = try evaluatePlan(
+        &evaluator,
+        &shell_state,
+        context.EvalContext.forTarget(.current_shell),
+        jobs_plan,
+    );
+    defer jobs_result.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 0), jobs_result.status);
+    try std.testing.expectEqualStrings("", jobs_result.stdout.items);
 }
 
 test "semantic jobs builtin supports pid and long operands with diagnostics" {
