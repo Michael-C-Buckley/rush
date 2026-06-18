@@ -152,6 +152,7 @@ pub fn runCommandStringWithEnvironment(
         io,
         script,
         invocation,
+        options.source_path,
         options.external_stdio,
         options.live_stdio,
         environ_map,
@@ -199,6 +200,7 @@ pub fn runSemanticCommandString(
         io,
         script,
         invocation,
+        null,
         external_stdio,
         false,
         environ_map,
@@ -212,6 +214,7 @@ fn runSemanticCommandStringInternal(
     io: std.Io,
     script: []const u8,
     invocation: shell.InvocationContext,
+    source_path: ?[]const u8,
     external_stdio: runtime.ExternalStdio,
     live_stdio: bool,
     environ_map: ?*const std.process.Environ.Map,
@@ -243,6 +246,7 @@ fn runSemanticCommandStringInternal(
             io,
             script,
             invocation,
+            source_path,
             external_stdio,
             live_stdio,
             environ_map,
@@ -257,7 +261,9 @@ fn runSemanticCommandStringInternal(
     });
     defer parsed.deinit();
     if (parsed.diagnostics.len != 0) {
-        return .{ .output = try parseDiagnostics(allocator, script, parsed.diagnostics) };
+        return .{ .output = try parseDiagnosticsWithOptions(allocator, script, parsed.diagnostics, .{
+            .source_path = source_path,
+        }) };
     }
 
     var program = try ir.lowerSimpleCommands(allocator, parsed);
@@ -315,6 +321,7 @@ fn runSemanticAliasTimingCommandString(
     io: std.Io,
     script: []const u8,
     invocation: shell.InvocationContext,
+    source_path: ?[]const u8,
     external_stdio: runtime.ExternalStdio,
     live_stdio: bool,
     environ_map: ?*const std.process.Environ.Map,
@@ -399,7 +406,10 @@ fn runSemanticAliasTimingCommandString(
                 break;
             }
             if (!parsed.incomplete or end >= script.len)
-                return .{ .output = try parseDiagnostics(allocator, source, parsed.diagnostics) };
+                return .{ .output = try parseDiagnosticsWithOptions(allocator, source, parsed.diagnostics, .{
+                    .source_path = source_path,
+                    .line_offset = semanticSourceLine(script, start),
+                }) };
             end = extendSemanticHereDocChunk(script, start, semanticLineEnd(script, end));
         }
         if (stop_for_pending_exit) break;
@@ -476,6 +486,7 @@ pub fn runShellStateScriptWithExtensionHandlers(
             shell_state,
             script,
             invocation,
+            source_path,
             external_stdio,
             extension_handlers,
         )
@@ -486,6 +497,7 @@ pub fn runShellStateScriptWithExtensionHandlers(
             shell_state,
             script,
             invocation,
+            source_path,
             external_stdio,
             extension_handlers,
         );
@@ -587,6 +599,7 @@ fn runSemanticShellStateScriptWithoutAliasTiming(
     shell_state: *shell.ShellState,
     script: []const u8,
     invocation: shell.InvocationContext,
+    source_path: []const u8,
     external_stdio: runtime.ExternalStdio,
     extension_handlers: ExtensionHandlers,
 ) !SemanticInvocationExecution {
@@ -603,7 +616,9 @@ fn runSemanticShellStateScriptWithoutAliasTiming(
     );
     defer parsed.deinit();
     if (parsed.diagnostics.len != 0) {
-        return .{ .output = try parseDiagnostics(allocator, script, parsed.diagnostics) };
+        return .{ .output = try parseDiagnosticsWithOptions(allocator, script, parsed.diagnostics, .{
+            .source_path = source_path,
+        }) };
     }
 
     var program = try ir.lowerSimpleCommands(allocator, parsed);
@@ -646,6 +661,7 @@ fn runSemanticAliasTimingShellStateScript(
     shell_state: *shell.ShellState,
     script: []const u8,
     invocation: shell.InvocationContext,
+    source_path: []const u8,
     external_stdio: runtime.ExternalStdio,
     extension_handlers: ExtensionHandlers,
 ) !SemanticInvocationExecution {
@@ -726,7 +742,10 @@ fn runSemanticAliasTimingShellStateScript(
                 break;
             }
             if (!parsed.incomplete or end >= script.len)
-                return .{ .output = try parseDiagnostics(allocator, source, parsed.diagnostics) };
+                return .{ .output = try parseDiagnosticsWithOptions(allocator, source, parsed.diagnostics, .{
+                    .source_path = source_path,
+                    .line_offset = semanticSourceLine(script, start),
+                }) };
             end = extendSemanticHereDocChunk(script, start, semanticLineEnd(script, end));
         }
         if (stop_for_pending_exit) break;
@@ -1743,14 +1762,36 @@ pub fn parseDiagnostics(
     script: []const u8,
     diagnostics: []const parser.Diagnostic,
 ) !CommandResult {
+    return parseDiagnosticsWithOptions(allocator, script, diagnostics, .{});
+}
+
+const ParseDiagnosticOptions = struct {
+    source_path: ?[]const u8 = null,
+    line_offset: usize = 0,
+};
+
+fn parseDiagnosticsWithOptions(
+    allocator: std.mem.Allocator,
+    script: []const u8,
+    diagnostics: []const parser.Diagnostic,
+    options: ParseDiagnosticOptions,
+) !CommandResult {
     var stderr_buffer: std.ArrayList(u8) = .empty;
     defer stderr_buffer.deinit(allocator);
 
     for (diagnostics) |diagnostic| {
-        const line = try std.fmt.allocPrint(allocator, "rush: {s}: {s}\n", .{
-            @tagName(diagnostic.kind),
-            diagnostic.message,
-        });
+        const line = if (options.source_path) |source_path|
+            try std.fmt.allocPrint(allocator, "rush: {s}:{d}: {s}: {s}\n", .{
+                source_path,
+                options.line_offset + diagnosticLineNumber(script, diagnostic.span.start),
+                @tagName(diagnostic.kind),
+                diagnostic.message,
+            })
+        else
+            try std.fmt.allocPrint(allocator, "rush: {s}: {s}\n", .{
+                @tagName(diagnostic.kind),
+                diagnostic.message,
+            });
         defer allocator.free(line);
         try stderr_buffer.appendSlice(allocator, line);
         try appendDiagnosticSource(allocator, &stderr_buffer, script, diagnostic.span);
@@ -1787,6 +1828,14 @@ fn diagnosticLineStart(source: []const u8, offset: usize) usize {
     var index = @min(offset, source.len);
     while (index > 0 and source[index - 1] != '\n') index -= 1;
     return index;
+}
+
+fn diagnosticLineNumber(source: []const u8, offset: usize) usize {
+    var line: usize = 1;
+    for (source[0..@min(offset, source.len)]) |byte| {
+        if (byte == '\n') line += 1;
+    }
+    return line;
 }
 
 fn diagnosticLineEnd(source: []const u8, offset: usize) usize {
@@ -1949,6 +1998,55 @@ test "script file invocation preserves trailing EOF backslash without final newl
     try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
     try std.testing.expectEqualStrings("a\\\n", result.stdout);
     try std.testing.expectEqualStrings("", result.stderr);
+}
+test "script file incomplete parse diagnostics include path and line" {
+    const path = "rush-script-incomplete-diagnostic-test.rush";
+    try deleteFileIfExists(std.testing.io, path);
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = path, .data =
+        \\echo before
+        \\if true; then
+        \\  echo after
+    });
+
+    const invocation = cli_invocation.parse(&.{ "rush", path }) orelse return error.ExpectedInvocation;
+    var result = try runInvocationForTest(std.testing.allocator, std.testing.io, invocation, null, .capture, false);
+    defer result.deinit();
+
+    const expected = try std.fmt.allocPrint(
+        std.testing.allocator,
+        "rush: {s}:2: incomplete_input: missing fi to close if command",
+        .{path},
+    );
+    defer std.testing.allocator.free(expected);
+    try std.testing.expectEqual(@as(shell.ExitStatus, 2), result.status);
+    try std.testing.expectEqualStrings("", result.stdout);
+    try std.testing.expect(std.mem.indexOf(u8, result.stderr, expected) != null);
+    try std.testing.expect(std.mem.indexOf(u8, result.stderr, "  if true; then\n  ^^^^^^^^^^^^^\n") != null);
+}
+test "script file parse diagnostics include path and line" {
+    const path = "rush-script-parse-diagnostic-test.rush";
+    try deleteFileIfExists(std.testing.io, path);
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = path, .data =
+        \\echo before
+        \\echo after 2>
+    });
+
+    const invocation = cli_invocation.parse(&.{ "rush", path }) orelse return error.ExpectedInvocation;
+    var result = try runInvocationForTest(std.testing.allocator, std.testing.io, invocation, null, .capture, false);
+    defer result.deinit();
+
+    const expected = try std.fmt.allocPrint(
+        std.testing.allocator,
+        "rush: {s}:2: parse_error: missing redirection target",
+        .{path},
+    );
+    defer std.testing.allocator.free(expected);
+    try std.testing.expectEqual(@as(shell.ExitStatus, 2), result.status);
+    try std.testing.expectEqualStrings("", result.stdout);
+    try std.testing.expect(std.mem.indexOf(u8, result.stderr, expected) != null);
+    try std.testing.expect(std.mem.indexOf(u8, result.stderr, "  echo after 2>\n") != null);
 }
 test "script file invocation shell options affect execution" {
     const path = "rush-script-options-test.rush";
