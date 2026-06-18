@@ -3100,7 +3100,8 @@ fn evaluatePlanWithInput(
             try commitExecRedirectionsToFrame(evaluator.allocator, frame, effective_plan.redirections);
         },
     }
-    if ((effective_plan.redirections.steps.len != 0 or
+    if (!simpleCommandOutputAlreadyRouted(effective_plan) and
+        (effective_plan.redirections.steps.len != 0 or
         redirection_guard.hasTransaction() or
         (hasScopedExecRedirections(evaluator.*) and eval_context.command_substitution_depth == 0)) and
         effective_plan.class() != .external and
@@ -3153,6 +3154,12 @@ fn evaluatePlanWithInput(
     try appendBuiltinDiagnostic(&command_outcome, effective_plan, result.status);
     command_outcome.validateForContext(eval_context);
     return command_outcome;
+}
+
+fn simpleCommandOutputAlreadyRouted(plan: command_plan.CommandPlan) bool {
+    plan.validate();
+    if (plan.argv.len == 0) return false;
+    return std.mem.eql(u8, plan.argv[0], "echo") or std.mem.eql(u8, plan.argv[0], "printf");
 }
 
 fn bashCommandIgnoresReadonlyAssignment(eval_context: context.EvalContext, plan: command_plan.CommandPlan) bool {

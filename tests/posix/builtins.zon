@@ -894,5 +894,71 @@
             .stderr = "visible\n",
             .status = 0,
         },
+        .{
+            .name = "brace group builtin duplicated output survives later source descriptor close",
+            .script =
+            \\{ echo visible >&2 2>&-; }
+            \\printf '<%s>\n' "$?"
+            ,
+            .stdout =
+            \\<0>
+            \\
+            ,
+            .stderr = "visible\n",
+            .status = 0,
+        },
+        .{
+            .name = "subshell builtin duplicated output survives later source descriptor close",
+            .script =
+            \\( echo visible >&2 2>&- )
+            \\printf '<%s>\n' "$?"
+            ,
+            .stdout =
+            \\<0>
+            \\
+            ,
+            .stderr = "visible\n",
+            .status = 0,
+        },
+        .{
+            .name = "printf duplicated output survives later source descriptor close",
+            .script =
+            \\{ printf visible >&2 2>&-; }
+            \\printf '<%s>\n' "$?"
+            ,
+            .stdout =
+            \\<0>
+            \\
+            ,
+            .stderr = "visible",
+            .status = 0,
+        },
+        .{
+            .name = "function builtin duplicated output survives later source descriptor close",
+            .script =
+            \\f() { echo visible >&2 2>&-; }
+            \\f
+            \\printf '<%s>\n' "$?"
+            ,
+            .stdout =
+            \\<0>
+            \\
+            ,
+            .stderr = "visible\n",
+            .status = 0,
+        },
+        .{
+            .name = "command substitution builtin duplicated output survives later source descriptor close",
+            .script =
+            \\x=$(echo visible >&2 2>&-)
+            \\printf 'x=<%s> status=<%s>\n' "$x" "$?"
+            ,
+            .stdout =
+            \\x=<> status=<0>
+            \\
+            ,
+            .stderr = "visible\n",
+            .status = 0,
+        },
     },
 }
