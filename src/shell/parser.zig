@@ -2791,7 +2791,12 @@ const SyntaxParser = struct {
                     try self.appendCurrentTokenChildTo(&case_children);
                     continue;
                 }
-                if (self.atWord("esac")) break;
+                if (self.atWord("esac")) {
+                    if (!self.esacStartsCaseItemPattern() or self.esacClosesCaseBeforeSubshell()) break;
+                    try self.appendParseError(self.current().span, "unexpected esac in case pattern");
+                    try self.recoverInvalidCaseItem(&case_children);
+                    continue;
+                }
                 const item = try self.parseCaseItem();
                 try case_children.append(self.allocator, .{ .node = item });
             }
@@ -2895,6 +2900,29 @@ const SyntaxParser = struct {
         try self.children.appendSlice(self.allocator, item_children.items);
         const span = spanForTokenRange(self.tokens, token_start, token_end);
         return self.addNode(.case_item, span, token_start, token_end, child_start, self.children.items.len);
+    }
+
+    fn recoverInvalidCaseItem(self: *SyntaxParser, case_children: *std.ArrayList(SyntaxChild)) !void {
+        while (!self.at(.eof)) {
+            const is_terminating_esac = self.atWord("esac") and
+                (!self.esacStartsCaseItemPattern() or self.esacClosesCaseBeforeSubshell());
+            if (is_terminating_esac) return;
+            try self.appendCurrentTokenChildTo(case_children);
+            if (self.previousToken().kind == .dsemicolon or
+                self.previousToken().kind == .semicolon_amp or
+                self.previousToken().kind == .semicolon_amp_amp)
+            {
+                return;
+            }
+        }
+    }
+
+    fn esacClosesCaseBeforeSubshell(self: SyntaxParser) bool {
+        if (self.right_paren_list_terminator_depth == 0) return false;
+        if (!self.atWord("esac")) return false;
+        var index = self.index + 1;
+        while (index < self.tokens.len and self.tokens[index].kind.isTrivia()) : (index += 1) {}
+        return index < self.tokens.len and self.tokens[index].kind == .right_paren;
     }
 
     fn atCaseTerminator(self: SyntaxParser) bool {
@@ -5054,7 +5082,7 @@ test "parser accepts in as POSIX case subject word" {
 }
 
 test "parser accepts esac as POSIX case subject word" {
-    var result = try parse(std.testing.allocator, "case esac in esac) echo ok ;; *) echo bad ;; esac", .{});
+    var result = try parse(std.testing.allocator, "case esac in *) echo ok ;; esac", .{});
     defer result.deinit();
 
     try std.testing.expectEqual(@as(usize, 0), result.diagnostics.len);
@@ -5063,7 +5091,16 @@ test "parser accepts esac as POSIX case subject word" {
     for (result.nodes) |node| {
         if (node.kind == .case_item) item_count += 1;
     }
-    try std.testing.expectEqual(@as(usize, 2), item_count);
+    try std.testing.expectEqual(@as(usize, 1), item_count);
+}
+
+test "parser reports unquoted esac case pattern without cascading diagnostics" {
+    var result = try parse(std.testing.allocator, "case esac in esac) echo ok ;; *) echo bad ;; esac", .{});
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(usize, 1), result.diagnostics.len);
+    try std.testing.expectEqualStrings("unexpected esac in case pattern", result.diagnostics[0].message);
+    try std.testing.expect(!result.incomplete);
 }
 
 test "parser reports missing POSIX case item terminator" {
