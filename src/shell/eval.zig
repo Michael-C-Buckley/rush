@@ -814,6 +814,7 @@ const ParserCommandSubstitutionResolver = struct {
     signal: ?state.TrapSignal,
     expansion_context: *CommandSubstitutionExpansionContext,
     local_functions: []const command_plan.FunctionDefinition = &.{},
+    source_line_offset: usize = 0,
 
     fn commandSubstitutionResolver(self: *ParserCommandSubstitutionResolver) CommandSubstitutionResolver {
         return .{ .context = self, .resolveFn = resolve };
@@ -852,7 +853,7 @@ const ParserCommandSubstitutionResolver = struct {
             .eval_context = self.expansion_context.eval_context,
             .signal = self.signal,
             .local_functions = .empty,
-            .source_line_offset = 0,
+            .source_line_offset = self.source_line_offset,
         };
         try lowerer.local_functions.appendSlice(arena_allocator, self.local_functions);
 
@@ -900,6 +901,7 @@ const SourceExpansionCommandSubstitutions = struct {
             .signal = lowerer.signal,
             .expansion_context = undefined,
             .local_functions = lowerer.local_functions.items,
+            .source_line_offset = lowerer.current_line_number -| 1,
         };
         self.context = CommandSubstitutionExpansionContext.init(
             lowerer.owner.evaluator,
@@ -1096,6 +1098,18 @@ const SourceLowerer = struct {
         const list: command_plan.StatementList = .{ .statements = statements };
         list.validate();
         return .{ .list = list };
+    }
+
+    fn lowerStatementListAtLine(
+        self: *SourceLowerer,
+        program: ir.Program,
+        source_line_offset: usize,
+        target: context.ExecutionTarget,
+    ) !StatementListLowering {
+        const previous_source_line_offset = self.source_line_offset;
+        self.source_line_offset += source_line_offset;
+        defer self.source_line_offset = previous_source_line_offset;
+        return self.lowerStatementList(program, target);
     }
 
     const StatementListEntryLowering = union(enum) {
@@ -1303,9 +1317,9 @@ const SourceLowerer = struct {
         const redirections = try self.lowerRedirections(group.redirections, .regular_command);
         if (redirections == .failure) return .{ .failure = redirections.failure };
         const list = if (group.body_program) |program|
-            try self.lowerStatementList(program.*, target)
+            try self.lowerStatementListAtLine(program.*, group.body_line_offset, target)
         else
-            try self.lowerStatementListSource(group.body, target);
+            try self.lowerStatementListSourceAtLine(group.body, group.body_line_offset, target);
         switch (list) {
             .failure => |trap_failure| return .{ .failure = trap_failure },
             .list => |command_list| {
@@ -1324,9 +1338,9 @@ const SourceLowerer = struct {
         const redirections = try self.lowerRedirections(subshell.redirections, .regular_command);
         if (redirections == .failure) return .{ .failure = redirections.failure };
         const list = if (subshell.body_program) |program|
-            try self.lowerStatementList(program.*, .subshell)
+            try self.lowerStatementListAtLine(program.*, subshell.body_line_offset, .subshell)
         else
-            try self.lowerStatementListSource(subshell.body, .subshell);
+            try self.lowerStatementListSourceAtLine(subshell.body, subshell.body_line_offset, .subshell);
         switch (list) {
             .failure => |trap_failure| return .{ .failure = trap_failure },
             .list => |command_list| {
@@ -1374,12 +1388,20 @@ const SourceLowerer = struct {
         if (redirections == .failure) return .{ .failure = redirections.failure };
         const branches = try self.allocator.alloc(command_plan.IfBranch, command.branches.len);
         for (command.branches, 0..) |source_branch, branch_index| {
-            const condition_result = try self.lowerStatementListSource(source_branch.condition, target);
+            const condition_result = try self.lowerStatementListSourceAtLine(
+                source_branch.condition,
+                source_branch.condition_line_offset,
+                target,
+            );
             const condition = switch (condition_result) {
                 .failure => |trap_failure| return .{ .failure = trap_failure },
                 .list => |list| list,
             };
-            const body_result = try self.lowerStatementListSource(source_branch.body, target);
+            const body_result = try self.lowerStatementListSourceAtLine(
+                source_branch.body,
+                source_branch.body_line_offset,
+                target,
+            );
             const body = switch (body_result) {
                 .failure => |trap_failure| return .{ .failure = trap_failure },
                 .list => |list| list,
@@ -1388,7 +1410,11 @@ const SourceLowerer = struct {
         }
         var else_body: command_plan.StatementList = .{};
         if (command.else_body) |source| {
-            const lowered_else = try self.lowerStatementListSource(source, target);
+            const lowered_else = try self.lowerStatementListSourceAtLine(
+                source,
+                command.else_body_line_offset,
+                target,
+            );
             else_body = switch (lowered_else) {
                 .failure => |trap_failure| return .{ .failure = trap_failure },
                 .list => |list| list,
@@ -1410,12 +1436,16 @@ const SourceLowerer = struct {
     ) !TrapActionBodyPayload {
         const redirections = try self.lowerRedirections(command.redirections, .regular_command);
         if (redirections == .failure) return .{ .failure = redirections.failure };
-        const condition_result = try self.lowerStatementListSource(command.condition, target);
+        const condition_result = try self.lowerStatementListSourceAtLine(
+            command.condition,
+            command.condition_line_offset,
+            target,
+        );
         const condition = switch (condition_result) {
             .failure => |trap_failure| return .{ .failure = trap_failure },
             .list => |list| list,
         };
-        const body_result = try self.lowerStatementListSource(command.body, target);
+        const body_result = try self.lowerStatementListSourceAtLine(command.body, command.body_line_offset, target);
         const body = switch (body_result) {
             .failure => |trap_failure| return .{ .failure = trap_failure },
             .list => |list| list,
@@ -1494,7 +1524,7 @@ const SourceLowerer = struct {
         else
             null;
         const body: command_plan.StatementList = if (source_backed) .{} else blk: {
-            const lowered = try self.lowerStatementListSource(command.body, target);
+            const lowered = try self.lowerStatementListSourceAtLine(command.body, command.body_line_offset, target);
             break :blk switch (lowered) {
                 .failure => |trap_failure| return .{ .failure = trap_failure },
                 .list => |list| list,
@@ -1528,7 +1558,7 @@ const SourceLowerer = struct {
             for (arm.patterns, 0..) |pattern, pattern_index| {
                 patterns[pattern_index] = try self.allocator.dupe(u8, pattern.raw);
             }
-            const body_result = try self.lowerStatementListSource(arm.body, target);
+            const body_result = try self.lowerStatementListSourceAtLine(arm.body, arm.body_line_offset, target);
             const body = switch (body_result) {
                 .failure => |trap_failure| return .{ .failure = trap_failure },
                 .list => |list| list,
@@ -1687,8 +1717,21 @@ const SourceLowerer = struct {
         source: []const u8,
         target: context.ExecutionTarget,
     ) !StatementListLowering {
+        return self.lowerStatementListSourceAtLine(source, 0, target);
+    }
+
+    fn lowerStatementListSourceAtLine(
+        self: *SourceLowerer,
+        source: []const u8,
+        source_line_offset: usize,
+        target: context.ExecutionTarget,
+    ) !StatementListLowering {
         const local_function_count = self.local_functions.items.len;
         defer self.local_functions.shrinkRetainingCapacity(local_function_count);
+
+        const previous_source_line_offset = self.source_line_offset;
+        self.source_line_offset += source_line_offset;
+        defer self.source_line_offset = previous_source_line_offset;
 
         const parsed = try self.parseWithAliases(source);
         if (parsed.diagnostics.len != 0)

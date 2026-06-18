@@ -236,6 +236,33 @@
             .status = 0,
         },
         .{
+            .name = "LINENO reports body lines inside compound commands and command substitution",
+            .script =
+            \\if true
+            \\then
+            \\printf '<if:%s>\n' "$LINENO"
+            \\fi
+            \\case x in
+            \\x)
+            \\printf '<case:%s>\n' "$LINENO"
+            \\;;
+            \\esac
+            \\(
+            \\printf '<subshell:%s>\n' "$LINENO"
+            \\)
+            \\printf '<cmdsub:%s>\n' "$(printf '%s' "$LINENO")"
+            ,
+            .stdout =
+            \\<if:3>
+            \\<case:7>
+            \\<subshell:11>
+            \\<cmdsub:13>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "hyphen reflects set option flags",
             .script =
             \\case $- in *u*) printf 'bad-u\n' ;; *) printf 'no-u\n' ;; esac

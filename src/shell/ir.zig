@@ -45,13 +45,16 @@ pub const Pipeline = struct {
 
 pub const IfBranch = struct {
     condition: []const u8,
+    condition_line_offset: usize = 0,
     body: []const u8,
+    body_line_offset: usize = 0,
 };
 
 pub const IfCommand = struct {
     span: parser.Span,
-    branches: []const IfBranch,
+    branches: []IfBranch,
     else_body: ?[]const u8 = null,
+    else_body_line_offset: usize = 0,
     redirections: []Redirection,
 };
 
@@ -64,7 +67,9 @@ pub const LoopCommand = struct {
     span: parser.Span,
     kind: LoopKind,
     condition: []const u8,
+    condition_line_offset: usize = 0,
     body: []const u8,
+    body_line_offset: usize = 0,
     redirections: []Redirection,
 };
 
@@ -74,12 +79,14 @@ pub const ForCommand = struct {
     words: []WordRef,
     use_positionals: bool = false,
     body: []const u8,
+    body_line_offset: usize = 0,
     redirections: []Redirection,
 };
 
 pub const CaseArm = struct {
     patterns: []WordRef,
     body: []const u8,
+    body_line_offset: usize = 0,
     fallthrough: bool = false,
     test_next: bool = false,
 };
@@ -106,6 +113,7 @@ pub const BashTestCommand = struct {
 pub const BraceGroup = struct {
     span: parser.Span,
     body: []const u8,
+    body_line_offset: usize = 0,
     body_program: ?*Program = null,
     redirections: []Redirection,
 };
@@ -113,6 +121,7 @@ pub const BraceGroup = struct {
 pub const Subshell = struct {
     span: parser.Span,
     body: []const u8,
+    body_line_offset: usize = 0,
     body_program: ?*Program = null,
     redirections: []Redirection,
 };
@@ -307,6 +316,7 @@ fn cloneIfCommands(allocator: std.mem.Allocator, commands: []const IfCommand) ![
             .span = command.span,
             .branches = try cloneIfBranches(allocator, command.branches),
             .else_body = if (command.else_body) |body| try allocator.dupe(u8, body) else null,
+            .else_body_line_offset = command.else_body_line_offset,
             .redirections = try cloneRedirections(allocator, command.redirections),
         };
         initialized += 1;
@@ -325,7 +335,9 @@ fn cloneIfBranches(allocator: std.mem.Allocator, branches: []const IfBranch) ![]
     for (branches, 0..) |branch, index| {
         clone[index] = .{
             .condition = try allocator.dupe(u8, branch.condition),
+            .condition_line_offset = branch.condition_line_offset,
             .body = try allocator.dupe(u8, branch.body),
+            .body_line_offset = branch.body_line_offset,
         };
         initialized += 1;
     }
@@ -342,7 +354,9 @@ fn cloneLoopCommands(allocator: std.mem.Allocator, commands: []const LoopCommand
             .span = command.span,
             .kind = command.kind,
             .condition = try allocator.dupe(u8, command.condition),
+            .condition_line_offset = command.condition_line_offset,
             .body = try allocator.dupe(u8, command.body),
+            .body_line_offset = command.body_line_offset,
             .redirections = try cloneRedirections(allocator, command.redirections),
         };
         initialized += 1;
@@ -362,6 +376,7 @@ fn cloneForCommands(allocator: std.mem.Allocator, commands: []const ForCommand) 
             .words = try cloneWords(allocator, command.words),
             .use_positionals = command.use_positionals,
             .body = try allocator.dupe(u8, command.body),
+            .body_line_offset = command.body_line_offset,
             .redirections = try cloneRedirections(allocator, command.redirections),
         };
         initialized += 1;
@@ -395,6 +410,7 @@ fn cloneCaseArms(allocator: std.mem.Allocator, arms: []const CaseArm) ![]CaseArm
         clone[index] = .{
             .patterns = try cloneWords(allocator, arm.patterns),
             .body = try allocator.dupe(u8, arm.body),
+            .body_line_offset = arm.body_line_offset,
             .fallthrough = arm.fallthrough,
             .test_next = arm.test_next,
         };
@@ -457,6 +473,7 @@ fn cloneBraceGroups(allocator: std.mem.Allocator, groups: []const BraceGroup) ![
         clone[index] = .{
             .span = group.span,
             .body = owned_body,
+            .body_line_offset = group.body_line_offset,
             .body_program = owned_body_program,
             .redirections = try cloneRedirections(allocator, group.redirections),
         };
@@ -484,6 +501,7 @@ fn cloneSubshells(allocator: std.mem.Allocator, subshells: []const Subshell) ![]
         clone[index] = .{
             .span = subshell.span,
             .body = owned_body,
+            .body_line_offset = subshell.body_line_offset,
             .body_program = owned_body_program,
             .redirections = try cloneRedirections(allocator, subshell.redirections),
         };
@@ -1173,7 +1191,7 @@ fn lowerListNode(
         .subshells = try subshells.toOwnedSlice(allocator),
         .statements = try statements.toOwnedSlice(allocator),
     };
-    relocateProgramSpans(&program, source_span.start);
+    relocateProgramSpans(&program, source_span.start, sourceLineIndex(parsed.source, source_span.start));
     return program;
 }
 
@@ -1265,7 +1283,7 @@ fn lowerPipelineDirect(
     };
 }
 
-fn relocateProgramSpans(program: *Program, source_offset: usize) void {
+fn relocateProgramSpans(program: *Program, source_offset: usize, source_line_offset: usize) void {
     for (program.commands) |*command| relocateSimpleCommandSpans(command, source_offset);
     for (program.pipelines) |*pipeline| {
         pipeline.span = relocateSpan(pipeline.span, source_offset);
@@ -1273,14 +1291,22 @@ fn relocateProgramSpans(program: *Program, source_offset: usize) void {
     }
     for (program.if_commands) |*command| {
         command.span = relocateSpan(command.span, source_offset);
+        for (command.branches) |*branch| {
+            branch.condition_line_offset -|= source_line_offset;
+            branch.body_line_offset -|= source_line_offset;
+        }
+        command.else_body_line_offset -|= source_line_offset;
         for (command.redirections) |*redirection| relocateRedirectionSpans(redirection, source_offset);
     }
     for (program.loop_commands) |*command| {
         command.span = relocateSpan(command.span, source_offset);
+        command.condition_line_offset -|= source_line_offset;
+        command.body_line_offset -|= source_line_offset;
         for (command.redirections) |*redirection| relocateRedirectionSpans(redirection, source_offset);
     }
     for (program.for_commands) |*command| {
         command.span = relocateSpan(command.span, source_offset);
+        command.body_line_offset -|= source_line_offset;
         for (command.words) |*word| relocateWordSpans(word, source_offset);
         for (command.redirections) |*redirection| relocateRedirectionSpans(redirection, source_offset);
     }
@@ -1288,6 +1314,7 @@ fn relocateProgramSpans(program: *Program, source_offset: usize) void {
         command.span = relocateSpan(command.span, source_offset);
         relocateWordSpans(&command.word, source_offset);
         for (command.arms) |*arm| {
+            arm.body_line_offset -|= source_line_offset;
             for (arm.patterns) |*pattern| relocateWordSpans(pattern, source_offset);
         }
         for (command.redirections) |*redirection| relocateRedirectionSpans(redirection, source_offset);
@@ -1302,10 +1329,12 @@ fn relocateProgramSpans(program: *Program, source_offset: usize) void {
     }
     for (program.brace_groups) |*group| {
         group.span = relocateSpan(group.span, source_offset);
+        group.body_line_offset -|= source_line_offset;
         for (group.redirections) |*redirection| relocateRedirectionSpans(redirection, source_offset);
     }
     for (program.subshells) |*subshell| {
         subshell.span = relocateSpan(subshell.span, source_offset);
+        subshell.body_line_offset -|= source_line_offset;
         for (subshell.redirections) |*redirection| relocateRedirectionSpans(redirection, source_offset);
     }
     for (program.statements) |*statement| statement.span = relocateSpan(statement.span, source_offset);
@@ -1575,10 +1604,11 @@ fn lowerSubshell(allocator: std.mem.Allocator, parsed: parser.ParseResult, node:
     }
 
     const body_end = close_paren orelse node.token_end;
-    const body = try ownedBodySource(allocator, parsed, @min(node.token_start + 1, node.token_end), body_end);
+    const body_start = @min(node.token_start + 1, node.token_end);
+    const body = try ownedBodySource(allocator, parsed, body_start, body_end);
     errdefer allocator.free(body);
     const body_program = if (bodyProgramCacheable(body))
-        try lowerBodyProgram(allocator, parsed, node, @min(node.token_start + 1, node.token_end), body_end)
+        try lowerBodyProgram(allocator, parsed, node, body_start, body_end)
     else
         null;
     errdefer if (body_program) |program| {
@@ -1589,6 +1619,7 @@ fn lowerSubshell(allocator: std.mem.Allocator, parsed: parser.ParseResult, node:
     return .{
         .span = node.span,
         .body = body,
+        .body_line_offset = sourceLineIndex(parsed.source, sourceStart(parsed, body_start)),
         .body_program = body_program,
         .redirections = try redirections.toOwnedSlice(allocator),
     };
@@ -1605,10 +1636,11 @@ fn lowerBraceGroup(allocator: std.mem.Allocator, parsed: parser.ParseResult, nod
     }
 
     const body_end = close_brace orelse node.token_end;
-    const body = try ownedBodySource(allocator, parsed, @min(node.token_start + 1, node.token_end), body_end);
+    const body_start = @min(node.token_start + 1, node.token_end);
+    const body = try ownedBodySource(allocator, parsed, body_start, body_end);
     errdefer allocator.free(body);
     const body_program = if (bodyProgramCacheable(body))
-        try lowerBodyProgram(allocator, parsed, node, @min(node.token_start + 1, node.token_end), body_end)
+        try lowerBodyProgram(allocator, parsed, node, body_start, body_end)
     else
         null;
     errdefer if (body_program) |program| {
@@ -1619,6 +1651,7 @@ fn lowerBraceGroup(allocator: std.mem.Allocator, parsed: parser.ParseResult, nod
     return .{
         .span = node.span,
         .body = body,
+        .body_line_offset = sourceLineIndex(parsed.source, sourceStart(parsed, body_start)),
         .body_program = body_program,
         .redirections = try redirections.toOwnedSlice(allocator),
     };
@@ -1882,6 +1915,7 @@ fn lowerCaseCommand(allocator: std.mem.Allocator, parsed: parser.ParseResult, no
         try arms.append(allocator, .{
             .patterns = try patterns.toOwnedSlice(allocator),
             .body = body,
+            .body_line_offset = sourceLineIndex(parsed.source, sourceStart(parsed, body_start)),
             .fallthrough = child_node.token_end > child_node.token_start and
                 parsed.tokens[child_node.token_end - 1].kind == .semicolon_amp,
             .test_next = child_node.token_end > child_node.token_start and
@@ -1967,10 +2001,12 @@ fn lowerForCommand(allocator: std.mem.Allocator, parsed: parser.ParseResult, nod
         for (redirections.items) |redirection| freeRedirection(allocator, redirection);
         redirections.deinit(allocator);
     }
-    const body = if (body_node) |body_node_value|
-        try ownedBodySource(allocator, parsed, body_node_value.token_start, body_node_value.token_end)
+    const body_start = if (body_node) |body_node_value|
+        body_node_value.token_start
     else
-        try ownedBodySource(allocator, parsed, @min(do_index + 1, node.token_end), done_index);
+        @min(do_index + 1, node.token_end);
+    const body_end = if (body_node) |body_node_value| body_node_value.token_end else done_index;
+    const body = try ownedBodySource(allocator, parsed, body_start, body_end);
     errdefer allocator.free(body);
 
     return .{
@@ -1979,6 +2015,7 @@ fn lowerForCommand(allocator: std.mem.Allocator, parsed: parser.ParseResult, nod
         .words = try words.toOwnedSlice(allocator),
         .use_positionals = in_token == null,
         .body = body,
+        .body_line_offset = sourceLineIndex(parsed.source, sourceStart(parsed, body_start)),
         .redirections = try redirections.toOwnedSlice(allocator),
     };
 }
@@ -2022,21 +2059,27 @@ fn lowerLoopCommand(allocator: std.mem.Allocator, parsed: parser.ParseResult, no
         for (redirections.items) |redirection| freeRedirection(allocator, redirection);
         redirections.deinit(allocator);
     }
-    const condition = if (condition_node) |condition_node_value|
-        try ownedBodySource(allocator, parsed, condition_node_value.token_start, condition_node_value.token_end)
+    const condition_start = if (condition_node) |condition_node_value|
+        condition_node_value.token_start
     else
-        try ownedBodySource(allocator, parsed, node.token_start + 1, do_index);
+        node.token_start + 1;
+    const condition_end = if (condition_node) |condition_node_value| condition_node_value.token_end else do_index;
+    const condition = try ownedBodySource(allocator, parsed, condition_start, condition_end);
     errdefer allocator.free(condition);
-    const body = if (body_node) |body_node_value|
-        try ownedBodySource(allocator, parsed, body_node_value.token_start, body_node_value.token_end)
+    const body_start = if (body_node) |body_node_value|
+        body_node_value.token_start
     else
-        try ownedBodySource(allocator, parsed, @min(do_index + 1, node.token_end), done_index);
+        @min(do_index + 1, node.token_end);
+    const body_end = if (body_node) |body_node_value| body_node_value.token_end else done_index;
+    const body = try ownedBodySource(allocator, parsed, body_start, body_end);
     errdefer allocator.free(body);
     return .{
         .span = node.span,
         .kind = if (std.mem.eql(u8, opener, "while")) .while_loop else .until_loop,
         .condition = condition,
+        .condition_line_offset = sourceLineIndex(parsed.source, sourceStart(parsed, condition_start)),
         .body = body,
+        .body_line_offset = sourceLineIndex(parsed.source, sourceStart(parsed, body_start)),
         .redirections = try redirections.toOwnedSlice(allocator),
     };
 }
@@ -2044,9 +2087,11 @@ fn lowerLoopCommand(allocator: std.mem.Allocator, parsed: parser.ParseResult, no
 fn lowerIfCommand(allocator: std.mem.Allocator, parsed: parser.ParseResult, node: parser.Node) !IfCommand {
     std.debug.assert(node.kind == .if_command);
     var list_sources: std.ArrayList([]const u8) = .empty;
+    var list_line_offsets: std.ArrayList(usize) = .empty;
     defer {
         for (list_sources.items) |source| allocator.free(source);
         list_sources.deinit(allocator);
+        list_line_offsets.deinit(allocator);
     }
     var has_else_clause = false;
 
@@ -2057,6 +2102,10 @@ fn lowerIfCommand(allocator: std.mem.Allocator, parsed: parser.ParseResult, node
             try list_sources.append(
                 allocator,
                 try ownedBodySource(allocator, parsed, child_node.token_start, child_node.token_end),
+            );
+            try list_line_offsets.append(
+                allocator,
+                sourceLineIndex(parsed.source, sourceStart(parsed, child_node.token_start)),
             );
         },
         .token => |token_id| {
@@ -2084,13 +2133,20 @@ fn lowerIfCommand(allocator: std.mem.Allocator, parsed: parser.ParseResult, node
     for (branches, 0..) |*branch, index| {
         branch.* = .{
             .condition = list_sources.items[index * 2],
+            .condition_line_offset = list_line_offsets.items[index * 2],
             .body = list_sources.items[index * 2 + 1],
+            .body_line_offset = list_line_offsets.items[index * 2 + 1],
         };
     }
-    const else_body = if (has_else_clause and list_sources.items.len != 0) blk: {
-        const source = list_sources.items[list_sources.items.len - 1];
+    const else_body_index = if (has_else_clause and list_sources.items.len != 0)
+        list_sources.items.len - 1
+    else
+        null;
+    const else_body = if (else_body_index) |index| blk: {
+        const source = list_sources.items[index];
         break :blk source;
     } else null;
+    const else_body_line_offset = if (else_body_index) |index| list_line_offsets.items[index] else 0;
     list_sources.items.len = 0;
     errdefer if (else_body) |body| allocator.free(body);
 
@@ -2105,6 +2161,7 @@ fn lowerIfCommand(allocator: std.mem.Allocator, parsed: parser.ParseResult, node
         .span = node.span,
         .branches = branches,
         .else_body = else_body,
+        .else_body_line_offset = else_body_line_offset,
         .redirections = try redirections.toOwnedSlice(allocator),
     };
 }
@@ -2529,6 +2586,15 @@ fn sourceLineBounds(source: []const u8, offset: usize) SourceLine {
     var end = @min(offset, source.len);
     while (end < source.len and source[end] != '\n') : (end += 1) {}
     return .{ .start = start, .end = end };
+}
+
+fn sourceLineIndex(source: []const u8, offset: usize) usize {
+    std.debug.assert(offset <= source.len);
+    var line: usize = 0;
+    for (source[0..offset]) |byte| {
+        if (byte == '\n') line += 1;
+    }
+    return line;
 }
 
 fn hereDocBodyStartFromLine(source: []const u8, line: SourceLine) ?usize {
