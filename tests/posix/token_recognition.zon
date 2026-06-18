@@ -244,6 +244,21 @@
             .status = 0,
         },
         .{
+            .name = "uncached function bodies do not expand aliases at call time",
+            .script =
+            \\f() { for name in one; do hit; done; }
+            \\alias hit='printf "%s\n" call'
+            \\f 2>/dev/null
+            \\printf '<%s>\n' "$?"
+            ,
+            .stdout =
+            \\<127>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "aliases defined inside a compound command do not affect its remaining body",
             .script =
             \\if true; then alias late='printf "%s\n" bad'; late 2>/dev/null; printf '<%s>\n' "$?"; fi

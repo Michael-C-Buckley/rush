@@ -298,6 +298,7 @@ pub const StatementPlan = union(enum) {
 pub const SourceStatementPlan = struct {
     target: context.ExecutionTarget,
     source: []const u8,
+    expand_aliases: bool = true,
     line: usize = 0,
     targets_stdout: bool = false,
     targets_stderr: bool = false,
@@ -314,6 +315,7 @@ pub const IrStatementPlan = struct {
     program: *const ir.Program,
     statement_index: usize,
     fallback_source: []const u8,
+    expand_aliases: bool = true,
     line: usize = 0,
     targets_stdout: bool = false,
     targets_stderr: bool = false,
@@ -967,6 +969,7 @@ fn cloneSourceStatementPlan(
     return .{
         .target = plan.target,
         .source = try allocator.dupe(u8, plan.source),
+        .expand_aliases = plan.expand_aliases,
         .line = plan.line,
         .targets_stdout = plan.targets_stdout,
         .targets_stderr = plan.targets_stderr,
@@ -985,6 +988,7 @@ fn persistIrStatementPlanAsSource(
     return .{
         .target = plan.target,
         .source = try allocator.dupe(u8, plan.fallback_source),
+        .expand_aliases = plan.expand_aliases,
         .line = plan.line,
         .targets_stdout = plan.targets_stdout,
         .targets_stderr = plan.targets_stderr,

@@ -1094,6 +1094,7 @@ const SourceLowerer = struct {
                     .program = program_ref,
                     .statement_index = index,
                     .fallback_source = try self.statementSource(program, index),
+                    .expand_aliases = self.owner.expand_aliases,
                     .line = self.source_line_offset + statementLine(program.source, statement.span.start),
                     .targets_stdout = statementTargetsDescriptor(program, statement, 1),
                     .targets_stderr = statementTargetsDescriptor(program, statement, 2),
@@ -3784,7 +3785,7 @@ fn ownedFunctionCallFromSourceForCursor(
     var parser_resolver = ParserBackedSourceResolver.init(evaluator);
     parser_resolver.features = evaluator.features;
     parser_resolver.arg_zero = evaluator.arg_zero;
-    parser_resolver.expand_aliases = shell_state.shopts.enabled(.expand_aliases);
+    parser_resolver.expand_aliases = source_plan.expand_aliases and shell_state.shopts.enabled(.expand_aliases);
     parser_resolver.alias_state = evaluator.alias_state;
     parser_resolver.source_line_offset = source_plan.line;
     var body = (parser_resolver.lowerSource(
@@ -3810,7 +3811,7 @@ fn ownedFunctionCallFromIrSourceForCursor(
     var parser_resolver = ParserBackedSourceResolver.init(evaluator);
     parser_resolver.features = evaluator.features;
     parser_resolver.arg_zero = evaluator.arg_zero;
-    parser_resolver.expand_aliases = shell_state.shopts.enabled(.expand_aliases);
+    parser_resolver.expand_aliases = source_plan.expand_aliases and shell_state.shopts.enabled(.expand_aliases);
     parser_resolver.alias_state = evaluator.alias_state;
     parser_resolver.source_line_offset = source_plan.line -| sourceLineIndex(
         source_plan.program.source,
@@ -9110,7 +9111,7 @@ fn evaluateFunctionTailSourceStatementPlan(
     var parser_resolver = ParserBackedSourceResolver.init(evaluator);
     parser_resolver.features = evaluator.features;
     parser_resolver.arg_zero = evaluator.arg_zero;
-    parser_resolver.expand_aliases = shell_state.shopts.enabled(.expand_aliases);
+    parser_resolver.expand_aliases = source_plan.expand_aliases and shell_state.shopts.enabled(.expand_aliases);
     parser_resolver.alias_state = evaluator.alias_state;
     parser_resolver.active_frame = buffers.frame;
     parser_resolver.active_input = buffers.stdin;
@@ -9151,7 +9152,7 @@ fn evaluateFunctionTailIrSourceStatementPlan(
     var parser_resolver = ParserBackedSourceResolver.init(evaluator);
     parser_resolver.features = evaluator.features;
     parser_resolver.arg_zero = evaluator.arg_zero;
-    parser_resolver.expand_aliases = shell_state.shopts.enabled(.expand_aliases);
+    parser_resolver.expand_aliases = source_plan.expand_aliases and shell_state.shopts.enabled(.expand_aliases);
     parser_resolver.alias_state = evaluator.alias_state;
     parser_resolver.active_frame = buffers.frame;
     parser_resolver.active_input = buffers.stdin;
@@ -9761,7 +9762,7 @@ fn evaluateSourceStatement(
     var parser_resolver = ParserBackedSourceResolver.init(evaluator);
     parser_resolver.features = evaluator.features;
     parser_resolver.arg_zero = evaluator.arg_zero;
-    parser_resolver.expand_aliases = shell_state.shopts.enabled(.expand_aliases);
+    parser_resolver.expand_aliases = source_plan.expand_aliases and shell_state.shopts.enabled(.expand_aliases);
     parser_resolver.alias_state = evaluator.alias_state;
     parser_resolver.active_frame = frame;
     parser_resolver.active_input = input;
@@ -9799,7 +9800,7 @@ fn evaluateIrSourceStatement(
     var parser_resolver = ParserBackedSourceResolver.init(evaluator);
     parser_resolver.features = evaluator.features;
     parser_resolver.arg_zero = evaluator.arg_zero;
-    parser_resolver.expand_aliases = shell_state.shopts.enabled(.expand_aliases);
+    parser_resolver.expand_aliases = source_plan.expand_aliases and shell_state.shopts.enabled(.expand_aliases);
     parser_resolver.alias_state = evaluator.alias_state;
     parser_resolver.active_frame = frame;
     parser_resolver.active_input = input;
@@ -10218,7 +10219,7 @@ fn evaluateFunctionStatementListSource(
     var parser_resolver = ParserBackedSourceResolver.init(evaluator);
     parser_resolver.features = evaluator.features;
     parser_resolver.arg_zero = evaluator.arg_zero;
-    parser_resolver.expand_aliases = shell_state.shopts.enabled(.expand_aliases);
+    parser_resolver.expand_aliases = false;
     parser_resolver.alias_state = evaluator.alias_state;
     parser_resolver.active_frame = buffers.frame;
     parser_resolver.active_input = buffers.stdin;
@@ -11567,7 +11568,7 @@ fn initializeFunctionBodyCursor(
         var parser_resolver = ParserBackedSourceResolver.init(evaluator);
         parser_resolver.features = evaluator.features;
         parser_resolver.arg_zero = evaluator.arg_zero;
-        parser_resolver.expand_aliases = frame_state.shopts.enabled(.expand_aliases);
+        parser_resolver.expand_aliases = false;
         parser_resolver.alias_state = evaluator.alias_state;
         parser_resolver.active_frame = buffers.frame;
         parser_resolver.active_input = buffers.stdin;
@@ -11635,7 +11636,7 @@ fn evaluateFunctionProgramBody(
     var parser_resolver = ParserBackedSourceResolver.init(evaluator);
     parser_resolver.features = evaluator.features;
     parser_resolver.arg_zero = evaluator.arg_zero;
-    parser_resolver.expand_aliases = frame_state.shopts.enabled(.expand_aliases);
+    parser_resolver.expand_aliases = false;
     parser_resolver.alias_state = evaluator.alias_state;
     parser_resolver.active_frame = buffers.frame;
     parser_resolver.active_input = buffers.stdin;
