@@ -3037,6 +3037,7 @@ fn evaluatePlanWithInput(
             const apply_result = try applyRedirectionsEmittingExpansionOutput(
                 evaluator.*,
                 &buffers,
+                .current_scoped,
                 .{},
                 effective_plan.redirections,
                 redirectionExpansionModeForContext(eval_context),
@@ -3541,10 +3542,13 @@ const OutputRouting = struct {
             .duplicate => |duplicate| {
                 const source_bound = self.boundDestination(duplicate.source) != null;
                 const source_destination = self.destination(duplicate.source);
-                const copied_destination = if (!source_bound and self.initial_mode == .inherited) switch (source_destination) {
-                    .host_descriptor => @as(OutputDestination, .{ .host_descriptor = duplicate.target }),
-                    else => source_destination,
-                } else source_destination;
+                const copied_destination = if (!source_bound and self.initial_mode == .inherited)
+                    switch (source_destination) {
+                        .host_descriptor => @as(OutputDestination, .{ .host_descriptor = duplicate.target }),
+                        else => source_destination,
+                    }
+                else
+                    source_destination;
                 try self.setDestination(duplicate.target, copied_destination);
             },
             .close => |close| try self.setDestination(close.target, .closed),
@@ -4197,11 +4201,13 @@ fn emitSemanticRedirectionTransforms(
 fn applyRedirectionsEmittingExpansionOutput(
     evaluator: Evaluator,
     buffers: *EvaluationBuffers,
+    scope: RedirectionScope,
     already_applied: redirection_plan.RedirectionPlan,
     redirections: redirection_plan.RedirectionPlan,
     mode: RedirectionExpansionOutputMode,
     diagnostic_command_name: ?[]const u8,
 ) EvalError!redirection_plan.ApplyResult {
+    scope.validate();
     already_applied.validate();
     redirections.validate();
     const fd_port = evaluator.fd_port orelse return error.Unimplemented;
@@ -4256,6 +4262,20 @@ fn applyRedirectionsEmittingExpansionOutput(
     applied.validateActive();
     return .{ .applied = applied };
 }
+
+const RedirectionScope = enum {
+    /// Redirections apply to the current shell only for the duration of one
+    /// builtin, function, or compound command evaluation.
+    current_scoped,
+    /// Redirections are expected to become current-shell state, such as a
+    /// successful `exec` redirection. Callers still own the commit decision.
+    current_permanent,
+    /// Redirections are applied only to prepare a child/subshell boundary and
+    /// must be restored in the parent after launch/evaluation.
+    child_only,
+
+    fn validate(_: RedirectionScope) void {}
+};
 
 fn diagnosticDestinationIsWritable(destination: OutputDestination) bool {
     destination.validate();
@@ -4560,6 +4580,7 @@ fn evaluateCompoundPlanWithInput(
             const apply_result = try applyRedirectionsEmittingExpansionOutput(
                 evaluator.*,
                 &buffers,
+                .current_scoped,
                 .{},
                 plan.redirections,
                 redirectionExpansionModeForContext(eval_context),
@@ -5879,6 +5900,7 @@ fn applySingleStageBackgroundRedirections(
     const apply_result = try applyRedirectionsEmittingExpansionOutput(
         evaluator.*,
         buffers,
+        .child_only,
         .{},
         redirections,
         .inherited,
@@ -5964,6 +5986,7 @@ fn startBackgroundSingleExternal(
         const apply_result = try applyRedirectionsEmittingExpansionOutput(
             evaluator.*,
             buffers,
+            .child_only,
             .{},
             plan.redirections,
             .inherited,
@@ -8408,6 +8431,7 @@ fn evaluateFunction(
         const apply_result = try applyRedirectionsEmittingExpansionOutput(
             evaluator.*,
             buffers,
+            .current_scoped,
             .{},
             plan.redirections,
             redirectionExpansionModeForContext(eval_context),
@@ -8431,6 +8455,7 @@ fn evaluateFunction(
         const apply_result = try applyRedirectionsEmittingExpansionOutput(
             evaluator.*,
             buffers,
+            .current_scoped,
             plan.redirections,
             definition.redirections,
             redirectionExpansionModeForContext(eval_context),
@@ -8898,6 +8923,7 @@ fn evaluateExternalWithProcessEnvironment(
             const apply_result = try applyRedirectionsEmittingExpansionOutput(
                 evaluator.*,
                 buffers,
+                .child_only,
                 .{},
                 plan.redirections,
                 redirectionExpansionModeForExternal(evaluator.external_stdio),
@@ -8978,6 +9004,7 @@ fn evaluateExternalWithProcessEnvironment(
         const apply_result = try applyRedirectionsEmittingExpansionOutput(
             evaluator.*,
             buffers,
+            .child_only,
             .{},
             plan.redirections,
             redirectionExpansionModeForExternal(evaluator.external_stdio),
@@ -9049,6 +9076,7 @@ fn evaluateCapturedExternal(
         const apply_result = try applyRedirectionsEmittingExpansionOutput(
             evaluator.*,
             buffers,
+            .child_only,
             .{},
             plan.redirections,
             switch (capture_mode) {
@@ -9166,6 +9194,7 @@ fn runExternalWithPipelineInputWithProcessEnvironment(
         const apply_result = try applyRedirectionsEmittingExpansionOutput(
             evaluator.*,
             buffers,
+            .child_only,
             .{},
             plan.redirections,
             redirectionExpansionModeForExternal(evaluator.external_stdio),

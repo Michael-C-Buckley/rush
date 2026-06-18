@@ -285,6 +285,9 @@ pub const RestorationStep = struct {
 
 pub const RedirectionPlan = struct {
     steps: []const RedirectionStep = &.{},
+    /// Semantic guard metadata for frame ownership and tests. Runtime fd
+    /// restoration is not ordinal-based; `FdTransaction` saves each mutated
+    /// target once and restores those saved descriptor states in reverse.
     rollback_steps: []const RestorationStep = &.{},
     failure_consequence: FailureConsequence = .command_failure,
     self_duplicate_noop: bool = false,
@@ -554,6 +557,10 @@ const HereDocWriter = struct {
     thread: ?std.Thread = null,
 
     fn run(self: *HereDocWriter) void {
+        // Broken pipes are expected when a command exits early or only consumes
+        // part of a here-doc. The transaction joins this writer to bound the
+        // lifetime, but writer errors are currently not part of Rush's user
+        // diagnostic contract.
         // ziglint-ignore: Z026 best-effort here-doc writer cleanup
         self.port.writeAll(.{ .descriptor = self.descriptor, .bytes = self.bytes }) catch {};
         // ziglint-ignore: Z026 best-effort here-doc writer cleanup

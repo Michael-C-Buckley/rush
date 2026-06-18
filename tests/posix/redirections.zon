@@ -547,6 +547,34 @@
             .status = 0,
         },
         .{
+            .name = "stderr redirection remains open across exec after standard error is closed",
+            .script =
+            \\exec 2>&-
+            \\/bin/sh -c 'echo err >&2' 2>err
+            \\cat err
+            ,
+            .stdout =
+            \\err
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "high fd redirection remains open across exec after descriptor is closed",
+            .script =
+            \\exec 3>&-
+            \\/bin/sh -c 'echo hi >&3' 3>out
+            \\cat out
+            ,
+            .stdout =
+            \\hi
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "here document supplies input after standard input is closed",
             .script =
             \\exec 0<&-
@@ -558,6 +586,22 @@
             .stdout =
             \\hi
             \\<0>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "here document writer tolerates early reader exit",
+            .script =
+            \\cat <<EOF | head -c 1
+            \\abcdef
+            \\EOF
+            \\printf '\nstatus:%s\n' "$?"
+            ,
+            .stdout =
+            \\a
+            \\status:0
             \\
             ,
             .stderr = "",
