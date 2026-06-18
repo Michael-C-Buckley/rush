@@ -179,6 +179,7 @@ pub const ForPlan = struct {
 
 pub const CaseArm = struct {
     patterns: []const []const u8,
+    pattern_lines: []const usize = &.{},
     patterns_expanded: bool = true,
     pattern_expansion_outputs: []const ExpansionOutput = &.{},
     body: StatementList,
@@ -187,11 +188,13 @@ pub const CaseArm = struct {
 
     pub fn validate(self: CaseArm) void {
         std.debug.assert(self.patterns.len != 0);
+        std.debug.assert(self.pattern_lines.len == 0 or self.pattern_lines.len == self.patterns.len);
         if (!self.patterns_expanded) std.debug.assert(self.pattern_expansion_outputs.len == 0);
         std.debug.assert(self.pattern_expansion_outputs.len == 0 or
             self.pattern_expansion_outputs.len == self.patterns.len);
         std.debug.assert(!(self.fallthrough and self.test_next));
         for (self.patterns) |pattern| std.debug.assert(std.mem.indexOfScalar(u8, pattern, 0) == null);
+        for (self.pattern_lines) |line| std.debug.assert(line != 0);
         for (self.pattern_expansion_outputs) |expansion_output| expansion_output.validate();
         self.body.validate();
     }
@@ -199,12 +202,14 @@ pub const CaseArm = struct {
 
 pub const CasePlan = struct {
     word: []const u8,
+    word_line: ?usize = null,
     word_expanded: bool = true,
     word_expansion_output: ExpansionOutput = .{},
     arms: []const CaseArm,
 
     pub fn validate(self: CasePlan) void {
         std.debug.assert(std.mem.indexOfScalar(u8, self.word, 0) == null);
+        if (self.word_line) |line| std.debug.assert(line != 0);
         self.word_expansion_output.validate();
         for (self.arms) |arm| arm.validate();
     }
@@ -1386,6 +1391,7 @@ fn cloneCasePlanWithMode(
     }
     return .{
         .word = word,
+        .word_line = plan.word_line,
         .word_expanded = plan.word_expanded,
         .word_expansion_output = word_expansion_output,
         .arms = arms,
@@ -1434,12 +1440,15 @@ fn cloneCaseArmWithMode(
         patterns[index] = try allocator.dupe(u8, pattern);
         initialized += 1;
     }
+    const pattern_lines = try allocator.dupe(usize, arm.pattern_lines);
+    errdefer allocator.free(pattern_lines);
     const pattern_expansion_outputs = try clonePatternExpansionOutputs(allocator, arm.pattern_expansion_outputs);
     errdefer freePatternExpansionOutputs(allocator, pattern_expansion_outputs);
     const body = try cloneStatementListWithMode(allocator, arm.body, mode);
     errdefer freeStatementList(allocator, body);
     return .{
         .patterns = patterns,
+        .pattern_lines = pattern_lines,
         .patterns_expanded = arm.patterns_expanded,
         .pattern_expansion_outputs = pattern_expansion_outputs,
         .body = body,
@@ -1451,6 +1460,7 @@ fn cloneCaseArmWithMode(
 fn freeCaseArm(allocator: std.mem.Allocator, arm: CaseArm) void {
     for (arm.patterns) |pattern| allocator.free(pattern);
     allocator.free(arm.patterns);
+    allocator.free(arm.pattern_lines);
     freePatternExpansionOutputs(allocator, arm.pattern_expansion_outputs);
     freeStatementList(allocator, arm.body);
 }

@@ -806,7 +806,10 @@ pub fn runInteractiveCommandStringWithExtensionHandlers(
             "semantic interactive executor does not yet preserve verbose/xtrace/errexit state",
         );
 
-    var parsed = try parser.parse(allocator, script, .{
+    const aliased = try semanticExpandAliases(allocator, script, invocation.features, shell_state);
+    defer allocator.free(aliased);
+
+    var parsed = try parser.parse(allocator, aliased, .{
         .mode = .interactive,
         .features = invocation.features.withStrictDiagnostics(),
         .collect_command_substitution_nodes = false,
@@ -838,7 +841,7 @@ pub fn runInteractiveCommandStringWithExtensionHandlers(
 
     return runSemanticLoweredProgram(
         allocator,
-        script,
+        aliased,
         program,
         &evaluator,
         shell_state,
@@ -1378,8 +1381,6 @@ fn semanticInteractiveProgramUnsupported(shell_state: shell.ShellState, program:
     shell_state.validate();
     if (program.function_definitions.len != 0)
         return "semantic interactive executor does not yet preserve function definitions";
-    if (shell_state.aliases.count() != 0)
-        return "semantic interactive executor does not yet preserve alias-aware parsing";
     if (shell_state.options.nounset and semanticProgramUsesShellExpansion(program))
         return "semantic interactive executor does not yet preserve nounset expansion diagnostics";
 
@@ -1400,7 +1401,6 @@ fn semanticInteractiveBuiltinRootAllowed(name: []const u8) bool {
     const definition = default_builtins.lookup(name) orelse return false;
     if (definition.semantic_class == .unsupported) return false;
     if (definition.semantic_class == .control_flow) return false;
-    if (std.mem.eql(u8, name, "alias") or std.mem.eql(u8, name, "unalias")) return false;
     if (std.mem.eql(u8, name, "local") or
         std.mem.eql(u8, name, "read") or
         std.mem.eql(u8, name, "set") or
@@ -2116,6 +2116,69 @@ test "script file parse diagnostics include path and line" {
     try std.testing.expect(std.mem.indexOf(u8, result.stderr, expected) != null);
     try std.testing.expect(std.mem.indexOf(u8, result.stderr, "  echo after 2>\n") != null);
 }
+
+test "script file parameter expansion diagnostics in for and case words include path and line" {
+    const Case = struct {
+        path: []const u8,
+        data: []const u8,
+        diagnostic: []const u8,
+    };
+    const cases = [_]Case{
+        .{
+            .path = "rush-script-for-word-parameter-diagnostic-test.rush",
+            .data =
+            \\echo before
+            \\unset x
+            \\for i in ${x:?forbad}; do echo "$i"; done
+            \\echo after
+            ,
+            .diagnostic = "expansion error: x: forbad",
+        },
+        .{
+            .path = "rush-script-case-word-parameter-diagnostic-test.rush",
+            .data =
+            \\echo before
+            \\unset x
+            \\case ${x:?casewordbad} in *) echo ok;; esac
+            \\echo after
+            ,
+            .diagnostic = "expansion error: x: casewordbad",
+        },
+        .{
+            .path = "rush-script-case-pattern-parameter-diagnostic-test.rush",
+            .data =
+            \\echo before
+            \\unset x
+            \\case ok in ${x:?casepatbad}) echo ok;; esac
+            \\echo after
+            ,
+            .diagnostic = "expansion error: x: casepatbad",
+        },
+    };
+
+    for (cases) |case| {
+        try deleteFileIfExists(std.testing.io, case.path);
+        defer std.Io.Dir.cwd().deleteFile(std.testing.io, case.path) catch {};
+        try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = case.path, .data = case.data });
+
+        const invocation = cli_invocation.parse(
+            &.{ "rush", "--posix", case.path },
+        ) orelse return error.ExpectedInvocation;
+        var result = try runInvocationForTest(std.testing.allocator, std.testing.io, invocation, null, .capture, false);
+        defer result.deinit();
+
+        const expected = try std.fmt.allocPrint(
+            std.testing.allocator,
+            "{s}:3: {s}\n",
+            .{ case.path, case.diagnostic },
+        );
+        defer std.testing.allocator.free(expected);
+        try std.testing.expectEqualStrings("before\n", result.stdout);
+        try std.testing.expectEqualStrings(expected, result.stderr);
+        try std.testing.expect(result.status != 0);
+    }
+}
+
 test "script file invocation shell options affect execution" {
     const path = "rush-script-options-test.rush";
     try deleteFileIfExists(std.testing.io, path);
@@ -2553,6 +2616,58 @@ test "semantic interactive invocation dispatches job control builtins" {
             try std.testing.expectEqual(@as(shell.ExitStatus, 1), result.status);
             try std.testing.expectEqualStrings("", result.stdout);
             try std.testing.expectEqualStrings("bg: job control disabled\nfg: job control disabled\n", result.stderr);
+        },
+    }
+}
+
+test "semantic interactive invocation dispatches alias builtins" {
+    var shell_state = shell.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    try shell.startup.initializeInvocationState(std.testing.allocator, std.testing.io, &shell_state, null, &.{}, .{});
+
+    var execution = try runInteractiveCommandString(
+        std.testing.allocator,
+        std.testing.io,
+        &shell_state,
+        "alias ll='echo listed'\nalias ll\nunalias ll",
+        shell.InvocationContext.init(.{ .arg_zero = "rush", .interactive = true }),
+        .capture,
+    );
+    defer execution.deinit(std.testing.allocator);
+
+    switch (execution) {
+        .unsupported => return error.ExpectedSemanticExecution,
+        .output => |result| {
+            try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
+            try std.testing.expectEqualStrings("ll='echo listed'\n", result.stdout);
+            try std.testing.expectEqualStrings("", result.stderr);
+            try std.testing.expect(shell_state.getAlias("ll") == null);
+        },
+    }
+}
+
+test "semantic interactive invocation expands existing aliases" {
+    var shell_state = shell.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    try shell.startup.initializeInvocationState(std.testing.allocator, std.testing.io, &shell_state, null, &.{}, .{});
+    try shell_state.setAlias("say", "echo alias-ok");
+
+    var execution = try runInteractiveCommandString(
+        std.testing.allocator,
+        std.testing.io,
+        &shell_state,
+        "say",
+        shell.InvocationContext.init(.{ .arg_zero = "rush", .interactive = true }),
+        .capture,
+    );
+    defer execution.deinit(std.testing.allocator);
+
+    switch (execution) {
+        .unsupported => return error.ExpectedSemanticExecution,
+        .output => |result| {
+            try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
+            try std.testing.expectEqualStrings("alias-ok\n", result.stdout);
+            try std.testing.expectEqualStrings("", result.stderr);
         },
     }
 }

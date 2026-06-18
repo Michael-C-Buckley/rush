@@ -1038,8 +1038,8 @@ const SourceLowerer = struct {
             .subshell => self.lowerSubshell(program.subshells[statement.index]),
             .if_command => self.lowerIfCommand(program.if_commands[statement.index], target),
             .loop_command => self.lowerLoopCommand(program.loop_commands[statement.index], target),
-            .for_command => self.lowerForCommand(program.for_commands[statement.index], target),
-            .case_command => self.lowerCaseCommand(program.case_commands[statement.index], target),
+            .for_command => self.lowerForCommand(program.source, program.for_commands[statement.index], target),
+            .case_command => self.lowerCaseCommand(program.source, program.case_commands[statement.index], target),
             .function_definition => self.lowerFunctionDefinition(program.function_definitions[statement.index], target),
             .bash_test_command => self.unsupportedShapeFailure(
                 "bash [[ ]] lowering is not implemented in the semantic trap resolver",
@@ -1503,6 +1503,7 @@ const SourceLowerer = struct {
 
     fn lowerForCommand(
         self: *SourceLowerer,
+        source: []const u8,
         command: ir.ForCommand,
         target: context.ExecutionTarget,
     ) !TrapActionBodyPayload {
@@ -1528,12 +1529,21 @@ const SourceLowerer = struct {
             var explicit: std.ArrayList([]const u8) = .empty;
             errdefer explicit.deinit(self.allocator);
             for (command.words) |word| {
-                const fields = switch (try self.expandFields(word.raw, target)) {
-                    .failure => |trap_failure| return .{ .failure = trap_failure },
-                    .result => |expanded| blk_fields: {
-                        try ExpansionOutputAccumulator.appendOwned(self.allocator, &expansion_outputs, expanded.output);
-                        break :blk_fields expanded.result;
-                    },
+                const fields = fields: {
+                    const previous_line_number = self.current_line_number;
+                    self.current_line_number = self.sourceLineNumber(source, word.span.start);
+                    defer self.current_line_number = previous_line_number;
+                    break :fields switch (try self.expandFields(word.raw, target)) {
+                        .failure => |trap_failure| return .{ .failure = trap_failure },
+                        .result => |expanded| blk_fields: {
+                            try ExpansionOutputAccumulator.appendOwned(
+                                self.allocator,
+                                &expansion_outputs,
+                                expanded.output,
+                            );
+                            break :blk_fields expanded.result;
+                        },
+                    };
                 };
                 try explicit.appendSlice(self.allocator, fields.fields);
             }
@@ -1570,6 +1580,7 @@ const SourceLowerer = struct {
 
     fn lowerCaseCommand(
         self: *SourceLowerer,
+        source: []const u8,
         command: ir.CaseCommand,
         target: context.ExecutionTarget,
     ) !TrapActionBodyPayload {
@@ -1578,8 +1589,10 @@ const SourceLowerer = struct {
         const arms = try self.allocator.alloc(command_plan.CaseArm, command.arms.len);
         for (command.arms, 0..) |arm, arm_index| {
             const patterns = try self.allocator.alloc([]const u8, arm.patterns.len);
+            const pattern_lines = try self.allocator.alloc(usize, arm.patterns.len);
             for (arm.patterns, 0..) |pattern, pattern_index| {
                 patterns[pattern_index] = try self.allocator.dupe(u8, pattern.raw);
+                pattern_lines[pattern_index] = self.sourceLineNumber(source, pattern.span.start);
             }
             const body_result = try self.lowerStatementListSourceAtLine(arm.body, arm.body_line_offset, target);
             const body = switch (body_result) {
@@ -1588,6 +1601,7 @@ const SourceLowerer = struct {
             };
             arms[arm_index] = .{
                 .patterns = patterns,
+                .pattern_lines = pattern_lines,
                 .patterns_expanded = false,
                 .body = body,
                 .fallthrough = arm.fallthrough,
@@ -1600,6 +1614,7 @@ const SourceLowerer = struct {
             .redirections = redirections.plan,
             .body = .{ .case_clause = .{
                 .word = raw_word,
+                .word_line = self.sourceLineNumber(source, command.word.span.start),
                 .word_expanded = false,
                 .arms = arms,
             } },
@@ -2258,17 +2273,31 @@ const SourceLowerer = struct {
         expansion_failure: shell_expand.ExpansionFailure,
     ) ![]const u8 {
         if (self.signal) |signal| {
+            if (self.scriptPathForDiagnostics()) |path| return std.fmt.allocPrint(
+                self.allocator,
+                "{s}:{d}: trap {s}: expansion error: {s}: {s}",
+                .{ path, self.current_line_number, signal.name(), expansion_failure.name, expansion_failure.message },
+            );
             return std.fmt.allocPrint(
                 self.allocator,
                 "trap {s}: expansion error: {s}: {s}",
                 .{ signal.name(), expansion_failure.name, expansion_failure.message },
             );
         }
+        if (self.scriptPathForDiagnostics()) |path| return std.fmt.allocPrint(
+            self.allocator,
+            "{s}:{d}: expansion error: {s}: {s}",
+            .{ path, self.current_line_number, expansion_failure.name, expansion_failure.message },
+        );
         return std.fmt.allocPrint(
             self.allocator,
             "expansion error: {s}: {s}",
             .{ expansion_failure.name, expansion_failure.message },
         );
+    }
+
+    fn scriptPathForDiagnostics(self: SourceLowerer) ?[]const u8 {
+        return if (self.eval_context.source == .script_file) self.owner.arg_zero else null;
     }
 
     fn resolveExternal(
@@ -2419,7 +2448,8 @@ const SourceLowerer = struct {
         });
         defer expansion.deinit();
         const result = expansion.expandWordFields(raw) catch |err| {
-            if (expansion.classifyError(err)) |_| return err;
+            if (expansion.classifyError(err)) |expansion_failure|
+                return .{ .failure = try self.expansionFailure(expansion_failure) };
             return err;
         };
         if (command_substitutions.context.fatal_failure) |trap_failure| {
@@ -10334,12 +10364,14 @@ fn evaluateCasePattern(
     shell_state: *state.ShellState,
     eval_context: context.EvalContext,
     raw_pattern: []const u8,
+    line_number: usize,
     case_word: []const u8,
     buffers: *EvaluationBuffers,
 ) EvalError!CasePatternEvaluation {
     shell_state.validate();
     eval_context.validate();
     std.debug.assert(std.mem.findScalar(u8, raw_pattern, 0) == null);
+    std.debug.assert(line_number != 0);
     std.debug.assert(std.mem.findScalar(u8, case_word, 0) == null);
 
     const arena = try evaluator.allocator.create(std.heap.ArenaAllocator);
@@ -10360,6 +10392,7 @@ fn evaluateCasePattern(
         .eval_context = eval_context,
         .signal = null,
         .local_functions = .empty,
+        .current_line_number = line_number,
     };
 
     const expanded_pattern = lowerer.expandCasePattern(raw_pattern, eval_context.target) catch |err| switch (err) {
@@ -10408,6 +10441,7 @@ fn evaluateCaseWord(
         .eval_context = eval_context,
         .signal = null,
         .local_functions = .empty,
+        .current_line_number = case_plan.word_line orelse 1,
     };
     const expanded_word = lowerer.expandScalar(case_plan.word, eval_context.target) catch |err| switch (err) {
         error.OutOfMemory => return error.OutOfMemory,
@@ -10486,6 +10520,7 @@ fn evaluateCaseClause(
                         shell_state,
                         eval_context,
                         pattern,
+                        if (arm.pattern_lines.len != 0) arm.pattern_lines[pattern_index] else 1,
                         case_word,
                         buffers,
                     );
