@@ -678,4 +678,3 @@ pub fn isAsciiWhitespace(byte: u8) bool {
         else => false,
     };
 }
-

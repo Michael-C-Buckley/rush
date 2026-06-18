@@ -8,6 +8,7 @@ const command_plan = @import("command_plan.zig");
 const context = @import("context.zig");
 const runtime_process = @import("../runtime/process.zig");
 const trap_semantics = @import("trap.zig");
+const expand = @import("expand.zig");
 
 pub const ExitStatus = u8;
 pub const TrapSignal = trap_semantics.Signal;
@@ -429,6 +430,12 @@ pub const BackgroundJobNotification = struct {
     }
 };
 
+fn shellStateLookup(ctx: ?*const anyopaque, name: []const u8) ?[]const u8 {
+    const state: *const ShellState = @ptrCast(@alignCast(ctx.?));
+    const vr = state.getVariable(name);
+    return if (vr) |v| v.value else null;
+}
+
 pub const ShellState = struct {
     allocator: std.mem.Allocator,
     scope: Scope = .current_shell,
@@ -459,6 +466,13 @@ pub const ShellState = struct {
         idle,
         running,
     };
+
+    pub fn envLookup(self: *const ShellState) expand.EnvLookup {
+        return .{
+            .context = self,
+            .lookupFn = shellStateLookup,
+        };
+    }
 
     pub fn init(allocator: std.mem.Allocator) ShellState {
         return .{ .allocator = allocator };
