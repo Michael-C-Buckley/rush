@@ -21,6 +21,19 @@
 
   <p>These notes are not a complete compatibility matrix. They are for cases where Rush makes a deliberate choice, where common system shells disagree, or where an older Bash version behaves differently from current Bash. The decision-making rules live in the <a href="conformance.html">conformance policy</a>.</p>
 
+  <h2 id="current-scope"><a href="#current-scope">Current scope</a></h2>
+
+  <h3 id="c-locale-shell-semantics"><a href="#c-locale-shell-semantics">C locale shell semantics</a></h3>
+
+  <p>Rush currently implements shell semantics as if the active locale were the POSIX/C locale. Locale-sensitive behavior such as pathname expansion ordering, bracket expression collation, and character classes does not yet follow <code>LC_COLLATE</code> or <code>LC_CTYPE</code>.</p>
+
+  <p>For example, Rush sorts pathname expansion matches by byte value. In a UTF-8 locale such as <code>en_US.UTF-8</code>, shells that apply locale collation may order mixed-case names differently:</p>
+
+  <pre><span class="cmd">touch</span> b a AGENTS.md LICENSE README.md
+<span class="cmd">printf</span> <span class="str">'&lt;%s&gt;\n'</span> *</pre>
+
+  <p>Rush prints uppercase names before lowercase names, matching C-locale byte ordering. Scripts that require portable ordering should set <code>LC_ALL=C</code> explicitly before relying on pathname expansion order.</p>
+
   <h2 id="posix-mode"><a href="#posix-mode">POSIX mode</a></h2>
 
   <h3 id="assigning-defaults-to-positional-parameters"><a href="#assigning-defaults-to-positional-parameters">Assigning defaults to positional parameters</a></h3>
