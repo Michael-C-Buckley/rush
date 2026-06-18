@@ -108,6 +108,18 @@
             .status = 0,
         },
         .{
+            .name = "eval observes aliases defined earlier in the same list",
+            .script =
+            \\alias hi='printf "%s\n" alias'; eval 'hi'
+            ,
+            .stdout =
+            \\alias
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "alias substitution applies to later complete commands in dot scripts",
             .script =
             \\script=./rush-alias-dot-script.tmp

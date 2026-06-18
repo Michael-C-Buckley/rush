@@ -10141,7 +10141,7 @@ fn evaluateEval(
     defer working_state.deinit();
     try applyEvalAssignmentOverlay(&working_state, shell_state, plan);
 
-    const result = try evaluateStatementListSource(evaluator, &working_state, eval_context, source.items, buffers);
+    const result = try evaluateSourcedTextChunks(evaluator, &working_state, eval_context, source.items, buffers);
     if (bashEvalUsesTemporaryAssignments(eval_context, plan)) {
         try appendShellStateDiffExcludingVariables(shell_state, working_state, state_delta, plan.assignments);
     } else {
