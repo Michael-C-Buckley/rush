@@ -142,6 +142,18 @@
             .status = 0,
         },
         .{
+            .name = "for allows do as the loop variable name",
+            .script =
+            \\for do in a; do printf '<%s>\n' "$do"; done
+            ,
+            .stdout =
+            \\<a>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "for recognizes do as the third word when in is omitted",
             .script =
             \\set -- a b

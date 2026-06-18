@@ -1537,7 +1537,7 @@ fn lowerForCommand(allocator: std.mem.Allocator, parsed: parser.ParseResult, nod
             if (body_node == null) {
                 if (std.mem.eql(u8, lexeme, "for")) continue;
                 if (name_token == null) {
-                    if (!std.mem.eql(u8, lexeme, "in") and !std.mem.eql(u8, lexeme, "do")) name_token = token_index;
+                    if (!std.mem.eql(u8, lexeme, "in")) name_token = token_index;
                 } else if (in_token == null and std.mem.eql(u8, lexeme, "in")) {
                     in_token = token_index;
                 }
