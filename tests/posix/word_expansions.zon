@@ -516,6 +516,24 @@
             .status = 0,
         },
         .{
+            .name = "deep nested command substitutions preserve inner output",
+            .script =
+            \\s='echo ok'
+            \\i=0
+            \\while [ "$i" -lt 200 ]; do
+            \\    s='echo $('"$s"')'
+            \\    i=$((i + 1))
+            \\done
+            \\eval "$s"
+            ,
+            .stdout =
+            \\ok
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "command substitution removes all trailing newlines",
             .script =
             \\x=$(printf 'a\n\n\n')

@@ -252,7 +252,10 @@ fn runSemanticCommandStringInternal(
         );
     }
 
-    var parsed = try parser.parse(allocator, script, .{ .features = invocation.features.withStrictDiagnostics() });
+    var parsed = try parser.parse(allocator, script, .{
+        .features = invocation.features.withStrictDiagnostics(),
+        .collect_command_substitution_nodes = false,
+    });
     defer parsed.deinit();
     if (parsed.diagnostics.len != 0) {
         return .{ .output = try parseDiagnostics(allocator, script, parsed.diagnostics) };
@@ -353,6 +356,7 @@ fn runSemanticAliasTimingCommandString(
             defer allocator.free(aliased);
             var parsed = try parser.parse(allocator, aliased, .{
                 .features = invocation.features.withStrictDiagnostics(),
+                .collect_command_substitution_nodes = false,
             });
             defer parsed.deinit();
             if (parsed.diagnostics.len == 0) {
@@ -591,7 +595,10 @@ fn runSemanticShellStateScriptWithoutAliasTiming(
     var parsed = try parser.parse(
         allocator,
         script,
-        .{ .features = invocation.features.withStrictDiagnostics() },
+        .{
+            .features = invocation.features.withStrictDiagnostics(),
+            .collect_command_substitution_nodes = false,
+        },
     );
     defer parsed.deinit();
     if (parsed.diagnostics.len != 0) {
@@ -673,6 +680,7 @@ fn runSemanticAliasTimingShellStateScript(
             defer allocator.free(aliased);
             var parsed = try parser.parse(allocator, aliased, .{
                 .features = invocation.features.withStrictDiagnostics(),
+                .collect_command_substitution_nodes = false,
             });
             defer parsed.deinit();
             if (parsed.diagnostics.len == 0) {
@@ -779,6 +787,7 @@ pub fn runInteractiveCommandStringWithExtensionHandlers(
     var parsed = try parser.parse(allocator, script, .{
         .mode = .interactive,
         .features = invocation.features.withStrictDiagnostics(),
+        .collect_command_substitution_nodes = false,
     });
     defer parsed.deinit();
     if (parsed.diagnostics.len != 0)
@@ -1252,6 +1261,7 @@ fn semanticExpandAliases(
         .features = features.withStrictDiagnostics(),
         .context = shell_state,
         .lookup = lookupSemanticAlias,
+        .collect_command_substitution_nodes = false,
     });
 }
 
@@ -1426,7 +1436,10 @@ fn semanticFunctionDefinitionPreflightUnsupported(
     definition: ir.FunctionDefinition,
     features: compat.Features,
 ) !?[]const u8 {
-    var parsed = try parser.parse(allocator, definition.body, .{ .features = features.withStrictDiagnostics() });
+    var parsed = try parser.parse(allocator, definition.body, .{
+        .features = features.withStrictDiagnostics(),
+        .collect_command_substitution_nodes = false,
+    });
     defer parsed.deinit();
     if (parsed.diagnostics.len != 0)
         return "semantic executor production preflight keeps parser-rejected function bodies on the old executor";

@@ -944,7 +944,7 @@ const SourceLowerer = struct {
         if (parsed.incomplete) return error.Unimplemented;
 
         const program = try ir.lowerSimpleCommands(self.allocator, parsed);
-        const payload = try self.lowerProgram(program, .subshell, true);
+        const payload = try self.lowerProgram(program, .subshell, false);
         return switch (payload) {
             .simple => |plan| .{ .simple = plan },
             .compound => |plan| .{ .compound = plan },
@@ -957,18 +957,28 @@ const SourceLowerer = struct {
         if (!self.owner.expand_aliases) return parser.parse(
             self.allocator,
             source,
-            .{ .features = self.owner.features.withStrictDiagnostics() },
+            .{
+                .features = self.owner.features.withStrictDiagnostics(),
+                .collect_command_substitution_nodes = false,
+            },
         );
         const aliased = try parser.expandAliases(self.allocator, source, .{
             .features = self.owner.features.withStrictDiagnostics(),
             .context = self.owner.alias_state orelse self.shell_state,
             .lookup = lookupSemanticAliasForParser,
+            .collect_command_substitution_nodes = false,
         });
-        return parser.parse(self.allocator, aliased, .{ .features = self.owner.features.withStrictDiagnostics() });
+        return parser.parse(self.allocator, aliased, .{
+            .features = self.owner.features.withStrictDiagnostics(),
+            .collect_command_substitution_nodes = false,
+        });
     }
 
     fn parseWithoutAliases(self: *SourceLowerer, source: []const u8) !parser.ParseResult {
-        return parser.parse(self.allocator, source, .{ .features = self.owner.features.withStrictDiagnostics() });
+        return parser.parse(self.allocator, source, .{
+            .features = self.owner.features.withStrictDiagnostics(),
+            .collect_command_substitution_nodes = false,
+        });
     }
 
     fn lowerProgram(
@@ -12982,6 +12992,7 @@ fn evaluateSourcedTextChunks(
                 .features = evaluator.features.withStrictDiagnostics(),
                 .context = &alias_snapshot,
                 .lookup = lookupSemanticAliasForParser,
+                .collect_command_substitution_nodes = false,
             }) catch |err| switch (err) {
                 error.OutOfMemory => return error.OutOfMemory,
                 else => return error.Unimplemented,
@@ -12989,6 +13000,7 @@ fn evaluateSourcedTextChunks(
             defer evaluator.allocator.free(aliased);
             var parsed = parser.parse(evaluator.allocator, aliased, .{
                 .features = evaluator.features.withStrictDiagnostics(),
+                .collect_command_substitution_nodes = false,
             }) catch |err| switch (err) {
                 error.OutOfMemory => return error.OutOfMemory,
                 else => return error.Unimplemented,

@@ -585,6 +585,7 @@ pub const ParseOptions = struct {
     mode: ParseMode = .complete,
     cursor: ?usize = null,
     features: compat.Features = .{},
+    collect_command_substitution_nodes: bool = true,
 };
 
 pub const AliasLookupFn = *const fn (context: *anyopaque, name: []const u8) ?[]const u8;
@@ -593,6 +594,7 @@ pub const AliasExpansionOptions = struct {
     features: compat.Features = .{},
     context: ?*anyopaque = null,
     lookup: ?AliasLookupFn = null,
+    collect_command_substitution_nodes: bool = true,
 };
 
 pub const HighlightKind = enum {
@@ -1755,6 +1757,7 @@ pub fn parse(allocator: std.mem.Allocator, source: []const u8, options: ParseOpt
             .tokens = lex_result.tokens,
             .mode = options.mode,
             .features = options.features,
+            .collect_command_substitution_nodes = options.collect_command_substitution_nodes,
         };
         errdefer parser.deinit();
 
@@ -1839,7 +1842,10 @@ fn expandAliasesIntoParsedSource(
     output: *std.ArrayList(u8),
     active_aliases: *std.ArrayList([]const u8),
 ) !bool {
-    var parsed = try parse(allocator, source, .{ .features = options.features });
+    var parsed = try parse(allocator, source, .{
+        .features = options.features,
+        .collect_command_substitution_nodes = options.collect_command_substitution_nodes,
+    });
     defer parsed.deinit();
 
     var skipped_spans: std.ArrayList(Span) = .empty;
@@ -2254,6 +2260,7 @@ const SyntaxParser = struct {
     tokens: []const Token,
     mode: ParseMode,
     features: compat.Features = .{},
+    collect_command_substitution_nodes: bool = true,
     index: usize = 0,
     nodes: std.ArrayList(Node) = .empty,
     children: std.ArrayList(SyntaxChild) = .empty,
@@ -3531,7 +3538,7 @@ const SyntaxParser = struct {
         for (token_start..token_end) |token_index| {
             const token = self.tokens[token_index];
             try word_children.append(self.allocator, .{ .token = .init(token_index) });
-            if (token.kind != .word) continue;
+            if (token.kind != .word or !self.collect_command_substitution_nodes) continue;
 
             var substitutions = try commandSubstitutionSpans(self.allocator, self.source, token.span);
             defer substitutions.deinit(self.allocator);

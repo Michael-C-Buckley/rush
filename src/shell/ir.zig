@@ -1178,6 +1178,15 @@ fn isStatementNode(kind: parser.NodeKind) bool {
     };
 }
 
+fn pipelineRequiresStageSources(parsed: parser.ParseResult, node: parser.Node) bool {
+    std.debug.assert(node.kind == .pipeline);
+    for (parsed.nodeChildren(node)) |child| switch (child) {
+        .node => |child_node_id| if (parsed.nodes[child_node_id.index()].kind != .simple_command) return true,
+        .token => {},
+    };
+    return false;
+}
+
 fn lowerPipelineDirect(
     allocator: std.mem.Allocator,
     parsed: parser.ParseResult,
@@ -1195,6 +1204,7 @@ fn lowerPipelineDirect(
         stage_sources.deinit(allocator);
     }
     var negated = false;
+    const collect_stage_sources = pipelineRequiresStageSources(parsed, node);
 
     for (parsed.nodeChildren(node)) |child| switch (child) {
         .token => |token_index| {
@@ -1204,10 +1214,12 @@ fn lowerPipelineDirect(
         .node => |child_node_id| {
             const child_node = parsed.nodes[child_node_id.index()];
             try stage_spans.append(allocator, child_node.span);
-            try stage_sources.append(
-                allocator,
-                try ownedSourceWithHereDocs(allocator, parsed, child_node.span.start, child_node.span.end),
-            );
+            if (collect_stage_sources) {
+                try stage_sources.append(
+                    allocator,
+                    try ownedSourceWithHereDocs(allocator, parsed, child_node.span.start, child_node.span.end),
+                );
+            }
             if (child_node.kind == .simple_command) {
                 const command_index = commands.items.len;
                 try commands.append(allocator, try lowerSimpleCommand(allocator, parsed, child_node_id));
@@ -2105,6 +2117,7 @@ fn lowerPipeline(
         stage_sources.deinit(allocator);
     }
     var negated = false;
+    const collect_stage_sources = pipelineRequiresStageSources(parsed, node);
 
     for (parsed.nodeChildren(node)) |child| switch (child) {
         .token => |token_index| {
@@ -2114,10 +2127,12 @@ fn lowerPipeline(
         .node => |child_node_id| {
             const child_node = parsed.nodes[child_node_id.index()];
             try stage_spans.append(allocator, child_node.span);
-            try stage_sources.append(
-                allocator,
-                try ownedSourceWithHereDocs(allocator, parsed, child_node.span.start, child_node.span.end),
-            );
+            if (collect_stage_sources) {
+                try stage_sources.append(
+                    allocator,
+                    try ownedSourceWithHereDocs(allocator, parsed, child_node.span.start, child_node.span.end),
+                );
+            }
             if (child_node.kind == .simple_command) {
                 const command_index = command_indexes_by_node[child_node_id.index()];
                 std.debug.assert(command_index != missing_command);
