@@ -118,6 +118,20 @@
             .status = 0,
         },
         .{
+            .name = "deep mutual non-tail-recursive function call chain exceeds one thousand calls",
+            .script =
+            \\f() { if [ "$1" -eq 0 ]; then printf 'ok\n'; else next=$(( $1 - 1 )); g "$next"; :; fi; }
+            \\g() { if [ "$1" -eq 0 ]; then printf 'ok\n'; else next=$(( $1 - 1 )); f "$next"; :; fi; }
+            \\f 1200
+            ,
+            .stdout =
+            \\ok
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "non-tail recursive bare return preserves child status",
             .script =
             \\f() { if [ "$1" -eq 0 ]; then return 7; else next=$(( $1 - 1 )); f "$next"; return; fi; }
