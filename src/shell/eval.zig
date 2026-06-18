@@ -3070,7 +3070,7 @@ fn evaluatePlanWithInput(
         .special_builtin => eval_context.enterSpecialBuiltin(),
         else => eval_context,
     };
-    const result = try evaluateSimpleCommand(
+    var result = try evaluateSimpleCommand(
         evaluator,
         shell_state,
         command_context,
@@ -3096,18 +3096,30 @@ fn evaluatePlanWithInput(
             try commitExecRedirectionsToFrame(evaluator.allocator, frame, effective_plan.redirections);
         },
     }
-    if ((applied_redirections != null or
+    if ((effective_plan.redirections.steps.len != 0 or
+        applied_redirections != null or
         (hasScopedExecRedirections(evaluator.*) and eval_context.command_substitution_depth == 0)) and
         effective_plan.class() != .external and
         effective_plan.class() != .function)
     {
-        try flushBufferedRedirectionOutput(
+        if (try discardBufferedOutputForClosedDestinations(
+            evaluator.*,
+            &buffers,
+            effective_plan.redirections,
+            eval_context,
+        )) {
+            result.status = 1;
+        }
+        flushBufferedRedirectionOutput(
             evaluator.*,
             &buffers,
             effective_plan.redirections,
             eval_context,
             routed_prefix,
-        );
+        ) catch |err| switch (err) {
+            error.Unimplemented => result.status = 1,
+            else => |e| return e,
+        };
     }
     if (frameRoutesPipelineData(command_frame)) try routeDirectPipelineStageBuffers(&buffers);
     state_delta.setLastStatus(result.status);
@@ -4009,6 +4021,7 @@ fn flushBufferedRedirectionOutput(
             }
         }
         try frame.applyRedirectionsFlushingRouteChanges(redirections);
+        try frame.flushPendingStandardDescriptors();
         return;
     }
 
@@ -4024,6 +4037,35 @@ fn flushBufferedRedirectionOutput(
             routed_prefix,
         );
     }
+}
+
+fn discardBufferedOutputForClosedDestinations(
+    evaluator: Evaluator,
+    buffers: *EvaluationBuffers,
+    redirections: redirection_plan.RedirectionPlan,
+    eval_context: context.EvalContext,
+) EvalError!bool {
+    redirections.validate();
+    eval_context.validate();
+    if (buffers.stdout.items.len == 0 and buffers.stderr.items.len == 0) return false;
+
+    var routing = if (eval_context.command_substitution_depth != 0)
+        OutputRouting.initCommandSubstitution(buffers.allocator)
+    else
+        OutputRouting.init(buffers.allocator, .inherited);
+    defer routing.deinit();
+
+    try applyOutputRoutingRedirections(evaluator, &routing, redirections);
+    var failed = false;
+    if (buffers.stdout.items.len != 0 and routing.destination(1) == .closed) {
+        buffers.stdout.items.len = 0;
+        failed = true;
+    }
+    if (buffers.stderr.items.len != 0 and routing.destination(2) == .closed) {
+        buffers.stderr.items.len = 0;
+        failed = true;
+    }
+    return failed;
 }
 
 fn flushBufferedRedirectionOutputAfterPrefix(
@@ -13557,9 +13599,9 @@ fn evaluateEchoRouted(
     var stdout: std.ArrayList(u8) = .empty;
     defer stdout.deinit(allocator);
     var status = try evaluateEcho(allocator, argv, &stdout);
-    if (stdout.items.len != 0 and buffers.frame.spec.fd_table.endpoint(1) == .closed) status = 1;
     var frame = try buffers.outputFrame();
     defer frame.deinit();
+    if (stdout.items.len != 0 and frame.routingRef().destination(1) == .closed) status = 1;
     try frame.write(1, stdout.items);
     return status;
 }
