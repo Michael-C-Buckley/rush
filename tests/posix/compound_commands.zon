@@ -1068,6 +1068,278 @@
             .status = 0,
         },
         .{
+            .name = "if command accepts deeply nested compound bodies",
+            .script =
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\if true; then if true; then
+            \\printf 'ok\n'
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            \\fi; fi
+            ,
+            .stdout =
+            \\ok
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "if command redirection applies to the selected body",
             .script =
             \\if true
