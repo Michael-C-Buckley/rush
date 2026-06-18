@@ -2759,6 +2759,110 @@ const FunctionTailCallContext = struct {
     definition_has_redirections: bool,
 };
 
+const FunctionCallFrame = struct {
+    allocator: std.mem.Allocator,
+    caller_context: context.EvalContext,
+    function_context: context.EvalContext,
+    plan: command_plan.CommandPlan,
+    definition: command_plan.FunctionDefinition,
+    owns_plan: bool,
+    function_frame: *FunctionFrame,
+    call_redirections: RedirectionGuard = RedirectionGuard.empty(.current_scoped),
+    definition_redirections: RedirectionGuard = RedirectionGuard.empty(.current_scoped),
+    body_lowering: ?TrapActionBody = null,
+    body_lowering_arena: ?*std.heap.ArenaAllocator = null,
+
+    fn init(
+        allocator: std.mem.Allocator,
+        caller_context: context.EvalContext,
+        plan: command_plan.CommandPlan,
+        owns_plan: bool,
+    ) EvalError!FunctionCallFrame {
+        caller_context.validate();
+        plan.validate();
+        const function_context = caller_context.enterFunction();
+        const definition = functionDefinitionFromCallPlan(plan);
+        validateFunctionCall(plan, definition);
+
+        const function_frame = try allocator.create(FunctionFrame);
+        errdefer allocator.destroy(function_frame);
+        function_frame.* = FunctionFrame.init(
+            allocator,
+            function_context.function_depth,
+            plan.assignments,
+        );
+
+        return .{
+            .allocator = allocator,
+            .caller_context = caller_context,
+            .function_context = function_context,
+            .plan = plan,
+            .definition = definition,
+            .owns_plan = owns_plan,
+            .function_frame = function_frame,
+        };
+    }
+
+    fn deinit(self: *FunctionCallFrame) void {
+        if (self.body_lowering) |*body| {
+            body.deinit();
+            self.body_lowering = null;
+        }
+        if (self.body_lowering_arena) |arena| {
+            arena.deinit();
+            self.allocator.destroy(arena);
+            self.body_lowering_arena = null;
+        }
+        self.function_frame.deinit();
+        self.allocator.destroy(self.function_frame);
+        self.definition_redirections.restore();
+        self.call_redirections.restore();
+        if (self.owns_plan) command_plan.freeCommandPlan(self.allocator, self.plan);
+        self.* = undefined;
+    }
+
+    fn bodyArenaAllocator(self: *FunctionCallFrame) EvalError!std.mem.Allocator {
+        std.debug.assert(self.body_lowering_arena == null);
+        const arena = try self.allocator.create(std.heap.ArenaAllocator);
+        errdefer self.allocator.destroy(arena);
+        arena.* = std.heap.ArenaAllocator.init(self.allocator);
+        self.body_lowering_arena = arena;
+        return arena.allocator();
+    }
+
+    fn storeBodyLowering(self: *FunctionCallFrame, body: TrapActionBody) void {
+        body.validate();
+        std.debug.assert(self.body_lowering == null);
+        self.body_lowering = body;
+    }
+
+    fn bodyLowering(self: FunctionCallFrame) TrapActionBody {
+        const body = self.body_lowering.?;
+        body.validate();
+        return body;
+    }
+
+    fn tailContext(self: FunctionCallFrame) FunctionTailCallContext {
+        return functionTailCallContext(self.plan, self.definition);
+    }
+
+    fn hasRedirections(self: FunctionCallFrame) bool {
+        return self.call_redirections.hasTransaction() or self.definition_redirections.hasTransaction();
+    }
+
+    fn validate(self: FunctionCallFrame) void {
+        self.caller_context.validate();
+        self.function_context.validate();
+        std.debug.assert(self.function_context.canReturnFromFunction());
+        validateFunctionCall(self.plan, self.definition);
+        self.function_frame.validate();
+        std.debug.assert(self.function_frame.depth == self.function_context.function_depth);
+        if (self.function_frame.assignment_prefixes.len != 0) {
+            std.debug.assert(self.function_frame.assignment_prefixes.ptr == self.plan.assignments.ptr);
+        }
+    }
+};
+
 const FunctionFrame = struct {
     allocator: std.mem.Allocator,
     depth: u32,
@@ -2798,6 +2902,12 @@ const FunctionFrame = struct {
             if (std.mem.eql(u8, local_name, name)) return true;
         }
         return false;
+    }
+
+    fn validate(self: FunctionFrame) void {
+        std.debug.assert(self.depth != 0);
+        for (self.assignment_prefixes) |assignment| assignment.validate();
+        for (self.local_names.items) |name| state.assertValidVariableName(name);
     }
 };
 
@@ -8761,6 +8871,7 @@ fn evaluateStatementListSource(
 fn evaluateFunctionStatementListSource(
     evaluator: *Evaluator,
     shell_state: *state.ShellState,
+    call_frame: *FunctionCallFrame,
     eval_context: context.EvalContext,
     source: []const u8,
     tail_context: FunctionTailCallContext,
@@ -8780,7 +8891,7 @@ fn evaluateFunctionStatementListSource(
     parser_resolver.alias_state = evaluator.alias_state;
     parser_resolver.active_frame = buffers.frame;
     parser_resolver.active_input = buffers.stdin;
-    var body = (parser_resolver.lowerSource(
+    const body = (parser_resolver.lowerSource(
         evaluator.allocator,
         source,
         eval_context,
@@ -8789,9 +8900,10 @@ fn evaluateFunctionStatementListSource(
         error.OutOfMemory => return error.OutOfMemory,
         else => return error.Unimplemented,
     }) orelse return error.Unimplemented;
-    defer body.deinit();
+    call_frame.storeBodyLowering(body);
+    const body_lowering = call_frame.bodyLowering();
 
-    if (trapActionStatementSequence(body)) |list| {
+    if (trapActionStatementSequence(body_lowering)) |list| {
         return evaluateFunctionStatementList(evaluator, shell_state, eval_context, list, tail_context, buffers);
     }
 
@@ -8799,14 +8911,14 @@ fn evaluateFunctionStatementListSource(
         evaluator,
         shell_state,
         eval_context,
-        body,
+        body_lowering,
         buffers.stdin,
         buffers.frame,
     );
     defer body_outcome.deinit();
 
     try appendOutcomeBuffers(buffers, body_outcome);
-    if (trapActionBodyCommitsStateToParent(body)) {
+    if (trapActionBodyCommitsStateToParent(body_lowering)) {
         try applyOutcomeToWorkingState(shell_state, &body_outcome, body_outcome.state_delta.target);
     } else {
         try applyOutcomeStatusToWorkingState(shell_state, body_outcome);
@@ -9391,6 +9503,73 @@ fn beginFunctionFrameState(
     try frame_state.replacePositionals(plan.argv[1..]);
 }
 
+const FunctionActivation = struct {
+    allocator: std.mem.Allocator,
+    evaluator: *Evaluator,
+    frame_state: state.ShellState,
+    previous_frame: ?*FunctionFrame,
+    call_frame: ?*FunctionCallFrame = null,
+    installed_function_frame: bool = false,
+
+    fn init(evaluator: *Evaluator, shell_state: *state.ShellState) EvalError!FunctionActivation {
+        const frame_state = try cloneFunctionFrameState(evaluator, shell_state);
+        return .{
+            .allocator = evaluator.allocator,
+            .evaluator = evaluator,
+            .frame_state = frame_state,
+            .previous_frame = evaluator.function_frame,
+        };
+    }
+
+    fn deinit(self: *FunctionActivation) void {
+        self.endCallFrame();
+        self.frame_state.deinit();
+        self.* = undefined;
+    }
+
+    fn beginCallFrame(
+        self: *FunctionActivation,
+        caller_context: context.EvalContext,
+        plan: command_plan.CommandPlan,
+        owns_plan: bool,
+    ) EvalError!*FunctionCallFrame {
+        std.debug.assert(self.call_frame == null);
+        errdefer if (owns_plan) command_plan.freeCommandPlan(self.allocator, plan);
+
+        const call_frame = try self.allocator.create(FunctionCallFrame);
+        errdefer self.allocator.destroy(call_frame);
+        call_frame.* = try FunctionCallFrame.init(self.allocator, caller_context, plan, owns_plan);
+        self.call_frame = call_frame;
+        return call_frame;
+    }
+
+    fn installCallFrame(self: *FunctionActivation) void {
+        std.debug.assert(self.call_frame != null);
+        std.debug.assert(!self.installed_function_frame);
+        installFunctionFrame(self.evaluator, self.call_frame.?.function_frame);
+        self.installed_function_frame = true;
+    }
+
+    fn endCallFrame(self: *FunctionActivation) void {
+        if (self.call_frame) |call_frame| {
+            if (self.installed_function_frame) {
+                restoreFunctionFrame(self.evaluator, call_frame.function_frame, self.previous_frame);
+                self.installed_function_frame = false;
+            }
+            call_frame.deinit();
+            self.allocator.destroy(call_frame);
+            self.call_frame = null;
+        } else {
+            std.debug.assert(!self.installed_function_frame);
+        }
+    }
+
+    fn validate(self: FunctionActivation) void {
+        self.frame_state.validate();
+        if (self.call_frame) |call_frame| call_frame.validate();
+    }
+};
+
 fn installFunctionFrame(evaluator: *Evaluator, function_frame: *FunctionFrame) void {
     std.debug.assert(function_frame.depth != 0);
     evaluator.function_frame = function_frame;
@@ -9480,82 +9659,65 @@ fn evaluateFunction(
     const shell_state_before = shellStateMutationFingerprint(shell_state.*);
     defer std.debug.assert(shellStateMutationFingerprint(shell_state.*) == shell_state_before);
 
-    var frame_state = try cloneFunctionFrameState(evaluator, shell_state);
-    defer frame_state.deinit();
-    const previous_frame = evaluator.function_frame;
+    var activation = try FunctionActivation.init(evaluator, shell_state);
+    defer activation.deinit();
     var caller_context = eval_context;
     var current_plan = plan;
-    var owned_plan: ?command_plan.CommandPlan = null;
-    defer if (owned_plan) |owned| command_plan.freeCommandPlan(evaluator.allocator, owned);
+    var current_plan_owned = false;
 
     while (true) {
-        const function_context = caller_context.enterFunction();
-        const current_definition = functionDefinitionFromCallPlan(current_plan);
-        validateFunctionCall(current_plan, current_definition);
+        const call_frame = try activation.beginCallFrame(caller_context, current_plan, current_plan_owned);
+        current_plan_owned = false;
+        activation.validate();
 
-        try flushBuffersForFunctionRedirectionTargets(buffers, current_plan, current_definition);
+        try flushBuffersForFunctionRedirectionTargets(buffers, call_frame.plan, call_frame.definition);
 
-        var call_redirections = RedirectionGuard.empty(.current_scoped);
-        defer call_redirections.restore();
         if (try beginFunctionCallRedirections(
             evaluator,
             shell_state.*,
-            caller_context,
-            current_plan,
-            current_definition,
-            &call_redirections,
+            call_frame.caller_context,
+            call_frame.plan,
+            call_frame.definition,
+            &call_frame.call_redirections,
             buffers,
         )) |redirection_failure| return redirection_failure;
 
-        var definition_redirections = RedirectionGuard.empty(.current_scoped);
-        defer definition_redirections.restore();
         if (try beginFunctionDefinitionRedirections(
             evaluator,
             shell_state.*,
-            caller_context,
-            current_plan,
-            current_definition,
-            &definition_redirections,
+            call_frame.caller_context,
+            call_frame.plan,
+            call_frame.definition,
+            &call_frame.definition_redirections,
             buffers,
         )) |redirection_failure| return redirection_failure;
 
-        try beginFunctionFrameState(&frame_state, current_plan);
+        try beginFunctionFrameState(&activation.frame_state, call_frame.plan);
+        activation.installCallFrame();
 
-        var function_frame = FunctionFrame.init(
-            evaluator.allocator,
-            function_context.function_depth,
-            current_plan.assignments,
-        );
-        defer function_frame.deinit();
-        installFunctionFrame(evaluator, &function_frame);
-        defer restoreFunctionFrame(evaluator, &function_frame, previous_frame);
-
-        const tail_context = functionTailCallContext(current_plan, current_definition);
         const body_result = try evaluateFunctionBody(
             evaluator,
-            &frame_state,
-            function_context,
-            current_definition,
-            tail_context,
+            &activation.frame_state,
+            call_frame,
             buffers,
         );
         switch (body_result) {
             .tail_call => |tail_plan| {
-                assertFunctionTailCallElisionSafe(function_frame);
-                if (owned_plan) |owned| command_plan.freeCommandPlan(evaluator.allocator, owned);
-                owned_plan = tail_plan;
-                current_plan = owned_plan.?;
-                caller_context = function_context;
+                assertFunctionTailCallElisionSafe(call_frame.function_frame.*);
+                caller_context = call_frame.function_context;
+                activation.endCallFrame();
+                current_plan = tail_plan;
+                current_plan_owned = true;
                 continue;
             },
             .result => |body_simple_result| return finishFunctionLifecycle(
                 shell_state.*,
-                frame_state,
-                function_context,
-                current_plan,
-                current_definition,
-                function_frame,
-                call_redirections.hasTransaction() or definition_redirections.hasTransaction(),
+                activation.frame_state,
+                call_frame.function_context,
+                call_frame.plan,
+                call_frame.definition,
+                call_frame.function_frame.*,
+                call_frame.hasRedirections(),
                 state_delta,
                 buffers,
                 body_simple_result,
@@ -9581,16 +9743,18 @@ fn flushBuffersForFunctionRedirectionTargets(
 fn evaluateFunctionBody(
     evaluator: *Evaluator,
     frame_state: *state.ShellState,
-    function_context: context.EvalContext,
-    definition: command_plan.FunctionDefinition,
-    tail_context: FunctionTailCallContext,
+    call_frame: *FunctionCallFrame,
     buffers: *EvaluationBuffers,
 ) EvalError!FunctionBodyEvalResult {
+    const function_context = call_frame.function_context;
+    const definition = call_frame.definition;
+    const tail_context = call_frame.tailContext();
     definition.validate();
     return if (definition.source_body_program) |program| blk: {
         break :blk try evaluateFunctionProgramBody(
             evaluator,
             frame_state,
+            call_frame,
             function_context,
             program.*,
             tail_context,
@@ -9600,6 +9764,7 @@ fn evaluateFunctionBody(
         break :blk try evaluateFunctionSourceBody(
             evaluator,
             frame_state,
+            call_frame,
             function_context,
             source_body,
             tail_context,
@@ -9620,6 +9785,7 @@ fn evaluateFunctionBody(
 fn evaluateFunctionSourceBody(
     evaluator: *Evaluator,
     frame_state: *state.ShellState,
+    call_frame: *FunctionCallFrame,
     function_context: context.EvalContext,
     source_body: []const u8,
     tail_context: FunctionTailCallContext,
@@ -9632,6 +9798,7 @@ fn evaluateFunctionSourceBody(
     return evaluateFunctionStatementListSource(
         evaluator,
         frame_state,
+        call_frame,
         function_context,
         source_body,
         tail_context,
@@ -9642,6 +9809,7 @@ fn evaluateFunctionSourceBody(
 fn evaluateFunctionProgramBody(
     evaluator: *Evaluator,
     frame_state: *state.ShellState,
+    call_frame: *FunctionCallFrame,
     function_context: context.EvalContext,
     program: ir.Program,
     tail_context: FunctionTailCallContext,
@@ -9652,11 +9820,6 @@ fn evaluateFunctionProgramBody(
     std.debug.assert(function_context.canReturnFromFunction());
     std.debug.assert(std.mem.findScalar(u8, program.source, 0) == null);
 
-    const arena = try evaluator.allocator.create(std.heap.ArenaAllocator);
-    defer evaluator.allocator.destroy(arena);
-    arena.* = std.heap.ArenaAllocator.init(evaluator.allocator);
-    defer arena.deinit();
-
     var parser_resolver = ParserBackedSourceResolver.init(evaluator);
     parser_resolver.features = evaluator.features;
     parser_resolver.arg_zero = evaluator.arg_zero;
@@ -9664,8 +9827,9 @@ fn evaluateFunctionProgramBody(
     parser_resolver.alias_state = evaluator.alias_state;
     parser_resolver.active_frame = buffers.frame;
     parser_resolver.active_input = buffers.stdin;
+    const arena_allocator = try call_frame.bodyArenaAllocator();
     var lowerer: SourceLowerer = .{
-        .allocator = arena.allocator(),
+        .allocator = arena_allocator,
         .owner = &parser_resolver,
         .shell_state = frame_state,
         .eval_context = function_context,
