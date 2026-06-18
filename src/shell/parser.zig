@@ -2231,6 +2231,23 @@ pub fn hasTrailingLineContinuation(line: []const u8) bool {
     return backslashes % 2 == 1;
 }
 
+pub fn removeLineContinuations(allocator: std.mem.Allocator, raw: []const u8) ![]const u8 {
+    if (std.mem.indexOf(u8, raw, "\\\n") == null) return allocator.dupe(u8, raw);
+
+    var normalized: std.ArrayList(u8) = .empty;
+    errdefer normalized.deinit(allocator);
+    var index: usize = 0;
+    while (index < raw.len) {
+        if (raw[index] == '\\' and index + 1 < raw.len and raw[index + 1] == '\n') {
+            index += 2;
+            continue;
+        }
+        try normalized.append(allocator, raw[index]);
+        index += 1;
+    }
+    return normalized.toOwnedSlice(allocator);
+}
+
 const SyntaxParser = struct {
     allocator: std.mem.Allocator,
     source: []const u8,
@@ -2641,7 +2658,8 @@ const SyntaxParser = struct {
         defer function_children.deinit(self.allocator);
 
         const name_token = self.current();
-        const name = name_token.lexeme(self.source);
+        const name = try removeLineContinuations(self.allocator, name_token.lexeme(self.source));
+        defer self.allocator.free(name);
         if (isAliasReservedWord(name)) {
             try self.appendParseError(name_token.span, "function name cannot be a reserved word");
         }
@@ -3681,7 +3699,7 @@ const SyntaxParser = struct {
 
     fn functionDefinitionHeaderEnd(self: SyntaxParser) ?usize {
         if (!self.at(.word) or self.index + 2 >= self.tokens.len) return null;
-        if (!isName(self.current().lexeme(self.source))) return null;
+        if (!isNameRemovingLineContinuations(self.current().lexeme(self.source))) return null;
         var index = self.index + 1;
         while (index < self.tokens.len and self.tokens[index].kind == .whitespace) : (index += 1) {}
         if (index >= self.tokens.len or self.tokens[index].kind != .left_paren) return null;
@@ -3940,6 +3958,26 @@ fn isName(word: []const u8) bool {
         if (!isNameContinue(c)) return false;
     }
     return true;
+}
+
+fn isNameRemovingLineContinuations(word: []const u8) bool {
+    var logical_index: usize = 0;
+    var index: usize = 0;
+    while (index < word.len) {
+        if (word[index] == '\\' and index + 1 < word.len and word[index + 1] == '\n') {
+            index += 2;
+            continue;
+        }
+
+        const byte = word[index];
+        if (logical_index == 0) {
+            if (!isNameStart(byte)) return false;
+        } else if (!isNameContinue(byte)) return false;
+
+        logical_index += 1;
+        index += 1;
+    }
+    return logical_index != 0;
 }
 
 fn isSpecialParameterChar(c: u8) bool {

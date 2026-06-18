@@ -29,6 +29,24 @@
             .status = 0,
         },
         .{
+            .name = "function definition header removes backslash-newline before parsing",
+            .script =
+            \\f\
+            \\(){ printf 'name\n'; }
+            \\f
+            \\g()\
+            \\{ printf 'body\n'; }
+            \\g
+            ,
+            .stdout =
+            \\name
+            \\body
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "function definition rejects special built-in names",
             .script =
             \\export() { printf 'bad\n'; }

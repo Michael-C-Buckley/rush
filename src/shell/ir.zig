@@ -1369,7 +1369,7 @@ fn lowerFunctionDefinition(
             close_brace = token_index;
         }
     }
-    const name = try allocator.dupe(u8, parsed.tokens[node.token_start].lexeme(parsed.source));
+    const name = try parser.removeLineContinuations(allocator, parsed.tokens[node.token_start].lexeme(parsed.source));
     errdefer allocator.free(name);
     const body_start = if (open_brace) |index|
         index + 1
