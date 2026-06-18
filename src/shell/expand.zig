@@ -1060,7 +1060,9 @@ fn renderParameter(
     options: Options,
     in_double_quotes: bool,
 ) anyerror![]const u8 {
-    const parsed = parseParameterExpression(expression, options.features);
+    const normalized = try removeLineContinuations(allocator, expression);
+    defer allocator.free(normalized);
+    const parsed = parseParameterExpression(normalized, options.features);
     if (parsed.operator == .invalid) return invalidParameterExpansion(allocator, options);
     if (parsed.name_prefix) |kind| return renderNamePrefixJoined(allocator, parsed.name, kind, options);
     if (parsed.indirect) return renderIndirectParameter(allocator, parsed.name, options);
@@ -1214,7 +1216,9 @@ fn renderParameterSegmented(
     expression: []const u8,
     options: Options,
 ) anyerror!SegmentedText {
-    const parsed = parseParameterExpression(expression, options.features);
+    const normalized = try removeLineContinuations(allocator, expression);
+    defer allocator.free(normalized);
+    const parsed = parseParameterExpression(normalized, options.features);
     if (parsed.operator == .invalid) return invalidParameterExpansion(allocator, options);
     if (parsed.name_prefix != null or
         parsed.indirect or
@@ -1222,7 +1226,7 @@ fn renderParameterSegmented(
         parsed.array_whole != null or
         parsed.array_index != null)
     {
-        const rendered = try renderParameter(allocator, expression, options, false);
+        const rendered = try renderParameter(allocator, normalized, options, false);
         defer allocator.free(rendered);
         return segmentedFromText(allocator, rendered, true, false, false);
     }
@@ -2159,6 +2163,23 @@ fn invalidParameterExpansion(allocator: std.mem.Allocator, options: Options) any
         parameter_error.message = message;
     }
     return error.ParameterExpansionFailed;
+}
+
+fn removeLineContinuations(allocator: std.mem.Allocator, expression: []const u8) ![]const u8 {
+    if (std.mem.indexOf(u8, expression, "\\\n") == null) return allocator.dupe(u8, expression);
+
+    var normalized: std.ArrayList(u8) = .empty;
+    errdefer normalized.deinit(allocator);
+    var index: usize = 0;
+    while (index < expression.len) {
+        if (expression[index] == '\\' and index + 1 < expression.len and expression[index + 1] == '\n') {
+            index += 2;
+            continue;
+        }
+        try normalized.append(allocator, expression[index]);
+        index += 1;
+    }
+    return normalized.toOwnedSlice(allocator);
 }
 
 fn parameterAssignmentInvalid(allocator: std.mem.Allocator, options: Options, parameter: []const u8) anyerror {
@@ -4223,7 +4244,9 @@ fn appendParameterExpansionUnquoted(
         return;
     }
 
-    const parsed = parseParameterExpression(parameter, options.features);
+    const normalized = try removeLineContinuations(allocator, parameter);
+    defer allocator.free(normalized);
+    const parsed = parseParameterExpression(normalized, options.features);
     if (parsed.operator == .invalid) return invalidParameterExpansion(allocator, options);
     if (isFieldAwareParameterWordOperator(parsed)) {
         try appendParameterWordOperatorUnquoted(
@@ -4239,7 +4262,7 @@ fn appendParameterExpansionUnquoted(
         return;
     }
 
-    var rendered = try renderParameterSegmented(allocator, parameter, options);
+    var rendered = try renderParameterSegmented(allocator, normalized, options);
     defer rendered.deinit(allocator);
     if (rendered.quoted_glob) quoted_glob.* = true;
     if (rendered.force_field) force_current_field.* = true;
@@ -4756,7 +4779,9 @@ fn appendParameterExpansionQuoted(
         return;
     }
 
-    const parsed = parseParameterExpression(parameter, options.features);
+    const normalized = try removeLineContinuations(allocator, parameter);
+    defer allocator.free(normalized);
+    const parsed = parseParameterExpression(normalized, options.features);
     if (parsed.operator == .invalid) return invalidParameterExpansion(allocator, options);
     if (isFieldAwareParameterWordOperator(parsed)) {
         try appendParameterWordOperatorQuoted(
@@ -4772,7 +4797,7 @@ fn appendParameterExpansionQuoted(
         return;
     }
 
-    const rendered = try renderParameter(allocator, parameter, options, true);
+    const rendered = try renderParameter(allocator, normalized, options, true);
     defer allocator.free(rendered);
     if (hasGlobSyntax(rendered)) quoted_glob.* = true;
     try current.appendSlice(allocator, rendered);

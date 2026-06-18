@@ -16,6 +16,26 @@
             .status = 0,
         },
         .{
+            .name = "parameter expansion removes backslash newline in parameter name",
+            .script = "A=ok; printf '<%s>\\n' ${A\\\n}\n",
+            .stdout =
+            \\<ok>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "parameter expansion removes backslash newline in default word",
+            .script = "unset A; printf '<%s>\\n' ${A:-o\\\nk}\n",
+            .stdout =
+            \\<ok>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "parameter expansion default distinguishes unset from null",
             .script =
             \\unset missing
