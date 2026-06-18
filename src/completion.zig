@@ -1860,28 +1860,44 @@ fn registerManifestCommand(
     try registerManifestOptions(allocator, state, root, command_object, providers, path.items, source);
     try registerManifestArguments(allocator, state, root, command_object, providers, path.items, source);
 
-    const subcommands_value = command_object.get("subcommands") orelse return;
-    const subcommands = switch (subcommands_value) {
-        .array => |array| array,
-        else => return,
-    };
-    for (subcommands.items, 0..) |subcommand_value, index| {
-        const subcommand_object = jsonObject(subcommand_value) orelse continue;
-        if (subcommand_object.get("provider")) |provider_ref| {
-            try registerProviderRefRules(allocator, state, .{
-                .root = root,
-                .path = path.items,
-                .kind = .dynamic_subcommands,
-                .provider_order = index,
-                .source = source,
-            }, provider_ref, providers);
-            continue;
+    var subcommand_count: usize = 0;
+    if (command_object.get("subcommands")) |subcommands_value| {
+        const subcommands = switch (subcommands_value) {
+            .array => |array| array,
+            else => return,
+        };
+        subcommand_count = subcommands.items.len;
+        for (subcommands.items, 0..) |subcommand_value, index| {
+            const subcommand_object = jsonObject(subcommand_value) orelse continue;
+            if (subcommand_object.get("provider")) |provider_ref| {
+                try registerProviderRefRules(allocator, state, .{
+                    .root = root,
+                    .path = path.items,
+                    .kind = .dynamic_subcommands,
+                    .provider_order = index,
+                    .source = source,
+                }, provider_ref, providers);
+                continue;
+            }
+            const primary = commandPrimaryName(subcommand_object) orelse continue;
+            try registerSubcommandNames(allocator, state, root, subcommand_object, path.items, source, index);
+            try path.append(allocator, primary);
+            try registerManifestCommand(allocator, state, root, subcommand_object, providers, path, source);
+            _ = path.pop();
         }
-        const primary = commandPrimaryName(subcommand_object) orelse continue;
-        try registerSubcommandNames(allocator, state, root, subcommand_object, path.items, source, index);
-        try path.append(allocator, primary);
-        try registerManifestCommand(allocator, state, root, subcommand_object, providers, path, source);
-        _ = path.pop();
+    }
+    if (command_object.get("dynamicSubcommands")) |dynamic_subcommands_value| {
+        const dynamic_subcommands = switch (dynamic_subcommands_value) {
+            .array => |array| array,
+            else => return,
+        };
+        for (dynamic_subcommands.items, 0..) |provider_ref, index| try registerProviderRefRules(allocator, state, .{
+            .root = root,
+            .path = path.items,
+            .kind = .dynamic_subcommands,
+            .provider_order = subcommand_count + index,
+            .source = source,
+        }, provider_ref, providers);
     }
 }
 
@@ -3000,8 +3016,8 @@ test "manifest completion uses dynamic subcommand providers" {
         \\    "providers": {
         \\      "tool.scripts": { "function": "__rush_complete_tool_scripts" }
         \\    },
+        \\    "dynamicSubcommands": ["tool.scripts"],
         \\    "subcommands": [
-        \\      { "provider": "tool.scripts" },
         \\      { "name": "start", "description": "static command" }
         \\    ]
         \\  }
@@ -3044,6 +3060,69 @@ test "manifest completion uses dynamic subcommand providers" {
     try expectCandidate(candidates, "storybook", .subcommand);
     try expectCandidate(candidates, "start", .subcommand);
     try std.testing.expectEqualStrings("storybook", candidates[0].value);
+}
+
+test "git manifest completion includes configured aliases with expansion descriptions" {
+    var completion_state = State.init(std.testing.allocator);
+    defer completion_state.deinit();
+    try loadManifestFile(std.testing.allocator, std.testing.io, &completion_state, "share/rush/completions/git.json");
+
+    var shell_state = shell_state_mod.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    try sourceCompletionScript(&shell_state, "share/rush/completions/git.rush");
+
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    var git = try tmp.dir.createFile(std.testing.io, "git", .{ .permissions = .executable_file });
+    {
+        var buffer: [4096]u8 = undefined;
+        var writer = git.writer(std.testing.io, &buffer);
+        try writer.interface.writeAll(
+            \\
+            \\#!/bin/sh
+            \\case "$1" in
+            \\  config)
+            \\    if test "$2" = --get-regexp; then
+            \\      printf '%s\n' alias.co alias.cob
+            \\    elif test "$2" = --get; then
+            \\      case "$3" in
+            \\        alias.co) printf '%s\n' checkout ;;
+            \\        alias.cob) printf '%s\n' 'checkout -b' ;;
+            \\      esac
+            \\    fi
+            \\    ;;
+            \\  --list-cmds=list-mainporcelain,others)
+            \\    printf '%s\n' checkout commit custom-tool
+            \\    ;;
+            \\esac
+            \\
+        );
+        try writer.interface.flush();
+    }
+    git.close(std.testing.io);
+    var tmp_root_buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
+    const tmp_root_len = try tmp.dir.realPath(std.testing.io, &tmp_root_buffer);
+    const tmp_root = tmp_root_buffer[0..tmp_root_len];
+    const path = try std.fmt.allocPrint(std.testing.allocator, "{s}:/bin:/usr/bin", .{tmp_root});
+    defer std.testing.allocator.free(path);
+    try shell_state.putVariable("PATH", path, .{ .exported = true });
+
+    const source = "git c";
+    const application = try manifestApplication(
+        std.testing.allocator,
+        std.testing.io,
+        &completion_state,
+        shell_state,
+        source,
+        source.len,
+    );
+    defer application.deinit(std.testing.allocator);
+
+    const candidates = application.ambiguous;
+    try expectCandidateDescription(candidates, "co", "alias: checkout");
+    try expectCandidateDescription(candidates, "cob", "alias: checkout -b");
+    try expectCandidateDescription(candidates, "custom-tool", "git command");
+    try expectCandidateDescription(candidates, "checkout", "switch branches or restore paths");
 }
 
 test "git manifest completion orders common subcommands by priority" {

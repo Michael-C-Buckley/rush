@@ -38,12 +38,20 @@ __rush_complete_git_directories() {
 }
 
 __rush_complete_git_commands() {
-  tmp=$(mktemp)
-  git --list-cmds=list-mainporcelain,others,alias > "$tmp" 2>/dev/null
-  while read command; do
+  for key in $(git config --get-regexp --name-only '^alias\.' 2>/dev/null); do
+    alias=${key#alias.}
+    test -n "$alias" || continue
+    expansion=$(git config --get "$key" 2>/dev/null)
+    if test -n "$expansion"; then
+      description="alias: $expansion"
+    else
+      description=alias
+    fi
+    rush_complete candidate "$alias" --kind subcommand --description "$description" --priority -5
+  done
+  for command in $(git --list-cmds=list-mainporcelain,others 2>/dev/null); do
     rush_complete candidate "$command" --kind subcommand --description 'git command' --priority -5
-  done < "$tmp"
-  rm -f "$tmp"
+  done
 }
 
 __rush_complete_git_branches() {

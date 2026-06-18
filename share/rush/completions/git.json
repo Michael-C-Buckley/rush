@@ -10,6 +10,7 @@
       "git.branches": { "function": "__rush_complete_git_branches" },
       "git.remote-branches": { "function": "__rush_complete_git_remote_branches" },
       "git.refs": { "function": "__rush_complete_git_refs" },
+      "git.commands": { "function": "__rush_complete_git_commands" },
       "git.tags": { "function": "__rush_complete_git_tags" },
       "git.remotes": { "function": "__rush_complete_git_remotes" },
       "git.stashes": { "function": "__rush_complete_git_stashes" },
@@ -59,6 +60,7 @@
       { "long": "paginate", "description": "pipe output into a pager" },
       { "long": "no-pager", "description": "do not pipe output into a pager" }
     ],
+    "dynamicSubcommands": ["git.commands"],
     "subcommands": [
       {
         "name": "add",
