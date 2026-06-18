@@ -106,12 +106,14 @@ pub const BashTestCommand = struct {
 pub const BraceGroup = struct {
     span: parser.Span,
     body: []const u8,
+    body_program: ?*Program = null,
     redirections: []Redirection,
 };
 
 pub const Subshell = struct {
     span: parser.Span,
     body: []const u8,
+    body_program: ?*Program = null,
     redirections: []Redirection,
 };
 
@@ -229,7 +231,11 @@ pub const Program = struct {
     }
 };
 
-pub fn cloneProgram(allocator: std.mem.Allocator, program: Program, source: []const u8) !*Program {
+pub fn cloneProgram(
+    allocator: std.mem.Allocator,
+    program: Program,
+    source: []const u8,
+) std.mem.Allocator.Error!*Program {
     const clone = try allocator.create(Program);
     errdefer allocator.destroy(clone);
     clone.* = .{
@@ -438,9 +444,20 @@ fn cloneBraceGroups(allocator: std.mem.Allocator, groups: []const BraceGroup) ![
     var initialized: usize = 0;
     errdefer for (clone[0..initialized]) |group| freeBraceGroup(allocator, group);
     for (groups, 0..) |group, index| {
+        const owned_body = try allocator.dupe(u8, group.body);
+        errdefer allocator.free(owned_body);
+        const owned_body_program = if (group.body_program) |program|
+            try cloneProgram(allocator, program.*, owned_body)
+        else
+            null;
+        errdefer if (owned_body_program) |program| {
+            program.deinit();
+            allocator.destroy(program);
+        };
         clone[index] = .{
             .span = group.span,
-            .body = try allocator.dupe(u8, group.body),
+            .body = owned_body,
+            .body_program = owned_body_program,
             .redirections = try cloneRedirections(allocator, group.redirections),
         };
         initialized += 1;
@@ -454,9 +471,20 @@ fn cloneSubshells(allocator: std.mem.Allocator, subshells: []const Subshell) ![]
     var initialized: usize = 0;
     errdefer for (clone[0..initialized]) |subshell| freeSubshell(allocator, subshell);
     for (subshells, 0..) |subshell, index| {
+        const owned_body = try allocator.dupe(u8, subshell.body);
+        errdefer allocator.free(owned_body);
+        const owned_body_program = if (subshell.body_program) |program|
+            try cloneProgram(allocator, program.*, owned_body)
+        else
+            null;
+        errdefer if (owned_body_program) |program| {
+            program.deinit();
+            allocator.destroy(program);
+        };
         clone[index] = .{
             .span = subshell.span,
-            .body = try allocator.dupe(u8, subshell.body),
+            .body = owned_body,
+            .body_program = owned_body_program,
             .redirections = try cloneRedirections(allocator, subshell.redirections),
         };
         initialized += 1;
@@ -1549,9 +1577,19 @@ fn lowerSubshell(allocator: std.mem.Allocator, parsed: parser.ParseResult, node:
     const body_end = close_paren orelse node.token_end;
     const body = try ownedBodySource(allocator, parsed, @min(node.token_start + 1, node.token_end), body_end);
     errdefer allocator.free(body);
+    const body_program = if (bodyProgramCacheable(body))
+        try lowerBodyProgram(allocator, parsed, node, @min(node.token_start + 1, node.token_end), body_end)
+    else
+        null;
+    errdefer if (body_program) |program| {
+        program.deinit();
+        allocator.destroy(program);
+    };
+    if (body_program) |program| program.source = body;
     return .{
         .span = node.span,
         .body = body,
+        .body_program = body_program,
         .redirections = try redirections.toOwnedSlice(allocator),
     };
 }
@@ -1569,11 +1607,58 @@ fn lowerBraceGroup(allocator: std.mem.Allocator, parsed: parser.ParseResult, nod
     const body_end = close_brace orelse node.token_end;
     const body = try ownedBodySource(allocator, parsed, @min(node.token_start + 1, node.token_end), body_end);
     errdefer allocator.free(body);
+    const body_program = if (bodyProgramCacheable(body))
+        try lowerBodyProgram(allocator, parsed, node, @min(node.token_start + 1, node.token_end), body_end)
+    else
+        null;
+    errdefer if (body_program) |program| {
+        program.deinit();
+        allocator.destroy(program);
+    };
+    if (body_program) |program| program.source = body;
     return .{
         .span = node.span,
         .body = body,
+        .body_program = body_program,
         .redirections = try redirections.toOwnedSlice(allocator),
     };
+}
+
+fn bodyProgramCacheable(body: []const u8) bool {
+    return std.mem.indexOf(u8, body, "<<") == null;
+}
+
+fn lowerBodyProgram(
+    allocator: std.mem.Allocator,
+    parsed: parser.ParseResult,
+    node: parser.Node,
+    body_token_start: usize,
+    body_token_end: usize,
+) std.mem.Allocator.Error!?*Program {
+    const list_node = directListChild(parsed, node) orelse return null;
+    const body_source_span = parser.Span.init(
+        sourceStart(parsed, body_token_start),
+        sourceEnd(parsed, body_token_end),
+    );
+    var program = lowerListNode(allocator, parsed, list_node, body_source_span) catch |err| switch (err) {
+        error.OutOfMemory => return error.OutOfMemory,
+        else => unreachable,
+    };
+    errdefer program.deinit();
+    const owned_program = try allocator.create(Program);
+    owned_program.* = program;
+    return owned_program;
+}
+
+fn directListChild(parsed: parser.ParseResult, node: parser.Node) ?parser.Node {
+    for (parsed.nodeChildren(node)) |child| switch (child) {
+        .node => |node_id| {
+            const child_node = parsed.nodes[node_id.index()];
+            if (child_node.kind == .list) return child_node;
+        },
+        .token => {},
+    };
+    return null;
 }
 
 fn directTokenChildMatching(
@@ -2511,6 +2596,10 @@ fn endsWithUnpairedBackslashAtEof(source: []const u8, span: parser.Span) bool {
 }
 
 fn freeSubshell(allocator: std.mem.Allocator, subshell: Subshell) void {
+    if (subshell.body_program) |program| {
+        program.deinit();
+        allocator.destroy(program);
+    }
     allocator.free(subshell.body);
     for (subshell.redirections) |redirection| freeRedirection(allocator, redirection);
     allocator.free(subshell.redirections);
@@ -2528,6 +2617,10 @@ fn freePipeline(allocator: std.mem.Allocator, pipeline: Pipeline) void {
 }
 
 fn freeBraceGroup(allocator: std.mem.Allocator, group: BraceGroup) void {
+    if (group.body_program) |program| {
+        program.deinit();
+        allocator.destroy(program);
+    }
     allocator.free(group.body);
     for (group.redirections) |redirection| freeRedirection(allocator, redirection);
     allocator.free(group.redirections);
@@ -2679,6 +2772,19 @@ test "lower compound command redirection preserves io number" {
     try std.testing.expectEqual(parser.TokenKind.greater_and, group.redirections[1].operator);
     try std.testing.expectEqualStrings("2", group.redirections[1].io_number.?.text);
     try std.testing.expectEqualStrings("1", group.redirections[1].target.?.text);
+}
+
+test "lower caches nested compound body programs" {
+    var parsed = try parser.parse(std.testing.allocator, "( ( : ) )", .{});
+    defer parsed.deinit();
+
+    var program = try lowerSimpleCommands(std.testing.allocator, parsed);
+    defer program.deinit();
+
+    try std.testing.expectEqual(@as(usize, 1), program.subshells.len);
+    const outer_body = program.subshells[0].body_program orelse return error.ExpectedBodyProgram;
+    try std.testing.expectEqual(@as(usize, 1), outer_body.subshells.len);
+    try std.testing.expect(outer_body.subshells[0].body_program != null);
 }
 
 test "lower preserves POSIX pipeline negation" {

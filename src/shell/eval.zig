@@ -1284,7 +1284,10 @@ const SourceLowerer = struct {
     ) !TrapActionBodyPayload {
         const redirections = try self.lowerRedirections(group.redirections, .regular_command);
         if (redirections == .failure) return .{ .failure = redirections.failure };
-        const list = try self.lowerStatementListSource(group.body, target);
+        const list = if (group.body_program) |program|
+            try self.lowerStatementList(program.*, target)
+        else
+            try self.lowerStatementListSource(group.body, target);
         switch (list) {
             .failure => |trap_failure| return .{ .failure = trap_failure },
             .list => |command_list| {
@@ -1302,19 +1305,46 @@ const SourceLowerer = struct {
     fn lowerSubshell(self: *SourceLowerer, subshell: ir.Subshell) !TrapActionBodyPayload {
         const redirections = try self.lowerRedirections(subshell.redirections, .regular_command);
         if (redirections == .failure) return .{ .failure = redirections.failure };
-        const list = try self.lowerStatementListSource(subshell.body, .subshell);
+        const list = if (subshell.body_program) |program|
+            try self.lowerStatementList(program.*, .subshell)
+        else
+            try self.lowerStatementListSource(subshell.body, .subshell);
         switch (list) {
             .failure => |trap_failure| return .{ .failure = trap_failure },
             .list => |command_list| {
                 const plan: command_plan.CompoundCommandPlan = .{
                     .target = .subshell,
                     .redirections = redirections.plan,
-                    .body = .{ .subshell = command_list },
+                    .body = .{ .subshell = flattenNestedSubshellOnlyList(command_list) },
                 };
                 plan.validate();
                 return .{ .compound = plan };
             },
         }
+    }
+
+    fn flattenNestedSubshellOnlyList(list: command_plan.StatementList) command_plan.StatementList {
+        var current = list;
+        while (singleUnredirectedSubshellBody(current)) |nested| current = nested;
+        return current;
+    }
+
+    fn singleUnredirectedSubshellBody(list: command_plan.StatementList) ?command_plan.StatementList {
+        list.validate();
+        if (list.commands.len != 0 or list.statements.len != 1) return null;
+        const entry = list.statements[0];
+        if (entry.op_before != .sequence) return null;
+        return switch (entry.plan) {
+            .compound => |compound| blk: {
+                if (compound.target != .subshell) break :blk null;
+                if (compound.redirections.steps.len != 0) break :blk null;
+                break :blk switch (compound.body) {
+                    .subshell => |nested| nested,
+                    else => null,
+                };
+            },
+            .simple, .pipeline, .source, .ir_source => null,
+        };
     }
 
     fn lowerIfCommand(
@@ -23115,4 +23145,34 @@ test "semantic parser lowering plans compound pipeline stages" {
         .simple => {},
         .compound => return error.ExpectedSimplePipelineStage,
     }
+}
+
+test "semantic parser lowering flattens redundant nested subshells" {
+    var shell_state = state.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    var evaluator = Evaluator.init(std.testing.allocator);
+    var parser_resolver = ParserBackedSourceResolver.init(&evaluator);
+
+    var body = (try parser_resolver.lowerSource(
+        std.testing.allocator,
+        "( ( ( : ) ) )",
+        context.EvalContext.forTarget(.current_shell),
+        &shell_state,
+    )) orelse return error.ExpectedSemanticBody;
+    defer body.deinit();
+
+    const plan = switch (body) {
+        .owned => |owned| switch (owned.body) {
+            .compound => |compound| compound,
+            else => return error.ExpectedCompoundPlan,
+        },
+        else => return error.ExpectedOwnedSemanticBody,
+    };
+
+    const list = switch (plan.body) {
+        .subshell => |subshell| subshell,
+        else => return error.ExpectedSubshellPlan,
+    };
+    try std.testing.expectEqual(@as(usize, 1), list.statements.len);
+    try std.testing.expect(list.statements[0].plan != .compound);
 }
