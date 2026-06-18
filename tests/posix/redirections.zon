@@ -533,6 +533,20 @@
             .status_match = .nonzero,
         },
         .{
+            .name = "output redirection remains open across exec after standard output is closed",
+            .script =
+            \\exec 1>&-
+            \\/bin/echo hi >out
+            \\cat out >&2
+            ,
+            .stdout = "",
+            .stderr =
+            \\hi
+            \\
+            ,
+            .status = 0,
+        },
+        .{
             .name = "here document supplies input after standard input is closed",
             .script =
             \\exec 0<&-

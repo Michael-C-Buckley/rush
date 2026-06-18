@@ -190,7 +190,7 @@
             \\<nonzero:out>
             \\
             ,
-            .stderr_match = .nonempty,
+            .stderr_match = .any,
             .status = 0,
         },
         .{

@@ -42,6 +42,13 @@ The full conformance suite intentionally prints compact one-line failures. Add
 `--diff` for detailed stdout/stderr diffs, or add `--case TEXT` to run matching
 case names only; `--case` implies detailed diffs.
 
+Conformance comparisons are primarily a Rush validation tool, not a requirement
+that every reference shell pass every case. If Rush matches the documented POSIX
+target or an intentional compatibility choice, a reference-shell mismatch is
+acceptable evidence about that shell's behavior. Do not weaken a test solely to
+make dash, Bash, or zsh pass; only relax expectations when the relaxed output is
+still the intended Rush contract.
+
 The Bash reference is current stable GNU Bash in POSIX mode; do not substitute
 macOS `/bin/bash` 3.2 or `/bin/sh` for it. The zsh reference is zsh in sh
 emulation with startup files disabled; do not run default zsh or substitute

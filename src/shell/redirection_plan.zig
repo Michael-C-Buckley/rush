@@ -624,7 +624,7 @@ pub const FdTransaction = struct {
         step.validate();
         if (try self.saveTarget(step.target)) |failure| return failure;
 
-        const pipe_result = self.port.pipe(.{ .close_on_exec = true }) catch |err| return .{ .pipe = err };
+        const pipe_result = self.port.pipe(.{ .close_on_exec = false }) catch |err| return .{ .pipe = err };
         errdefer {
             closeOpened(self.port, pipe_result.read) catch {};
             closeOpened(self.port, pipe_result.write) catch {};
@@ -666,7 +666,7 @@ pub const FdTransaction = struct {
         if (step.source != step.target) {
             const source = self.port.duplicate(.{
                 .descriptor = step.source,
-                .close_on_exec = true,
+                .close_on_exec = false,
             }) catch |err| return .{ .duplicate = err };
             if (source.descriptor == step.target) {
                 if (!self.hasSavedTarget(step.target)) {
@@ -764,31 +764,31 @@ fn stepFromSpec(
     var result = switch (spec.operator) {
         .input => pathOpenStep(spec.operand, ordinal, target, .{
             .access = .read_only,
-            .close_on_exec = true,
+            .close_on_exec = false,
         }, false, consequence),
         .input_output => pathOpenStep(spec.operand, ordinal, target, .{
             .access = .read_write,
             .create = true,
-            .close_on_exec = true,
+            .close_on_exec = false,
         }, false, consequence),
         .output => pathOpenStep(spec.operand, ordinal, target, .{
             .access = .write_only,
             .create = true,
             .exclusive = options.noclobber,
             .truncate = !options.noclobber,
-            .close_on_exec = true,
+            .close_on_exec = false,
         }, options.noclobber, consequence),
         .append => pathOpenStep(spec.operand, ordinal, target, .{
             .access = .write_only,
             .create = true,
             .append = true,
-            .close_on_exec = true,
+            .close_on_exec = false,
         }, false, consequence),
         .clobber => pathOpenStep(spec.operand, ordinal, target, .{
             .access = .write_only,
             .create = true,
             .truncate = true,
-            .close_on_exec = true,
+            .close_on_exec = false,
         }, false, consequence),
         .duplicate_input,
         .duplicate_output,
