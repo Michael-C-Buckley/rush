@@ -3062,6 +3062,79 @@ test "manifest completion uses dynamic subcommand providers" {
     try std.testing.expectEqualStrings("storybook", candidates[0].value);
 }
 
+test "manifest completion providers support redirected while loops" {
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    try tmp.dir.writeFile(std.testing.io, .{
+        .sub_path = "tool.json",
+        .data =
+        \\
+        \\{
+        \\  "manifestVersion": 1,
+        \\  "command": {
+        \\    "name": "tool",
+        \\    "providers": {
+        \\      "tool.generated": { "function": "__rush_complete_tool_generated" }
+        \\    },
+        \\    "dynamicSubcommands": ["tool.generated"],
+        \\    "subcommands": [
+        \\      { "name": "beta", "description": "static command" }
+        \\    ]
+        \\  }
+        \\}
+        \\
+        ,
+    });
+    var manifest_path_buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
+    const tmp_root_len = try tmp.dir.realPath(std.testing.io, &manifest_path_buffer);
+    const tmp_root = manifest_path_buffer[0..tmp_root_len];
+    const manifest_path = try std.fs.path.join(std.testing.allocator, &.{ tmp_root, "tool.json" });
+    defer std.testing.allocator.free(manifest_path);
+
+    var completion_state = State.init(std.testing.allocator);
+    defer completion_state.deinit();
+    try loadManifestFile(std.testing.allocator, std.testing.io, &completion_state, manifest_path);
+
+    var shell_state = shell_state_mod.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    const provider_tmp_path = try std.fs.path.join(std.testing.allocator, &.{ tmp_root, "provider-values.txt" });
+    defer std.testing.allocator.free(provider_tmp_path);
+    try tmp.dir.writeFile(std.testing.io, .{ .sub_path = "provider-values.txt", .data = "alpha\n" });
+    const provider_source = try std.fmt.allocPrint(
+        std.testing.allocator,
+        \\
+        \\tmp={s}
+        \\while :; do
+        \\  rush_complete candidate alpha --kind subcommand --description generated
+        \\  break
+        \\done < "$tmp"
+        \\
+    ,
+        .{provider_tmp_path},
+    );
+    defer std.testing.allocator.free(provider_source);
+    try shell_state.putFunction(.{
+        .name = "__rush_complete_tool_generated",
+        .source_body = provider_source,
+    });
+    const source = "tool alp";
+    const application = try manifestApplication(
+        std.testing.allocator,
+        std.testing.io,
+        &completion_state,
+        shell_state,
+        source,
+        source.len,
+    );
+    defer application.deinit(std.testing.allocator);
+
+    switch (application) {
+        .edit => |edit| try std.testing.expectEqualStrings("alpha", edit.replacement),
+        .ambiguous => |candidates| try expectCandidateDescription(candidates, "alpha", "generated"),
+        .none => return error.ExpectedCompletionCandidate,
+    }
+}
+
 test "git manifest completion includes configured aliases with expansion descriptions" {
     var completion_state = State.init(std.testing.allocator);
     defer completion_state.deinit();

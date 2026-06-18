@@ -1123,6 +1123,7 @@ const SourceLowerer = struct {
         statement: ir.Statement,
         target: context.ExecutionTarget,
     ) !StatementListEntryLowering {
+        if (statementHasCompoundRedirections(program, statement)) return .{ .plan = null };
         return switch (statement.kind) {
             .brace_group,
             .subshell,
@@ -1138,6 +1139,19 @@ const SourceLowerer = struct {
                 .failure => |trap_failure| .{ .failure = trap_failure },
             },
             .pipeline, .bash_test_command => .{ .plan = null },
+        };
+    }
+
+    fn statementHasCompoundRedirections(program: ir.Program, statement: ir.Statement) bool {
+        return switch (statement.kind) {
+            .brace_group => program.brace_groups[statement.index].redirections.len != 0,
+            .subshell => program.subshells[statement.index].redirections.len != 0,
+            .if_command => program.if_commands[statement.index].redirections.len != 0,
+            .loop_command => program.loop_commands[statement.index].redirections.len != 0,
+            .for_command => program.for_commands[statement.index].redirections.len != 0,
+            .case_command => program.case_commands[statement.index].redirections.len != 0,
+            .function_definition => program.function_definitions[statement.index].redirections.len != 0,
+            .pipeline, .bash_test_command => false,
         };
     }
 
@@ -1459,7 +1473,7 @@ const SourceLowerer = struct {
             .failure => |trap_failure| return .{ .failure = trap_failure },
             .list => |list| list,
         };
-        const source_backed = self.owner.expand_aliases;
+        const source_backed = self.owner.expand_aliases or command.redirections.len != 0;
         const condition_source: ?[]const u8 = if (source_backed)
             try self.allocator.dupe(u8, command.condition)
         else
