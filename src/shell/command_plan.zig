@@ -30,6 +30,7 @@ pub const FunctionDefinition = struct {
     /// Alias-expanded parser-backed function body source. Used as the fallback
     /// body when no cached parsed body is available.
     source_body: ?[]const u8 = null,
+    source_body_line_offset: usize = 0,
     /// Parsed source body for conservative call-time relowering without
     /// reparsing the full function body on each invocation. The program source
     /// is borrowed from `source_body`.
@@ -796,6 +797,7 @@ fn cloneFunctionDefinitionWithMode(
         .name = owned_name,
         .body = owned_body,
         .source_body = owned_source_body,
+        .source_body_line_offset = definition.source_body_line_offset,
         .source_body_program = owned_source_body_program,
         .redirections = owned_redirections,
     };

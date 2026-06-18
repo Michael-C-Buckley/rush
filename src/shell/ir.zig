@@ -102,6 +102,7 @@ pub const FunctionDefinition = struct {
     span: parser.Span,
     name: []const u8,
     body: []const u8,
+    body_line_offset: usize = 0,
     redirections: []Redirection,
 };
 
@@ -432,6 +433,7 @@ fn cloneFunctionDefinitions(
             .span = definition.span,
             .name = try allocator.dupe(u8, definition.name),
             .body = try allocator.dupe(u8, definition.body),
+            .body_line_offset = definition.body_line_offset,
             .redirections = try cloneRedirections(allocator, definition.redirections),
         };
         initialized += 1;
@@ -1321,6 +1323,7 @@ fn relocateProgramSpans(program: *Program, source_offset: usize, source_line_off
     }
     for (program.function_definitions) |*definition| {
         definition.span = relocateSpan(definition.span, source_offset);
+        definition.body_line_offset -|= source_line_offset;
         for (definition.redirections) |*redirection| relocateRedirectionSpans(redirection, source_offset);
     }
     for (program.bash_test_commands) |*command| {
@@ -1816,6 +1819,7 @@ fn lowerFunctionDefinition(
         .span = node.span,
         .name = name,
         .body = body,
+        .body_line_offset = sourceLineIndex(parsed.source, sourceStart(parsed, body_start)),
         .redirections = try redirections.toOwnedSlice(allocator),
     };
 }

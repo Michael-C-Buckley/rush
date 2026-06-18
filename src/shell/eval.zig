@@ -1616,6 +1616,7 @@ const SourceLowerer = struct {
         const function_definition: command_plan.FunctionDefinition = .{
             .name = name,
             .source_body = source_body,
+            .source_body_line_offset = self.source_line_offset + definition.body_line_offset,
             .source_body_program = source_body_program,
             .redirections = redirections.plan,
         };
@@ -10135,6 +10136,7 @@ fn evaluateFunctionStatementListSource(
     parser_resolver.alias_state = evaluator.alias_state;
     parser_resolver.active_frame = buffers.frame;
     parser_resolver.active_input = buffers.stdin;
+    parser_resolver.source_line_offset = call_frame.definition.source_body_line_offset;
     const body = (parser_resolver.lowerSource(
         evaluator.allocator,
         source,
@@ -11453,6 +11455,7 @@ fn initializeFunctionBodyCursor(
             .eval_context = function_context,
             .signal = null,
             .local_functions = .empty,
+            .source_line_offset = definition.source_body_line_offset,
         };
 
         const lowered = lowerer.lowerStatementList(program.*, function_context.target) catch |err| switch (err) {
@@ -11477,6 +11480,7 @@ fn initializeFunctionBodyCursor(
         parser_resolver.alias_state = evaluator.alias_state;
         parser_resolver.active_frame = buffers.frame;
         parser_resolver.active_input = buffers.stdin;
+        parser_resolver.source_line_offset = definition.source_body_line_offset;
         const body = (parser_resolver.lowerSource(
             evaluator.allocator,
             source_body,
@@ -11552,6 +11556,7 @@ fn evaluateFunctionProgramBody(
         .eval_context = function_context,
         .signal = null,
         .local_functions = .empty,
+        .source_line_offset = call_frame.definition.source_body_line_offset,
     };
 
     const lowered = lowerer.lowerStatementList(program, function_context.target) catch |err| switch (err) {

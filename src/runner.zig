@@ -2467,6 +2467,39 @@ test "semantic non-interactive invocation lowers function bodies at call time" {
         },
     }
 }
+
+test "semantic non-interactive invocation preserves function body source lines" {
+    var execution = try runSemanticCommandString(
+        std.testing.allocator,
+        std.testing.io,
+        \\printf 'before\n'
+        \\outer() {
+        \\printf '<outer:%s>\n' "$LINENO"
+        \\inner() {
+        \\printf '<inner:%s>\n' "$LINENO"
+        \\}
+        \\inner
+        \\}
+        \\outer
+    ,
+        shell.InvocationContext.init(.{ .arg_zero = "rush", .features = .strictPosix() }),
+        .inherit,
+        null,
+        &.{},
+        .{},
+    );
+    defer execution.deinit(std.testing.allocator);
+
+    switch (execution) {
+        .unsupported => return error.ExpectedSemanticExecution,
+        .output => |result| {
+            try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
+            try std.testing.expectEqualStrings("before\n<outer:3>\n<inner:5>\n", result.stdout);
+            try std.testing.expectEqualStrings("", result.stderr);
+        },
+    }
+}
+
 test "semantic non-interactive invocation lowers function for bodies per iteration" {
     var execution = try runSemanticCommandString(
         std.testing.allocator,
