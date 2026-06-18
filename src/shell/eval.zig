@@ -2776,6 +2776,7 @@ const FunctionCursorCall = struct {
 const FunctionCursorFrame = union(enum) {
     list: FunctionStatementListCursor,
     if_clause: FunctionIfCursor,
+    loop: FunctionLoopCursor,
 };
 
 const FunctionCursorStep = union(enum) {
@@ -2878,6 +2879,57 @@ const FunctionIfCursor = struct {
     }
 };
 
+const FunctionLoopPhase = enum {
+    condition,
+    waiting_condition,
+    body,
+    waiting_body,
+    done,
+};
+
+const FunctionLoopCursor = struct {
+    loop: command_plan.LoopPlan,
+    kind: LoopKind,
+    eval_context: context.EvalContext,
+    phase: FunctionLoopPhase = .condition,
+    result: SimpleEvalResult = .{ .status = 0 },
+    stderr_before: usize = 0,
+    diagnostics_before: usize = 0,
+    completed_result: ?SimpleEvalResult = null,
+
+    fn init(
+        loop: command_plan.LoopPlan,
+        kind: LoopKind,
+        eval_context: context.EvalContext,
+    ) FunctionLoopCursor {
+        loop.validate();
+        std.debug.assert(loop.condition_source == null);
+        std.debug.assert(loop.body_source == null);
+        eval_context.validate();
+        return .{ .loop = loop, .kind = kind, .eval_context = eval_context };
+    }
+
+    fn validate(self: FunctionLoopCursor) void {
+        self.loop.validate();
+        std.debug.assert(self.loop.condition_source == null);
+        std.debug.assert(self.loop.body_source == null);
+        self.eval_context.validate();
+        self.result.control_flow.validate();
+        if (self.completed_result) |result| result.control_flow.validate();
+    }
+
+    fn loopContext(self: FunctionLoopCursor) context.EvalContext {
+        self.eval_context.validate();
+        return self.eval_context.enterLoop();
+    }
+
+    fn complete(self: *FunctionLoopCursor, result: SimpleEvalResult) void {
+        result.control_flow.validate();
+        self.phase = .done;
+        self.completed_result = result;
+    }
+};
+
 const FunctionBodyCursor = struct {
     allocator: std.mem.Allocator,
     frames: std.ArrayList(FunctionCursorFrame) = .empty,
@@ -2937,6 +2989,18 @@ const FunctionBodyCursor = struct {
                         .tail_call, .call_function => return step_result,
                     }
                 },
+                .loop => |*loop_cursor| {
+                    const step_result = try self.stepLoop(evaluator, shell_state, loop_cursor, buffers);
+                    switch (step_result) {
+                        .completed => |simple_result| {
+                            _ = self.frames.pop();
+                            if (self.frames.items.len == 0) return .{ .completed = simple_result };
+                            try self.deliverNestedResult(evaluator, shell_state, buffers, simple_result);
+                            continue;
+                        },
+                        .tail_call, .call_function => return step_result,
+                    }
+                },
             }
         }
     }
@@ -2974,7 +3038,7 @@ const FunctionBodyCursor = struct {
                 }
                 list_cursor.validate();
             },
-            .if_clause => unreachable,
+            .if_clause, .loop => unreachable,
         }
     }
 
@@ -3241,6 +3305,43 @@ const FunctionBodyCursor = struct {
         }
     }
 
+    fn stepLoop(
+        self: *FunctionBodyCursor,
+        evaluator: *Evaluator,
+        shell_state: *state.ShellState,
+        loop_cursor: *FunctionLoopCursor,
+        buffers: *EvaluationBuffers,
+    ) EvalError!FunctionCursorStep {
+        loop_cursor.validate();
+        const loop_context = loop_cursor.loopContext();
+        switch (loop_cursor.phase) {
+            .condition => {
+                loop_cursor.stderr_before = buffers.stderr.items.len;
+                loop_cursor.diagnostics_before = buffers.diagnostics.items.len;
+                loop_cursor.phase = .waiting_condition;
+                try self.frames.append(
+                    self.allocator,
+                    .{ .list = FunctionStatementListCursor.init(
+                        loop_cursor.loop.condition,
+                        loop_context.ignoreErrexit(),
+                        false,
+                    ) },
+                );
+                return self.step(evaluator, shell_state, buffers);
+            },
+            .body => {
+                loop_cursor.phase = .waiting_body;
+                try self.frames.append(
+                    self.allocator,
+                    .{ .list = FunctionStatementListCursor.init(loop_cursor.loop.body, loop_context, false) },
+                );
+                return self.step(evaluator, shell_state, buffers);
+            },
+            .waiting_condition, .waiting_body => unreachable,
+            .done => return .{ .completed = loop_cursor.completed_result.? },
+        }
+    }
+
     fn pushCompound(
         self: *FunctionBodyCursor,
         body: command_plan.CompoundBody,
@@ -3257,11 +3358,17 @@ const FunctionBodyCursor = struct {
                 self.allocator,
                 .{ .if_clause = FunctionIfCursor.init(if_plan, eval_context, tail_position) },
             ),
+            .while_loop => |loop| try self.frames.append(
+                self.allocator,
+                .{ .loop = FunctionLoopCursor.init(loop, .while_loop, eval_context) },
+            ),
+            .until_loop => |loop| try self.frames.append(
+                self.allocator,
+                .{ .loop = FunctionLoopCursor.init(loop, .until_loop, eval_context) },
+            ),
             .and_or_list,
             .negation,
             .subshell,
-            .while_loop,
-            .until_loop,
             .for_loop,
             .case_clause,
             => unreachable,
@@ -3285,6 +3392,12 @@ const FunctionBodyCursor = struct {
                 nested_result,
             ),
             .if_clause => |*if_cursor| try self.deliverIfResult(buffers, if_cursor, nested_result),
+            .loop => |*loop_cursor| try self.deliverLoopResult(
+                evaluator,
+                buffers,
+                loop_cursor,
+                nested_result,
+            ),
         }
     }
 
@@ -3389,6 +3502,79 @@ const FunctionBodyCursor = struct {
             .condition, .body, .done => unreachable,
         }
     }
+
+    fn deliverLoopResult(
+        self: *FunctionBodyCursor,
+        evaluator: *Evaluator,
+        buffers: *EvaluationBuffers,
+        loop_cursor: *FunctionLoopCursor,
+        nested_result: SimpleEvalResult,
+    ) EvalError!void {
+        _ = self;
+        nested_result.control_flow.validate();
+        switch (loop_cursor.phase) {
+            .waiting_condition => {
+                if (nested_result.control_flow != .normal) {
+                    switch (consumeLoopControl(nested_result.control_flow)) {
+                        .stop => loop_cursor.complete(normalEvaluation(0)),
+                        .repeat => loop_cursor.phase = .condition,
+                        .propagate => |flow| loop_cursor.complete(.{
+                            .status = flow.status(nested_result.status),
+                            .control_flow = flow,
+                        }),
+                        .other => loop_cursor.complete(nested_result),
+                    }
+                    return;
+                }
+                if (bashAssignmentErrorBuffersAbortSourceLine(
+                    loop_cursor.eval_context,
+                    buffers.*,
+                    loop_cursor.stderr_before,
+                    loop_cursor.diagnostics_before,
+                    nested_result,
+                )) {
+                    loop_cursor.complete(nested_result);
+                    return;
+                }
+
+                const should_run = switch (loop_cursor.kind) {
+                    .while_loop => nested_result.status == 0,
+                    .until_loop => nested_result.status != 0,
+                };
+                loop_cursor.phase = if (should_run) .body else .done;
+                if (!should_run) loop_cursor.completed_result = loop_cursor.result;
+            },
+            .waiting_body => {
+                try flushCurrentShellBufferedCommandOutput(
+                    buffers,
+                    loop_cursor.eval_context,
+                    evaluator.external_stdio,
+                    evaluator.io != null,
+                );
+                switch (consumeLoopControl(nested_result.control_flow)) {
+                    .stop => loop_cursor.complete(normalEvaluation(0)),
+                    .repeat => {
+                        loop_cursor.result = normalEvaluation(nested_result.status);
+                        loop_cursor.phase = .condition;
+                    },
+                    .propagate => |flow| loop_cursor.complete(.{
+                        .status = flow.status(nested_result.status),
+                        .control_flow = flow,
+                    }),
+                    .other => {
+                        if (nested_result.control_flow != .normal) {
+                            loop_cursor.complete(nested_result);
+                        } else {
+                            loop_cursor.result = normalEvaluation(nested_result.status);
+                            loop_cursor.phase = .condition;
+                        }
+                    },
+                }
+            },
+            .condition, .body, .done => unreachable,
+        }
+        loop_cursor.validate();
+    }
 };
 
 fn functionCursorCanSuspendSimpleCall(plan: command_plan.CommandPlan) bool {
@@ -3478,11 +3664,10 @@ fn functionCursorCanEnterCompound(
     if (shell_state.options.enabled(.errexit)) return false;
     return switch (plan.body) {
         .sequence, .brace_group, .if_clause => true,
+        .while_loop, .until_loop => |loop| loop.condition_source == null and loop.body_source == null,
         .and_or_list,
         .negation,
         .subshell,
-        .while_loop,
-        .until_loop,
         .for_loop,
         .case_clause,
         => false,
@@ -10933,7 +11118,7 @@ fn initializeFunctionBodyCursor(
         var parser_resolver = ParserBackedSourceResolver.init(evaluator);
         parser_resolver.features = evaluator.features;
         parser_resolver.arg_zero = evaluator.arg_zero;
-        parser_resolver.expand_aliases = frame_state.shopts.enabled(.expand_aliases);
+        parser_resolver.expand_aliases = false;
         parser_resolver.alias_state = evaluator.alias_state;
         parser_resolver.active_frame = buffers.frame;
         parser_resolver.active_input = buffers.stdin;

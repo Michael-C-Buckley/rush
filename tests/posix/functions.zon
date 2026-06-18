@@ -132,6 +132,51 @@
             .status = 0,
         },
         .{
+            .name = "deep non-tail-recursive function call chain through while body exceeds one thousand calls",
+            .script =
+            \\f() {
+            \\    while [ "$1" -gt 0 ]; do
+            \\        next=$(( $1 - 1 ))
+            \\        f "$next"
+            \\        break
+            \\    done
+            \\    if [ "$1" -eq 0 ]; then printf 'ok\n'; fi
+            \\}
+            \\f 1200
+            ,
+            .stdout =
+            \\ok
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "non-tail function call in until body preserves continue",
+            .script =
+            \\child() { :; }
+            \\f() {
+            \\    i=0
+            \\    until [ "$i" -eq 3 ]; do
+            \\        i=$(( i + 1 ))
+            \\        if [ "$i" -eq 2 ]; then
+            \\            child
+            \\            continue
+            \\        fi
+            \\        printf '<%s>\n' "$i"
+            \\    done
+            \\}
+            \\f
+            ,
+            .stdout =
+            \\<1>
+            \\<3>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "non-tail recursive bare return preserves child status",
             .script =
             \\f() { if [ "$1" -eq 0 ]; then return 7; else next=$(( $1 - 1 )); f "$next"; return; fi; }
