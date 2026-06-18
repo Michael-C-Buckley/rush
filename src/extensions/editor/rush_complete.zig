@@ -38,6 +38,7 @@ pub const State = struct {
     candidates: std.ArrayList(editor_completion.Candidate) = .empty,
     next_source_order: usize = 0,
     env_lookup: expand.EnvLookup,
+    expand_tilde: bool,
 
     pub fn init(
         allocator: std.mem.Allocator,
@@ -51,6 +52,7 @@ pub const State = struct {
         parsed_options: []const ParsedOption,
         operands: []const ParsedOperand,
         env_lookup: expand.EnvLookup,
+        expand_tilde: bool,
     ) State {
         return .{
             .allocator = allocator,
@@ -64,6 +66,7 @@ pub const State = struct {
             .parsed_options = parsed_options,
             .operands = operands,
             .env_lookup = env_lookup,
+            .expand_tilde = expand_tilde,
         };
     }
 
@@ -322,7 +325,10 @@ fn appendPathCandidates(state: *State, directories_only: bool) !void {
     const dir_prefix = if (split_after_separator) state.prefix[0 .. separator_index + 1] else "";
     const entry_prefix = if (split_after_separator) state.prefix[separator_index + 1 ..] else state.prefix;
     const dir_path_raw = if (dir_prefix.len == 0) "." else dir_prefix;
-    const dir_path = try expand.expandTilde(state.allocator, dir_path_raw, state.env_lookup);
+    const dir_path = if (state.expand_tilde)
+        try expand.expandTilde(state.allocator, dir_path_raw, state.env_lookup)
+    else
+        try state.allocator.dupe(u8, dir_path_raw);
     defer state.allocator.free(dir_path);
     var dir = std.Io.Dir.cwd().openDir(state.io, dir_path, .{ .iterate = true }) catch |err| switch (err) {
         error.FileNotFound, error.NotDir, error.AccessDenied => return,
