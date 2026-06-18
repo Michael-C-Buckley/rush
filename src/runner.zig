@@ -2025,30 +2025,71 @@ test "script file incomplete parse diagnostics include path and line" {
     try std.testing.expect(std.mem.indexOf(u8, result.stderr, "  if true; then\n  ^^^^^^^^^^^^^\n") != null);
 }
 
-test "script file unterminated parameter expansion diagnostics do not cascade" {
-    const path = "rush-script-parameter-diagnostic-test.rush";
-    try deleteFileIfExists(std.testing.io, path);
-    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
-    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = path, .data =
-        \\echo before
-        \\if true; then
-        \\  echo ${foo
-    });
+test "script file unterminated lexer diagnostics do not cascade" {
+    const Case = struct {
+        path: []const u8,
+        data: []const u8,
+        message: []const u8,
+    };
+    const cases = [_]Case{
+        .{
+            .path = "rush-script-parameter-diagnostic-test.rush",
+            .data =
+            \\echo before
+            \\if true; then
+            \\  echo ${foo
+            ,
+            .message = "unterminated parameter expansion",
+        },
+        .{
+            .path = "rush-script-single-quote-diagnostic-test.rush",
+            .data =
+            \\echo before
+            \\if true; then
+            \\  echo 'foo
+            ,
+            .message = "unterminated single quote",
+        },
+        .{
+            .path = "rush-script-command-substitution-diagnostic-test.rush",
+            .data =
+            \\echo before
+            \\if true; then
+            \\  echo $(foo
+            ,
+            .message = "unterminated command substitution",
+        },
+        .{
+            .path = "rush-script-arithmetic-diagnostic-test.rush",
+            .data =
+            \\echo before
+            \\if true; then
+            \\  echo $((1 + 2
+            ,
+            .message = "unterminated arithmetic expansion",
+        },
+    };
 
-    const invocation = cli_invocation.parse(&.{ "rush", path }) orelse return error.ExpectedInvocation;
-    var result = try runInvocationForTest(std.testing.allocator, std.testing.io, invocation, null, .capture, false);
-    defer result.deinit();
+    for (cases) |case| {
+        try deleteFileIfExists(std.testing.io, case.path);
+        defer std.Io.Dir.cwd().deleteFile(std.testing.io, case.path) catch {};
+        try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = case.path, .data = case.data });
 
-    const expected = try std.fmt.allocPrint(
-        std.testing.allocator,
-        "rush: {s}:3: incomplete_input: unterminated parameter expansion",
-        .{path},
-    );
-    defer std.testing.allocator.free(expected);
-    try std.testing.expectEqual(@as(shell.ExitStatus, 2), result.status);
-    try std.testing.expectEqualStrings("", result.stdout);
-    try std.testing.expect(std.mem.indexOf(u8, result.stderr, expected) != null);
-    try std.testing.expect(std.mem.indexOf(u8, result.stderr, "missing fi to close if command") == null);
+        const invocation = cli_invocation.parse(&.{ "rush", case.path }) orelse return error.ExpectedInvocation;
+        var result = try runInvocationForTest(std.testing.allocator, std.testing.io, invocation, null, .capture, false);
+        defer result.deinit();
+
+        const expected = try std.fmt.allocPrint(
+            std.testing.allocator,
+            "rush: {s}:3: incomplete_input: {s}",
+            .{ case.path, case.message },
+        );
+        defer std.testing.allocator.free(expected);
+        try std.testing.expectEqual(@as(shell.ExitStatus, 2), result.status);
+        try std.testing.expectEqualStrings("", result.stdout);
+        try std.testing.expect(std.mem.indexOf(u8, result.stderr, expected) != null);
+        try std.testing.expect(std.mem.indexOf(u8, result.stderr, "missing fi to close if command") == null);
+    }
 }
 
 test "script file parse diagnostics include path and line" {

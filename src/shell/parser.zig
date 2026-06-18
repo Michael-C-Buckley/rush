@@ -1767,7 +1767,7 @@ pub fn parse(allocator: std.mem.Allocator, source: []const u8, options: ParseOpt
         lex_result.diagnostics = &.{};
 
         try parser.run();
-        suppressParserDiagnosticsAfterUnterminatedParameterExpansion(&parser.diagnostics, lex_diagnostic_count);
+        suppressDependentParserIncompleteDiagnostics(&parser.diagnostics, lex_diagnostic_count);
         parser.freePendingHereDocs();
         parser.pending_here_docs.deinit(allocator);
         parser.pending_here_docs = .empty;
@@ -1798,14 +1798,14 @@ pub fn parse(allocator: std.mem.Allocator, source: []const u8, options: ParseOpt
     }
 }
 
-fn suppressParserDiagnosticsAfterUnterminatedParameterExpansion(
+fn suppressDependentParserIncompleteDiagnostics(
     diagnostics: *std.ArrayList(Diagnostic),
     lex_diagnostic_count: usize,
 ) void {
     std.debug.assert(lex_diagnostic_count <= diagnostics.items.len);
     const lex_diagnostics = diagnostics.items[0..lex_diagnostic_count];
     for (lex_diagnostics) |lex_diagnostic| {
-        if (isUnterminatedParameterExpansionDiagnostic(lex_diagnostic)) break;
+        if (isUnterminatedLexerDiagnostic(lex_diagnostic)) break;
     } else return;
 
     var write_index = lex_diagnostic_count;
@@ -1813,7 +1813,7 @@ fn suppressParserDiagnosticsAfterUnterminatedParameterExpansion(
         var suppress = false;
         if (diagnostic.kind == .incomplete_input) {
             for (lex_diagnostics) |lex_diagnostic| {
-                if (isUnterminatedParameterExpansionDiagnostic(lex_diagnostic) and
+                if (isUnterminatedLexerDiagnostic(lex_diagnostic) and
                     spanContains(diagnostic.span, lex_diagnostic.span))
                 {
                     suppress = true;
@@ -1829,9 +1829,9 @@ fn suppressParserDiagnosticsAfterUnterminatedParameterExpansion(
     diagnostics.shrinkRetainingCapacity(write_index);
 }
 
-fn isUnterminatedParameterExpansionDiagnostic(diagnostic: Diagnostic) bool {
+fn isUnterminatedLexerDiagnostic(diagnostic: Diagnostic) bool {
     return diagnostic.kind == .incomplete_input and
-        std.mem.eql(u8, diagnostic.message, "unterminated parameter expansion");
+        std.mem.startsWith(u8, diagnostic.message, "unterminated ");
 }
 
 fn spanContains(outer: Span, inner: Span) bool {
@@ -5506,6 +5506,64 @@ test "parser suppresses dependent compound diagnostics after unterminated parame
         }},
         .incomplete = true,
     });
+}
+
+test "parser suppresses dependent compound diagnostics after unterminated lexer constructs" {
+    const Case = struct {
+        source: []const u8,
+        span: Span,
+        message: []const u8,
+        options: ParseOptions = .{},
+    };
+    const cases = [_]Case{
+        .{
+            .source = "if true; then echo 'foo",
+            .span = .init(19, 23),
+            .message = "unterminated single quote",
+        },
+        .{
+            .source = "if true; then echo \"foo",
+            .span = .init(19, 23),
+            .message = "unterminated double quote",
+        },
+        .{
+            .source = "if true; then echo $'foo",
+            .span = .init(19, 24),
+            .message = "unterminated dollar single quote",
+        },
+        .{
+            .source = "if true; then echo `foo",
+            .span = .init(19, 23),
+            .message = "unterminated backquote command substitution",
+        },
+        .{
+            .source = "if true; then echo $(foo",
+            .span = .init(19, 24),
+            .message = "unterminated command substitution",
+        },
+        .{
+            .source = "if true; then echo $((1 + 2",
+            .span = .init(19, 27),
+            .message = "unterminated arithmetic expansion",
+        },
+        .{
+            .source = "if true; then echo @(foo",
+            .span = .init(19, 24),
+            .message = "unterminated extglob pattern",
+            .options = .{ .features = compat.Features.bash() },
+        },
+    };
+
+    for (cases) |case| {
+        var result = try parse(std.testing.allocator, case.source, case.options);
+        defer result.deinit();
+
+        try std.testing.expect(result.incomplete);
+        try std.testing.expectEqual(@as(usize, 1), result.diagnostics.len);
+        try std.testing.expectEqual(DiagnosticKind.incomplete_input, result.diagnostics[0].kind);
+        try expectSpan(case.span, result.diagnostics[0].span);
+        try std.testing.expectEqualStrings(case.message, result.diagnostics[0].message);
+    }
 }
 
 test "parser builds lists and pipelines around simple commands" {
