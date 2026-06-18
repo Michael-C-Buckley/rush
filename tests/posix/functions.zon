@@ -91,6 +91,162 @@
             .status = 0,
         },
         .{
+            .name = "deep non-tail-recursive function call chain masks child failure below native stack limit",
+            .script =
+            \\f() { if [ "$1" -eq 0 ]; then false; else next=$(( $1 - 1 )); f "$next"; :; fi; }
+            \\f 600
+            \\printf '<%s>\n' "$?"
+            ,
+            .stdout =
+            \\<0>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "deep non-tail-recursive function call chain exceeds one thousand calls",
+            .script =
+            \\f() { if [ "$1" -eq 0 ]; then printf 'ok\n'; else next=$(( $1 - 1 )); f "$next"; :; fi; }
+            \\f 1200
+            ,
+            .stdout =
+            \\ok
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+            .skip_rush = "known Rush debug abort before explicit non-tail activation stack support",
+        },
+        .{
+            .name = "non-tail recursive bare return preserves child status",
+            .script =
+            \\f() { if [ "$1" -eq 0 ]; then return 7; else next=$(( $1 - 1 )); f "$next"; return; fi; }
+            \\f 64
+            \\printf '<%s>\n' "$?"
+            ,
+            .stdout =
+            \\<7>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "non-tail recursive function calls restore positional parameters while unwinding",
+            .script =
+            \\set -- outer1 outer2
+            \\f() {
+            \\    if [ "$1" -eq 0 ]; then printf 'leaf:%s:%s:%s\n' "$1" "$2" "$#"; return; fi
+            \\    next=$(( $1 - 1 ))
+            \\    f "$next" "child-$1"
+            \\    if [ "$1" -eq 3 ]; then printf 'unwind:%s:%s:%s\n' "$1" "$2" "$#"; fi
+            \\    :
+            \\}
+            \\f 3 root
+            \\printf 'outer:%s:%s:%s\n' "$1" "$2" "$#"
+            ,
+            .stdout =
+            \\leaf:0:child-1:2
+            \\unwind:3:root:2
+            \\outer:outer1:outer2:2
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "non-tail recursive assignment prefixes are scoped to each function call",
+            .script =
+            \\v=outer
+            \\f() {
+            \\    if [ "$1" -eq 0 ]; then printf 'leaf:%s\n' "$v"; return; fi
+            \\    next=$(( $1 - 1 ))
+            \\    v="body-$1" f "$next"
+            \\    printf 'unwind:%s:%s\n' "$1" "$v"
+            \\    :
+            \\}
+            \\v=call f 2
+            \\printf 'after:%s\n' "$v"
+            ,
+            .stdout =
+            \\leaf:body-1
+            \\unwind:1:body-2
+            \\unwind:2:call
+            \\after:outer
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "non-tail recursive call and definition redirections restore in LIFO order",
+            .script =
+            \\rm -f def outercall call-1 call-2
+            \\f() {
+            \\    if [ "$1" -eq 0 ]; then printf 'leaf\n'; return; fi
+            \\    next=$(( $1 - 1 ))
+            \\    f "$next" >>"call-$1"
+            \\    printf 'after-%s\n' "$1"
+            \\} >>def
+            \\printf 'before\n'
+            \\f 2 >>outercall
+            \\printf 'after-stdout\n'
+            \\for file in def outercall call-2 call-1; do
+            \\    printf '[%s]\n' "$file"
+            \\    if [ -f "$file" ]; then cat "$file"; else printf 'missing\n'; fi
+            \\done
+            ,
+            .stdout =
+            \\before
+            \\after-stdout
+            \\[def]
+            \\leaf
+            \\after-1
+            \\after-2
+            \\[outercall]
+            \\[call-2]
+            \\[call-1]
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "non-tail recursive trap checkpoints run before the next function command",
+            .script =
+            \\trap 'printf "trap:%s\n" "$1"' USR1
+            \\f() {
+            \\    if [ "$1" -eq 0 ]; then kill -s USR1 $$; printf 'leaf:%s\n' "$1"; return; fi
+            \\    next=$(( $1 - 1 ))
+            \\    f "$next"
+            \\    printf 'after:%s\n' "$1"
+            \\}
+            \\f 2
+            ,
+            .stdout =
+            \\trap:0
+            \\leaf:0
+            \\after:1
+            \\after:2
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "non-tail recursive function child failure triggers set -e before following command",
+            .script =
+            \\set -e
+            \\f() { if [ "$1" -eq 0 ]; then false; else next=$(( $1 - 1 )); f "$next"; :; fi; }
+            \\f 3
+            \\printf 'bad\n'
+            ,
+            .stdout = "",
+            .stderr = "",
+            .status = 1,
+        },
+        .{
             .name = "cached function compound body expands parameters when called",
             .script =
             \\f() { if true; then printf '<%s:%s>\n' "$1" "$#"; fi; }

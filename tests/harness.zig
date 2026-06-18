@@ -21,6 +21,8 @@ const Case = struct {
     stderr_match: BytesExpectation = .exact,
     status: u8 = 0,
     status_match: StatusExpectation = .exact,
+    skip: ?[]const u8 = null,
+    skip_rush: ?[]const u8 = null,
 };
 
 const BytesExpectation = enum {
@@ -81,6 +83,22 @@ const RunResult = struct {
         allocator.free(self.stdout);
         allocator.free(self.stderr);
     }
+};
+
+const RunStats = struct {
+    failed: usize = 0,
+    skipped: usize = 0,
+
+    fn add(self: *RunStats, other: RunStats) void {
+        self.failed += other.failed;
+        self.skipped += other.skipped;
+    }
+};
+
+const CaseResult = enum {
+    passed,
+    failed,
+    skipped,
 };
 
 const Progress = struct {
@@ -152,7 +170,7 @@ pub fn main(init: std.process.Init) !u8 {
         return 2;
     }
 
-    var failures: usize = 0;
+    var stats: RunStats = .{};
     const case_count = try countCases(allocator, init.io, config);
     if (case_count == 0) {
         if (config.case_filter) |case_filter| {
@@ -167,21 +185,29 @@ pub fn main(init: std.process.Init) !u8 {
     var progress = Progress.init(init.io, case_count);
     errdefer progress.deinit();
     for (config.files) |path| {
-        failures += try runSuiteFile(allocator, init.io, config, path, &progress);
+        stats.add(try runSuiteFile(allocator, init.io, config, path, &progress));
     }
     progress.deinit();
 
-    if (failures != 0) {
+    if (stats.failed != 0) {
         std.debug.print(
-            "conformance: failed {d}/{d} case(s) from {d} file(s) against {s}\n",
-            .{ failures, case_count, config.files.len, target_name },
+            "conformance: failed {d}/{d} case(s), skipped {d} from {d} file(s) against {s}\n",
+            .{ stats.failed, case_count, stats.skipped, config.files.len, target_name },
         );
         return 1;
     }
-    std.debug.print(
-        "conformance: passed {d} case(s) from {d} file(s) against {s}\n",
-        .{ case_count, config.files.len, target_name },
-    );
+    const passed = case_count - stats.skipped;
+    if (stats.skipped == 0) {
+        std.debug.print(
+            "conformance: passed {d} case(s) from {d} file(s) against {s}\n",
+            .{ passed, config.files.len, target_name },
+        );
+    } else {
+        std.debug.print(
+            "conformance: passed {d} case(s), skipped {d} from {d} file(s) against {s}\n",
+            .{ passed, stats.skipped, config.files.len, target_name },
+        );
+    }
     return 0;
 }
 
@@ -324,7 +350,7 @@ fn runSuiteFile(
     config: Config,
     path: []const u8,
     progress: *Progress,
-) !usize {
+) !RunStats {
     const source = try std.Io.Dir.cwd().readFileAlloc(io, path, allocator, .unlimited);
     defer allocator.free(source);
     const source_z = try allocator.dupeZ(u8, source);
@@ -335,7 +361,7 @@ fn runSuiteFile(
     const suite = try std.zon.parse.fromSliceAlloc(Suite, arena.allocator(), source_z, null, .{});
     std.debug.assert(suite.mode == config.mode);
     const matching_cases = countMatchingCases(config, suite);
-    if (matching_cases == 0) return 0;
+    if (matching_cases == 0) return .{};
 
     const file_node = progress.startFile(path, suite.name, matching_cases);
     defer progress.finishFile(file_node);
@@ -343,10 +369,10 @@ fn runSuiteFile(
     var temp_root = try createTempRoot(allocator, io);
     defer temp_root.deinit(allocator, io);
 
-    var failures: usize = 0;
+    var stats: RunStats = .{};
     for (suite.cases, 0..) |case, case_index| {
         if (!caseMatches(config, case.name)) continue;
-        failures += try runCase(
+        switch (try runCase(
             allocator,
             io,
             config,
@@ -357,9 +383,13 @@ fn runSuiteFile(
             case,
             case_index,
             progress,
-        );
+        )) {
+            .passed => {},
+            .failed => stats.failed += 1,
+            .skipped => stats.skipped += 1,
+        }
     }
-    return failures;
+    return stats;
 }
 
 fn createTempRoot(allocator: std.mem.Allocator, io: std.Io) !TempRoot {
@@ -406,9 +436,15 @@ fn runCase(
     case: Case,
     case_index: usize,
     progress: *Progress,
-) !usize {
+) !CaseResult {
     const case_node = progress.startCase(file_node, case.name);
     defer case_node.end();
+    if (caseSkipReason(case, config)) |reason| {
+        if (config.print_diff) printSkipHeader(path, suite_name, case.name, reason);
+        progress.completeCase();
+        return .skipped;
+    }
+
     const target = try runTarget(allocator, io, temp_root, case_index, config, case.script);
     defer target.deinit(allocator);
     const target_name = try targetNameAlloc(allocator, config);
@@ -425,7 +461,15 @@ fn runCase(
     );
     progress.completeCase();
 
-    return if (failed) 1 else 0;
+    return if (failed) .failed else .passed;
+}
+
+fn caseSkipReason(case: Case, config: Config) ?[]const u8 {
+    if (case.skip) |reason| return reason;
+    if (config.rush_path != null) {
+        if (case.skip_rush) |reason| return reason;
+    }
+    return null;
 }
 
 fn targetNameAlloc(allocator: std.mem.Allocator, config: Config) ![]u8 {
@@ -600,6 +644,15 @@ fn printFailureHeader(
     case_name: []const u8,
 ) void {
     std.debug.print("FAIL {s} › {s} › {s}\n", .{ path, suite_name, case_name });
+}
+
+fn printSkipHeader(
+    path: []const u8,
+    suite_name: []const u8,
+    case_name: []const u8,
+    reason: []const u8,
+) void {
+    std.debug.print("SKIP {s} › {s} › {s}: {s}\n", .{ path, suite_name, case_name, reason });
 }
 
 fn printBytesExpectationMismatch(
