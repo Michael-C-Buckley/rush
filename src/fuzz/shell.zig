@@ -210,10 +210,8 @@ fn fuzzShellRedirectionRollback(_: void, smith: *std.testing.Smith) anyerror!voi
     const failure_mode = smith.index(3);
 
     var steps: [redirection_max_prefix_steps + 1]redirection_plan.RedirectionStep = undefined;
-    var rollbacks: [redirection_max_prefix_steps + 1]redirection_plan.RestorationStep = undefined;
     for (0..prefix_len) |index| {
         steps[index] = generatedRedirectionStep(smith, index);
-        rollbacks[index] = .{ .ordinal = index, .target = steps[index].target() };
     }
 
     const step_count = switch (failure_mode) {
@@ -225,7 +223,6 @@ fn fuzzShellRedirectionRollback(_: void, smith: *std.testing.Smith) anyerror!voi
                 "missing",
                 .{ .access = .read_only },
             );
-            rollbacks[prefix_len] = .{ .ordinal = prefix_len, .target = steps[prefix_len].target() };
             break :blk prefix_len + 1;
         },
         2 => blk: {
@@ -234,16 +231,12 @@ fn fuzzShellRedirectionRollback(_: void, smith: *std.testing.Smith) anyerror!voi
                 generatedTarget(smith),
                 closed_duplicate_source,
             );
-            rollbacks[prefix_len] = .{ .ordinal = prefix_len, .target = steps[prefix_len].target() };
             break :blk prefix_len + 1;
         },
         else => unreachable,
     };
 
-    const plan: redirection_plan.RedirectionPlan = .{
-        .steps = steps[0..step_count],
-        .rollback_steps = rollbacks[0..step_count],
-    };
+    const plan: redirection_plan.RedirectionPlan = .{ .steps = steps[0..step_count] };
     plan.validate();
 
     var fake: FuzzFdRuntime = .{};
@@ -515,8 +508,6 @@ const EvalSubject = union(enum) {
 const EvalPlanStorage = struct {
     redirection_steps: [eval_max_redirection_plans][eval_max_redirection_steps]redirection_plan.RedirectionStep =
         undefined,
-    rollback_steps: [eval_max_redirection_plans][eval_max_redirection_steps]redirection_plan.RestorationStep =
-        undefined,
     redirection_plan_count: usize = 0,
     assignments: [eval_max_commands][1]shell.Assignment = undefined,
     argv: [eval_max_commands][1][]const u8 = undefined,
@@ -532,15 +523,10 @@ const EvalPlanStorage = struct {
         const step_count = smith.index(eval_max_redirection_steps + 1);
         for (0..step_count) |ordinal| {
             self.redirection_steps[index][ordinal] = generatedEvalRedirectionStep(smith, ordinal);
-            self.rollback_steps[index][ordinal] = .{
-                .ordinal = ordinal,
-                .target = self.redirection_steps[index][ordinal].target(),
-            };
         }
 
         const plan: shell.RedirectionPlan = .{
             .steps = self.redirection_steps[index][0..step_count],
-            .rollback_steps = self.rollback_steps[index][0..step_count],
             .failure_consequence = if (smith.boolWeighted(1, 3)) .fatal_shell_error else .command_failure,
         };
         plan.validate();

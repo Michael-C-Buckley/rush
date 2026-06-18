@@ -733,7 +733,6 @@ pub const CommandPlan = struct {
                 std.debug.assert(self.argv.len == 0);
                 std.debug.assert(self.assignments.len == 0);
                 std.debug.assert(self.redirections.steps.len == 0);
-                std.debug.assert(self.redirections.rollback_steps.len == 0);
             },
             .function => |definition| {
                 definition.validate();
@@ -1536,7 +1535,7 @@ fn allStagesSemantic(stages: []const PipelineStagePlan) bool {
 
 fn hasSimpleRedirections(plan: CommandPlan) bool {
     plan.redirections.validate();
-    return plan.redirections.steps.len != 0 or plan.redirections.rollback_steps.len != 0;
+    return plan.redirections.steps.len != 0;
 }
 
 fn pipefailStatus(statuses: []const state.ExitStatus) state.ExitStatus {
@@ -1556,11 +1555,7 @@ fn negateStatus(status: state.ExitStatus) state.ExitStatus {
 test "CommandPlan classifies expanded simple command shapes" {
     const assignments = [_]Assignment{.{ .name = "FOO", .value = "bar" }};
     const redirection_steps = [_]redirection_plan.RedirectionStep{redirection_plan.RedirectionStep.close(0, 1)};
-    const rollback_steps = [_]redirection_plan.RestorationStep{.{ .ordinal = 0, .target = 1 }};
-    const redirections: redirection_plan.RedirectionPlan = .{
-        .steps = &redirection_steps,
-        .rollback_steps = &rollback_steps,
-    };
+    const redirections: redirection_plan.RedirectionPlan = .{ .steps = &redirection_steps };
     const echo_argv = [_][]const u8{ "echo", "hello" };
     const function_argv = [_][]const u8{"say_hi"};
     const external_argv = [_][]const u8{ "cat", "file" };

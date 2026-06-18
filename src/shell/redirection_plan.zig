@@ -274,21 +274,8 @@ pub const RedirectionStep = struct {
     }
 };
 
-pub const RestorationStep = struct {
-    ordinal: usize,
-    target: fd.Descriptor,
-
-    pub fn validate(self: RestorationStep) void {
-        fd.assertValidDescriptor(self.target);
-    }
-};
-
 pub const RedirectionPlan = struct {
     steps: []const RedirectionStep = &.{},
-    /// Semantic guard metadata for frame ownership and tests. Runtime fd
-    /// restoration is not ordinal-based; `FdTransaction` saves each mutated
-    /// target once and restores those saved descriptor states in reverse.
-    rollback_steps: []const RestorationStep = &.{},
     failure_consequence: FailureConsequence = .command_failure,
     self_duplicate_noop: bool = false,
     allocator: ?std.mem.Allocator = null,
@@ -305,12 +292,8 @@ pub const RedirectionPlan = struct {
             initialized += 1;
         }
 
-        const owned_rollback_steps = try allocator.dupe(RestorationStep, self.rollback_steps);
-        errdefer allocator.free(owned_rollback_steps);
-
         const plan: RedirectionPlan = .{
             .steps = owned_steps,
-            .rollback_steps = owned_rollback_steps,
             .failure_consequence = self.failure_consequence,
             .self_duplicate_noop = self.self_duplicate_noop,
             .allocator = allocator,
@@ -327,18 +310,12 @@ pub const RedirectionPlan = struct {
         var steps: std.ArrayList(RedirectionStep) = .empty;
         errdefer steps.deinit(allocator);
 
-        var rollback_steps: std.ArrayList(RestorationStep) = .empty;
-        errdefer rollback_steps.deinit(allocator);
-
         const consequence = options.failure_policy.consequence();
         for (specs, 0..) |spec, ordinal| {
             spec.validate();
             const step_or_failure = stepFromSpec(spec, ordinal, options, consequence);
             switch (step_or_failure) {
-                .step => |step| {
-                    try steps.append(allocator, step);
-                    try rollback_steps.append(allocator, .{ .ordinal = ordinal, .target = step.target() });
-                },
+                .step => |step| try steps.append(allocator, step),
                 .failure => |failure| {
                     return .{ .failure = failure };
                 },
@@ -346,12 +323,9 @@ pub const RedirectionPlan = struct {
         }
 
         const owned_steps = try steps.toOwnedSlice(allocator);
-        errdefer allocator.free(owned_steps);
-        const owned_rollback_steps = try rollback_steps.toOwnedSlice(allocator);
 
         const plan: RedirectionPlan = .{
             .steps = owned_steps,
-            .rollback_steps = owned_rollback_steps,
             .failure_consequence = consequence,
             .self_duplicate_noop = options.self_duplicate_noop,
             .allocator = allocator,
@@ -367,21 +341,13 @@ pub const RedirectionPlan = struct {
         };
         for (self.steps) |step| freeStepData(allocator, step);
         allocator.free(self.steps);
-        allocator.free(self.rollback_steps);
         self.* = undefined;
     }
 
     pub fn validate(self: RedirectionPlan) void {
-        std.debug.assert(self.rollback_steps.len == 0 or self.rollback_steps.len == self.steps.len);
         for (self.steps, 0..) |step, index| {
             step.validate();
             std.debug.assert(step.ordinal == index);
-            if (self.rollback_steps.len != 0) {
-                const rollback = self.rollback_steps[index];
-                rollback.validate();
-                std.debug.assert(rollback.ordinal == step.ordinal);
-                std.debug.assert(rollback.target == step.target());
-            }
         }
     }
 
@@ -992,7 +958,6 @@ test "RedirectionPlan builds ordered semantic operations and failure policy" {
 
     try std.testing.expectEqual(FailureConsequence.fatal_shell_error, plan.failure_consequence);
     try std.testing.expectEqual(@as(usize, 4), plan.steps.len);
-    try std.testing.expectEqual(@as(usize, 4), plan.rollback_steps.len);
 
     switch (plan.steps[0].effect) {
         .open_path => |step| {
@@ -1026,18 +991,13 @@ test "RedirectionPlan clone owns path and here-doc data" {
         RedirectionStep.openPath(0, 1, "out", .{ .access = .write_only, .create = true, .truncate = true }),
         .{ .ordinal = 1, .effect = .{ .here_doc = .{ .target = 0, .data = .{ .bytes = "body\n" } } } },
     };
-    const rollback_steps = [_]RestorationStep{
-        .{ .ordinal = 0, .target = 1 },
-        .{ .ordinal = 1, .target = 0 },
-    };
-    const plan: RedirectionPlan = .{ .steps = &steps, .rollback_steps = &rollback_steps };
+    const plan: RedirectionPlan = .{ .steps = &steps };
 
     var cloned = try plan.clone(std.testing.allocator);
     defer cloned.deinit();
 
     try std.testing.expectEqual(@as(usize, 2), cloned.steps.len);
     try std.testing.expect(cloned.steps.ptr != plan.steps.ptr);
-    try std.testing.expect(cloned.rollback_steps.ptr != plan.rollback_steps.ptr);
     switch (cloned.steps[0].effect) {
         .open_path => |step| {
             try std.testing.expectEqualStrings("out", step.path.bytes);
@@ -1255,11 +1215,7 @@ test "RedirectionPlan application restores earlier steps after runtime failure" 
         RedirectionStep.close(0, 0),
         RedirectionStep.duplicate(1, 1, 9),
     };
-    const rollback_steps = [_]RestorationStep{
-        .{ .ordinal = 0, .target = 0 },
-        .{ .ordinal = 1, .target = 1 },
-    };
-    const plan: RedirectionPlan = .{ .steps = &steps, .rollback_steps = &rollback_steps };
+    const plan: RedirectionPlan = .{ .steps = &steps };
 
     var fake: FakeFdRuntime = .{};
     const result = try plan.apply(std.testing.allocator, fake.port());
@@ -1284,8 +1240,7 @@ test "RedirectionPlan application restores earlier steps after runtime failure" 
 
 test "RedirectionPlan duplicate from closed source fails before saving target reuses that fd" {
     const steps = [_]RedirectionStep{RedirectionStep.duplicate(0, 1, 2)};
-    const rollback_steps = [_]RestorationStep{.{ .ordinal = 0, .target = 1 }};
-    const plan: RedirectionPlan = .{ .steps = &steps, .rollback_steps = &rollback_steps };
+    const plan: RedirectionPlan = .{ .steps = &steps };
 
     var fake: FakeFdRuntime = .{ .reuse_low_descriptors = true };
     fake.setOpen(2, false);
@@ -1310,8 +1265,7 @@ test "RedirectionPlan duplicate from closed source fails before saving target re
 
 test "RedirectionPlan duplicate to closed target restores that target closed" {
     const steps = [_]RedirectionStep{RedirectionStep.duplicate(0, 2, 3)};
-    const rollback_steps = [_]RestorationStep{.{ .ordinal = 0, .target = 2 }};
-    const plan: RedirectionPlan = .{ .steps = &steps, .rollback_steps = &rollback_steps };
+    const plan: RedirectionPlan = .{ .steps = &steps };
 
     var fake: FakeFdRuntime = .{ .reuse_low_descriptors = true };
     fake.setOpen(2, false);

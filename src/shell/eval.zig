@@ -328,22 +328,19 @@ fn semanticCommandExecutionFrame(
     };
     try fd_table.applyRedirectionPlan(allocator, redirections);
     const stdin: execution_frame.InputEndpoint = switch (fd_table.boundEndpoint(0) orelse
-        @as(execution_frame.FdEndpoint, .{ .input = parent_frame.spec.stdin }))
-    {
+        @as(execution_frame.FdEndpoint, .{ .input = parent_frame.spec.stdin })) {
         .input => |input| input,
         .closed => .closed,
         .output => parent_frame.spec.stdin,
     };
     const stdout: execution_frame.OutputEndpoint = switch (fd_table.boundEndpoint(1) orelse
-        @as(execution_frame.FdEndpoint, .{ .output = parent_frame.spec.stdout }))
-    {
+        @as(execution_frame.FdEndpoint, .{ .output = parent_frame.spec.stdout })) {
         .output => |output| output,
         .closed => .discard,
         .input => parent_frame.spec.stdout,
     };
     const stderr: execution_frame.OutputEndpoint = switch (fd_table.boundEndpoint(2) orelse
-        @as(execution_frame.FdEndpoint, .{ .output = parent_frame.spec.stderr }))
-    {
+        @as(execution_frame.FdEndpoint, .{ .output = parent_frame.spec.stderr })) {
         .output => |output| output,
         .closed => .discard,
         .input => parent_frame.spec.stderr,
@@ -488,8 +485,7 @@ fn captureSet(
             .command_substitution_stdout => .{ .channels = &.{ .pipeline_data, .command_substitution_stdout } },
         },
         .command_substitution_stdout => switch (second orelse
-            return .{ .channels = &.{.command_substitution_stdout} })
-        {
+            return .{ .channels = &.{.command_substitution_stdout} }) {
             .side_stdout => .{ .channels = &.{ .command_substitution_stdout, .side_stdout } },
             .side_stderr => .{ .channels = &.{ .command_substitution_stdout, .side_stderr } },
             .pipeline_data => .{ .channels = &.{ .command_substitution_stdout, .pipeline_data } },
@@ -3020,11 +3016,8 @@ fn evaluatePlanWithInput(
         .stderr = buffers.stderr.items.len,
     };
 
-    var applied_redirections: ?redirection_plan.FdTransaction = null;
-    defer if (applied_redirections) |*applied| {
-        applied.restore();
-        applied.deinit();
-    };
+    var redirection_guard = RedirectionGuard.empty(.current_scoped);
+    defer redirection_guard.restore();
     if (effective_plan.redirections.steps.len != 0 and
         effective_plan.class() != .external and
         effective_plan.class() != .function)
@@ -3034,7 +3027,7 @@ fn evaluatePlanWithInput(
         {
             try emitSemanticRedirectionTransforms(evaluator.*, &buffers, effective_plan.redirections);
         } else {
-            const apply_result = try applyRedirectionsEmittingExpansionOutput(
+            const apply_result = try applyRedirectionsForScope(
                 evaluator.*,
                 &buffers,
                 .current_scoped,
@@ -3044,7 +3037,7 @@ fn evaluatePlanWithInput(
                 if (effective_plan.argv.len == 0) "redirection" else effective_plan.argv[0],
             );
             switch (apply_result) {
-                .applied => |applied| applied_redirections = applied,
+                .applied => |applied| redirection_guard = applied,
                 .failure => |failure| {
                     const command_name = if (effective_plan.argv.len == 0) "redirection" else effective_plan.argv[0];
                     try addRedirectionFailureDiagnostic(&buffers, command_name, failure);
@@ -3084,13 +3077,16 @@ fn evaluatePlanWithInput(
             try commitExecRedirectionsToFrame(evaluator.allocator, frame, effective_plan.redirections);
         },
         .permanent => {
-            if (applied_redirections) |*applied| applied.commit();
+            redirection_guard.commitPermanent();
             try commitExecRedirectionsToFrame(evaluator.allocator, frame, effective_plan.redirections);
         },
         .scoped => {
-            if (applied_redirections) |applied| {
-                try appendScopedExecRedirection(evaluator, applied, effective_plan.redirections);
-                applied_redirections = null;
+            if (redirection_guard.hasTransaction()) {
+                try appendScopedExecRedirection(
+                    evaluator,
+                    redirection_guard.disarmForScopedExec(),
+                    effective_plan.redirections,
+                );
             } else {
                 try appendScopedExecRedirectionPlan(evaluator, effective_plan.redirections);
             }
@@ -3098,7 +3094,7 @@ fn evaluatePlanWithInput(
         },
     }
     if ((effective_plan.redirections.steps.len != 0 or
-        applied_redirections != null or
+        redirection_guard.hasTransaction() or
         (hasScopedExecRedirections(evaluator.*) and eval_context.command_substitution_depth == 0)) and
         effective_plan.class() != .external and
         effective_plan.class() != .function)
@@ -4277,6 +4273,85 @@ const RedirectionScope = enum {
     fn validate(_: RedirectionScope) void {}
 };
 
+const RedirectionGuard = struct {
+    scope: RedirectionScope,
+    transaction: ?redirection_plan.FdTransaction,
+
+    fn init(scope: RedirectionScope, transaction: redirection_plan.FdTransaction) RedirectionGuard {
+        scope.validate();
+        transaction.validateActive();
+        return .{ .scope = scope, .transaction = transaction };
+    }
+
+    fn empty(scope: RedirectionScope) RedirectionGuard {
+        scope.validate();
+        return .{ .scope = scope, .transaction = null };
+    }
+
+    fn hasTransaction(self: RedirectionGuard) bool {
+        self.scope.validate();
+        return self.transaction != null;
+    }
+
+    fn restore(self: *RedirectionGuard) void {
+        self.scope.validate();
+        if (self.transaction) |*transaction| {
+            transaction.restore();
+            transaction.deinit();
+            self.transaction = null;
+        }
+    }
+
+    fn commitPermanent(self: *RedirectionGuard) void {
+        self.scope.validate();
+        std.debug.assert(self.scope == .current_permanent or self.scope == .current_scoped);
+        if (self.transaction) |*transaction| {
+            transaction.commit();
+            transaction.deinit();
+            self.transaction = null;
+        }
+    }
+
+    fn disarmForScopedExec(self: *RedirectionGuard) redirection_plan.FdTransaction {
+        self.scope.validate();
+        std.debug.assert(self.scope == .current_scoped or self.scope == .current_permanent);
+        var transaction = self.transaction orelse unreachable;
+        self.transaction = null;
+        transaction.validateActive();
+        return transaction;
+    }
+};
+
+const RedirectionGuardResult = union(enum) {
+    applied: RedirectionGuard,
+    failure: redirection_plan.ApplyFailure,
+};
+
+fn applyRedirectionsForScope(
+    evaluator: Evaluator,
+    buffers: *EvaluationBuffers,
+    scope: RedirectionScope,
+    already_applied: redirection_plan.RedirectionPlan,
+    redirections: redirection_plan.RedirectionPlan,
+    mode: RedirectionExpansionOutputMode,
+    diagnostic_command_name: ?[]const u8,
+) EvalError!RedirectionGuardResult {
+    scope.validate();
+    const apply_result = try applyRedirectionsEmittingExpansionOutput(
+        evaluator,
+        buffers,
+        scope,
+        already_applied,
+        redirections,
+        mode,
+        diagnostic_command_name,
+    );
+    return switch (apply_result) {
+        .applied => |applied| .{ .applied = RedirectionGuard.init(scope, applied) },
+        .failure => |failure| .{ .failure = failure },
+    };
+}
+
 fn diagnosticDestinationIsWritable(destination: OutputDestination) bool {
     destination.validate();
     return switch (destination) {
@@ -4568,16 +4643,13 @@ fn evaluateCompoundPlanWithInput(
         evaluator.scoped_exec_redirections = previous_scoped_exec_redirections;
     };
 
-    var applied_redirections: ?redirection_plan.FdTransaction = null;
-    defer if (applied_redirections) |*applied| {
-        applied.restore();
-        applied.deinit();
-    };
+    var redirection_guard = RedirectionGuard.empty(.current_scoped);
+    defer redirection_guard.restore();
     if (hasCompoundRedirections(plan)) {
         if (frameRoutesPipelineData(command_frame) and !redirectionPlanNeedsRuntimeFdEffects(plan.redirections)) {
             try emitSemanticRedirectionTransforms(evaluator.*, &buffers, plan.redirections);
         } else {
-            const apply_result = try applyRedirectionsEmittingExpansionOutput(
+            const apply_result = try applyRedirectionsForScope(
                 evaluator.*,
                 &buffers,
                 .current_scoped,
@@ -4587,7 +4659,7 @@ fn evaluateCompoundPlanWithInput(
                 plan.kindName(),
             );
             switch (apply_result) {
-                .applied => |applied| applied_redirections = applied,
+                .applied => |applied| redirection_guard = applied,
                 .failure => |failure| {
                     const status = consequence.statusForRedirectionFailure(failure.consequence);
                     const decision = consequence.decideForRedirectionFailure(
@@ -4647,7 +4719,7 @@ fn evaluateCompoundPlanWithInput(
         result.control_flow = decision.control_flow;
     }
 
-    if (applied_redirections != null) {
+    if (redirection_guard.hasTransaction()) {
         try flushBufferedRedirectionOutput(evaluator.*, &buffers, plan.redirections, eval_context, .{});
     }
     if (frameRoutesPipelineData(command_frame)) try routeDirectPipelineStageBuffers(&buffers);
@@ -5269,24 +5341,24 @@ fn evaluateCommandSubstitutionBody(
         .simple => |plan| blk: {
             var input = EvaluationInput.empty();
             break :blk evaluatePlanWithInput(
-            evaluator,
-            substitution_state,
-            substitution_context.withTarget(plan.target),
-            plan,
-            &input,
-            frame,
-        );
+                evaluator,
+                substitution_state,
+                substitution_context.withTarget(plan.target),
+                plan,
+                &input,
+                frame,
+            );
         },
         .compound => |plan| blk: {
             var input = EvaluationInput.empty();
             break :blk evaluateCompoundPlanWithInput(
-            evaluator,
-            substitution_state,
-            substitution_context.withTarget(plan.target),
-            plan,
-            &input,
-            frame,
-        );
+                evaluator,
+                substitution_state,
+                substitution_context.withTarget(plan.target),
+                plan,
+                &input,
+                frame,
+            );
         },
         .pipeline => |plan| evaluatePipelinePlanWithFrame(
             evaluator,
@@ -5327,24 +5399,24 @@ fn evaluateCommandSubstitutionBodyPayload(
         .simple => |plan| blk: {
             var input = EvaluationInput.empty();
             break :blk evaluatePlanWithInput(
-            evaluator,
-            substitution_state,
-            substitution_context.withTarget(plan.target),
-            plan,
-            &input,
-            frame,
-        );
+                evaluator,
+                substitution_state,
+                substitution_context.withTarget(plan.target),
+                plan,
+                &input,
+                frame,
+            );
         },
         .compound => |plan| blk: {
             var input = EvaluationInput.empty();
             break :blk evaluateCompoundPlanWithInput(
-            evaluator,
-            substitution_state,
-            substitution_context.withTarget(plan.target),
-            plan,
-            &input,
-            frame,
-        );
+                evaluator,
+                substitution_state,
+                substitution_context.withTarget(plan.target),
+                plan,
+                &input,
+                frame,
+            );
         },
         .pipeline => |plan| evaluatePipelinePlanWithFrame(
             evaluator,
@@ -5776,16 +5848,13 @@ fn startBackgroundSemanticPipeline(
     const process_port = evaluator.process_port orelse return error.Unimplemented;
     const use_process_group = shell_state.options.enabled(.monitor);
 
-    var applied_redirections: ?redirection_plan.FdTransaction = null;
-    defer if (applied_redirections) |*applied| {
-        applied.restore();
-        applied.deinit();
-    };
+    var redirection_guard = RedirectionGuard.empty(.child_only);
+    defer redirection_guard.restore();
     const redirections_already_applied = try applySingleStageBackgroundRedirections(
         evaluator,
         plan,
         buffers,
-        &applied_redirections,
+        &redirection_guard,
     ) orelse return .{ .failure = 1 };
 
     var semantic_context: BackgroundSemanticContext = .{
@@ -5813,7 +5882,7 @@ fn startBackgroundSemanticPipeline(
         },
     }).child;
 
-    if (applied_redirections) |*applied| applied.restore();
+    redirection_guard.restore();
 
     const command_text = try pipelineCommandText(evaluator.allocator, plan);
     errdefer evaluator.allocator.free(command_text);
@@ -5879,11 +5948,11 @@ fn applySingleStageBackgroundRedirections(
     evaluator: *Evaluator,
     plan: pipeline_plan.PipelinePlan,
     buffers: *EvaluationBuffers,
-    applied_redirections: *?redirection_plan.FdTransaction,
+    redirection_guard: *RedirectionGuard,
 ) EvalError!?bool {
     plan.validate();
     std.debug.assert(plan.strategy == .background_deferred);
-    std.debug.assert(applied_redirections.* == null);
+    std.debug.assert(!redirection_guard.hasTransaction());
     if (plan.stages.len != 1) return false;
 
     const redirections = switch (plan.stages[0]) {
@@ -5897,7 +5966,7 @@ fn applySingleStageBackgroundRedirections(
         },
     };
 
-    const apply_result = try applyRedirectionsEmittingExpansionOutput(
+    const apply_result = try applyRedirectionsForScope(
         evaluator.*,
         buffers,
         .child_only,
@@ -5908,7 +5977,7 @@ fn applySingleStageBackgroundRedirections(
     );
     switch (apply_result) {
         .applied => |applied| {
-            applied_redirections.* = applied;
+            redirection_guard.* = applied;
             return true;
         },
         .failure => |failure| {
@@ -5977,13 +6046,10 @@ fn startBackgroundSingleExternal(
     var invocation = try ExternalInvocation.init(evaluator.allocator, shell_state, plan, resolution, &.{});
     defer invocation.deinit(evaluator.allocator);
 
-    var applied_redirections: ?redirection_plan.FdTransaction = null;
-    defer if (applied_redirections) |*applied| {
-        applied.restore();
-        applied.deinit();
-    };
+    var redirection_guard = RedirectionGuard.empty(.child_only);
+    defer redirection_guard.restore();
     if (hasRedirections(plan)) {
-        const apply_result = try applyRedirectionsEmittingExpansionOutput(
+        const apply_result = try applyRedirectionsForScope(
             evaluator.*,
             buffers,
             .child_only,
@@ -5993,7 +6059,7 @@ fn startBackgroundSingleExternal(
             plan.argv[0],
         );
         switch (apply_result) {
-            .applied => |applied| applied_redirections = applied,
+            .applied => |applied| redirection_guard = applied,
             .failure => |failure| {
                 try addRedirectionFailureDiagnostic(buffers, plan.argv[0], failure);
                 return .{ .failure = 1 };
@@ -6013,7 +6079,7 @@ fn startBackgroundSingleExternal(
         },
     }).child;
 
-    if (applied_redirections) |*applied| applied.restore();
+    redirection_guard.restore();
 
     const command_text = try commandTextFromArgv(evaluator.allocator, plan.argv);
     errdefer evaluator.allocator.free(command_text);
@@ -8372,7 +8438,7 @@ fn appendPipelineStageBuffers(
 
 fn hasCompoundRedirections(plan: command_plan.CompoundCommandPlan) bool {
     plan.redirections.validate();
-    return plan.redirections.steps.len != 0 or plan.redirections.rollback_steps.len != 0;
+    return plan.redirections.steps.len != 0;
 }
 
 fn compoundBodySuppressesFinalErrexit(body: command_plan.CompoundBody) bool {
@@ -8422,13 +8488,10 @@ fn evaluateFunction(
 
     try flushBuffersForFunctionRedirectionTargets(buffers, plan, definition);
 
-    var call_redirections: ?redirection_plan.FdTransaction = null;
-    defer if (call_redirections) |*applied| {
-        applied.restore();
-        applied.deinit();
-    };
+    var call_redirections = RedirectionGuard.empty(.current_scoped);
+    defer call_redirections.restore();
     if (hasRedirections(plan)) {
-        const apply_result = try applyRedirectionsEmittingExpansionOutput(
+        const apply_result = try applyRedirectionsForScope(
             evaluator.*,
             buffers,
             .current_scoped,
@@ -8446,13 +8509,10 @@ fn evaluateFunction(
         }
     }
 
-    var definition_redirections: ?redirection_plan.FdTransaction = null;
-    defer if (definition_redirections) |*applied| {
-        applied.restore();
-        applied.deinit();
-    };
-    if (definition.redirections.steps.len != 0 or definition.redirections.rollback_steps.len != 0) {
-        const apply_result = try applyRedirectionsEmittingExpansionOutput(
+    var definition_redirections = RedirectionGuard.empty(.current_scoped);
+    defer definition_redirections.restore();
+    if (definition.redirections.steps.len != 0) {
+        const apply_result = try applyRedirectionsForScope(
             evaluator.*,
             buffers,
             .current_scoped,
@@ -8504,7 +8564,7 @@ fn evaluateFunction(
         }
     }
 
-    if (call_redirections != null or definition_redirections != null) {
+    if (call_redirections.hasTransaction() or definition_redirections.hasTransaction()) {
         try flushBuffersForFunctionRedirectionTargets(buffers, plan, definition);
     }
 
@@ -8913,14 +8973,11 @@ fn evaluateExternalWithProcessEnvironment(
     }
 
     if (semanticHereDocStdinSource(plan.redirections)) |stdin_source| {
-        var applied_redirections: ?redirection_plan.FdTransaction = null;
-        defer if (applied_redirections) |*applied| {
-            applied.restore();
-            applied.deinit();
-        };
+        var redirection_guard = RedirectionGuard.empty(.child_only);
+        defer redirection_guard.restore();
         if (capturedExternalMode(evaluator.external_stdio) == null) try flushBuffersToInheritedDescriptors(buffers);
         if (plan.redirections.steps.len != 0) {
-            const apply_result = try applyRedirectionsEmittingExpansionOutput(
+            const apply_result = try applyRedirectionsForScope(
                 evaluator.*,
                 buffers,
                 .child_only,
@@ -8930,7 +8987,7 @@ fn evaluateExternalWithProcessEnvironment(
                 plan.argv[0],
             );
             switch (apply_result) {
-                .applied => |applied| applied_redirections = applied,
+                .applied => |applied| redirection_guard = applied,
                 .failure => |failure| {
                     try addRedirectionFailureDiagnostic(buffers, plan.argv[0], failure);
                     return 1;
@@ -8995,13 +9052,10 @@ fn evaluateExternalWithProcessEnvironment(
 
     try flushBuffersToInheritedDescriptors(buffers);
 
-    var applied_redirections: ?redirection_plan.FdTransaction = null;
-    defer if (applied_redirections) |*applied| {
-        applied.restore();
-        applied.deinit();
-    };
+    var redirection_guard = RedirectionGuard.empty(.child_only);
+    defer redirection_guard.restore();
     if (hasRedirections(plan)) {
-        const apply_result = try applyRedirectionsEmittingExpansionOutput(
+        const apply_result = try applyRedirectionsForScope(
             evaluator.*,
             buffers,
             .child_only,
@@ -9011,7 +9065,7 @@ fn evaluateExternalWithProcessEnvironment(
             plan.argv[0],
         );
         switch (apply_result) {
-            .applied => |applied| applied_redirections = applied,
+            .applied => |applied| redirection_guard = applied,
             .failure => |failure| {
                 try addRedirectionFailureDiagnostic(buffers, plan.argv[0], failure);
                 return 1;
@@ -9029,7 +9083,7 @@ fn evaluateExternalWithProcessEnvironment(
         },
     }).child;
 
-    if (applied_redirections) |*applied| applied.restore();
+    redirection_guard.restore();
 
     const wait_result = process_port.wait(.{ .child = &child }) catch |err| {
         const failure = waitFailure(err);
@@ -9067,13 +9121,10 @@ fn evaluateCapturedExternal(
     std.debug.assert(invocation.argv.len != 0);
     _ = fd_port;
 
-    var applied_redirections: ?redirection_plan.FdTransaction = null;
-    defer if (applied_redirections) |*applied| {
-        applied.restore();
-        applied.deinit();
-    };
+    var redirection_guard = RedirectionGuard.empty(.child_only);
+    defer redirection_guard.restore();
     if (hasRedirections(plan)) {
-        const apply_result = try applyRedirectionsEmittingExpansionOutput(
+        const apply_result = try applyRedirectionsForScope(
             evaluator.*,
             buffers,
             .child_only,
@@ -9086,7 +9137,7 @@ fn evaluateCapturedExternal(
             plan.argv[0],
         );
         switch (apply_result) {
-            .applied => |applied| applied_redirections = applied,
+            .applied => |applied| redirection_guard = applied,
             .failure => |failure| {
                 try addRedirectionFailureDiagnostic(buffers, plan.argv[0], failure);
                 return 1;
@@ -9182,16 +9233,13 @@ fn runExternalWithPipelineInputWithProcessEnvironment(
     var invocation = try ExternalInvocation.init(evaluator.allocator, shell_state, plan, resolution, process_overlay);
     defer invocation.deinit(evaluator.allocator);
 
-    var applied_redirections: ?redirection_plan.FdTransaction = null;
-    defer if (applied_redirections) |*applied| {
-        applied.restore();
-        applied.deinit();
-    };
+    var redirection_guard = RedirectionGuard.empty(.child_only);
+    defer redirection_guard.restore();
     if (capturedExternalMode(evaluator.external_stdio) == null and buffers.frame.spec.kind != .pipeline_stage) {
         try flushBuffersToInheritedDescriptors(buffers);
     }
-    if (plan.redirections.steps.len != 0 or plan.redirections.rollback_steps.len != 0) {
-        const apply_result = try applyRedirectionsEmittingExpansionOutput(
+    if (plan.redirections.steps.len != 0) {
+        const apply_result = try applyRedirectionsForScope(
             evaluator.*,
             buffers,
             .child_only,
@@ -9201,7 +9249,7 @@ fn runExternalWithPipelineInputWithProcessEnvironment(
             plan.argv[0],
         );
         switch (apply_result) {
-            .applied => |applied| applied_redirections = applied,
+            .applied => |applied| redirection_guard = applied,
             .failure => |failure| {
                 try addRedirectionFailureDiagnostic(buffers, plan.argv[0], failure);
                 return 1;
@@ -9262,7 +9310,7 @@ fn evaluateNotFound(not_found: command_plan.NotFound, buffers: *EvaluationBuffer
 
 fn hasRedirections(plan: command_plan.CommandPlan) bool {
     plan.redirections.validate();
-    return plan.redirections.steps.len != 0 or plan.redirections.rollback_steps.len != 0;
+    return plan.redirections.steps.len != 0;
 }
 
 const StdinSource = union(enum) {
@@ -16844,7 +16892,6 @@ test "semantic parser trap resolver lowers redirection operators for trap action
     };
     try std.testing.expectEqual(command_plan.CommandClass.external, plan.class());
     try std.testing.expectEqual(@as(usize, 8), plan.redirections.steps.len);
-    try std.testing.expectEqual(@as(usize, 8), plan.redirections.rollback_steps.len);
 
     switch (plan.redirections.steps[0].effect) {
         .open_path => |step| {
@@ -18882,11 +18929,10 @@ test "semantic background single external applies redirections and records proce
         "out",
         .{ .access = .write_only, .create = true, .truncate = true },
     )};
-    const rollback_steps = [_]redirection_plan.RestorationStep{.{ .ordinal = 0, .target = 1 }};
     const plan = command_plan.classifyExpandedSimpleCommand(.{
         .command = .{
             .argv = &[_][]const u8{ "tool", "arg" },
-            .redirections = .{ .steps = &redirection_steps, .rollback_steps = &rollback_steps },
+            .redirections = .{ .steps = &redirection_steps },
         },
         .lookup = .{ .externals = &externals },
     });
@@ -19054,10 +19100,9 @@ test "semantic background builtin redirections are guarded and restored around l
         "semantic-out",
         .{ .access = .write_only, .create = true, .truncate = true },
     )};
-    const rollback_steps = [_]redirection_plan.RestorationStep{.{ .ordinal = 0, .target = 1 }};
     const plan = command_plan.classifyExpandedSimpleCommand(.{ .command = .{
         .argv = &[_][]const u8{ "printf", "payload" },
-        .redirections = .{ .steps = &redirection_steps, .rollback_steps = &rollback_steps },
+        .redirections = .{ .steps = &redirection_steps },
     } });
     const pipeline = pipeline_plan.PipelinePlan.init(
         &[_]pipeline_plan.PipelineStagePlan{.{ .simple = plan }},
@@ -19257,10 +19302,8 @@ test "semantic pipeline evaluation keeps mixed status policy and redirection gua
         "mixed-out",
         .{ .access = .write_only, .create = true, .truncate = true },
     )};
-    const rollback_steps = [_]redirection_plan.RestorationStep{.{ .ordinal = 0, .target = 1 }};
     const redirections: redirection_plan.RedirectionPlan = .{
         .steps = &redirection_steps,
-        .rollback_steps = &rollback_steps,
     };
     const externals = [_]command_plan.ExternalResolution{.{ .name = "failer", .path = "/bin/failer" }};
     const lookup: command_plan.LookupSnapshot = .{ .externals = &externals };
@@ -19551,10 +19594,8 @@ test "semantic evaluator routes redirection failure consequences through central
         "missing",
         .{ .access = .read_only },
     )};
-    const command_failure_rollback = [_]redirection_plan.RestorationStep{.{ .ordinal = 0, .target = 0 }};
     const command_failure_redirections: redirection_plan.RedirectionPlan = .{
         .steps = &command_failure_steps,
-        .rollback_steps = &command_failure_rollback,
     };
     const command_failure_plan: command_plan.CompoundCommandPlan = .{
         .target = .current_shell,
@@ -19581,10 +19622,8 @@ test "semantic evaluator routes redirection failure consequences through central
         "missing",
         .{ .access = .read_only },
     )};
-    const fatal_rollback = [_]redirection_plan.RestorationStep{.{ .ordinal = 0, .target = 0 }};
     const fatal_redirections: redirection_plan.RedirectionPlan = .{
         .steps = &fatal_steps,
-        .rollback_steps = &fatal_rollback,
         .failure_consequence = .fatal_shell_error,
     };
     const fatal_plan: command_plan.CompoundCommandPlan = .{
@@ -19925,10 +19964,8 @@ test "semantic evaluator applies and restores compound command redirections" {
         "compound-out",
         .{ .access = .write_only, .create = true, .truncate = true },
     )};
-    const rollback_steps = [_]redirection_plan.RestorationStep{.{ .ordinal = 0, .target = 1 }};
     const redirections: redirection_plan.RedirectionPlan = .{
         .steps = &redirection_steps,
-        .rollback_steps = &rollback_steps,
     };
     const body_commands = [_]command_plan.CommandPlan{command_plan.classifyExpandedSimpleCommand(.{
         .command = .{ .argv = &[_][]const u8{
@@ -20172,10 +20209,8 @@ test "semantic evaluator applies and restores function call and definition redir
         "definition-out",
         .{ .access = .write_only, .create = true, .truncate = true },
     )};
-    const definition_rollback = [_]redirection_plan.RestorationStep{.{ .ordinal = 0, .target = 1 }};
     const definition_redirections: redirection_plan.RedirectionPlan = .{
         .steps = &definition_steps,
-        .rollback_steps = &definition_rollback,
     };
     const definition: command_plan.FunctionDefinition = .{
         .name = "fn",
@@ -20189,10 +20224,8 @@ test "semantic evaluator applies and restores function call and definition redir
         "call-out",
         .{ .access = .write_only, .create = true, .truncate = true },
     )};
-    const call_rollback = [_]redirection_plan.RestorationStep{.{ .ordinal = 0, .target = 1 }};
     const call_redirections: redirection_plan.RedirectionPlan = .{
         .steps = &call_steps,
-        .rollback_steps = &call_rollback,
     };
     const call_plan = command_plan.classifyExpandedSimpleCommand(.{
         .command = .{ .argv = &[_][]const u8{"fn"}, .redirections = call_redirections },
@@ -20246,10 +20279,8 @@ test "semantic evaluator executes external commands through runtime process and 
         "out",
         .{ .access = .write_only, .create = true, .truncate = true },
     )};
-    const rollback_steps = [_]redirection_plan.RestorationStep{.{ .ordinal = 0, .target = 1 }};
     const redirections: redirection_plan.RedirectionPlan = .{
         .steps = &redirection_steps,
-        .rollback_steps = &rollback_steps,
     };
     const plan = command_plan.classifyExpandedSimpleCommand(.{
         .command = .{ .assignments = &assignments, .argv = &argv, .redirections = redirections },

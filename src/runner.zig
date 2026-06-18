@@ -1602,8 +1602,7 @@ fn semanticPipelineUnsupportedMessage(plan: shell.PipelinePlan, legacy_fallback_
 
 fn semanticCompoundUnsupportedMessage(plan: shell.CompoundCommandPlan, legacy_fallback_gates: bool) ?[]const u8 {
     plan.validate();
-    if (legacy_fallback_gates and (plan.redirections.steps.len != 0 or
-        plan.redirections.rollback_steps.len != 0))
+    if (legacy_fallback_gates and plan.redirections.steps.len != 0)
         return "semantic executor production preflight keeps compound redirections " ++
             "unsupported outside the switched slice";
     switch (plan.body) {
