@@ -1340,6 +1340,24 @@
             .status = 0,
         },
         .{
+            .name = "subshell grouping accepts deeply nested compound bodies",
+            .script =
+            \\s='printf "ok\n"'
+            \\i=0
+            \\while [ "$i" -lt 200 ]; do
+            \\    s='( '"$s"' )'
+            \\    i=$((i + 1))
+            \\done
+            \\eval "$s"
+            ,
+            .stdout =
+            \\ok
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "if command redirection applies to the selected body",
             .script =
             \\if true
