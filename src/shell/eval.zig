@@ -12349,7 +12349,7 @@ fn assignReadFields(
         cursor = skipReadIfsWhitespace(line, escaped, cursor, ifs);
         const start = cursor;
         if (index + 1 == names.len) {
-            const end = trimReadIfsWhitespaceEnd(line, escaped, start, ifs);
+            const end = trimReadLastFieldEnd(line, escaped, start, ifs);
             try state_delta.assignVariable(name, line[start..end], .{});
             return;
         }
@@ -12469,6 +12469,26 @@ fn trimReadIfsWhitespaceEnd(
         end = previous;
     }
     return end;
+}
+
+fn trimReadLastFieldEnd(line: []const u8, escaped: ?[]const bool, start: usize, ifs: []const u8) usize {
+    const end = trimReadIfsWhitespaceEnd(line, escaped, start, ifs);
+    if (end <= start) return end;
+
+    const previous = previousReadCharacterIndex(line, end);
+    const trailing_separator = readIfsSeparatorAt(line, escaped, previous, ifs) orelse return end;
+    if (trailing_separator.whitespace or previous + trailing_separator.width != end) return end;
+
+    var cursor = start;
+    while (cursor < previous) {
+        if (readIfsSeparatorAt(line, escaped, cursor, ifs)) |separator| {
+            if (!separator.whitespace) return end;
+            cursor += separator.width;
+        } else {
+            cursor = nextReadCharacterIndex(line, cursor);
+        }
+    }
+    return previous;
 }
 
 const JobPrintMode = enum {

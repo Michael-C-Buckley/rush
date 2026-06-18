@@ -240,6 +240,26 @@
             .status = 0,
         },
         .{
+            .name = "read trims a single trailing non-whitespace IFS delimiter from the last variable",
+            .script =
+            \\printf 'a:b:\n' | {
+            \\    IFS=: read -r first rest
+            \\    printf '<%s>|<%s>\n' "$first" "$rest"
+            \\}
+            \\printf 'a::b:\n' | {
+            \\    IFS=: read -r first second rest
+            \\    printf '<%s>|<%s>|<%s>\n' "$first" "$second" "$rest"
+            \\}
+            ,
+            .stdout =
+            \\<a>|<b>
+            \\<a>|<>|<b>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "read treats multibyte IFS delimiters as single characters",
             .script =
             \\printf 'aåbåc\n' | {
