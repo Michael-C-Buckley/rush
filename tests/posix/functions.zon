@@ -78,10 +78,10 @@
             .status = 1,
         },
         .{
-            .name = "deep finite function call chain completes",
+            .name = "deep tail-recursive function call chain exceeds one thousand calls",
             .script =
             \\f() { if [ "$1" -eq 0 ]; then printf 'ok\n'; else next=$(( $1 - 1 )); f "$next"; fi; }
-            \\f 600
+            \\f 1200
             ,
             .stdout =
             \\ok

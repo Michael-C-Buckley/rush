@@ -2749,6 +2749,16 @@ const SimpleEvalResult = struct {
     control_flow: outcome.ControlFlow = .normal,
 };
 
+const FunctionBodyEvalResult = union(enum) {
+    result: SimpleEvalResult,
+    tail_call: command_plan.CommandPlan,
+};
+
+const FunctionTailCallContext = struct {
+    call_has_redirections: bool,
+    definition_has_redirections: bool,
+};
+
 const FunctionFrame = struct {
     allocator: std.mem.Allocator,
     depth: u32,
@@ -7527,6 +7537,530 @@ fn evaluateStatementList(
     return result;
 }
 
+fn evaluateFunctionStatementList(
+    evaluator: *Evaluator,
+    shell_state: *state.ShellState,
+    eval_context: context.EvalContext,
+    list: command_plan.StatementList,
+    tail_context: FunctionTailCallContext,
+    buffers: *EvaluationBuffers,
+) EvalError!FunctionBodyEvalResult {
+    shell_state.validate();
+    eval_context.validate();
+    list.validate();
+
+    var result = normalEvaluation(0);
+    if (list.commands.len != 0) {
+        for (list.commands, 0..) |child_plan, index| {
+            child_plan.validate();
+            try flushBuffersForRedirectionTargetsBetweenCommands(
+                buffers,
+                eval_context,
+                child_plan.redirections,
+                evaluator.external_stdio,
+            );
+            if (index + 1 == list.commands.len) {
+                if (try ownedTailFunctionCallPlan(
+                    evaluator,
+                    shell_state.*,
+                    eval_context,
+                    child_plan,
+                    tail_context,
+                    buffers,
+                )) |tail_plan| {
+                    return .{ .tail_call = tail_plan };
+                }
+            }
+
+            var child_outcome = try evaluatePlanWithInput(
+                evaluator,
+                shell_state,
+                eval_context.withTarget(child_plan.target),
+                child_plan,
+                buffers.stdin,
+                buffers.frame,
+            );
+            defer child_outcome.deinit();
+
+            try appendOutcomeBuffers(buffers, child_outcome);
+            try applyOutcomeToWorkingState(shell_state, &child_outcome, child_plan.target);
+            try configureRuntimeTrapMutations(evaluator, shell_state.*, child_outcome.state_delta);
+
+            const child_control_flow = child_outcome.effectiveControlFlow();
+            result = .{ .status = child_outcome.status, .control_flow = child_control_flow };
+            if (try runCurrentShellRuntimeTrapBoundary(evaluator, shell_state, eval_context, buffers)) |trap_result| {
+                if (trap_result.control_flow != .normal) {
+                    result = trap_result;
+                    break;
+                }
+                if (child_control_flow == .normal) result = trap_result;
+            }
+            try flushCurrentShellBufferedCommandOutput(
+                buffers,
+                eval_context,
+                evaluator.external_stdio,
+                evaluator.io != null,
+            );
+            if (child_control_flow != .normal) break;
+        }
+        return .{ .result = result };
+    }
+
+    var abort_bash_line: ?usize = null;
+    for (list.statements, 0..) |entry, index| {
+        entry.validate(index);
+        if (abort_bash_line) |line| {
+            if (statementSourceLine(entry.plan) == line) continue;
+            abort_bash_line = null;
+        }
+        const should_run = switch (entry.op_before) {
+            .sequence => true,
+            .and_if => result.status == 0,
+            .or_if => result.status != 0,
+        };
+        if (!should_run) continue;
+
+        var child_context = eval_context;
+        if (index + 1 < list.statements.len) {
+            switch (list.statements[index + 1].op_before) {
+                .sequence => {},
+                .and_if, .or_if => child_context = child_context.ignoreErrexit(),
+            }
+        }
+
+        try flushBuffersForStatementRedirections(
+            buffers,
+            child_context,
+            entry.plan,
+            evaluator.external_stdio,
+            evaluator.io != null,
+        );
+        if (index + 1 == list.statements.len) {
+            if (try evaluateFunctionTailStatementPlan(
+                evaluator,
+                shell_state,
+                child_context,
+                entry.plan,
+                tail_context,
+                buffers,
+            )) |tail_result| {
+                const tail_control_flow = switch (tail_result) {
+                    .tail_call => return tail_result,
+                    .result => |tail_simple_result| blk: {
+                        result = tail_simple_result;
+                        break :blk tail_simple_result.control_flow;
+                    },
+                };
+                if (try runCurrentShellRuntimeTrapBoundary(
+                    evaluator,
+                    shell_state,
+                    eval_context,
+                    buffers,
+                )) |trap_result| {
+                    if (trap_result.control_flow != .normal) {
+                        result = trap_result;
+                    } else if (tail_control_flow == .normal) {
+                        result = trap_result;
+                    }
+                }
+                try flushCurrentShellBufferedCommandOutput(
+                    buffers,
+                    eval_context,
+                    evaluator.external_stdio,
+                    evaluator.io != null,
+                );
+                return .{ .result = result };
+            }
+        }
+
+        var child_outcome = try evaluateStatementPlan(
+            evaluator,
+            shell_state,
+            child_context,
+            entry.plan,
+            buffers.stdin,
+            buffers.frame,
+        );
+        defer child_outcome.deinit();
+
+        try appendOutcomeBuffers(buffers, child_outcome);
+        if (statementPlanCommitsStateToParent(entry.plan)) {
+            try applyOutcomeToWorkingState(shell_state, &child_outcome, child_outcome.state_delta.target);
+            try configureRuntimeTrapMutations(evaluator, shell_state.*, child_outcome.state_delta);
+        } else {
+            try applyOutcomeStatusToWorkingState(shell_state, child_outcome);
+        }
+
+        const child_control_flow = child_outcome.effectiveControlFlow();
+        result = .{ .status = child_outcome.status, .control_flow = child_control_flow };
+        if (try runCurrentShellRuntimeTrapBoundary(evaluator, shell_state, eval_context, buffers)) |trap_result| {
+            if (trap_result.control_flow != .normal) {
+                result = trap_result;
+                break;
+            }
+            if (child_control_flow == .normal) result = trap_result;
+        }
+        try flushCurrentShellBufferedCommandOutput(
+            buffers,
+            eval_context,
+            evaluator.external_stdio,
+            evaluator.io != null,
+        );
+        if (bashAssignmentErrorAbortsSourceLine(eval_context, entry.plan, child_outcome)) {
+            abort_bash_line = statementSourceLine(entry.plan);
+        }
+        if (child_control_flow != .normal) break;
+    }
+    return .{ .result = result };
+}
+
+fn evaluateFunctionTailStatementPlan(
+    evaluator: *Evaluator,
+    shell_state: *state.ShellState,
+    eval_context: context.EvalContext,
+    plan: command_plan.StatementPlan,
+    tail_context: FunctionTailCallContext,
+    buffers: *EvaluationBuffers,
+) EvalError!?FunctionBodyEvalResult {
+    shell_state.validate();
+    eval_context.validate();
+    plan.validate();
+    return switch (plan) {
+        .simple => |simple| if (try ownedTailFunctionCallPlan(
+            evaluator,
+            shell_state.*,
+            eval_context,
+            simple,
+            tail_context,
+            buffers,
+        )) |tail_plan| .{ .tail_call = tail_plan } else null,
+        .compound => |compound| evaluateFunctionTailCompoundPlan(
+            evaluator,
+            shell_state,
+            eval_context,
+            compound,
+            tail_context,
+            buffers,
+        ),
+        .source => |source| evaluateFunctionTailSourceStatementPlan(
+            evaluator,
+            shell_state,
+            eval_context,
+            source,
+            tail_context,
+            buffers,
+        ),
+        .ir_source => |source| evaluateFunctionTailIrSourceStatementPlan(
+            evaluator,
+            shell_state,
+            eval_context,
+            source,
+            tail_context,
+            buffers,
+        ),
+        .pipeline => null,
+    };
+}
+
+fn evaluateFunctionTailSourceStatementPlan(
+    evaluator: *Evaluator,
+    shell_state: *state.ShellState,
+    eval_context: context.EvalContext,
+    source_plan: command_plan.SourceStatementPlan,
+    tail_context: FunctionTailCallContext,
+    buffers: *EvaluationBuffers,
+) EvalError!?FunctionBodyEvalResult {
+    source_plan.validate();
+    var parser_resolver = ParserBackedSourceResolver.init(evaluator);
+    parser_resolver.features = evaluator.features;
+    parser_resolver.arg_zero = evaluator.arg_zero;
+    parser_resolver.expand_aliases = shell_state.shopts.enabled(.expand_aliases);
+    parser_resolver.alias_state = evaluator.alias_state;
+    parser_resolver.active_frame = buffers.frame;
+    parser_resolver.active_input = buffers.stdin;
+    var body = (parser_resolver.lowerSource(
+        evaluator.allocator,
+        source_plan.source,
+        eval_context,
+        shell_state,
+    ) catch |err| switch (err) {
+        error.OutOfMemory => return error.OutOfMemory,
+        else => return error.Unimplemented,
+    }) orelse return error.Unimplemented;
+    defer body.deinit();
+    if (try evaluateFunctionTailTrapActionBody(
+        evaluator,
+        shell_state,
+        eval_context,
+        body,
+        tail_context,
+        buffers,
+    )) |tail_result| return tail_result;
+    return @as(
+        ?FunctionBodyEvalResult,
+        try evaluateFunctionTrapActionBodyResult(evaluator, shell_state, eval_context, body, buffers),
+    );
+}
+
+fn evaluateFunctionTailIrSourceStatementPlan(
+    evaluator: *Evaluator,
+    shell_state: *state.ShellState,
+    eval_context: context.EvalContext,
+    source_plan: command_plan.IrStatementPlan,
+    tail_context: FunctionTailCallContext,
+    buffers: *EvaluationBuffers,
+) EvalError!?FunctionBodyEvalResult {
+    source_plan.validate();
+    var parser_resolver = ParserBackedSourceResolver.init(evaluator);
+    parser_resolver.features = evaluator.features;
+    parser_resolver.arg_zero = evaluator.arg_zero;
+    parser_resolver.expand_aliases = shell_state.shopts.enabled(.expand_aliases);
+    parser_resolver.alias_state = evaluator.alias_state;
+    parser_resolver.active_frame = buffers.frame;
+    parser_resolver.active_input = buffers.stdin;
+    var body = (parser_resolver.lowerProgramStatement(
+        evaluator.allocator,
+        source_plan.program.*,
+        source_plan.statement_index,
+        eval_context,
+        shell_state,
+    ) catch |err| switch (err) {
+        error.OutOfMemory => return error.OutOfMemory,
+        else => return error.Unimplemented,
+    });
+    defer body.deinit();
+    if (try evaluateFunctionTailTrapActionBody(
+        evaluator,
+        shell_state,
+        eval_context,
+        body,
+        tail_context,
+        buffers,
+    )) |tail_result| return tail_result;
+    return @as(
+        ?FunctionBodyEvalResult,
+        try evaluateFunctionTrapActionBodyResult(evaluator, shell_state, eval_context, body, buffers),
+    );
+}
+
+fn evaluateFunctionTailTrapActionBody(
+    evaluator: *Evaluator,
+    shell_state: *state.ShellState,
+    eval_context: context.EvalContext,
+    body: TrapActionBody,
+    tail_context: FunctionTailCallContext,
+    buffers: *EvaluationBuffers,
+) EvalError!?FunctionBodyEvalResult {
+    body.validate();
+    return switch (body) {
+        .simple => |simple| if (try ownedTailFunctionCallPlan(
+            evaluator,
+            shell_state.*,
+            eval_context.withTarget(simple.target),
+            simple,
+            tail_context,
+            buffers,
+        )) |tail_plan| .{ .tail_call = tail_plan } else null,
+        .compound => |compound| evaluateFunctionTailCompoundPlan(
+            evaluator,
+            shell_state,
+            eval_context.withTarget(compound.target),
+            compound,
+            tail_context,
+            buffers,
+        ),
+        .owned => |owned| switch (owned.body) {
+            .simple => |simple| if (try ownedTailFunctionCallPlan(
+                evaluator,
+                shell_state.*,
+                eval_context.withTarget(simple.target),
+                simple,
+                tail_context,
+                buffers,
+            )) |tail_plan| .{ .tail_call = tail_plan } else null,
+            .compound => |compound| evaluateFunctionTailCompoundPlan(
+                evaluator,
+                shell_state,
+                eval_context.withTarget(compound.target),
+                compound,
+                tail_context,
+                buffers,
+            ),
+            .pipeline, .failure => null,
+        },
+        .pipeline, .failure => null,
+    };
+}
+
+fn evaluateFunctionTrapActionBodyResult(
+    evaluator: *Evaluator,
+    shell_state: *state.ShellState,
+    eval_context: context.EvalContext,
+    body: TrapActionBody,
+    buffers: *EvaluationBuffers,
+) EvalError!FunctionBodyEvalResult {
+    var body_outcome = try evaluateTrapActionBodyWithInputInFrame(
+        evaluator,
+        shell_state,
+        eval_context,
+        body,
+        buffers.stdin,
+        buffers.frame,
+    );
+    defer body_outcome.deinit();
+
+    try appendOutcomeBuffers(buffers, body_outcome);
+    if (trapActionBodyCommitsStateToParent(body)) {
+        try applyOutcomeToWorkingState(shell_state, &body_outcome, body_outcome.state_delta.target);
+    } else {
+        try applyOutcomeStatusToWorkingState(shell_state, body_outcome);
+    }
+    return .{ .result = .{ .status = body_outcome.status, .control_flow = body_outcome.effectiveControlFlow() } };
+}
+
+fn evaluateFunctionTailCompoundPlan(
+    evaluator: *Evaluator,
+    shell_state: *state.ShellState,
+    eval_context: context.EvalContext,
+    plan: command_plan.CompoundCommandPlan,
+    tail_context: FunctionTailCallContext,
+    buffers: *EvaluationBuffers,
+) EvalError!?FunctionBodyEvalResult {
+    shell_state.validate();
+    eval_context.validate();
+    plan.validate();
+    if (plan.target != .current_shell) return null;
+    if (plan.redirections.steps.len != 0) return null;
+    if (shell_state.options.enabled(.errexit)) return null;
+
+    return switch (plan.body) {
+        .sequence, .brace_group => |nested_list| @as(?FunctionBodyEvalResult, try evaluateFunctionStatementList(
+            evaluator,
+            shell_state,
+            eval_context,
+            nested_list,
+            tail_context,
+            buffers,
+        )),
+        .if_clause => |if_plan| @as(?FunctionBodyEvalResult, try evaluateFunctionIfClause(
+            evaluator,
+            shell_state,
+            eval_context,
+            if_plan,
+            tail_context,
+            buffers,
+        )),
+        .and_or_list,
+        .negation,
+        .subshell,
+        .while_loop,
+        .until_loop,
+        .for_loop,
+        .case_clause,
+        => null,
+    };
+}
+
+fn evaluateFunctionIfClause(
+    evaluator: *Evaluator,
+    shell_state: *state.ShellState,
+    eval_context: context.EvalContext,
+    if_plan: command_plan.IfPlan,
+    tail_context: FunctionTailCallContext,
+    buffers: *EvaluationBuffers,
+) EvalError!FunctionBodyEvalResult {
+    if_plan.validate();
+    for (if_plan.branches) |branch| {
+        const stderr_before = buffers.stderr.items.len;
+        const diagnostics_before = buffers.diagnostics.items.len;
+        const condition = try evaluateStatementList(
+            evaluator,
+            shell_state,
+            eval_context.ignoreErrexit(),
+            branch.condition,
+            buffers,
+        );
+        if (condition.control_flow != .normal) return .{ .result = condition };
+        if (bashAssignmentErrorBuffersAbortSourceLine(
+            eval_context,
+            buffers.*,
+            stderr_before,
+            diagnostics_before,
+            condition,
+        )) return .{ .result = condition };
+        if (condition.status == 0) return evaluateFunctionStatementList(
+            evaluator,
+            shell_state,
+            eval_context,
+            branch.body,
+            tail_context,
+            buffers,
+        );
+    }
+    return evaluateFunctionStatementList(
+        evaluator,
+        shell_state,
+        eval_context,
+        if_plan.else_body,
+        tail_context,
+        buffers,
+    );
+}
+
+fn ownedTailFunctionCallPlan(
+    evaluator: *Evaluator,
+    shell_state: state.ShellState,
+    eval_context: context.EvalContext,
+    plan: command_plan.CommandPlan,
+    tail_context: FunctionTailCallContext,
+    buffers: *EvaluationBuffers,
+) EvalError!?command_plan.CommandPlan {
+    if (!tailFunctionCallEligible(evaluator.*, shell_state, eval_context, plan, tail_context)) return null;
+    try appendPlanExpansionOutput(evaluator.*, eval_context, plan, buffers);
+    try flushCurrentShellBufferedCommandOutput(buffers, eval_context, evaluator.external_stdio, evaluator.io != null);
+    return command_plan.cloneCommandPlan(evaluator.allocator, plan) catch |err| switch (err) {
+        error.OutOfMemory => return error.OutOfMemory,
+    };
+}
+
+fn tailFunctionCallEligible(
+    evaluator: Evaluator,
+    shell_state: state.ShellState,
+    eval_context: context.EvalContext,
+    plan: command_plan.CommandPlan,
+    tail_context: FunctionTailCallContext,
+) bool {
+    shell_state.validate();
+    eval_context.validate();
+    plan.validate();
+    if (tail_context.call_has_redirections or tail_context.definition_has_redirections) return false;
+    if (eval_context.target != .current_shell) return false;
+    if (eval_context.subshell_depth != 0 or
+        eval_context.pipeline_depth != 0 or
+        eval_context.command_substitution_depth != 0) return false;
+    if (shell_state.scope != .current_shell or !shell_state.acceptsExecutionTarget(.current_shell)) return false;
+    if (shell_state.options.enabled(.errexit)) return false;
+    if (shell_state.traps.count() != 0 or
+        shell_state.pending_traps.items.len != 0 or
+        shell_state.pending_exit != null or
+        shell_state.trap_execution != .idle) return false;
+    if (plan.target != .current_shell) return false;
+    if (plan.assignments.len != 0 or plan.redirections.steps.len != 0) return false;
+    const frame = evaluator.function_frame orelse return false;
+    if (frame.assignment_prefixes.len != 0 or frame.local_names.items.len != 0) return false;
+    return switch (plan.classification) {
+        .function => true,
+        .empty,
+        .assignment_only,
+        .function_definition,
+        .special_builtin,
+        .regular_builtin,
+        .external,
+        .not_found,
+        => false,
+    };
+}
+
 fn statementSourceLine(plan: command_plan.StatementPlan) ?usize {
     plan.validate();
     return switch (plan) {
@@ -8169,6 +8703,62 @@ fn evaluateStatementListSource(
     return .{ .status = body_outcome.status, .control_flow = body_outcome.effectiveControlFlow() };
 }
 
+fn evaluateFunctionStatementListSource(
+    evaluator: *Evaluator,
+    shell_state: *state.ShellState,
+    eval_context: context.EvalContext,
+    source: []const u8,
+    tail_context: FunctionTailCallContext,
+    buffers: *EvaluationBuffers,
+) EvalError!FunctionBodyEvalResult {
+    shell_state.validate();
+    eval_context.validate();
+    std.debug.assert(eval_context.target.allowsShellStateCommit());
+    std.debug.assert(std.mem.findScalar(u8, source, 0) == null);
+
+    if (source.len == 0) return .{ .result = normalEvaluation(0) };
+
+    var parser_resolver = ParserBackedSourceResolver.init(evaluator);
+    parser_resolver.features = evaluator.features;
+    parser_resolver.arg_zero = evaluator.arg_zero;
+    parser_resolver.expand_aliases = shell_state.shopts.enabled(.expand_aliases);
+    parser_resolver.alias_state = evaluator.alias_state;
+    parser_resolver.active_frame = buffers.frame;
+    parser_resolver.active_input = buffers.stdin;
+    var body = (parser_resolver.lowerSource(
+        evaluator.allocator,
+        source,
+        eval_context,
+        shell_state,
+    ) catch |err| switch (err) {
+        error.OutOfMemory => return error.OutOfMemory,
+        else => return error.Unimplemented,
+    }) orelse return error.Unimplemented;
+    defer body.deinit();
+
+    if (trapActionStatementSequence(body)) |list| {
+        return evaluateFunctionStatementList(evaluator, shell_state, eval_context, list, tail_context, buffers);
+    }
+
+    var body_outcome = try evaluateTrapActionBodyWithInputInFrame(
+        evaluator,
+        shell_state,
+        eval_context,
+        body,
+        buffers.stdin,
+        buffers.frame,
+    );
+    defer body_outcome.deinit();
+
+    try appendOutcomeBuffers(buffers, body_outcome);
+    if (trapActionBodyCommitsStateToParent(body)) {
+        try applyOutcomeToWorkingState(shell_state, &body_outcome, body_outcome.state_delta.target);
+    } else {
+        try applyOutcomeStatusToWorkingState(shell_state, body_outcome);
+    }
+    return .{ .result = .{ .status = body_outcome.status, .control_flow = body_outcome.effectiveControlFlow() } };
+}
+
 fn trapActionStatementSequence(body: TrapActionBody) ?command_plan.StatementList {
     body.validate();
     return switch (body) {
@@ -8657,92 +9247,133 @@ fn evaluateFunction(
     const shell_state_before = shellStateMutationFingerprint(shell_state.*);
     defer std.debug.assert(shellStateMutationFingerprint(shell_state.*) == shell_state_before);
 
-    try flushBuffersForFunctionRedirectionTargets(buffers, plan, definition);
-
-    var call_redirections = RedirectionGuard.empty(.current_scoped);
-    defer call_redirections.restore();
-    if (hasRedirections(plan)) {
-        const apply_result = try applyRedirectionsForScope(
-            evaluator.*,
-            buffers,
-            .current_scoped,
-            .{},
-            plan.redirections,
-            redirectionExpansionModeForContext(eval_context),
-            definition.name,
-        );
-        switch (apply_result) {
-            .applied => |applied| call_redirections = applied,
-            .failure => |failure| {
-                try addRedirectionFailureDiagnostic(buffers, definition.name, failure);
-                return evaluationFromRedirectionFailure(shell_state.options, eval_context, failure);
-            },
-        }
-    }
-
-    var definition_redirections = RedirectionGuard.empty(.current_scoped);
-    defer definition_redirections.restore();
-    if (definition.redirections.steps.len != 0) {
-        const apply_result = try applyRedirectionsForScope(
-            evaluator.*,
-            buffers,
-            .current_scoped,
-            plan.redirections,
-            definition.redirections,
-            redirectionExpansionModeForContext(eval_context),
-            definition.name,
-        );
-        switch (apply_result) {
-            .applied => |applied| definition_redirections = applied,
-            .failure => |failure| {
-                try addRedirectionFailureDiagnostic(buffers, definition.name, failure);
-                return evaluationFromRedirectionFailure(shell_state.options, eval_context, failure);
-            },
-        }
-    }
-
     var frame_state = shell_state.cloneBorrowingFunctions(evaluator.allocator) catch |err| switch (err) {
         error.OutOfMemory => return error.OutOfMemory,
         error.ReadonlyVariable => unreachable,
     };
     defer frame_state.deinit();
-    try applyFunctionAssignmentPrefixes(&frame_state, shell_state.*, plan);
-    try frame_state.replacePositionals(plan.argv[1..]);
-
-    const function_context = eval_context.enterFunction();
-    var function_frame = FunctionFrame.init(evaluator.allocator, function_context.function_depth, plan.assignments);
-    defer function_frame.deinit();
     const previous_frame = evaluator.function_frame;
-    evaluator.function_frame = &function_frame;
-    defer {
-        std.debug.assert(evaluator.function_frame == &function_frame);
-        evaluator.function_frame = previous_frame;
-    }
+    var caller_context = eval_context;
+    var current_plan = plan;
+    var owned_plan: ?command_plan.CommandPlan = null;
+    defer if (owned_plan) |owned| command_plan.freeCommandPlan(evaluator.allocator, owned);
 
-    var result = if (definition.source_body_program) |program| blk: {
-        break :blk try evaluateFunctionProgramBody(evaluator, &frame_state, function_context, program.*, buffers);
-    } else if (definition.source_body) |source_body| blk: {
-        break :blk try evaluateFunctionSourceBody(evaluator, &frame_state, function_context, source_body, buffers);
-    } else blk: {
-        break :blk try evaluateStatementList(evaluator, &frame_state, function_context, definition.body, buffers);
-    };
-    if (result.control_flow == .return_from_scope) {
-        const request = result.control_flow.return_from_scope;
-        switch (request.scope) {
-            .function => {
-                std.debug.assert(function_context.canReturnFromFunction());
-                result = normalEvaluation(request.status);
+    while (true) {
+        const function_context = caller_context.enterFunction();
+        const current_definition = switch (current_plan.classification) {
+            .function => |current| current,
+            else => unreachable,
+        };
+        current_definition.validate();
+        std.debug.assert(current_definition.hasExecutableBody());
+        std.debug.assert(current_plan.target.allowsShellStateCommit());
+        std.debug.assert(current_plan.argv.len != 0);
+        std.debug.assert(std.mem.eql(u8, current_plan.argv[0], current_definition.name));
+        std.debug.assert(current_plan.assignmentEffect() == .temporary or current_plan.assignmentEffect() == .none);
+
+        try flushBuffersForFunctionRedirectionTargets(buffers, current_plan, current_definition);
+
+        var call_redirections = RedirectionGuard.empty(.current_scoped);
+        defer call_redirections.restore();
+        if (hasRedirections(current_plan)) {
+            const apply_result = try applyRedirectionsForScope(
+                evaluator.*,
+                buffers,
+                .current_scoped,
+                .{},
+                current_plan.redirections,
+                redirectionExpansionModeForContext(caller_context),
+                current_definition.name,
+            );
+            switch (apply_result) {
+                .applied => |applied| call_redirections = applied,
+                .failure => |failure| {
+                    try addRedirectionFailureDiagnostic(buffers, current_definition.name, failure);
+                    return evaluationFromRedirectionFailure(shell_state.options, caller_context, failure);
+                },
+            }
+        }
+
+        var definition_redirections = RedirectionGuard.empty(.current_scoped);
+        defer definition_redirections.restore();
+        if (current_definition.redirections.steps.len != 0) {
+            const apply_result = try applyRedirectionsForScope(
+                evaluator.*,
+                buffers,
+                .current_scoped,
+                current_plan.redirections,
+                current_definition.redirections,
+                redirectionExpansionModeForContext(caller_context),
+                current_definition.name,
+            );
+            switch (apply_result) {
+                .applied => |applied| definition_redirections = applied,
+                .failure => |failure| {
+                    try addRedirectionFailureDiagnostic(buffers, current_definition.name, failure);
+                    return evaluationFromRedirectionFailure(shell_state.options, caller_context, failure);
+                },
+            }
+        }
+
+        try applyFunctionAssignmentPrefixes(&frame_state, frame_state, current_plan);
+        try frame_state.replacePositionals(current_plan.argv[1..]);
+
+        var function_frame = FunctionFrame.init(
+            evaluator.allocator,
+            function_context.function_depth,
+            current_plan.assignments,
+        );
+        defer function_frame.deinit();
+        evaluator.function_frame = &function_frame;
+        defer {
+            std.debug.assert(evaluator.function_frame == &function_frame);
+            evaluator.function_frame = previous_frame;
+        }
+
+        const tail_context: FunctionTailCallContext = .{
+            .call_has_redirections = hasRedirections(current_plan),
+            .definition_has_redirections = current_definition.redirections.steps.len != 0,
+        };
+        const body_result = try evaluateFunctionBody(
+            evaluator,
+            &frame_state,
+            function_context,
+            current_definition,
+            tail_context,
+            buffers,
+        );
+        switch (body_result) {
+            .tail_call => |tail_plan| {
+                std.debug.assert(function_frame.assignment_prefixes.len == 0);
+                std.debug.assert(function_frame.local_names.items.len == 0);
+                if (owned_plan) |owned| command_plan.freeCommandPlan(evaluator.allocator, owned);
+                owned_plan = tail_plan;
+                current_plan = owned_plan.?;
+                caller_context = function_context;
+                continue;
             },
-            .sourced_script => {},
+            .result => |body_simple_result| {
+                var result = body_simple_result;
+                if (result.control_flow == .return_from_scope) {
+                    const request = result.control_flow.return_from_scope;
+                    switch (request.scope) {
+                        .function => {
+                            std.debug.assert(function_context.canReturnFromFunction());
+                            result = normalEvaluation(request.status);
+                        },
+                        .sourced_script => {},
+                    }
+                }
+
+                if (call_redirections.hasTransaction() or definition_redirections.hasTransaction()) {
+                    try flushBuffersForFunctionRedirectionTargets(buffers, current_plan, current_definition);
+                }
+
+                try appendFunctionFrameDelta(shell_state.*, frame_state, function_frame, state_delta);
+                return result;
+            },
         }
     }
-
-    if (call_redirections.hasTransaction() or definition_redirections.hasTransaction()) {
-        try flushBuffersForFunctionRedirectionTargets(buffers, plan, definition);
-    }
-
-    try appendFunctionFrameDelta(shell_state.*, frame_state, function_frame, state_delta);
-    return result;
 }
 
 fn flushBuffersForFunctionRedirectionTargets(
@@ -8759,18 +9390,65 @@ fn flushBuffersForFunctionRedirectionTargets(
     try frame.applyRedirectionsFlushingRouteChanges(definition.redirections);
 }
 
+fn evaluateFunctionBody(
+    evaluator: *Evaluator,
+    frame_state: *state.ShellState,
+    function_context: context.EvalContext,
+    definition: command_plan.FunctionDefinition,
+    tail_context: FunctionTailCallContext,
+    buffers: *EvaluationBuffers,
+) EvalError!FunctionBodyEvalResult {
+    definition.validate();
+    return if (definition.source_body_program) |program| blk: {
+        break :blk try evaluateFunctionProgramBody(
+            evaluator,
+            frame_state,
+            function_context,
+            program.*,
+            tail_context,
+            buffers,
+        );
+    } else if (definition.source_body) |source_body| blk: {
+        break :blk try evaluateFunctionSourceBody(
+            evaluator,
+            frame_state,
+            function_context,
+            source_body,
+            tail_context,
+            buffers,
+        );
+    } else blk: {
+        break :blk try evaluateFunctionStatementList(
+            evaluator,
+            frame_state,
+            function_context,
+            definition.body,
+            tail_context,
+            buffers,
+        );
+    };
+}
+
 fn evaluateFunctionSourceBody(
     evaluator: *Evaluator,
     frame_state: *state.ShellState,
     function_context: context.EvalContext,
     source_body: []const u8,
+    tail_context: FunctionTailCallContext,
     buffers: *EvaluationBuffers,
-) EvalError!SimpleEvalResult {
+) EvalError!FunctionBodyEvalResult {
     frame_state.validate();
     function_context.validate();
     std.debug.assert(function_context.canReturnFromFunction());
     std.debug.assert(std.mem.findScalar(u8, source_body, 0) == null);
-    return evaluateStatementListSource(evaluator, frame_state, function_context, source_body, buffers);
+    return evaluateFunctionStatementListSource(
+        evaluator,
+        frame_state,
+        function_context,
+        source_body,
+        tail_context,
+        buffers,
+    );
 }
 
 fn evaluateFunctionProgramBody(
@@ -8778,8 +9456,9 @@ fn evaluateFunctionProgramBody(
     frame_state: *state.ShellState,
     function_context: context.EvalContext,
     program: ir.Program,
+    tail_context: FunctionTailCallContext,
     buffers: *EvaluationBuffers,
-) EvalError!SimpleEvalResult {
+) EvalError!FunctionBodyEvalResult {
     frame_state.validate();
     function_context.validate();
     std.debug.assert(function_context.canReturnFromFunction());
@@ -8813,10 +9492,16 @@ fn evaluateFunctionProgramBody(
     const list = switch (lowered) {
         .list => |list| list,
         .failure => |failure| {
-            return simpleResultFromTrapActionFailure(evaluator, frame_state.*, function_context, failure, buffers);
+            return .{ .result = try simpleResultFromTrapActionFailure(
+                evaluator,
+                frame_state.*,
+                function_context,
+                failure,
+                buffers,
+            ) };
         },
     };
-    return evaluateStatementList(evaluator, frame_state, function_context, list, buffers);
+    return evaluateFunctionStatementList(evaluator, frame_state, function_context, list, tail_context, buffers);
 }
 
 fn applyFunctionAssignmentPrefixes(

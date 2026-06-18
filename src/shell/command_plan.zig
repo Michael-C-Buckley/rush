@@ -979,7 +979,7 @@ fn persistIrStatementPlanAsSource(
     };
 }
 
-fn cloneCommandPlan(allocator: std.mem.Allocator, plan: CommandPlan) std.mem.Allocator.Error!CommandPlan {
+pub fn cloneCommandPlan(allocator: std.mem.Allocator, plan: CommandPlan) std.mem.Allocator.Error!CommandPlan {
     return cloneCommandPlanWithMode(allocator, plan, .preserve_ir_source);
 }
 
@@ -1012,7 +1012,7 @@ fn cloneCommandPlanWithMode(
     return owned;
 }
 
-fn freeCommandPlan(allocator: std.mem.Allocator, plan: CommandPlan) void {
+pub fn freeCommandPlan(allocator: std.mem.Allocator, plan: CommandPlan) void {
     freeAssignments(allocator, plan.assignments);
     freeArgv(allocator, plan.argv);
     var redirections = plan.redirections;
