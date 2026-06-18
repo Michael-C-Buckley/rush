@@ -115,6 +115,20 @@
             .status = 0,
         },
         .{
+            .name = "io number removes backslash-newline before redirection operator",
+            .script =
+            \\echo ok 1\
+            \\>out
+            \\cat out
+            ,
+            .stdout =
+            \\ok
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "command substitution preserves descriptor swap routing",
             .script =
             \\v=$(exec 3>&1 1>&2 2>&3; printf out; printf err >&2)

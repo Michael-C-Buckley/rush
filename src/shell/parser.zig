@@ -3805,7 +3805,7 @@ const SyntaxParser = struct {
 
     fn startsIoNumberRedirection(self: SyntaxParser) bool {
         if (!self.at(.word) or self.index + 1 >= self.tokens.len) return false;
-        if (!isAllDigits(self.current().lexeme(self.source))) return false;
+        if (!isAllDigitsRemovingLineContinuations(self.current().lexeme(self.source))) return false;
         const next = self.tokens[self.index + 1];
         return self.current().span.end == next.span.start and next.kind.isRedirectOperator();
     }
@@ -3992,12 +3992,20 @@ fn isNameContinue(c: u8) bool {
     return isNameStart(c) or std.ascii.isDigit(c);
 }
 
-fn isAllDigits(word: []const u8) bool {
-    if (word.len == 0) return false;
-    for (word) |c| {
-        if (!std.ascii.isDigit(c)) return false;
+fn isAllDigitsRemovingLineContinuations(word: []const u8) bool {
+    var logical_index: usize = 0;
+    var index: usize = 0;
+    while (index < word.len) {
+        if (word[index] == '\\' and index + 1 < word.len and word[index + 1] == '\n') {
+            index += 2;
+            continue;
+        }
+
+        if (!std.ascii.isDigit(word[index])) return false;
+        logical_index += 1;
+        index += 1;
     }
-    return true;
+    return logical_index != 0;
 }
 
 fn spanForTokenRange(tokens: []const Token, start: usize, end: usize) Span {
@@ -4606,6 +4614,31 @@ test "parser builds redirection nodes with optional io number" {
             .{ .kind = .redirection, .span = .init(0, 5), .token_start = 0, .token_end = 3 },
             .{ .kind = .command_word, .span = .init(6, 10), .token_start = 4, .token_end = 5 },
             .{ .kind = .simple_command, .span = .init(0, 10), .token_start = 0, .token_end = 5 },
+        },
+    });
+}
+
+test "parser removes line continuations before classifying redirection io number" {
+    try expectParse("1\\\n>out", .{
+        .tokens = &.{
+            .{ .kind = .word, .span = .init(0, 3) },
+            .{ .kind = .greater, .span = .init(3, 4) },
+            .{ .kind = .word, .span = .init(4, 7) },
+            .{ .kind = .eof, .span = .empty(7) },
+        },
+        .nodes = &.{
+            .{ .kind = .root, .span = .init(0, 7), .token_start = 0, .token_end = 4 },
+            .{
+                .kind = .io_number,
+                .span = .init(0, 3),
+                .token_start = 0,
+                .token_end = 1,
+                .child_start = 0,
+                .child_end = 1,
+            },
+            .{ .kind = .word, .span = .init(4, 7), .token_start = 2, .token_end = 3, .child_start = 1, .child_end = 2 },
+            .{ .kind = .redirection, .span = .init(0, 7), .token_start = 0, .token_end = 3 },
+            .{ .kind = .simple_command, .span = .init(0, 7), .token_start = 0, .token_end = 3 },
         },
     });
 }
