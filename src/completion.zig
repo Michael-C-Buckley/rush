@@ -11,6 +11,7 @@ const runner = @import("runner.zig");
 const runtime = @import("runtime.zig");
 const shell_state_mod = @import("shell/state.zig");
 const editor_completion = @import("editor/completion.zig");
+const expand = @import("shell/expand.zig");
 
 pub const CancellationToken = editor_completion.CancellationToken;
 pub const Kind = editor_completion.Kind;
@@ -1658,6 +1659,7 @@ fn appendProviderCandidates(
                 semantic.replace_start,
                 semantic.replace_end,
                 .{},
+                shell_state.envLookup(),
             );
             defer freeCandidates(allocator, candidates);
             for (candidates) |candidate| try builder.appendCandidateIfMissing(allocator, candidate);
@@ -1670,6 +1672,7 @@ fn appendProviderCandidates(
                 semantic.replace_start,
                 semantic.replace_end,
                 .{ .directories_only = true },
+                shell_state.envLookup(),
             );
             defer freeCandidates(allocator, candidates);
             for (candidates) |candidate| try builder.appendCandidateIfMissing(allocator, candidate);
@@ -1735,6 +1738,7 @@ fn appendFunctionProviderCandidates(
         value_position,
         parsed_options,
         operands,
+        shell_state.envLookup(),
     );
     defer provider_state.deinit();
 
@@ -2241,7 +2245,7 @@ pub fn defaultPathApplication(
     const word = try decodeShellCompletionSlice(allocator, source, replace_start, replace_end);
     defer allocator.free(word);
 
-    const candidates = try pathCandidates(allocator, io, word, replace_start, replace_end);
+    const candidates = try pathCandidates(allocator, io, word, replace_start, replace_end, .{});
     defer freeCandidates(allocator, candidates);
     return applyCandidatesForInputWithPolicy(allocator, source, candidates, .prefixOnly());
 }
@@ -2270,7 +2274,7 @@ pub fn defaultApplication(
     const candidates = if (context.kind == .command and std.mem.indexOfScalar(u8, word, '/') == null)
         try commandCandidates(allocator, io, shell_state, replace_start, replace_end)
     else
-        try pathCandidates(allocator, io, word, replace_start, replace_end);
+        try pathCandidates(allocator, io, word, replace_start, replace_end, shell_state.envLookup());
     defer freeCandidates(allocator, candidates);
     return applyCandidatesForInputWithPolicy(allocator, source, candidates, .prefixOnly());
 }
@@ -2296,8 +2300,9 @@ fn pathCandidates(
     word: []const u8,
     replace_start: usize,
     replace_end: usize,
+    env: expand.EnvLookup,
 ) ![]Candidate {
-    return pathCandidatesWithOptions(allocator, io, word, replace_start, replace_end, .{});
+    return pathCandidatesWithOptions(allocator, io, word, replace_start, replace_end, .{}, env);
 }
 
 const PathCandidateOptions = struct {
@@ -2311,12 +2316,14 @@ fn pathCandidatesWithOptions(
     replace_start: usize,
     replace_end: usize,
     options: PathCandidateOptions,
+    env: expand.EnvLookup,
 ) ![]Candidate {
     const split = std.mem.findScalarLast(u8, word, '/');
     const dir_prefix = if (split) |index| word[0 .. index + 1] else "";
     const entry_prefix = if (split) |index| word[index + 1 ..] else word;
-    const dir_path = pathDirectoryToOpen(dir_prefix);
-
+    const dir_path_raw = if (dir_prefix.len == 0) "." else dir_prefix;
+    const dir_path = try expand.expandTilde(allocator, dir_path_raw, env);
+    defer allocator.free(dir_path);
     var dir = std.Io.Dir.cwd().openDir(io, dir_path, .{ .iterate = true }) catch |err| switch (err) {
         error.FileNotFound, error.NotDir, error.AccessDenied => return &.{},
         else => return err,
@@ -2644,8 +2651,8 @@ fn appendShellEscapedValue(
 }
 
 fn needsUnquotedEscape(byte: u8, index: usize) bool {
+    _ = index;
     if (std.ascii.isWhitespace(byte)) return true;
-    if (index == 0 and byte == '~') return true;
     return switch (byte) {
         '\\', '\'', '"', '`', '$', '&', '|', ';', '<', '>', '(', ')', '[', ']', '{', '}', '*', '?', '!', '#' => true,
         else => false,
@@ -4009,7 +4016,7 @@ test "application decodes escaped prefixes before matching and reinserts escaped
     try std.testing.expectEqualStrings("two\\ words", edit.replacement);
 }
 
-test "application escapes tilde and keeps directory completions open" {
+test "application preserves tilde and keeps directory completions open" {
     const tilde_source = "cat ~li";
     const tilde_candidates = [_]Candidate{.{
         .value = "~literal?",
@@ -4018,7 +4025,7 @@ test "application escapes tilde and keeps directory completions open" {
     }};
     const tilde_application = try applyCandidatesForInput(std.testing.allocator, tilde_source, &tilde_candidates);
     defer tilde_application.deinit(std.testing.allocator);
-    try std.testing.expectEqualStrings("\\~literal\\?", tilde_application.edit.replacement);
+    try std.testing.expectEqualStrings("~literal\\?", tilde_application.edit.replacement);
 
     const dir_source = "cat dir";
     const dir_candidates = [_]Candidate{.{

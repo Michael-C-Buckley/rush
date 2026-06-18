@@ -32,7 +32,6 @@ const completion_progress_start = "\x1b]9;4;3\x07";
 const completion_progress_stop = "\x1b]9;4;0\x07";
 const completion_progress_delay_ms = 500;
 
-
 pub const TerminalEvent = terminal.Event;
 pub const ColorScheme = terminal.ColorScheme;
 pub const ColorReport = terminal.ColorReport;
@@ -143,7 +142,6 @@ pub const ReadLineResult = union(enum) {
 };
 
 const completion_flash_ms = 80;
-
 
 pub const TerminalSession = struct {
     allocator: std.mem.Allocator,

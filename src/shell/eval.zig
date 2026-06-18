@@ -328,22 +328,19 @@ fn semanticCommandExecutionFrame(
     };
     try fd_table.applyRedirectionPlan(allocator, redirections);
     const stdin: execution_frame.InputEndpoint = switch (fd_table.boundEndpoint(0) orelse
-        @as(execution_frame.FdEndpoint, .{ .input = parent_frame.spec.stdin }))
-    {
+        @as(execution_frame.FdEndpoint, .{ .input = parent_frame.spec.stdin })) {
         .input => |input| input,
         .closed => .closed,
         .output => parent_frame.spec.stdin,
     };
     const stdout: execution_frame.OutputEndpoint = switch (fd_table.boundEndpoint(1) orelse
-        @as(execution_frame.FdEndpoint, .{ .output = parent_frame.spec.stdout }))
-    {
+        @as(execution_frame.FdEndpoint, .{ .output = parent_frame.spec.stdout })) {
         .output => |output| output,
         .closed => .discard,
         .input => parent_frame.spec.stdout,
     };
     const stderr: execution_frame.OutputEndpoint = switch (fd_table.boundEndpoint(2) orelse
-        @as(execution_frame.FdEndpoint, .{ .output = parent_frame.spec.stderr }))
-    {
+        @as(execution_frame.FdEndpoint, .{ .output = parent_frame.spec.stderr })) {
         .output => |output| output,
         .closed => .discard,
         .input => parent_frame.spec.stderr,
@@ -488,8 +485,7 @@ fn captureSet(
             .command_substitution_stdout => .{ .channels = &.{ .pipeline_data, .command_substitution_stdout } },
         },
         .command_substitution_stdout => switch (second orelse
-            return .{ .channels = &.{.command_substitution_stdout} })
-        {
+            return .{ .channels = &.{.command_substitution_stdout} }) {
             .side_stdout => .{ .channels = &.{ .command_substitution_stdout, .side_stdout } },
             .side_stderr => .{ .channels = &.{ .command_substitution_stdout, .side_stderr } },
             .pipeline_data => .{ .channels = &.{ .command_substitution_stdout, .pipeline_data } },
@@ -5172,24 +5168,24 @@ fn evaluateCommandSubstitutionBody(
         .simple => |plan| blk: {
             var input = EvaluationInput.empty();
             break :blk evaluatePlanWithInput(
-            evaluator,
-            substitution_state,
-            substitution_context.withTarget(plan.target),
-            plan,
-            &input,
-            frame,
-        );
+                evaluator,
+                substitution_state,
+                substitution_context.withTarget(plan.target),
+                plan,
+                &input,
+                frame,
+            );
         },
         .compound => |plan| blk: {
             var input = EvaluationInput.empty();
             break :blk evaluateCompoundPlanWithInput(
-            evaluator,
-            substitution_state,
-            substitution_context.withTarget(plan.target),
-            plan,
-            &input,
-            frame,
-        );
+                evaluator,
+                substitution_state,
+                substitution_context.withTarget(plan.target),
+                plan,
+                &input,
+                frame,
+            );
         },
         .pipeline => |plan| evaluatePipelinePlanWithFrame(
             evaluator,
@@ -5230,24 +5226,24 @@ fn evaluateCommandSubstitutionBodyPayload(
         .simple => |plan| blk: {
             var input = EvaluationInput.empty();
             break :blk evaluatePlanWithInput(
-            evaluator,
-            substitution_state,
-            substitution_context.withTarget(plan.target),
-            plan,
-            &input,
-            frame,
-        );
+                evaluator,
+                substitution_state,
+                substitution_context.withTarget(plan.target),
+                plan,
+                &input,
+                frame,
+            );
         },
         .compound => |plan| blk: {
             var input = EvaluationInput.empty();
             break :blk evaluateCompoundPlanWithInput(
-            evaluator,
-            substitution_state,
-            substitution_context.withTarget(plan.target),
-            plan,
-            &input,
-            frame,
-        );
+                evaluator,
+                substitution_state,
+                substitution_context.withTarget(plan.target),
+                plan,
+                &input,
+                frame,
+            );
         },
         .pipeline => |plan| evaluatePipelinePlanWithFrame(
             evaluator,
