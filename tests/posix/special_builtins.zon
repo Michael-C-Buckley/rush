@@ -433,6 +433,44 @@
             .status = 0,
         },
         .{
+            .name = "xtrace traces external pipeline component commands",
+            .script =
+            \\set -x
+            \\/bin/echo hi | cat
+            \\set +x
+            ,
+            .stdout =
+            \\hi
+            \\
+            ,
+            .stderr =
+            \\+ /bin/echo hi
+            \\+ cat
+            \\+ set +x
+            \\
+            ,
+            .status = 0,
+        },
+        .{
+            .name = "xtrace traces mixed pipeline external component commands",
+            .script =
+            \\set -x
+            \\echo hi | cat
+            \\set +x
+            ,
+            .stdout =
+            \\hi
+            \\
+            ,
+            .stderr =
+            \\+ echo hi
+            \\+ cat
+            \\+ set +x
+            \\
+            ,
+            .status = 0,
+        },
+        .{
             .name = "xtrace traces commands inside command substitutions before the expanded command",
             .script =
             \\set -x

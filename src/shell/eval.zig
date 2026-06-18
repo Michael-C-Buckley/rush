@@ -6106,7 +6106,7 @@ fn evaluatePipelinePlanWithFrame(
             pipelineHasExpansionOutput(plan))
             try evaluateFallbackPipeline(evaluator, shell_state.*, eval_context, plan, statuses, &buffers)
         else
-            try evaluateExternalOnlyRealPipeline(evaluator, shell_state.*, plan, statuses, &buffers),
+            try evaluateExternalOnlyRealPipeline(evaluator, shell_state.*, eval_context, plan, statuses, &buffers),
         .semantic_in_memory, .mixed_in_memory => try evaluateFallbackPipeline(
             evaluator,
             shell_state.*,
@@ -7758,11 +7758,13 @@ const PipelinePipe = struct {
 fn evaluateExternalOnlyRealPipeline(
     evaluator: *Evaluator,
     shell_state: state.ShellState,
+    eval_context: context.EvalContext,
     plan: pipeline_plan.PipelinePlan,
     statuses: []outcome.ExitStatus,
     buffers: *EvaluationBuffers,
 ) EvalError!void {
     shell_state.validate();
+    eval_context.validate();
     plan.validate();
     plan.validateStatusCount(statuses);
     std.debug.assert(plan.strategy == .external_only_real);
@@ -7798,6 +7800,22 @@ fn evaluateExternalOnlyRealPipeline(
         const stdin: runtime.process.StandardIo = if (index == 0) .inherit else .{ .fd = pipes[index - 1].read };
         const stdout: runtime.process.StandardIo =
             if (index + 1 == plan.stages.len) .inherit else .{ .fd = pipes[index].write };
+        const stage_target = plan.stageTarget(index);
+        const stage_context = pipelineStageContext(eval_context, stage_target, true);
+        var trace_state = shell_state;
+        var trace_input = EvaluationInput.empty();
+        switch (stageWithTarget(stage, stage_target)) {
+            .simple => |simple| try traceCommandPlanForEvaluation(
+                evaluator,
+                &trace_state,
+                stage_context,
+                simple,
+                &trace_input,
+                buffers.frame,
+                buffers,
+            ),
+            .compound => unreachable,
+        }
 
         const spawn_result = try spawnExternalPipelineStage(
             evaluator,
@@ -8099,6 +8117,7 @@ fn evaluateExternalPipelineStage(
     var stage_buffers = EvaluationBuffers.init(evaluator.allocator, input, frame);
     defer stage_buffers.deinit();
     try appendPlanExpansionOutput(evaluator.*, eval_context, plan, &stage_buffers);
+    try traceCommandPlanForEvaluation(evaluator, shell_state, eval_context, plan, input, frame, &stage_buffers);
 
     const status = try runExternalWithPipelineInput(evaluator, shell_state.*, plan, resolution, &stage_buffers);
     state_delta.setLastStatus(status);
