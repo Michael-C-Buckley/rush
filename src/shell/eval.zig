@@ -3187,6 +3187,7 @@ const FunctionBodyCursor = struct {
                     child_plan.redirections,
                     evaluator.external_stdio,
                 );
+                try traceCommandPlan(shell_state.*, child_plan, buffers);
                 const is_tail_child = list_cursor.tail_position and
                     list_cursor.index + 1 == list_cursor.list.commands.len;
                 if (is_tail_child) {
@@ -3269,6 +3270,7 @@ const FunctionBodyCursor = struct {
                 evaluator.external_stdio,
                 evaluator.io != null,
             );
+            try traceStatementPlan(shell_state.*, entry.plan, buffers);
 
             const is_tail_child = list_cursor.tail_position and
                 list_cursor.index + 1 == list_cursor.list.statements.len;
@@ -8689,6 +8691,7 @@ fn evaluateStatementList(
                 child_plan.redirections,
                 evaluator.external_stdio,
             );
+            try traceCommandPlan(shell_state.*, child_plan, buffers);
             var child_outcome = try evaluatePlanWithInput(
                 evaluator,
                 shell_state,
@@ -8744,6 +8747,7 @@ fn evaluateStatementList(
             evaluator.external_stdio,
             evaluator.io != null,
         );
+        try traceStatementPlan(shell_state.*, entry.plan, buffers);
         var child_outcome = try evaluateStatementPlan(
             evaluator,
             shell_state,
@@ -8796,6 +8800,7 @@ fn evaluateFunctionStatementList(
                 child_plan.redirections,
                 evaluator.external_stdio,
             );
+            try traceCommandPlan(shell_state.*, child_plan, buffers);
             if (index + 1 == list.commands.len) {
                 if (try ownedTailFunctionCallPlan(
                     evaluator,
@@ -8864,6 +8869,7 @@ fn evaluateFunctionStatementList(
             evaluator.external_stdio,
             evaluator.io != null,
         );
+        try traceStatementPlan(shell_state.*, entry.plan, buffers);
         if (index + 1 == list.statements.len) {
             if (try evaluateFunctionTailStatementPlan(
                 evaluator,
@@ -9292,6 +9298,75 @@ fn statementSourceLine(plan: command_plan.StatementPlan) ?usize {
         .ir_source => |source| source.line,
         .simple, .compound, .pipeline => null,
     };
+}
+
+fn traceStatementPlan(
+    shell_state: state.ShellState,
+    plan: command_plan.StatementPlan,
+    buffers: *EvaluationBuffers,
+) EvalError!void {
+    shell_state.validate();
+    plan.validate();
+    if (!shell_state.options.enabled(.xtrace)) return;
+    const source = statementTraceSource(plan) orelse return;
+
+    var frame = try buffers.outputFrame();
+    defer frame.deinit();
+    try frame.write(2, xtracePrefix(shell_state));
+    try frame.write(2, source);
+    try frame.write(2, "\n");
+}
+
+fn statementTraceSource(plan: command_plan.StatementPlan) ?[]const u8 {
+    plan.validate();
+    return switch (plan) {
+        .source => |source| source.source,
+        .ir_source => |source| source.fallback_source,
+        .simple, .compound, .pipeline => null,
+    };
+}
+
+fn xtracePrefix(shell_state: state.ShellState) []const u8 {
+    shell_state.validate();
+    return if (shell_state.getVariable("PS4")) |variable| variable.value else "";
+}
+
+fn traceCommandPlan(
+    shell_state: state.ShellState,
+    plan: command_plan.CommandPlan,
+    buffers: *EvaluationBuffers,
+) EvalError!void {
+    shell_state.validate();
+    plan.validate();
+    if (!shell_state.options.enabled(.xtrace)) return;
+
+    var text: std.ArrayList(u8) = .empty;
+    defer text.deinit(buffers.allocator);
+    try appendXtraceCommandText(buffers.allocator, &text, plan);
+
+    var frame = try buffers.outputFrame();
+    defer frame.deinit();
+    try frame.write(2, xtracePrefix(shell_state));
+    try frame.write(2, text.items);
+    try frame.write(2, "\n");
+}
+
+fn appendXtraceCommandText(
+    allocator: std.mem.Allocator,
+    text: *std.ArrayList(u8),
+    plan: command_plan.CommandPlan,
+) !void {
+    plan.validate();
+    for (plan.assignments, 0..) |assignment, index| {
+        if (index != 0) try text.append(allocator, ' ');
+        try text.appendSlice(allocator, assignment.name);
+        try text.append(allocator, '=');
+        try text.appendSlice(allocator, assignment.value);
+    }
+    for (plan.argv, 0..) |arg, index| {
+        if (index != 0 or plan.assignments.len != 0) try text.append(allocator, ' ');
+        try text.appendSlice(allocator, arg);
+    }
 }
 
 fn sourceLineIndex(source: []const u8, offset: usize) usize {

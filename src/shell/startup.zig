@@ -28,6 +28,7 @@ pub fn initializeInvocationState(
     try initializeShellLevel(shell_state);
     try shell_state.putVariable("IFS", " \t\n", .{});
     try shell_state.putVariable("OPTIND", "1", .{});
+    if (shell_state.getVariable("PS4") == null) try shell_state.putVariable("PS4", "+ ", .{});
 
     var ppid_buffer: [32]u8 = undefined;
     const ppid = try std.fmt.bufPrint(&ppid_buffer, "{d}", .{std.posix.getppid()});

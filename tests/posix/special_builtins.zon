@@ -361,6 +361,43 @@
             .status = 0,
         },
         .{
+            .name = "xtrace uses the default PS4 prefix before PS4 is unset",
+            .script =
+            \\set -x
+            \\echo hi
+            \\set +x
+            ,
+            .stdout =
+            \\hi
+            \\
+            ,
+            .stderr =
+            \\+ echo hi
+            \\+ set +x
+            \\
+            ,
+            .status = 0,
+        },
+        .{
+            .name = "xtrace uses an empty prefix after PS4 is unset",
+            .script =
+            \\unset PS4
+            \\set -x
+            \\echo hi
+            \\set +x
+            ,
+            .stdout =
+            \\hi
+            \\
+            ,
+            .stderr =
+            \\echo hi
+            \\set +x
+            \\
+            ,
+            .status = 0,
+        },
+        .{
             .name = "shift without an operand shifts by one",
             .script =
             \\set -- a b

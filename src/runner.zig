@@ -921,6 +921,9 @@ fn runSemanticLoweredProgram(
         if (semanticBodyUnsupportedMessage(body, eval_context.interactive)) |message| {
             return semanticUnsupported(allocator, message);
         }
+        if (semanticBodyUsesStatementXtrace(body)) {
+            try appendSemanticXtrace(allocator, &output_frame, shell_state.*, statement_source);
+        }
         const body_failed = semanticBodyIsStoppingFailure(body, eval_context.features);
         if (evaluator.external_stdio == .inherit and semanticBodyUsesInheritedExternal(body)) {
             const flush_result = try output_frame.flushPendingToInheritedDescriptors();
@@ -1013,6 +1016,34 @@ fn semanticSourceLine(source: []const u8, offset: usize) usize {
         if (byte == '\n') line += 1;
     }
     return line;
+}
+
+fn semanticBodyUsesStatementXtrace(body: shell.TrapActionBody) bool {
+    body.validate();
+    return switch (body) {
+        .simple => true,
+        .owned => |owned| switch (owned.body) {
+            .simple => true,
+            .compound, .pipeline, .failure => false,
+        },
+        .compound, .pipeline, .failure => false,
+    };
+}
+
+fn appendSemanticXtrace(
+    allocator: std.mem.Allocator,
+    output_frame: *shell.eval.RunnerOutputFrame,
+    shell_state: shell.ShellState,
+    statement_source: []const u8,
+) !void {
+    shell_state.validate();
+    std.debug.assert(statement_source.len != 0);
+    if (!shell_state.options.enabled(.xtrace)) return;
+    const prefix = if (shell_state.getVariable("PS4")) |variable| variable.value else "";
+    const trace = try std.fmt.allocPrint(allocator, "{s}{s}\n", .{ prefix, statement_source });
+    defer allocator.free(trace);
+    const write_result = try output_frame.writeOutcome("", trace);
+    if (write_result.stderr_failed) return error.Unimplemented;
 }
 
 fn bashAssignmentErrorAbortsSourceLine(
