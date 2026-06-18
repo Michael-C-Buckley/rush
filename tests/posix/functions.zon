@@ -116,7 +116,6 @@
             ,
             .stderr = "",
             .status = 0,
-            .skip_rush = "known Rush debug abort before explicit non-tail activation stack support",
         },
         .{
             .name = "non-tail recursive bare return preserves child status",

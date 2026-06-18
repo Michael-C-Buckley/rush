@@ -2752,12 +2752,742 @@ const SimpleEvalResult = struct {
 const FunctionBodyEvalResult = union(enum) {
     result: SimpleEvalResult,
     tail_call: command_plan.CommandPlan,
+    call_function: FunctionCursorCall,
 };
 
 const FunctionTailCallContext = struct {
     call_has_redirections: bool,
     definition_has_redirections: bool,
 };
+
+const FunctionCursorCall = struct {
+    plan: command_plan.CommandPlan,
+    eval_context: context.EvalContext,
+    owns_plan: bool = false,
+
+    fn validate(self: FunctionCursorCall) void {
+        self.plan.validate();
+        self.eval_context.validate();
+        std.debug.assert(self.plan.class() == .function);
+        std.debug.assert(self.plan.target == self.eval_context.target);
+    }
+};
+
+const FunctionCursorFrame = union(enum) {
+    list: FunctionStatementListCursor,
+    if_clause: FunctionIfCursor,
+};
+
+const FunctionCursorStep = union(enum) {
+    completed: SimpleEvalResult,
+    tail_call: command_plan.CommandPlan,
+    call_function: FunctionCursorCall,
+};
+
+const FunctionPendingCall = struct {
+    state_disposition: StatementChildStateDisposition,
+    statement_plan: ?command_plan.StatementPlan = null,
+
+    fn validate(self: FunctionPendingCall) void {
+        switch (self.state_disposition) {
+            .commit_to_working => |target| std.debug.assert(target.allowsShellStateCommit()),
+            .discard_except_status => {},
+        }
+        if (self.statement_plan) |plan| plan.validate();
+    }
+};
+
+const FunctionPendingCompound = struct {
+    body: command_plan.CompoundBody,
+    tail_statement: bool,
+
+    fn validate(self: FunctionPendingCompound) void {
+        self.body.validate();
+    }
+};
+
+const FunctionStatementListCursor = struct {
+    list: command_plan.StatementList,
+    eval_context: context.EvalContext,
+    tail_position: bool,
+    index: usize = 0,
+    result: SimpleEvalResult = .{ .status = 0 },
+    abort_bash_line: ?usize = null,
+    pending_call: ?FunctionPendingCall = null,
+    pending_compound: ?FunctionPendingCompound = null,
+
+    fn init(
+        list: command_plan.StatementList,
+        eval_context: context.EvalContext,
+        tail_position: bool,
+    ) FunctionStatementListCursor {
+        list.validate();
+        eval_context.validate();
+        return .{ .list = list, .eval_context = eval_context, .tail_position = tail_position };
+    }
+
+    fn validate(self: FunctionStatementListCursor) void {
+        self.list.validate();
+        self.eval_context.validate();
+        self.result.control_flow.validate();
+        std.debug.assert(self.index <= self.entryCount());
+        if (self.abort_bash_line != null) std.debug.assert(self.list.statements.len != 0);
+        if (self.pending_call) |pending| pending.validate();
+        if (self.pending_compound) |pending| pending.validate();
+        std.debug.assert(self.pending_call == null or self.pending_compound == null);
+    }
+
+    fn entryCount(self: FunctionStatementListCursor) usize {
+        return if (self.list.commands.len != 0) self.list.commands.len else self.list.statements.len;
+    }
+};
+
+const FunctionIfPhase = enum {
+    condition,
+    waiting_condition,
+    body,
+    waiting_body,
+    done,
+};
+
+const FunctionIfCursor = struct {
+    if_plan: command_plan.IfPlan,
+    eval_context: context.EvalContext,
+    tail_position: bool,
+    branch_index: usize = 0,
+    phase: FunctionIfPhase = .condition,
+    stderr_before: usize = 0,
+    diagnostics_before: usize = 0,
+    completed_result: ?SimpleEvalResult = null,
+
+    fn init(
+        if_plan: command_plan.IfPlan,
+        eval_context: context.EvalContext,
+        tail_position: bool,
+    ) FunctionIfCursor {
+        if_plan.validate();
+        eval_context.validate();
+        return .{ .if_plan = if_plan, .eval_context = eval_context, .tail_position = tail_position };
+    }
+
+    fn validate(self: FunctionIfCursor) void {
+        self.if_plan.validate();
+        self.eval_context.validate();
+        std.debug.assert(self.branch_index <= self.if_plan.branches.len);
+        if (self.completed_result) |result| result.control_flow.validate();
+    }
+};
+
+const FunctionBodyCursor = struct {
+    allocator: std.mem.Allocator,
+    frames: std.ArrayList(FunctionCursorFrame) = .empty,
+    tail_context: FunctionTailCallContext,
+
+    fn init(
+        allocator: std.mem.Allocator,
+        list: command_plan.StatementList,
+        eval_context: context.EvalContext,
+        tail_context: FunctionTailCallContext,
+    ) EvalError!FunctionBodyCursor {
+        list.validate();
+        eval_context.validate();
+        var cursor: FunctionBodyCursor = .{ .allocator = allocator, .tail_context = tail_context };
+        errdefer cursor.deinit();
+        try cursor.frames.append(allocator, .{ .list = FunctionStatementListCursor.init(list, eval_context, true) });
+        return cursor;
+    }
+
+    fn deinit(self: *FunctionBodyCursor) void {
+        self.frames.deinit(self.allocator);
+        self.* = undefined;
+    }
+
+    fn step(
+        self: *FunctionBodyCursor,
+        evaluator: *Evaluator,
+        shell_state: *state.ShellState,
+        buffers: *EvaluationBuffers,
+    ) EvalError!FunctionCursorStep {
+        shell_state.validate();
+        while (true) {
+            std.debug.assert(self.frames.items.len != 0);
+            const frame_index = self.frames.items.len - 1;
+            switch (self.frames.items[frame_index]) {
+                .list => |*list_cursor| {
+                    const step_result = try self.stepList(evaluator, shell_state, list_cursor, buffers);
+                    switch (step_result) {
+                        .completed => |simple_result| {
+                            _ = self.frames.pop();
+                            if (self.frames.items.len == 0) return .{ .completed = simple_result };
+                            try self.deliverNestedResult(evaluator, shell_state, buffers, simple_result);
+                            continue;
+                        },
+                        .tail_call, .call_function => return step_result,
+                    }
+                },
+                .if_clause => |*if_cursor| {
+                    const step_result = try self.stepIf(evaluator, shell_state, if_cursor, buffers);
+                    switch (step_result) {
+                        .completed => |simple_result| {
+                            _ = self.frames.pop();
+                            if (self.frames.items.len == 0) return .{ .completed = simple_result };
+                            try self.deliverNestedResult(evaluator, shell_state, buffers, simple_result);
+                            continue;
+                        },
+                        .tail_call, .call_function => return step_result,
+                    }
+                },
+            }
+        }
+    }
+
+    fn completeCallOutcome(
+        self: *FunctionBodyCursor,
+        evaluator: *Evaluator,
+        shell_state: *state.ShellState,
+        child_outcome: *outcome.CommandOutcome,
+        buffers: *EvaluationBuffers,
+    ) EvalError!void {
+        std.debug.assert(self.frames.items.len != 0);
+        switch (self.frames.items[self.frames.items.len - 1]) {
+            .list => |*list_cursor| {
+                const pending = list_cursor.pending_call orelse unreachable;
+                pending.validate();
+                var abort_bash_line_ptr: ?*?usize = null;
+                if (pending.statement_plan != null) abort_bash_line_ptr = &list_cursor.abort_bash_line;
+                const completion = try completeStatementChildOutcome(
+                    evaluator,
+                    shell_state,
+                    list_cursor.eval_context,
+                    child_outcome,
+                    pending.state_disposition,
+                    pending.statement_plan,
+                    abort_bash_line_ptr,
+                    &list_cursor.result,
+                    buffers,
+                );
+                list_cursor.pending_call = null;
+                if (completion.stop_list) {
+                    list_cursor.index = list_cursor.entryCount();
+                } else {
+                    list_cursor.index += 1;
+                }
+                list_cursor.validate();
+            },
+            .if_clause => unreachable,
+        }
+    }
+
+    fn stepList(
+        self: *FunctionBodyCursor,
+        evaluator: *Evaluator,
+        shell_state: *state.ShellState,
+        list_cursor: *FunctionStatementListCursor,
+        buffers: *EvaluationBuffers,
+    ) EvalError!FunctionCursorStep {
+        list_cursor.validate();
+        std.debug.assert(list_cursor.pending_call == null);
+        std.debug.assert(list_cursor.pending_compound == null);
+
+        if (list_cursor.list.commands.len != 0) {
+            while (list_cursor.index < list_cursor.list.commands.len) {
+                const child_plan = list_cursor.list.commands[list_cursor.index];
+                child_plan.validate();
+                try flushBuffersForRedirectionTargetsBetweenCommands(
+                    buffers,
+                    list_cursor.eval_context,
+                    child_plan.redirections,
+                    evaluator.external_stdio,
+                );
+                const is_tail_child = list_cursor.tail_position and
+                    list_cursor.index + 1 == list_cursor.list.commands.len;
+                if (is_tail_child) {
+                    if (try ownedTailFunctionCallPlan(
+                        evaluator,
+                        shell_state.*,
+                        list_cursor.eval_context,
+                        child_plan,
+                        self.tail_context,
+                        buffers,
+                    )) |tail_plan| return .{ .tail_call = tail_plan };
+                }
+                if (functionCursorCanSuspendSimpleCall(child_plan)) {
+                    list_cursor.pending_call = .{ .state_disposition = .{ .commit_to_working = child_plan.target } };
+                    return .{ .call_function = .{
+                        .plan = child_plan,
+                        .eval_context = list_cursor.eval_context.withTarget(child_plan.target),
+                    } };
+                }
+
+                var child_outcome = try evaluatePlanWithInput(
+                    evaluator,
+                    shell_state,
+                    list_cursor.eval_context.withTarget(child_plan.target),
+                    child_plan,
+                    buffers.stdin,
+                    buffers.frame,
+                );
+                defer child_outcome.deinit();
+                const completion = try completeStatementChildOutcome(
+                    evaluator,
+                    shell_state,
+                    list_cursor.eval_context,
+                    &child_outcome,
+                    .{ .commit_to_working = child_plan.target },
+                    null,
+                    null,
+                    &list_cursor.result,
+                    buffers,
+                );
+                list_cursor.index += 1;
+                if (completion.stop_list) break;
+            }
+            list_cursor.index = list_cursor.entryCount();
+            return .{ .completed = list_cursor.result };
+        }
+
+        while (list_cursor.index < list_cursor.list.statements.len) {
+            const entry = list_cursor.list.statements[list_cursor.index];
+            entry.validate(list_cursor.index);
+            if (list_cursor.abort_bash_line) |line| {
+                if (statementSourceLine(entry.plan) == line) {
+                    list_cursor.index += 1;
+                    continue;
+                }
+                list_cursor.abort_bash_line = null;
+            }
+            const should_run = switch (entry.op_before) {
+                .sequence => true,
+                .and_if => list_cursor.result.status == 0,
+                .or_if => list_cursor.result.status != 0,
+            };
+            if (!should_run) {
+                list_cursor.index += 1;
+                continue;
+            }
+
+            var child_context = list_cursor.eval_context;
+            if (list_cursor.index + 1 < list_cursor.list.statements.len) {
+                switch (list_cursor.list.statements[list_cursor.index + 1].op_before) {
+                    .sequence => {},
+                    .and_if, .or_if => child_context = child_context.ignoreErrexit(),
+                }
+            }
+
+            try flushBuffersForStatementRedirections(
+                buffers,
+                child_context,
+                entry.plan,
+                evaluator.external_stdio,
+                evaluator.io != null,
+            );
+
+            const is_tail_child = list_cursor.tail_position and
+                list_cursor.index + 1 == list_cursor.list.statements.len;
+            if (is_tail_child) {
+                switch (entry.plan) {
+                    .simple => |simple| if (try ownedTailFunctionCallPlan(
+                        evaluator,
+                        shell_state.*,
+                        child_context,
+                        simple,
+                        self.tail_context,
+                        buffers,
+                    )) |tail_plan| return .{ .tail_call = tail_plan },
+                    .compound => |compound| if (functionCursorCanEnterCompound(shell_state.*, compound, true)) {
+                        list_cursor.pending_compound = .{ .body = compound.body, .tail_statement = true };
+                        try self.pushCompound(compound.body, child_context, true);
+                        return self.step(evaluator, shell_state, buffers);
+                    },
+                    .source, .ir_source, .pipeline => {},
+                }
+            }
+
+            switch (entry.plan) {
+                .simple => |simple| if (functionCursorCanSuspendSimpleCall(simple)) {
+                    const state_disposition: StatementChildStateDisposition = .{ .commit_to_working = simple.target };
+                    list_cursor.pending_call = .{
+                        .state_disposition = state_disposition,
+                        .statement_plan = entry.plan,
+                    };
+                    return .{ .call_function = .{
+                        .plan = simple,
+                        .eval_context = child_context.withTarget(simple.target),
+                    } };
+                },
+                .compound => |compound| if (functionCursorCanEnterCompound(shell_state.*, compound, false)) {
+                    list_cursor.pending_compound = .{ .body = compound.body, .tail_statement = false };
+                    try self.pushCompound(compound.body, child_context, false);
+                    return self.step(evaluator, shell_state, buffers);
+                },
+                .source => |source| if (try ownedFunctionCallFromSourceForCursor(
+                    evaluator,
+                    shell_state,
+                    child_context,
+                    source,
+                )) |owned_plan| {
+                    list_cursor.pending_call = .{
+                        .state_disposition = .{ .commit_to_working = owned_plan.target },
+                        .statement_plan = entry.plan,
+                    };
+                    return .{ .call_function = .{
+                        .plan = owned_plan,
+                        .eval_context = child_context.withTarget(owned_plan.target),
+                        .owns_plan = true,
+                    } };
+                },
+                .ir_source => |source| if (try ownedFunctionCallFromIrSourceForCursor(
+                    evaluator,
+                    shell_state,
+                    child_context,
+                    source,
+                )) |owned_plan| {
+                    list_cursor.pending_call = .{
+                        .state_disposition = .{ .commit_to_working = owned_plan.target },
+                        .statement_plan = entry.plan,
+                    };
+                    return .{ .call_function = .{
+                        .plan = owned_plan,
+                        .eval_context = child_context.withTarget(owned_plan.target),
+                        .owns_plan = true,
+                    } };
+                },
+                .pipeline => {},
+            }
+
+            var child_outcome = try evaluateStatementPlan(
+                evaluator,
+                shell_state,
+                child_context,
+                entry.plan,
+                buffers.stdin,
+                buffers.frame,
+            );
+            defer child_outcome.deinit();
+
+            const state_disposition: StatementChildStateDisposition = if (statementPlanCommitsStateToParent(entry.plan))
+                .{ .commit_to_working = child_outcome.state_delta.target }
+            else
+                .discard_except_status;
+            const completion = try completeStatementChildOutcome(
+                evaluator,
+                shell_state,
+                list_cursor.eval_context,
+                &child_outcome,
+                state_disposition,
+                entry.plan,
+                &list_cursor.abort_bash_line,
+                &list_cursor.result,
+                buffers,
+            );
+            list_cursor.index += 1;
+            if (completion.stop_list) break;
+        }
+        list_cursor.index = list_cursor.entryCount();
+        return .{ .completed = list_cursor.result };
+    }
+
+    fn stepIf(
+        self: *FunctionBodyCursor,
+        evaluator: *Evaluator,
+        shell_state: *state.ShellState,
+        if_cursor: *FunctionIfCursor,
+        buffers: *EvaluationBuffers,
+    ) EvalError!FunctionCursorStep {
+        if_cursor.validate();
+        switch (if_cursor.phase) {
+            .condition => {
+                if (if_cursor.branch_index < if_cursor.if_plan.branches.len) {
+                    const branch = if_cursor.if_plan.branches[if_cursor.branch_index];
+                    if_cursor.stderr_before = buffers.stderr.items.len;
+                    if_cursor.diagnostics_before = buffers.diagnostics.items.len;
+                    if_cursor.phase = .waiting_condition;
+                    try self.frames.append(
+                        self.allocator,
+                        .{ .list = FunctionStatementListCursor.init(
+                            branch.condition,
+                            if_cursor.eval_context.ignoreErrexit(),
+                            false,
+                        ) },
+                    );
+                    return self.step(evaluator, shell_state, buffers);
+                }
+                if_cursor.phase = .waiting_body;
+                try self.frames.append(
+                    self.allocator,
+                    .{ .list = FunctionStatementListCursor.init(
+                        if_cursor.if_plan.else_body,
+                        if_cursor.eval_context,
+                        if_cursor.tail_position,
+                    ) },
+                );
+                return self.step(evaluator, shell_state, buffers);
+            },
+            .body => {
+                const branch = if_cursor.if_plan.branches[if_cursor.branch_index];
+                if_cursor.phase = .waiting_body;
+                try self.frames.append(
+                    self.allocator,
+                    .{ .list = FunctionStatementListCursor.init(
+                        branch.body,
+                        if_cursor.eval_context,
+                        if_cursor.tail_position,
+                    ) },
+                );
+                return self.step(evaluator, shell_state, buffers);
+            },
+            .waiting_condition, .waiting_body => unreachable,
+            .done => return .{ .completed = if_cursor.completed_result.? },
+        }
+    }
+
+    fn pushCompound(
+        self: *FunctionBodyCursor,
+        body: command_plan.CompoundBody,
+        eval_context: context.EvalContext,
+        tail_position: bool,
+    ) EvalError!void {
+        body.validate();
+        switch (body) {
+            .sequence, .brace_group => |list| try self.frames.append(
+                self.allocator,
+                .{ .list = FunctionStatementListCursor.init(list, eval_context, tail_position) },
+            ),
+            .if_clause => |if_plan| try self.frames.append(
+                self.allocator,
+                .{ .if_clause = FunctionIfCursor.init(if_plan, eval_context, tail_position) },
+            ),
+            .and_or_list,
+            .negation,
+            .subshell,
+            .while_loop,
+            .until_loop,
+            .for_loop,
+            .case_clause,
+            => unreachable,
+        }
+    }
+
+    fn deliverNestedResult(
+        self: *FunctionBodyCursor,
+        evaluator: *Evaluator,
+        shell_state: *state.ShellState,
+        buffers: *EvaluationBuffers,
+        nested_result: SimpleEvalResult,
+    ) EvalError!void {
+        std.debug.assert(self.frames.items.len != 0);
+        switch (self.frames.items[self.frames.items.len - 1]) {
+            .list => |*list_cursor| try self.deliverCompoundResult(
+                evaluator,
+                shell_state,
+                buffers,
+                list_cursor,
+                nested_result,
+            ),
+            .if_clause => |*if_cursor| try self.deliverIfResult(buffers, if_cursor, nested_result),
+        }
+    }
+
+    fn deliverCompoundResult(
+        self: *FunctionBodyCursor,
+        evaluator: *Evaluator,
+        shell_state: *state.ShellState,
+        buffers: *EvaluationBuffers,
+        list_cursor: *FunctionStatementListCursor,
+        nested_result: SimpleEvalResult,
+    ) EvalError!void {
+        _ = self;
+        const pending = list_cursor.pending_compound orelse unreachable;
+        pending.validate();
+        var child_result = nested_result;
+        if (pending.tail_statement) {
+            const tail_control_flow = child_result.control_flow;
+            list_cursor.result = child_result;
+            if (try runCurrentShellRuntimeTrapBoundary(
+                evaluator,
+                shell_state,
+                list_cursor.eval_context,
+                buffers,
+            )) |trap_result| {
+                if (trap_result.control_flow != .normal) {
+                    list_cursor.result = trap_result;
+                } else if (tail_control_flow == .normal) {
+                    list_cursor.result = trap_result;
+                }
+            }
+            try flushCurrentShellBufferedCommandOutput(
+                buffers,
+                list_cursor.eval_context,
+                evaluator.external_stdio,
+                evaluator.io != null,
+            );
+            list_cursor.index = list_cursor.entryCount();
+            list_cursor.pending_compound = null;
+            return;
+        }
+
+        if (!compoundBodySuppressesFinalErrexit(pending.body)) {
+            const decision = consequence.decideForCompoundCommand(
+                shell_state.options,
+                list_cursor.eval_context,
+                child_result.status,
+                child_result.control_flow,
+            );
+            child_result.control_flow = decision.control_flow;
+        }
+        const completion = try completeStatementChildResult(
+            evaluator,
+            shell_state,
+            list_cursor.eval_context,
+            child_result,
+            &list_cursor.result,
+            buffers,
+        );
+        list_cursor.pending_compound = null;
+        if (completion.stop_list) {
+            list_cursor.index = list_cursor.entryCount();
+        } else {
+            list_cursor.index += 1;
+        }
+        list_cursor.validate();
+    }
+
+    fn deliverIfResult(
+        self: *FunctionBodyCursor,
+        buffers: *EvaluationBuffers,
+        if_cursor: *FunctionIfCursor,
+        nested_result: SimpleEvalResult,
+    ) EvalError!void {
+        _ = self;
+        nested_result.control_flow.validate();
+        switch (if_cursor.phase) {
+            .waiting_condition => {
+                if (nested_result.control_flow != .normal or bashAssignmentErrorBuffersAbortSourceLine(
+                    if_cursor.eval_context,
+                    buffers.*,
+                    if_cursor.stderr_before,
+                    if_cursor.diagnostics_before,
+                    nested_result,
+                )) {
+                    if_cursor.phase = .done;
+                    if_cursor.branch_index = if_cursor.if_plan.branches.len;
+                    if_cursor.completed_result = nested_result;
+                    return;
+                }
+                if (nested_result.status == 0) {
+                    if_cursor.phase = .body;
+                } else {
+                    if_cursor.branch_index += 1;
+                    if_cursor.phase = .condition;
+                }
+            },
+            .waiting_body => {
+                if_cursor.phase = .done;
+                if_cursor.branch_index = if_cursor.if_plan.branches.len;
+                if_cursor.completed_result = nested_result;
+            },
+            .condition, .body, .done => unreachable,
+        }
+    }
+};
+
+fn functionCursorCanSuspendSimpleCall(plan: command_plan.CommandPlan) bool {
+    plan.validate();
+    return plan.class() == .function and plan.target.allowsShellStateCommit();
+}
+
+fn ownedFunctionCallFromSourceForCursor(
+    evaluator: *Evaluator,
+    shell_state: *state.ShellState,
+    eval_context: context.EvalContext,
+    source_plan: command_plan.SourceStatementPlan,
+) EvalError!?command_plan.CommandPlan {
+    source_plan.validate();
+    var parser_resolver = ParserBackedSourceResolver.init(evaluator);
+    parser_resolver.features = evaluator.features;
+    parser_resolver.arg_zero = evaluator.arg_zero;
+    parser_resolver.expand_aliases = shell_state.shopts.enabled(.expand_aliases);
+    parser_resolver.alias_state = evaluator.alias_state;
+    var body = (parser_resolver.lowerSource(
+        evaluator.allocator,
+        source_plan.source,
+        eval_context,
+        shell_state,
+    ) catch |err| switch (err) {
+        error.OutOfMemory => return error.OutOfMemory,
+        else => return null,
+    }) orelse return null;
+    defer body.deinit();
+    return ownedFunctionCallFromTrapActionBodyForCursor(evaluator.allocator, body);
+}
+
+fn ownedFunctionCallFromIrSourceForCursor(
+    evaluator: *Evaluator,
+    shell_state: *state.ShellState,
+    eval_context: context.EvalContext,
+    source_plan: command_plan.IrStatementPlan,
+) EvalError!?command_plan.CommandPlan {
+    source_plan.validate();
+    var parser_resolver = ParserBackedSourceResolver.init(evaluator);
+    parser_resolver.features = evaluator.features;
+    parser_resolver.arg_zero = evaluator.arg_zero;
+    parser_resolver.expand_aliases = shell_state.shopts.enabled(.expand_aliases);
+    parser_resolver.alias_state = evaluator.alias_state;
+    var body = (parser_resolver.lowerProgramStatement(
+        evaluator.allocator,
+        source_plan.program.*,
+        source_plan.statement_index,
+        eval_context,
+        shell_state,
+    ) catch |err| switch (err) {
+        error.OutOfMemory => return error.OutOfMemory,
+        else => return null,
+    });
+    defer body.deinit();
+    return ownedFunctionCallFromTrapActionBodyForCursor(evaluator.allocator, body);
+}
+
+fn ownedFunctionCallFromTrapActionBodyForCursor(
+    allocator: std.mem.Allocator,
+    body: TrapActionBody,
+) EvalError!?command_plan.CommandPlan {
+    body.validate();
+    const plan: command_plan.CommandPlan = switch (body) {
+        .simple => |simple| simple,
+        .owned => |owned| switch (owned.body) {
+            .simple => |simple| simple,
+            .compound, .pipeline, .failure => return null,
+        },
+        .compound, .pipeline, .failure => return null,
+    };
+    if (!functionCursorCanSuspendSimpleCall(plan)) return null;
+    return command_plan.cloneCommandPlan(allocator, plan) catch |err| switch (err) {
+        error.OutOfMemory => return error.OutOfMemory,
+    };
+}
+
+fn functionCursorCanEnterCompound(
+    shell_state: state.ShellState,
+    plan: command_plan.CompoundCommandPlan,
+    _: bool,
+) bool {
+    shell_state.validate();
+    plan.validate();
+    if (plan.target != .current_shell) return false;
+    if (plan.redirections.steps.len != 0) return false;
+    if (shell_state.options.enabled(.errexit)) return false;
+    return switch (plan.body) {
+        .sequence, .brace_group, .if_clause => true,
+        .and_or_list,
+        .negation,
+        .subshell,
+        .while_loop,
+        .until_loop,
+        .for_loop,
+        .case_clause,
+        => false,
+    };
+}
 
 const FunctionCallFrame = struct {
     allocator: std.mem.Allocator,
@@ -2771,6 +3501,7 @@ const FunctionCallFrame = struct {
     definition_redirections: RedirectionGuard = RedirectionGuard.empty(.current_scoped),
     body_lowering: ?TrapActionBody = null,
     body_lowering_arena: ?*std.heap.ArenaAllocator = null,
+    body_cursor: ?FunctionBodyCursor = null,
 
     fn init(
         allocator: std.mem.Allocator,
@@ -2804,6 +3535,10 @@ const FunctionCallFrame = struct {
     }
 
     fn deinit(self: *FunctionCallFrame) void {
+        if (self.body_cursor) |*cursor| {
+            cursor.deinit();
+            self.body_cursor = null;
+        }
         if (self.body_lowering) |*body| {
             body.deinit();
             self.body_lowering = null;
@@ -7822,6 +8557,7 @@ fn evaluateFunctionStatementList(
             )) |tail_result| {
                 switch (tail_result) {
                     .tail_call => return tail_result,
+                    .call_function => unreachable,
                     .result => |tail_simple_result| {
                         const tail_control_flow = tail_simple_result.control_flow;
                         result = tail_simple_result;
@@ -9570,6 +10306,311 @@ const FunctionActivation = struct {
     }
 };
 
+const FunctionStartResult = union(enum) {
+    started: *FunctionCallFrame,
+    completed: SimpleEvalResult,
+};
+
+fn startFunctionCallFrame(
+    evaluator: *Evaluator,
+    caller_shell_state: state.ShellState,
+    activation: *FunctionActivation,
+    caller_context: context.EvalContext,
+    plan: command_plan.CommandPlan,
+    owns_plan: bool,
+    buffers: *EvaluationBuffers,
+) EvalError!FunctionStartResult {
+    const call_frame = try activation.beginCallFrame(caller_context, plan, owns_plan);
+    activation.validate();
+
+    try flushBuffersForFunctionRedirectionTargets(buffers, call_frame.plan, call_frame.definition);
+
+    if (try beginFunctionCallRedirections(
+        evaluator,
+        caller_shell_state,
+        call_frame.caller_context,
+        call_frame.plan,
+        call_frame.definition,
+        &call_frame.call_redirections,
+        buffers,
+    )) |redirection_failure| return .{ .completed = redirection_failure };
+
+    if (try beginFunctionDefinitionRedirections(
+        evaluator,
+        caller_shell_state,
+        call_frame.caller_context,
+        call_frame.plan,
+        call_frame.definition,
+        &call_frame.definition_redirections,
+        buffers,
+    )) |redirection_failure| return .{ .completed = redirection_failure };
+
+    try beginFunctionFrameState(&activation.frame_state, call_frame.plan);
+    activation.installCallFrame();
+    return .{ .started = call_frame };
+}
+
+const FunctionCommandInvocationStart = union(enum) {
+    invocation: *FunctionCommandInvocation,
+    outcome: outcome.CommandOutcome,
+};
+
+const ActiveFunctionStart = union(enum) {
+    active: *ActiveFunctionCall,
+    outcome: outcome.CommandOutcome,
+};
+
+const FunctionCommandInvocation = struct {
+    allocator: std.mem.Allocator,
+    parent_shell_state: *state.ShellState,
+    eval_context: context.EvalContext,
+    effective_plan: command_plan.CommandPlan,
+    owns_plan: bool = false,
+    filtered_assignments: ?[]command_plan.Assignment = null,
+    state_delta: delta.StateDelta,
+    state_delta_consumed: bool = false,
+    command_frame: execution_frame.ExecutionFrame,
+    frame_input: EvaluationInput = EvaluationInput.empty(),
+    buffers: EvaluationBuffers,
+
+    fn begin(
+        allocator: std.mem.Allocator,
+        evaluator: *Evaluator,
+        parent_shell_state: *state.ShellState,
+        eval_context: context.EvalContext,
+        plan: command_plan.CommandPlan,
+        owns_plan: bool,
+        input: *EvaluationInput,
+        frame: *execution_frame.ExecutionFrame,
+    ) EvalError!FunctionCommandInvocationStart {
+        var plan_transferred = false;
+        errdefer if (owns_plan and !plan_transferred) command_plan.freeCommandPlan(allocator, plan);
+        parent_shell_state.validate();
+        eval_context.validate();
+        plan.validate();
+        input.validate();
+        frame.validate();
+        std.debug.assert(plan.class() == .function);
+        std.debug.assert(plan.target == eval_context.target);
+
+        var effective_plan = plan;
+        var filtered_assignments: ?[]command_plan.Assignment = null;
+        errdefer if (filtered_assignments) |assignments| allocator.free(assignments);
+        const readonly_assignment = delta.firstReadonlyAssignment(parent_shell_state.*, plan.assignments);
+        if (readonly_assignment) |_| {
+            if (bashCommandIgnoresReadonlyAssignment(eval_context, plan)) {
+                filtered_assignments = try filterReadonlyAssignments(allocator, parent_shell_state.*, plan.assignments);
+                effective_plan.assignments = filtered_assignments.?;
+                effective_plan.validate();
+            } else {
+                var outcome_result = try evaluatePlanWithInput(
+                    evaluator,
+                    parent_shell_state,
+                    eval_context,
+                    plan,
+                    input,
+                    frame,
+                );
+                errdefer outcome_result.deinit();
+                if (owns_plan) command_plan.freeCommandPlan(allocator, plan);
+                return .{ .outcome = outcome_result };
+            }
+        }
+
+        const invocation = try allocator.create(FunctionCommandInvocation);
+        errdefer allocator.destroy(invocation);
+        var command_frame = try semanticCommandExecutionFrame(
+            allocator,
+            evaluator.scoped_exec_redirections,
+            frame,
+            effective_plan.target,
+            effective_plan.redirections,
+        );
+        errdefer command_frame.spec.fd_table.deinit(allocator);
+
+        invocation.* = .{
+            .allocator = allocator,
+            .parent_shell_state = parent_shell_state,
+            .eval_context = eval_context,
+            .effective_plan = effective_plan,
+            .owns_plan = owns_plan,
+            .filtered_assignments = filtered_assignments,
+            .state_delta = delta.StateDelta.init(allocator, effective_plan.target),
+            .command_frame = command_frame,
+            .buffers = EvaluationBuffers.init(allocator, input, &invocation.command_frame),
+        };
+        plan_transferred = true;
+        filtered_assignments = null;
+        errdefer invocation.deinit();
+
+        invocation.buffers.useFrameFdTableInput(&invocation.frame_input, input);
+        if (readonly_assignment) |name| try invocation.buffers.addBuiltinDiagnostic(name, "readonly variable");
+        try appendPlanExpansionOutput(evaluator.*, eval_context, effective_plan, &invocation.buffers);
+        try flushCurrentShellBufferedCommandOutput(
+            &invocation.buffers,
+            eval_context,
+            evaluator.external_stdio,
+            evaluator.io != null,
+        );
+        return .{ .invocation = invocation };
+    }
+
+    fn finishCommandOutcome(
+        self: *FunctionCommandInvocation,
+        evaluator: *Evaluator,
+        result: SimpleEvalResult,
+    ) EvalError!outcome.CommandOutcome {
+        result.control_flow.validate();
+        if (frameRoutesPipelineData(self.command_frame)) try routeDirectPipelineStageBuffers(&self.buffers);
+        self.state_delta.setLastStatus(result.status);
+        assertCommandDeltaCompatible(self.effective_plan, self.state_delta);
+        const decision = consequence.decideForSimpleCommand(
+            self.parent_shell_state.options,
+            self.eval_context,
+            self.effective_plan,
+            result.status,
+            result.control_flow,
+        );
+        var command_outcome = try commandOutcomeFromBuffers(
+            self.allocator,
+            self.eval_context,
+            result.status,
+            self.state_delta,
+            decision.control_flow,
+            &self.buffers,
+        );
+        self.state_delta_consumed = true;
+        errdefer command_outcome.deinit();
+        try appendBuiltinDiagnostic(&command_outcome, self.effective_plan, result.status);
+        command_outcome.validateForContext(self.eval_context);
+        _ = evaluator;
+        return command_outcome;
+    }
+
+    fn deinit(self: *FunctionCommandInvocation) void {
+        self.buffers.deinit();
+        self.command_frame.spec.fd_table.deinit(self.allocator);
+        if (!self.state_delta_consumed) self.state_delta.deinit();
+        if (self.filtered_assignments) |assignments| self.allocator.free(assignments);
+        if (self.owns_plan) command_plan.freeCommandPlan(self.allocator, self.effective_plan);
+        self.* = undefined;
+    }
+};
+
+const ActiveFunctionCall = struct {
+    allocator: std.mem.Allocator,
+    caller_shell_state: *state.ShellState,
+    activation: FunctionActivation,
+    invocation: ?*FunctionCommandInvocation = null,
+    root_state_delta: ?*delta.StateDelta = null,
+    root_buffers: ?*EvaluationBuffers = null,
+    pending_result: ?SimpleEvalResult = null,
+
+    fn initRoot(
+        allocator: std.mem.Allocator,
+        evaluator: *Evaluator,
+        caller_shell_state: *state.ShellState,
+        caller_context: context.EvalContext,
+        plan: command_plan.CommandPlan,
+        state_delta: *delta.StateDelta,
+        buffers: *EvaluationBuffers,
+    ) EvalError!*ActiveFunctionCall {
+        const active = try allocator.create(ActiveFunctionCall);
+        errdefer allocator.destroy(active);
+        active.* = .{
+            .allocator = allocator,
+            .caller_shell_state = caller_shell_state,
+            .activation = try FunctionActivation.init(evaluator, caller_shell_state),
+            .root_state_delta = state_delta,
+            .root_buffers = buffers,
+        };
+        errdefer active.deinit();
+        switch (try startFunctionCallFrame(
+            evaluator,
+            caller_shell_state.*,
+            &active.activation,
+            caller_context,
+            plan,
+            false,
+            buffers,
+        )) {
+            .started => {},
+            .completed => |result| active.pending_result = result,
+        }
+        return active;
+    }
+
+    fn initNested(
+        allocator: std.mem.Allocator,
+        evaluator: *Evaluator,
+        parent_shell_state: *state.ShellState,
+        request: FunctionCursorCall,
+        input: *EvaluationInput,
+        frame: *execution_frame.ExecutionFrame,
+    ) EvalError!ActiveFunctionStart {
+        request.validate();
+        const invocation_start = try FunctionCommandInvocation.begin(
+            allocator,
+            evaluator,
+            parent_shell_state,
+            request.eval_context,
+            request.plan,
+            request.owns_plan,
+            input,
+            frame,
+        );
+        switch (invocation_start) {
+            .outcome => |command_outcome| return .{ .outcome = command_outcome },
+            .invocation => |invocation| {
+                errdefer {
+                    invocation.deinit();
+                    allocator.destroy(invocation);
+                }
+                const active = try allocator.create(ActiveFunctionCall);
+                errdefer allocator.destroy(active);
+                active.* = .{
+                    .allocator = allocator,
+                    .caller_shell_state = parent_shell_state,
+                    .activation = try FunctionActivation.init(evaluator, parent_shell_state),
+                    .invocation = invocation,
+                };
+                errdefer active.deinit();
+                switch (try startFunctionCallFrame(
+                    evaluator,
+                    parent_shell_state.*,
+                    &active.activation,
+                    request.eval_context,
+                    invocation.effective_plan,
+                    false,
+                    &invocation.buffers,
+                )) {
+                    .started => {},
+                    .completed => |result| active.pending_result = result,
+                }
+                return .{ .active = active };
+            },
+        }
+    }
+
+    fn activeBuffers(self: *ActiveFunctionCall) *EvaluationBuffers {
+        if (self.invocation) |invocation| return &invocation.buffers;
+        return self.root_buffers.?;
+    }
+
+    fn callFrame(self: *ActiveFunctionCall) *FunctionCallFrame {
+        return self.activation.call_frame.?;
+    }
+
+    fn deinit(self: *ActiveFunctionCall) void {
+        self.activation.deinit();
+        if (self.invocation) |invocation| {
+            invocation.deinit();
+            self.allocator.destroy(invocation);
+        }
+        self.* = undefined;
+    }
+};
+
 fn installFunctionFrame(evaluator: *Evaluator, function_frame: *FunctionFrame) void {
     std.debug.assert(function_frame.depth != 0);
     evaluator.function_frame = function_frame;
@@ -9659,71 +10700,139 @@ fn evaluateFunction(
     const shell_state_before = shellStateMutationFingerprint(shell_state.*);
     defer std.debug.assert(shellStateMutationFingerprint(shell_state.*) == shell_state_before);
 
-    var activation = try FunctionActivation.init(evaluator, shell_state);
-    defer activation.deinit();
-    var caller_context = eval_context;
-    var current_plan = plan;
-    var current_plan_owned = false;
+    var stack: std.ArrayList(*ActiveFunctionCall) = .empty;
+    defer {
+        while (stack.items.len != 0) {
+            const active = stack.pop().?;
+            active.deinit();
+            evaluator.allocator.destroy(active);
+        }
+        stack.deinit(evaluator.allocator);
+    }
 
-    while (true) {
-        const call_frame = try activation.beginCallFrame(caller_context, current_plan, current_plan_owned);
-        current_plan_owned = false;
-        activation.validate();
-
-        try flushBuffersForFunctionRedirectionTargets(buffers, call_frame.plan, call_frame.definition);
-
-        if (try beginFunctionCallRedirections(
+    try stack.append(
+        evaluator.allocator,
+        try ActiveFunctionCall.initRoot(
+            evaluator.allocator,
             evaluator,
-            shell_state.*,
-            call_frame.caller_context,
-            call_frame.plan,
-            call_frame.definition,
-            &call_frame.call_redirections,
+            shell_state,
+            eval_context,
+            plan,
+            state_delta,
             buffers,
-        )) |redirection_failure| return redirection_failure;
+        ),
+    );
 
-        if (try beginFunctionDefinitionRedirections(
+    while (stack.items.len != 0) {
+        const active = stack.items[stack.items.len - 1];
+        const body_result = if (active.pending_result) |pending| blk: {
+            active.pending_result = null;
+            break :blk FunctionBodyEvalResult{ .result = pending };
+        } else try evaluateFunctionBody(
             evaluator,
-            shell_state.*,
-            call_frame.caller_context,
-            call_frame.plan,
-            call_frame.definition,
-            &call_frame.definition_redirections,
-            buffers,
-        )) |redirection_failure| return redirection_failure;
-
-        try beginFunctionFrameState(&activation.frame_state, call_frame.plan);
-        activation.installCallFrame();
-
-        const body_result = try evaluateFunctionBody(
-            evaluator,
-            &activation.frame_state,
-            call_frame,
-            buffers,
+            &active.activation.frame_state,
+            active.callFrame(),
+            active.activeBuffers(),
         );
+
         switch (body_result) {
             .tail_call => |tail_plan| {
+                const call_frame = active.callFrame();
                 assertFunctionTailCallElisionSafe(call_frame.function_frame.*);
-                caller_context = call_frame.function_context;
-                activation.endCallFrame();
-                current_plan = tail_plan;
-                current_plan_owned = true;
-                continue;
+                const caller_context = call_frame.function_context;
+                if (call_frame.body_cursor) |*cursor| {
+                    cursor.deinit();
+                    call_frame.body_cursor = null;
+                }
+                active.activation.endCallFrame();
+                switch (try startFunctionCallFrame(
+                    evaluator,
+                    active.caller_shell_state.*,
+                    &active.activation,
+                    caller_context,
+                    tail_plan,
+                    true,
+                    active.activeBuffers(),
+                )) {
+                    .started => {},
+                    .completed => |result| active.pending_result = result,
+                }
             },
-            .result => |body_simple_result| return finishFunctionLifecycle(
-                shell_state.*,
-                activation.frame_state,
-                call_frame.function_context,
-                call_frame.plan,
-                call_frame.definition,
-                call_frame.function_frame.*,
-                call_frame.hasRedirections(),
-                state_delta,
-                buffers,
-                body_simple_result,
-            ),
+            .call_function => |request| {
+                request.validate();
+                switch (try ActiveFunctionCall.initNested(
+                    evaluator.allocator,
+                    evaluator,
+                    &active.activation.frame_state,
+                    request,
+                    active.activeBuffers().stdin,
+                    active.activeBuffers().frame,
+                )) {
+                    .outcome => |*child_outcome| {
+                        var mutable_outcome = child_outcome.*;
+                        defer mutable_outcome.deinit();
+                        try active.callFrame().body_cursor.?.completeCallOutcome(
+                            evaluator,
+                            &active.activation.frame_state,
+                            &mutable_outcome,
+                            active.activeBuffers(),
+                        );
+                    },
+                    .active => |child_active| try stack.append(evaluator.allocator, child_active),
+                }
+            },
+            .result => |body_simple_result| {
+                const call_frame = active.callFrame();
+                if (active.invocation) |invocation| {
+                    const command_result = try finishFunctionLifecycle(
+                        active.caller_shell_state.*,
+                        active.activation.frame_state,
+                        call_frame.function_context,
+                        call_frame.plan,
+                        call_frame.definition,
+                        call_frame.function_frame.*,
+                        call_frame.hasRedirections(),
+                        &invocation.state_delta,
+                        &invocation.buffers,
+                        body_simple_result,
+                    );
+                    var child_outcome = try invocation.finishCommandOutcome(evaluator, command_result);
+                    errdefer child_outcome.deinit();
+
+                    _ = stack.pop();
+                    active.deinit();
+                    evaluator.allocator.destroy(active);
+
+                    const parent = stack.items[stack.items.len - 1];
+                    defer child_outcome.deinit();
+                    try parent.callFrame().body_cursor.?.completeCallOutcome(
+                        evaluator,
+                        &parent.activation.frame_state,
+                        &child_outcome,
+                        parent.activeBuffers(),
+                    );
+                } else {
+                    const result = try finishFunctionLifecycle(
+                        shell_state.*,
+                        active.activation.frame_state,
+                        call_frame.function_context,
+                        call_frame.plan,
+                        call_frame.definition,
+                        call_frame.function_frame.*,
+                        call_frame.hasRedirections(),
+                        state_delta,
+                        buffers,
+                        body_simple_result,
+                    );
+                    _ = stack.pop();
+                    active.deinit();
+                    evaluator.allocator.destroy(active);
+                    return result;
+                }
+            },
         }
     }
+    unreachable;
 }
 
 fn flushBuffersForFunctionRedirectionTargets(
@@ -9741,6 +10850,27 @@ fn flushBuffersForFunctionRedirectionTargets(
 }
 
 fn evaluateFunctionBody(
+    evaluator: *Evaluator,
+    frame_state: *state.ShellState,
+    call_frame: *FunctionCallFrame,
+    buffers: *EvaluationBuffers,
+) EvalError!FunctionBodyEvalResult {
+    if (call_frame.body_cursor == null) {
+        if (try initializeFunctionBodyCursor(evaluator, frame_state, call_frame, buffers)) {
+            // The cursor is stepped below.
+        } else {
+            return evaluateFunctionBodyFallback(evaluator, frame_state, call_frame, buffers);
+        }
+    }
+    const step = try call_frame.body_cursor.?.step(evaluator, frame_state, buffers);
+    return switch (step) {
+        .completed => |result| .{ .result = result },
+        .tail_call => |tail_plan| .{ .tail_call = tail_plan },
+        .call_function => |request| .{ .call_function = request },
+    };
+}
+
+fn evaluateFunctionBodyFallback(
     evaluator: *Evaluator,
     frame_state: *state.ShellState,
     call_frame: *FunctionCallFrame,
@@ -9780,6 +10910,85 @@ fn evaluateFunctionBody(
             buffers,
         );
     };
+}
+
+fn initializeFunctionBodyCursor(
+    evaluator: *Evaluator,
+    frame_state: *state.ShellState,
+    call_frame: *FunctionCallFrame,
+    buffers: *EvaluationBuffers,
+) EvalError!bool {
+    const function_context = call_frame.function_context;
+    const definition = call_frame.definition;
+    const tail_context = call_frame.tailContext();
+    definition.validate();
+    std.debug.assert(call_frame.body_cursor == null);
+
+    const list: command_plan.StatementList = if (definition.source_body_program) |program| blk: {
+        frame_state.validate();
+        function_context.validate();
+        std.debug.assert(function_context.canReturnFromFunction());
+        std.debug.assert(std.mem.findScalar(u8, program.source, 0) == null);
+
+        var parser_resolver = ParserBackedSourceResolver.init(evaluator);
+        parser_resolver.features = evaluator.features;
+        parser_resolver.arg_zero = evaluator.arg_zero;
+        parser_resolver.expand_aliases = frame_state.shopts.enabled(.expand_aliases);
+        parser_resolver.alias_state = evaluator.alias_state;
+        parser_resolver.active_frame = buffers.frame;
+        parser_resolver.active_input = buffers.stdin;
+        const arena_allocator = try call_frame.bodyArenaAllocator();
+        var lowerer: SourceLowerer = .{
+            .allocator = arena_allocator,
+            .owner = &parser_resolver,
+            .shell_state = frame_state,
+            .eval_context = function_context,
+            .signal = null,
+            .local_functions = .empty,
+        };
+
+        const lowered = lowerer.lowerStatementList(program.*, function_context.target) catch |err| switch (err) {
+            error.OutOfMemory => return error.OutOfMemory,
+            else => return false,
+        };
+        break :blk switch (lowered) {
+            .list => |lowered_list| lowered_list,
+            .failure => return false,
+        };
+    } else if (definition.source_body) |source_body| blk: {
+        frame_state.validate();
+        function_context.validate();
+        std.debug.assert(function_context.canReturnFromFunction());
+        std.debug.assert(std.mem.findScalar(u8, source_body, 0) == null);
+        if (source_body.len == 0) break :blk command_plan.StatementList{};
+
+        var parser_resolver = ParserBackedSourceResolver.init(evaluator);
+        parser_resolver.features = evaluator.features;
+        parser_resolver.arg_zero = evaluator.arg_zero;
+        parser_resolver.expand_aliases = frame_state.shopts.enabled(.expand_aliases);
+        parser_resolver.alias_state = evaluator.alias_state;
+        parser_resolver.active_frame = buffers.frame;
+        parser_resolver.active_input = buffers.stdin;
+        const body = (parser_resolver.lowerSource(
+            evaluator.allocator,
+            source_body,
+            function_context,
+            frame_state,
+        ) catch |err| switch (err) {
+            error.OutOfMemory => return error.OutOfMemory,
+            else => return false,
+        }) orelse return false;
+        call_frame.storeBodyLowering(body);
+        const body_lowering = call_frame.bodyLowering();
+        break :blk trapActionStatementSequence(body_lowering) orelse {
+            call_frame.body_lowering.?.deinit();
+            call_frame.body_lowering = null;
+            return false;
+        };
+    } else definition.body;
+
+    call_frame.body_cursor = try FunctionBodyCursor.init(evaluator.allocator, list, function_context, tail_context);
+    return true;
 }
 
 fn evaluateFunctionSourceBody(
