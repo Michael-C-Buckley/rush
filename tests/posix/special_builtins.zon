@@ -433,6 +433,49 @@
             .status = 0,
         },
         .{
+            .name = "xtrace traces commands inside command substitutions before the expanded command",
+            .script =
+            \\set -x
+            \\x=$(echo sub)
+            \\echo x:$x
+            \\set +x
+            ,
+            .stdout =
+            \\x:sub
+            \\
+            ,
+            .stderr =
+            \\+ echo sub
+            \\+ x=sub
+            \\+ echo x:sub
+            \\+ set +x
+            \\
+            ,
+            .status = 0,
+        },
+        .{
+            .name = "xtrace traces nested command substitutions before the expanded command",
+            .script =
+            \\set -x
+            \\x=$(echo $(echo inner))
+            \\echo x:$x
+            \\set +x
+            ,
+            .stdout =
+            \\x:inner
+            \\
+            ,
+            .stderr =
+            \\+ echo inner
+            \\+ echo inner
+            \\+ x=inner
+            \\+ echo x:inner
+            \\+ set +x
+            \\
+            ,
+            .status = 0,
+        },
+        .{
             .name = "shift without an operand shifts by one",
             .script =
             \\set -- a b

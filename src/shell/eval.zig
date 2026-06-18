@@ -3188,7 +3188,6 @@ const FunctionBodyCursor = struct {
                     child_plan.redirections,
                     evaluator.external_stdio,
                 );
-                try traceCommandPlan(evaluator, shell_state, list_cursor.eval_context, child_plan, buffers);
                 const is_tail_child = list_cursor.tail_position and
                     list_cursor.index + 1 == list_cursor.list.commands.len;
                 if (is_tail_child) {
@@ -3271,8 +3270,6 @@ const FunctionBodyCursor = struct {
                 evaluator.external_stdio,
                 evaluator.io != null,
             );
-            try traceStatementPlan(evaluator, shell_state, child_context, entry.plan, buffers);
-
             const is_tail_child = list_cursor.tail_position and
                 list_cursor.index + 1 == list_cursor.list.statements.len;
             if (is_tail_child) {
@@ -4261,6 +4258,15 @@ fn evaluatePlanWithInput(
             var buffers = EvaluationBuffers.init(evaluator.allocator, &failure_input, frame);
             defer buffers.deinit();
             try appendPlanExpansionOutput(evaluator.*, eval_context, plan, &buffers);
+            try traceCommandPlanForEvaluation(
+                evaluator,
+                shell_state,
+                eval_context,
+                plan,
+                &failure_input,
+                frame,
+                &buffers,
+            );
             try buffers.addBuiltinDiagnostic(name, "readonly variable");
 
             const kind: consequence.ShellErrorKind = if (plan.class() == .special_builtin)
@@ -4317,6 +4323,7 @@ fn evaluatePlanWithInput(
     buffers.useFrameFdTableInput(&frame_input, input);
     if (readonly_assignment) |name| try buffers.addBuiltinDiagnostic(name, "readonly variable");
     try appendPlanExpansionOutput(evaluator.*, eval_context, effective_plan, &buffers);
+    try traceCommandPlanForEvaluation(evaluator, shell_state, eval_context, effective_plan, input, frame, &buffers);
     try flushCurrentShellBufferedCommandOutput(&buffers, eval_context, evaluator.external_stdio, evaluator.io != null);
     const routed_prefix: RoutedOutputPrefix = .{
         .stdout = buffers.stdout.items.len,
@@ -8693,7 +8700,6 @@ fn evaluateStatementList(
                 child_plan.redirections,
                 evaluator.external_stdio,
             );
-            try traceCommandPlan(evaluator, shell_state, eval_context, child_plan, buffers);
             var child_outcome = try evaluatePlanWithInput(
                 evaluator,
                 shell_state,
@@ -8749,7 +8755,6 @@ fn evaluateStatementList(
             evaluator.external_stdio,
             evaluator.io != null,
         );
-        try traceStatementPlan(evaluator, shell_state, child_context, entry.plan, buffers);
         var child_outcome = try evaluateStatementPlan(
             evaluator,
             shell_state,
@@ -8802,7 +8807,6 @@ fn evaluateFunctionStatementList(
                 child_plan.redirections,
                 evaluator.external_stdio,
             );
-            try traceCommandPlan(evaluator, shell_state, eval_context, child_plan, buffers);
             if (index + 1 == list.commands.len) {
                 if (try ownedTailFunctionCallPlan(
                     evaluator,
@@ -8871,7 +8875,6 @@ fn evaluateFunctionStatementList(
             evaluator.external_stdio,
             evaluator.io != null,
         );
-        try traceStatementPlan(evaluator, shell_state, child_context, entry.plan, buffers);
         if (index + 1 == list.statements.len) {
             if (try evaluateFunctionTailStatementPlan(
                 evaluator,
@@ -9249,6 +9252,16 @@ fn ownedTailFunctionCallPlan(
 ) EvalError!?command_plan.CommandPlan {
     if (!tailFunctionCallEligible(evaluator.*, shell_state, eval_context, plan, tail_context)) return null;
     try appendPlanExpansionOutput(evaluator.*, eval_context, plan, buffers);
+    var trace_state = shell_state;
+    try traceCommandPlanForEvaluation(
+        evaluator,
+        &trace_state,
+        eval_context,
+        plan,
+        buffers.stdin,
+        buffers.frame,
+        buffers,
+    );
     try flushCurrentShellBufferedCommandOutput(buffers, eval_context, evaluator.external_stdio, evaluator.io != null);
     return command_plan.cloneCommandPlan(evaluator.allocator, plan) catch |err| switch (err) {
         error.OutOfMemory => return error.OutOfMemory,
@@ -9302,81 +9315,33 @@ fn statementSourceLine(plan: command_plan.StatementPlan) ?usize {
     };
 }
 
-fn traceStatementPlan(
-    evaluator: *Evaluator,
-    shell_state: *state.ShellState,
-    eval_context: context.EvalContext,
-    plan: command_plan.StatementPlan,
-    buffers: *EvaluationBuffers,
-) EvalError!void {
-    shell_state.validate();
-    eval_context.validate();
-    plan.validate();
-    if (!shell_state.options.enabled(.xtrace)) return;
-    const source = statementTraceSource(plan) orelse return;
-
-    var frame = try buffers.outputFrame();
-    defer frame.deinit();
-    try appendXtracePrefix(evaluator, shell_state, eval_context, buffers.frame, buffers.stdin, &frame);
-    try frame.write(2, source);
-    try frame.write(2, "\n");
-}
-
-fn statementTraceSource(plan: command_plan.StatementPlan) ?[]const u8 {
-    plan.validate();
-    return switch (plan) {
-        .source => |source| source.source,
-        .ir_source => |source| source.fallback_source,
-        .simple, .compound, .pipeline => null,
-    };
-}
-
-fn traceCommandPlan(
+fn traceCommandPlanForEvaluation(
     evaluator: *Evaluator,
     shell_state: *state.ShellState,
     eval_context: context.EvalContext,
     plan: command_plan.CommandPlan,
+    trace_input: *EvaluationInput,
+    trace_frame: *execution_frame.ExecutionFrame,
     buffers: *EvaluationBuffers,
 ) EvalError!void {
     shell_state.validate();
     eval_context.validate();
     plan.validate();
+    trace_input.validate();
+    trace_frame.validate();
+    buffers.frame.validate();
+    buffers.stdin.validate();
+
     if (!shell_state.options.enabled(.xtrace)) return;
 
     var text: std.ArrayList(u8) = .empty;
     defer text.deinit(buffers.allocator);
     try appendXtraceCommandText(buffers.allocator, &text, plan);
 
-    var frame = try buffers.outputFrame();
+    var frame = OutputFrame.initOutcomeCapture(buffers);
     defer frame.deinit();
-    try appendXtracePrefix(evaluator, shell_state, eval_context, buffers.frame, buffers.stdin, &frame);
+    try appendXtracePrefix(evaluator, shell_state, eval_context, trace_frame, trace_input, &frame);
     try frame.write(2, text.items);
-    try frame.write(2, "\n");
-}
-
-pub fn appendRunnerXtraceLine(
-    evaluator: *Evaluator,
-    shell_state: *state.ShellState,
-    eval_context: context.EvalContext,
-    output_frame: *RunnerOutputFrame,
-    source: []const u8,
-) EvalError!void {
-    shell_state.validate();
-    eval_context.validate();
-    std.debug.assert(source.len != 0);
-    if (!shell_state.options.enabled(.xtrace)) return;
-
-    var frame = output_frame.outputFrame();
-    defer frame.deinit();
-    try appendXtracePrefix(
-        evaluator,
-        shell_state,
-        eval_context,
-        output_frame.execution_frame_value,
-        output_frame.input,
-        &frame,
-    );
-    try frame.write(2, source);
     try frame.write(2, "\n");
 }
 

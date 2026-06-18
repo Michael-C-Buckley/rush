@@ -920,9 +920,6 @@ fn runSemanticLoweredProgram(
         if (semanticBodyUnsupportedMessage(body, eval_context.interactive)) |message| {
             return semanticUnsupported(allocator, message);
         }
-        if (semanticBodyUsesStatementXtrace(body)) {
-            try appendSemanticXtrace(evaluator, shell_state, statement_context, &output_frame, statement_source);
-        }
         const body_failed = semanticBodyIsStoppingFailure(body, eval_context.features);
         if (evaluator.external_stdio == .inherit and semanticBodyUsesInheritedExternal(body)) {
             const flush_result = try output_frame.flushPendingToInheritedDescriptors();
@@ -1015,32 +1012,6 @@ fn semanticSourceLine(source: []const u8, offset: usize) usize {
         if (byte == '\n') line += 1;
     }
     return line;
-}
-
-fn semanticBodyUsesStatementXtrace(body: shell.TrapActionBody) bool {
-    body.validate();
-    return switch (body) {
-        .simple => true,
-        .owned => |owned| switch (owned.body) {
-            .simple => true,
-            .compound, .pipeline, .failure => false,
-        },
-        .compound, .pipeline, .failure => false,
-    };
-}
-
-fn appendSemanticXtrace(
-    evaluator: *shell.eval.Evaluator,
-    shell_state: *shell.ShellState,
-    eval_context: shell.EvalContext,
-    output_frame: *shell.eval.RunnerOutputFrame,
-    statement_source: []const u8,
-) !void {
-    shell_state.validate();
-    eval_context.validate();
-    std.debug.assert(statement_source.len != 0);
-    if (!shell_state.options.enabled(.xtrace)) return;
-    try shell.eval.appendRunnerXtraceLine(evaluator, shell_state, eval_context, output_frame, statement_source);
 }
 
 fn bashAssignmentErrorAbortsSourceLine(
