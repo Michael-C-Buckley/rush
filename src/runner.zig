@@ -1674,9 +1674,6 @@ fn semanticCommandUnsupportedMessage(plan: shell.CommandPlan, legacy_fallback_ga
                 break :blk "semantic evaluator does not yet implement this builtin";
             if (legacy_fallback_gates and std.mem.eql(u8, definition.name, "read"))
                 break :blk "semantic evaluator does not yet connect read to non-interactive stdin";
-            if (legacy_fallback_gates and (std.mem.eql(u8, definition.name, "alias") or
-                std.mem.eql(u8, definition.name, "unalias")))
-                break :blk "semantic evaluator does not yet integrate alias expansion with production parsing";
             break :blk null;
         },
         .empty, .assignment_only => null,
@@ -2960,6 +2957,39 @@ test "non-interactive aliases affect later complete commands" {
 
     try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
     try std.testing.expectEqualStrings("script-alias-ok\nscript-alias-ok trailing-ok\n", result.stdout);
+    try std.testing.expectEqualStrings("", result.stderr);
+}
+
+test "non-interactive unalias removes aliases for later complete commands" {
+    var result = try runScript(std.testing.allocator, std.testing.io,
+        \\alias gone='echo before-unalias'
+        \\gone
+        \\unalias gone
+        \\gone 2>/dev/null
+        \\printf '<%s>\n' "$?"
+        \\alias gone='echo after-realias'
+        \\gone
+    );
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("before-unalias\n<127>\nafter-realias\n", result.stdout);
+    try std.testing.expectEqualStrings("", result.stderr);
+}
+
+test "non-interactive alias mutations do not affect the same complete command" {
+    var result = try runScript(std.testing.allocator, std.testing.io,
+        \\alias late='echo late-ok'; late 2>/dev/null; printf 'alias-same:%s\n' "$?"
+        \\late
+        \\alias kept='echo kept-before'
+        \\unalias kept; kept
+        \\kept 2>/dev/null
+        \\printf 'unalias-later:%s\n' "$?"
+    );
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("alias-same:127\nlate-ok\nkept-before\nunalias-later:127\n", result.stdout);
     try std.testing.expectEqualStrings("", result.stderr);
 }
 
