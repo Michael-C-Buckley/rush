@@ -3979,6 +3979,9 @@ pub const EvaluationInput = struct {
     bytes: []const u8 = &.{},
     cursor: usize = 0,
     redirected: bool = false,
+    /// Allows `read` to honor an explicit fd-0 redirection without letting hidden
+    /// helpers fall back to the terminal when no redirection exists.
+    fd_redirected: bool = false,
 
     pub fn empty() EvaluationInput {
         return .{};
@@ -3994,8 +3997,15 @@ pub const EvaluationInput = struct {
         return input;
     }
 
+    fn fdRedirected() EvaluationInput {
+        const input: EvaluationInput = .{ .fd_redirected = true };
+        input.validate();
+        return input;
+    }
+
     pub fn validate(self: EvaluationInput) void {
         std.debug.assert(self.cursor <= self.bytes.len);
+        std.debug.assert(!self.redirected or !self.fd_redirected);
     }
 
     fn remaining(self: EvaluationInput) []const u8 {
@@ -4102,7 +4112,11 @@ const EvaluationBuffers = struct {
                         self.stdin = frame_input;
                     }
                 },
-                .inherit_stdin, .path, .fd, .pipe_read => self.stdin = inherited_input,
+                .inherit_stdin => self.stdin = inherited_input,
+                .path, .fd, .pipe_read => {
+                    frame_input.* = EvaluationInput.fdRedirected();
+                    self.stdin = frame_input;
+                },
                 .closed => self.stdin = frame_input,
             },
             .closed => self.stdin = frame_input,
@@ -15310,7 +15324,7 @@ fn readSingleRawReadLine(
         return .{ .bytes = line.bytes, .owned = false, .delimiter_found = line.delimiter_found };
     }
     if (buffers.stdin.redirected) return null;
-    if (!evaluator.read_stdin_from_fd) return null;
+    if (!evaluator.read_stdin_from_fd and !buffers.stdin.fd_redirected) return null;
     const line = try readUntilFromStdinFd(evaluator.allocator, delimiter) orelse return null;
     return .{ .bytes = line.bytes, .owned = true, .delimiter_found = line.delimiter_found };
 }

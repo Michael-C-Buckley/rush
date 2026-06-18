@@ -3062,7 +3062,7 @@ test "manifest completion uses dynamic subcommand providers" {
     try std.testing.expectEqualStrings("storybook", candidates[0].value);
 }
 
-test "manifest completion providers support redirected while loops" {
+test "manifest completion providers support redirected while read loops" {
     var tmp = std.testing.tmpDir(.{});
     defer tmp.cleanup();
     try tmp.dir.writeFile(std.testing.io, .{
@@ -3104,9 +3104,8 @@ test "manifest completion providers support redirected while loops" {
         std.testing.allocator,
         \\
         \\tmp={s}
-        \\while :; do
-        \\  rush_complete candidate alpha --kind subcommand --description generated
-        \\  break
+        \\while IFS= read -r value; do
+        \\  rush_complete candidate "$value" --kind subcommand --description generated
         \\done < "$tmp"
         \\
     ,
