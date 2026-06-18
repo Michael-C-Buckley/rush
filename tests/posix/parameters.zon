@@ -263,6 +263,24 @@
             .status = 0,
         },
         .{
+            .name = "LINENO reports source lines for later multiline pipeline stages",
+            .script =
+            \\printf x |
+            \\printf '<simple:%s>\n' "$LINENO"
+            \\printf x |
+            \\{
+            \\printf '<brace:%s>\n' "$LINENO"
+            \\}
+            ,
+            .stdout =
+            \\<simple:2>
+            \\<brace:5>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "hyphen reflects set option flags",
             .script =
             \\case $- in *u*) printf 'bad-u\n' ;; *) printf 'no-u\n' ;; esac

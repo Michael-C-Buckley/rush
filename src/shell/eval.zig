@@ -1239,13 +1239,17 @@ const SourceLowerer = struct {
         const stages = try self.allocator.alloc(pipeline_plan.PipelineStagePlan, pipeline.stage_spans.len);
         for (pipeline.stage_spans, 0..) |stage_span, index| {
             const stage_target: context.ExecutionTarget = if (pipeline.stage_spans.len == 1) target else .subshell;
-            const lowered = if (pipeline.command_indexes.len == pipeline.stage_spans.len)
-                try self.lowerPipelineSimpleStage(program.commands[pipeline.command_indexes[index]], stage_target)
-            else blk: {
-                _ = stage_span;
+            const stage_line_offset = statementLine(program.source, stage_span.start);
+            const lowered = if (pipeline.command_indexes.len == pipeline.stage_spans.len) blk: {
+                const previous_line_number = self.current_line_number;
+                self.current_line_number = self.source_line_offset + stage_line_offset + 1;
+                defer self.current_line_number = previous_line_number;
+                const command = program.commands[pipeline.command_indexes[index]];
+                break :blk try self.lowerPipelineSimpleStage(command, stage_target);
+            } else blk: {
                 std.debug.assert(pipeline.stage_sources.len == pipeline.stage_spans.len);
                 const source = pipeline.stage_sources[index];
-                break :blk try self.lowerPipelineStageSource(source, stage_target);
+                break :blk try self.lowerPipelineStageSource(source, stage_line_offset, stage_target);
             };
             stages[index] = switch (lowered) {
                 .failure => |trap_failure| return .{ .failure = trap_failure },
@@ -1281,10 +1285,15 @@ const SourceLowerer = struct {
     fn lowerPipelineStageSource(
         self: *SourceLowerer,
         source: []const u8,
+        source_line_offset: usize,
         target: context.ExecutionTarget,
     ) anyerror!PipelineStageLowering {
         const local_function_count = self.local_functions.items.len;
         defer self.local_functions.shrinkRetainingCapacity(local_function_count);
+
+        const previous_source_line_offset = self.source_line_offset;
+        self.source_line_offset += source_line_offset;
+        defer self.source_line_offset = previous_source_line_offset;
 
         const parsed = try self.parseWithAliases(source);
         if (parsed.diagnostics.len != 0)
