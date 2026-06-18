@@ -680,6 +680,7 @@ pub const ParserBackedSourceResolver = struct {
     alias_state: ?*state.ShellState = null,
     active_frame: ?*execution_frame.ExecutionFrame = null,
     active_input: ?*EvaluationInput = null,
+    source_line_offset: usize = 0,
 
     pub fn init(evaluator: *Evaluator) ParserBackedSourceResolver {
         return .{ .evaluator = evaluator };
@@ -733,6 +734,7 @@ pub const ParserBackedSourceResolver = struct {
             .eval_context = lowering_eval_context,
             .signal = null,
             .local_functions = .empty,
+            .source_line_offset = self.source_line_offset,
         };
 
         const payload = try lowerer.lowerSingleStatement(
@@ -798,6 +800,7 @@ pub const ParserBackedSourceResolver = struct {
             .eval_context = lowering_eval_context,
             .signal = signal,
             .local_functions = .empty,
+            .source_line_offset = self.source_line_offset,
         };
 
         const payload = try lowerer.lower(source);
@@ -849,6 +852,7 @@ const ParserCommandSubstitutionResolver = struct {
             .eval_context = self.expansion_context.eval_context,
             .signal = self.signal,
             .local_functions = .empty,
+            .source_line_offset = 0,
         };
         try lowerer.local_functions.appendSlice(arena_allocator, self.local_functions);
 
@@ -926,6 +930,8 @@ const SourceLowerer = struct {
     eval_context: context.EvalContext,
     signal: ?state.TrapSignal,
     local_functions: std.ArrayList(command_plan.FunctionDefinition),
+    source_line_offset: usize = 0,
+    current_line_number: usize = 1,
 
     fn lower(self: *SourceLowerer, action: []const u8) !TrapActionBodyPayload {
         if (self.signal) |signal| trapSemanticActionAssert(action, signal, self.eval_context);
@@ -1016,6 +1022,10 @@ const SourceLowerer = struct {
         statement: ir.Statement,
         target: context.ExecutionTarget,
     ) !TrapActionBodyPayload {
+        const previous_line_number = self.current_line_number;
+        self.current_line_number = self.sourceLineNumber(program.source, statement.span.start);
+        defer self.current_line_number = previous_line_number;
+
         if (statement.async_after) return self.unsupportedShapeFailure(
             "background commands are not supported by the semantic trap resolver",
             "background commands are not supported by semantic source lowering",
@@ -1077,7 +1087,7 @@ const SourceLowerer = struct {
                     .program = program_ref,
                     .statement_index = index,
                     .fallback_source = try self.statementSource(program, index),
-                    .line = statementLine(program.source, statement.span.start),
+                    .line = self.source_line_offset + statementLine(program.source, statement.span.start),
                     .targets_stdout = statementTargetsDescriptor(program, statement, 1),
                     .targets_stderr = statementTargetsDescriptor(program, statement, 2),
                 } },
@@ -1130,6 +1140,14 @@ const SourceLowerer = struct {
             if (byte == '\n') line += 1;
         }
         return line;
+    }
+
+    fn sourceLineNumber(self: SourceLowerer, source: []const u8, offset: usize) usize {
+        return self.source_line_offset + statementLine(source, offset) + 1;
+    }
+
+    fn currentLineNumberText(self: SourceLowerer, buffer: []u8) []const u8 {
+        return std.fmt.bufPrint(buffer, "{d}", .{self.current_line_number}) catch "1";
     }
 
     fn statementTargetsDescriptor(
@@ -1699,6 +1717,7 @@ const SourceLowerer = struct {
         const expansion_eval_context = self.eval_context.withTarget(expansion_target);
         var process_id_buffer: [32]u8 = undefined;
         var last_background_pid_buffer: [32]u8 = undefined;
+        var line_number_buffer: [std.fmt.count("{d}", .{std.math.maxInt(usize)})]u8 = undefined;
         var command_substitutions: SourceExpansionCommandSubstitutions = .{};
         command_substitutions.init(self, expansion_eval_context);
         defer command_substitutions.deinit();
@@ -1711,6 +1730,7 @@ const SourceLowerer = struct {
             .arg_zero = self.owner.arg_zero,
             .process_id = self.processIdText(&process_id_buffer),
             .last_background_pid = self.lastBackgroundPidText(&last_background_pid_buffer),
+            .line_number = self.currentLineNumberText(&line_number_buffer),
         });
         defer expansion.deinit();
 
@@ -2077,6 +2097,7 @@ const SourceLowerer = struct {
         const expansion_eval_context = self.eval_context.withTarget(expansion_target);
         var process_id_buffer: [32]u8 = undefined;
         var last_background_pid_buffer: [32]u8 = undefined;
+        var line_number_buffer: [std.fmt.count("{d}", .{std.math.maxInt(usize)})]u8 = undefined;
         var command_substitutions: SourceExpansionCommandSubstitutions = .{};
         command_substitutions.init(self, expansion_eval_context);
         defer command_substitutions.deinit();
@@ -2089,6 +2110,7 @@ const SourceLowerer = struct {
             .arg_zero = self.owner.arg_zero,
             .process_id = self.processIdText(&process_id_buffer),
             .last_background_pid = self.lastBackgroundPidText(&last_background_pid_buffer),
+            .line_number = self.currentLineNumberText(&line_number_buffer),
         });
         defer expansion.deinit();
         const field = expansion.expandWordScalar(raw) catch |err| {
@@ -2120,6 +2142,7 @@ const SourceLowerer = struct {
         const expansion_eval_context = self.eval_context.withTarget(expansion_target);
         var process_id_buffer: [32]u8 = undefined;
         var last_background_pid_buffer: [32]u8 = undefined;
+        var line_number_buffer: [std.fmt.count("{d}", .{std.math.maxInt(usize)})]u8 = undefined;
         var command_substitutions: SourceExpansionCommandSubstitutions = .{};
         command_substitutions.init(self, expansion_eval_context);
         defer command_substitutions.deinit();
@@ -2132,6 +2155,7 @@ const SourceLowerer = struct {
             .arg_zero = self.owner.arg_zero,
             .process_id = self.processIdText(&process_id_buffer),
             .last_background_pid = self.lastBackgroundPidText(&last_background_pid_buffer),
+            .line_number = self.currentLineNumberText(&line_number_buffer),
         });
         defer expansion.deinit();
         const data = expansion.expandHereDocBody(text) catch |err| {
@@ -2233,6 +2257,7 @@ const SourceLowerer = struct {
         const expansion_eval_context = self.eval_context.withTarget(expansion_target);
         var process_id_buffer: [32]u8 = undefined;
         var last_background_pid_buffer: [32]u8 = undefined;
+        var line_number_buffer: [std.fmt.count("{d}", .{std.math.maxInt(usize)})]u8 = undefined;
         var command_substitutions: SourceExpansionCommandSubstitutions = .{};
         command_substitutions.init(self, expansion_eval_context);
         defer command_substitutions.deinit();
@@ -2245,6 +2270,7 @@ const SourceLowerer = struct {
             .arg_zero = self.owner.arg_zero,
             .process_id = self.processIdText(&process_id_buffer),
             .last_background_pid = self.lastBackgroundPidText(&last_background_pid_buffer),
+            .line_number = self.currentLineNumberText(&line_number_buffer),
         });
         defer expansion.deinit();
         const value = expansion.expandWordScalar(raw) catch |err| {
@@ -2270,6 +2296,7 @@ const SourceLowerer = struct {
         const expansion_eval_context = self.eval_context.withTarget(expansion_target);
         var process_id_buffer: [32]u8 = undefined;
         var last_background_pid_buffer: [32]u8 = undefined;
+        var line_number_buffer: [std.fmt.count("{d}", .{std.math.maxInt(usize)})]u8 = undefined;
         var command_substitutions: SourceExpansionCommandSubstitutions = .{};
         command_substitutions.init(self, expansion_eval_context);
         defer command_substitutions.deinit();
@@ -2282,6 +2309,7 @@ const SourceLowerer = struct {
             .arg_zero = self.owner.arg_zero,
             .process_id = self.processIdText(&process_id_buffer),
             .last_background_pid = self.lastBackgroundPidText(&last_background_pid_buffer),
+            .line_number = self.currentLineNumberText(&line_number_buffer),
         });
         defer expansion.deinit();
         const value = expansion.expandCasePattern(raw) catch |err| {
@@ -2307,6 +2335,7 @@ const SourceLowerer = struct {
         const expansion_eval_context = self.eval_context.withTarget(expansion_target);
         var process_id_buffer: [32]u8 = undefined;
         var last_background_pid_buffer: [32]u8 = undefined;
+        var line_number_buffer: [std.fmt.count("{d}", .{std.math.maxInt(usize)})]u8 = undefined;
         var command_substitutions: SourceExpansionCommandSubstitutions = .{};
         command_substitutions.init(self, expansion_eval_context);
         defer command_substitutions.deinit();
@@ -2319,6 +2348,7 @@ const SourceLowerer = struct {
             .arg_zero = self.owner.arg_zero,
             .process_id = self.processIdText(&process_id_buffer),
             .last_background_pid = self.lastBackgroundPidText(&last_background_pid_buffer),
+            .line_number = self.currentLineNumberText(&line_number_buffer),
         });
         defer expansion.deinit();
         const result = expansion.expandWordFields(raw) catch |err| {
@@ -2339,6 +2369,7 @@ const SourceLowerer = struct {
         const expansion_eval_context = self.eval_context.withTarget(expansion_target);
         var process_id_buffer: [32]u8 = undefined;
         var last_background_pid_buffer: [32]u8 = undefined;
+        var line_number_buffer: [std.fmt.count("{d}", .{std.math.maxInt(usize)})]u8 = undefined;
         var command_substitutions: SourceExpansionCommandSubstitutions = .{};
         command_substitutions.init(self, expansion_eval_context);
         defer command_substitutions.deinit();
@@ -2351,6 +2382,7 @@ const SourceLowerer = struct {
             .arg_zero = self.owner.arg_zero,
             .process_id = self.processIdText(&process_id_buffer),
             .last_background_pid = self.lastBackgroundPidText(&last_background_pid_buffer),
+            .line_number = self.currentLineNumberText(&line_number_buffer),
         });
         defer expansion.deinit();
         return expansion.expandHereDocBody(text);
@@ -3634,6 +3666,7 @@ fn ownedFunctionCallFromSourceForCursor(
     parser_resolver.arg_zero = evaluator.arg_zero;
     parser_resolver.expand_aliases = shell_state.shopts.enabled(.expand_aliases);
     parser_resolver.alias_state = evaluator.alias_state;
+    parser_resolver.source_line_offset = source_plan.line;
     var body = (parser_resolver.lowerSource(
         evaluator.allocator,
         source_plan.source,
@@ -3659,6 +3692,10 @@ fn ownedFunctionCallFromIrSourceForCursor(
     parser_resolver.arg_zero = evaluator.arg_zero;
     parser_resolver.expand_aliases = shell_state.shopts.enabled(.expand_aliases);
     parser_resolver.alias_state = evaluator.alias_state;
+    parser_resolver.source_line_offset = source_plan.line -| sourceLineIndex(
+        source_plan.program.source,
+        source_plan.program.statements[source_plan.statement_index].span.start,
+    );
     var body = (parser_resolver.lowerProgramStatement(
         evaluator.allocator,
         source_plan.program.*,
@@ -8908,6 +8945,7 @@ fn evaluateFunctionTailSourceStatementPlan(
     parser_resolver.alias_state = evaluator.alias_state;
     parser_resolver.active_frame = buffers.frame;
     parser_resolver.active_input = buffers.stdin;
+    parser_resolver.source_line_offset = source_plan.line;
     var body = (parser_resolver.lowerSource(
         evaluator.allocator,
         source_plan.source,
@@ -8948,6 +8986,10 @@ fn evaluateFunctionTailIrSourceStatementPlan(
     parser_resolver.alias_state = evaluator.alias_state;
     parser_resolver.active_frame = buffers.frame;
     parser_resolver.active_input = buffers.stdin;
+    parser_resolver.source_line_offset = source_plan.line -| sourceLineIndex(
+        source_plan.program.source,
+        source_plan.program.statements[source_plan.statement_index].span.start,
+    );
     var body = (parser_resolver.lowerProgramStatement(
         evaluator.allocator,
         source_plan.program.*,
@@ -9200,6 +9242,15 @@ fn statementSourceLine(plan: command_plan.StatementPlan) ?usize {
     };
 }
 
+fn sourceLineIndex(source: []const u8, offset: usize) usize {
+    std.debug.assert(offset <= source.len);
+    var line: usize = 0;
+    for (source[0..offset]) |byte| {
+        if (byte == '\n') line += 1;
+    }
+    return line;
+}
+
 fn bashAssignmentErrorAbortsSourceLine(
     eval_context: context.EvalContext,
     plan: command_plan.StatementPlan,
@@ -9416,6 +9467,7 @@ fn evaluateSourceStatement(
     parser_resolver.alias_state = evaluator.alias_state;
     parser_resolver.active_frame = frame;
     parser_resolver.active_input = input;
+    parser_resolver.source_line_offset = source_plan.line;
     var body = (parser_resolver.lowerSource(
         evaluator.allocator,
         source_plan.source,
@@ -9453,6 +9505,10 @@ fn evaluateIrSourceStatement(
     parser_resolver.alias_state = evaluator.alias_state;
     parser_resolver.active_frame = frame;
     parser_resolver.active_input = input;
+    parser_resolver.source_line_offset = source_plan.line -| sourceLineIndex(
+        source_plan.program.source,
+        source_plan.program.statements[source_plan.statement_index].span.start,
+    );
     var body = (parser_resolver.lowerProgramStatement(
         evaluator.allocator,
         source_plan.program.*,
@@ -9785,6 +9841,17 @@ fn evaluateStatementListSource(
     source: []const u8,
     buffers: *EvaluationBuffers,
 ) EvalError!SimpleEvalResult {
+    return evaluateStatementListSourceAtLine(evaluator, shell_state, eval_context, source, 0, buffers);
+}
+
+fn evaluateStatementListSourceAtLine(
+    evaluator: *Evaluator,
+    shell_state: *state.ShellState,
+    eval_context: context.EvalContext,
+    source: []const u8,
+    source_line_offset: usize,
+    buffers: *EvaluationBuffers,
+) EvalError!SimpleEvalResult {
     shell_state.validate();
     eval_context.validate();
     std.debug.assert(eval_context.target.allowsShellStateCommit());
@@ -9799,6 +9866,7 @@ fn evaluateStatementListSource(
     parser_resolver.alias_state = evaluator.alias_state;
     parser_resolver.active_frame = buffers.frame;
     parser_resolver.active_input = buffers.stdin;
+    parser_resolver.source_line_offset = source_line_offset;
     var body = (parser_resolver.lowerSource(
         evaluator.allocator,
         source,
@@ -13044,12 +13112,26 @@ fn evaluateSourcedTextChunks(
                 const previous_alias_state = evaluator.alias_state;
                 evaluator.alias_state = &alias_snapshot;
                 defer evaluator.alias_state = previous_alias_state;
-                result = try evaluateStatementListSource(evaluator, shell_state, eval_context, chunk, buffers);
+                result = try evaluateStatementListSourceAtLine(
+                    evaluator,
+                    shell_state,
+                    eval_context,
+                    chunk,
+                    sourceLineIndex(source, start),
+                    buffers,
+                );
                 if (result.control_flow != .normal) return result;
                 break;
             }
             if (!parsed.incomplete or end >= source.len) {
-                return evaluateStatementListSource(evaluator, shell_state, eval_context, chunk, buffers);
+                return evaluateStatementListSourceAtLine(
+                    evaluator,
+                    shell_state,
+                    eval_context,
+                    chunk,
+                    sourceLineIndex(source, start),
+                    buffers,
+                );
             }
             end = sourcedTextLineEnd(source, end);
         }

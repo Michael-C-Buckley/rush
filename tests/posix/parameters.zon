@@ -212,6 +212,30 @@
             .status = 0,
         },
         .{
+            .name = "LINENO in the main script continues after dot script and eval",
+            .script =
+            \\cat >dot.sh <<'EOF'
+            \\printf '<dot1:%s>\n' "$LINENO"
+            \\printf '<dot2:%s>\n' "$LINENO"
+            \\EOF
+            \\printf '<before:%s>\n' "$LINENO"
+            \\. ./dot.sh
+            \\printf '<after-dot:%s>\n' "$LINENO"
+            \\eval ':'
+            \\printf '<after-eval:%s>\n' "$LINENO"
+            ,
+            .stdout =
+            \\<before:5>
+            \\<dot1:1>
+            \\<dot2:2>
+            \\<after-dot:7>
+            \\<after-eval:9>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "hyphen reflects set option flags",
             .script =
             \\case $- in *u*) printf 'bad-u\n' ;; *) printf 'no-u\n' ;; esac

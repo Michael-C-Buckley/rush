@@ -293,6 +293,7 @@ fn runSemanticCommandStringInternal(
         &shell_state,
         eval_context,
         &parser_resolver,
+        0,
         invocation.stdin_script_file,
         invocation.stdin_script_source_offset,
         true,
@@ -380,6 +381,7 @@ fn runSemanticAliasTimingCommandString(
                     &shell_state,
                     eval_context,
                     &parser_resolver,
+                    semanticSourceLine(script, start),
                     invocation.stdin_script_file,
                     invocation.stdin_script_source_offset,
                     false,
@@ -632,6 +634,7 @@ fn runSemanticShellStateScriptWithoutAliasTiming(
         shell_state,
         eval_context,
         &parser_resolver,
+        0,
         null,
         0,
         false,
@@ -706,6 +709,7 @@ fn runSemanticAliasTimingShellStateScript(
                     shell_state,
                     eval_context,
                     &parser_resolver,
+                    semanticSourceLine(script, start),
                     null,
                     0,
                     false,
@@ -822,6 +826,7 @@ pub fn runInteractiveCommandStringWithExtensionHandlers(
         shell_state,
         eval_context,
         &parser_resolver,
+        0,
         null,
         0,
         false,
@@ -836,6 +841,7 @@ fn runSemanticLoweredProgram(
     shell_state: *shell.ShellState,
     eval_context: shell.EvalContext,
     source_resolver: *shell.ParserBackedSourceResolver,
+    source_line_offset: usize,
     stdin_script_file: ?std.Io.File,
     stdin_script_source_offset: usize,
     run_exit_trap: bool,
@@ -843,6 +849,10 @@ fn runSemanticLoweredProgram(
     eval_context.validate();
     shell_state.validate();
     if (stdin_script_file == null) std.debug.assert(stdin_script_source_offset == 0);
+
+    const previous_source_line_offset = source_resolver.source_line_offset;
+    source_resolver.source_line_offset = source_line_offset;
+    defer source_resolver.source_line_offset = previous_source_line_offset;
 
     var output_frame = try shell.eval.RunnerOutputFrame.init(
         allocator,
@@ -890,6 +900,9 @@ fn runSemanticLoweredProgram(
         var body = if (statement.async_after) body: {
             const statement_script = try statement_fragment.render(allocator, program.source, .{ .trim_syntax = true });
             defer allocator.free(statement_script);
+            const previous_statement_source_line_offset = source_resolver.source_line_offset;
+            source_resolver.source_line_offset = source_line_offset + semanticSourceLine(script, statement.span.start);
+            defer source_resolver.source_line_offset = previous_statement_source_line_offset;
             break :body (try source_resolver.lowerSource(
                 allocator,
                 statement_script,
