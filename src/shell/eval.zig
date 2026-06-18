@@ -2823,13 +2823,13 @@ fn outputDestinationForFrameEndpointInContext(
     return switch (endpoint) {
         .output => |output| switch (output) {
             .inherit_stdout => if (command_substitution_context)
-                .{ .host_descriptor = 1 }
+                .{ .host_descriptor = descriptor }
             else
-                .{ .host_descriptor = 1 },
+                .{ .host_descriptor = descriptor },
             .inherit_stderr => if (command_substitution_context)
                 .outcome_stderr_capture
             else
-                .{ .host_descriptor = 2 },
+                .{ .host_descriptor = descriptor },
             .fd => |host_descriptor| if (command_substitution_context) switch (host_descriptor) {
                 1 => .{ .host_descriptor = 1 },
                 2 => .outcome_stderr_capture,
@@ -3488,10 +3488,21 @@ const OutputRouting = struct {
 
     fn destination(self: OutputRouting, descriptor: runtime.fd.Descriptor) OutputDestination {
         runtime.fd.assertValidDescriptor(descriptor);
+        if (self.boundDestination(descriptor)) |bound| return bound;
+        return self.defaultDestination(descriptor);
+    }
+
+    fn boundDestination(self: OutputRouting, descriptor: runtime.fd.Descriptor) ?OutputDestination {
+        runtime.fd.assertValidDescriptor(descriptor);
         for (self.bindings.items) |binding| {
             binding.validate();
             if (binding.descriptor == descriptor) return binding.destination;
         }
+        return null;
+    }
+
+    fn defaultDestination(self: OutputRouting, descriptor: runtime.fd.Descriptor) OutputDestination {
+        runtime.fd.assertValidDescriptor(descriptor);
         return switch (self.initial_mode) {
             .outcome_capture => switch (descriptor) {
                 1 => .outcome_stdout_capture,
@@ -3527,7 +3538,15 @@ const OutputRouting = struct {
     fn applyRedirectionStep(self: *OutputRouting, step: redirection_plan.RedirectionStep) !void {
         step.validate();
         switch (step.effect) {
-            .duplicate => |duplicate| try self.setDestination(duplicate.target, self.destination(duplicate.source)),
+            .duplicate => |duplicate| {
+                const source_bound = self.boundDestination(duplicate.source) != null;
+                const source_destination = self.destination(duplicate.source);
+                const copied_destination = if (!source_bound and self.initial_mode == .inherited) switch (source_destination) {
+                    .host_descriptor => @as(OutputDestination, .{ .host_descriptor = duplicate.target }),
+                    else => source_destination,
+                } else source_destination;
+                try self.setDestination(duplicate.target, copied_destination);
+            },
             .close => |close| try self.setDestination(close.target, .closed),
             .open_path, .here_doc => try self.setDestination(step.target(), .{ .host_descriptor = step.target() }),
         }
@@ -3895,6 +3914,21 @@ test "output routing duplicate copies current source destination" {
     try routing.applyRedirections(plan);
 
     try std.testing.expectEqual(OutputDestination.command_substitution_stderr_capture, routing.destination(1));
+}
+
+test "output routing inherited duplicate survives source close" {
+    const steps = [_]redirection_plan.RedirectionStep{
+        redirection_plan.RedirectionStep.duplicate(0, 1, 2),
+        redirection_plan.RedirectionStep.close(1, 2),
+    };
+    const plan: redirection_plan.RedirectionPlan = .{ .steps = &steps };
+    var routing = OutputRouting.init(std.testing.allocator, .inherited);
+    defer routing.deinit();
+
+    try routing.applyRedirections(plan);
+
+    try std.testing.expectEqual(@as(OutputDestination, .{ .host_descriptor = 1 }), routing.destination(1));
+    try std.testing.expectEqual(OutputDestination.closed, routing.destination(2));
 }
 
 test "output routing close marks destination closed" {

@@ -861,5 +861,18 @@
             .stderr_match = .any,
             .status = 0,
         },
+        .{
+            .name = "duplicated output survives later source descriptor close",
+            .script =
+            \\echo visible >&2 2>&-
+            \\printf '<%s>\n' "$?"
+            ,
+            .stdout =
+            \\<0>
+            \\
+            ,
+            .stderr = "visible\n",
+            .status = 0,
+        },
     },
 }
