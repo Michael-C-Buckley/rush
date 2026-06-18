@@ -2792,6 +2792,7 @@ pub const CommandSubstitutionExpansionContext = struct {
     trap_resolver: ?TrapActionResolver = null,
     parent_frame: ?*execution_frame.ExecutionFrame = null,
     parent_input: ?*EvaluationInput = null,
+    suppress_inherited_xtrace: bool = false,
     fatal_failure: ?TrapActionFailure = null,
     last_status: ?outcome.ExitStatus = null,
     last_control_flow: outcome.ControlFlow = .normal,
@@ -3187,7 +3188,7 @@ const FunctionBodyCursor = struct {
                     child_plan.redirections,
                     evaluator.external_stdio,
                 );
-                try traceCommandPlan(shell_state.*, child_plan, buffers);
+                try traceCommandPlan(evaluator, shell_state, list_cursor.eval_context, child_plan, buffers);
                 const is_tail_child = list_cursor.tail_position and
                     list_cursor.index + 1 == list_cursor.list.commands.len;
                 if (is_tail_child) {
@@ -3270,7 +3271,7 @@ const FunctionBodyCursor = struct {
                 evaluator.external_stdio,
                 evaluator.io != null,
             );
-            try traceStatementPlan(shell_state.*, entry.plan, buffers);
+            try traceStatementPlan(evaluator, shell_state, child_context, entry.plan, buffers);
 
             const is_tail_child = list_cursor.tail_position and
                 list_cursor.index + 1 == list_cursor.list.statements.len;
@@ -6916,6 +6917,7 @@ fn runSemanticCommandSubstitution(
         error.ReadonlyVariable => unreachable,
     };
     defer substitution_state.deinit();
+    if (expansion_context.suppress_inherited_xtrace) substitution_state.options.set(.xtrace, false);
     if (expansion_context.evaluator.features.isBash()) substitution_state.options.set(.errexit, false);
 
     expansion_context.eval_context = substitution_context;
@@ -8691,7 +8693,7 @@ fn evaluateStatementList(
                 child_plan.redirections,
                 evaluator.external_stdio,
             );
-            try traceCommandPlan(shell_state.*, child_plan, buffers);
+            try traceCommandPlan(evaluator, shell_state, eval_context, child_plan, buffers);
             var child_outcome = try evaluatePlanWithInput(
                 evaluator,
                 shell_state,
@@ -8747,7 +8749,7 @@ fn evaluateStatementList(
             evaluator.external_stdio,
             evaluator.io != null,
         );
-        try traceStatementPlan(shell_state.*, entry.plan, buffers);
+        try traceStatementPlan(evaluator, shell_state, child_context, entry.plan, buffers);
         var child_outcome = try evaluateStatementPlan(
             evaluator,
             shell_state,
@@ -8800,7 +8802,7 @@ fn evaluateFunctionStatementList(
                 child_plan.redirections,
                 evaluator.external_stdio,
             );
-            try traceCommandPlan(shell_state.*, child_plan, buffers);
+            try traceCommandPlan(evaluator, shell_state, eval_context, child_plan, buffers);
             if (index + 1 == list.commands.len) {
                 if (try ownedTailFunctionCallPlan(
                     evaluator,
@@ -8869,7 +8871,7 @@ fn evaluateFunctionStatementList(
             evaluator.external_stdio,
             evaluator.io != null,
         );
-        try traceStatementPlan(shell_state.*, entry.plan, buffers);
+        try traceStatementPlan(evaluator, shell_state, child_context, entry.plan, buffers);
         if (index + 1 == list.statements.len) {
             if (try evaluateFunctionTailStatementPlan(
                 evaluator,
@@ -9301,18 +9303,21 @@ fn statementSourceLine(plan: command_plan.StatementPlan) ?usize {
 }
 
 fn traceStatementPlan(
-    shell_state: state.ShellState,
+    evaluator: *Evaluator,
+    shell_state: *state.ShellState,
+    eval_context: context.EvalContext,
     plan: command_plan.StatementPlan,
     buffers: *EvaluationBuffers,
 ) EvalError!void {
     shell_state.validate();
+    eval_context.validate();
     plan.validate();
     if (!shell_state.options.enabled(.xtrace)) return;
     const source = statementTraceSource(plan) orelse return;
 
     var frame = try buffers.outputFrame();
     defer frame.deinit();
-    try frame.write(2, xtracePrefix(shell_state));
+    try appendXtracePrefix(evaluator, shell_state, eval_context, buffers.frame, buffers.stdin, &frame);
     try frame.write(2, source);
     try frame.write(2, "\n");
 }
@@ -9326,17 +9331,15 @@ fn statementTraceSource(plan: command_plan.StatementPlan) ?[]const u8 {
     };
 }
 
-fn xtracePrefix(shell_state: state.ShellState) []const u8 {
-    shell_state.validate();
-    return if (shell_state.getVariable("PS4")) |variable| variable.value else "";
-}
-
 fn traceCommandPlan(
-    shell_state: state.ShellState,
+    evaluator: *Evaluator,
+    shell_state: *state.ShellState,
+    eval_context: context.EvalContext,
     plan: command_plan.CommandPlan,
     buffers: *EvaluationBuffers,
 ) EvalError!void {
     shell_state.validate();
+    eval_context.validate();
     plan.validate();
     if (!shell_state.options.enabled(.xtrace)) return;
 
@@ -9346,9 +9349,106 @@ fn traceCommandPlan(
 
     var frame = try buffers.outputFrame();
     defer frame.deinit();
-    try frame.write(2, xtracePrefix(shell_state));
+    try appendXtracePrefix(evaluator, shell_state, eval_context, buffers.frame, buffers.stdin, &frame);
     try frame.write(2, text.items);
     try frame.write(2, "\n");
+}
+
+pub fn appendRunnerXtraceLine(
+    evaluator: *Evaluator,
+    shell_state: *state.ShellState,
+    eval_context: context.EvalContext,
+    output_frame: *RunnerOutputFrame,
+    source: []const u8,
+) EvalError!void {
+    shell_state.validate();
+    eval_context.validate();
+    std.debug.assert(source.len != 0);
+    if (!shell_state.options.enabled(.xtrace)) return;
+
+    var frame = output_frame.outputFrame();
+    defer frame.deinit();
+    try appendXtracePrefix(
+        evaluator,
+        shell_state,
+        eval_context,
+        output_frame.execution_frame_value,
+        output_frame.input,
+        &frame,
+    );
+    try frame.write(2, source);
+    try frame.write(2, "\n");
+}
+
+fn appendXtracePrefix(
+    evaluator: *Evaluator,
+    shell_state: *state.ShellState,
+    eval_context: context.EvalContext,
+    parent_frame: *execution_frame.ExecutionFrame,
+    parent_input: *EvaluationInput,
+    frame: *OutputFrame,
+) EvalError!void {
+    shell_state.validate();
+    eval_context.validate();
+    parent_frame.validate();
+    parent_input.validate();
+    const raw_prefix = if (shell_state.getVariable("PS4")) |variable| variable.value else "";
+    if (raw_prefix.len == 0) return;
+
+    var parser_resolver = ParserBackedSourceResolver.init(evaluator);
+    parser_resolver.features = eval_context.features;
+    parser_resolver.arg_zero = evaluator.arg_zero;
+    parser_resolver.active_frame = parent_frame;
+    parser_resolver.active_input = parent_input;
+
+    var command_resolver: ParserCommandSubstitutionResolver = .{
+        .owner = &parser_resolver,
+        .signal = null,
+        .expansion_context = undefined,
+    };
+    var command_substitutions = CommandSubstitutionExpansionContext.init(
+        evaluator,
+        shell_state,
+        eval_context,
+        command_resolver.commandSubstitutionResolver(),
+        parser_resolver.resolver(),
+        parent_frame,
+        parent_input,
+    );
+    command_substitutions.suppress_inherited_xtrace = true;
+    defer command_substitutions.deinit();
+    command_resolver.expansion_context = &command_substitutions;
+
+    var process_id_buffer: [32]u8 = undefined;
+    var last_background_pid_buffer: [32]u8 = undefined;
+    var expansion = shell_expand.ShellExpansion.init(evaluator.allocator, .{
+        .shell_state = shell_state,
+        .eval_context = eval_context,
+        .fs_port = evaluator.fs_port,
+        .features = evaluator.features,
+        .command_substitution = command_substitutions.commandSubstitution(),
+        .arg_zero = evaluator.arg_zero,
+        .process_id = std.fmt.bufPrint(&process_id_buffer, "{d}", .{evaluator.shell_pid}) catch "",
+        .last_background_pid = if (shell_state.last_background_pid) |pid|
+            std.fmt.bufPrint(&last_background_pid_buffer, "{d}", .{pid}) catch ""
+        else
+            "",
+    });
+    defer expansion.deinit();
+
+    const expanded_prefix = expansion.expandHereDocBody(raw_prefix) catch |err| switch (err) {
+        error.OutOfMemory => return error.OutOfMemory,
+        error.Unimplemented => return error.Unimplemented,
+        else => raw_prefix,
+    };
+    const expanded_prefix_owned = expanded_prefix.ptr != raw_prefix.ptr;
+    defer if (expanded_prefix_owned) evaluator.allocator.free(expanded_prefix);
+
+    if (command_substitutions.stderr.items.len != 0) try frame.write(2, command_substitutions.stderr.items);
+    for (command_substitutions.diagnostics.items) |diagnostic| {
+        try frame.buffers.addDiagnosticMessage(diagnostic.message);
+    }
+    try frame.write(2, expanded_prefix);
 }
 
 fn appendXtraceCommandText(

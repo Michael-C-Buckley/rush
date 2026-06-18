@@ -414,6 +414,25 @@
             .status = 0,
         },
         .{
+            .name = "xtrace expands command substitution in PS4 prefix",
+            .script =
+            \\PS4='[$(printf p)] '
+            \\set -x
+            \\echo hi
+            \\set +x
+            ,
+            .stdout =
+            \\hi
+            \\
+            ,
+            .stderr =
+            \\[p] echo hi
+            \\[p] set +x
+            \\
+            ,
+            .status = 0,
+        },
+        .{
             .name = "shift without an operand shifts by one",
             .script =
             \\set -- a b

@@ -921,7 +921,7 @@ fn runSemanticLoweredProgram(
             return semanticUnsupported(allocator, message);
         }
         if (semanticBodyUsesStatementXtrace(body)) {
-            try appendSemanticXtrace(allocator, &output_frame, shell_state.*, statement_source);
+            try appendSemanticXtrace(evaluator, shell_state, statement_context, &output_frame, statement_source);
         }
         const body_failed = semanticBodyIsStoppingFailure(body, eval_context.features);
         if (evaluator.external_stdio == .inherit and semanticBodyUsesInheritedExternal(body)) {
@@ -1030,19 +1030,17 @@ fn semanticBodyUsesStatementXtrace(body: shell.TrapActionBody) bool {
 }
 
 fn appendSemanticXtrace(
-    allocator: std.mem.Allocator,
+    evaluator: *shell.eval.Evaluator,
+    shell_state: *shell.ShellState,
+    eval_context: shell.EvalContext,
     output_frame: *shell.eval.RunnerOutputFrame,
-    shell_state: shell.ShellState,
     statement_source: []const u8,
 ) !void {
     shell_state.validate();
+    eval_context.validate();
     std.debug.assert(statement_source.len != 0);
     if (!shell_state.options.enabled(.xtrace)) return;
-    const prefix = if (shell_state.getVariable("PS4")) |variable| variable.value else "";
-    const trace = try std.fmt.allocPrint(allocator, "{s}{s}\n", .{ prefix, statement_source });
-    defer allocator.free(trace);
-    const write_result = try output_frame.writeOutcome("", trace);
-    if (write_result.stderr_failed) return error.Unimplemented;
+    try shell.eval.appendRunnerXtraceLine(evaluator, shell_state, eval_context, output_frame, statement_source);
 }
 
 fn bashAssignmentErrorAbortsSourceLine(
