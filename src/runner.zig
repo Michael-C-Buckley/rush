@@ -221,12 +221,11 @@ fn runSemanticCommandStringInternal(
     assertSemanticStartupOptions(script, invocation, positionals);
 
     if (shell_options.noexec or
-        shell_options.verbose or
-        shell_options.xtrace)
+        shell_options.verbose)
     {
         return semanticUnsupported(
             allocator,
-            "semantic executor does not yet implement non-interactive noexec/verbose/xtrace startup modes",
+            "semantic executor does not yet implement non-interactive noexec/verbose startup modes",
         );
     }
     if (environ_map) |map| {
@@ -2025,6 +2024,16 @@ test "standard input invocation accepts -s operands and shell options" {
     try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
     try std.testing.expectEqualStrings("rush:2:posarg:two words\n", result.stdout);
     try std.testing.expectEqualStrings("", result.stderr);
+}
+test "command string invocation xtrace option traces the first command" {
+    const invocation = cli_invocation.parse(&.{ "rush", "-x", "-c", "echo hi" }) orelse
+        return error.ExpectedInvocation;
+    var result = try runInvocationForTest(std.testing.allocator, std.testing.io, invocation, null, .capture, false);
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("hi\n", result.stdout);
+    try std.testing.expectEqualStrings("+ echo hi\n", result.stderr);
 }
 test "command string invocation shell options affect execution" {
     const errexit_invocation = cli_invocation.parseCommandString(&.{

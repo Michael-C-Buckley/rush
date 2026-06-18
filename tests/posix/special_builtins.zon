@@ -379,6 +379,22 @@
             .status = 0,
         },
         .{
+            .name = "xtrace invocation option traces the first command",
+            .shell_args = .{ "-x" },
+            .script =
+            \\echo hi
+            ,
+            .stdout =
+            \\hi
+            \\
+            ,
+            .stderr =
+            \\+ echo hi
+            \\
+            ,
+            .status = 0,
+        },
+        .{
             .name = "xtrace uses an empty prefix after PS4 is unset",
             .script =
             \\unset PS4

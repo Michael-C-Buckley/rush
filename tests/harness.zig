@@ -15,6 +15,7 @@ const Suite = struct {
 
 const Case = struct {
     name: []const u8,
+    shell_args: []const []const u8 = &.{},
     script: []const u8,
     stdout: []const u8 = "",
     stderr: []const u8 = "",
@@ -445,7 +446,7 @@ fn runCase(
         return .skipped;
     }
 
-    const target = try runTarget(allocator, io, temp_root, case_index, config, case.script);
+    const target = try runTarget(allocator, io, temp_root, case_index, config, case);
     defer target.deinit(allocator);
     const target_name = try targetNameAlloc(allocator, config);
     defer allocator.free(target_name);
@@ -495,14 +496,14 @@ fn runTarget(
     temp_root: *TempRoot,
     case_index: usize,
     config: Config,
-    script: []const u8,
+    case: Case,
 ) !RunResult {
     if (config.shell) |shell| {
         var sub_path_buffer: [64]u8 = undefined;
         const sub_path = try std.fmt.bufPrint(&sub_path_buffer, "case-{d}-shell", .{case_index});
-        return runGenericShell(allocator, io, temp_root, sub_path, shell, config.shell_args, script);
+        return runGenericShell(allocator, io, temp_root, sub_path, shell, config.shell_args, case);
     }
-    return runRush(allocator, io, temp_root, case_index, config, script);
+    return runRush(allocator, io, temp_root, case_index, config, case);
 }
 
 fn runRush(
@@ -511,18 +512,21 @@ fn runRush(
     temp_root: *TempRoot,
     case_index: usize,
     config: Config,
-    script: []const u8,
+    case: Case,
 ) !RunResult {
     var sub_path_buffer: [64]u8 = undefined;
     const sub_path = try std.fmt.bufPrint(&sub_path_buffer, "case-{d}-rush", .{case_index});
     var cwd = try temp_root.dir.createDirPathOpen(io, sub_path, .{});
     defer cwd.close(io);
 
-    const argv = switch (config.mode) {
-        .posix => &[_][]const u8{ config.rush_path.?, "--posix", "-c", script },
-        .bash => &[_][]const u8{ config.rush_path.?, "-c", script },
-    };
-    return runCommand(allocator, io, cwd, argv);
+    var argv: std.ArrayList([]const u8) = .empty;
+    defer argv.deinit(allocator);
+    try argv.append(allocator, config.rush_path.?);
+    if (config.mode == .posix) try argv.append(allocator, "--posix");
+    try argv.appendSlice(allocator, case.shell_args);
+    try argv.append(allocator, "-c");
+    try argv.append(allocator, case.script);
+    return runCommand(allocator, io, cwd, argv.items);
 }
 
 fn runGenericShell(
@@ -532,7 +536,7 @@ fn runGenericShell(
     sub_path: []const u8,
     shell: []const u8,
     shell_args: []const []const u8,
-    script: []const u8,
+    case: Case,
 ) !RunResult {
     var cwd = try temp_root.dir.createDirPathOpen(io, sub_path, .{});
     defer cwd.close(io);
@@ -541,8 +545,9 @@ fn runGenericShell(
     defer argv.deinit(allocator);
     try argv.append(allocator, shell);
     try argv.appendSlice(allocator, shell_args);
+    try argv.appendSlice(allocator, case.shell_args);
     try argv.append(allocator, "-c");
-    try argv.append(allocator, script);
+    try argv.append(allocator, case.script);
     return runCommand(allocator, io, cwd, argv.items);
 }
 
