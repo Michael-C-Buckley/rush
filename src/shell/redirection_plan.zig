@@ -547,11 +547,33 @@ const SavedDescriptor = struct {
     }
 };
 
+const HereDocWriter = struct {
+    port: fd.Port,
+    descriptor: fd.Descriptor,
+    bytes: []const u8,
+    thread: ?std.Thread = null,
+
+    fn run(self: *HereDocWriter) void {
+        // ziglint-ignore: Z026 best-effort here-doc writer cleanup
+        self.port.writeAll(.{ .descriptor = self.descriptor, .bytes = self.bytes }) catch {};
+        // ziglint-ignore: Z026 best-effort here-doc writer cleanup
+        closeOpened(self.port, self.descriptor) catch {};
+    }
+
+    fn join(self: *HereDocWriter) void {
+        if (self.thread) |thread| {
+            thread.join();
+            self.thread = null;
+        }
+    }
+};
+
 pub const FdTransaction = struct {
     allocator: std.mem.Allocator,
     port: fd.Port,
     self_duplicate_noop: bool = false,
     saved: std.ArrayList(SavedDescriptor) = .empty,
+    here_doc_writers: std.ArrayList(*HereDocWriter) = .empty,
     active: bool = true,
 
     pub fn init(allocator: std.mem.Allocator, port: fd.Port, self_duplicate_noop: bool) FdTransaction {
@@ -561,7 +583,9 @@ pub const FdTransaction = struct {
     pub fn deinit(self: *FdTransaction) void {
         std.debug.assert(!self.active);
         std.debug.assert(self.saved.items.len == 0);
+        std.debug.assert(self.here_doc_writers.items.len == 0);
         self.saved.deinit(self.allocator);
+        self.here_doc_writers.deinit(self.allocator);
         self.* = undefined;
     }
 
@@ -587,6 +611,7 @@ pub const FdTransaction = struct {
             }
         }
         self.saved.clearRetainingCapacity();
+        self.joinHereDocWriters();
         self.active = false;
     }
 
@@ -601,6 +626,7 @@ pub const FdTransaction = struct {
             }
         }
         self.saved.clearRetainingCapacity();
+        self.joinHereDocWriters();
         self.active = false;
     }
 
@@ -630,16 +656,40 @@ pub const FdTransaction = struct {
             closeOpened(self.port, pipe_result.write) catch {};
         }
 
-        self.port.writeAll(.{ .descriptor = pipe_result.write, .bytes = step.data.bytes }) catch |err| {
-            return .{ .write = err };
-        };
-        closeOpened(self.port, pipe_result.write) catch |err| return .{ .close = err };
-
-        if (pipe_result.read == step.target) return null;
+        if (pipe_result.read == step.target) {
+            try self.startHereDocWriter(pipe_result.write, step.data.bytes);
+            return null;
+        }
         self.port.duplicateTo(.{ .source = pipe_result.read, .target = step.target }) catch |err|
             return .{ .duplicate = err };
         closeOpened(self.port, pipe_result.read) catch |err| return .{ .close = err };
+        try self.startHereDocWriter(pipe_result.write, step.data.bytes);
         return null;
+    }
+
+    fn startHereDocWriter(
+        self: *FdTransaction,
+        descriptor: fd.Descriptor,
+        bytes: []const u8,
+    ) std.mem.Allocator.Error!void {
+        fd.assertValidDescriptor(descriptor);
+        const writer = try self.allocator.create(HereDocWriter);
+        errdefer self.allocator.destroy(writer);
+        writer.* = .{ .port = self.port, .descriptor = descriptor, .bytes = bytes };
+        writer.thread = std.Thread.spawn(.{}, HereDocWriter.run, .{writer}) catch return error.OutOfMemory;
+        errdefer {
+            writer.thread.?.join();
+            writer.thread = null;
+        }
+        try self.here_doc_writers.append(self.allocator, writer);
+    }
+
+    fn joinHereDocWriters(self: *FdTransaction) void {
+        for (self.here_doc_writers.items) |writer| {
+            writer.join();
+            self.allocator.destroy(writer);
+        }
+        self.here_doc_writers.clearRetainingCapacity();
     }
 
     fn applyOpenPath(self: *FdTransaction, step: OpenPathStep) std.mem.Allocator.Error!?ApplyFailureDetail {

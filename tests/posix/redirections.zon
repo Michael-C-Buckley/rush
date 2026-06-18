@@ -564,6 +564,23 @@
             .status = 0,
         },
         .{
+            .name = "large here document streams without pipe buffer deadlock",
+            .script =
+            \\count=$(cat <<EOF | wc -c
+            \\$(awk 'BEGIN { for (i = 0; i < 131072; i++) printf "x" }')
+            \\EOF
+            \\)
+            \\set -- $count
+            \\printf '%s\n' "$1"
+            ,
+            .stdout =
+            \\131073
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "here document redirection overrides earlier stdin close in the same command",
             .script =
             \\cat 0<&- <<EOF
