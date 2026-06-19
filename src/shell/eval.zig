@@ -6436,7 +6436,12 @@ fn executePendingTrapsWithFrame(
 
         try appendOutcomeBuffers(&buffers, action_outcome);
         try applyOutcomeToWorkingState(&working_state, &action_outcome, action_outcome.state_delta.target);
-        const action_control_flow = if (interactiveSubshellExitTrapActionEndsWithExit(signal, eval_context, body))
+        const action_control_flow = if (interactiveSubshellExitTrapActionEndsWithExit(
+            signal,
+            eval_context,
+            registered.action,
+            body,
+        ))
             outcome.ControlFlow{ .exit = action_outcome.status }
         else
             action_outcome.effectiveControlFlow();
@@ -6475,14 +6480,17 @@ fn executePendingTrapsWithFrame(
 fn interactiveSubshellExitTrapActionEndsWithExit(
     signal: state.TrapSignal,
     eval_context: context.EvalContext,
+    action: []const u8,
     body: TrapActionBody,
 ) bool {
     signal.validate();
     eval_context.validate();
+    std.debug.assert(std.mem.indexOfScalar(u8, action, 0) == null);
     body.validate();
     if (signal != .EXIT) return false;
     if (!eval_context.interactive) return false;
     if (eval_context.target != .subshell) return false;
+    if (sourceTextStartsWithExit(action)) return true;
     return trapActionBodyPayloadEndsWithTopLevelExit(switch (body) {
         .simple => |plan| .{ .simple = plan },
         .compound => |plan| .{ .compound = plan },
@@ -6496,12 +6504,45 @@ fn trapActionBodyPayloadEndsWithTopLevelExit(body: TrapActionBodyPayload) bool {
     body.validate();
     return switch (body) {
         .simple => |plan| simplePlanIsExit(plan),
-        .compound => |plan| switch (plan.body) {
-            .sequence => |list| statementListEndsWithTopLevelExit(list),
-            else => false,
-        },
+        .compound => |plan| compoundPlanEndsWithTopLevelExit(plan),
         .pipeline, .failure => false,
     };
+}
+
+fn compoundPlanEndsWithTopLevelExit(plan: command_plan.CompoundCommandPlan) bool {
+    plan.validate();
+    return switch (plan.body) {
+        .sequence, .brace_group => |list| statementListEndsWithTopLevelExit(list),
+        .and_or_list => |and_or| andOrPlanEndsWithTopLevelExit(and_or),
+        .negation => |negation| statementListEndsWithTopLevelExit(negation.body),
+        .if_clause => |if_plan| ifPlanMayEndWithTopLevelExit(if_plan),
+        .while_loop, .until_loop => |loop| statementListEndsWithTopLevelExit(loop.body),
+        .for_loop => |for_plan| statementListEndsWithTopLevelExit(for_plan.body),
+        .case_clause => |case_plan| casePlanMayEndWithTopLevelExit(case_plan),
+        .subshell => false,
+    };
+}
+
+fn andOrPlanEndsWithTopLevelExit(plan: command_plan.AndOrPlan) bool {
+    plan.validate();
+    if (plan.commands.len == 0) return false;
+    return simplePlanIsExit(plan.commands[plan.commands.len - 1].command);
+}
+
+fn ifPlanMayEndWithTopLevelExit(plan: command_plan.IfPlan) bool {
+    plan.validate();
+    for (plan.branches) |branch| {
+        if (statementListEndsWithTopLevelExit(branch.body)) return true;
+    }
+    return statementListEndsWithTopLevelExit(plan.else_body);
+}
+
+fn casePlanMayEndWithTopLevelExit(plan: command_plan.CasePlan) bool {
+    plan.validate();
+    for (plan.arms) |arm| {
+        if (statementListEndsWithTopLevelExit(arm.body)) return true;
+    }
+    return false;
 }
 
 fn statementListEndsWithTopLevelExit(list: command_plan.StatementList) bool {
@@ -6515,6 +6556,7 @@ fn statementPlanIsExit(plan: command_plan.StatementPlan) bool {
     plan.validate();
     return switch (plan) {
         .simple => |simple| simplePlanIsExit(simple),
+        .compound => |compound| compoundPlanEndsWithTopLevelExit(compound),
         .source => |source| sourceTextStartsWithExit(source.source),
         .ir_source => |source| sourceTextStartsWithExit(source.fallback_source),
         else => false,
