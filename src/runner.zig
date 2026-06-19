@@ -277,7 +277,7 @@ fn runSemanticCommandStringInternal(
 
     var program = try ir.lowerSimpleCommands(allocator, parsed);
     defer program.deinit();
-    if (try semanticPreflightUnsupported(allocator, program, invocation.features, false)) |message| {
+    if (try semanticPreflightUnsupported(allocator, program, invocation.features, false, false)) |message| {
         return semanticUnsupported(allocator, message);
     }
 
@@ -636,7 +636,7 @@ fn runSemanticShellStateScriptWithoutAliasTiming(
 
     var program = try ir.lowerSimpleCommands(allocator, parsed);
     defer program.deinit();
-    if (try semanticPreflightUnsupported(allocator, program, invocation.features, false)) |message| {
+    if (try semanticPreflightUnsupported(allocator, program, invocation.features, false, false)) |message| {
         return semanticUnsupported(allocator, message);
     }
 
@@ -717,7 +717,7 @@ fn runSemanticAliasTimingShellStateScript(
             if (parsed.diagnostics.len == 0) {
                 var program = try ir.lowerSimpleCommands(allocator, parsed);
                 defer program.deinit();
-                if (try semanticPreflightUnsupported(allocator, program, invocation.features, false)) |message|
+                if (try semanticPreflightUnsupported(allocator, program, invocation.features, false, false)) |message|
                     return semanticUnsupported(allocator, message);
                 var alias_snapshot = shell_state.clone(allocator) catch |err| switch (err) {
                     error.OutOfMemory => return error.OutOfMemory,
@@ -836,7 +836,7 @@ pub fn runInteractiveCommandStringWithExtensionHandlers(
 
     var program = try ir.lowerSimpleCommands(allocator, parsed);
     defer program.deinit();
-    if (try semanticPreflightUnsupported(allocator, program, invocation.features, true)) |message|
+    if (try semanticPreflightUnsupported(allocator, program, invocation.features, true, true)) |message|
         return semanticUnsupported(allocator, message);
     if (semanticInteractiveProgramUnsupported(shell_state.*, program)) |message|
         return semanticUnsupported(allocator, message);
@@ -1444,6 +1444,7 @@ fn semanticPreflightUnsupported(
     program: ir.Program,
     features: compat.Features,
     legacy_fallback_gates: bool,
+    allow_interactive_declarations: bool,
 ) !?[]const u8 {
     if (legacy_fallback_gates and (program.if_commands.len != 0 or
         program.loop_commands.len != 0 or
@@ -1459,7 +1460,7 @@ fn semanticPreflightUnsupported(
     }
     if (legacy_fallback_gates) {
         for (program.commands) |command| {
-            if (commandUsesUnsupportedSemanticBuiltin(command, false))
+            if (commandUsesUnsupportedSemanticBuiltin(command, allow_interactive_declarations))
                 return "semantic executor preflight found an unsupported builtin";
             if (commandUsesUnsupportedProductionExpansion(command))
                 return "semantic executor production preflight found an expansion shape outside the switched slice";
@@ -2826,6 +2827,34 @@ test "semantic interactive invocation expands existing aliases" {
             try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
             try std.testing.expectEqualStrings("alias-ok\n", result.stdout);
             try std.testing.expectEqualStrings("", result.stderr);
+        },
+    }
+}
+
+test "semantic interactive invocation dispatches declaration builtins" {
+    var shell_state = shell.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    try shell.startup.initializeInvocationState(std.testing.allocator, std.testing.io, &shell_state, null, &.{}, .{});
+
+    var execution = try runInteractiveCommandString(
+        std.testing.allocator,
+        std.testing.io,
+        &shell_state,
+        "export FOO=bar",
+        shell.InvocationContext.init(.{ .arg_zero = "rush", .interactive = true }),
+        .capture,
+    );
+    defer execution.deinit(std.testing.allocator);
+
+    switch (execution) {
+        .unsupported => return error.ExpectedSemanticExecution,
+        .output => |result| {
+            try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
+            try std.testing.expectEqualStrings("", result.stdout);
+            try std.testing.expectEqualStrings("", result.stderr);
+            const variable = shell_state.getVariable("FOO") orelse return error.ExpectedExportedVariable;
+            try std.testing.expectEqualStrings("bar", variable.value);
+            try std.testing.expect(variable.exported);
         },
     }
 }
