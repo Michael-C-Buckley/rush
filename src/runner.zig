@@ -972,7 +972,7 @@ fn runSemanticLoweredProgram(
         );
         defer body.deinit();
 
-        if (semanticBodyUnsupportedMessage(body, eval_context.interactive)) |message| {
+        if (semanticBodyUnsupportedMessage(body, false)) |message| {
             return semanticUnsupported(allocator, message);
         }
         const body_failed = semanticBodyIsStoppingFailure(body, eval_context.features);
