@@ -1305,8 +1305,17 @@ fn skipSemanticChunkSeparators(script: []const u8, start: usize) usize {
 
 fn semanticLineEnd(script: []const u8, start: usize) usize {
     var index = start;
-    while (index < script.len and script[index] != '\n') index += 1;
-    if (index < script.len) index += 1;
+    while (index < script.len) {
+        if (script[index] == '\\' and index + 1 < script.len and script[index + 1] == '\n') {
+            index += 2;
+            continue;
+        }
+        if (script[index] == '\n') {
+            index += 1;
+            break;
+        }
+        index += 1;
+    }
     return index;
 }
 
@@ -3620,6 +3629,19 @@ test "non-interactive aliases affect later complete commands" {
 
     try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
     try std.testing.expectEqualStrings("script-alias-ok\nscript-alias-ok trailing-ok\n", result.stdout);
+    try std.testing.expectEqualStrings("", result.stderr);
+}
+
+test "non-interactive aliases see backslash-newline joined command words" {
+    var result = try runScript(std.testing.allocator, std.testing.io,
+        \\alias joined='echo alias-joined'
+        \\join\
+        \\ed ok
+    );
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("alias-joined ok\n", result.stdout);
     try std.testing.expectEqualStrings("", result.stderr);
 }
 

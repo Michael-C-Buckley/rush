@@ -2108,11 +2108,14 @@ fn appendAliasExpansion(
     output: *std.ArrayList(u8),
     active_aliases: *std.ArrayList([]const u8),
 ) !?bool {
-    if (isAliasReservedWord(word) or looksLikeFunctionDefinitionName(source, after_word)) return null;
-    const value = lookupAlias(options, word) orelse return null;
-    if (isActiveAlias(active_aliases.items, word)) return null;
+    const name = try removeLineContinuations(allocator, word);
+    defer allocator.free(name);
 
-    try active_aliases.append(allocator, word);
+    if (isAliasReservedWord(name) or looksLikeFunctionDefinitionName(source, after_word)) return null;
+    const value = lookupAlias(options, name) orelse return null;
+    if (isActiveAlias(active_aliases.items, name)) return null;
+
+    try active_aliases.append(allocator, name);
     const nested_continues = try expandAliasesIntoParsedSource(allocator, value, options, output, active_aliases);
     _ = active_aliases.pop();
     return nested_continues or (value.len > 0 and isAliasTrailingBlank(value[value.len - 1]));
@@ -2382,6 +2385,9 @@ const SyntaxParser = struct {
 
         while (!self.at(.eof) and !self.atListTerminator(word_terminators, token_terminators)) {
             if (self.startsPosixCompoundCommand()) {
+                if (!expect_command and self.previousTokenIsWhitespace()) {
+                    try self.appendParseError(self.current().span, "missing command separator before compound command");
+                }
                 const command = try self.parsePosixCompoundCommand();
                 if (self.nextNonWhitespaceIsPipe()) {
                     const pipeline = try self.parsePipelineAfterFirstCommand(command);
@@ -3856,6 +3862,10 @@ const SyntaxParser = struct {
         return index < self.tokens.len and self.tokens[index].kind == .pipe;
     }
 
+    fn previousTokenIsWhitespace(self: SyntaxParser) bool {
+        return self.index > 0 and self.tokens[self.index - 1].kind == .whitespace;
+    }
+
     fn startsSubshell(self: SyntaxParser) bool {
         return self.at(.left_paren);
     }
@@ -4839,6 +4849,19 @@ test "parser builds POSIX subshell nodes" {
         }
     }
     try std.testing.expect(found);
+}
+
+test "parser rejects assignment prefix before subshell command" {
+    var result = try parse(std.testing.allocator, "x=new ( printf '%s\\n' \"$x\" )", .{});
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(usize, 1), result.diagnostics.len);
+    try std.testing.expectEqual(DiagnosticKind.parse_error, result.diagnostics[0].kind);
+    try expectSpan(.init(6, 7), result.diagnostics[0].span);
+    try std.testing.expectEqualStrings(
+        "missing command separator before compound command",
+        result.diagnostics[0].message,
+    );
 }
 
 test "parser reports incomplete POSIX subshells" {
