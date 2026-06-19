@@ -15755,6 +15755,7 @@ fn readLineWithEscapesProcessed(
                 escaped.deinit(evaluator.allocator);
                 return null;
             }
+            delimiter_found = false;
             break;
         };
         defer if (raw_line.owned) evaluator.allocator.free(raw_line.bytes);
@@ -22743,6 +22744,33 @@ test "semantic evaluator reads through custom delimiters" {
     try result.commitDelta(&shell_state, .current_shell);
     try std.testing.expectEqualStrings("ab", shell_state.getVariable("value").?.value);
     try std.testing.expectEqualStrings("cd", input.remaining());
+}
+
+test "semantic evaluator read reports EOF after escaped newline continuation" {
+    var shell_state = state.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    var evaluator = Evaluator.init(std.testing.allocator);
+    var input = EvaluationInput.init("a\\ b c\\\n");
+    const plan = command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{
+        "read",
+        "x",
+        "y",
+    } } });
+
+    var frame = rootExecutionFrame(context.EvalContext.forTarget(.current_shell));
+    var result = try evaluatePlanWithInput(
+        &evaluator,
+        &shell_state,
+        context.EvalContext.forTarget(.current_shell),
+        plan,
+        &input,
+        &frame,
+    );
+    defer result.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 1), result.status);
+    try result.commitDelta(&shell_state, .current_shell);
+    try std.testing.expectEqualStrings("a b", shell_state.getVariable("x").?.value);
+    try std.testing.expectEqualStrings("c", shell_state.getVariable("y").?.value);
 }
 
 test "semantic pipeline evaluation streams semantic output into external stdin" {
