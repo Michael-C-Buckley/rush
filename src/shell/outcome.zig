@@ -217,7 +217,7 @@ pub const CommandOutcome = struct {
         } else {
             std.debug.assert(target.isIsolatedFromParent());
             self.discardDelta(target);
-            shell_state.last_status = self.control_flow.status(self.status);
+            shell_state.last_status = self.effectiveControlFlow().status(self.status);
         }
 
         if (options.record_exit_control_flow) {

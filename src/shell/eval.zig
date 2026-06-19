@@ -6436,8 +6436,12 @@ fn executePendingTrapsWithFrame(
 
         try appendOutcomeBuffers(&buffers, action_outcome);
         try applyOutcomeToWorkingState(&working_state, &action_outcome, action_outcome.state_delta.target);
-        result = .{ .status = action_outcome.status, .control_flow = action_outcome.control_flow };
-        if (action_outcome.control_flow != .normal) break;
+        const action_control_flow = if (interactiveSubshellExitTrapActionEndsWithExit(signal, eval_context, body))
+            outcome.ControlFlow{ .exit = action_outcome.status }
+        else
+            action_outcome.effectiveControlFlow();
+        result = .{ .status = action_outcome.status, .control_flow = action_control_flow };
+        if (action_control_flow != .normal) break;
     }
 
     var state_delta = delta.StateDelta.init(evaluator.allocator, eval_context.target);
@@ -6466,6 +6470,81 @@ fn executePendingTrapsWithFrame(
         control_flow,
         &buffers,
     );
+}
+
+fn interactiveSubshellExitTrapActionEndsWithExit(
+    signal: state.TrapSignal,
+    eval_context: context.EvalContext,
+    body: TrapActionBody,
+) bool {
+    signal.validate();
+    eval_context.validate();
+    body.validate();
+    if (signal != .EXIT) return false;
+    if (!eval_context.interactive) return false;
+    if (eval_context.target != .subshell) return false;
+    return trapActionBodyPayloadEndsWithTopLevelExit(switch (body) {
+        .simple => |plan| .{ .simple = plan },
+        .compound => |plan| .{ .compound = plan },
+        .pipeline => |plan| .{ .pipeline = plan },
+        .failure => |failure| .{ .failure = failure },
+        .owned => |owned| owned.body,
+    });
+}
+
+fn trapActionBodyPayloadEndsWithTopLevelExit(body: TrapActionBodyPayload) bool {
+    body.validate();
+    return switch (body) {
+        .simple => |plan| simplePlanIsExit(plan),
+        .compound => |plan| switch (plan.body) {
+            .sequence => |list| statementListEndsWithTopLevelExit(list),
+            else => false,
+        },
+        .pipeline, .failure => false,
+    };
+}
+
+fn statementListEndsWithTopLevelExit(list: command_plan.StatementList) bool {
+    list.validate();
+    if (list.commands.len != 0) return simplePlanIsExit(list.commands[list.commands.len - 1]);
+    if (list.statements.len == 0) return false;
+    return statementPlanIsExit(list.statements[list.statements.len - 1].plan);
+}
+
+fn statementPlanIsExit(plan: command_plan.StatementPlan) bool {
+    plan.validate();
+    return switch (plan) {
+        .simple => |simple| simplePlanIsExit(simple),
+        .source => |source| sourceTextStartsWithExit(source.source),
+        .ir_source => |source| sourceTextStartsWithExit(source.fallback_source),
+        else => false,
+    };
+}
+
+fn simplePlanIsExit(plan: command_plan.CommandPlan) bool {
+    plan.validate();
+    return plan.argv.len != 0 and std.mem.eql(u8, plan.argv[0], "exit");
+}
+
+fn sourceTextStartsWithExit(source: []const u8) bool {
+    const trimmed = std.mem.trim(u8, source, &std.ascii.whitespace);
+    if (sourceWordAtOffsetIsExit(trimmed, 0)) return true;
+    var index: usize = 0;
+    while (std.mem.findScalarPos(u8, trimmed, index, ';')) |separator| {
+        var command_start = separator + 1;
+        while (command_start < trimmed.len and std.ascii.isWhitespace(trimmed[command_start])) command_start += 1;
+        if (sourceWordAtOffsetIsExit(trimmed, command_start)) return true;
+        index = separator + 1;
+    }
+    return false;
+}
+
+fn sourceWordAtOffsetIsExit(source: []const u8, offset: usize) bool {
+    if (offset > source.len) return false;
+    const rest = source[offset..];
+    if (!std.mem.startsWith(u8, rest, "exit")) return false;
+    if (rest.len == "exit".len) return true;
+    return std.ascii.isWhitespace(rest["exit".len]);
 }
 
 fn trapHandlerExecutionFrame(
@@ -9920,7 +9999,7 @@ fn applyOutcomeStatusToWorkingState(
 ) EvalError!void {
     shell_state.validate();
     command_outcome.validate();
-    shell_state.last_status = command_outcome.status;
+    shell_state.last_status = command_outcome.effectiveControlFlow().status(command_outcome.status);
     if (command_outcome.state_delta.last_pipeline_statuses) |statuses| {
         shell_state.setLastPipelineStatuses(statuses) catch |err| switch (err) {
             error.OutOfMemory => return error.OutOfMemory,
