@@ -6572,7 +6572,7 @@ fn sourceTextStartsWithExit(source: []const u8) bool {
     const trimmed = std.mem.trim(u8, source, &std.ascii.whitespace);
     if (sourceWordAtOffsetIsExit(trimmed, 0)) return true;
     var index: usize = 0;
-    while (std.mem.findScalarPos(u8, trimmed, index, ';')) |separator| {
+    while (findUnquotedSeparator(trimmed, index, ';')) |separator| {
         var command_start = separator + 1;
         while (command_start < trimmed.len and std.ascii.isWhitespace(trimmed[command_start])) command_start += 1;
         if (sourceWordAtOffsetIsExit(trimmed, command_start)) return true;
@@ -6587,6 +6587,28 @@ fn sourceWordAtOffsetIsExit(source: []const u8, offset: usize) bool {
     if (!std.mem.startsWith(u8, rest, "exit")) return false;
     if (rest.len == "exit".len) return true;
     return std.ascii.isWhitespace(rest["exit".len]);
+}
+
+fn findUnquotedSeparator(source: []const u8, start: usize, separator: u8) ?usize {
+    var index = start;
+    var quote: ?u8 = null;
+    while (index < source.len) : (index += 1) {
+        const byte = source[index];
+        if (quote) |active| {
+            if (active == '"' and byte == '\\') {
+                index += 1;
+                continue;
+            }
+            if (byte == active) quote = null;
+            continue;
+        }
+        switch (byte) {
+            '\'', '"' => quote = byte,
+            '\\' => index += 1,
+            else => if (byte == separator) return index,
+        }
+    }
+    return null;
 }
 
 fn trapHandlerExecutionFrame(
