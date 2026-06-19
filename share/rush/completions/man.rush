@@ -1,0 +1,136 @@
+__rush_complete_man_manpaths() {
+  manpaths=
+  for value in $(rush_complete option-values --short M); do manpaths="$value"; done
+  for value in $(rush_complete option-values --long manpath); do manpaths="$value"; done
+  if test -z "$manpaths"; then
+    manpaths=$MANPATH
+  fi
+  if test -z "$manpaths"; then
+    manpaths=$(manpath 2>/dev/null)
+  fi
+  if test -z "$manpaths"; then
+    manpaths=/usr/share/man:/usr/local/share/man:/opt/homebrew/share/man
+  fi
+  printf '%s\n' "$manpaths" | tr ':' '\n'
+}
+
+__rush_complete_man_find() {
+  if test -x /usr/bin/find; then
+    /usr/bin/find "$@"
+  else
+    find "$@"
+  fi
+}
+
+__rush_complete_man_section_description() {
+  case "$1" in
+    0) echo 'library headers' ;;
+    1) echo 'general commands' ;;
+    1m) echo 'maintenance commands' ;;
+    2) echo 'system calls' ;;
+    3) echo 'library functions' ;;
+    3p) echo 'Perl features' ;;
+    4) echo 'devices and drivers' ;;
+    5) echo 'file formats and conventions' ;;
+    6) echo 'games' ;;
+    7) echo 'miscellanea' ;;
+    8) echo 'maintenance commands and procedures' ;;
+    9) echo 'kernel features' ;;
+    l) echo 'local documentation' ;;
+    n) echo 'Tcl/Tk features' ;;
+    o) echo 'old documentation' ;;
+    p) echo 'public documentation' ;;
+    x) echo 'X11 features' ;;
+    *) echo 'manual section' ;;
+  esac
+}
+
+__rush_complete_man_sections() {
+  for dir in /usr/share/man /usr/local/share/man /opt/homebrew/share/man $(__rush_complete_man_manpaths); do
+    test -n "$dir" || continue
+    for section_dir in $(__rush_complete_man_find "$dir" -type d -name 'man*' 2>/dev/null) $(__rush_complete_man_find "$dir" -type d -name 'cat*' 2>/dev/null); do
+      section=${section_dir##*/}
+      case "$section" in
+        man*) section=${section#man} ;;
+        cat*) section=${section#cat} ;;
+        *) continue ;;
+      esac
+      case "$section" in
+        man|cat|'') continue ;;
+      esac
+      rush_complete candidate "$section" --kind plain --description "$(__rush_complete_man_section_description "$section")"
+    done
+  done
+}
+
+__rush_complete_man_pages() {
+  if rush_complete option-present --short k; then
+    return
+  fi
+  if rush_complete option-present --long apropos; then
+    return
+  fi
+  if rush_complete option-present --short f; then
+    return
+  fi
+  if rush_complete option-present --long whatis; then
+    return
+  fi
+
+  case "$rush_completion_prefix" in
+    */*)
+      rush_complete files
+      return
+      ;;
+  esac
+
+  section=
+  for value in $(rush_complete option-values --short S); do section="$value"; done
+  for value in $(rush_complete option-values --long sections); do section="$value"; done
+  for value in $(rush_complete option-values --short s); do section="$value"; done
+  section=${section%%:*}
+  section=${section%%,*}
+  if test -z "$section"; then
+    section=${MANSECT%%:*}
+  fi
+  if test "$rush_completion_argument_index" != 0; then
+    first=$(rush_complete operand 0)
+    case "$first" in
+      2to3*|7z*) ;;
+      [0-9]*|l|n|o|p|x) section=$first ;;
+    esac
+  fi
+  page_prefix=$rush_completion_prefix
+  if test -z "$page_prefix"; then
+    return
+  else
+    page_prefix=$page_prefix'*'
+  fi
+
+  for dir in /usr/share/man /usr/local/share/man /opt/homebrew/share/man $(__rush_complete_man_manpaths); do
+    test -n "$dir" || continue
+    for path in $(__rush_complete_man_find "$dir" -type f \( -name "$page_prefix" -o -name "$page_prefix.*" \) 2>/dev/null); do
+      page=${path##*/}
+      case "$page" in
+        *.gz|*.bz2|*.xz|*.zst|*.Z|*.z|*.lzma) page=${page%.*} ;;
+      esac
+
+      page_section=${page##*.}
+      case "$page" in
+        *.[0-9]*) page=${page%%.[0-9]*} ;;
+        *.l*|*.n*|*.o*|*.p*|*.x*) page=${page%.*} ;;
+        *) page=${page%.*} ;;
+      esac
+      test -n "$page" || continue
+      test -n "$page_section" || continue
+      if test -n "$section"; then
+        case "$page_section" in
+          "$section"*) ;;
+          *) continue ;;
+        esac
+      fi
+
+      rush_complete candidate "$page" --kind plain --description "manual page, section $page_section"
+    done
+  done
+}

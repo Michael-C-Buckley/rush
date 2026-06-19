@@ -1,0 +1,49 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "man",
+    "description": "display manual pages",
+    "providers": {
+      "builtin.directories": { "builtin": "directories" },
+      "builtin.files": { "builtin": "files" },
+      "builtin.executables": { "builtin": "executables" },
+      "man.pages": { "function": "__rush_complete_man_pages" },
+      "man.sections": { "function": "__rush_complete_man_sections" }
+    },
+    "options": [
+      { "short": "a", "long": "all", "description": "show all matching manual pages" },
+      { "short": "B", "value": { "name": "browser", "provider": "builtin.files" }, "platforms": ["darwin"], "description": "use a browser for html output" },
+      { "short": "c", "platforms": ["darwin"], "description": "reformat the source manual page" },
+      { "short": "d", "long": "debug", "description": "print debugging information" },
+      { "short": "D", "platforms": ["darwin"], "description": "show page with debugging information" },
+      { "short": "f", "long": "whatis", "description": "show short manual page descriptions" },
+      { "short": "F", "long": "preformat", "platforms": ["darwin"], "description": "format page without displaying it" },
+      { "short": "h", "long": "help", "priority": 20, "description": "print help and exit" },
+      { "short": "H", "value": { "name": "pager", "provider": "builtin.executables" }, "platforms": ["darwin"], "description": "render html with a command" },
+      { "short": "k", "long": "apropos", "description": "search short descriptions for a keyword" },
+      { "short": "m", "value": { "name": "system" }, "description": "search manuals for a system" },
+      { "short": "p", "long": "preprocessor", "value": { "name": "sequence" }, "description": "use a roff preprocessor sequence" },
+      { "short": "t", "long": "troff", "description": "format page using troff" },
+      { "short": "v", "long": "version", "platforms": ["darwin"], "description": "print version information" },
+      { "short": "w", "long": "where", "description": "print manual page locations" },
+      { "short": "W", "platforms": ["darwin"], "description": "print one file location per line" },
+      { "short": "M", "long": "manpath", "value": { "name": "path", "provider": "builtin.directories" }, "description": "use an alternate manual page path" },
+      { "short": "P", "long": "pager", "value": { "name": "command", "provider": "builtin.executables" }, "description": "use an alternate pager" },
+      { "short": "S", "long": "sections", "value": { "name": "list", "provider": "man.sections" }, "description": "search only selected sections" },
+      { "spellings": ["-s"], "value": { "name": "section", "provider": "man.sections" }, "description": "search only one section" },
+      { "long": "help", "priority": 20, "description": "print help and exit" }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "page",
+          "index": 0,
+          "repeatable": true,
+          "provider": "man.pages",
+          "description": "manual page to display"
+        }
+      ]
+    }
+  }
+}
