@@ -12846,18 +12846,6 @@ fn evaluateBuiltin(
         else => unreachable,
     }
 
-    if (definition.origin == .extension) {
-        if (evaluator.extensionHandler(definition.name)) |handler| return evaluateExtensionBuiltin(
-            evaluator,
-            handler,
-            shell_state,
-            eval_context,
-            plan,
-            state_delta,
-            buffers,
-        );
-    }
-
     if (std.mem.eql(u8, definition.name, ":")) return normalEvaluation(0);
     if (std.mem.eql(u8, definition.name, "true")) return normalEvaluation(0);
     if (std.mem.eql(u8, definition.name, "false")) return normalEvaluation(1);
@@ -13056,6 +13044,17 @@ fn evaluateBuiltin(
         plan.argv,
         buffers,
     ));
+    if (definition.origin == .extension) {
+        if (evaluator.extensionHandler(definition.name)) |handler| return evaluateExtensionBuiltin(
+            evaluator,
+            handler,
+            shell_state,
+            eval_context,
+            plan,
+            state_delta,
+            buffers,
+        );
+    }
     return error.Unimplemented;
 }
 
@@ -13465,7 +13464,8 @@ fn evaluateSourcedTextChunks(
                 else => return error.Unimplemented,
             };
             defer evaluator.allocator.free(aliased);
-            var parsed = parser.parse(evaluator.allocator, aliased, .{
+            const parse_source = if (shell_state.shopts.enabled(.expand_aliases)) aliased else chunk;
+            var parsed = parser.parse(evaluator.allocator, parse_source, .{
                 .features = evaluator.features.withStrictDiagnostics(),
                 .collect_command_substitution_nodes = false,
             }) catch |err| switch (err) {
@@ -13481,7 +13481,7 @@ fn evaluateSourcedTextChunks(
                     evaluator,
                     shell_state,
                     eval_context,
-                    chunk,
+                    parse_source,
                     sourceLineIndex(source, start),
                     buffers,
                 );

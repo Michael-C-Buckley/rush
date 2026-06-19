@@ -414,6 +414,8 @@ fn runSemanticAliasTimingCommandString(
                     },
                 }
                 parser_resolver.alias_state = null;
+                parser_resolver.active_frame = null;
+                parser_resolver.active_input = null;
                 if (shell_state.pending_exit != null) stop_for_pending_exit = true;
                 break;
             }
@@ -502,6 +504,7 @@ pub fn runShellStateScriptWithExtensionHandlers(
             source_path,
             external_stdio,
             extension_handlers,
+            false,
         )
     else
         try runSemanticShellStateScriptWithoutAliasTiming(
@@ -677,6 +680,7 @@ fn runSemanticAliasTimingShellStateScript(
     source_path: []const u8,
     external_stdio: runtime.ExternalStdio,
     extension_handlers: ExtensionHandlers,
+    run_exit_trap: bool,
 ) !SemanticInvocationExecution {
     shell_state.validate();
     invocation.validate();
@@ -758,6 +762,8 @@ fn runSemanticAliasTimingShellStateScript(
                     },
                 }
                 parser_resolver.alias_state = null;
+                parser_resolver.active_frame = null;
+                parser_resolver.active_input = null;
                 if (shell_state.pending_exit != null) stop_for_pending_exit = true;
                 break;
             }
@@ -772,6 +778,14 @@ fn runSemanticAliasTimingShellStateScript(
         start = skipSemanticChunkSeparators(script, end);
     }
 
+    if (run_exit_trap) try appendSemanticExitTrap(
+        &output_frame,
+        &status,
+        &evaluator,
+        shell_state,
+        eval_context,
+        parser_resolver.resolver(),
+    );
     const runner_output = try output_frame.finish();
     return .{ .output = .{
         .allocator = allocator,
@@ -836,6 +850,7 @@ pub fn runInteractiveCommandStringWithExtensionHandlers(
             "-c",
             external_stdio,
             extension_handlers,
+            invocation.source == .command_string,
         );
     }
 
@@ -865,6 +880,7 @@ pub fn runInteractiveCommandStringWithExtensionHandlers(
     var evaluator = shell.eval.Evaluator.initWithRuntimePorts(allocator, runtime.posixPorts(&adapter));
     evaluator.features = invocation.features;
     evaluator.arg_zero = invocation.arg_zero;
+    evaluator.io = io;
     evaluator.external_stdio = external_stdio;
     extension_handlers.apply(&evaluator);
     var parser_resolver = shell.ParserBackedSourceResolver.init(&evaluator);
@@ -883,7 +899,7 @@ pub fn runInteractiveCommandStringWithExtensionHandlers(
         0,
         null,
         0,
-        false,
+        invocation.source == .command_string,
     );
 }
 
@@ -1234,6 +1250,7 @@ fn appendSemanticExitTrap(
 fn semanticScriptNeedsAliasTiming(script: []const u8) bool {
     var index: usize = 0;
     while (index < script.len) {
+        if (script[index] == '.' and isSemanticAliasTokenBoundary(script, index, index + 1)) return true;
         while (index < script.len and !isSemanticAliasTokenByte(script[index])) index += 1;
         const start = index;
         while (index < script.len and isSemanticAliasTokenByte(script[index])) index += 1;
@@ -1241,12 +1258,20 @@ fn semanticScriptNeedsAliasTiming(script: []const u8) bool {
         if (std.mem.eql(u8, word, "alias") or
             std.mem.eql(u8, word, "unalias") or
             std.mem.eql(u8, word, "eval") or
-            std.mem.eql(u8, word, "."))
+            std.mem.eql(u8, word, "source"))
         {
             return true;
         }
     }
     return false;
+}
+
+fn isSemanticAliasTokenBoundary(script: []const u8, start: usize, end: usize) bool {
+    std.debug.assert(start < end);
+    std.debug.assert(end <= script.len);
+    const before = start == 0 or !isSemanticAliasTokenByte(script[start - 1]);
+    const after = end == script.len or !isSemanticAliasTokenByte(script[end]);
+    return before and after;
 }
 
 fn isSemanticAliasTokenByte(byte: u8) bool {
@@ -2770,7 +2795,7 @@ test "semantic interactive invocation runs cd" {
         std.testing.io,
         &shell_state,
         script,
-        shell.InvocationContext.init(.{ .arg_zero = "rush", .interactive = true }),
+        shell.InvocationContext.init(.{ .arg_zero = "rush", .source = .interactive, .interactive = true }),
         .capture,
     );
     defer execution.deinit(std.testing.allocator);
@@ -2796,7 +2821,7 @@ test "semantic interactive invocation dispatches job control builtins" {
         std.testing.io,
         &shell_state,
         "jobs\nbg\nfg",
-        shell.InvocationContext.init(.{ .arg_zero = "rush", .interactive = true }),
+        shell.InvocationContext.init(.{ .arg_zero = "rush", .source = .interactive, .interactive = true }),
         .capture,
     );
     defer execution.deinit(std.testing.allocator);
@@ -2821,7 +2846,7 @@ test "semantic interactive invocation dispatches alias builtins" {
         std.testing.io,
         &shell_state,
         "alias ll='echo listed'\nalias ll\nunalias ll",
-        shell.InvocationContext.init(.{ .arg_zero = "rush", .interactive = true }),
+        shell.InvocationContext.init(.{ .arg_zero = "rush", .source = .interactive, .interactive = true }),
         .capture,
     );
     defer execution.deinit(std.testing.allocator);
@@ -2848,7 +2873,7 @@ test "semantic interactive invocation expands existing aliases" {
         std.testing.io,
         &shell_state,
         "say",
-        shell.InvocationContext.init(.{ .arg_zero = "rush", .interactive = true }),
+        shell.InvocationContext.init(.{ .arg_zero = "rush", .source = .interactive, .interactive = true }),
         .capture,
     );
     defer execution.deinit(std.testing.allocator);
@@ -2873,7 +2898,7 @@ test "semantic interactive invocation dispatches declaration builtins" {
         std.testing.io,
         &shell_state,
         "export FOO=bar",
-        shell.InvocationContext.init(.{ .arg_zero = "rush", .interactive = true }),
+        shell.InvocationContext.init(.{ .arg_zero = "rush", .source = .interactive, .interactive = true }),
         .capture,
     );
     defer execution.deinit(std.testing.allocator);
@@ -2902,7 +2927,7 @@ test "semantic interactive invocation dispatches shell state builtins" {
         std.testing.io,
         &shell_state,
         "set -f\nunset GONE\ntrap 'echo bye' EXIT",
-        shell.InvocationContext.init(.{ .arg_zero = "rush", .interactive = true }),
+        shell.InvocationContext.init(.{ .arg_zero = "rush", .source = .interactive, .interactive = true }),
         .capture,
     );
     defer execution.deinit(std.testing.allocator);
@@ -2930,7 +2955,7 @@ test "semantic interactive invocation dispatches exit" {
         std.testing.io,
         &shell_state,
         "exit 7",
-        shell.InvocationContext.init(.{ .arg_zero = "rush", .interactive = true }),
+        shell.InvocationContext.init(.{ .arg_zero = "rush", .source = .interactive, .interactive = true }),
         .capture,
     );
     defer execution.deinit(std.testing.allocator);
@@ -3707,6 +3732,61 @@ test "aliases defined by dot affect later complete commands" {
     try std.testing.expectEqualStrings("dot-ok\n", result.stdout);
     try std.testing.expectEqualStrings("", result.stderr);
 }
+
+test "semantic interactive command string dot aliases affect later lines" {
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, "rush-interactive-alias-dot-source") catch {};
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{
+        .sub_path = "rush-interactive-alias-dot-source",
+        .data = "alias dot='echo interactive-dot-ok'\n",
+    });
+
+    const invocation = cli_invocation.parse(&.{
+        "rush",
+        "--posix",
+        "-i",
+        "-c",
+        ". ./rush-interactive-alias-dot-source\ndot",
+    }) orelse return error.ExpectedInvocation;
+    var result = try runInvocationForTest(std.testing.allocator, std.testing.io, invocation, null, .capture, false);
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("interactive-dot-ok\n", result.stdout);
+    try std.testing.expectEqualStrings("", result.stderr);
+}
+
+test "semantic interactive command string runs exit trap after alias-timed chunks" {
+    const invocation = cli_invocation.parse(&.{
+        "rush",
+        "--posix",
+        "-i",
+        "-c",
+        "trap 'echo EXIT_TRAP' EXIT\nalias body='echo BODY'\nbody",
+    }) orelse return error.ExpectedInvocation;
+    var result = try runInvocationForTest(std.testing.allocator, std.testing.io, invocation, null, .capture, false);
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("BODY\nEXIT_TRAP\n", result.stdout);
+    try std.testing.expectEqualStrings("", result.stderr);
+}
+
+test "semantic interactive command string runs exit trap after normal script" {
+    const invocation = cli_invocation.parse(&.{
+        "rush",
+        "--posix",
+        "-i",
+        "-c",
+        "trap 'echo EXIT_TRAP' EXIT\necho BODY",
+    }) orelse return error.ExpectedInvocation;
+    var result = try runInvocationForTest(std.testing.allocator, std.testing.io, invocation, null, .capture, false);
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("BODY\nEXIT_TRAP\n", result.stdout);
+    try std.testing.expectEqualStrings("", result.stderr);
+}
+
 test "aliases defined on a read line affect only later read lines" {
     var result = try runScript(std.testing.allocator, std.testing.io,
         \\alias zzsamecmd='echo same-ok'; zzsamecmd; echo same-line:$?
