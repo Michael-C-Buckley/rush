@@ -1093,6 +1093,7 @@ pub fn runCommandStringWithEnvironment(
 
 fn syncSemanticTerminalSize(shell_state: *shell.ShellState, terminal: editor_driver.TerminalSession) !void {
     const winsize = terminal.currentWinsize();
+    if (winsize.rows == 0 or winsize.cols == 0) return;
     try shell_state.setInteractiveTerminalSize(winsize.rows, winsize.cols);
 }
 
