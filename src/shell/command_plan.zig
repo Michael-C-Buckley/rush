@@ -138,13 +138,24 @@ pub const NegationPlan = struct {
     }
 };
 
+pub const ForWord = struct {
+    raw: []const u8,
+    line: usize = 0,
+
+    pub fn validate(self: ForWord) void {
+        std.debug.assert(std.mem.indexOfScalar(u8, self.raw, 0) == null);
+    }
+};
+
 pub const ForWords = union(enum) {
     explicit: []const []const u8,
+    source: []const ForWord,
     positional_parameters,
 
     pub fn validate(self: ForWords) void {
         switch (self) {
             .explicit => |words| for (words) |word| std.debug.assert(std.mem.indexOfScalar(u8, word, 0) == null),
+            .source => |words| for (words) |word| word.validate(),
             .positional_parameters => {},
         }
     }
@@ -1364,6 +1375,17 @@ fn cloneForWords(allocator: std.mem.Allocator, words: ForWords) std.mem.Allocato
             }
             break :blk .{ .explicit = owned };
         },
+        .source => |source| blk: {
+            const owned = try allocator.alloc(ForWord, source.len);
+            errdefer allocator.free(owned);
+            var initialized: usize = 0;
+            errdefer for (owned[0..initialized]) |word| allocator.free(word.raw);
+            for (source, 0..) |word, index| {
+                owned[index] = .{ .raw = try allocator.dupe(u8, word.raw), .line = word.line };
+                initialized += 1;
+            }
+            break :blk .{ .source = owned };
+        },
     };
 }
 
@@ -1373,6 +1395,10 @@ fn freeForWords(allocator: std.mem.Allocator, words: ForWords) void {
         .explicit => |explicit| {
             for (explicit) |word| allocator.free(word);
             allocator.free(explicit);
+        },
+        .source => |source| {
+            for (source) |word| allocator.free(word.raw);
+            allocator.free(source);
         },
     }
 }

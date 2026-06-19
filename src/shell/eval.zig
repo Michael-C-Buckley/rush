@@ -1529,33 +1529,20 @@ const SourceLowerer = struct {
         }
         const redirections = try self.lowerRedirections(command.redirections, .regular_command);
         if (redirections == .failure) return .{ .failure = redirections.failure };
-        var expansion_outputs: ExpansionOutputAccumulator = .{};
-        defer ExpansionOutputAccumulator.deinit(self.allocator, &expansion_outputs);
         const words = if (command.use_positionals) command_plan.ForWords.positional_parameters else blk: {
-            var explicit: std.ArrayList([]const u8) = .empty;
-            errdefer explicit.deinit(self.allocator);
-            for (command.words) |word| {
-                const fields = fields: {
-                    const previous_line_number = self.current_line_number;
-                    self.current_line_number = self.sourceLineNumber(source, word.span.start);
-                    defer self.current_line_number = previous_line_number;
-                    break :fields switch (try self.expandFields(word.raw, target)) {
-                        .failure => |trap_failure| return .{ .failure = trap_failure },
-                        .result => |expanded| blk_fields: {
-                            try ExpansionOutputAccumulator.appendOwned(
-                                self.allocator,
-                                &expansion_outputs,
-                                expanded.output,
-                            );
-                            break :blk_fields expanded.result;
-                        },
-                    };
+            const source_words = try self.allocator.alloc(command_plan.ForWord, command.words.len);
+            errdefer self.allocator.free(source_words);
+            var initialized: usize = 0;
+            errdefer for (source_words[0..initialized]) |word| self.allocator.free(word.raw);
+            for (command.words, 0..) |word, index| {
+                source_words[index] = .{
+                    .raw = try self.allocator.dupe(u8, word.raw),
+                    .line = self.sourceLineNumber(source, word.span.start),
                 };
-                try explicit.appendSlice(self.allocator, fields.fields);
+                initialized += 1;
             }
-            break :blk command_plan.ForWords{ .explicit = try explicit.toOwnedSlice(self.allocator) };
+            break :blk command_plan.ForWords{ .source = source_words };
         };
-        const expansion_output = try ExpansionOutputAccumulator.toOwned(self.allocator, &expansion_outputs);
         const name = try self.allocator.dupe(u8, command.name);
         const source_backed = self.owner.expand_aliases;
         const body_source: ?[]const u8 = if (source_backed)
@@ -1575,7 +1562,6 @@ const SourceLowerer = struct {
             .body = .{ .for_loop = .{
                 .variable_name = name,
                 .words = words,
-                .expansion_output = expansion_output,
                 .body_source = body_source,
                 .body = body,
             } },
@@ -10084,9 +10070,20 @@ fn evaluateForLoop(
     const loop_context = eval_context.enterLoop();
     var positional_words: ?[][]const u8 = null;
     defer if (positional_words) |words| freeForLoopWords(evaluator.allocator, words);
+    var source_words: ?[][]const u8 = null;
+    defer if (source_words) |words| freeForLoopWords(evaluator.allocator, words);
 
     const words = switch (for_plan.words) {
         .explicit => |explicit| explicit,
+        .source => |source| blk: {
+            switch (try expandForLoopSourceWords(evaluator, shell_state, eval_context, source, buffers)) {
+                .words => |expanded| {
+                    source_words = expanded;
+                    break :blk expanded;
+                },
+                .failure => |result| return result,
+            }
+        },
         .positional_parameters => blk: {
             const snapshot = try cloneForLoopWords(evaluator.allocator, shell_state.positionals.items);
             positional_words = snapshot;
@@ -10130,6 +10127,90 @@ fn evaluateForLoop(
         }
     }
     return result;
+}
+
+const ForLoopWordExpansion = union(enum) {
+    words: [][]const u8,
+    failure: SimpleEvalResult,
+};
+
+fn expandForLoopSourceWords(
+    evaluator: *Evaluator,
+    shell_state: *state.ShellState,
+    eval_context: context.EvalContext,
+    source_words: []const command_plan.ForWord,
+    buffers: *EvaluationBuffers,
+) EvalError!ForLoopWordExpansion {
+    shell_state.validate();
+    eval_context.validate();
+    for (source_words) |word| word.validate();
+
+    var parser_resolver = ParserBackedSourceResolver.init(evaluator);
+    parser_resolver.features = evaluator.features;
+    parser_resolver.arg_zero = evaluator.arg_zero;
+    parser_resolver.expand_aliases = false;
+    parser_resolver.alias_state = evaluator.alias_state;
+    parser_resolver.active_frame = buffers.frame;
+    parser_resolver.active_input = buffers.stdin;
+
+    var lowerer: SourceLowerer = .{
+        .allocator = evaluator.allocator,
+        .owner = &parser_resolver,
+        .shell_state = shell_state,
+        .eval_context = eval_context,
+        .signal = null,
+        .local_functions = .empty,
+    };
+
+    var expanded_words: std.ArrayList([]const u8) = .empty;
+    errdefer {
+        freeForLoopWords(evaluator.allocator, expanded_words.items);
+        expanded_words.deinit(evaluator.allocator);
+    }
+    var expansion_outputs: SourceLowerer.ExpansionOutputAccumulator = .{};
+    defer SourceLowerer.ExpansionOutputAccumulator.deinit(evaluator.allocator, &expansion_outputs);
+
+    for (source_words) |word| {
+        lowerer.current_line_number = word.line;
+        const expanded_word = lowerer.expandFields(word.raw, eval_context.target) catch |err| switch (err) {
+            error.OutOfMemory => return error.OutOfMemory,
+            else => return error.Unimplemented,
+        };
+        switch (expanded_word) {
+            .failure => |failure| {
+                const result = try simpleResultFromTrapActionFailure(
+                    evaluator,
+                    shell_state.*,
+                    eval_context,
+                    failure,
+                    buffers,
+                );
+                evaluator.allocator.free(failure.message);
+                try appendExpansionOutput(evaluator.*, eval_context, try SourceLowerer.ExpansionOutputAccumulator.toOwned(
+                    evaluator.allocator,
+                    &expansion_outputs,
+                ), buffers);
+                return .{ .failure = result };
+            },
+            .result => |expanded| {
+                var expanded_result = expanded.result;
+                defer expanded_result.deinit();
+                try SourceLowerer.ExpansionOutputAccumulator.appendOwned(
+                    evaluator.allocator,
+                    &expansion_outputs,
+                    expanded.output,
+                );
+                for (expanded_result.fields) |field| {
+                    try expanded_words.append(evaluator.allocator, try evaluator.allocator.dupe(u8, field));
+                }
+            },
+        }
+    }
+    try appendExpansionOutput(evaluator.*, eval_context, try SourceLowerer.ExpansionOutputAccumulator.toOwned(
+        evaluator.allocator,
+        &expansion_outputs,
+    ), buffers);
+    return .{ .words = try expanded_words.toOwnedSlice(evaluator.allocator) };
 }
 
 fn cloneForLoopWords(allocator: std.mem.Allocator, words: []const []const u8) ![][]const u8 {
@@ -11613,6 +11694,22 @@ fn initializeFunctionBodyCursor(
         parser_resolver.active_frame = buffers.frame;
         parser_resolver.active_input = buffers.stdin;
         parser_resolver.source_line_offset = definition.source_body_line_offset;
+        var cache_check_arena = std.heap.ArenaAllocator.init(evaluator.allocator);
+        defer cache_check_arena.deinit();
+        var cache_check_lowerer: SourceLowerer = .{
+            .allocator = cache_check_arena.allocator(),
+            .owner = &parser_resolver,
+            .shell_state = frame_state,
+            .eval_context = function_context,
+            .signal = null,
+            .local_functions = .empty,
+            .source_line_offset = definition.source_body_line_offset,
+        };
+        if (!(cache_check_lowerer.functionBodySourceCacheable(source_body) catch |err| switch (err) {
+            error.OutOfMemory => return error.OutOfMemory,
+            else => return false,
+        })) return false;
+
         const body = (parser_resolver.lowerSource(
             evaluator.allocator,
             source_body,

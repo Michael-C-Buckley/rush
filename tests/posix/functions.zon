@@ -366,6 +366,20 @@
             .status = 0,
         },
         .{
+            .name = "function for in words expand after earlier body assignments",
+            .script =
+            \\foo() { dir=$1; for path in "$dir"/a "$dir"/b; do printf '<%s>\n' "$path"; done; }
+            \\foo /tmp
+            ,
+            .stdout =
+            \\</tmp/a>
+            \\</tmp/b>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "function definition redirections are applied when the function is invoked",
             .script =
             \\foo() { printf '%s\n' call; } >out
