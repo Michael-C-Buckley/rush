@@ -13778,8 +13778,17 @@ fn skipSourcedTextChunkSeparators(source: []const u8, start: usize) usize {
 
 fn sourcedTextLineEnd(source: []const u8, start: usize) usize {
     var index = start;
-    while (index < source.len and source[index] != '\n') index += 1;
-    if (index < source.len) index += 1;
+    while (index < source.len) {
+        if (source[index] == '\\' and index + 1 < source.len and source[index + 1] == '\n') {
+            index += 2;
+            continue;
+        }
+        if (source[index] == '\n') {
+            index += 1;
+            break;
+        }
+        index += 1;
+    }
     return index;
 }
 
@@ -19889,6 +19898,34 @@ test "semantic evaluator sources empty files as successful no-op scripts" {
     try std.testing.expectEqual(outcome.ControlFlow.normal, result.control_flow);
     try std.testing.expectEqualStrings("", buffers.stdout.items);
     try std.testing.expectEqualStrings("", buffers.stderr.items);
+}
+
+test "semantic evaluator sources backslash-newline continued reserved words" {
+    var shell_state = state.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    var evaluator = Evaluator.init(std.testing.allocator);
+    var input = EvaluationInput.empty();
+    const eval_context = context.EvalContext.forTarget(.current_shell).enterSource();
+    var execution_frame_value = rootExecutionFrame(eval_context);
+    var buffers = EvaluationBuffers.init(std.testing.allocator, &input, &execution_frame_value);
+    defer buffers.deinit();
+    var state_delta = delta.StateDelta.init(std.testing.allocator, .current_shell);
+    defer state_delta.deinit();
+
+    const result = try evaluateSourcedText(
+        &evaluator,
+        shell_state,
+        eval_context,
+        "i\\\nf true; then DOT_OK=yes; fi\n",
+        &.{},
+        &state_delta,
+        &buffers,
+    );
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 0), result.status);
+    try std.testing.expectEqual(outcome.ControlFlow.normal, result.control_flow);
+    try std.testing.expectEqualStrings("", buffers.stderr.items);
+    try state_delta.commit(&shell_state, .current_shell);
+    try std.testing.expectEqualStrings("yes", shell_state.getVariable("DOT_OK").?.value);
 }
 
 test "semantic evaluator polls fake runtime signals into pending trap state" {

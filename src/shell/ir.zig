@@ -1257,7 +1257,7 @@ fn lowerPipelineDirect(
     for (parsed.nodeChildren(node)) |child| switch (child) {
         .token => |token_index| {
             const token = parsed.tokens[token_index.index()];
-            if (token.kind == .word and std.mem.eql(u8, token.lexeme(parsed.source), "!")) negated = true;
+            if (token.kind == .word and wordEqualsRemovingLineContinuations(token.lexeme(parsed.source), "!")) negated = true;
         },
         .node => |child_node_id| {
             const child_node = parsed.nodes[child_node_id.index()];
@@ -1664,6 +1664,21 @@ fn bodyProgramCacheable(body: []const u8) bool {
     return std.mem.indexOf(u8, body, "<<") == null;
 }
 
+fn wordEqualsRemovingLineContinuations(word: []const u8, expected: []const u8) bool {
+    var word_index: usize = 0;
+    var expected_index: usize = 0;
+    while (word_index < word.len) {
+        if (word[word_index] == '\\' and word_index + 1 < word.len and word[word_index + 1] == '\n') {
+            word_index += 2;
+            continue;
+        }
+        if (expected_index >= expected.len or word[word_index] != expected[expected_index]) return false;
+        word_index += 1;
+        expected_index += 1;
+    }
+    return expected_index == expected.len;
+}
+
 fn lowerBodyProgram(
     allocator: std.mem.Allocator,
     parsed: parser.ParseResult,
@@ -1868,7 +1883,7 @@ fn lowerCaseCommand(allocator: std.mem.Allocator, parsed: parser.ParseResult, no
         const lexeme = token.lexeme(parsed.source);
         if (word_token == null) {
             word_token = token_index;
-        } else if (in_token == null and std.mem.eql(u8, lexeme, "in")) {
+        } else if (in_token == null and wordEqualsRemovingLineContinuations(lexeme, "in")) {
             in_token = token_index;
             break;
         }
@@ -1961,14 +1976,14 @@ fn lowerForCommand(allocator: std.mem.Allocator, parsed: parser.ParseResult, nod
             if (token.kind != .word) continue;
             const lexeme = token.lexeme(parsed.source);
             if (body_node == null) {
-                if (std.mem.eql(u8, lexeme, "for")) continue;
+                if (wordEqualsRemovingLineContinuations(lexeme, "for")) continue;
                 if (name_token == null) {
-                    if (!std.mem.eql(u8, lexeme, "in")) name_token = token_index;
-                } else if (in_token == null and std.mem.eql(u8, lexeme, "in")) {
+                    if (!wordEqualsRemovingLineContinuations(lexeme, "in")) name_token = token_index;
+                } else if (in_token == null and wordEqualsRemovingLineContinuations(lexeme, "in")) {
                     in_token = token_index;
                 }
                 previous_word_token = token_index;
-            } else if (done_token == null and std.mem.eql(u8, lexeme, "done")) {
+            } else if (done_token == null and wordEqualsRemovingLineContinuations(lexeme, "done")) {
                 done_token = token_index;
             }
         },
@@ -2048,9 +2063,9 @@ fn lowerLoopCommand(allocator: std.mem.Allocator, parsed: parser.ParseResult, no
             const token = parsed.tokens[token_index];
             if (token.kind != .word) continue;
             const lexeme = token.lexeme(parsed.source);
-            if (do_token == null and std.mem.eql(u8, lexeme, "do")) {
+            if (do_token == null and wordEqualsRemovingLineContinuations(lexeme, "do")) {
                 do_token = token_index;
-            } else if (done_token == null and std.mem.eql(u8, lexeme, "done")) {
+            } else if (done_token == null and wordEqualsRemovingLineContinuations(lexeme, "done")) {
                 done_token = token_index;
             }
         },
@@ -2079,7 +2094,7 @@ fn lowerLoopCommand(allocator: std.mem.Allocator, parsed: parser.ParseResult, no
     errdefer allocator.free(body);
     return .{
         .span = node.span,
-        .kind = if (std.mem.eql(u8, opener, "while")) .while_loop else .until_loop,
+        .kind = if (wordEqualsRemovingLineContinuations(opener, "while")) .while_loop else .until_loop,
         .condition = condition,
         .condition_line_offset = sourceLineIndex(parsed.source, sourceStart(parsed, condition_start)),
         .body = body,
@@ -2117,7 +2132,7 @@ fn lowerIfCommand(allocator: std.mem.Allocator, parsed: parser.ParseResult, node
             const token = parsed.tokens[token_index];
             if (token.kind != .word) continue;
             const lexeme = token.lexeme(parsed.source);
-            if (std.mem.eql(u8, lexeme, "else")) has_else_clause = true;
+            if (wordEqualsRemovingLineContinuations(lexeme, "else")) has_else_clause = true;
         },
     };
 
@@ -2268,7 +2283,7 @@ fn lowerPipeline(
     for (parsed.nodeChildren(node)) |child| switch (child) {
         .token => |token_index| {
             const token = parsed.tokens[token_index.index()];
-            if (token.kind == .word and std.mem.eql(u8, token.lexeme(parsed.source), "!")) negated = true;
+            if (token.kind == .word and wordEqualsRemovingLineContinuations(token.lexeme(parsed.source), "!")) negated = true;
         },
         .node => |child_node_id| {
             const child_node = parsed.nodes[child_node_id.index()];
