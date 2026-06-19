@@ -10186,10 +10186,12 @@ fn expandForLoopSourceWords(
                     buffers,
                 );
                 evaluator.allocator.free(failure.message);
-                try appendExpansionOutput(evaluator.*, eval_context, try SourceLowerer.ExpansionOutputAccumulator.toOwned(
-                    evaluator.allocator,
-                    &expansion_outputs,
-                ), buffers);
+                try appendExpansionOutput(
+                    evaluator.*,
+                    eval_context,
+                    try SourceLowerer.ExpansionOutputAccumulator.toOwned(evaluator.allocator, &expansion_outputs),
+                    buffers,
+                );
                 return .{ .failure = result };
             },
             .result => |expanded| {

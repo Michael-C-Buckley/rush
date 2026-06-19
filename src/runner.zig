@@ -1230,6 +1230,7 @@ fn appendSemanticExitTrap(
     resolver: shell.TrapActionResolver,
 ) !void {
     if (shell_state.getTrapForSignal(.EXIT) == null) return;
+    if (evaluator.commit_exec_redirections) _ = try output_frame.flushPendingToInheritedDescriptors();
     shell_state.last_status = status.*;
     try shell_state.appendPendingTrap(.EXIT);
     var trap_outcome = (try shell.eval.executePendingTraps(
@@ -1456,7 +1457,13 @@ fn semanticInteractiveProgramUnsupported(shell_state: shell.ShellState, program:
 fn semanticInteractiveBuiltinRootAllowed(name: []const u8) bool {
     const definition = default_builtins.lookup(name) orelse return false;
     if (definition.semantic_class == .unsupported) return false;
-    if (definition.semantic_class == .control_flow and !std.mem.eql(u8, name, "exit")) return false;
+    if (definition.semantic_class == .control_flow and
+        !std.mem.eql(u8, name, "exit") and
+        !std.mem.eql(u8, name, "break") and
+        !std.mem.eql(u8, name, "continue"))
+    {
+        return false;
+    }
     if (std.mem.eql(u8, name, "local") or std.mem.eql(u8, name, "read")) return false;
     return true;
 }
@@ -3784,6 +3791,38 @@ test "semantic interactive command string runs exit trap after normal script" {
 
     try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
     try std.testing.expectEqualStrings("BODY\nEXIT_TRAP\n", result.stdout);
+    try std.testing.expectEqualStrings("", result.stderr);
+}
+
+test "semantic interactive command string preserves output before exiting exit trap" {
+    const invocation = cli_invocation.parse(&.{
+        "rush",
+        "--posix",
+        "-i",
+        "-c",
+        "trap 'echo EXIT_TRAP; exit 7' EXIT\necho BODY",
+    }) orelse return error.ExpectedInvocation;
+    var result = try runInvocationForTest(std.testing.allocator, std.testing.io, invocation, null, .capture, false);
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(shell.ExitStatus, 7), result.status);
+    try std.testing.expectEqualStrings("BODY\nEXIT_TRAP\n", result.stdout);
+    try std.testing.expectEqualStrings("", result.stderr);
+}
+
+test "semantic interactive command string permits top-level loop controls" {
+    const invocation = cli_invocation.parse(&.{
+        "rush",
+        "--posix",
+        "-i",
+        "-c",
+        "break\ncontinue\necho AFTER",
+    }) orelse return error.ExpectedInvocation;
+    var result = try runInvocationForTest(std.testing.allocator, std.testing.io, invocation, null, .capture, false);
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("AFTER\n", result.stdout);
     try std.testing.expectEqualStrings("", result.stderr);
 }
 
