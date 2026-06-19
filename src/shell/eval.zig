@@ -9835,10 +9835,13 @@ fn flushBuffersForRedirectionTargetsBetweenCommands(
     eval_context.validate();
     redirections.validate();
     if (eval_context.command_substitution_depth != 0) return;
+    const flush_stdout = buffers.stdout.items.len != 0 and redirectionTargetsDescriptor(redirections, 1);
+    const flush_stderr = buffers.stderr.items.len != 0 and redirectionTargetsDescriptor(redirections, 2);
+    if (!flush_stdout and !flush_stderr) return;
     switch (external_stdio) {
         .capture => return,
         .capture_stdout => {
-            if (!redirectionTargetsDescriptor(redirections, 2)) return;
+            if (!flush_stderr) return;
             var frame = OutputFrame.initInherited(buffers);
             defer frame.deinit();
             try frame.flushPendingDescriptor(2);
