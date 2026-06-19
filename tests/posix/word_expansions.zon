@@ -1216,6 +1216,25 @@
             .status = 0,
         },
         .{
+            .name = "pathname expansion leaves unreadable directory patterns unchanged",
+            .script =
+            \\dir=unreadable
+            \\mkdir "$dir"
+            \\: >"$dir/match.txt"
+            \\trap 'chmod 700 "$dir" 2>/dev/null; rm -rf "$dir"' 0
+            \\chmod 000 "$dir"
+            \\printf '<%s>\n' "$dir"/*.txt
+            \\printf 'after\n'
+            ,
+            .stdout =
+            \\<unreadable/*.txt>
+            \\after
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "pathname expansion is disabled by set minus f",
             .script =
             \\: >a.txt

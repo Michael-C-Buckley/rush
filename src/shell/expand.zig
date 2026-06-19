@@ -6374,7 +6374,11 @@ fn expandPathnameExpansionPatternWithLookupOptions(
             } else {
                 const candidate = try joinPathComponent(allocator, prefix, component.text);
                 errdefer allocator.free(candidate);
-                if (try lookup.pathExists(candidate)) try next_prefixes.append(
+                const exists = lookup.pathExists(candidate) catch |err| switch (err) {
+                    error.AccessDenied => false,
+                    else => return err,
+                };
+                if (exists) try next_prefixes.append(
                     allocator,
                     candidate,
                 ) else allocator.free(candidate);
@@ -6402,7 +6406,10 @@ fn appendGlobComponentMatches(
     options: PathnameExpansionOptions,
 ) !void {
     const dir_path = if (prefix.len == 0) "." else prefix;
-    var entries = try lookup.listDir(allocator, dir_path);
+    var entries = lookup.listDir(allocator, dir_path) catch |err| switch (err) {
+        error.AccessDenied => return,
+        else => return err,
+    };
     defer entries.deinit(allocator);
 
     for (entries.entries) |entry_name| {
@@ -10153,6 +10160,46 @@ test "pathname expansion handles slash components and dotfiles" {
     defer unmatched.deinit();
     try std.testing.expectEqual(@as(usize, 1), unmatched.fields.len);
     try std.testing.expectEqualStrings(missing_suffix, unmatched.fields[0]);
+}
+
+test "pathname expansion preserves patterns when traversal is not readable" {
+    const UnreadableLookup = struct {
+        fn listDir(
+            _: ?*anyopaque,
+            _: std.mem.Allocator, // ziglint-ignore: Z023 (callback iface)
+            path: []const u8,
+        ) anyerror!PathnameEntries {
+            if (std.mem.eql(u8, path, "unreadable")) return error.AccessDenied;
+            return .{ .entries = &.{} };
+        }
+
+        fn pathExists(_: ?*anyopaque, path: []const u8) anyerror!bool {
+            if (std.mem.eql(u8, path, "blocked")) return error.AccessDenied;
+            return std.mem.eql(u8, path, "unreadable");
+        }
+    };
+    const lookup: PathnameLookup = .{
+        .listDirFn = UnreadableLookup.listDir,
+        .pathExistsFn = UnreadableLookup.pathExists,
+    };
+
+    var unreadable = try expandWord(
+        std.testing.allocator,
+        "unreadable/*.txt",
+        .{ .pathname_lookup = lookup },
+    );
+    defer unreadable.deinit();
+    try std.testing.expectEqual(@as(usize, 1), unreadable.fields.len);
+    try std.testing.expectEqualStrings("unreadable/*.txt", unreadable.fields[0]);
+
+    var blocked = try expandWord(
+        std.testing.allocator,
+        "blocked/*.txt",
+        .{ .pathname_lookup = lookup },
+    );
+    defer blocked.deinit();
+    try std.testing.expectEqual(@as(usize, 1), blocked.fields.len);
+    try std.testing.expectEqualStrings("blocked/*.txt", blocked.fields[0]);
 }
 
 test "pathname expansion honors nullglob and dotglob options" {
