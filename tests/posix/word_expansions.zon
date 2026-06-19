@@ -138,7 +138,7 @@
             ,
             .stdout = "",
             .stderr =
-            \\expansion error: missing: need it
+            \\2: expansion error: missing: need it
             \\
             ,
             .status = 1,

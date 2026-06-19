@@ -2300,6 +2300,15 @@ test "multiline command string expansion diagnostics include line without path" 
             .script =
             \\echo before
             \\unset x
+            \\printf '%s\n' ${x:?simplebad}
+            \\echo after
+            ,
+            .diagnostic = "3: expansion error: x: simplebad\n",
+        },
+        .{
+            .script =
+            \\echo before
+            \\unset x
             \\for i in ${x:?forbad}; do echo "$i"; done
             \\echo after
             ,
