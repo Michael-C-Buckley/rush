@@ -2132,6 +2132,23 @@ const SourceLowerer = struct {
         if (descriptor) |fd| if (!runtime.fd.isValidDescriptor(fd))
             return .{ .failure = try self.malformedRedirectionFailure() };
 
+        if (redirection.operator == .tless) {
+            const target_word = redirection.target orelse return .{ .failure = try self.malformedRedirectionFailure() };
+            const here_string = switch (try self.expandHereStringForRedirection(
+                target_word.raw,
+                self.eval_context.target,
+            )) {
+                .data => |data| data,
+                .failure => |trap_failure| return .{ .failure = trap_failure },
+            };
+            return .{ .spec = .{
+                .descriptor = descriptor,
+                .operator = operator,
+                .operand = .{ .here_doc = .{ .bytes = here_string.data, .ownership = .owned_by_plan } },
+                .expansion_output = here_string.output,
+            } };
+        }
+
         if (operator == .here_doc) {
             const body = redirection.here_doc orelse "";
             const here_doc = if (redirection.here_doc_quoted) HereDocValue{ .data = try self.allocator.dupe(
@@ -2166,6 +2183,29 @@ const SourceLowerer = struct {
             .operand = .{ .fields = expanded_fields.fields },
             .expansion_output = expanded_fields.output,
         } };
+    }
+
+    fn expandHereStringForRedirection(
+        self: *SourceLowerer,
+        raw: []const u8,
+        target: context.ExecutionTarget,
+    ) !HereDocLowering {
+        return switch (try self.expandFieldsForRedirection(raw, target)) {
+            .fields => |expanded| blk: {
+                std.debug.assert(expanded.fields.fields.len == 1);
+                const field = expanded.fields.fields[0];
+                const data = try std.fmt.allocPrint(self.allocator, "{s}\n", .{field});
+                switch (expanded.fields.ownership) {
+                    .owned_by_plan => {
+                        self.allocator.free(field);
+                        self.allocator.free(expanded.fields.fields);
+                    },
+                    .borrowed => {},
+                }
+                break :blk .{ .data = .{ .data = data, .output = expanded.output } };
+            },
+            .failure => |trap_failure| .{ .failure = trap_failure },
+        };
     }
 
     fn malformedRedirectionFailure(self: *SourceLowerer) !TrapActionFailure {
@@ -2635,7 +2675,7 @@ fn redirectionOperator(token: parser.TokenKind) ?redirection_plan.RedirectionOpe
     return switch (token) {
         .less => .input,
         .greater => .output,
-        .dless, .dless_dash => .here_doc,
+        .dless, .dless_dash, .tless => .here_doc,
         .dgreat => .append,
         .less_and => .duplicate_input,
         .greater_and => .duplicate_output,

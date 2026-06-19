@@ -1573,8 +1573,7 @@ fn commandUsesUnsupportedProductionExpansion(command: ir.SimpleCommand) bool {
 }
 
 fn wordUsesUnsupportedProductionExpansion(raw: []const u8) bool {
-    return std.mem.indexOf(u8, raw, "$(") != null or
-        std.mem.indexOfScalar(u8, raw, '`') != null or
+    return std.mem.indexOfScalar(u8, raw, '`') != null or
         std.mem.indexOf(u8, raw, "${") != null or
         std.mem.indexOf(u8, raw, "$((") != null or
         std.mem.indexOf(u8, raw, "$@") != null or

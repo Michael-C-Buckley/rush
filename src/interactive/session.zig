@@ -1390,6 +1390,37 @@ test "semantic interactive shell state persists variable mutations without legac
     try std.testing.expectEqualStrings("state\n", readback.stdout);
     try std.testing.expectEqualStrings("", readback.stderr);
 }
+
+test "semantic interactive eval accepts command substitution output" {
+    var interactive_shell = Shell.init(std.testing.allocator);
+    defer interactive_shell.deinit();
+    var env = std.process.Environ.Map.init(std.testing.allocator);
+    defer env.deinit();
+    try interactive_shell.initializeSemanticStartup(std.testing.io, &env, .{ .arg_zero = "rush" });
+
+    var eval_result = try runInteractiveScript(
+        std.testing.allocator,
+        std.testing.io,
+        &interactive_shell,
+        "eval \"$(printf '%s\\n' 'export RUSH_INTERACTIVE_EVAL=ok')\"",
+        .{
+            .io = std.testing.io,
+            .allow_external = true,
+            .external_stdio = .inherit,
+            .interactive = true,
+            .arg_zero = "rush",
+        },
+    );
+    defer eval_result.deinit();
+    try std.testing.expectEqual(@as(shell.ExitStatus, 0), eval_result.status);
+    try std.testing.expectEqualStrings("", eval_result.stdout);
+    try std.testing.expectEqualStrings("", eval_result.stderr);
+    try std.testing.expectEqualStrings(
+        "ok",
+        interactive_shell.semantic_state.getVariable("RUSH_INTERACTIVE_EVAL").?.value,
+    );
+}
+
 test "semantic interactive assignment-bearing commands preserve assignment lifetime without legacy fallback" {
     var interactive_shell = Shell.init(std.testing.allocator);
     defer interactive_shell.deinit();

@@ -18,5 +18,32 @@
             .stderr = "",
             .status = 0,
         },
+        .{
+            .name = "here string redirects expanded word with trailing newline",
+            .script =
+            \\value=hello
+            \\IFS= read -r line <<< "$value world"
+            \\printf '<%s>\n' "$line"
+            ,
+            .stdout =
+            \\<hello world>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "here string can target an explicit descriptor",
+            .script =
+            \\read -r line 3<<< data <&3
+            \\printf '<%s>\n' "$line"
+            ,
+            .stdout =
+            \\<data>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
     },
 }

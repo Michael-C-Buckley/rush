@@ -69,6 +69,7 @@ pub const TokenKind = enum {
     greater,
     dless,
     dless_dash,
+    tless,
     dgreat,
     less_and,
     greater_and,
@@ -98,6 +99,7 @@ pub const TokenKind = enum {
             .greater,
             .dless,
             .dless_dash,
+            .tless,
             .dgreat,
             .less_and,
             .greater_and,
@@ -114,6 +116,7 @@ pub const TokenKind = enum {
             .greater,
             .dless,
             .dless_dash,
+            .tless,
             .dgreat,
             .less_and,
             .greater_and,
@@ -306,6 +309,7 @@ const Lexer = struct {
             '(' => .left_paren,
             ')' => .right_paren,
             '<' => if (self.matchNext('<')) blk: {
+                if (self.features.isBash() and self.matchNext('<')) break :blk .tless;
                 if (self.matchNext('-')) break :blk .dless_dash;
                 break :blk .dless;
             } else if (self.matchNext('&')) .less_and else if (self.matchNext('>')) .less_great else .less,
@@ -1728,6 +1732,7 @@ fn defaultHighlightKind(kind: TokenKind) HighlightKind {
         .greater,
         .dless,
         .dless_dash,
+        .tless,
         .dgreat,
         .less_and,
         .greater_and,
