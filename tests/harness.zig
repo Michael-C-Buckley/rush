@@ -42,6 +42,7 @@ const Config = struct {
     shell: ?[]const u8,
     shell_args: []const []const u8,
     mode: Mode,
+    interactive: bool,
     files: []const []const u8,
     print_diff: bool,
     color_diff: bool,
@@ -153,7 +154,7 @@ pub fn main(init: std.process.Init) !u8 {
     var discovered_files: DiscoveredFiles = .{};
     defer discovered_files.deinit(allocator);
     const files = if (parsed_config.files.len == 0) files: {
-        try discoverSuiteFiles(allocator, init.io, parsed_config.mode, &discovered_files);
+        try discoverSuiteFiles(allocator, init.io, parsed_config, &discovered_files);
         break :files discovered_files.files.items;
     } else parsed_config.files;
     const config: Config = .{
@@ -161,6 +162,7 @@ pub fn main(init: std.process.Init) !u8 {
         .shell = shell,
         .shell_args = parsed_config.shell_args,
         .mode = parsed_config.mode,
+        .interactive = parsed_config.interactive,
         .files = files,
         .print_diff = parsed_config.print_diff or parsed_config.case_filter != null,
         .color_diff = std.Io.File.stderr().isTty(init.io) catch false,
@@ -219,6 +221,7 @@ fn parseArgs(allocator: std.mem.Allocator, args: []const []const u8) !?Config {
     var shell_args: std.ArrayList([]const u8) = .empty;
     defer shell_args.deinit(allocator);
     var mode: ?Mode = null;
+    var interactive = false;
     var print_diff = false;
     var case_filter: ?[]const u8 = null;
     var index: usize = 1;
@@ -240,6 +243,8 @@ fn parseArgs(allocator: std.mem.Allocator, args: []const []const u8) !?Config {
             index += 1;
             if (index >= args.len) return null;
             mode = parseMode(args[index]) orelse return null;
+        } else if (std.mem.eql(u8, arg, "--interactive")) {
+            interactive = true;
         } else if (std.mem.eql(u8, arg, "--diff")) {
             print_diff = true;
         } else if (std.mem.eql(u8, arg, "--case")) {
@@ -260,6 +265,7 @@ fn parseArgs(allocator: std.mem.Allocator, args: []const []const u8) !?Config {
         .shell = shell,
         .shell_args = try shell_args.toOwnedSlice(allocator),
         .mode = parsed_mode,
+        .interactive = interactive,
         .files = args[index..],
         .print_diff = print_diff,
         .color_diff = false,
@@ -286,10 +292,10 @@ fn resolveCommandPath(allocator: std.mem.Allocator, io: std.Io, path: []const u8
 fn discoverSuiteFiles(
     allocator: std.mem.Allocator,
     io: std.Io,
-    mode: Mode,
+    config: Config,
     discovered_files: *DiscoveredFiles,
 ) !void {
-    const dir_path = suiteDir(mode);
+    const dir_path = suiteDir(config.mode, config.interactive);
     var dir = try std.Io.Dir.cwd().openDir(io, dir_path, .{ .iterate = true });
     defer dir.close(io);
 
@@ -304,7 +310,13 @@ fn discoverSuiteFiles(
     std.mem.sort([]const u8, discovered_files.files.items, {}, stringLessThan);
 }
 
-fn suiteDir(mode: Mode) []const u8 {
+fn suiteDir(mode: Mode, interactive: bool) []const u8 {
+    if (interactive) {
+        return switch (mode) {
+            .posix => "tests/interactive/posix",
+            .bash => "tests/interactive/bash",
+        };
+    }
     return switch (mode) {
         .posix => "tests/posix",
         .bash => "tests/bash",
@@ -482,9 +494,11 @@ fn targetNameAlloc(allocator: std.mem.Allocator, config: Config) ![]u8 {
         for (config.shell_args) |arg| {
             try name.writer.print(" {s}", .{arg});
         }
+        if (config.interactive) try name.writer.writeAll(" -i");
     } else {
         try name.writer.writeAll("rush");
         if (config.mode == .posix) try name.writer.writeAll(" --posix");
+        if (config.interactive) try name.writer.writeAll(" -i");
     }
 
     return name.toOwnedSlice();
@@ -501,7 +515,7 @@ fn runTarget(
     if (config.shell) |shell| {
         var sub_path_buffer: [64]u8 = undefined;
         const sub_path = try std.fmt.bufPrint(&sub_path_buffer, "case-{d}-shell", .{case_index});
-        return runGenericShell(allocator, io, temp_root, sub_path, shell, config.shell_args, case);
+        return runGenericShell(allocator, io, temp_root, sub_path, shell, config.shell_args, config.interactive, case);
     }
     return runRush(allocator, io, temp_root, case_index, config, case);
 }
@@ -523,6 +537,7 @@ fn runRush(
     defer argv.deinit(allocator);
     try argv.append(allocator, config.rush_path.?);
     if (config.mode == .posix) try argv.append(allocator, "--posix");
+    if (config.interactive) try argv.append(allocator, "-i");
     try argv.appendSlice(allocator, case.shell_args);
     try argv.append(allocator, "-c");
     try argv.append(allocator, case.script);
@@ -536,6 +551,7 @@ fn runGenericShell(
     sub_path: []const u8,
     shell: []const u8,
     shell_args: []const []const u8,
+    interactive: bool,
     case: Case,
 ) !RunResult {
     var cwd = try temp_root.dir.createDirPathOpen(io, sub_path, .{});
@@ -545,10 +561,13 @@ fn runGenericShell(
     defer argv.deinit(allocator);
     try argv.append(allocator, shell);
     try argv.appendSlice(allocator, shell_args);
+    if (interactive) try argv.append(allocator, "-i");
     try argv.appendSlice(allocator, case.shell_args);
     try argv.append(allocator, "-c");
     try argv.append(allocator, case.script);
-    return runCommand(allocator, io, cwd, argv.items);
+    var result = try runCommand(allocator, io, cwd, argv.items);
+    if (interactive) result = try filterInteractiveShellStderr(allocator, result);
+    return result;
 }
 
 fn runCommand(allocator: std.mem.Allocator, io: std.Io, cwd: std.Io.Dir, argv: []const []const u8) !RunResult {
@@ -561,6 +580,35 @@ fn runCommand(allocator: std.mem.Allocator, io: std.Io, cwd: std.Io.Dir, argv: [
         .stderr = result.stderr,
         .status = statusFromTerm(result.term),
     };
+}
+
+fn filterInteractiveShellStderr(allocator: std.mem.Allocator, result: RunResult) !RunResult {
+    var filtered: std.ArrayList(u8) = .empty;
+    errdefer filtered.deinit(allocator);
+
+    var start: usize = 0;
+    while (start < result.stderr.len) {
+        const end = if (std.mem.findScalarPos(u8, result.stderr, start, '\n')) |newline|
+            newline + 1
+        else
+            result.stderr.len;
+        const line = result.stderr[start..end];
+        if (!interactiveShellWarningLine(line)) try filtered.appendSlice(allocator, line);
+        start = end;
+    }
+
+    allocator.free(result.stderr);
+    return .{
+        .stdout = result.stdout,
+        .stderr = try filtered.toOwnedSlice(allocator),
+        .status = result.status,
+    };
+}
+
+fn interactiveShellWarningLine(line: []const u8) bool {
+    return std.mem.indexOf(u8, line, "cannot set terminal process group") != null or
+        std.mem.indexOf(u8, line, "no job control in this shell") != null or
+        std.mem.indexOf(u8, line, "can't access tty; job control turned off") != null;
 }
 
 fn statusFromTerm(term: std.process.Child.Term) u8 {
@@ -805,8 +853,9 @@ fn printFullBytesFallback(expected: []const u8, actual: []const u8) void {
 fn writeUsage(io: std.Io) !void {
     const usage =
         \\usage: conformance-harness (--rush PATH | --shell SHELL [--shell-arg ARG...])
-        \\                           --mode MODE [--case TEXT] [--diff] [FILE...]
+        \\                           --mode MODE [--interactive] [--case TEXT] [--diff] [FILE...]
         \\modes: posix, bash
+        \\--interactive: discover interactive suites and invoke the target with -i -c
         \\--case TEXT: run cases whose names contain TEXT; implies --diff
         \\--diff: print unified stdout/stderr diffs for failures
         \\

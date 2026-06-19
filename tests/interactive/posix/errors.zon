@@ -1,0 +1,39 @@
+.{
+    .name = "Interactive POSIX shell errors",
+    .mode = .posix,
+    .cases = .{
+        .{
+            .name = "readonly assignment in function stops the function but not the shell",
+            .script =
+                \\readonly R=old
+                \\f(){ R=new; echo BAD; }
+                \\f
+                \\echo "S:$? R:$R"
+            ,
+            .stdout = "S:1 R:old\n",
+            .stderr_match = .nonempty,
+        },
+        .{
+            .name = "readonly assignment redirection in function does not create the target",
+            .script =
+                \\readonly R=old
+                \\p=out
+                \\f(){ R=new >"$p"; echo BAD; }
+                \\f
+                \\echo "S:$? R:$R"
+                \\cat "$p" 2>/dev/null || echo NOFILE
+            ,
+            .stdout = "S:1 R:old\nNOFILE\n",
+            .stderr_match = .nonempty,
+        },
+        .{
+            .name = "eval syntax error does not exit the interactive shell",
+            .script =
+                \\eval 'if'
+                \\echo after
+            ,
+            .stdout = "after\n",
+            .stderr_match = .nonempty,
+        },
+    },
+}

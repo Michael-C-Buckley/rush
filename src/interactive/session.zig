@@ -896,6 +896,7 @@ fn runInteractiveScript(
             script,
             runner.invocationContext(options),
             options.external_stdio,
+            options.live_stdio,
         );
         switch (execution) {
             .output => |output| {
@@ -923,6 +924,7 @@ pub fn runSemanticInteractiveCommandString(
     script: []const u8,
     invocation: shell.InvocationContext,
     external_stdio: runtime.ExternalStdio,
+    live_stdio: bool,
 ) !runner.SemanticInvocationExecution {
     std.debug.assert(interactive_shell.semantic_enabled);
     var interactive_context: Context = .{
@@ -938,6 +940,7 @@ pub fn runSemanticInteractiveCommandString(
         script,
         invocation,
         external_stdio,
+        live_stdio,
         interactiveExtensionHandlers(&interactive_context),
     );
 }
@@ -1362,6 +1365,7 @@ test "semantic interactive shell state persists variable mutations without legac
         "RUSH_INTERACTIVE_SEMANTIC=state",
         shell.InvocationContext.init(.{ .interactive = true, .arg_zero = "rush" }),
         .inherit,
+        false,
     );
     defer assign.deinit(std.testing.allocator);
     switch (assign) {
@@ -1436,6 +1440,7 @@ test "semantic interactive assignment-bearing commands preserve assignment lifet
         "RUSH_INTERACTIVE_TEMPORARY=discarded true",
         shell.InvocationContext.init(.{ .interactive = true, .arg_zero = "rush" }),
         .inherit,
+        false,
     );
     defer temporary.deinit(std.testing.allocator);
     switch (temporary) {
@@ -1451,6 +1456,7 @@ test "semantic interactive assignment-bearing commands preserve assignment lifet
         "RUSH_INTERACTIVE_SPECIAL=persistent :",
         shell.InvocationContext.init(.{ .interactive = true, .arg_zero = "rush" }),
         .inherit,
+        false,
     );
     defer persistent.deinit(std.testing.allocator);
     switch (persistent) {
@@ -1476,6 +1482,7 @@ test "semantic interactive external commands run through runtime ports without l
         "/usr/bin/printf 'semantic-external\\n'",
         shell.InvocationContext.init(.{ .interactive = true, .arg_zero = "rush" }),
         .capture,
+        false,
     );
     defer external.deinit(std.testing.allocator);
     switch (external) {
@@ -1534,6 +1541,7 @@ test "semantic interactive invocation executes simple command redirections witho
         "echo before > " ++ path ++ "; echo redirected >> " ++ path,
         shell.InvocationContext.init(.{ .interactive = true, .arg_zero = "rush" }),
         .inherit,
+        false,
     );
     defer semantic.deinit(std.testing.allocator);
     switch (semantic) {
@@ -1564,6 +1572,7 @@ test "semantic interactive invocation preserves function definitions" {
         "f(){ echo FN=$1; }; f arg",
         shell.InvocationContext.init(.{ .interactive = true, .arg_zero = "rush" }),
         .capture,
+        false,
     );
     defer semantic.deinit(std.testing.allocator);
     switch (semantic) {
@@ -1590,6 +1599,7 @@ test "semantic interactive invocation executes compound commands" {
         "case abc in a*) echo CASE=no;; ab*) echo CASE=yes;; esac",
         shell.InvocationContext.init(.{ .interactive = true, .arg_zero = "rush" }),
         .capture,
+        false,
     );
     defer semantic.deinit(std.testing.allocator);
     switch (semantic) {
@@ -1616,6 +1626,7 @@ test "semantic interactive command string aliases affect later lines" {
         "alias hi='echo HI'\nhi",
         shell.InvocationContext.init(.{ .interactive = true, .arg_zero = "rush" }),
         .capture,
+        false,
     );
     defer semantic.deinit(std.testing.allocator);
     switch (semantic) {

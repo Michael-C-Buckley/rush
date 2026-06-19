@@ -205,6 +205,16 @@ fn addConformanceTests(
             const run_posix = b.addRunArtifact(harness);
             run_posix.addArgs(args);
             conformance_step.dependOn(&run_posix.step);
+
+            if (conformanceArgsSelectPosix(args) and
+                !conformanceArgsSelectInteractive(args) and
+                !conformanceArgsHaveSuiteFiles(args))
+            {
+                const run_interactive = b.addRunArtifact(harness);
+                run_interactive.addArgs(args);
+                run_interactive.addArg("--interactive");
+                conformance_step.dependOn(&run_interactive.step);
+            }
         } else {
             const run_posix = b.addRunArtifact(harness);
             run_posix.addArg("--rush");
@@ -213,6 +223,17 @@ fn addConformanceTests(
             run_posix.addArg("posix");
             run_posix.addArgs(args);
             conformance_step.dependOn(&run_posix.step);
+
+            if (!conformanceArgsSelectInteractive(args) and !conformanceArgsHaveSuiteFiles(args)) {
+                const run_interactive = b.addRunArtifact(harness);
+                run_interactive.addArg("--rush");
+                run_interactive.addArtifactArg(rush);
+                run_interactive.addArg("--mode");
+                run_interactive.addArg("posix");
+                run_interactive.addArgs(args);
+                run_interactive.addArg("--interactive");
+                conformance_step.dependOn(&run_interactive.step);
+            }
         }
     } else {
         const run_posix = b.addRunArtifact(harness);
@@ -221,6 +242,14 @@ fn addConformanceTests(
         run_posix.addArg("--mode");
         run_posix.addArg("posix");
         conformance_step.dependOn(&run_posix.step);
+
+        const run_interactive = b.addRunArtifact(harness);
+        run_interactive.addArg("--rush");
+        run_interactive.addArtifactArg(rush);
+        run_interactive.addArg("--mode");
+        run_interactive.addArg("posix");
+        run_interactive.addArg("--interactive");
+        conformance_step.dependOn(&run_interactive.step);
 
         const run_bash = b.addRunArtifact(harness);
         run_bash.addArg("--rush");
@@ -234,6 +263,42 @@ fn addConformanceTests(
 fn usesCustomConformanceRunner(args: []const []const u8) bool {
     for (args) |arg| {
         if (std.mem.eql(u8, arg, "--rush") or std.mem.eql(u8, arg, "--shell")) return true;
+    }
+    return false;
+}
+
+fn conformanceArgsSelectPosix(args: []const []const u8) bool {
+    for (args, 0..) |arg, index| {
+        if (std.mem.eql(u8, arg, "--mode")) {
+            return index + 1 < args.len and std.mem.eql(u8, args[index + 1], "posix");
+        }
+    }
+    return false;
+}
+
+fn conformanceArgsSelectInteractive(args: []const []const u8) bool {
+    for (args) |arg| {
+        if (std.mem.eql(u8, arg, "--interactive")) return true;
+    }
+    return false;
+}
+
+fn conformanceArgsHaveSuiteFiles(args: []const []const u8) bool {
+    var index: usize = 0;
+    while (index < args.len) : (index += 1) {
+        const arg = args[index];
+        if (std.mem.eql(u8, arg, "--rush") or
+            std.mem.eql(u8, arg, "--shell") or
+            std.mem.eql(u8, arg, "--shell-arg") or
+            std.mem.eql(u8, arg, "--mode") or
+            std.mem.eql(u8, arg, "--case"))
+        {
+            index += 1;
+            continue;
+        }
+        if (std.mem.eql(u8, arg, "--diff") or std.mem.eql(u8, arg, "--interactive")) continue;
+        if (std.mem.startsWith(u8, arg, "--")) continue;
+        return true;
     }
     return false;
 }

@@ -503,6 +503,7 @@ pub fn runShellStateScriptWithExtensionHandlers(
             invocation,
             source_path,
             external_stdio,
+            false,
             extension_handlers,
             false,
         )
@@ -679,6 +680,7 @@ fn runSemanticAliasTimingShellStateScript(
     invocation: shell.InvocationContext,
     source_path: []const u8,
     external_stdio: runtime.ExternalStdio,
+    live_stdio: bool,
     extension_handlers: ExtensionHandlers,
     run_exit_trap: bool,
 ) !SemanticInvocationExecution {
@@ -692,6 +694,7 @@ fn runSemanticAliasTimingShellStateScript(
     evaluator.io = io;
     evaluator.read_stdin_from_fd = true;
     evaluator.external_stdio = external_stdio;
+    evaluator.commit_exec_redirections = live_stdio and external_stdio == .inherit;
     extension_handlers.apply(&evaluator);
     var parser_resolver = shell.ParserBackedSourceResolver.init(&evaluator);
     parser_resolver.features = invocation.features;
@@ -802,6 +805,7 @@ pub fn runInteractiveCommandString(
     script: []const u8,
     invocation: shell.InvocationContext,
     external_stdio: runtime.ExternalStdio,
+    live_stdio: bool,
 ) !SemanticInvocationExecution {
     return runInteractiveCommandStringWithExtensionHandlers(
         allocator,
@@ -810,6 +814,7 @@ pub fn runInteractiveCommandString(
         script,
         invocation,
         external_stdio,
+        live_stdio,
         .{},
     );
 }
@@ -821,6 +826,7 @@ pub fn runInteractiveCommandStringWithExtensionHandlers(
     script: []const u8,
     invocation: shell.InvocationContext,
     external_stdio: runtime.ExternalStdio,
+    live_stdio: bool,
     extension_handlers: ExtensionHandlers,
 ) !SemanticInvocationExecution {
     assertSemanticInteractiveOptions(script, invocation);
@@ -849,6 +855,7 @@ pub fn runInteractiveCommandStringWithExtensionHandlers(
             invocation,
             "-c",
             external_stdio,
+            live_stdio,
             extension_handlers,
             invocation.source == .command_string,
         );
@@ -882,6 +889,7 @@ pub fn runInteractiveCommandStringWithExtensionHandlers(
     evaluator.arg_zero = invocation.arg_zero;
     evaluator.io = io;
     evaluator.external_stdio = external_stdio;
+    evaluator.commit_exec_redirections = live_stdio and external_stdio == .inherit;
     extension_handlers.apply(&evaluator);
     var parser_resolver = shell.ParserBackedSourceResolver.init(&evaluator);
     parser_resolver.features = invocation.features;
@@ -1038,6 +1046,10 @@ fn runSemanticLoweredProgram(
             command_outcome.stderr.items,
         );
         applyOutputWriteResult(&command_outcome, write_result);
+        if (evaluator.commit_exec_redirections) {
+            const flush_result = try output_frame.flushPendingToInheritedDescriptors();
+            if (flush_result.stdout_failed or flush_result.stderr_failed) return error.Unimplemented;
+        }
         status = command_outcome.status;
         control_flow = command_outcome.effectiveControlFlow();
         if (bashAssignmentErrorAbortsSourceLine(eval_context.features, statement_source, command_outcome)) {
@@ -2806,6 +2818,7 @@ test "semantic interactive invocation runs cd" {
         script,
         shell.InvocationContext.init(.{ .arg_zero = "rush", .source = .interactive, .interactive = true }),
         .capture,
+        false,
     );
     defer execution.deinit(std.testing.allocator);
 
@@ -2832,6 +2845,7 @@ test "semantic interactive invocation dispatches job control builtins" {
         "jobs\nbg\nfg",
         shell.InvocationContext.init(.{ .arg_zero = "rush", .source = .interactive, .interactive = true }),
         .capture,
+        false,
     );
     defer execution.deinit(std.testing.allocator);
 
@@ -2857,6 +2871,7 @@ test "semantic interactive invocation dispatches alias builtins" {
         "alias ll='echo listed'\nalias ll\nunalias ll",
         shell.InvocationContext.init(.{ .arg_zero = "rush", .source = .interactive, .interactive = true }),
         .capture,
+        false,
     );
     defer execution.deinit(std.testing.allocator);
 
@@ -2884,6 +2899,7 @@ test "semantic interactive invocation expands existing aliases" {
         "say",
         shell.InvocationContext.init(.{ .arg_zero = "rush", .source = .interactive, .interactive = true }),
         .capture,
+        false,
     );
     defer execution.deinit(std.testing.allocator);
 
@@ -2909,6 +2925,7 @@ test "semantic interactive invocation dispatches declaration builtins" {
         "export FOO=bar",
         shell.InvocationContext.init(.{ .arg_zero = "rush", .source = .interactive, .interactive = true }),
         .capture,
+        false,
     );
     defer execution.deinit(std.testing.allocator);
 
@@ -2938,6 +2955,7 @@ test "semantic interactive invocation dispatches shell state builtins" {
         "set -f\nunset GONE\ntrap 'echo bye' EXIT",
         shell.InvocationContext.init(.{ .arg_zero = "rush", .source = .interactive, .interactive = true }),
         .capture,
+        false,
     );
     defer execution.deinit(std.testing.allocator);
 
@@ -2966,6 +2984,7 @@ test "semantic interactive invocation dispatches exit" {
         "exit 7",
         shell.InvocationContext.init(.{ .arg_zero = "rush", .source = .interactive, .interactive = true }),
         .capture,
+        false,
     );
     defer execution.deinit(std.testing.allocator);
 
