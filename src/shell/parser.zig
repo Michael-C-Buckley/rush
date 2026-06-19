@@ -2385,10 +2385,14 @@ const SyntaxParser = struct {
 
         while (!self.at(.eof) and !self.atListTerminator(word_terminators, token_terminators)) {
             if (self.startsPosixCompoundCommand()) {
+                const compound_starts_command = expect_command;
                 if (!expect_command and self.previousTokenIsWhitespace()) {
                     try self.appendParseError(self.current().span, "missing command separator before compound command");
                 }
                 const command = try self.parsePosixCompoundCommand();
+                if (compound_starts_command and self.startsSimpleCommand()) {
+                    try self.appendParseError(self.current().span, "missing command separator before command");
+                }
                 if (self.nextNonWhitespaceIsPipe()) {
                     const pipeline = try self.parsePipelineAfterFirstCommand(command);
                     try list_children.append(self.allocator, .{ .node = pipeline });
@@ -4920,6 +4924,19 @@ test "parser rejects assignment prefix before subshell command" {
     try expectSpan(.init(6, 7), result.diagnostics[0].span);
     try std.testing.expectEqualStrings(
         "missing command separator before compound command",
+        result.diagnostics[0].message,
+    );
+}
+
+test "parser rejects simple command suffix after subshell command" {
+    var result = try parse(std.testing.allocator, "( false ) R=1", .{});
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(usize, 1), result.diagnostics.len);
+    try std.testing.expectEqual(DiagnosticKind.parse_error, result.diagnostics[0].kind);
+    try expectSpan(.init(10, 13), result.diagnostics[0].span);
+    try std.testing.expectEqualStrings(
+        "missing command separator before command",
         result.diagnostics[0].message,
     );
 }
