@@ -339,6 +339,27 @@ test "interactive config service sources alias definitions through semantic Shel
     try std.testing.expectEqualStrings("echo listed", shell_state.getAlias("ll").?.value);
 }
 
+test "interactive config service reports alias definition syntax hint" {
+    const path = "rush-bad-alias-config-test.rush";
+    const stderr_path = "rush-bad-alias-config-test.stderr";
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, stderr_path) catch {};
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = path, .data = "alias foo git\n" });
+
+    var shell_state = shell.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    const stderr = try sourceOptionalConfigCapturingStderr(
+        std.testing.allocator,
+        &shell_state,
+        path,
+        stderr_path,
+    );
+    defer std.testing.allocator.free(stderr);
+
+    try std.testing.expect(std.mem.indexOf(u8, stderr, "alias: foo: not found") != null);
+    try std.testing.expect(std.mem.indexOf(u8, stderr, "define aliases with name=value") != null);
+}
+
 const TestAbbrState = struct {
     saw_ll: bool = false,
 };

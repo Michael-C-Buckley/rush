@@ -16360,12 +16360,8 @@ fn evaluateAlias(
             try preview_delta.setAlias(name, arg[equals + 1 ..]);
         } else {
             if (!isAliasName(arg)) return builtinUsageError(buffers, "alias", "invalid alias name");
-            if (lookupAliasValue(shell_state, preview_delta, arg) == null) return builtinStatusError(
-                buffers,
-                1,
-                "alias",
-                "not found",
-            );
+            if (lookupAliasValue(shell_state, preview_delta, arg) == null)
+                return aliasNotFoundError(buffers, arg);
         }
     }
 
@@ -16380,6 +16376,17 @@ fn evaluateAlias(
         }
     }
     return 0;
+}
+
+fn aliasNotFoundError(buffers: *EvaluationBuffers, name: []const u8) !outcome.ExitStatus {
+    std.debug.assert(name.len != 0);
+    const message = try std.fmt.allocPrint(
+        buffers.allocator,
+        "{s}: not found; define aliases with name=value",
+        .{name},
+    );
+    defer buffers.allocator.free(message);
+    return builtinStatusError(buffers, 1, "alias", message);
 }
 
 fn evaluateUnalias(

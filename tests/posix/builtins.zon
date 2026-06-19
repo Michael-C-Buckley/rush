@@ -250,10 +250,15 @@
             \\    IFS=: read -r first second rest
             \\    printf '<%s>|<%s>|<%s>\n' "$first" "$second" "$rest"
             \\}
+            \\printf 'a, b,\n' | {
+            \\    IFS=", " read -r first rest
+            \\    printf '<%s>|<%s>\n' "$first" "$rest"
+            \\}
             ,
             .stdout =
             \\<a>|<b>
             \\<a>|<>|<b>
+            \\<a>|<b>
             \\
             ,
             .stderr = "",
@@ -840,6 +845,15 @@
             ,
             .stderr = "",
             .status = 0,
+        },
+        .{
+            .name = "alias query failure hints assignment syntax",
+            .script =
+            \\alias foo git
+            ,
+            .stdout = "",
+            .stderr_match = .nonempty,
+            .status = 1,
         },
         .{
             .name = "echo reports failure when stdout is closed",
