@@ -22,6 +22,14 @@ __rush_complete_man_find() {
   fi
 }
 
+__rush_complete_man_mktemp() {
+  if test -x /usr/bin/mktemp; then
+    /usr/bin/mktemp
+  else
+    mktemp
+  fi
+}
+
 __rush_complete_man_section_description() {
   case "$1" in
     0) echo 'library headers' ;;
@@ -102,14 +110,18 @@ __rush_complete_man_pages() {
   fi
   page_prefix=$rush_completion_prefix
   if test -z "$page_prefix"; then
-    return
+    page_prefix='*'
   else
     page_prefix=$page_prefix'*'
   fi
 
+  tmp=$(__rush_complete_man_mktemp 2>/dev/null)
+  test -n "$tmp" || return
+
   for dir in /usr/share/man /usr/local/share/man /opt/homebrew/share/man $(__rush_complete_man_manpaths); do
     test -n "$dir" || continue
-    for path in $(__rush_complete_man_find "$dir" -type f \( -name "$page_prefix" -o -name "$page_prefix.*" \) 2>/dev/null); do
+    __rush_complete_man_find "$dir" -type f -name "$page_prefix" > "$tmp" 2>/dev/null
+    while read path; do
       page=${path##*/}
       case "$page" in
         *.gz|*.bz2|*.xz|*.zst|*.Z|*.z|*.lzma) page=${page%.*} ;;
@@ -131,6 +143,11 @@ __rush_complete_man_pages() {
       fi
 
       rush_complete candidate "$page" --kind plain --description "manual page, section $page_section"
-    done
+    done < "$tmp"
   done
+  if test -x /bin/rm; then
+    /bin/rm -f "$tmp"
+  else
+    rm -f "$tmp"
+  fi
 }
