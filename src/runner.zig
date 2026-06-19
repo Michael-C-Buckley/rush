@@ -277,7 +277,7 @@ fn runSemanticCommandStringInternal(
 
     var program = try ir.lowerSimpleCommands(allocator, parsed);
     defer program.deinit();
-    if (try semanticPreflightUnsupported(allocator, program, invocation.features, false, false)) |message| {
+    if (try semanticPreflightUnsupported(allocator, program, invocation.features, false, false, false)) |message| {
         return semanticUnsupported(allocator, message);
     }
 
@@ -636,7 +636,7 @@ fn runSemanticShellStateScriptWithoutAliasTiming(
 
     var program = try ir.lowerSimpleCommands(allocator, parsed);
     defer program.deinit();
-    if (try semanticPreflightUnsupported(allocator, program, invocation.features, false, false)) |message| {
+    if (try semanticPreflightUnsupported(allocator, program, invocation.features, false, false, false)) |message| {
         return semanticUnsupported(allocator, message);
     }
 
@@ -717,7 +717,14 @@ fn runSemanticAliasTimingShellStateScript(
             if (parsed.diagnostics.len == 0) {
                 var program = try ir.lowerSimpleCommands(allocator, parsed);
                 defer program.deinit();
-                if (try semanticPreflightUnsupported(allocator, program, invocation.features, false, false)) |message|
+                if (try semanticPreflightUnsupported(
+                    allocator,
+                    program,
+                    invocation.features,
+                    false,
+                    false,
+                    false,
+                )) |message|
                     return semanticUnsupported(allocator, message);
                 var alias_snapshot = shell_state.clone(allocator) catch |err| switch (err) {
                     error.OutOfMemory => return error.OutOfMemory,
@@ -836,7 +843,7 @@ pub fn runInteractiveCommandStringWithExtensionHandlers(
 
     var program = try ir.lowerSimpleCommands(allocator, parsed);
     defer program.deinit();
-    if (try semanticPreflightUnsupported(allocator, program, invocation.features, true, true)) |message|
+    if (try semanticPreflightUnsupported(allocator, program, invocation.features, true, true, true)) |message|
         return semanticUnsupported(allocator, message);
     if (semanticInteractiveProgramUnsupported(shell_state.*, program)) |message|
         return semanticUnsupported(allocator, message);
@@ -1413,12 +1420,8 @@ fn semanticInteractiveProgramUnsupported(shell_state: shell.ShellState, program:
 fn semanticInteractiveBuiltinRootAllowed(name: []const u8) bool {
     const definition = default_builtins.lookup(name) orelse return false;
     if (definition.semantic_class == .unsupported) return false;
-    if (definition.semantic_class == .control_flow) return false;
-    if (std.mem.eql(u8, name, "local") or
-        std.mem.eql(u8, name, "read") or
-        std.mem.eql(u8, name, "set") or
-        std.mem.eql(u8, name, "unset")) return false;
-    if (std.mem.eql(u8, name, "trap")) return false;
+    if (definition.semantic_class == .control_flow and !std.mem.eql(u8, name, "exit")) return false;
+    if (std.mem.eql(u8, name, "local") or std.mem.eql(u8, name, "read")) return false;
     return true;
 }
 
@@ -1445,6 +1448,7 @@ fn semanticPreflightUnsupported(
     features: compat.Features,
     legacy_fallback_gates: bool,
     allow_interactive_declarations: bool,
+    allow_interactive_exit: bool,
 ) !?[]const u8 {
     if (legacy_fallback_gates and (program.if_commands.len != 0 or
         program.loop_commands.len != 0 or
@@ -1460,7 +1464,11 @@ fn semanticPreflightUnsupported(
     }
     if (legacy_fallback_gates) {
         for (program.commands) |command| {
-            if (commandUsesUnsupportedSemanticBuiltin(command, allow_interactive_declarations))
+            if (commandUsesUnsupportedSemanticBuiltin(
+                command,
+                allow_interactive_declarations,
+                allow_interactive_exit,
+            ))
                 return "semantic executor preflight found an unsupported builtin";
             if (commandUsesUnsupportedProductionExpansion(command))
                 return "semantic executor production preflight found an expansion shape outside the switched slice";
@@ -1538,12 +1546,17 @@ fn semanticAsyncStatementPreflightUnsupported(program: ir.Program, statement: ir
     };
 }
 
-fn commandUsesUnsupportedSemanticBuiltin(command: ir.SimpleCommand, allow_interactive_declarations: bool) bool {
+fn commandUsesUnsupportedSemanticBuiltin(
+    command: ir.SimpleCommand,
+    allow_interactive_declarations: bool,
+    allow_interactive_exit: bool,
+) bool {
     if (command.argv.len == 0) return false;
     const name = command.argv[0].text;
     const definition = default_builtins.lookup(name) orelse return false;
     return switch (definition.semantic_class) {
-        .unsupported, .control_flow => true,
+        .unsupported => true,
+        .control_flow => !(allow_interactive_exit and std.mem.eql(u8, name, "exit")),
         .declaration => !allow_interactive_declarations,
         .no_op, .status_constant, .output, .predicate, .shell_state, .extension_state, .job_control => false,
     };
@@ -2864,6 +2877,61 @@ test "semantic interactive invocation dispatches declaration builtins" {
             const variable = shell_state.getVariable("FOO") orelse return error.ExpectedExportedVariable;
             try std.testing.expectEqualStrings("bar", variable.value);
             try std.testing.expect(variable.exported);
+        },
+    }
+}
+
+test "semantic interactive invocation dispatches shell state builtins" {
+    var shell_state = shell.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    try shell.startup.initializeInvocationState(std.testing.allocator, std.testing.io, &shell_state, null, &.{}, .{});
+    try shell_state.putVariable("GONE", "yes", .{});
+
+    var execution = try runInteractiveCommandString(
+        std.testing.allocator,
+        std.testing.io,
+        &shell_state,
+        "set -f\nunset GONE\ntrap 'echo bye' EXIT",
+        shell.InvocationContext.init(.{ .arg_zero = "rush", .interactive = true }),
+        .capture,
+    );
+    defer execution.deinit(std.testing.allocator);
+
+    switch (execution) {
+        .unsupported => return error.ExpectedSemanticExecution,
+        .output => |result| {
+            try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
+            try std.testing.expectEqualStrings("", result.stdout);
+            try std.testing.expectEqualStrings("", result.stderr);
+            try std.testing.expect(shell_state.options.noglob);
+            try std.testing.expect(shell_state.getVariable("GONE") == null);
+            try std.testing.expect(shell_state.getTrapForSignal(.EXIT) != null);
+        },
+    }
+}
+
+test "semantic interactive invocation dispatches exit" {
+    var shell_state = shell.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    try shell.startup.initializeInvocationState(std.testing.allocator, std.testing.io, &shell_state, null, &.{}, .{});
+
+    var execution = try runInteractiveCommandString(
+        std.testing.allocator,
+        std.testing.io,
+        &shell_state,
+        "exit 7",
+        shell.InvocationContext.init(.{ .arg_zero = "rush", .interactive = true }),
+        .capture,
+    );
+    defer execution.deinit(std.testing.allocator);
+
+    switch (execution) {
+        .unsupported => return error.ExpectedSemanticExecution,
+        .output => |result| {
+            try std.testing.expectEqual(@as(shell.ExitStatus, 7), result.status);
+            try std.testing.expectEqualStrings("", result.stdout);
+            try std.testing.expectEqualStrings("", result.stderr);
+            try std.testing.expectEqual(@as(?shell.ExitStatus, 7), shell_state.pending_exit);
         },
     }
 }
