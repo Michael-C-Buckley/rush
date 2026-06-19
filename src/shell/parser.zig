@@ -2555,7 +2555,7 @@ const SyntaxParser = struct {
         if (token.kind != .word) return false;
         const lexeme = token.lexeme(self.source);
         for (word_terminators) |word| {
-            if (std.mem.eql(u8, lexeme, word)) return true;
+            if (wordEqualsRemovingLineContinuations(lexeme, word)) return true;
         }
         return false;
     }
@@ -3777,7 +3777,7 @@ const SyntaxParser = struct {
     }
 
     fn atWord(self: SyntaxParser, word: []const u8) bool {
-        return self.at(.word) and std.mem.eql(u8, self.current().lexeme(self.source), word);
+        return self.at(.word) and wordEqualsRemovingLineContinuations(self.current().lexeme(self.source), word);
     }
 
     fn atListTerminator(
@@ -3791,7 +3791,7 @@ const SyntaxParser = struct {
         if (!self.at(.word)) return false;
         const lexeme = self.current().lexeme(self.source);
         for (word_terminators) |word| {
-            if (std.mem.eql(u8, lexeme, word)) return true;
+            if (wordEqualsRemovingLineContinuations(lexeme, word)) return true;
         }
         return false;
     }
@@ -3853,7 +3853,7 @@ const SyntaxParser = struct {
     }
 
     fn startsBraceGroup(self: SyntaxParser) bool {
-        return self.at(.word) and std.mem.eql(u8, self.current().lexeme(self.source), "{");
+        return self.atWord("{");
     }
 
     fn nextNonWhitespaceIsPipe(self: SyntaxParser) bool {
@@ -3887,25 +3887,23 @@ const SyntaxParser = struct {
     }
 
     fn startsBashTestCommand(self: SyntaxParser) bool {
-        return self.features.isBash() and self.at(.word) and std.mem.eql(u8, self.current().lexeme(self.source), "[[");
+        return self.features.isBash() and self.atWord("[[");
     }
 
     fn startsIfCommand(self: SyntaxParser) bool {
-        return self.at(.word) and std.mem.eql(u8, self.current().lexeme(self.source), "if");
+        return self.atWord("if");
     }
 
     fn startsLoopCommand(self: SyntaxParser) bool {
-        if (!self.at(.word)) return false;
-        const lexeme = self.current().lexeme(self.source);
-        return std.mem.eql(u8, lexeme, "while") or std.mem.eql(u8, lexeme, "until");
+        return self.atWord("while") or self.atWord("until");
     }
 
     fn startsForCommand(self: SyntaxParser) bool {
-        return self.at(.word) and std.mem.eql(u8, self.current().lexeme(self.source), "for");
+        return self.atWord("for");
     }
 
     fn startsCaseCommand(self: SyntaxParser) bool {
-        return self.at(.word) and std.mem.eql(u8, self.current().lexeme(self.source), "case");
+        return self.atWord("case");
     }
 
     fn startsCommand(self: SyntaxParser) bool {
@@ -3950,17 +3948,15 @@ const SyntaxParser = struct {
     }
 
     fn atMisplacedReservedWord(self: SyntaxParser) bool {
-        if (!self.at(.word)) return false;
-        const lexeme = self.current().lexeme(self.source);
-        return std.mem.eql(u8, lexeme, "then") or
-            std.mem.eql(u8, lexeme, "else") or
-            std.mem.eql(u8, lexeme, "elif") or
-            std.mem.eql(u8, lexeme, "fi") or
-            std.mem.eql(u8, lexeme, "do") or
-            std.mem.eql(u8, lexeme, "done") or
-            std.mem.eql(u8, lexeme, "esac") or
-            std.mem.eql(u8, lexeme, "in") or
-            std.mem.eql(u8, lexeme, "}");
+        return self.atWord("then") or
+            self.atWord("else") or
+            self.atWord("elif") or
+            self.atWord("fi") or
+            self.atWord("do") or
+            self.atWord("done") or
+            self.atWord("esac") or
+            self.atWord("in") or
+            self.atWord("}");
     }
 
     fn atMisplacedRightParen(self: SyntaxParser) bool {
@@ -4126,6 +4122,21 @@ fn functionBodyWordContinuesCommandPosition(word: []const u8) bool {
         std.mem.eql(u8, word, "do") or
         std.mem.eql(u8, word, "case") or
         std.mem.eql(u8, word, "in");
+}
+
+fn wordEqualsRemovingLineContinuations(word: []const u8, expected: []const u8) bool {
+    var word_index: usize = 0;
+    var expected_index: usize = 0;
+    while (word_index < word.len) {
+        if (word[word_index] == '\\' and word_index + 1 < word.len and word[word_index + 1] == '\n') {
+            word_index += 2;
+            continue;
+        }
+        if (expected_index >= expected.len or word[word_index] != expected[expected_index]) return false;
+        word_index += 1;
+        expected_index += 1;
+    }
+    return expected_index == expected.len;
 }
 
 fn isAssignmentWord(word: []const u8, features: compat.Features) bool {
@@ -6014,6 +6025,20 @@ test "parser preserves valid newline continuations and list terminators" {
         try std.testing.expect(!result.incomplete);
         try std.testing.expectEqual(@as(usize, 0), result.diagnostics.len);
     }
+}
+
+test "parser removes line continuations before matching reserved words" {
+    var parsed = try parse(std.testing.allocator, "i\\\nf true; then printf yes; fi", .{});
+    defer parsed.deinit();
+
+    try std.testing.expect(!parsed.incomplete);
+    try std.testing.expectEqual(@as(usize, 0), parsed.diagnostics.len);
+
+    var found_if = false;
+    for (parsed.nodes) |node| {
+        if (node.kind == .if_command) found_if = true;
+    }
+    try std.testing.expect(found_if);
 }
 
 test "parser continues pipeline rhs after newline" {
