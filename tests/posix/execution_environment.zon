@@ -220,7 +220,7 @@
             \\end
             ,
             .stderr =
-            \\expansion error: parameter: parameter not set
+            \\3: expansion error: parameter: parameter not set
             \\
             ,
             .status = 0,
