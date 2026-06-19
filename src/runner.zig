@@ -843,7 +843,7 @@ pub fn runInteractiveCommandStringWithExtensionHandlers(
 
     var program = try ir.lowerSimpleCommands(allocator, parsed);
     defer program.deinit();
-    if (try semanticPreflightUnsupported(allocator, program, invocation.features, true, true, true)) |message|
+    if (try semanticPreflightUnsupported(allocator, program, invocation.features, false, true, true)) |message|
         return semanticUnsupported(allocator, message);
     if (semanticInteractiveProgramUnsupported(shell_state.*, program)) |message|
         return semanticUnsupported(allocator, message);
@@ -1399,8 +1399,6 @@ fn semanticEnvironmentSupported(environ_map: *const std.process.Environ.Map) boo
 
 fn semanticInteractiveProgramUnsupported(shell_state: shell.ShellState, program: ir.Program) ?[]const u8 {
     shell_state.validate();
-    if (program.function_definitions.len != 0)
-        return "semantic interactive executor does not yet preserve function definitions";
     if (shell_state.options.nounset and semanticProgramUsesShellExpansion(program))
         return "semantic interactive executor does not yet preserve nounset expansion diagnostics";
 
