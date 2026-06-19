@@ -130,9 +130,10 @@ pub const PathnameLookup = struct {
     context: ?*anyopaque = null,
     listDirFn: ?*const fn (?*anyopaque, std.mem.Allocator, []const u8) anyerror!PathnameEntries = null,
     pathExistsFn: ?*const fn (?*anyopaque, []const u8) anyerror!bool = null,
+    pathIsDirectoryFn: ?*const fn (?*anyopaque, []const u8) anyerror!bool = null,
 
     pub fn enabled(self: PathnameLookup) bool {
-        return self.listDirFn != null and self.pathExistsFn != null;
+        return self.listDirFn != null and self.pathExistsFn != null and self.pathIsDirectoryFn != null;
     }
 
     pub fn listDir(self: PathnameLookup, allocator: std.mem.Allocator, path: []const u8) !PathnameEntries {
@@ -144,6 +145,11 @@ pub const PathnameLookup = struct {
     pub fn pathExists(self: PathnameLookup, path: []const u8) !bool {
         const path_exists = self.pathExistsFn orelse unreachable;
         return path_exists(self.context, path);
+    }
+
+    pub fn pathIsDirectory(self: PathnameLookup, path: []const u8) !bool {
+        const path_is_directory = self.pathIsDirectoryFn orelse unreachable;
+        return path_is_directory(self.context, path);
     }
 };
 
@@ -6205,6 +6211,7 @@ fn ioPathnameLookup(context: *IoPathnameLookupContext) PathnameLookup {
         .context = context,
         .listDirFn = listPathnameDirWithIo,
         .pathExistsFn = pathnameExistsWithIo,
+        .pathIsDirectoryFn = pathnameIsDirectoryWithIo,
     };
 }
 
@@ -6248,6 +6255,17 @@ fn pathnameExistsWithIo(opaque_context: ?*anyopaque, path: []const u8) !bool {
     };
     file.close(context.io);
     return true;
+}
+
+fn pathnameIsDirectoryWithIo(opaque_context: ?*anyopaque, path: []const u8) !bool {
+    std.debug.assert(opaque_context != null);
+    const context: *IoPathnameLookupContext = @ptrCast(@alignCast(opaque_context.?));
+    if (path.len == 0) return true;
+    const stat = std.Io.Dir.cwd().statFile(context.io, path, .{}) catch |err| switch (err) {
+        error.FileNotFound, error.NotDir => return false,
+        else => return err,
+    };
+    return stat.kind == .directory;
 }
 
 fn applyPathnameExpansion(
@@ -6369,7 +6387,13 @@ fn expandPathnameExpansionPatternWithLookupOptions(
         }
 
         for (prefixes.items) |prefix| {
-            if (patternHasGlobSyntaxWithOptions(component, .{ .extglob = options.extglob })) {
+            if (component.text.len == 0 and component_end == pattern.text.len) {
+                const is_directory = lookup.pathIsDirectory(prefix) catch |err| switch (err) {
+                    error.AccessDenied => false,
+                    else => return err,
+                };
+                if (is_directory) try next_prefixes.append(allocator, try appendTrailingSlash(allocator, prefix));
+            } else if (patternHasGlobSyntaxWithOptions(component, .{ .extglob = options.extglob })) {
                 try appendGlobComponentMatches(allocator, lookup, &next_prefixes, prefix, component, options);
             } else {
                 const candidate = try joinPathComponent(allocator, prefix, component.text);
@@ -6395,6 +6419,11 @@ fn expandPathnameExpansionPatternWithLookupOptions(
 
     std.mem.sort([]const u8, prefixes.items, {}, lessThanString);
     return prefixes.toOwnedSlice(allocator);
+}
+
+fn appendTrailingSlash(allocator: std.mem.Allocator, path: []const u8) ![]const u8 {
+    if (std.mem.endsWith(u8, path, "/")) return allocator.dupe(u8, path);
+    return std.fmt.allocPrint(allocator, "{s}/", .{path});
 }
 
 fn appendGlobComponentMatches(
@@ -10136,15 +10165,22 @@ test "pathname expansion matches sorted cwd entries" {
 
 test "pathname expansion handles slash components and dotfiles" {
     const dir = "rush-glob-dir";
+    const peer_file = "rush-glob-peer-file";
     const visible = "rush-glob-dir/visible.tmp";
     const hidden = "rush-glob-dir/.hidden.tmp";
+    const child_dir = "rush-glob-dir/child-dir";
+    const child_file = "rush-glob-dir/child-file";
     const missing_suffix = "rush-glob-dir/*.missing";
     try std.Io.Dir.cwd().createDirPath(std.testing.io, dir);
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, dir) catch {};
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = peer_file, .data = "" });
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, peer_file) catch {};
     try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = visible, .data = "" });
     defer std.Io.Dir.cwd().deleteFile(std.testing.io, visible) catch {};
     try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = hidden, .data = "" });
     defer std.Io.Dir.cwd().deleteFile(std.testing.io, hidden) catch {};
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, child_dir);
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = child_file, .data = "" });
 
     var slash = try expandWord(std.testing.allocator, "rush-glob-dir/*.tmp", .{ .io = std.testing.io });
     defer slash.deinit();
@@ -10160,6 +10196,16 @@ test "pathname expansion handles slash components and dotfiles" {
     defer unmatched.deinit();
     try std.testing.expectEqual(@as(usize, 1), unmatched.fields.len);
     try std.testing.expectEqualStrings(missing_suffix, unmatched.fields[0]);
+
+    var trailing = try expandWord(std.testing.allocator, "rush-glob-*/", .{ .io = std.testing.io });
+    defer trailing.deinit();
+    try std.testing.expectEqual(@as(usize, 1), trailing.fields.len);
+    try std.testing.expectEqualStrings("rush-glob-dir/", trailing.fields[0]);
+
+    var nested_trailing = try expandWord(std.testing.allocator, "rush-glob-dir/child-*/", .{ .io = std.testing.io });
+    defer nested_trailing.deinit();
+    try std.testing.expectEqual(@as(usize, 1), nested_trailing.fields.len);
+    try std.testing.expectEqualStrings("rush-glob-dir/child-dir/", nested_trailing.fields[0]);
 }
 
 test "pathname expansion preserves patterns when traversal is not readable" {
@@ -10177,10 +10223,16 @@ test "pathname expansion preserves patterns when traversal is not readable" {
             if (std.mem.eql(u8, path, "blocked")) return error.AccessDenied;
             return std.mem.eql(u8, path, "unreadable");
         }
+
+        fn pathIsDirectory(_: ?*anyopaque, path: []const u8) anyerror!bool {
+            if (std.mem.eql(u8, path, "blocked")) return error.AccessDenied;
+            return std.mem.eql(u8, path, "unreadable");
+        }
     };
     const lookup: PathnameLookup = .{
         .listDirFn = UnreadableLookup.listDir,
         .pathExistsFn = UnreadableLookup.pathExists,
+        .pathIsDirectoryFn = UnreadableLookup.pathIsDirectory,
     };
 
     var unreadable = try expandWord(

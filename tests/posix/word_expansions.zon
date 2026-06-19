@@ -1320,6 +1320,43 @@
             .status = 0,
         },
         .{
+            .name = "pathname expansion trailing slash matches directories and preserves slash",
+            .script =
+            \\mkdir d
+            \\: >dfile
+            \\: >f
+            \\mkdir -p a/dir a/filedir
+            \\: >a/file
+            \\printf '<%s>\n' */ d*/ a/*/
+            ,
+            .stdout =
+            \\<a/>
+            \\<d/>
+            \\<d/>
+            \\<a/dir/>
+            \\<a/filedir/>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "pathname expansion trailing slash follows directory symlinks",
+            .script =
+            \\mkdir real
+            \\ln -s real link
+            \\: >f
+            \\printf '<%s>\n' */
+            ,
+            .stdout =
+            \\<link/>
+            \\<real/>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "pathname expansion does not match leading period implicitly",
             .script =
             \\: >a.txt

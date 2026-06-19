@@ -400,6 +400,7 @@ fn pathnameLookup(self: *ShellExpansion) expansion.PathnameLookup {
         .context = self,
         .listDirFn = listPathnameDir,
         .pathExistsFn = pathnameExists,
+        .pathIsDirectoryFn = pathnameIsDirectory,
     };
 }
 
@@ -431,6 +432,18 @@ fn pathnameExists(opaque_context: ?*anyopaque, path: []const u8) !bool {
         else => return err,
     };
     return true;
+}
+
+fn pathnameIsDirectory(opaque_context: ?*anyopaque, path: []const u8) !bool {
+    std.debug.assert(opaque_context != null);
+    const self: *ShellExpansion = @ptrCast(@alignCast(opaque_context.?));
+    const fs_port = self.fs_port orelse unreachable;
+    if (path.len == 0) return true;
+    const metadata = fs_port.inspectPath(.{ .path = path }) catch |err| switch (err) {
+        error.FileNotFound, error.NotDir => return false,
+        else => return err,
+    };
+    return metadata.stat.kind == .directory;
 }
 
 fn lookupEnv(opaque_context: ?*const anyopaque, name: []const u8) ?[]const u8 {
