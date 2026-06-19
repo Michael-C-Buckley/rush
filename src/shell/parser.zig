@@ -4129,6 +4129,11 @@ fn functionBodyWordContinuesCommandPosition(word: []const u8) bool {
 }
 
 fn isAssignmentWord(word: []const u8, features: compat.Features) bool {
+    if (std.mem.indexOf(u8, word, "\\\n")) |_| return isAssignmentWordRemovingLineContinuations(word);
+    return isAssignmentWordRaw(word, features);
+}
+
+fn isAssignmentWordRaw(word: []const u8, features: compat.Features) bool {
     if (word.len == 0) return false;
     if (!isNameStart(word[0])) return false;
     var name_end: usize = 1;
@@ -4144,6 +4149,27 @@ fn isAssignmentWord(word: []const u8, features: compat.Features) bool {
 
     const equals = std.mem.indexOfScalar(u8, word, '=') orelse return false;
     return name_end == equals;
+}
+
+fn isAssignmentWordRemovingLineContinuations(word: []const u8) bool {
+    var logical_index: usize = 0;
+    var index: usize = 0;
+    while (index < word.len) {
+        if (word[index] == '\\' and index + 1 < word.len and word[index + 1] == '\n') {
+            index += 2;
+            continue;
+        }
+
+        const byte = word[index];
+        if (byte == '=') return logical_index != 0;
+        if (logical_index == 0) {
+            if (!isNameStart(byte)) return false;
+        } else if (!isNameContinue(byte)) return false;
+
+        logical_index += 1;
+        index += 1;
+    }
+    return false;
 }
 
 fn isName(word: []const u8) bool {
@@ -4591,6 +4617,29 @@ test "parser classifies assignment words, command word, and arguments" {
                 .child_end = 3,
             },
             .{ .kind = .simple_command, .span = .init(0, 15), .token_start = 0, .token_end = 5 },
+        },
+    });
+}
+
+test "parser removes line continuations before classifying assignment words" {
+    try expectParse("FO\\\nO=bar printf '%s\\n' \"$FOO\"", .{
+        .tokens = &.{
+            .{ .kind = .word, .span = .init(0, 9) },
+            .{ .kind = .whitespace, .span = .init(9, 10) },
+            .{ .kind = .word, .span = .init(10, 16) },
+            .{ .kind = .whitespace, .span = .init(16, 17) },
+            .{ .kind = .word, .span = .init(17, 23) },
+            .{ .kind = .whitespace, .span = .init(23, 24) },
+            .{ .kind = .word, .span = .init(24, 30) },
+            .{ .kind = .eof, .span = .empty(30) },
+        },
+        .nodes = &.{
+            .{ .kind = .root, .span = .init(0, 30) },
+            .{ .kind = .assignment_word, .span = .init(0, 9), .token_start = 0, .token_end = 1 },
+            .{ .kind = .command_word, .span = .init(10, 16), .token_start = 2, .token_end = 3 },
+            .{ .kind = .word, .span = .init(17, 23), .token_start = 4, .token_end = 5 },
+            .{ .kind = .word, .span = .init(24, 30), .token_start = 6, .token_end = 7 },
+            .{ .kind = .simple_command, .span = .init(0, 30) },
         },
     });
 }
