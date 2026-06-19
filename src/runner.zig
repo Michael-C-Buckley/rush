@@ -1230,7 +1230,9 @@ fn appendSemanticExitTrap(
     resolver: shell.TrapActionResolver,
 ) !void {
     if (shell_state.getTrapForSignal(.EXIT) == null) return;
-    if (evaluator.commit_exec_redirections) _ = try output_frame.flushPendingToInheritedDescriptors();
+    if (evaluator.io != null and evaluator.external_stdio == .inherit) {
+        _ = try output_frame.flushPendingToInheritedDescriptors();
+    }
     shell_state.last_status = status.*;
     try shell_state.appendPendingTrap(.EXIT);
     var trap_outcome = (try shell.eval.executePendingTraps(
