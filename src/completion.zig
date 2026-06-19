@@ -2281,6 +2281,21 @@ pub fn defaultApplication(
     defer parse_result.deinit();
 
     const context = parser.completionContext(parse_result, cursor);
+    if (context.kind == .parameter) {
+        var builder: Builder = .{};
+        errdefer builder.deinit(allocator);
+        var variable_iter = shell_state.variables.iterator();
+        while (variable_iter.next()) |entry| try builder.appendCandidateIfMissing(allocator, .{
+            .value = entry.key_ptr.*,
+            .kind = .variable,
+            .replace_start = context.span.start,
+            .replace_end = context.span.end,
+            .append_space = false,
+        });
+        const candidates = try builder.finish(allocator);
+        defer freeCandidates(allocator, candidates);
+        return applyCandidatesForInputWithPolicy(allocator, source, candidates, .prefixOnly());
+    }
     if (!completionContextUsesPaths(context.kind) and context.kind != .command) return .none;
 
     const replace_start = context.span.start;
@@ -2972,6 +2987,40 @@ test "default completion returns commands in command position" {
     try expectCandidate(candidates, "rush_fn", .function);
     try expectCandidate(candidates, "rush-tool", .command);
     try expectNoCandidate(candidates, "rush-note");
+}
+
+test "default completion returns variables after dollar" {
+    var shell_state = shell_state_mod.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    try shell_state.putVariable("ALPHA", "1", .{});
+    try shell_state.putVariable("BETA", "2", .{});
+
+    const empty_source = "echo $";
+    const empty_application = try defaultApplication(
+        std.testing.allocator,
+        std.testing.io,
+        shell_state,
+        empty_source,
+        empty_source.len,
+    );
+    defer empty_application.deinit(std.testing.allocator);
+    try expectCandidate(empty_application.ambiguous, "ALPHA", .variable);
+    try expectCandidate(empty_application.ambiguous, "BETA", .variable);
+
+    const prefixed_source = "echo $AL";
+    const prefixed_application = try defaultApplication(
+        std.testing.allocator,
+        std.testing.io,
+        shell_state,
+        prefixed_source,
+        prefixed_source.len,
+    );
+    defer prefixed_application.deinit(std.testing.allocator);
+    const edit = prefixed_application.edit;
+    try std.testing.expectEqual(@as(usize, "echo $".len), edit.replace_start);
+    try std.testing.expectEqual(@as(usize, prefixed_source.len), edit.replace_end);
+    try std.testing.expectEqualStrings("ALPHA", edit.replacement);
+    try std.testing.expect(!edit.append_space);
 }
 
 test "default completion keeps command words with slash path-like" {
