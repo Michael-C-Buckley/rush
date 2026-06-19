@@ -4795,6 +4795,18 @@ fn flushCurrentShellBufferedCommandOutput(
     }
 }
 
+fn flushLiveInheritedBufferedOutput(
+    buffers: *EvaluationBuffers,
+    eval_context: context.EvalContext,
+    live_stdio: bool,
+) EvalError!void {
+    eval_context.validate();
+    if (!eval_context.interactive) return;
+    if (eval_context.command_substitution_depth != 0) return;
+    if (!frameTargetsInheritedStandardDescriptors(buffers.frame.*, live_stdio)) return;
+    try flushBuffersToInheritedDescriptors(buffers);
+}
+
 fn frameTargetsInheritedStandardDescriptors(frame: execution_frame.ExecutionFrame, live_stdio: bool) bool {
     frame.validate();
     const stdout_endpoint = frame.spec.fd_table.boundEndpoint(1) orelse
@@ -8818,6 +8830,7 @@ fn appendSubshellExitTrap(
     const visible_status = result.control_flow.status(result.status);
     shell_state.last_status = visible_status;
     try shell_state.appendPendingTrap(.EXIT);
+    try flushLiveInheritedBufferedOutput(buffers, eval_context, evaluator.io != null);
 
     var parser_resolver = ParserBackedSourceResolver.init(evaluator);
     parser_resolver.features = evaluator.features;
@@ -8895,12 +8908,16 @@ fn completeStatementChildResult(
         }
         if (child_result.control_flow == .normal) result.* = trap_result;
     }
-    try flushCurrentShellBufferedCommandOutput(
-        buffers,
-        eval_context,
-        evaluator.external_stdio,
-        evaluator.io != null,
-    );
+    if (eval_context.target == .current_shell) {
+        try flushCurrentShellBufferedCommandOutput(
+            buffers,
+            eval_context,
+            evaluator.external_stdio,
+            evaluator.io != null,
+        );
+    } else {
+        try flushLiveInheritedBufferedOutput(buffers, eval_context, evaluator.io != null);
+    }
     return .{
         .stop_list = child_result.control_flow != .normal,
         .flushed_child_output = true,
