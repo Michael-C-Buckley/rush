@@ -4388,7 +4388,7 @@ fn evaluatePlanWithInput(
                 kind,
                 status,
             ).control_flow;
-            if (bashReadonlyAssignmentOnlyReturnsFromFunction(eval_context, plan, control_flow)) {
+            if (readonlyAssignmentOnlyReturnsFromFunction(eval_context, plan, control_flow)) {
                 control_flow = .{ .return_from_scope = .{ .scope = .function, .status = status } };
             }
             return commandOutcomeFromBuffers(
@@ -4587,7 +4587,7 @@ fn bashCommandIgnoresReadonlyAssignment(eval_context: context.EvalContext, plan:
     };
 }
 
-fn bashReadonlyAssignmentOnlyReturnsFromFunction(
+fn readonlyAssignmentOnlyReturnsFromFunction(
     eval_context: context.EvalContext,
     plan: command_plan.CommandPlan,
     control_flow: outcome.ControlFlow,
@@ -4595,8 +4595,7 @@ fn bashReadonlyAssignmentOnlyReturnsFromFunction(
     eval_context.validate();
     plan.validate();
     control_flow.validateForContext(eval_context);
-    return eval_context.features.isBash() and
-        eval_context.canReturnFromFunction() and
+    return eval_context.canReturnFromFunction() and
         plan.class() == .assignment_only and
         control_flow == .normal;
 }
@@ -23616,6 +23615,37 @@ test "semantic evaluator consumes return control flow at function boundary" {
     );
     try std.testing.expectEqualStrings("return: not in a function or dot script", outside.diagnostics.items[0].message);
     outside.discardDelta(.current_shell);
+}
+
+test "semantic evaluator stops function body after readonly assignment failure" {
+    var shell_state = state.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    try shell_state.putVariable("LOCKED", "outer", .{ .readonly = true });
+    var evaluator = Evaluator.init(std.testing.allocator);
+    const eval_context = context.EvalContext.init(.{ .target = .current_shell, .interactive = true });
+
+    const assignment = [_]command_plan.Assignment{.{ .name = "LOCKED", .value = "inner" }};
+    const after_assignment = [_]command_plan.Assignment{.{ .name = "AFTER", .value = "bad" }};
+    const body_commands = [_]command_plan.CommandPlan{
+        command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .assignments = &assignment } }),
+        command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .assignments = &after_assignment } }),
+    };
+    const definition: command_plan.FunctionDefinition = .{ .name = "fn", .body = .{ .commands = &body_commands } };
+    const lookup_functions = [_]command_plan.FunctionDefinition{definition};
+    const call_plan = command_plan.classifyExpandedSimpleCommand(.{
+        .command = .{ .argv = &[_][]const u8{"fn"} },
+        .lookup = .{ .functions = &lookup_functions },
+    });
+
+    var call = try evaluatePlan(&evaluator, &shell_state, eval_context, call_plan);
+    defer call.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 1), call.status);
+    try std.testing.expectEqual(outcome.ControlFlow.normal, call.control_flow);
+    try std.testing.expectEqualStrings("LOCKED: readonly variable", call.diagnostics.items[0].message);
+    try call.commitDelta(&shell_state, .current_shell);
+    try std.testing.expectEqualStrings("outer", shell_state.getVariable("LOCKED").?.value);
+    try std.testing.expectEqual(@as(?state.Variable, null), shell_state.getVariable("AFTER"));
+    try std.testing.expectEqual(@as(state.ExitStatus, 1), shell_state.last_status);
 }
 
 test "semantic evaluator uses child command status for bare function return" {
