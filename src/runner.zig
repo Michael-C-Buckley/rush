@@ -826,6 +826,19 @@ pub fn runInteractiveCommandStringWithExtensionHandlers(
             "semantic interactive executor does not yet preserve verbose/xtrace/errexit state",
         );
 
+    if (semanticScriptNeedsAliasTiming(script)) {
+        return runSemanticAliasTimingShellStateScript(
+            allocator,
+            io,
+            shell_state,
+            script,
+            invocation,
+            "-c",
+            external_stdio,
+            extension_handlers,
+        );
+    }
+
     const aliased = try semanticExpandAliases(allocator, script, invocation.features, shell_state);
     defer allocator.free(aliased);
 

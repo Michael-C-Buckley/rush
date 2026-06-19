@@ -1602,6 +1602,32 @@ test "semantic interactive invocation executes compound commands" {
     }
 }
 
+test "semantic interactive command string aliases affect later lines" {
+    var interactive_shell = Shell.init(std.testing.allocator);
+    defer interactive_shell.deinit();
+    var env = std.process.Environ.Map.init(std.testing.allocator);
+    defer env.deinit();
+    try interactive_shell.initializeSemanticStartup(std.testing.io, &env, .{ .arg_zero = "rush" });
+
+    var semantic = try runSemanticInteractiveCommandString(
+        std.testing.allocator,
+        std.testing.io,
+        &interactive_shell,
+        "alias hi='echo HI'\nhi",
+        shell.InvocationContext.init(.{ .interactive = true, .arg_zero = "rush" }),
+        .capture,
+    );
+    defer semantic.deinit(std.testing.allocator);
+    switch (semantic) {
+        .unsupported => return error.ExpectedSemanticExecution,
+        .output => |result| {
+            try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
+            try std.testing.expectEqualStrings("HI\n", result.stdout);
+            try std.testing.expectEqualStrings("", result.stderr);
+        },
+    }
+}
+
 test "interactive abbreviation expansion rewrites command words from editor state" {
     var shell_state = shell.ShellState.init(std.testing.allocator);
     defer shell_state.deinit();
