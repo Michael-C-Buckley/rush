@@ -248,6 +248,60 @@
             .status = 0,
         },
         .{
+            .name = "AND-OR list rejects missing command before control operator",
+            .script =
+            \\&& printf 'bad\n'
+            ,
+            .stdout = "",
+            .stderr_match = .nonempty,
+            .status_match = .nonzero,
+        },
+        .{
+            .name = "AND-OR list rejects missing command between control operators",
+            .script =
+            \\printf 'bad\n' && && printf 'nope\n'
+            ,
+            .stdout = "",
+            .stderr_match = .nonempty,
+            .status_match = .nonzero,
+        },
+        .{
+            .name = "pipeline rejects missing command before pipe operator",
+            .script =
+            \\| cat
+            ,
+            .stdout = "",
+            .stderr_match = .nonempty,
+            .status_match = .nonzero,
+        },
+        .{
+            .name = "sequential list rejects missing command after separator",
+            .script =
+            \\printf 'bad\n' ; && printf 'nope\n'
+            ,
+            .stdout = "",
+            .stderr_match = .nonempty,
+            .status_match = .nonzero,
+        },
+        .{
+            .name = "asynchronous list rejects missing command after separator",
+            .script =
+            \\printf 'bad\n' & & printf 'nope\n'
+            ,
+            .stdout = "",
+            .stderr_match = .nonempty,
+            .status_match = .nonzero,
+        },
+        .{
+            .name = "case item terminator is rejected outside case command",
+            .script =
+            \\printf 'bad\n';; printf 'nope\n'
+            ,
+            .stdout = "",
+            .stderr_match = .nonempty,
+            .status_match = .nonzero,
+        },
+        .{
             .name = "for clause with empty in list executes zero iterations",
             .script =
             \\var=old

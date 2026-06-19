@@ -2366,6 +2366,9 @@ const SyntaxParser = struct {
         const token_start = self.index;
         var list_children: std.ArrayList(SyntaxChild) = .empty;
         defer list_children.deinit(self.allocator);
+        var expect_command = true;
+        var saw_command = false;
+        var pending_required_operator: ?Token = null;
         const tracks_right_paren_terminator = tokenTerminatorsContain(token_terminators, .right_paren);
         if (tracks_right_paren_terminator) self.right_paren_list_terminator_depth += 1;
         defer {
@@ -2378,15 +2381,24 @@ const SyntaxParser = struct {
                 if (self.nextNonWhitespaceIsPipe()) {
                     const pipeline = try self.parsePipelineAfterFirstCommand(command);
                     try list_children.append(self.allocator, .{ .node = pipeline });
+                    saw_command = true;
+                    expect_command = false;
+                    pending_required_operator = null;
                     continue;
                 }
                 try list_children.append(self.allocator, .{ .node = command });
+                saw_command = true;
+                expect_command = false;
+                pending_required_operator = null;
                 continue;
             }
 
             if (self.startsBashTestCommand()) {
                 const bash_test = try self.parseBashTestCommand();
                 try list_children.append(self.allocator, .{ .node = bash_test });
+                saw_command = true;
+                expect_command = false;
+                pending_required_operator = null;
                 continue;
             }
 
@@ -2405,17 +2417,79 @@ const SyntaxParser = struct {
             if (self.startsPipeline()) {
                 const pipeline = try self.parsePipeline();
                 try list_children.append(self.allocator, .{ .node = pipeline });
+                saw_command = true;
+                expect_command = false;
+                pending_required_operator = null;
                 continue;
             }
 
-            if (self.current().kind.isTrivia() or isListSeparator(self.current().kind)) {
+            if (self.current().kind == .whitespace) {
+                try self.appendCurrentTokenChildTo(&list_children);
+                continue;
+            }
+
+            if (self.current().kind == .newline or self.current().kind == .comment) {
                 const was_newline = self.at(.newline);
                 try self.appendCurrentTokenChildTo(&list_children);
                 if (was_newline) try self.drainHereDocBodies(&list_children);
+                if (pending_required_operator == null) expect_command = true;
+                continue;
+            }
+
+            if (self.atCaseTerminator()) {
+                if (pending_required_operator) |operator| {
+                    try self.appendMissingCommandAfterOperatorDiagnostic(operator, self.at(.eof));
+                    pending_required_operator = null;
+                } else {
+                    try self.appendParseError(self.current().span, "case item terminator outside case command");
+                }
+                try self.appendCurrentTokenChildTo(&list_children);
+                expect_command = true;
+                continue;
+            }
+
+            if (isCommandRequiredControlOperator(self.current().kind)) {
+                if (expect_command) {
+                    if (pending_required_operator) |operator| {
+                        try self.appendMissingCommandAfterOperatorDiagnostic(operator, false);
+                        pending_required_operator = null;
+                    } else {
+                        try self.appendMissingCommandBeforeOperatorDiagnostic(self.current());
+                    }
+                    try self.appendCurrentTokenChildTo(&list_children);
+                    expect_command = true;
+                    continue;
+                }
+
+                pending_required_operator = self.current();
+                try self.appendCurrentTokenChildTo(&list_children);
+                expect_command = true;
+                continue;
+            }
+
+            if (isCommandTerminatingListSeparator(self.current().kind)) {
+                if (expect_command) {
+                    if (pending_required_operator) |operator| {
+                        try self.appendMissingCommandAfterOperatorDiagnostic(operator, false);
+                        pending_required_operator = null;
+                    } else if (!self.canDeferEmptyCompoundListDiagnostic(
+                        saw_command,
+                        word_terminators,
+                        token_terminators,
+                    )) {
+                        try self.appendMissingCommandBeforeOperatorDiagnostic(self.current());
+                    }
+                }
+                try self.appendCurrentTokenChildTo(&list_children);
+                expect_command = true;
                 continue;
             }
 
             break;
+        }
+
+        if (pending_required_operator) |operator| {
+            try self.appendMissingCommandAfterOperatorDiagnostic(operator, self.at(.eof));
         }
 
         if (self.at(.eof)) try self.drainHereDocBodies(&list_children);
@@ -2436,6 +2510,42 @@ const SyntaxParser = struct {
             },
             .token => {},
         };
+        return false;
+    }
+
+    fn canDeferEmptyCompoundListDiagnostic(
+        self: SyntaxParser,
+        saw_command: bool,
+        word_terminators: []const []const u8,
+        token_terminators: []const TokenKind,
+    ) bool {
+        if (saw_command) return false;
+        if (!self.at(.semicolon)) return false;
+        if (!tokenTerminatorsContain(token_terminators, .right_paren) and
+            !(word_terminators.len == 1 and std.mem.eql(u8, word_terminators[0], "}")))
+        {
+            return false;
+        }
+        return self.nextSignificantTokenIsListTerminator(word_terminators, token_terminators);
+    }
+
+    fn nextSignificantTokenIsListTerminator(
+        self: SyntaxParser,
+        word_terminators: []const []const u8,
+        token_terminators: []const TokenKind,
+    ) bool {
+        var index = self.index + 1;
+        while (index < self.tokens.len and self.tokens[index].kind.isTrivia()) : (index += 1) {}
+        if (index >= self.tokens.len) return false;
+        const token = self.tokens[index];
+        for (token_terminators) |kind| {
+            if (token.kind == kind) return true;
+        }
+        if (token.kind != .word) return false;
+        const lexeme = token.lexeme(self.source);
+        for (word_terminators) |word| {
+            if (std.mem.eql(u8, lexeme, word)) return true;
+        }
         return false;
     }
 
@@ -3685,6 +3795,9 @@ const SyntaxParser = struct {
             self.startsForCommand() or
             self.startsCaseCommand() or
             self.startsPipeline() or
+            self.atCaseTerminator() or
+            isCommandRequiredControlOperator(self.current().kind) or
+            isCommandTerminatingListSeparator(self.current().kind) or
             (self.features.strict_diagnostics and self.atMisplacedRightParen());
     }
 
@@ -3810,6 +3923,15 @@ const SyntaxParser = struct {
 
     fn appendMisplacedRightParenDiagnostic(self: *SyntaxParser) !void {
         try self.appendParseError(self.current().span, "misplaced )");
+    }
+
+    fn appendMissingCommandBeforeOperatorDiagnostic(self: *SyntaxParser, operator: Token) !void {
+        try self.appendParseError(operator.span, "missing command before control operator");
+    }
+
+    fn appendMissingCommandAfterOperatorDiagnostic(self: *SyntaxParser, operator: Token, incomplete: bool) !void {
+        if (incomplete) self.incomplete = true;
+        try self.appendParseError(operator.span, "missing command after control operator");
     }
 
     fn atMisplacedReservedWord(self: SyntaxParser) bool {
@@ -3942,6 +4064,14 @@ const SyntaxParser = struct {
 
 fn isSimpleCommandSeparator(kind: TokenKind) bool {
     return kind == .pipe or isListSeparator(kind);
+}
+
+fn isCommandRequiredControlOperator(kind: TokenKind) bool {
+    return kind == .pipe or kind == .and_if or kind == .or_if;
+}
+
+fn isCommandTerminatingListSeparator(kind: TokenKind) bool {
+    return kind == .semicolon or kind == .ampersand;
 }
 
 fn isListSeparator(kind: TokenKind) bool {
@@ -5724,6 +5854,89 @@ test "parser recovers from missing pipeline rhs" {
         }},
         .incomplete = true,
     });
+}
+
+test "parser rejects missing commands around list and control operators" {
+    const Case = struct {
+        source: []const u8,
+        span: Span,
+        message: []const u8,
+        incomplete: bool = false,
+    };
+    const cases = [_]Case{
+        .{ .source = ";", .span = .init(0, 1), .message = "missing command before control operator" },
+        .{ .source = "&", .span = .init(0, 1), .message = "missing command before control operator" },
+        .{ .source = "&& echo no", .span = .init(0, 2), .message = "missing command before control operator" },
+        .{ .source = "|| echo no", .span = .init(0, 2), .message = "missing command before control operator" },
+        .{
+            .source = "echo a &&",
+            .span = .init(7, 9),
+            .message = "missing command after control operator",
+            .incomplete = true,
+        },
+        .{
+            .source = "echo a ||",
+            .span = .init(7, 9),
+            .message = "missing command after control operator",
+            .incomplete = true,
+        },
+        .{ .source = "| cat", .span = .init(0, 1), .message = "missing command before control operator" },
+        .{
+            .source = "echo a;; echo b",
+            .span = .init(6, 8),
+            .message = "case item terminator outside case command",
+        },
+        .{
+            .source = "echo a\n;;\necho b",
+            .span = .init(7, 9),
+            .message = "case item terminator outside case command",
+        },
+        .{
+            .source = "echo a ; && echo b",
+            .span = .init(9, 11),
+            .message = "missing command before control operator",
+        },
+        .{
+            .source = "echo a && | echo b",
+            .span = .init(7, 9),
+            .message = "missing command after control operator",
+        },
+        .{
+            .source = "echo a & & echo b",
+            .span = .init(9, 10),
+            .message = "missing command before control operator",
+        },
+    };
+
+    for (cases) |case| {
+        var result = try parse(std.testing.allocator, case.source, .{});
+        defer result.deinit();
+
+        try std.testing.expectEqual(case.incomplete, result.incomplete);
+        try std.testing.expectEqual(@as(usize, 1), result.diagnostics.len);
+        try std.testing.expectEqual(DiagnosticKind.parse_error, result.diagnostics[0].kind);
+        try expectSpan(case.span, result.diagnostics[0].span);
+        try std.testing.expectEqualStrings(case.message, result.diagnostics[0].message);
+    }
+}
+
+test "parser preserves valid newline continuations and list terminators" {
+    const cases = [_][]const u8{
+        "\n\nprintf ok;\nprintf after\n",
+        "printf async &\nwait\n",
+        "true &&\nprintf ok\nfalse ||\nprintf ok\n",
+        "true && # linebreak comment\nprintf ok\n",
+        "printf pipe |\ncat\n",
+        "case x in a) ;; esac",
+    };
+
+    for (cases) |source| {
+        var result = try parse(std.testing.allocator, source, .{});
+        defer result.deinit();
+
+        try std.testing.expect(!result.incomplete);
+        try std.testing.expectEqual(@as(usize, 0), result.diagnostics.len);
+    }
 }
 
 test "parser continues pipeline rhs after newline" {
