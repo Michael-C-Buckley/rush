@@ -8986,6 +8986,7 @@ fn evaluateStatementList(
     if (list.commands.len != 0) {
         for (list.commands) |child_plan| {
             child_plan.validate();
+            if (noexecSuppressesCommand(shell_state.*, eval_context)) break;
             try flushBuffersForRedirectionTargetsBetweenCommands(
                 buffers,
                 eval_context,
@@ -9031,6 +9032,7 @@ fn evaluateStatementList(
             .or_if => result.status != 0,
         };
         if (!should_run) continue;
+        if (noexecSuppressesCommand(shell_state.*, eval_context)) break;
 
         var child_context = eval_context;
         if (index + 1 < list.statements.len) {
@@ -9077,6 +9079,12 @@ fn evaluateStatementList(
     return result;
 }
 
+fn noexecSuppressesCommand(shell_state: state.ShellState, eval_context: context.EvalContext) bool {
+    shell_state.validate();
+    eval_context.validate();
+    return shell_state.options.enabled(.noexec) and !eval_context.interactive;
+}
+
 fn evaluateFunctionStatementList(
     evaluator: *Evaluator,
     shell_state: *state.ShellState,
@@ -9093,6 +9101,7 @@ fn evaluateFunctionStatementList(
     if (list.commands.len != 0) {
         for (list.commands, 0..) |child_plan, index| {
             child_plan.validate();
+            if (noexecSuppressesCommand(shell_state.*, eval_context)) break;
             try flushBuffersForRedirectionTargetsBetweenCommands(
                 buffers,
                 eval_context,
@@ -9151,6 +9160,7 @@ fn evaluateFunctionStatementList(
             .or_if => result.status != 0,
         };
         if (!should_run) continue;
+        if (noexecSuppressesCommand(shell_state.*, eval_context)) break;
 
         var child_context = eval_context;
         if (index + 1 < list.statements.len) {

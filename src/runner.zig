@@ -230,12 +230,10 @@ fn runSemanticCommandStringInternal(
 ) !SemanticInvocationExecution {
     assertSemanticStartupOptions(script, invocation, positionals);
 
-    if (shell_options.noexec or
-        shell_options.verbose)
-    {
+    if (shell_options.verbose) {
         return semanticUnsupported(
             allocator,
-            "semantic executor does not yet implement non-interactive noexec/verbose startup modes",
+            "semantic executor does not yet implement non-interactive verbose startup mode",
         );
     }
     if (environ_map) |map| {
@@ -960,6 +958,7 @@ fn runSemanticLoweredProgram(
             .or_if => status != 0,
         };
         if (!should_run) continue;
+        if (semanticNoexecSuppressesStatement(shell_state.*, eval_context)) break;
 
         var statement_fragment = try ir.statementSourceFragment(allocator, program, statement_index);
         defer statement_fragment.deinit(allocator);
@@ -1086,6 +1085,12 @@ fn runSemanticLoweredProgram(
         .stdout = runner_output.stdout,
         .stderr = runner_output.stderr,
     } };
+}
+
+fn semanticNoexecSuppressesStatement(shell_state: shell.ShellState, eval_context: shell.EvalContext) bool {
+    shell_state.validate();
+    eval_context.validate();
+    return shell_state.options.noexec and !eval_context.interactive;
 }
 
 fn semanticSourceLine(source: []const u8, offset: usize) usize {
@@ -2600,9 +2605,9 @@ test "command string invocation shell options affect execution" {
     );
     defer no_execute.deinit();
 
-    try std.testing.expectEqual(@as(shell.ExitStatus, 2), no_execute.status);
+    try std.testing.expectEqual(@as(shell.ExitStatus, 0), no_execute.status);
     try std.testing.expectEqualStrings("", no_execute.stdout);
-    try std.testing.expect(no_execute.stderr.len != 0);
+    try std.testing.expectEqualStrings("", no_execute.stderr);
 
     const invalid_noexec_invocation = cli_invocation.parseCommandString(&.{
         "rush",
@@ -2656,6 +2661,21 @@ test "command string set -v does not echo already-read input" {
     try std.testing.expectEqualStrings("command-string-verbose\n", result.stdout);
     try std.testing.expectEqualStrings("", result.stderr);
 }
+
+test "command string set -n parses but does not execute later commands" {
+    const invocation = cli_invocation.parse(&.{
+        "rush",
+        "-c",
+        "set -n\nprintf should-not-run\nx=$(printf substitution)\nprintf after",
+    }) orelse return error.ExpectedInvocation;
+    var result = try runInvocationForTest(std.testing.allocator, std.testing.io, invocation, null, .capture, false);
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("", result.stdout);
+    try std.testing.expectEqualStrings("", result.stderr);
+}
+
 test "command string read consumes piped real stdin" {
     const invocation = cli_invocation.parse(&.{
         "rush",
