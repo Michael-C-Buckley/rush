@@ -3083,10 +3083,12 @@ const SyntaxParser = struct {
             const body = try self.parseListUntil(&.{"esac"}, &.{ .dsemicolon, .semicolon_amp, .semicolon_amp_amp });
             try item_children.append(self.allocator, .{ .node = body });
             if (self.atCaseTerminator()) {
+                // POSIX Issue 8 defines ;& fallthrough, but not Bash's ;;& test-next terminator.
                 if (self.features.strict_posix and self.at(.semicolon_amp_amp)) try self.appendCaseTestNextDiagnostic();
                 try self.appendCurrentTokenChildTo(&item_children);
             }
         } else if (self.atCaseTerminator()) {
+            // POSIX Issue 8 defines ;& fallthrough, but not Bash's ;;& test-next terminator.
             if (self.features.strict_posix and self.at(.semicolon_amp_amp)) try self.appendCaseTestNextDiagnostic();
             try self.appendCurrentTokenChildTo(&item_children);
         }
