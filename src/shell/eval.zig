@@ -7429,10 +7429,15 @@ fn commandSubstitutionResultFromOutcome(
     var result = CommandSubstitutionResult.init(allocator, visible_status);
     errdefer result.deinit();
 
-    if (fold_side_stdout)
-        try appendCommandSubstitutionOutput(allocator, &result.output, command_outcome.command_substitution_side_stdout.items)
-    else
+    if (fold_side_stdout) {
+        try appendCommandSubstitutionOutput(
+            allocator,
+            &result.output,
+            command_outcome.command_substitution_side_stdout.items,
+        );
+    } else {
         try result.side_stdout.appendSlice(allocator, command_outcome.command_substitution_side_stdout.items);
+    }
     const trimmed = trimCommandSubstitutionOutput(command_outcome.stdout.items);
     try appendCommandSubstitutionOutput(allocator, &result.output, trimmed);
     const trimmed_pipeline_stdout = trimCommandSubstitutionOutput(command_outcome.pipeline_stdout.items);
@@ -11454,10 +11459,7 @@ fn appendPipelineStageBuffers(
     try frame.write(2, command_outcome.stderr.items);
     switch (route) {
         .pipeline_data_only => {},
-        .parent_output => try buffers.pipeline_stdout.appendSlice(
-            buffers.allocator,
-            command_outcome.pipeline_stdout.items,
-        ),
+        .parent_output => try frame.write(1, command_outcome.pipeline_stdout.items),
     }
     for (command_outcome.diagnostics.items) |diagnostic| {
         try buffers.addDiagnosticMessage(diagnostic.message);
@@ -13229,10 +13231,22 @@ fn runExternalWithPipelineInputWithProcessEnvironment(
         }
     }
 
-    var run_result = invocation.run(
+    const stdin_source = if (semanticHereDocStdinSource(plan.redirections)) |source|
+        source.bytes()
+    else if (redirectionTargetsDescriptor(plan.redirections, 0))
+        ""
+    else
+        buffers.stdin.takeRemaining();
+    const stdin_stdio: runtime.process.StandardIo = if (redirectionTargetsDescriptor(plan.redirections, 0))
+        .inherit
+    else
+        .pipe;
+
+    var run_result = invocation.runWithStdin(
         evaluator,
         process_port,
-        if (semanticHereDocStdinSource(plan.redirections)) |source| source.bytes() else buffers.stdin.takeRemaining(),
+        stdin_source,
+        stdin_stdio,
     ) catch |err| switch (err) {
         error.OutOfMemory => return error.OutOfMemory,
         else => |run_err| {

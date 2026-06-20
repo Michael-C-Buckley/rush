@@ -50,6 +50,7 @@ const FeatureSet = packed struct {
     ifs: bool = true,
     cases: bool = true,
     while_loop: bool = true,
+    pipeline: bool = true,
 
     const default: FeatureSet = .{
         .fd = true,
@@ -63,6 +64,7 @@ const FeatureSet = packed struct {
         .ifs = true,
         .cases = true,
         .while_loop = true,
+        .pipeline = true,
     };
 
     fn parse(text: []const u8) ?FeatureSet {
@@ -78,6 +80,7 @@ const FeatureSet = packed struct {
             .ifs = false,
             .cases = false,
             .while_loop = false,
+            .pipeline = false,
         };
         var saw_feature = false;
         var iterator = std.mem.splitScalar(u8, text, ',');
@@ -118,6 +121,9 @@ const FeatureSet = packed struct {
             } else if (std.mem.eql(u8, feature, "while")) {
                 features.while_loop = true;
                 saw_feature = true;
+            } else if (std.mem.eql(u8, feature, "pipeline")) {
+                features.pipeline = true;
+                saw_feature = true;
             } else {
                 return null;
             }
@@ -138,6 +144,7 @@ const FeatureSet = packed struct {
         if (self.ifs) try writer.writeAll(",ifs");
         if (self.cases) try writer.writeAll(",cases");
         if (self.while_loop) try writer.writeAll(",while");
+        if (self.pipeline) try writer.writeAll(",pipeline");
     }
 };
 
@@ -414,7 +421,8 @@ fn writeUsage(io: std.Io) !void {
         \\  --seed N            deterministic seed (default: random)
         \\  --case N            run only one generated case index
         \\  --features LIST     comma-separated features:
-        \\                       base,fd,params,lists,redir,cmdsub,func,alias,loops,ifs,cases,while (default: all)
+        \\                       base,fd,params,lists,redir,cmdsub,func,alias,loops,ifs,cases,while,
+        \\                       pipeline (default: all)
         \\  --print-cases       print each generated shell script before running it
         \\  --timeout-ms N      per-command timeout in milliseconds, or 0 to disable (default: Debug 5000, Release 1000)
         \\  --keep-temp         keep the temporary sandbox
@@ -1127,6 +1135,38 @@ const WhileProbe = enum {
     }
 };
 
+const PipelineProbe = enum {
+    pass_stdout,
+    last_status_success,
+    last_status_failure,
+    left_assignment_isolated,
+    redirected_input,
+
+    fn random(random_source: std.Random) PipelineProbe {
+        return @enumFromInt(random_source.uintLessThan(u3, 5));
+    }
+
+    fn render(self: PipelineProbe, writer: *std.Io.Writer) !void {
+        switch (self) {
+            .pass_stdout => try writer.writeAll(
+                "printf '%s\n' pipe | cat",
+            ),
+            .last_status_success => try writer.writeAll(
+                "false | true; printf '[%s]\n' $?",
+            ),
+            .last_status_failure => try writer.writeAll(
+                "true | false; printf '[%s]\n' $?",
+            ),
+            .left_assignment_isolated => try writer.writeAll(
+                "A=outer; A=inner printf '%s\n' pipe | cat >/dev/null; printf '[%s]\n' \"$A\"",
+            ),
+            .redirected_input => try writer.writeAll(
+                "printf '%s\n' redirected > a; cat < a | cat",
+            ),
+        }
+    }
+};
+
 const DirName = enum {
     d,
     e,
@@ -1244,6 +1284,7 @@ const Command = union(enum) {
     if_probe: IfProbe,
     case_probe: CaseProbe,
     while_probe: WhileProbe,
+    pipeline_probe: PipelineProbe,
     print_to_file: struct { value: Value, file: FileName },
     cat_file: FileName,
     subshell: []Command,
@@ -1307,8 +1348,13 @@ const Command = union(enum) {
             .top_level => 1,
             .inline_compound => if (depth < 2) 1 else 0,
         } else 0;
+        const pipeline_count: u8 = if (features.pipeline) switch (mode) {
+            .top_level => 1,
+            .inline_compound => if (depth < 2) 1 else 0,
+        } else 0;
         const choice_count = base_count + fd_count + params_count + positional_count + lists_count + redir_count +
-            cmdsub_count + func_count + alias_count + loops_count + ifs_count + cases_count + while_count;
+            cmdsub_count + func_count + alias_count + loops_count + ifs_count + cases_count + while_count +
+            pipeline_count;
         const choice = random.uintLessThan(
             u8,
             choice_count,
@@ -1402,6 +1448,8 @@ const Command = union(enum) {
         if (feature_choice < cases_count) return .{ .case_probe = CaseProbe.random(random) };
         feature_choice -= cases_count;
         if (feature_choice < while_count) return .{ .while_probe = WhileProbe.random(random) };
+        feature_choice -= while_count;
+        if (feature_choice < pipeline_count) return .{ .pipeline_probe = PipelineProbe.random(random) };
         unreachable;
     }
 
@@ -1456,6 +1504,7 @@ const Command = union(enum) {
             .if_probe => |if_probe| try if_probe.render(writer),
             .case_probe => |case_probe| try case_probe.render(writer),
             .while_probe => |while_probe| try while_probe.render(writer),
+            .pipeline_probe => |pipeline_probe| try pipeline_probe.render(writer),
             .print_to_file => |print| try writer.print(
                 "printf '%s\\n' {s} > {s}",
                 .{ print.value.shell(), print.file.shell() },

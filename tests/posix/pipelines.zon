@@ -368,5 +368,18 @@
             .stderr = "",
             .status = 0,
         },
+        .{
+            .name = "pipeline after redirected command preserves last stage stdout",
+            .script =
+            \\printf '%s\n' redirected > a
+            \\cat < a | cat
+            ,
+            .stdout =
+            \\redirected
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
     },
 }
