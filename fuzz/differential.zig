@@ -11,11 +11,41 @@ const Config = struct {
     case_filter: ?usize = null,
     keep_temp: bool = false,
     strict_stderr: bool = false,
+    features: FeatureSet = .default,
 
     fn deinit(self: Config, allocator: std.mem.Allocator) void {
         allocator.free(self.rush_path);
         allocator.free(self.shell);
         allocator.free(self.shell_args);
+    }
+};
+
+const FeatureSet = packed struct {
+    fd: bool = true,
+
+    const default: FeatureSet = .{ .fd = true };
+
+    fn parse(text: []const u8) ?FeatureSet {
+        var features: FeatureSet = .{ .fd = false };
+        var saw_feature = false;
+        var iterator = std.mem.splitScalar(u8, text, ',');
+        while (iterator.next()) |feature| {
+            if (feature.len == 0) return null;
+            if (std.mem.eql(u8, feature, "base")) {
+                saw_feature = true;
+            } else if (std.mem.eql(u8, feature, "fd")) {
+                features.fd = true;
+                saw_feature = true;
+            } else {
+                return null;
+            }
+        }
+        return if (saw_feature) features else null;
+    }
+
+    fn format(self: FeatureSet, writer: *std.Io.Writer) !void {
+        try writer.writeAll("base");
+        if (self.fd) try writer.writeAll(",fd");
     }
 };
 
@@ -91,7 +121,7 @@ pub fn main(init: std.process.Init) !u8 {
         if (config.case_filter) |selected| if (selected != case_index) continue;
         progress.startCase(case_index);
 
-        const script = try generateScript(allocator, config.seed, case_index);
+        const script = try generateScript(allocator, config.seed, case_index, config.features);
         defer allocator.free(script);
 
         const rush = try runOne(
@@ -173,6 +203,7 @@ fn parseArgs(allocator: std.mem.Allocator, io: std.Io, args: []const []const u8)
     var case_filter: ?usize = null;
     var keep_temp = false;
     var strict_stderr = false;
+    var features: FeatureSet = .default;
 
     var index: usize = 1;
     while (index < args.len) : (index += 1) {
@@ -205,6 +236,10 @@ fn parseArgs(allocator: std.mem.Allocator, io: std.Io, args: []const []const u8)
             keep_temp = true;
         } else if (std.mem.eql(u8, arg, "--strict-stderr")) {
             strict_stderr = true;
+        } else if (std.mem.eql(u8, arg, "--features")) {
+            index += 1;
+            if (index >= args.len) return null;
+            features = FeatureSet.parse(args[index]) orelse return null;
         } else {
             return null;
         }
@@ -225,6 +260,7 @@ fn parseArgs(allocator: std.mem.Allocator, io: std.Io, args: []const []const u8)
         .case_filter = case_filter,
         .keep_temp = keep_temp,
         .strict_stderr = strict_stderr,
+        .features = features,
     };
 }
 
@@ -251,6 +287,7 @@ fn writeUsage(io: std.Io) !void {
         \\  --cases N           number of generated cases (default: 100)
         \\  --seed N            deterministic seed (default: 1)
         \\  --case N            run only one generated case index
+        \\  --features LIST     comma-separated features: base,fd (default: base,fd)
         \\  --keep-temp         keep the temporary sandbox
         \\  --strict-stderr     compare stderr exactly
         \\
@@ -280,23 +317,23 @@ fn createTempRoot(allocator: std.mem.Allocator, io: std.Io) !TempRoot {
     return error.TemporaryNameCollision;
 }
 
-fn generateScript(allocator: std.mem.Allocator, seed: u64, case_index: usize) ![]u8 {
+fn generateScript(allocator: std.mem.Allocator, seed: u64, case_index: usize, features: FeatureSet) ![]u8 {
     var prng = std.Random.DefaultPrng.init(seed ^ (@as(u64, @intCast(case_index)) *% 0x9e3779b97f4a7c15));
     const random = prng.random();
-    var script_ast = try Script.generate(allocator, random);
+    var script_ast = try Script.generate(allocator, random, features);
     defer script_ast.deinit(allocator);
 
     var writer: std.Io.Writer.Allocating = .init(allocator);
     errdefer writer.deinit();
     try script_ast.render(&writer.writer);
-    try renderProbe(&writer.writer);
+    try renderProbe(&writer.writer, features);
     return writer.toOwnedSlice();
 }
 
 const Script = struct {
     commands: []Command,
 
-    fn generate(allocator: std.mem.Allocator, random: std.Random) !Script {
+    fn generate(allocator: std.mem.Allocator, random: std.Random, features: FeatureSet) !Script {
         const command_count = 1 + random.uintLessThan(usize, 8);
         const commands = try allocator.alloc(Command, command_count);
         errdefer allocator.free(commands);
@@ -304,7 +341,7 @@ const Script = struct {
         errdefer for (commands[0..initialized]) |*command| command.deinit(allocator);
 
         for (commands) |*command| {
-            command.* = try Command.generate(allocator, random, .top_level, 0);
+            command.* = try Command.generate(allocator, random, .top_level, 0, features);
             initialized += 1;
         }
 
@@ -420,10 +457,16 @@ const Command = union(enum) {
     exec_dup_fd: struct { target: Fd, source: FdSource },
     print_to_fd: struct { fd: Fd, value: Value },
 
-    fn generate(allocator: std.mem.Allocator, random: std.Random, mode: RenderMode, depth: usize) anyerror!Command {
+    fn generate(
+        allocator: std.mem.Allocator,
+        random: std.Random,
+        mode: RenderMode,
+        depth: usize,
+        features: FeatureSet,
+    ) anyerror!Command {
         const choice_count: u8 = switch (mode) {
-            .top_level => if (depth < 2) 14 else 11,
-            .inline_compound => if (depth < 2) 9 else 5,
+            .top_level => if (features.fd) if (depth < 2) 14 else 11 else if (depth < 2) 10 else 7,
+            .inline_compound => if (features.fd and depth < 2) 9 else 5,
         };
         return switch (random.uintLessThan(u8, choice_count)) {
             0 => .noop,
@@ -433,8 +476,8 @@ const Command = union(enum) {
             4 => .{ .print_stdout = Value.random(random) },
             5 => .{ .print_to_file = .{ .value = Value.random(random), .file = FileName.random(random) } },
             6 => .{ .cat_file = FileName.random(random) },
-            7 => .{ .subshell = try generateCompoundCommands(allocator, random, depth + 1) },
-            8 => .{ .group = try generateCompoundCommands(allocator, random, depth + 1) },
+            7 => .{ .subshell = try generateCompoundCommands(allocator, random, depth + 1, features) },
+            8 => .{ .group = try generateCompoundCommands(allocator, random, depth + 1, features) },
             9 => .{ .mkdir_cd = DirName.random(random) },
             10 => .{ .exec_open_fd = .{
                 .fd = Fd.random(random),
@@ -492,7 +535,12 @@ const Command = union(enum) {
     }
 };
 
-fn generateCompoundCommands(allocator: std.mem.Allocator, random: std.Random, depth: usize) anyerror![]Command {
+fn generateCompoundCommands(
+    allocator: std.mem.Allocator,
+    random: std.Random,
+    depth: usize,
+    features: FeatureSet,
+) anyerror![]Command {
     const command_count = 1 + random.uintLessThan(usize, 3);
     const commands = try allocator.alloc(Command, command_count);
     errdefer allocator.free(commands);
@@ -500,7 +548,7 @@ fn generateCompoundCommands(allocator: std.mem.Allocator, random: std.Random, de
     errdefer for (commands[0..initialized]) |*command| command.deinit(allocator);
 
     for (commands) |*command| {
-        command.* = try Command.generate(allocator, random, .inline_compound, depth);
+        command.* = try Command.generate(allocator, random, .inline_compound, depth, features);
         initialized += 1;
     }
 
@@ -521,11 +569,13 @@ fn renderCompound(
     try writer.writeAll(close);
 }
 
-fn renderProbe(writer: *std.Io.Writer) !void {
+fn renderProbe(writer: *std.Io.Writer, features: FeatureSet) !void {
     try writer.writeAll("printf '__RUSH_PROBE_PWD=%s\\n' \"$PWD\"\n");
     try writer.writeAll("printf '__RUSH_PROBE_A=%s\\n' \"${A-unset}\"\n");
-    try renderFdProbe(writer, .fd3);
-    try renderFdProbe(writer, .fd4);
+    if (features.fd) {
+        try renderFdProbe(writer, .fd3);
+        try renderFdProbe(writer, .fd4);
+    }
 }
 
 fn renderFdProbe(writer: *std.Io.Writer, fd: Fd) !void {
@@ -659,19 +709,22 @@ fn reportMismatch(
         stderr_matches and
         filesEqual(rush.files, reference.files)) return false;
 
+    const replay_command = try replayCommandAlloc(allocator, config, case_index);
+    defer allocator.free(replay_command);
+
     std.debug.print(
         \\differential: mismatch against {s}
         \\seed: {d}
         \\case: {d}
         \\
         \\replay:
-        \\  zig build differential -- --shell {s} --seed {d} --case {d}
+        \\  {s}
         \\
         \\script:
         \\---
         \\{s}---
         \\
-    , .{ config.shell, config.seed, case_index, config.shell, config.seed, case_index, script });
+    , .{ config.shell, config.seed, case_index, replay_command, script });
 
     if (rush.status != reference.status) {
         std.debug.print("status: rush={d} reference={d}\n", .{ rush.status, reference.status });
@@ -686,6 +739,35 @@ fn reportMismatch(
         printFileMismatch(rush.files, reference.files);
     }
     return true;
+}
+
+fn replayCommandAlloc(allocator: std.mem.Allocator, config: Config, case_index: usize) ![]u8 {
+    var writer: std.Io.Writer.Allocating = .init(allocator);
+    errdefer writer.deinit();
+
+    try writer.writer.writeAll("zig build differential -- --shell ");
+    try writeShellArg(&writer.writer, config.shell);
+    for (config.shell_args) |arg| {
+        try writer.writer.writeAll(" --shell-arg ");
+        try writeShellArg(&writer.writer, arg);
+    }
+    try writer.writer.writeAll(" --features ");
+    try config.features.format(&writer.writer);
+    if (config.strict_stderr) try writer.writer.writeAll(" --strict-stderr");
+    try writer.writer.print(" --seed {d} --case {d}", .{ config.seed, case_index });
+    return writer.toOwnedSlice();
+}
+
+fn writeShellArg(writer: *std.Io.Writer, arg: []const u8) !void {
+    try writer.writeByte(0x27);
+    for (arg) |byte| {
+        if (byte == 0x27) {
+            try writer.writeAll("'\\''");
+        } else {
+            try writer.writeByte(byte);
+        }
+    }
+    try writer.writeByte(0x27);
 }
 
 fn filesEqual(lhs: []const FileSnapshot, rhs: []const FileSnapshot) bool {
