@@ -13,11 +13,22 @@ const Config = struct {
     strict_stderr: bool = false,
     features: FeatureSet = .default,
     print_cases: bool = false,
+    timeout_ms: i64 = 5000,
 
     fn deinit(self: Config, allocator: std.mem.Allocator) void {
         allocator.free(self.rush_path);
         allocator.free(self.shell);
         allocator.free(self.shell_args);
+    }
+
+    fn timeout(self: Config) std.Io.Timeout {
+        if (self.timeout_ms == 0) return .none;
+        return .{ .duration = .{ .raw = .fromMilliseconds(self.timeout_ms), .clock = .awake } };
+    }
+
+    fn caseLimit(self: Config) usize {
+        if (self.case_filter) |selected| return @max(self.cases, selected + 1);
+        return self.cases;
     }
 };
 
@@ -86,6 +97,7 @@ const RunResult = struct {
     stderr: []u8,
     status: u8,
     files: []FileSnapshot,
+    timed_out: bool = false,
 
     fn deinit(self: RunResult, allocator: std.mem.Allocator) void {
         allocator.free(self.stdout);
@@ -121,6 +133,7 @@ pub fn main(init: std.process.Init) !u8 {
     var keep_temp = config.keep_temp;
     defer temp_root.deinit(allocator, init.io, keep_temp);
 
+    const case_limit = config.caseLimit();
     const run_count = if (config.case_filter == null) config.cases else 1;
     var progress = Progress.init(init.io, run_count, config.print_cases);
     defer progress.deinit();
@@ -128,7 +141,7 @@ pub fn main(init: std.process.Init) !u8 {
     var failures: usize = 0;
     var completed: usize = 0;
     var case_index: usize = 0;
-    while (case_index < config.cases) : (case_index += 1) {
+    while (case_index < case_limit) : (case_index += 1) {
         if (config.case_filter) |selected| if (selected != case_index) continue;
         progress.startCase(case_index);
 
@@ -145,6 +158,7 @@ pub fn main(init: std.process.Init) !u8 {
             config.rush_path,
             &.{"--posix"},
             script,
+            config.timeout(),
         );
         defer rush.deinit(allocator);
         const reference = try runOne(
@@ -156,6 +170,7 @@ pub fn main(init: std.process.Init) !u8 {
             config.shell,
             config.shell_args,
             script,
+            config.timeout(),
         );
         defer reference.deinit(allocator);
 
@@ -231,6 +246,7 @@ fn parseArgs(allocator: std.mem.Allocator, io: std.Io, args: []const []const u8)
     var strict_stderr = false;
     var features: FeatureSet = .default;
     var print_cases = false;
+    var timeout_ms: i64 = 5000;
 
     var index: usize = 1;
     while (index < args.len) : (index += 1) {
@@ -265,6 +281,11 @@ fn parseArgs(allocator: std.mem.Allocator, io: std.Io, args: []const []const u8)
             strict_stderr = true;
         } else if (std.mem.eql(u8, arg, "--print-cases")) {
             print_cases = true;
+        } else if (std.mem.eql(u8, arg, "--timeout-ms")) {
+            index += 1;
+            if (index >= args.len) return null;
+            timeout_ms = try std.fmt.parseInt(i64, args[index], 10);
+            if (timeout_ms < 0) return null;
         } else if (std.mem.eql(u8, arg, "--features")) {
             index += 1;
             if (index >= args.len) return null;
@@ -291,6 +312,7 @@ fn parseArgs(allocator: std.mem.Allocator, io: std.Io, args: []const []const u8)
         .strict_stderr = strict_stderr,
         .features = features,
         .print_cases = print_cases,
+        .timeout_ms = timeout_ms,
     };
 }
 
@@ -319,6 +341,7 @@ fn writeUsage(io: std.Io) !void {
         \\  --case N            run only one generated case index
         \\  --features LIST     comma-separated features: base,fd,params,lists (default: all)
         \\  --print-cases       print each generated shell script before running it
+        \\  --timeout-ms N      per-command timeout in milliseconds, or 0 to disable (default: 5000)
         \\  --keep-temp         keep the temporary sandbox
         \\  --strict-stderr     compare stderr exactly
         \\
@@ -863,6 +886,7 @@ fn runOne(
     shell: []const u8,
     shell_args: []const []const u8,
     script: []const u8,
+    timeout_value: std.Io.Timeout,
 ) !RunResult {
     const sub_path = try std.fmt.allocPrint(allocator, "{s}-{d}", .{ prefix, case_index });
     defer allocator.free(sub_path);
@@ -876,7 +900,14 @@ fn runOne(
     try argv.append(allocator, "-c");
     try argv.append(allocator, script);
 
-    const result = try std.process.run(allocator, io, .{ .argv = argv.items, .cwd = .{ .dir = cwd } });
+    const result = std.process.run(allocator, io, .{
+        .argv = argv.items,
+        .cwd = .{ .dir = cwd },
+        .timeout = timeout_value,
+    }) catch |err| switch (err) {
+        error.Timeout => return timeoutRunResult(allocator, io, cwd),
+        else => |run_err| return run_err,
+    };
     errdefer allocator.free(result.stdout);
     errdefer allocator.free(result.stderr);
     var cwd_path_buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
@@ -898,6 +929,19 @@ fn runOne(
         .status = statusFromTerm(result.term),
         .files = files,
     };
+}
+
+fn timeoutRunResult(allocator: std.mem.Allocator, io: std.Io, cwd: std.Io.Dir) !RunResult {
+    const stdout = try allocator.dupe(u8, "");
+    errdefer allocator.free(stdout);
+    const stderr = try allocator.dupe(u8, "");
+    errdefer allocator.free(stderr);
+    const files = try snapshotFiles(allocator, io, cwd);
+    errdefer {
+        for (files) |file| file.deinit(allocator);
+        allocator.free(files);
+    }
+    return .{ .stdout = stdout, .stderr = stderr, .status = 124, .files = files, .timed_out = true };
 }
 
 fn normalizeBytes(allocator: std.mem.Allocator, bytes: []const u8, cwd_path: []const u8) ![]u8 {
@@ -933,7 +977,10 @@ fn snapshotFiles(allocator: std.mem.Allocator, io: std.Io, dir: std.Io.Dir) ![]F
             else => continue,
         };
         const contents = if (kind == .file)
-            try entry.dir.readFileAlloc(io, entry.basename, allocator, .limited(4096))
+            entry.dir.readFileAlloc(io, entry.basename, allocator, .limited(4096)) catch |err| switch (err) {
+                error.StreamTooLong => null,
+                else => |read_err| return read_err,
+            }
         else
             null;
         try files.append(allocator, .{ .path = path, .kind = kind, .contents = contents });
@@ -1017,6 +1064,7 @@ fn shrinkScriptAlloc(
         config.rush_path,
         &.{"--posix"},
         current,
+        config.timeout(),
     );
     errdefer rush.deinit(allocator);
     const reference = try runOne(
@@ -1028,6 +1076,7 @@ fn shrinkScriptAlloc(
         config.shell,
         config.shell_args,
         current,
+        config.timeout(),
     );
     errdefer reference.deinit(allocator);
     return .{ .script = current, .rush = rush, .reference = reference };
@@ -1055,6 +1104,7 @@ fn scriptStillMismatches(
         config.rush_path,
         &.{"--posix"},
         script,
+        config.timeout(),
     );
     defer rush.deinit(allocator);
     const reference = try runOne(
@@ -1066,6 +1116,7 @@ fn scriptStillMismatches(
         config.shell,
         config.shell_args,
         script,
+        config.timeout(),
     );
     defer reference.deinit(allocator);
     return !resultsMatch(config, rush, reference);
@@ -1090,6 +1141,7 @@ fn removeRangeAlloc(allocator: std.mem.Allocator, source: []const u8, start: usi
 }
 
 fn resultsMatch(config: Config, rush: RunResult, reference: RunResult) bool {
+    if (rush.timed_out or reference.timed_out) return false;
     const stderr_matches = !config.strict_stderr or std.mem.eql(u8, rush.stderr, reference.stderr);
     return rush.status == reference.status and
         std.mem.eql(u8, rush.stdout, reference.stdout) and
@@ -1128,6 +1180,13 @@ fn reportMismatch(
     if (rush.status != reference.status) {
         std.debug.print("status: rush={d} reference={d}\n", .{ rush.status, reference.status });
     }
+    if (rush.timed_out or reference.timed_out) {
+        std.debug.print("timeout: rush={} reference={} timeout_ms={d}\n", .{
+            rush.timed_out,
+            reference.timed_out,
+            config.timeout_ms,
+        });
+    }
     if (!std.mem.eql(u8, rush.stdout, reference.stdout)) {
         try printBytesMismatch(allocator, "stdout", rush.stdout, reference.stdout);
     }
@@ -1153,6 +1212,7 @@ fn replayCommandAlloc(allocator: std.mem.Allocator, config: Config, case_index: 
     try writer.writer.writeAll(" --features ");
     try config.features.format(&writer.writer);
     if (config.strict_stderr) try writer.writer.writeAll(" --strict-stderr");
+    try writer.writer.print(" --timeout-ms {d}", .{config.timeout_ms});
     try writer.writer.print(" --seed {d} --case {d}", .{ config.seed, case_index });
     return writer.toOwnedSlice();
 }
