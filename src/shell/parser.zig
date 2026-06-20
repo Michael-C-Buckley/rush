@@ -3214,7 +3214,7 @@ const SyntaxParser = struct {
         while (self.current().kind.isTrivia()) {
             try self.appendCurrentTokenChildTo(&for_children);
         }
-        if (self.at(.word) and !self.atWord("in")) {
+        if (self.at(.word)) {
             const candidate_name = self.current().lexeme(self.source);
             if (isName(candidate_name) or self.features.isBash()) {
                 saw_name = true;
@@ -5574,6 +5574,26 @@ test "parser builds POSIX for command nodes" {
     try std.testing.expect(found);
 }
 
+test "parser accepts in as a POSIX for loop variable name" {
+    const cases = [_][]const u8{
+        "for in in a; do echo $in; done",
+        "for in; do echo $in; done",
+    };
+
+    for (cases) |source| {
+        var result = try parse(std.testing.allocator, source, .{});
+        defer result.deinit();
+
+        try std.testing.expectEqual(@as(usize, 0), result.diagnostics.len);
+        try std.testing.expect(!result.incomplete);
+        var found = false;
+        for (result.nodes) |node| {
+            if (node.kind == .for_command) found = true;
+        }
+        try std.testing.expect(found);
+    }
+}
+
 test "parser treats reserved-looking words literally in POSIX for word lists" {
     var result = try parse(std.testing.allocator, "for x in if then do done; do echo $x; done", .{});
     defer result.deinit();
@@ -5625,13 +5645,13 @@ test "parser reports missing do in POSIX for commands" {
 }
 
 test "parser reports missing POSIX for loop variables" {
-    var missing_result = try parse(std.testing.allocator, "for in a; do echo $a; done", .{});
+    var missing_result = try parse(std.testing.allocator, "for ; do echo $a; done", .{});
     defer missing_result.deinit();
 
     try std.testing.expect(missing_result.incomplete);
     try std.testing.expectEqual(@as(usize, 1), missing_result.diagnostics.len);
     try std.testing.expectEqual(DiagnosticKind.parse_error, missing_result.diagnostics[0].kind);
-    try expectSpan(.init(0, 26), missing_result.diagnostics[0].span);
+    try expectSpan(.init(0, 22), missing_result.diagnostics[0].span);
     try std.testing.expectEqualStrings("missing loop variable in for command", missing_result.diagnostics[0].message);
 
     var invalid_result = try parse(std.testing.allocator, "for 1 in a; do echo bad; done", .{});

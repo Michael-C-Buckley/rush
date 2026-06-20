@@ -154,6 +154,31 @@
             .status = 0,
         },
         .{
+            .name = "for allows in as the loop variable name with an explicit list",
+            .script =
+            \\for in in a; do printf '<%s>\n' "$in"; done
+            ,
+            .stdout =
+            \\<a>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "for allows in as the loop variable name without an explicit list",
+            .script =
+            \\set -- a
+            \\for in; do printf '<%s>\n' "$in"; done
+            ,
+            .stdout =
+            \\<a>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "for recognizes do as the third word when in is omitted",
             .script =
             \\set -- a b

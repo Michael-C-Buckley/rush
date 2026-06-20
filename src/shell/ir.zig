@@ -1978,7 +1978,7 @@ fn lowerForCommand(allocator: std.mem.Allocator, parsed: parser.ParseResult, nod
             if (body_node == null) {
                 if (wordEqualsRemovingLineContinuations(lexeme, "for")) continue;
                 if (name_token == null) {
-                    if (!wordEqualsRemovingLineContinuations(lexeme, "in")) name_token = token_index;
+                    name_token = token_index;
                 } else if (in_token == null and wordEqualsRemovingLineContinuations(lexeme, "in")) {
                     in_token = token_index;
                 }
