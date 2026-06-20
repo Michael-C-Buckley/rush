@@ -53,6 +53,7 @@ const FeatureSet = packed struct {
     pipeline: bool = true,
     negation: bool = true,
     break_continue: bool = true,
+    arith: bool = true,
 
     const default: FeatureSet = .{
         .fd = true,
@@ -69,6 +70,7 @@ const FeatureSet = packed struct {
         .pipeline = true,
         .negation = true,
         .break_continue = true,
+        .arith = true,
     };
 
     fn parse(text: []const u8) ?FeatureSet {
@@ -87,6 +89,7 @@ const FeatureSet = packed struct {
             .pipeline = false,
             .negation = false,
             .break_continue = false,
+            .arith = false,
         };
         var saw_feature = false;
         var iterator = std.mem.splitScalar(u8, text, ',');
@@ -136,6 +139,9 @@ const FeatureSet = packed struct {
             } else if (std.mem.eql(u8, feature, "break_continue")) {
                 features.break_continue = true;
                 saw_feature = true;
+            } else if (std.mem.eql(u8, feature, "arith")) {
+                features.arith = true;
+                saw_feature = true;
             } else {
                 return null;
             }
@@ -159,6 +165,7 @@ const FeatureSet = packed struct {
         if (self.pipeline) try writer.writeAll(",pipeline");
         if (self.negation) try writer.writeAll(",negation");
         if (self.break_continue) try writer.writeAll(",break_continue");
+        if (self.arith) try writer.writeAll(",arith");
     }
 };
 
@@ -436,7 +443,7 @@ fn writeUsage(io: std.Io) !void {
         \\  --case N            run only one generated case index
         \\  --features LIST     comma-separated features:
         \\                       base,fd,params,lists,redir,cmdsub,func,alias,loops,ifs,cases,while,
-        \\                       pipeline,negation,break_continue (default: all)
+        \\                       pipeline,negation,break_continue,arith (default: all)
         \\  --print-cases       print each generated shell script before running it
         \\  --timeout-ms N      per-command timeout in milliseconds, or 0 to disable (default: Debug 5000, Release 1000)
         \\  --keep-temp         keep the temporary sandbox
@@ -1247,6 +1254,38 @@ const BreakContinueProbe = enum {
     }
 };
 
+const ArithmeticProbe = enum {
+    addition,
+    variable_reference,
+    assignment_result,
+    increment_loop,
+    quoted_expansion,
+
+    fn random(random_source: std.Random) ArithmeticProbe {
+        return @enumFromInt(random_source.uintLessThan(u3, 5));
+    }
+
+    fn render(self: ArithmeticProbe, writer: *std.Io.Writer) !void {
+        switch (self) {
+            .addition => try writer.writeAll(
+                "printf '[%s]\n' $((1 + 2 * 3))",
+            ),
+            .variable_reference => try writer.writeAll(
+                "i=4; printf '[%s]\n' $((i + 1))",
+            ),
+            .assignment_result => try writer.writeAll(
+                "i=1; i=$((i + 2)); printf '[%s]\n' \"$i\"",
+            ),
+            .increment_loop => try writer.writeAll(
+                "i=0; while [ \"$i\" -lt 3 ]; do i=$((i + 1)); done; printf '[%s]\n' \"$i\"",
+            ),
+            .quoted_expansion => try writer.writeAll(
+                "printf '[%s]\n' \"$((7 - 2))\"",
+            ),
+        }
+    }
+};
+
 const DirName = enum {
     d,
     e,
@@ -1367,6 +1406,7 @@ const Command = union(enum) {
     pipeline_probe: PipelineProbe,
     negation_probe: NegationProbe,
     break_continue_probe: BreakContinueProbe,
+    arithmetic_probe: ArithmeticProbe,
     print_to_file: struct { value: Value, file: FileName },
     cat_file: FileName,
     subshell: []Command,
@@ -1442,9 +1482,13 @@ const Command = union(enum) {
             .top_level => 1,
             .inline_compound => if (depth < 2) 1 else 0,
         } else 0;
+        const arith_count: u8 = if (features.arith) switch (mode) {
+            .top_level => 1,
+            .inline_compound => if (depth < 2) 1 else 0,
+        } else 0;
         const choice_count = base_count + fd_count + params_count + positional_count + lists_count + redir_count +
             cmdsub_count + func_count + alias_count + loops_count + ifs_count + cases_count + while_count +
-            pipeline_count + negation_count + break_continue_count;
+            pipeline_count + negation_count + break_continue_count + arith_count;
         const choice = random.uintLessThan(
             u8,
             choice_count,
@@ -1546,6 +1590,8 @@ const Command = union(enum) {
         if (feature_choice < break_continue_count) {
             return .{ .break_continue_probe = BreakContinueProbe.random(random) };
         }
+        feature_choice -= break_continue_count;
+        if (feature_choice < arith_count) return .{ .arithmetic_probe = ArithmeticProbe.random(random) };
         unreachable;
     }
 
@@ -1603,6 +1649,7 @@ const Command = union(enum) {
             .pipeline_probe => |pipeline_probe| try pipeline_probe.render(writer),
             .negation_probe => |negation_probe| try negation_probe.render(writer),
             .break_continue_probe => |break_continue_probe| try break_continue_probe.render(writer),
+            .arithmetic_probe => |arithmetic_probe| try arithmetic_probe.render(writer),
             .print_to_file => |print| try writer.print(
                 "printf '%s\\n' {s} > {s}",
                 .{ print.value.shell(), print.file.shell() },
