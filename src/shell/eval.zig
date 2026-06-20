@@ -12689,8 +12689,7 @@ fn evaluateExternalWithProcessEnvironment(
         return normalizeWaitStatus(run_result.status);
     }
 
-    const external_capture_mode = capturedExternalMode(evaluator.external_stdio) orelse
-        if (eval_context.target.isIsolatedFromParent()) CapturedExternalMode.stdout_and_stderr else null;
+    const external_capture_mode = try externalCaptureMode(evaluator.*, eval_context, plan, buffers);
     if (external_capture_mode) |capture_mode| {
         try flushCapturedExternalPrecedingOutput(buffers, capture_mode);
         return evaluateCapturedExternal(
@@ -12761,6 +12760,44 @@ fn capturedExternalMode(external_stdio: ExternalStdio) ?CapturedExternalMode {
     };
 }
 
+fn externalCaptureMode(
+    evaluator: Evaluator,
+    eval_context: context.EvalContext,
+    plan: command_plan.CommandPlan,
+    buffers: *EvaluationBuffers,
+) EvalError!?CapturedExternalMode {
+    plan.validate();
+    if (capturedExternalMode(evaluator.external_stdio) == null and
+        !eval_context.target.isIsolatedFromParent()) return null;
+
+    var frame = try buffers.outputFrame();
+    defer frame.deinit();
+    try applyOutputRoutingRedirections(evaluator, &frame.routing, plan.redirections);
+    const stdout_captured = outputDestinationCaptures(frame.routing.destination(1));
+    const stderr_captured = outputDestinationCaptures(frame.routing.destination(2));
+    if (!stdout_captured and !stderr_captured) return null;
+    return switch (evaluator.external_stdio) {
+        .capture_stdout => if (stdout_captured) .stdout else null,
+        .capture => if (stdout_captured) .stdout_and_stderr else null,
+        .inherit_output, .inherit => if (stdout_captured) .stdout_and_stderr else null,
+    };
+}
+
+fn outputDestinationCaptures(destination: OutputDestination) bool {
+    return switch (destination) {
+        .outcome_stdout_capture,
+        .outcome_stderr_capture,
+        .command_substitution_side_stdout_capture,
+        .pipeline_data_capture,
+        .command_substitution_stdout_capture,
+        .command_substitution_stderr_capture,
+        => true,
+        .host_descriptor,
+        .closed,
+        => false,
+    };
+}
+
 fn evaluateCapturedExternal(
     evaluator: *Evaluator,
     process_port: runtime.process.Port,
@@ -12828,11 +12865,9 @@ fn flushCapturedExternalPrecedingOutput(
     buffers: *EvaluationBuffers,
     capture_mode: CapturedExternalMode,
 ) EvalError!void {
-    var frame = switch (capture_mode) {
-        .stdout => OutputFrame.initOutcomeCapture(buffers),
-        .stdout_and_stderr => OutputFrame.initCommandSubstitution(buffers),
-    };
+    var frame = try buffers.outputFrame();
     defer frame.deinit();
+    if (capture_mode == .stdout) try frame.routing.setDestination(2, .closed);
     try frame.flushPendingStandardDescriptors();
 }
 
@@ -12842,10 +12877,7 @@ fn flushChildShellBufferedCommandOutput(
 ) EvalError!void {
     eval_context.validate();
     if (eval_context.target == .current_shell) return;
-    var frame = if (eval_context.command_substitution_depth != 0)
-        OutputFrame.initCommandSubstitution(buffers)
-    else
-        OutputFrame.initOutcomeCapture(buffers);
+    var frame = try buffers.outputFrame();
     defer frame.deinit();
     try frame.flushPendingStandardDescriptors();
 }
@@ -12861,10 +12893,7 @@ fn appendCapturedExternalOutput(
     plan.validate();
     switch (capture_mode) {
         .stdout => {
-            var frame = if (buffers.frame.spec.kind == .pipeline_stage)
-                try buffers.outputFrame()
-            else
-                OutputFrame.initOutcomeCapture(buffers);
+            var frame = try buffers.outputFrame();
             defer frame.deinit();
             if (buffers.frame.spec.kind != .pipeline_stage) {
                 try frame.routing.setDestination(2, .closed);
@@ -12874,10 +12903,7 @@ fn appendCapturedExternalOutput(
             try frame.write(2, stderr);
         },
         .stdout_and_stderr => {
-            var frame = if (buffers.frame.spec.kind == .pipeline_stage)
-                try buffers.outputFrame()
-            else
-                OutputFrame.initCommandSubstitution(buffers);
+            var frame = try buffers.outputFrame();
             defer frame.deinit();
             if (buffers.frame.spec.kind != .pipeline_stage) {
                 try applyOutputRoutingRedirections(evaluator, &frame.routing, plan.redirections);
@@ -12926,8 +12952,7 @@ fn runExternalWithPipelineInputWithProcessEnvironment(
 
     var redirection_guard = RedirectionGuard.empty(.child_only);
     defer redirection_guard.restore();
-    const external_capture_mode = capturedExternalMode(evaluator.external_stdio) orelse
-        if (eval_context.target.isIsolatedFromParent()) CapturedExternalMode.stdout_and_stderr else null;
+    const external_capture_mode = try externalCaptureMode(evaluator.*, eval_context, plan, buffers);
     if (external_capture_mode) |capture_mode| {
         if (buffers.frame.spec.kind != .pipeline_stage) try flushCapturedExternalPrecedingOutput(buffers, capture_mode);
     } else if (buffers.frame.spec.kind != .pipeline_stage) {
@@ -12967,10 +12992,7 @@ fn runExternalWithPipelineInputWithProcessEnvironment(
     };
     defer run_result.deinit();
 
-    var frame = if (buffers.frame.spec.kind == .pipeline_stage)
-        try buffers.outputFrame()
-    else
-        OutputFrame.initOutcomeCapture(buffers);
+    var frame = try buffers.outputFrame();
     defer frame.deinit();
     if (buffers.frame.spec.kind != .pipeline_stage) {
         try applyOutputRoutingRedirections(evaluator.*, &frame.routing, plan.redirections);

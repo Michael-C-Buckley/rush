@@ -1141,7 +1141,7 @@ fn removeRangeAlloc(allocator: std.mem.Allocator, source: []const u8, start: usi
 }
 
 fn resultsMatch(config: Config, rush: RunResult, reference: RunResult) bool {
-    if (rush.timed_out or reference.timed_out) return false;
+    if (rush.timed_out or reference.timed_out) return rush.timed_out == reference.timed_out;
     const stderr_matches = !config.strict_stderr or std.mem.eql(u8, rush.stderr, reference.stderr);
     return rush.status == reference.status and
         std.mem.eql(u8, rush.stdout, reference.stdout) and
