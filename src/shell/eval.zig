@@ -9419,6 +9419,8 @@ fn completeStatementChildResult(
             evaluator.external_stdio,
             evaluator.io != null,
         );
+    } else if (buffers.frame.spec.kind == .trap_handler) {
+        try flushLiveInheritedBufferedOutput(buffers, eval_context, evaluator.io != null);
     } else if (!(buffers.frame.spec.eval_target != .current_shell and buffers.frame.spec.kind != .pipeline_stage)) {
         try flushChildShellBufferedCommandOutput(buffers, eval_context);
         try flushLiveInheritedBufferedOutput(buffers, eval_context, evaluator.io != null);
@@ -10358,7 +10360,7 @@ fn flushBuffersForRedirectionTargetsBetweenCommands(
     const flush_stdout = buffers.stdout.items.len != 0 and redirectionTargetsDescriptor(redirections, 1);
     const flush_stderr = buffers.stderr.items.len != 0 and redirectionTargetsDescriptor(redirections, 2);
     if (!flush_stdout and !flush_stderr) return;
-    if (eval_context.target != .current_shell) return flushChildShellBufferedCommandOutput(buffers, eval_context);
+    if (eval_context.target != .current_shell or eval_context.subshell_depth != 0) return;
     switch (external_stdio) {
         .capture => return,
         .capture_stdout => {
@@ -10380,6 +10382,8 @@ fn flushBuffersForSourceRedirectionTargets(
     eval_context.validate();
     source.validate();
     if (eval_context.command_substitution_depth != 0) return;
+    if (eval_context.target != .current_shell or eval_context.subshell_depth != 0) return;
+    if (!buffers.frame.spec.kind.isParentVisible()) return;
     if (external_stdio == .capture) return;
     var frame = OutputFrame.initInherited(buffers);
     defer frame.deinit();
@@ -10396,6 +10400,8 @@ fn flushBuffersForIrSourceRedirectionTargets(
     eval_context.validate();
     source.validate();
     if (eval_context.command_substitution_depth != 0) return;
+    if (eval_context.target != .current_shell or eval_context.subshell_depth != 0) return;
+    if (!buffers.frame.spec.kind.isParentVisible()) return;
     if (external_stdio == .capture) return;
     var frame = OutputFrame.initInherited(buffers);
     defer frame.deinit();
@@ -11479,11 +11485,11 @@ fn appendOutcomeBuffers(buffers: *EvaluationBuffers, command_outcome: outcome.Co
         }
         return;
     }
+    try buffers.pipeline_stdout.appendSlice(buffers.allocator, command_outcome.pipeline_stdout.items);
     var frame = try buffers.outputFrame();
     defer frame.deinit();
     try frame.write(1, command_outcome.stdout.items);
     try frame.write(2, command_outcome.stderr.items);
-    try buffers.pipeline_stdout.appendSlice(buffers.allocator, command_outcome.pipeline_stdout.items);
     for (command_outcome.diagnostics.items) |diagnostic| {
         try buffers.addDiagnosticMessage(diagnostic.message);
     }
@@ -11511,11 +11517,11 @@ fn appendStatementChildOutcomeBuffers(buffers: *EvaluationBuffers, command_outco
         try side_frame.write(1, command_outcome.side_stdout.items);
     }
 
+    try buffers.pipeline_stdout.appendSlice(buffers.allocator, command_outcome.pipeline_stdout.items);
     var frame = OutputFrame.initOutcomeCapture(buffers);
     defer frame.deinit();
     try frame.write(1, command_outcome.stdout.items);
     try frame.write(2, command_outcome.stderr.items);
-    try buffers.pipeline_stdout.appendSlice(buffers.allocator, command_outcome.pipeline_stdout.items);
     for (command_outcome.diagnostics.items) |diagnostic| {
         try buffers.addDiagnosticMessage(diagnostic.message);
     }
@@ -11549,12 +11555,12 @@ fn appendPipelineStageBuffers(
 
     var frame = OutputFrame.initOutcomeCapture(buffers);
     defer frame.deinit();
-    try frame.write(1, command_outcome.stdout.items);
-    try frame.write(2, command_outcome.stderr.items);
     switch (route) {
         .pipeline_data_only => {},
         .parent_output => try frame.write(1, command_outcome.pipeline_stdout.items),
     }
+    try frame.write(1, command_outcome.stdout.items);
+    try frame.write(2, command_outcome.stderr.items);
     for (command_outcome.diagnostics.items) |diagnostic| {
         try buffers.addDiagnosticMessage(diagnostic.message);
     }
@@ -13326,13 +13332,16 @@ fn runExternalWithPipelineInputWithProcessEnvironment(
         }
     }
 
-    const stdin_source = if (semanticHereDocStdinSource(plan.redirections)) |source|
+    const here_doc_stdin_source = semanticHereDocStdinSource(plan.redirections);
+    const stdin_source = if (here_doc_stdin_source) |source|
         source.bytes()
     else if (redirectionTargetsDescriptor(plan.redirections, 0))
         ""
     else
         buffers.stdin.takeRemaining();
-    const stdin_stdio: runtime.process.StandardIo = if (redirectionTargetsDescriptor(plan.redirections, 0))
+    const stdin_stdio: runtime.process.StandardIo = if (here_doc_stdin_source != null)
+        .pipe
+    else if (redirectionTargetsDescriptor(plan.redirections, 0))
         .inherit
     else
         .pipe;
