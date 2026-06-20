@@ -972,7 +972,10 @@ const Command = union(enum) {
             .top_level => 2,
             .inline_compound => 1,
         } else 0;
-        const func_count: u8 = if (features.func and mode == .top_level) 2 else 0;
+        const func_count: u8 = if (features.func) switch (mode) {
+            .top_level => 2,
+            .inline_compound => if (depth < 2) 1 else 0,
+        } else 0;
         const choice_count = base_count + fd_count + params_count + positional_count + lists_count + redir_count +
             cmdsub_count + func_count;
         const choice = random.uintLessThan(
