@@ -281,6 +281,46 @@
             .status = 0,
         },
         .{
+            .name = "nested pipeline last stage preserves enclosing pipeline output",
+            .script =
+            \\{ exec 3>&1; { printf a >&3; printf b; } | cat; printf c; } | cat
+            \\printf '\n'
+            ,
+            .stdout =
+            \\abc
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "nested pipeline inherited output enters transformed enclosing pipeline",
+            .script =
+            \\{ exec 3>&1; { printf 'a\n' >&3; printf 'b\n'; } | cat; printf 'c\n'; } | sed 's/^/[p]/'
+            ,
+            .stdout =
+            \\[p]a
+            \\[p]b
+            \\[p]c
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "for pipeline redirection to inherited stdout bypasses stage pipe",
+            .script =
+            \\{ exec 3>&1; for x in a b; do printf "$x" >&3; done | cat; printf c; } | cat
+            \\printf '\n'
+            ,
+            .stdout =
+            \\abc
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "nested command substitution keeps inherited pipeline output before outer output",
             .script =
             \\{ exec 3>&1; printf '%s\n' "$(printf '%s' "$(printf inner >&3; printf outer)")"; } | cat

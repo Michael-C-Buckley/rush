@@ -4632,7 +4632,11 @@ fn evaluatePlanWithInput(
             else => |e| return e,
         };
     }
-    if (frameRoutesPipelineData(command_frame)) try routeDirectPipelineStageBuffers(&buffers);
+    if (frameRoutesCapturedOutput(command_frame) and eval_context.command_substitution_depth == 0 and
+        eval_context.pipeline_depth != 0)
+    {
+        try routeDirectPipelineStageBuffers(&buffers);
+    }
     state_delta.setLastStatus(result.status);
     assertCommandDeltaCompatible(effective_plan, state_delta);
     const decision = if (specialBuiltinStatusOnly(effective_plan, result, buffers))
@@ -4927,32 +4931,10 @@ fn frameTargetsInheritedStandardDescriptors(frame: execution_frame.ExecutionFram
 
 fn routeDirectPipelineStageBuffers(buffers: *EvaluationBuffers) EvalError!void {
     buffers.frame.validate();
-    std.debug.assert(frameRoutesPipelineData(buffers.frame.*));
+    std.debug.assert(frameRoutesCapturedOutput(buffers.frame.*));
 
-    try routeDirectPipelineStageSideStdout(buffers);
     try routeDirectPipelineStageBuffer(buffers, 1, &buffers.stdout);
     try routeDirectPipelineStageBuffer(buffers, 2, &buffers.stderr);
-}
-
-fn routeDirectPipelineStageSideStdout(buffers: *EvaluationBuffers) EvalError!void {
-    buffers.frame.validate();
-    if (buffers.side_stdout.items.len == 0) return;
-
-    switch (buffers.frame.spec.fd_table.endpoint(1)) {
-        .output => |output| switch (output) {
-            .capture => |channel| switch (channel) {
-                .pipeline_data => {
-                    try buffers.pipeline_stdout.appendSlice(buffers.allocator, buffers.side_stdout.items);
-                    buffers.side_stdout.items.len = 0;
-                },
-                .side_stdout, .side_stderr, .command_substitution_stdout => {},
-            },
-            .discard => buffers.side_stdout.items.len = 0,
-            .inherit_stdout, .inherit_stderr, .fd, .pipe_write, .path => {},
-        },
-        .closed => buffers.side_stdout.items.len = 0,
-        .input => buffers.side_stdout.items.len = 0,
-    }
 }
 
 fn routeDirectPipelineStageBuffer(
@@ -4966,11 +4948,10 @@ fn routeDirectPipelineStageBuffer(
     switch (buffers.frame.spec.fd_table.endpoint(descriptor)) {
         .output => |output| switch (output) {
             .capture => |channel| switch (channel) {
-                .pipeline_data => {
-                    try buffers.pipeline_stdout.appendSlice(buffers.allocator, source.items);
-                    source.items.len = 0;
-                },
-                .side_stdout, .side_stderr, .command_substitution_stdout => {},
+                .pipeline_data => try moveBufferedOutput(buffers.allocator, source, &buffers.pipeline_stdout),
+                .side_stdout => try moveBufferedOutput(buffers.allocator, source, &buffers.side_stdout),
+                .side_stderr => try moveBufferedOutput(buffers.allocator, source, &buffers.stderr),
+                .command_substitution_stdout => {},
             },
             .discard => source.items.len = 0,
             .inherit_stdout, .inherit_stderr, .fd, .pipe_write, .path => {},
@@ -4978,6 +4959,16 @@ fn routeDirectPipelineStageBuffer(
         .closed => source.items.len = 0,
         .input => source.items.len = 0,
     }
+}
+
+fn moveBufferedOutput(
+    allocator: std.mem.Allocator,
+    source: *std.ArrayList(u8),
+    dest: *std.ArrayList(u8),
+) !void {
+    if (source == dest) return;
+    try dest.appendSlice(allocator, source.items);
+    source.items.len = 0;
 }
 
 const OutputDestination = union(enum) {
@@ -6317,7 +6308,11 @@ fn evaluateCompoundPlanWithInput(
     if (redirection_guard.hasTransaction() and !redirection_output_flushed) {
         try flushBufferedRedirectionOutput(evaluator.*, &buffers, plan.redirections, eval_context, .{});
     }
-    if (frameRoutesPipelineData(command_frame)) try routeDirectPipelineStageBuffers(&buffers);
+    if (frameRoutesCapturedOutput(command_frame) and eval_context.command_substitution_depth == 0 and
+        eval_context.pipeline_depth != 0)
+    {
+        try routeDirectPipelineStageBuffers(&buffers);
+    }
 
     return commandOutcomeFromBuffers(
         evaluator.allocator,
@@ -11137,9 +11132,9 @@ fn appendOutcomeBuffers(buffers: *EvaluationBuffers, command_outcome: outcome.Co
         }
         return;
     }
+    try buffers.side_stdout.appendSlice(buffers.allocator, command_outcome.side_stdout.items);
     var frame = try buffers.outputFrame();
     defer frame.deinit();
-    try frame.write(1, command_outcome.side_stdout.items);
     try frame.write(1, command_outcome.stdout.items);
     try frame.write(2, command_outcome.stderr.items);
     try buffers.pipeline_stdout.appendSlice(buffers.allocator, command_outcome.pipeline_stdout.items);
@@ -11172,10 +11167,15 @@ fn appendPipelineStageBuffers(
 
     var frame = OutputFrame.initOutcomeCapture(buffers);
     defer frame.deinit();
-    switch (route) {
-        .pipeline_data_only, .parent_output => try frame.write(1, command_outcome.stdout.items),
-    }
+    try frame.write(1, command_outcome.stdout.items);
     try frame.write(2, command_outcome.stderr.items);
+    switch (route) {
+        .pipeline_data_only => {},
+        .parent_output => try buffers.pipeline_stdout.appendSlice(
+            buffers.allocator,
+            command_outcome.pipeline_stdout.items,
+        ),
+    }
     for (command_outcome.diagnostics.items) |diagnostic| {
         try buffers.addDiagnosticMessage(diagnostic.message);
     }
