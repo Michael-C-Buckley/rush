@@ -321,6 +321,60 @@
             .status = 0,
         },
         .{
+            .name = "compound pipeline redirection to inherited stdout bypasses while pipe",
+            .script =
+            \\{ exec 3>&1; { printf a >&3; printf b; } | while read -r x; do printf '<%s>' "$x"; done; printf c; } | cat
+            \\printf '\n'
+            ,
+            .stdout =
+            \\ac
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "compound pipeline inherited stdout bypasses while input records",
+            .script =
+            \\{ exec 3>&1; { printf 'a\n' >&3; printf 'b\n'; } | while read -r x; do printf '<%s>' "$x"; done; printf c; } | cat
+            \\printf '\n'
+            ,
+            .stdout =
+            \\a
+            \\<b>c
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "subshell pipeline redirection to inherited stdout bypasses while pipe",
+            .script =
+            \\{ exec 3>&1; ( printf a >&3; printf b; ) | while read -r x; do printf '<%s>' "$x"; done; printf c; } | cat
+            \\printf '\n'
+            ,
+            .stdout =
+            \\ac
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "function pipeline redirection to inherited stdout bypasses while pipe",
+            .script =
+            \\f(){ printf a >&3; printf b; }
+            \\{ exec 3>&1; f | while read -r x; do printf '<%s>' "$x"; done; printf c; } | cat
+            \\printf '\n'
+            ,
+            .stdout =
+            \\ac
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "nested command substitution keeps inherited pipeline output before outer output",
             .script =
             \\{ exec 3>&1; printf '%s\n' "$(printf '%s' "$(printf inner >&3; printf outer)")"; } | cat

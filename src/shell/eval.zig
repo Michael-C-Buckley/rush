@@ -380,6 +380,7 @@ fn semanticCommandExecutionFrame(
     if (inherit_scoped) if (scoped_exec_redirections) |scoped_list| {
         for (scoped_list.items) |scoped| try fd_table.applyRedirectionPlan(allocator, scoped.redirections);
     };
+    if (parent_frame.spec.kind == .pipeline_stage) normalizeInheritedPipelineCapturesForPipelineStage(&fd_table);
     try fd_table.applyRedirectionPlan(allocator, redirections);
     const stdin: execution_frame.InputEndpoint = switch (fd_table.boundEndpoint(0) orelse
         @as(execution_frame.FdEndpoint, .{ .input = parent_frame.spec.stdin })) {
