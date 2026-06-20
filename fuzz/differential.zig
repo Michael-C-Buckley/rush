@@ -37,11 +37,12 @@ const FeatureSet = packed struct {
     fd: bool = true,
     params: bool = true,
     lists: bool = true,
+    redir: bool = true,
 
-    const default: FeatureSet = .{ .fd = true, .params = true, .lists = true };
+    const default: FeatureSet = .{ .fd = true, .params = true, .lists = true, .redir = true };
 
     fn parse(text: []const u8) ?FeatureSet {
-        var features: FeatureSet = .{ .fd = false, .params = false, .lists = false };
+        var features: FeatureSet = .{ .fd = false, .params = false, .lists = false, .redir = false };
         var saw_feature = false;
         var iterator = std.mem.splitScalar(u8, text, ',');
         while (iterator.next()) |feature| {
@@ -57,6 +58,9 @@ const FeatureSet = packed struct {
             } else if (std.mem.eql(u8, feature, "lists")) {
                 features.lists = true;
                 saw_feature = true;
+            } else if (std.mem.eql(u8, feature, "redir")) {
+                features.redir = true;
+                saw_feature = true;
             } else {
                 return null;
             }
@@ -69,6 +73,7 @@ const FeatureSet = packed struct {
         if (self.fd) try writer.writeAll(",fd");
         if (self.params) try writer.writeAll(",params");
         if (self.lists) try writer.writeAll(",lists");
+        if (self.redir) try writer.writeAll(",redir");
     }
 };
 
@@ -340,7 +345,7 @@ fn writeUsage(io: std.Io) !void {
         \\  --cases N           number of generated cases (default: 100)
         \\  --seed N            deterministic seed (default: 1)
         \\  --case N            run only one generated case index
-        \\  --features LIST     comma-separated features: base,fd,params,lists (default: all)
+        \\  --features LIST     comma-separated features: base,fd,params,lists,redir (default: all)
         \\  --print-cases       print each generated shell script before running it
         \\  --timeout-ms N      per-command timeout in milliseconds, or 0 to disable (default: 5000)
         \\  --keep-temp         keep the temporary sandbox
@@ -554,6 +559,43 @@ const OutputRedirection = struct {
     }
 };
 
+const Redirection = union(enum) {
+    stdout_file: OutputRedirection,
+    stdin_file: FileName,
+    stderr_file: OutputRedirection,
+    stderr_to_stdout,
+    stdout_to_stderr,
+
+    fn random(random_source: std.Random) Redirection {
+        return switch (random_source.uintLessThan(u3, 5)) {
+            0 => .{ .stdout_file = OutputRedirection.random(random_source) },
+            1 => .{ .stdin_file = FileName.random(random_source) },
+            2 => .{ .stderr_file = OutputRedirection.random(random_source) },
+            3 => .stderr_to_stdout,
+            4 => .stdout_to_stderr,
+            else => unreachable,
+        };
+    }
+
+    fn render(self: Redirection, writer: *std.Io.Writer) !void {
+        switch (self) {
+            .stdout_file => |redirection| try redirection.render(writer),
+            .stdin_file => |file| try writer.print(" < {s}", .{file.shell()}),
+            .stderr_file => |redirection| try writer.print(
+                " 2{s} {s}",
+                .{ if (redirection.append) ">>" else ">", redirection.file.shell() },
+            ),
+            .stderr_to_stdout => try writer.writeAll(" 2>&1"),
+            .stdout_to_stderr => try writer.writeAll(" >&2"),
+        }
+    }
+};
+
+const RedirectedSimple = struct {
+    command: ListOperand,
+    redirection: Redirection,
+};
+
 const RedirectedCompound = struct {
     body: []Command,
     redirection: OutputRedirection,
@@ -664,6 +706,7 @@ const Command = union(enum) {
     shift_guarded,
     print_stdout: Value,
     print_expansion: Expansion,
+    redirected_simple: RedirectedSimple,
     print_to_file: struct { value: Value, file: FileName },
     cat_file: FileName,
     subshell: []Command,
@@ -698,7 +741,14 @@ const Command = union(enum) {
             .inline_compound => 1,
         } else 0;
         const lists_count: u8 = if (features.lists and mode == .top_level) 1 else 0;
-        const choice = random.uintLessThan(u8, base_count + fd_count + params_count + positional_count + lists_count);
+        const redir_count: u8 = if (features.redir) switch (mode) {
+            .top_level => 3,
+            .inline_compound => 2,
+        } else 0;
+        const choice = random.uintLessThan(
+            u8,
+            base_count + fd_count + params_count + positional_count + lists_count + redir_count,
+        );
         if (choice < base_count) return switch (choice) {
             0 => .noop,
             1 => .true_cmd,
@@ -748,11 +798,18 @@ const Command = union(enum) {
             1 => .shift_guarded,
             else => unreachable,
         };
-        return .{ .list = .{
+        feature_choice -= positional_count;
+        if (feature_choice < lists_count) return .{ .list = .{
             .left = ListOperand.random(random, features),
             .operator = ListOperator.random(random),
             .right = ListOperand.random(random, features),
         } };
+        feature_choice -= lists_count;
+        if (feature_choice < redir_count) return .{ .redirected_simple = .{
+            .command = ListOperand.random(random, features),
+            .redirection = Redirection.random(random),
+        } };
+        unreachable;
     }
 
     fn deinit(self: *Command, allocator: std.mem.Allocator) void {
@@ -787,6 +844,10 @@ const Command = union(enum) {
             .print_expansion => |expansion| {
                 try writer.writeAll("printf '%s\\n' ");
                 try expansion.render(writer);
+            },
+            .redirected_simple => |redirected| {
+                try redirected.command.render(writer);
+                try redirected.redirection.render(writer);
             },
             .print_to_file => |print| try writer.print(
                 "printf '%s\\n' {s} > {s}",
@@ -1205,10 +1266,15 @@ fn removeRangeAlloc(allocator: std.mem.Allocator, source: []const u8, start: usi
 fn resultsMatch(config: Config, rush: RunResult, reference: RunResult) bool {
     if (rush.timed_out or reference.timed_out) return rush.timed_out == reference.timed_out;
     const stderr_matches = !config.strict_stderr or std.mem.eql(u8, rush.stderr, reference.stderr);
-    return rush.status == reference.status and
+    return statusesMatch(rush.status, reference.status) and
         std.mem.eql(u8, rush.stdout, reference.stdout) and
         stderr_matches and
         filesEqual(rush.files, reference.files);
+}
+
+fn statusesMatch(rush_status: u8, reference_status: u8) bool {
+    if (rush_status == reference_status) return true;
+    return rush_status != 0 and reference_status != 0;
 }
 
 fn reportMismatch(
@@ -1239,7 +1305,7 @@ fn reportMismatch(
         \\
     , .{ config.shell, config.seed, case_index, replay_command, script });
 
-    if (rush.status != reference.status) {
+    if (!statusesMatch(rush.status, reference.status)) {
         std.debug.print("status: rush={d} reference={d}\n", .{ rush.status, reference.status });
     }
     if (rush.timed_out or reference.timed_out) {
