@@ -5,39 +5,39 @@
         .{
             .name = "semantic output flushes before later subshell branch output",
             .script =
-                \\env 1BAD=x printenv 1BAD
-                \\env 1BAD=x | grep '^1BAD='
-                \\FOO=outer
-                \\readonly FOO
-                \\env FOO=inner printenv FOO
-                \\printf 'after:%s\n' "$FOO"
-                \\if ( export 1BAD=x ) 2>/dev/null
-                \\then
-                \\    printf 'export-bad\n'
-                \\else
-                \\    printf 'export-invalid\n'
-                \\fi
+            \\env 1BAD=x printenv 1BAD
+            \\env 1BAD=x | grep '^1BAD='
+            \\FOO=outer
+            \\readonly FOO
+            \\env FOO=inner printenv FOO
+            \\printf 'after:%s\n' "$FOO"
+            \\if ( export 1BAD=x ) 2>/dev/null
+            \\then
+            \\    printf 'export-bad\n'
+            \\else
+            \\    printf 'export-invalid\n'
+            \\fi
             ,
             .stdout = "x\n1BAD=x\ninner\nafter:outer\nexport-invalid\n",
         },
         .{
             .name = "command -V statuses print in statement order",
             .script =
-                \\command -V command >/dev/null
-                \\printf '<%s>\n' "$?"
-                \\command -V no_such_posix_command_for_rush >/dev/null 2>/dev/null
-                \\case $? in 0) printf 'zero\n';; *) printf 'nonzero\n';; esac
+            \\command -V command >/dev/null
+            \\printf '<%s>\n' "$?"
+            \\command -V no_such_posix_command_for_rush >/dev/null 2>/dev/null
+            \\case $? in 0) printf 'zero\n';; *) printf 'nonzero\n';; esac
             ,
             .stdout = "<0>\nnonzero\n",
         },
         .{
             .name = "subshell redirection operand output precedes following parent output",
             .script =
-                \\exec 2>&1
-                \\( exec >"$(printf out; printf 'redir\n' >&2)"; printf 'inner\n' )
-                \\printf 'after\n'
-                \\cat out
-                \\rm -f out
+            \\exec 2>&1
+            \\( exec >"$(printf out; printf 'redir\n' >&2)"; printf 'inner\n' )
+            \\printf 'after\n'
+            \\cat out
+            \\rm -f out
             ,
             .stdout = "redir\nafter\ninner\n",
         },

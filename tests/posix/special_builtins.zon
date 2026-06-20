@@ -394,7 +394,7 @@
         },
         .{
             .name = "xtrace invocation option traces the first command",
-            .shell_args = .{ "-x" },
+            .shell_args = .{"-x"},
             .script =
             \\echo hi
             ,

@@ -5,24 +5,24 @@
         .{
             .name = "EXIT trap exec preserves preceding top-level output order",
             .script =
-                \\trap 'echo T; exec /bin/echo EXECED' EXIT
-                \\echo BODY
+            \\trap 'echo T; exec /bin/echo EXECED' EXIT
+            \\echo BODY
             ,
             .stdout = "BODY\nT\nEXECED\n",
         },
         .{
             .name = "EXIT trap installed by function runs after later top-level commands",
             .script =
-                \\f(){ trap 'echo T; exec /bin/echo EXECED' EXIT; echo BODY; }
-                \\f
-                \\echo AFTER:$?
+            \\f(){ trap 'echo T; exec /bin/echo EXECED' EXIT; echo BODY; }
+            \\f
+            \\echo AFTER:$?
             ,
             .stdout = "BODY\nAFTER:0\nT\nEXECED\n",
         },
         .{
             .name = "subshell EXIT trap exec preserves body output before trap output",
             .script =
-                \\(trap 'echo T; exec /bin/echo EXECED' EXIT; echo BODY); echo AFTER:$?
+            \\(trap 'echo T; exec /bin/echo EXECED' EXIT; echo BODY); echo AFTER:$?
             ,
             .stdout = "BODY\nT\nEXECED\nAFTER:0\n",
         },
