@@ -12,6 +12,7 @@ const Config = struct {
     keep_temp: bool = false,
     strict_stderr: bool = false,
     features: FeatureSet = .default,
+    print_cases: bool = false,
 
     fn deinit(self: Config, allocator: std.mem.Allocator) void {
         allocator.free(self.rush_path);
@@ -121,7 +122,7 @@ pub fn main(init: std.process.Init) !u8 {
     defer temp_root.deinit(allocator, init.io, keep_temp);
 
     const run_count = if (config.case_filter == null) config.cases else 1;
-    var progress = Progress.init(init.io, run_count);
+    var progress = Progress.init(init.io, run_count, config.print_cases);
     defer progress.deinit();
 
     var failures: usize = 0;
@@ -133,6 +134,7 @@ pub fn main(init: std.process.Init) !u8 {
 
         const script = try generateScript(allocator, config.seed, case_index, config.features);
         defer allocator.free(script);
+        if (config.print_cases) printGeneratedCase(case_index, script);
 
         const rush = try runOne(
             allocator,
@@ -180,9 +182,10 @@ const Progress = struct {
     root_node: std.Progress.Node,
     case_node: ?std.Progress.Node = null,
 
-    fn init(io: std.Io, case_count: usize) Progress {
+    fn init(io: std.Io, case_count: usize, disable_printing: bool) Progress {
         return .{ .root_node = std.Progress.start(io, .{
             .root_name = "Differential",
+            .disable_printing = disable_printing,
             .initial_delay_ns = .fromMilliseconds(0),
             .estimated_total_items = case_count,
         }) };
@@ -206,6 +209,15 @@ const Progress = struct {
     }
 };
 
+fn printGeneratedCase(case_index: usize, script: []const u8) void {
+    std.debug.print(
+        \\differential: generated case {d}
+        \\---
+        \\{s}---
+        \\
+    , .{ case_index, script });
+}
+
 fn parseArgs(allocator: std.mem.Allocator, io: std.Io, args: []const []const u8) !?Config {
     if (args.len < 2) return null;
     var rush_path: ?[]const u8 = null;
@@ -218,6 +230,7 @@ fn parseArgs(allocator: std.mem.Allocator, io: std.Io, args: []const []const u8)
     var keep_temp = false;
     var strict_stderr = false;
     var features: FeatureSet = .default;
+    var print_cases = false;
 
     var index: usize = 1;
     while (index < args.len) : (index += 1) {
@@ -250,6 +263,8 @@ fn parseArgs(allocator: std.mem.Allocator, io: std.Io, args: []const []const u8)
             keep_temp = true;
         } else if (std.mem.eql(u8, arg, "--strict-stderr")) {
             strict_stderr = true;
+        } else if (std.mem.eql(u8, arg, "--print-cases")) {
+            print_cases = true;
         } else if (std.mem.eql(u8, arg, "--features")) {
             index += 1;
             if (index >= args.len) return null;
@@ -275,6 +290,7 @@ fn parseArgs(allocator: std.mem.Allocator, io: std.Io, args: []const []const u8)
         .keep_temp = keep_temp,
         .strict_stderr = strict_stderr,
         .features = features,
+        .print_cases = print_cases,
     };
 }
 
@@ -302,6 +318,7 @@ fn writeUsage(io: std.Io) !void {
         \\  --seed N            deterministic seed (default: 1)
         \\  --case N            run only one generated case index
         \\  --features LIST     comma-separated features: base,fd,params,lists (default: all)
+        \\  --print-cases       print each generated shell script before running it
         \\  --keep-temp         keep the temporary sandbox
         \\  --strict-stderr     compare stderr exactly
         \\
@@ -408,6 +425,19 @@ const Variable = enum {
     }
 };
 
+const Assignment = struct {
+    variable: Variable,
+    value: Value,
+
+    fn random(random_source: std.Random) Assignment {
+        return .{ .variable = Variable.random(random_source), .value = Value.random(random_source) };
+    }
+
+    fn render(self: Assignment, writer: *std.Io.Writer) !void {
+        try writer.print("{s}={s}", .{ self.variable.shell(), self.value.shell() });
+    }
+};
+
 const Expansion = union(enum) {
     quoted: Variable,
     default_unset: Variable,
@@ -445,6 +475,24 @@ const FileName = enum {
     fn shell(self: FileName) []const u8 {
         return @tagName(self);
     }
+};
+
+const OutputRedirection = struct {
+    file: FileName,
+    append: bool,
+
+    fn random(random_source: std.Random) OutputRedirection {
+        return .{ .file = FileName.random(random_source), .append = random_source.boolean() };
+    }
+
+    fn render(self: OutputRedirection, writer: *std.Io.Writer) !void {
+        try writer.print(" {s} {s}", .{ if (self.append) ">>" else ">", self.file.shell() });
+    }
+};
+
+const RedirectedCompound = struct {
+    body: []Command,
+    redirection: OutputRedirection,
 };
 
 const DirName = enum {
@@ -545,13 +593,17 @@ const Command = union(enum) {
     noop,
     true_cmd,
     false_cmd,
-    assign_a: Value,
+    assign: Assignment,
+    export_assign: Assignment,
+    unset: Variable,
     print_stdout: Value,
     print_expansion: Expansion,
     print_to_file: struct { value: Value, file: FileName },
     cat_file: FileName,
     subshell: []Command,
     group: []Command,
+    redirected_subshell: RedirectedCompound,
+    redirected_group: RedirectedCompound,
     mkdir_cd: DirName,
     exec_open_fd: struct { fd: Fd, file: FileName, append: bool },
     exec_close_fd: Fd,
@@ -567,8 +619,8 @@ const Command = union(enum) {
         features: FeatureSet,
     ) anyerror!Command {
         const base_count: u8 = switch (mode) {
-            .top_level => if (depth < 2) 10 else 7,
-            .inline_compound => 5,
+            .top_level => if (depth < 2) 15 else 10,
+            .inline_compound => if (depth < 2) 8 else 7,
         };
         const fd_count: u8 = if (features.fd) switch (mode) {
             .top_level => 4,
@@ -581,13 +633,24 @@ const Command = union(enum) {
             0 => .noop,
             1 => .true_cmd,
             2 => .false_cmd,
-            3 => .{ .assign_a = Value.random(random) },
+            3 => .{ .assign = Assignment.random(random) },
             4 => .{ .print_stdout = Value.random(random) },
             5 => .{ .print_to_file = .{ .value = Value.random(random), .file = FileName.random(random) } },
             6 => .{ .cat_file = FileName.random(random) },
             7 => .{ .subshell = try generateCompoundCommands(allocator, random, depth + 1, features) },
             8 => .{ .group = try generateCompoundCommands(allocator, random, depth + 1, features) },
             9 => .{ .mkdir_cd = DirName.random(random) },
+            10 => .{ .export_assign = Assignment.random(random) },
+            11 => .{ .unset = Variable.random(random) },
+            12 => .{ .redirected_subshell = .{
+                .body = try generateCompoundCommands(allocator, random, depth + 1, features),
+                .redirection = OutputRedirection.random(random),
+            } },
+            13 => .{ .redirected_group = .{
+                .body = try generateCompoundCommands(allocator, random, depth + 1, features),
+                .redirection = OutputRedirection.random(random),
+            } },
+            14 => .{ .print_expansion = Expansion.random(random) },
             else => unreachable,
         };
 
@@ -621,6 +684,10 @@ const Command = union(enum) {
                 for (commands) |*command| command.deinit(allocator);
                 allocator.free(commands);
             },
+            .redirected_subshell, .redirected_group => |redirected| {
+                for (redirected.body) |*command| command.deinit(allocator);
+                allocator.free(redirected.body);
+            },
             else => {},
         }
         self.* = undefined;
@@ -631,7 +698,12 @@ const Command = union(enum) {
             .noop => try writer.writeAll(":"),
             .true_cmd => try writer.writeAll("true"),
             .false_cmd => try writer.writeAll("false"),
-            .assign_a => |value| try writer.print("A={s}", .{value.shell()}),
+            .assign => |assignment| try assignment.render(writer),
+            .export_assign => |assignment| {
+                try writer.writeAll("export ");
+                try assignment.render(writer);
+            },
+            .unset => |variable| try writer.print("unset {s}", .{variable.shell()}),
             .print_stdout => |value| try writer.print("printf '%s\\n' {s}", .{value.shell()}),
             .print_expansion => |expansion| {
                 try writer.writeAll("printf '%s\\n' ");
@@ -644,6 +716,14 @@ const Command = union(enum) {
             .cat_file => |file| try writer.print("cat < {s}", .{file.shell()}),
             .subshell => |commands| try renderCompound(writer, commands, "( ", ")"),
             .group => |commands| try renderCompound(writer, commands, "{ ", "}"),
+            .redirected_subshell => |redirected| {
+                try renderCompound(writer, redirected.body, "( ", ")");
+                try redirected.redirection.render(writer);
+            },
+            .redirected_group => |redirected| {
+                try renderCompound(writer, redirected.body, "{ ", "}");
+                try redirected.redirection.render(writer);
+            },
             .mkdir_cd => |dir| try writer.print("mkdir -p {s}; cd {s}", .{ dir.shell(), dir.shell() }),
             .exec_open_fd => |open| try writer.print(
                 "exec {d}{s}{s}",
