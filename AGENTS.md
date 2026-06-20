@@ -16,9 +16,11 @@ zigdoc vaxis.Window
 Use these commands for repository validation:
 
 ```bash
+zig fmt .
+zig build compile-check
 zig build lint
 zig build test
-zig build compile-check
+zig build conformance
 ```
 
 ## POSIX Conformance Target
