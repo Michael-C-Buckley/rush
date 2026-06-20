@@ -257,6 +257,20 @@
             .status = 0,
         },
         .{
+            .name = "subshell saved stdout flushes before later external output",
+            .script =
+            \\( printf '%s\n' two; exec 3>&1; printf '%s\n' file >out; printf '%s\n' saved >&3; exec 3>&-; cat out )
+            ,
+            .stdout =
+            \\two
+            \\saved
+            \\file
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "exec redirection in redirected brace group survives later redirection failure",
             .script =
             \\{ exec 3>>out; false <missing; } >>group

@@ -4211,6 +4211,7 @@ const EvaluationBuffers = struct {
     pipeline_stdout: std.ArrayList(u8) = .empty,
     diagnostics: std.ArrayList([]const u8) = .empty,
     preserve_parent_visible_stdout_capture: bool = false,
+    stream_side_stdout_to_inherited: bool = false,
     fold_side_stdout_to_stdout: bool = false,
 
     fn init(
@@ -4307,7 +4308,9 @@ const EvaluationBuffers = struct {
             .outcome_stdout_capture,
             .command_substitution_stdout_capture,
             => try self.stdout.appendSlice(self.allocator, bytes),
-            .side_stdout_capture => try self.side_stdout.appendSlice(self.allocator, bytes),
+            .side_stdout_capture => if (self.stream_side_stdout_to_inherited) {
+                if (!writeAllDescriptor(1, bytes)) return error.Unimplemented;
+            } else try self.side_stdout.appendSlice(self.allocator, bytes),
             .command_substitution_side_stdout_capture => try self.command_substitution_side_stdout.appendSlice(
                 self.allocator,
                 bytes,
@@ -4568,6 +4571,10 @@ fn evaluatePlanWithInput(
         &command_frame,
     );
     defer buffers.deinit();
+    buffers.stream_side_stdout_to_inherited = evaluator.external_stdio == .inherit and
+        evaluator.io != null and
+        eval_context.command_substitution_depth == 0 and
+        command_frame.spec.kind == .subshell;
     buffers.useFrameFdTableInput(&frame_input, input);
     if (readonly_assignment) |name| try buffers.addBuiltinDiagnostic(name, "readonly variable");
     try appendPlanExpansionOutput(evaluator.*, eval_context, effective_plan, &buffers);
