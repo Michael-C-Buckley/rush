@@ -268,6 +268,19 @@
             .status = 0,
         },
         .{
+            .name = "pipeline stage redirection to inherited stdout bypasses stage pipe",
+            .script =
+            \\{ exec 3>&1; printf a >&3 | cat; printf c; } | cat
+            \\printf '\n'
+            ,
+            .stdout =
+            \\ac
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "nested command substitution keeps inherited pipeline output before outer output",
             .script =
             \\{ exec 3>&1; printf '%s\n' "$(printf '%s' "$(printf inner >&3; printf outer)")"; } | cat

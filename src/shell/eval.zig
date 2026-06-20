@@ -445,6 +445,24 @@ fn frameRoutesPipelineData(frame: execution_frame.ExecutionFrame) bool {
         frameOutputEndpointCaptures(frame.spec.fd_table.endpoint(2), .pipeline_data);
 }
 
+fn frameRoutesCapturedOutput(frame: execution_frame.ExecutionFrame) bool {
+    frame.validate();
+    if (frame.spec.captures.channels.len != 0) return true;
+    for (frame.spec.fd_table.bindings.items) |binding| {
+        binding.validate();
+        if (frameOutputEndpointHasCapture(binding.endpoint)) return true;
+    }
+    return false;
+}
+
+fn frameOutputEndpointHasCapture(endpoint: execution_frame.FdEndpoint) bool {
+    endpoint.validate();
+    return switch (endpoint) {
+        .output => |output| output.captureChannel() != null,
+        .input, .closed => false,
+    };
+}
+
 fn frameOutputEndpointCaptures(
     endpoint: execution_frame.FdEndpoint,
     channel: execution_frame.CaptureChannel,
@@ -4516,7 +4534,8 @@ fn evaluatePlanWithInput(
         effective_plan.class() != .external and
         effective_plan.class() != .function)
     {
-        if (frameRoutesPipelineData(command_frame) and
+        if (((eval_context.command_substitution_depth == 0 and eval_context.pipeline_depth != 0 and
+            frameRoutesCapturedOutput(command_frame)) or frameRoutesPipelineData(command_frame)) and
             !redirectionPlanNeedsRuntimeFdEffects(effective_plan.redirections))
         {
             try emitSemanticRedirectionTransforms(evaluator.*, &buffers, effective_plan.redirections);
