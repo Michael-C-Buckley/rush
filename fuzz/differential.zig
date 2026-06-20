@@ -47,6 +47,7 @@ const FeatureSet = packed struct {
     func: bool = true,
     alias: bool = true,
     loops: bool = true,
+    ifs: bool = true,
 
     const default: FeatureSet = .{
         .fd = true,
@@ -57,6 +58,7 @@ const FeatureSet = packed struct {
         .func = true,
         .alias = true,
         .loops = true,
+        .ifs = true,
     };
 
     fn parse(text: []const u8) ?FeatureSet {
@@ -69,6 +71,7 @@ const FeatureSet = packed struct {
             .func = false,
             .alias = false,
             .loops = false,
+            .ifs = false,
         };
         var saw_feature = false;
         var iterator = std.mem.splitScalar(u8, text, ',');
@@ -100,6 +103,9 @@ const FeatureSet = packed struct {
             } else if (std.mem.eql(u8, feature, "loops")) {
                 features.loops = true;
                 saw_feature = true;
+            } else if (std.mem.eql(u8, feature, "ifs")) {
+                features.ifs = true;
+                saw_feature = true;
             } else {
                 return null;
             }
@@ -117,6 +123,7 @@ const FeatureSet = packed struct {
         if (self.func) try writer.writeAll(",func");
         if (self.alias) try writer.writeAll(",alias");
         if (self.loops) try writer.writeAll(",loops");
+        if (self.ifs) try writer.writeAll(",ifs");
     }
 };
 
@@ -393,7 +400,7 @@ fn writeUsage(io: std.Io) !void {
         \\  --seed N            deterministic seed (default: random)
         \\  --case N            run only one generated case index
         \\  --features LIST     comma-separated features:
-        \\                       base,fd,params,lists,redir,cmdsub,func,alias,loops (default: all)
+        \\                       base,fd,params,lists,redir,cmdsub,func,alias,loops,ifs (default: all)
         \\  --print-cases       print each generated shell script before running it
         \\  --timeout-ms N      per-command timeout in milliseconds, or 0 to disable (default: Debug 5000, Release 1000)
         \\  --keep-temp         keep the temporary sandbox
@@ -1014,6 +1021,34 @@ const LoopProbe = enum {
     }
 };
 
+const IfProbe = enum {
+    then_branch,
+    else_branch,
+    no_else_status,
+    variable_persists,
+
+    fn random(random_source: std.Random) IfProbe {
+        return @enumFromInt(random_source.uintLessThan(u3, 4));
+    }
+
+    fn render(self: IfProbe, writer: *std.Io.Writer) !void {
+        switch (self) {
+            .then_branch => try writer.writeAll(
+                "if true; then printf '%s\n' then; else printf '%s\n' else; fi",
+            ),
+            .else_branch => try writer.writeAll(
+                "if false; then printf '%s\n' then; else printf '%s\n' else; fi",
+            ),
+            .no_else_status => try writer.writeAll(
+                "if false; then printf '%s\n' bad; fi; printf '[%s]\n' $?",
+            ),
+            .variable_persists => try writer.writeAll(
+                "A=outer; if true; then A=inner; fi; printf '[%s]\n' \"$A\"",
+            ),
+        }
+    }
+};
+
 const DirName = enum {
     d,
     e,
@@ -1128,6 +1163,7 @@ const Command = union(enum) {
     function_unset_probe: FunctionUnsetProbe,
     alias_probe: AliasProbe,
     loop_probe: LoopProbe,
+    if_probe: IfProbe,
     print_to_file: struct { value: Value, file: FileName },
     cat_file: FileName,
     subshell: []Command,
@@ -1179,8 +1215,12 @@ const Command = union(enum) {
             .top_level => 1,
             .inline_compound => if (depth < 2) 1 else 0,
         } else 0;
+        const ifs_count: u8 = if (features.ifs) switch (mode) {
+            .top_level => 1,
+            .inline_compound => if (depth < 2) 1 else 0,
+        } else 0;
         const choice_count = base_count + fd_count + params_count + positional_count + lists_count + redir_count +
-            cmdsub_count + func_count + alias_count + loops_count;
+            cmdsub_count + func_count + alias_count + loops_count + ifs_count;
         const choice = random.uintLessThan(
             u8,
             choice_count,
@@ -1268,6 +1308,8 @@ const Command = union(enum) {
         if (feature_choice < alias_count) return .{ .alias_probe = AliasProbe.random(random) };
         feature_choice -= alias_count;
         if (feature_choice < loops_count) return .{ .loop_probe = LoopProbe.random(random) };
+        feature_choice -= loops_count;
+        if (feature_choice < ifs_count) return .{ .if_probe = IfProbe.random(random) };
         unreachable;
     }
 
@@ -1319,6 +1361,7 @@ const Command = union(enum) {
             .function_unset_probe => |unset_probe| try unset_probe.render(writer),
             .alias_probe => |alias_probe| try alias_probe.render(writer),
             .loop_probe => |loop_probe| try loop_probe.render(writer),
+            .if_probe => |if_probe| try if_probe.render(writer),
             .print_to_file => |print| try writer.print(
                 "printf '%s\\n' {s} > {s}",
                 .{ print.value.shell(), print.file.shell() },
