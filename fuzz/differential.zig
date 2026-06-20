@@ -3,6 +3,11 @@
 const std = @import("std");
 const builtin = @import("builtin");
 
+const default_timeout_ms: i64 = switch (builtin.mode) {
+    .Debug => 5000,
+    .ReleaseSafe, .ReleaseFast, .ReleaseSmall => 1000,
+};
+
 const Config = struct {
     rush_path: [:0]u8,
     shell: [:0]u8,
@@ -14,7 +19,7 @@ const Config = struct {
     strict_stderr: bool = false,
     features: FeatureSet = .default,
     print_cases: bool = false,
-    timeout_ms: i64 = 5000,
+    timeout_ms: i64 = default_timeout_ms,
 
     fn deinit(self: Config, allocator: std.mem.Allocator) void {
         allocator.free(self.rush_path);
@@ -277,7 +282,7 @@ fn parseArgs(allocator: std.mem.Allocator, io: std.Io, args: []const []const u8)
     var strict_stderr = false;
     var features: FeatureSet = .default;
     var print_cases = false;
-    var timeout_ms: i64 = 5000;
+    var timeout_ms: i64 = default_timeout_ms;
 
     var index: usize = 1;
     while (index < args.len) : (index += 1) {
@@ -375,7 +380,7 @@ fn writeUsage(io: std.Io) !void {
         \\  --case N            run only one generated case index
         \\  --features LIST     comma-separated features: base,fd,params,lists,redir,cmdsub,func (default: all)
         \\  --print-cases       print each generated shell script before running it
-        \\  --timeout-ms N      per-command timeout in milliseconds, or 0 to disable (default: 5000)
+        \\  --timeout-ms N      per-command timeout in milliseconds, or 0 to disable (default: Debug 5000, Release 1000)
         \\  --keep-temp         keep the temporary sandbox
         \\  --strict-stderr     compare stderr exactly
         \\
