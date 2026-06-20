@@ -221,7 +221,7 @@ fn commandSubstitutionExecutionFrame(
     try fd_table.bindInput(allocator, 0, stdin);
     try fd_table.bindOutput(allocator, 1, stdout);
     switch (fd_table.endpoint(2)) {
-        .output => |output| try fd_table.bindOutput(allocator, 2, output),
+        .output => |output| try fd_table.bindOutput(allocator, 2, commandSubstitutionInheritedErrorEndpoint(output)),
         .closed => try fd_table.close(allocator, 2),
         .input => try fd_table.bindOutput(allocator, 2, parent_frame.spec.stderr),
     }
@@ -269,9 +269,20 @@ fn commandSubstitutionStderrEndpoint(
     parent_frame.validate();
     fd_table.validate();
     return switch (fd_table.endpoint(2)) {
-        .output => |output| output,
+        .output => |output| commandSubstitutionInheritedErrorEndpoint(output),
         .closed => .discard,
         .input => parent_frame.spec.stderr,
+    };
+}
+
+fn commandSubstitutionInheritedErrorEndpoint(output: execution_frame.OutputEndpoint) execution_frame.OutputEndpoint {
+    output.validate();
+    return switch (output) {
+        .capture => |channel| switch (channel) {
+            .command_substitution_stdout => .{ .capture = .side_stdout },
+            else => output,
+        },
+        else => output,
     };
 }
 
@@ -1873,6 +1884,9 @@ const SourceLowerer = struct {
         if (expansion_context.stderr.items.len != 0) {
             output.stderr = try allocator.dupe(u8, expansion_context.stderr.items);
         }
+        if (expansion_context.side_stdout.items.len != 0) {
+            output.side_stdout = try allocator.dupe(u8, expansion_context.side_stdout.items);
+        }
         if (expansion_context.diagnostics.items.len != 0) {
             const diagnostics = try allocator.alloc([]const u8, expansion_context.diagnostics.items.len);
             var diagnostics_owned: usize = 0;
@@ -1986,6 +2000,7 @@ const SourceLowerer = struct {
 
     const ExpansionOutputAccumulator = struct {
         stderr: std.ArrayList(u8) = .empty,
+        side_stdout: std.ArrayList(u8) = .empty,
         diagnostics: std.ArrayList([]const u8) = .empty,
 
         fn appendOwned(
@@ -1996,8 +2011,10 @@ const SourceLowerer = struct {
             output.validate();
             errdefer freeExpansionOutput(allocator, output);
             try self.stderr.appendSlice(allocator, output.stderr);
+            try self.side_stdout.appendSlice(allocator, output.side_stdout);
             try self.diagnostics.appendSlice(allocator, output.diagnostics);
             allocator.free(output.stderr);
+            allocator.free(output.side_stdout);
             allocator.free(output.diagnostics);
         }
 
@@ -2007,12 +2024,15 @@ const SourceLowerer = struct {
         ) !command_plan.ExpansionOutput {
             const stderr = try self.stderr.toOwnedSlice(allocator);
             errdefer allocator.free(stderr);
+            const side_stdout = try self.side_stdout.toOwnedSlice(allocator);
+            errdefer allocator.free(side_stdout);
             const diagnostics = try self.diagnostics.toOwnedSlice(allocator);
-            return .{ .stderr = stderr, .diagnostics = diagnostics };
+            return .{ .stderr = stderr, .side_stdout = side_stdout, .diagnostics = diagnostics };
         }
 
         fn deinit(allocator: std.mem.Allocator, self: *ExpansionOutputAccumulator) void {
             self.stderr.deinit(allocator);
+            self.side_stdout.deinit(allocator);
             for (self.diagnostics.items) |message| allocator.free(message);
             self.diagnostics.deinit(allocator);
             self.* = undefined;
@@ -2021,6 +2041,7 @@ const SourceLowerer = struct {
 
     fn freeExpansionOutput(allocator: std.mem.Allocator, output: command_plan.ExpansionOutput) void {
         allocator.free(output.stderr);
+        allocator.free(output.side_stdout);
         for (output.diagnostics) |message| allocator.free(message);
         allocator.free(output.diagnostics);
     }
@@ -2032,6 +2053,8 @@ const SourceLowerer = struct {
         expansion_context.validate();
         const stderr = try self.allocator.dupe(u8, expansion_context.stderr.items);
         errdefer self.allocator.free(stderr);
+        const side_stdout = try self.allocator.dupe(u8, expansion_context.side_stdout.items);
+        errdefer self.allocator.free(side_stdout);
         const diagnostics = try self.allocator.alloc([]const u8, expansion_context.diagnostics.items.len);
         errdefer self.allocator.free(diagnostics);
         var initialized: usize = 0;
@@ -2040,7 +2063,11 @@ const SourceLowerer = struct {
             diagnostics[index] = try self.allocator.dupe(u8, diagnostic.message);
             initialized += 1;
         }
-        const output: command_plan.ExpansionOutput = .{ .stderr = stderr, .diagnostics = diagnostics };
+        const output: command_plan.ExpansionOutput = .{
+            .stderr = stderr,
+            .side_stdout = side_stdout,
+            .diagnostics = diagnostics,
+        };
         output.validate();
         return output;
     }
@@ -2830,6 +2857,7 @@ pub const CommandSubstitutionResult = struct {
     fatal_failure: ?TrapActionFailure = null,
     output: std.ArrayList(u8) = .empty,
     stderr: std.ArrayList(u8) = .empty,
+    side_stdout: std.ArrayList(u8) = .empty,
     diagnostics: std.ArrayList(outcome.Diagnostic) = .empty,
 
     pub fn init(allocator: std.mem.Allocator, status: outcome.ExitStatus) CommandSubstitutionResult {
@@ -2842,6 +2870,7 @@ pub const CommandSubstitutionResult = struct {
         if (self.fatal_failure) |failure| self.allocator.free(failure.message);
         self.output.deinit(self.allocator);
         self.stderr.deinit(self.allocator);
+        self.side_stdout.deinit(self.allocator);
         for (self.diagnostics.items) |diagnostic| self.allocator.free(diagnostic.message);
         self.diagnostics.deinit(self.allocator);
         self.* = undefined;
@@ -2893,6 +2922,7 @@ pub const CommandSubstitutionExpansionContext = struct {
     last_control_flow: outcome.ControlFlow = .normal,
     max_depth_observed: u32 = 0,
     stderr: std.ArrayList(u8) = .empty,
+    side_stdout: std.ArrayList(u8) = .empty,
     diagnostics: std.ArrayList(outcome.Diagnostic) = .empty,
 
     pub fn init(
@@ -2924,6 +2954,7 @@ pub const CommandSubstitutionExpansionContext = struct {
     pub fn deinit(self: *CommandSubstitutionExpansionContext) void {
         if (self.fatal_failure) |failure| self.evaluator.allocator.free(failure.message);
         self.stderr.deinit(self.evaluator.allocator);
+        self.side_stdout.deinit(self.evaluator.allocator);
         for (self.diagnostics.items) |diagnostic| self.evaluator.allocator.free(diagnostic.message);
         self.diagnostics.deinit(self.evaluator.allocator);
         self.* = undefined;
@@ -4130,6 +4161,7 @@ const EvaluationBuffers = struct {
     propagated_failure: ?outcome.PropagatedFailure = null,
     stdout: std.ArrayList(u8) = .empty,
     stderr: std.ArrayList(u8) = .empty,
+    side_stdout: std.ArrayList(u8) = .empty,
     pipeline_stdout: std.ArrayList(u8) = .empty,
     diagnostics: std.ArrayList([]const u8) = .empty,
 
@@ -4150,6 +4182,7 @@ const EvaluationBuffers = struct {
     fn deinit(self: *EvaluationBuffers) void {
         self.stdout.deinit(self.allocator);
         self.stderr.deinit(self.allocator);
+        self.side_stdout.deinit(self.allocator);
         self.pipeline_stdout.deinit(self.allocator);
         for (self.diagnostics.items) |message| self.allocator.free(message);
         self.diagnostics.deinit(self.allocator);
@@ -4262,8 +4295,11 @@ fn outputDestinationForFrameEndpointInContext(
             .pipe_write => |host_descriptor| .{ .host_descriptor = host_descriptor },
             .path => .{ .host_descriptor = descriptor },
             .capture => |channel| if (command_substitution_context) switch (channel) {
-                .command_substitution_stdout => .command_substitution_stdout_capture,
-                .side_stdout => .outcome_stdout_capture,
+                .command_substitution_stdout => if (descriptor == 1)
+                    .command_substitution_stdout_capture
+                else
+                    .command_substitution_side_stdout_capture,
+                .side_stdout => .command_substitution_side_stdout_capture,
                 .side_stderr => .outcome_stderr_capture,
                 .pipeline_data => .pipeline_data_capture,
             } else outputDestinationForCaptureChannel(channel),
@@ -4580,6 +4616,7 @@ fn evaluatePlanWithInput(
     errdefer command_outcome.deinit();
     try command_outcome.appendStdout(buffers.stdout.items);
     try command_outcome.appendStderr(buffers.stderr.items);
+    try command_outcome.side_stdout.appendSlice(evaluator.allocator, buffers.side_stdout.items);
     try command_outcome.pipeline_stdout.appendSlice(evaluator.allocator, buffers.pipeline_stdout.items);
     for (buffers.diagnostics.items) |message| try command_outcome.addDiagnostic(message);
     try appendBuiltinDiagnostic(&command_outcome, effective_plan, result.status);
@@ -4885,6 +4922,7 @@ fn routeDirectPipelineStageBuffer(
 const OutputDestination = union(enum) {
     outcome_stdout_capture,
     outcome_stderr_capture,
+    command_substitution_side_stdout_capture,
     pipeline_data_capture,
     command_substitution_stdout_capture,
     command_substitution_stderr_capture,
@@ -4895,6 +4933,7 @@ const OutputDestination = union(enum) {
         switch (self) {
             .outcome_stdout_capture,
             .outcome_stderr_capture,
+            .command_substitution_side_stdout_capture,
             .pipeline_data_capture,
             .command_substitution_stdout_capture,
             .command_substitution_stderr_capture,
@@ -5186,6 +5225,10 @@ const OutputFrame = struct {
             .outcome_stdout_capture,
             .command_substitution_stdout_capture,
             => try self.buffers.stdout.appendSlice(self.buffers.allocator, bytes),
+            .command_substitution_side_stdout_capture => try self.buffers.side_stdout.appendSlice(
+                self.buffers.allocator,
+                bytes,
+            ),
             .pipeline_data_capture => try self.buffers.pipeline_stdout.appendSlice(self.buffers.allocator, bytes),
             .outcome_stderr_capture,
             .command_substitution_stderr_capture,
@@ -5815,6 +5858,7 @@ fn diagnosticDestinationIsWritable(destination: OutputDestination) bool {
         .host_descriptor => |descriptor| descriptorIsOpen(descriptor),
         .outcome_stdout_capture,
         .outcome_stderr_capture,
+        .command_substitution_side_stdout_capture,
         .pipeline_data_capture,
         .command_substitution_stdout_capture,
         .command_substitution_stderr_capture,
@@ -5877,6 +5921,13 @@ fn flushBufferToDestination(
             try buffers.stderr.insertSlice(buffers.allocator, 0, bytes);
             buffers.stdout.items.len = 0;
         },
+        .command_substitution_side_stdout_capture => {
+            try buffers.side_stdout.appendSlice(buffers.allocator, bytes);
+            switch (stream) {
+                .stdout => buffers.stdout.items.len = 0,
+                .stderr => buffers.stderr.items.len = 0,
+            }
+        },
         .pipeline_data_capture => {
             try buffers.pipeline_stdout.appendSlice(buffers.allocator, bytes);
             switch (stream) {
@@ -5930,6 +5981,7 @@ fn appendBytesToDestination(
         .outcome_stdout_capture,
         .command_substitution_stdout_capture,
         => try buffers.stdout.appendSlice(buffers.allocator, bytes),
+        .command_substitution_side_stdout_capture => try buffers.side_stdout.appendSlice(buffers.allocator, bytes),
         .pipeline_data_capture => try buffers.pipeline_stdout.appendSlice(buffers.allocator, bytes),
         .outcome_stderr_capture,
         .command_substitution_stderr_capture,
@@ -6014,6 +6066,13 @@ fn appendExpansionOutput(
     output.validate();
     var frame = try commandExpansionOutputFrame(evaluator, eval_context, buffers);
     defer frame.deinit();
+    if (output.side_stdout.len != 0) {
+        if (eval_context.command_substitution_depth != 0 or frameWithinCommandSubstitution(buffers.frame.*)) {
+            try buffers.stdout.appendSlice(buffers.allocator, output.side_stdout);
+        } else {
+            try frame.write(1, output.side_stdout);
+        }
+    }
     if (output.stderr.len != 0) try frame.write(2, output.stderr);
     for (output.diagnostics) |message| {
         try buffers.addDiagnosticMessage(message);
@@ -6852,7 +6911,12 @@ fn evaluateCommandSubstitutionInState(
         resolver,
         &substitution_frame,
     );
-    const result = try commandSubstitutionResultFromOutcome(evaluator.allocator, visible_status, body_outcome);
+    const result = try commandSubstitutionResultFromOutcome(
+        evaluator.allocator,
+        substitution_context.command_substitution_depth,
+        visible_status,
+        body_outcome,
+    );
     result.validate();
     return result;
 }
@@ -7077,20 +7141,29 @@ fn applyCommandSubstitutionOutcome(
 
 fn commandSubstitutionResultFromOutcome(
     allocator: std.mem.Allocator,
+    command_substitution_depth: u32,
     visible_status: outcome.ExitStatus,
     command_outcome: outcome.CommandOutcome,
 ) EvalError!CommandSubstitutionResult {
     command_outcome.validate();
+    std.debug.assert(command_substitution_depth != 0);
     var result = CommandSubstitutionResult.init(allocator, visible_status);
     errdefer result.deinit();
 
+    if (command_substitution_depth == 1) {
+        try appendCommandSubstitutionOutput(allocator, &result.output, command_outcome.side_stdout.items);
+    }
     const trimmed = trimCommandSubstitutionOutput(command_outcome.stdout.items);
     try appendCommandSubstitutionOutput(allocator, &result.output, trimmed);
     const trimmed_pipeline_stdout = trimCommandSubstitutionOutput(command_outcome.pipeline_stdout.items);
     try appendCommandSubstitutionOutput(allocator, &result.output, trimmed_pipeline_stdout);
-    std.debug.assert(result.output.items.len <= trimmed.len + trimmed_pipeline_stdout.len);
+    std.debug.assert(result.output.items.len <=
+        trimmed.len + trimmed_pipeline_stdout.len + command_outcome.side_stdout.items.len);
     if (result.output.items.len != 0) std.debug.assert(result.output.items.ptr != command_outcome.stdout.items.ptr);
 
+    if (command_substitution_depth != 1) {
+        try result.side_stdout.appendSlice(allocator, command_outcome.side_stdout.items);
+    }
     try result.stderr.appendSlice(allocator, command_outcome.stderr.items);
     for (command_outcome.diagnostics.items) |diagnostic| {
         const owned_message = try allocator.dupe(u8, diagnostic.message);
@@ -7250,6 +7323,7 @@ fn runSemanticCommandSubstitution(
     expansion_context.last_control_flow = result.control_flow;
     if (commandSubstitutionHasSideOutput(result)) {
         try expansion_context.stderr.appendSlice(expansion_context.evaluator.allocator, result.stderr.items);
+        try expansion_context.side_stdout.appendSlice(expansion_context.evaluator.allocator, result.side_stdout.items);
         for (result.diagnostics.items) |diagnostic| {
             const owned_message = try expansion_context.evaluator.allocator.dupe(u8, diagnostic.message);
             errdefer expansion_context.evaluator.allocator.free(owned_message);
@@ -7268,7 +7342,7 @@ fn runSemanticCommandSubstitution(
 
 fn commandSubstitutionHasSideOutput(result: CommandSubstitutionResult) bool {
     result.validate();
-    return result.stderr.items.len != 0 or result.diagnostics.items.len != 0;
+    return result.stderr.items.len != 0 or result.side_stdout.items.len != 0 or result.diagnostics.items.len != 0;
 }
 
 fn evaluateSingleStagePipeline(
@@ -8785,6 +8859,10 @@ fn commandOutcomeFromBuffers(
     errdefer stderr.deinit(allocator);
     try stderr.appendSlice(allocator, buffers.stderr.items);
 
+    var side_stdout: std.ArrayList(u8) = .empty;
+    errdefer side_stdout.deinit(allocator);
+    try side_stdout.appendSlice(allocator, buffers.side_stdout.items);
+
     var pipeline_stdout: std.ArrayList(u8) = .empty;
     errdefer pipeline_stdout.deinit(allocator);
     try pipeline_stdout.appendSlice(allocator, buffers.pipeline_stdout.items);
@@ -8808,6 +8886,7 @@ fn commandOutcomeFromBuffers(
     );
     command_outcome.stdout = stdout;
     command_outcome.stderr = stderr;
+    command_outcome.side_stdout = side_stdout;
     command_outcome.pipeline_stdout = pipeline_stdout;
     command_outcome.diagnostics = diagnostics;
     command_outcome.propagated_failure = buffers.propagated_failure;
@@ -10970,6 +11049,7 @@ fn appendOutcomeBuffers(buffers: *EvaluationBuffers, command_outcome: outcome.Co
     if (frameWithinCommandSubstitution(buffers.frame.*)) {
         try buffers.stdout.appendSlice(buffers.allocator, command_outcome.stdout.items);
         try buffers.stderr.appendSlice(buffers.allocator, command_outcome.stderr.items);
+        try buffers.side_stdout.appendSlice(buffers.allocator, command_outcome.side_stdout.items);
         try buffers.pipeline_stdout.appendSlice(buffers.allocator, command_outcome.pipeline_stdout.items);
         for (command_outcome.diagnostics.items) |diagnostic| {
             try buffers.addDiagnosticMessage(diagnostic.message);
@@ -10980,6 +11060,7 @@ fn appendOutcomeBuffers(buffers: *EvaluationBuffers, command_outcome: outcome.Co
     defer frame.deinit();
     try frame.write(1, command_outcome.stdout.items);
     try frame.write(2, command_outcome.stderr.items);
+    try buffers.side_stdout.appendSlice(buffers.allocator, command_outcome.side_stdout.items);
     try buffers.pipeline_stdout.appendSlice(buffers.allocator, command_outcome.pipeline_stdout.items);
     for (command_outcome.diagnostics.items) |diagnostic| {
         try buffers.addDiagnosticMessage(diagnostic.message);

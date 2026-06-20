@@ -163,10 +163,12 @@ pub const ForWords = union(enum) {
 
 pub const ExpansionOutput = struct {
     stderr: []const u8 = "",
+    side_stdout: []const u8 = "",
     diagnostics: []const []const u8 = &.{},
 
     pub fn validate(self: ExpansionOutput) void {
         validateExpansionOutput(self.stderr, self.diagnostics);
+        validateExpansionOutput(self.side_stdout, &.{});
     }
 };
 
@@ -1448,13 +1450,16 @@ fn cloneExpansionOutput(
     output.validate();
     const stderr = try allocator.dupe(u8, output.stderr);
     errdefer allocator.free(stderr);
+    const side_stdout = try allocator.dupe(u8, output.side_stdout);
+    errdefer allocator.free(side_stdout);
     const diagnostics = try cloneArgv(allocator, output.diagnostics);
     errdefer freeArgv(allocator, diagnostics);
-    return .{ .stderr = stderr, .diagnostics = diagnostics };
+    return .{ .stderr = stderr, .side_stdout = side_stdout, .diagnostics = diagnostics };
 }
 
 fn freeExpansionOutput(allocator: std.mem.Allocator, output: ExpansionOutput) void {
     allocator.free(output.stderr);
+    allocator.free(output.side_stdout);
     freeArgv(allocator, output.diagnostics);
 }
 

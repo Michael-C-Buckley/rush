@@ -282,6 +282,20 @@
             .status = 0,
         },
         .{
+            .name = "nested command substitution redirected stderr precedes outer command output",
+            .script =
+            \\x=$(exec 2>&1; printf '[%s]' "$(printf 'side\n' >&2; printf inner)"; printf tail)
+            \\printf '<%s>\n' "$x"
+            ,
+            .stdout =
+            \\<side
+            \\[inner]tail>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "nested command substitutions isolate inner mutations from outer substitutions",
             .script =
             \\printf '<%s>\n' "$(x=outer-sub; printf '%s' "$(x=inner-sub; printf '%s' "$x")"; printf ':%s' "$x")"
