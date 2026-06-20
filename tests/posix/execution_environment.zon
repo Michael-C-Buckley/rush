@@ -256,6 +256,18 @@
             .status = 0,
         },
         .{
+            .name = "command substitution inherits nonstandard descriptor captures from pipeline stage",
+            .script =
+            \\{ exec 3>&1; printf '%s\n' "$(printf sub >&3)"; } | cat
+            ,
+            .stdout =
+            \\sub
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "command substitution stderr merge captures pattern side output outside nested result",
             .script =
             \\x=$(exec 2>&1; case y in "$(printf 'pattern\n' >&2; printf y)") printf value ;; esac)

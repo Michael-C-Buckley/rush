@@ -4171,6 +4171,21 @@ const EvaluationBuffers = struct {
             self.frame.spec.fd_table.endpoint(2),
             command_substitution_context,
         ));
+        for (self.frame.spec.fd_table.bindings.items) |binding| {
+            if (binding.descriptor <= 2) continue;
+            switch (binding.endpoint) {
+                .output => try routing.setDestination(
+                    binding.descriptor,
+                    outputDestinationForFrameEndpointInContext(
+                        binding.descriptor,
+                        binding.endpoint,
+                        command_substitution_context,
+                    ),
+                ),
+                .closed => try routing.setDestination(binding.descriptor, .closed),
+                .input => {},
+            }
+        }
         return OutputFrame.initOwnedRouting(self, routing);
     }
 
@@ -4513,6 +4528,7 @@ fn evaluatePlanWithInput(
             } else {
                 try appendScopedExecRedirectionPlan(evaluator, effective_plan.redirections);
             }
+            try commitExecRedirectionsToFrame(evaluator.allocator, frame, effective_plan.redirections);
         },
     }
     if (!simpleCommandOutputAlreadyRouted(effective_plan) and
@@ -7070,7 +7086,9 @@ fn commandSubstitutionResultFromOutcome(
 
     const trimmed = trimCommandSubstitutionOutput(command_outcome.stdout.items);
     try appendCommandSubstitutionOutput(allocator, &result.output, trimmed);
-    std.debug.assert(result.output.items.len <= trimmed.len);
+    const trimmed_pipeline_stdout = trimCommandSubstitutionOutput(command_outcome.pipeline_stdout.items);
+    try appendCommandSubstitutionOutput(allocator, &result.output, trimmed_pipeline_stdout);
+    std.debug.assert(result.output.items.len <= trimmed.len + trimmed_pipeline_stdout.len);
     if (result.output.items.len != 0) std.debug.assert(result.output.items.ptr != command_outcome.stdout.items.ptr);
 
     try result.stderr.appendSlice(allocator, command_outcome.stderr.items);

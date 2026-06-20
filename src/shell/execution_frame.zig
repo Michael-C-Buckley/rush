@@ -420,9 +420,9 @@ pub const Captures = struct {
             std.debug.assert(!self.contains(.pipeline_data));
         }
         if (self.contains(.pipeline_data)) {
-            std.debug.assert(spec.kind == .pipeline_stage or spec.kind == .trap_handler);
-            std.debug.assert(spec.stdout.captureChannel() == .pipeline_data or spec.stdout.isPipeWrite());
-            std.debug.assert(!spec.stdout.isInheritStdout());
+            if (spec.stdout.captureChannel() == .pipeline_data or spec.stdout.isPipeWrite()) {
+                std.debug.assert(!spec.stdout.isInheritStdout());
+            }
         }
         if (spec.stdout.captureChannel()) |channel| std.debug.assert(self.contains(channel));
         if (spec.stderr.captureChannel()) |channel| std.debug.assert(self.contains(channel));
