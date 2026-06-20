@@ -240,6 +240,23 @@
             .status = 0,
         },
         .{
+            .name = "subshell scoped exec preserves inherited descriptor route",
+            .script =
+            \\exec 3>&2
+            \\( exec 4>&1; printf '%s\n' two; printf '%s\n' three >&3 ) >out
+            \\cat out
+            ,
+            .stdout =
+            \\two
+            \\
+            ,
+            .stderr =
+            \\three
+            \\
+            ,
+            .status = 0,
+        },
+        .{
             .name = "exec redirection in redirected brace group survives later redirection failure",
             .script =
             \\{ exec 3>>out; false <missing; } >>group

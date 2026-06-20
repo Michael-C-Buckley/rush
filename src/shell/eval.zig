@@ -4653,7 +4653,7 @@ fn evaluatePlanWithInput(
         },
         .permanent => {
             redirection_guard.commitPermanent();
-            try commitExecRedirectionsToFrame(evaluator.allocator, frame, effective_plan.redirections);
+            try commitRuntimeExecRedirectionsToFrame(evaluator.allocator, frame, effective_plan.redirections);
         },
         .scoped => {
             if (redirection_guard.hasTransaction()) {
@@ -4665,7 +4665,7 @@ fn evaluatePlanWithInput(
             } else {
                 try appendScopedExecRedirectionPlan(evaluator, effective_plan.redirections);
             }
-            try commitExecRedirectionsToFrame(evaluator.allocator, frame, effective_plan.redirections);
+            try commitRuntimeExecRedirectionsToFrame(evaluator.allocator, frame, effective_plan.redirections);
         },
     }
     if (!simpleCommandOutputAlreadyRouted(effective_plan) and
@@ -4888,6 +4888,20 @@ fn commitExecRedirectionsToFrame(
     frame.validate();
     redirections.validate();
     try frame.spec.fd_table.applyRedirectionPlan(allocator, redirections);
+    frame.validate();
+}
+
+fn commitRuntimeExecRedirectionsToFrame(
+    allocator: std.mem.Allocator,
+    frame: *execution_frame.ExecutionFrame,
+    redirections: redirection_plan.RedirectionPlan,
+) EvalError!void {
+    frame.validate();
+    redirections.validate();
+    for (redirections.steps) |step| {
+        step.validate();
+        try bindRuntimeRedirectionTargetToFrame(allocator, frame, step);
+    }
     frame.validate();
 }
 
@@ -5911,46 +5925,7 @@ const ScopedFrameFdRedirections = struct {
         frame: *execution_frame.ExecutionFrame,
         step: redirection_plan.RedirectionStep,
     ) EvalError!void {
-        frame.validate();
-        step.validate();
-        switch (step.effect) {
-            .open_path => |open| switch (open.options.access) {
-                .read_only => try frame.spec.fd_table.bindInput(allocator, open.target, .{ .fd = open.target }),
-                .write_only, .read_write => try frame.spec.fd_table.bindOutput(
-                    allocator,
-                    open.target,
-                    .{ .fd = open.target },
-                ),
-            },
-            .here_doc => |here_doc| try frame.spec.fd_table.bindInput(
-                allocator,
-                here_doc.target,
-                .{ .fd = here_doc.target },
-            ),
-            .duplicate => |duplicate| switch (frame.spec.fd_table.endpoint(duplicate.source)) {
-                .input => try frame.spec.fd_table.bindInput(allocator, duplicate.target, .{ .fd = duplicate.target }),
-                .output => |output| if (duplicatedOutputStaysInSemanticCapture(output))
-                    try frame.spec.fd_table.bindOutput(allocator, duplicate.target, output)
-                else
-                    try frame.spec.fd_table.bindOutput(allocator, duplicate.target, .{ .fd = duplicate.target }),
-                .closed => try frame.spec.fd_table.close(allocator, duplicate.target),
-            },
-            .close => |close_step| try frame.spec.fd_table.close(allocator, close_step.target),
-        }
-    }
-
-    fn duplicatedOutputStaysInSemanticCapture(output: execution_frame.OutputEndpoint) bool {
-        output.validate();
-        return switch (output) {
-            .capture => |channel| !channel.isParentVisible(),
-            .inherit_stdout,
-            .inherit_stderr,
-            .path,
-            .fd,
-            .pipe_write,
-            .discard,
-            => false,
-        };
+        return bindRuntimeRedirectionTargetToFrame(allocator, frame, step);
     }
 
     fn restore(
@@ -5986,6 +5961,53 @@ const ScopedFrameFdRedirections = struct {
         });
     }
 };
+
+fn bindRuntimeRedirectionTargetToFrame(
+    allocator: std.mem.Allocator,
+    frame: *execution_frame.ExecutionFrame,
+    step: redirection_plan.RedirectionStep,
+) EvalError!void {
+    frame.validate();
+    step.validate();
+    switch (step.effect) {
+        .open_path => |open| switch (open.options.access) {
+            .read_only => try frame.spec.fd_table.bindInput(allocator, open.target, .{ .fd = open.target }),
+            .write_only, .read_write => try frame.spec.fd_table.bindOutput(
+                allocator,
+                open.target,
+                .{ .fd = open.target },
+            ),
+        },
+        .here_doc => |here_doc| try frame.spec.fd_table.bindInput(
+            allocator,
+            here_doc.target,
+            .{ .fd = here_doc.target },
+        ),
+        .duplicate => |duplicate| switch (frame.spec.fd_table.endpoint(duplicate.source)) {
+            .input => try frame.spec.fd_table.bindInput(allocator, duplicate.target, .{ .fd = duplicate.target }),
+            .output => |output| if (duplicatedOutputStaysInSemanticCapture(output))
+                try frame.spec.fd_table.bindOutput(allocator, duplicate.target, output)
+            else
+                try frame.spec.fd_table.bindOutput(allocator, duplicate.target, .{ .fd = duplicate.target }),
+            .closed => try frame.spec.fd_table.close(allocator, duplicate.target),
+        },
+        .close => |close_step| try frame.spec.fd_table.close(allocator, close_step.target),
+    }
+}
+
+fn duplicatedOutputStaysInSemanticCapture(output: execution_frame.OutputEndpoint) bool {
+    output.validate();
+    return switch (output) {
+        .capture => |channel| !channel.isParentVisible(),
+        .inherit_stdout,
+        .inherit_stderr,
+        .path,
+        .fd,
+        .pipe_write,
+        .discard,
+        => false,
+    };
+}
 
 fn restoreFrameFdBinding(frame: *execution_frame.ExecutionFrame, snapshot: ScopedFrameFdRedirections.Snapshot) void {
     runtime.fd.assertValidDescriptor(snapshot.descriptor);
