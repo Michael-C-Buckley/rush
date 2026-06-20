@@ -38,11 +38,12 @@ const FeatureSet = packed struct {
     params: bool = true,
     lists: bool = true,
     redir: bool = true,
+    cmdsub: bool = true,
 
-    const default: FeatureSet = .{ .fd = true, .params = true, .lists = true, .redir = true };
+    const default: FeatureSet = .{ .fd = true, .params = true, .lists = true, .redir = true, .cmdsub = true };
 
     fn parse(text: []const u8) ?FeatureSet {
-        var features: FeatureSet = .{ .fd = false, .params = false, .lists = false, .redir = false };
+        var features: FeatureSet = .{ .fd = false, .params = false, .lists = false, .redir = false, .cmdsub = false };
         var saw_feature = false;
         var iterator = std.mem.splitScalar(u8, text, ',');
         while (iterator.next()) |feature| {
@@ -61,6 +62,9 @@ const FeatureSet = packed struct {
             } else if (std.mem.eql(u8, feature, "redir")) {
                 features.redir = true;
                 saw_feature = true;
+            } else if (std.mem.eql(u8, feature, "cmdsub")) {
+                features.cmdsub = true;
+                saw_feature = true;
             } else {
                 return null;
             }
@@ -74,6 +78,7 @@ const FeatureSet = packed struct {
         if (self.params) try writer.writeAll(",params");
         if (self.lists) try writer.writeAll(",lists");
         if (self.redir) try writer.writeAll(",redir");
+        if (self.cmdsub) try writer.writeAll(",cmdsub");
     }
 };
 
@@ -345,7 +350,7 @@ fn writeUsage(io: std.Io) !void {
         \\  --cases N           number of generated cases (default: 100)
         \\  --seed N            deterministic seed (default: 1)
         \\  --case N            run only one generated case index
-        \\  --features LIST     comma-separated features: base,fd,params,lists,redir (default: all)
+        \\  --features LIST     comma-separated features: base,fd,params,lists,redir,cmdsub (default: all)
         \\  --print-cases       print each generated shell script before running it
         \\  --timeout-ms N      per-command timeout in milliseconds, or 0 to disable (default: 5000)
         \\  --keep-temp         keep the temporary sandbox
@@ -512,6 +517,58 @@ const Expansion = union(enum) {
                 .{parameter.number()},
             ),
         }
+    }
+};
+
+const CommandSubstitution = union(enum) {
+    print_value: Value,
+    print_value_with_blank_line: Value,
+    print_stderr: Value,
+    true_cmd,
+    false_cmd,
+
+    fn random(random_source: std.Random) CommandSubstitution {
+        return switch (random_source.uintLessThan(u3, 5)) {
+            0 => .{ .print_value = Value.random(random_source) },
+            1 => .{ .print_value_with_blank_line = Value.random(random_source) },
+            2 => .{ .print_stderr = Value.random(random_source) },
+            3 => .true_cmd,
+            4 => .false_cmd,
+            else => unreachable,
+        };
+    }
+
+    fn renderBody(self: CommandSubstitution, writer: *std.Io.Writer) !void {
+        switch (self) {
+            .print_value => |value| try writer.print("printf '%s\\n' {s}", .{value.shell()}),
+            .print_value_with_blank_line => |value| try writer.print("printf '%s\\n\\n' {s}", .{value.shell()}),
+            .print_stderr => |value| try writer.print("printf '%s\\n' {s} >&2", .{value.shell()}),
+            .true_cmd => try writer.writeAll("true"),
+            .false_cmd => try writer.writeAll("false"),
+        }
+    }
+
+    fn renderQuoted(self: CommandSubstitution, writer: *std.Io.Writer) !void {
+        try writer.writeAll("\"$(");
+        try self.renderBody(writer);
+        try writer.writeAll(")\"");
+    }
+};
+
+const CommandSubstitutionAssignment = struct {
+    variable: Variable,
+    substitution: CommandSubstitution,
+
+    fn random(random_source: std.Random) CommandSubstitutionAssignment {
+        return .{
+            .variable = Variable.random(random_source),
+            .substitution = CommandSubstitution.random(random_source),
+        };
+    }
+
+    fn render(self: CommandSubstitutionAssignment, writer: *std.Io.Writer) !void {
+        try writer.print("{s}=", .{self.variable.shell()});
+        try self.substitution.renderQuoted(writer);
     }
 };
 
@@ -706,6 +763,8 @@ const Command = union(enum) {
     shift_guarded,
     print_stdout: Value,
     print_expansion: Expansion,
+    print_cmdsub: CommandSubstitution,
+    assign_cmdsub: CommandSubstitutionAssignment,
     redirected_simple: RedirectedSimple,
     print_to_file: struct { value: Value, file: FileName },
     cat_file: FileName,
@@ -745,9 +804,13 @@ const Command = union(enum) {
             .top_level => 3,
             .inline_compound => 2,
         } else 0;
+        const cmdsub_count: u8 = if (features.cmdsub) switch (mode) {
+            .top_level => 2,
+            .inline_compound => 1,
+        } else 0;
         const choice = random.uintLessThan(
             u8,
-            base_count + fd_count + params_count + positional_count + lists_count + redir_count,
+            base_count + fd_count + params_count + positional_count + lists_count + redir_count + cmdsub_count,
         );
         if (choice < base_count) return switch (choice) {
             0 => .noop,
@@ -809,6 +872,12 @@ const Command = union(enum) {
             .command = ListOperand.random(random, features),
             .redirection = Redirection.random(random),
         } };
+        feature_choice -= redir_count;
+        if (feature_choice < cmdsub_count) return switch (feature_choice) {
+            0 => .{ .print_cmdsub = CommandSubstitution.random(random) },
+            1 => .{ .assign_cmdsub = CommandSubstitutionAssignment.random(random) },
+            else => unreachable,
+        };
         unreachable;
     }
 
@@ -845,6 +914,11 @@ const Command = union(enum) {
                 try writer.writeAll("printf '%s\\n' ");
                 try expansion.render(writer);
             },
+            .print_cmdsub => |substitution| {
+                try writer.writeAll("printf '%s\\n' ");
+                try substitution.renderQuoted(writer);
+            },
+            .assign_cmdsub => |assignment| try assignment.render(writer),
             .redirected_simple => |redirected| {
                 try redirected.command.render(writer);
                 try redirected.redirection.render(writer);
