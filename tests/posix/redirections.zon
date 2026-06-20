@@ -155,6 +155,48 @@
             .status = 0,
         },
         .{
+            .name = "exec redirection before failed brace group command persists",
+            .script =
+            \\{ exec 3>>out; false <missing; }
+            \\printf 'after\n' >&3
+            \\cat out
+            ,
+            .stdout =
+            \\after
+            \\
+            ,
+            .stderr_match = .nonempty,
+            .status = 0,
+        },
+        .{
+            .name = "exec redirection before failed brace group command is inherited by subshell",
+            .script =
+            \\{ exec 3>>out; false <missing; }
+            \\( printf 'after\n' >&3 )
+            \\cat out
+            ,
+            .stdout =
+            \\after
+            \\
+            ,
+            .stderr_match = .nonempty,
+            .status = 0,
+        },
+        .{
+            .name = "exec redirection in redirected brace group survives later redirection failure",
+            .script =
+            \\{ exec 3>>out; false <missing; } >>group
+            \\( printf 'after\n' >&3 )
+            \\cat out
+            ,
+            .stdout =
+            \\after
+            \\
+            ,
+            .stderr_match = .nonempty,
+            .status = 0,
+        },
+        .{
             .name = "nested command substitution side output preserves descriptor swap routing",
             .script =
             \\v=$(exec 3>&1 1>&2 2>&3; printf "$(printf inner >&2)"; printf outer >&2)

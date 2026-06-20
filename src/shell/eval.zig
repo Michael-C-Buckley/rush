@@ -6330,7 +6330,6 @@ fn evaluateCompoundPlanWithInput(
 fn compoundBodyUsesParentFrame(plan: command_plan.CompoundCommandPlan) bool {
     plan.validate();
     if (!plan.target.allowsShellStateCommit()) return false;
-    if (hasCompoundRedirections(plan)) return false;
     return switch (plan.body) {
         .sequence, .brace_group => true,
         .and_or_list,
