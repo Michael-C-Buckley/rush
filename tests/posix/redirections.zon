@@ -228,6 +228,18 @@
             .status = 0,
         },
         .{
+            .name = "subshell exec redirection reopens a previously closed descriptor",
+            .script =
+            \\( exec 3>&-; exec 3>&1; printf '%s\n' saved >&3 )
+            ,
+            .stdout =
+            \\saved
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "exec redirection in redirected brace group survives later redirection failure",
             .script =
             \\{ exec 3>>out; false <missing; } >>group

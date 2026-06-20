@@ -245,7 +245,7 @@ fn runSemanticCommandStringInternal(
         }
     }
 
-    if (semanticScriptNeedsAliasTiming(script)) {
+    if (semanticCommandStringNeedsChunkedExecution(script, command_string_line_diagnostics)) {
         return runSemanticAliasTimingCommandString(
             allocator,
             io,
@@ -350,7 +350,7 @@ fn runSemanticAliasTimingCommandString(
     evaluator.command_string_line_diagnostics = command_string_line_diagnostics;
     evaluator.io = io;
     evaluator.read_stdin_from_fd = true;
-    evaluator.external_stdio = external_stdio;
+    evaluator.external_stdio = semanticEvaluatorExternalStdio(external_stdio, live_stdio);
     evaluator.commit_exec_redirections = live_stdio and external_stdio == .inherit;
     var parser_resolver = shell.ParserBackedSourceResolver.init(&evaluator);
     parser_resolver.features = invocation.features;
@@ -419,12 +419,19 @@ fn runSemanticAliasTimingCommandString(
                 if (shell_state.pending_exit != null) stop_for_pending_exit = true;
                 break;
             }
-            if (!parsed.incomplete or end >= script.len)
-                return .{ .output = try parseDiagnosticsWithOptions(allocator, source, parsed.diagnostics, .{
-                    .source_path = source_path,
-                    .line_offset = semanticSourceLine(script, start),
-                    .line_number_without_path = command_string_line_diagnostics,
-                }) };
+            if (!parsed.incomplete or end >= script.len) {
+                return .{ .output = try parseDiagnosticsAfterChunkedOutput(
+                    allocator,
+                    &output_frame,
+                    source,
+                    parsed.diagnostics,
+                    .{
+                        .source_path = source_path,
+                        .line_offset = semanticSourceLine(script, start),
+                        .line_number_without_path = command_string_line_diagnostics,
+                    },
+                ) };
+            }
             end = extendSemanticHereDocChunk(script, start, semanticLineEnd(script, end));
         }
         if (stop_for_pending_exit) break;
@@ -772,11 +779,18 @@ fn runSemanticAliasTimingShellStateScript(
                 if (shell_state.pending_exit != null) stop_for_pending_exit = true;
                 break;
             }
-            if (!parsed.incomplete or end >= script.len)
-                return .{ .output = try parseDiagnosticsWithOptions(allocator, source, parsed.diagnostics, .{
-                    .source_path = source_path,
-                    .line_offset = semanticSourceLine(script, start),
-                }) };
+            if (!parsed.incomplete or end >= script.len) {
+                return .{ .output = try parseDiagnosticsAfterChunkedOutput(
+                    allocator,
+                    &output_frame,
+                    source,
+                    parsed.diagnostics,
+                    .{
+                        .source_path = source_path,
+                        .line_offset = semanticSourceLine(script, start),
+                    },
+                ) };
+            }
             end = extendSemanticHereDocChunk(script, start, semanticLineEnd(script, end));
         }
         if (stop_for_pending_exit) break;
@@ -1296,6 +1310,11 @@ fn semanticScriptNeedsAliasTiming(script: []const u8) bool {
         }
     }
     return false;
+}
+
+fn semanticCommandStringNeedsChunkedExecution(script: []const u8, command_string_line_diagnostics: bool) bool {
+    return semanticScriptNeedsAliasTiming(script) or
+        (command_string_line_diagnostics and std.mem.indexOfScalar(u8, script, '\n') != null);
 }
 
 fn isSemanticAliasTokenBoundary(script: []const u8, start: usize, end: usize) bool {
@@ -1919,6 +1938,33 @@ fn parseDiagnosticsWithOptions(
     return .{ .allocator = allocator, .status = 2, .stdout = stdout, .stderr = stderr };
 }
 
+fn parseDiagnosticsAfterChunkedOutput(
+    allocator: std.mem.Allocator,
+    output_frame: *shell.eval.RunnerOutputFrame,
+    script: []const u8,
+    diagnostics: []const parser.Diagnostic,
+    options: ParseDiagnosticOptions,
+) !CommandResult {
+    const prior_output = try output_frame.finish();
+    defer allocator.free(prior_output.stdout);
+    defer allocator.free(prior_output.stderr);
+
+    var diagnostic_output = try parseDiagnosticsWithOptions(allocator, script, diagnostics, options);
+    defer diagnostic_output.deinit();
+
+    const stdout = try concatOutput(allocator, prior_output.stdout, diagnostic_output.stdout);
+    errdefer allocator.free(stdout);
+    const stderr = try concatOutput(allocator, prior_output.stderr, diagnostic_output.stderr);
+    return .{ .allocator = allocator, .status = diagnostic_output.status, .stdout = stdout, .stderr = stderr };
+}
+
+fn concatOutput(allocator: std.mem.Allocator, first: []const u8, second: []const u8) ![]u8 {
+    const joined = try allocator.alloc(u8, first.len + second.len);
+    @memcpy(joined[0..first.len], first);
+    @memcpy(joined[first.len..], second);
+    return joined;
+}
+
 fn appendDiagnosticSource(
     allocator: std.mem.Allocator,
     out: *std.ArrayList(u8),
@@ -2243,7 +2289,7 @@ test "multiline command string parse diagnostics include line without path" {
     defer result.deinit();
 
     try std.testing.expectEqual(@as(shell.ExitStatus, 2), result.status);
-    try std.testing.expectEqualStrings("", result.stdout);
+    try std.testing.expectEqualStrings("before\n", result.stdout);
     try std.testing.expect(std.mem.indexOf(
         u8,
         result.stderr,
@@ -2251,6 +2297,25 @@ test "multiline command string parse diagnostics include line without path" {
     ) != null);
     try std.testing.expect(std.mem.indexOf(u8, result.stderr, "rush: rush:") == null);
     try std.testing.expect(std.mem.indexOf(u8, result.stderr, "  echo after 2>\n") != null);
+}
+
+test "multiline command string executes complete command before later unterminated quote" {
+    const invocation = cli_invocation.parse(&.{
+        "rush", "-c",
+        \\printf hi
+        \\'unterminated
+    }) orelse return error.ExpectedInvocation;
+    var result = try runInvocationForTest(std.testing.allocator, std.testing.io, invocation, null, .capture, false);
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(shell.ExitStatus, 2), result.status);
+    try std.testing.expectEqualStrings("hi", result.stdout);
+    try std.testing.expect(std.mem.indexOf(
+        u8,
+        result.stderr,
+        "rush: 2: incomplete_input: unterminated single quote\n",
+    ) != null);
+    try std.testing.expect(std.mem.indexOf(u8, result.stderr, "  'unterminated\n") != null);
 }
 
 test "single-line command string parse diagnostics omit redundant line" {

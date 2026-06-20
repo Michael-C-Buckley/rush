@@ -4584,11 +4584,15 @@ fn evaluatePlanWithInput(
         effective_plan.class() != .external and
         effective_plan.class() != .function)
     {
-        if ((((eval_context.command_substitution_depth == 0 and eval_context.pipeline_depth != 0 and
-            frameRoutesCapturedOutput(command_frame)) or frameRoutesPipelineData(command_frame)) or
-            (hasScopedExecRedirections(evaluator.*) and !frame.spec.kind.isParentVisible() and
-                redirectionPlanDuplicatesFromOpenSources(command_frame, effective_plan.redirections) and
-                !scopedExecClosesDuplicateSource(evaluator.scoped_exec_redirections, effective_plan.redirections))) and
+        if (!scopedExecRedirectionsMutateRuntime(evaluator.*, effective_plan) and
+            (((eval_context.command_substitution_depth == 0 and eval_context.pipeline_depth != 0 and
+                frameRoutesCapturedOutput(command_frame)) or frameRoutesPipelineData(command_frame)) or
+                (hasScopedExecRedirections(evaluator.*) and !frame.spec.kind.isParentVisible() and
+                    redirectionPlanDuplicatesFromOpenSources(command_frame, effective_plan.redirections) and
+                    !scopedExecClosesDuplicateSource(
+                        evaluator.scoped_exec_redirections,
+                        effective_plan.redirections,
+                    ))) and
             !redirectionPlanDuplicatesFromPathSources(command_frame, effective_plan.redirections) and
             !scopedExecPathBacksDuplicateSource(evaluator.scoped_exec_redirections, effective_plan.redirections) and
             !redirectionPlanNeedsRuntimeFdEffects(effective_plan.redirections))
@@ -4810,6 +4814,13 @@ const ExecRedirectionCommitMode = enum {
     permanent,
     scoped,
 };
+
+fn scopedExecRedirectionsMutateRuntime(evaluator: Evaluator, plan: command_plan.CommandPlan) bool {
+    plan.validate();
+    if (evaluator.scoped_exec_redirections == null) return false;
+    if (plan.argv.len != 1) return false;
+    return std.mem.eql(u8, plan.argv[0], "exec");
+}
 
 fn execRedirectionCommitMode(
     evaluator: Evaluator,
