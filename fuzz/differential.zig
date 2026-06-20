@@ -45,6 +45,7 @@ const FeatureSet = packed struct {
     redir: bool = true,
     cmdsub: bool = true,
     func: bool = true,
+    alias: bool = true,
 
     const default: FeatureSet = .{
         .fd = true,
@@ -53,6 +54,7 @@ const FeatureSet = packed struct {
         .redir = true,
         .cmdsub = true,
         .func = true,
+        .alias = true,
     };
 
     fn parse(text: []const u8) ?FeatureSet {
@@ -63,6 +65,7 @@ const FeatureSet = packed struct {
             .redir = false,
             .cmdsub = false,
             .func = false,
+            .alias = false,
         };
         var saw_feature = false;
         var iterator = std.mem.splitScalar(u8, text, ',');
@@ -88,6 +91,9 @@ const FeatureSet = packed struct {
             } else if (std.mem.eql(u8, feature, "func")) {
                 features.func = true;
                 saw_feature = true;
+            } else if (std.mem.eql(u8, feature, "alias")) {
+                features.alias = true;
+                saw_feature = true;
             } else {
                 return null;
             }
@@ -103,6 +109,7 @@ const FeatureSet = packed struct {
         if (self.redir) try writer.writeAll(",redir");
         if (self.cmdsub) try writer.writeAll(",cmdsub");
         if (self.func) try writer.writeAll(",func");
+        if (self.alias) try writer.writeAll(",alias");
     }
 };
 
@@ -378,7 +385,7 @@ fn writeUsage(io: std.Io) !void {
         \\  --cases N           number of generated cases (default: 100)
         \\  --seed N            deterministic seed (default: random)
         \\  --case N            run only one generated case index
-        \\  --features LIST     comma-separated features: base,fd,params,lists,redir,cmdsub,func (default: all)
+        \\  --features LIST     comma-separated features: base,fd,params,lists,redir,cmdsub,func,alias (default: all)
         \\  --print-cases       print each generated shell script before running it
         \\  --timeout-ms N      per-command timeout in milliseconds, or 0 to disable (default: Debug 5000, Release 1000)
         \\  --keep-temp         keep the temporary sandbox
@@ -929,6 +936,31 @@ const FunctionUnsetProbe = enum {
     }
 };
 
+const AliasProbe = enum {
+    define_call,
+    redefine,
+    unalias_missing,
+
+    fn random(random_source: std.Random) AliasProbe {
+        return @enumFromInt(random_source.uintLessThan(u2, 3));
+    }
+
+    fn render(self: AliasProbe, writer: *std.Io.Writer) !void {
+        try writer.writeAll("unalias a 2>/dev/null\n");
+        switch (self) {
+            .define_call => try writer.writeAll(
+                "alias a='printf \"%s\\n\" alias'\na",
+            ),
+            .redefine => try writer.writeAll(
+                "alias a='printf \"%s\\n\" old'\na\nalias a='printf \"%s\\n\" new'\na",
+            ),
+            .unalias_missing => try writer.writeAll(
+                "alias a='printf \"%s\\n\" alive'\na\nunalias a\na 2>/dev/null || printf '%s\n' missing",
+            ),
+        }
+    }
+};
+
 const DirName = enum {
     d,
     e,
@@ -1041,6 +1073,7 @@ const Command = union(enum) {
     function_scope_probe: FunctionScopeProbe,
     function_redefinition_probe: FunctionRedefinitionProbe,
     function_unset_probe: FunctionUnsetProbe,
+    alias_probe: AliasProbe,
     print_to_file: struct { value: Value, file: FileName },
     cat_file: FileName,
     subshell: []Command,
@@ -1087,8 +1120,9 @@ const Command = union(enum) {
             .top_level => 5,
             .inline_compound => if (depth < 2) 1 else 0,
         } else 0;
+        const alias_count: u8 = if (features.alias and mode == .top_level) 1 else 0;
         const choice_count = base_count + fd_count + params_count + positional_count + lists_count + redir_count +
-            cmdsub_count + func_count;
+            cmdsub_count + func_count + alias_count;
         const choice = random.uintLessThan(
             u8,
             choice_count,
@@ -1172,6 +1206,8 @@ const Command = union(enum) {
             }
             return .{ .function_case = FunctionCase.random(random, features) };
         }
+        feature_choice -= func_count;
+        if (feature_choice < alias_count) return .{ .alias_probe = AliasProbe.random(random) };
         unreachable;
     }
 
@@ -1221,6 +1257,7 @@ const Command = union(enum) {
             .function_scope_probe => |scope_probe| try scope_probe.render(writer),
             .function_redefinition_probe => |redefinition_probe| try redefinition_probe.render(writer),
             .function_unset_probe => |unset_probe| try unset_probe.render(writer),
+            .alias_probe => |alias_probe| try alias_probe.render(writer),
             .print_to_file => |print| try writer.print(
                 "printf '%s\\n' {s} > {s}",
                 .{ print.value.shell(), print.file.shell() },
