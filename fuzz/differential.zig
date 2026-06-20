@@ -139,6 +139,7 @@ pub fn main(init: std.process.Init) !u8 {
         return 2;
     };
     defer config.deinit(allocator);
+    std.debug.print("differential: seed: {d}\n", .{config.seed});
 
     var temp_root = try createTempRoot(allocator, init.io);
     var keep_temp = config.keep_temp;
@@ -251,7 +252,7 @@ fn parseArgs(allocator: std.mem.Allocator, io: std.Io, args: []const []const u8)
     var shell_args: std.ArrayList([]const u8) = .empty;
     defer shell_args.deinit(allocator);
     var cases: usize = 100;
-    var seed: u64 = 1;
+    var seed: ?u64 = null;
     var case_filter: ?usize = null;
     var keep_temp = false;
     var strict_stderr = false;
@@ -311,13 +312,16 @@ fn parseArgs(allocator: std.mem.Allocator, io: std.Io, args: []const []const u8)
     const resolved_shell = try resolveCommandPath(allocator, io, shell);
     errdefer allocator.free(resolved_shell);
     const owned_shell_args = try shell_args.toOwnedSlice(allocator);
+    var random_seed_bytes: [8]u8 = undefined;
+    if (seed == null) io.random(&random_seed_bytes);
+    const resolved_seed = seed orelse std.mem.readInt(u64, &random_seed_bytes, .little);
 
     return .{
         .rush_path = resolved_rush,
         .shell = resolved_shell,
         .shell_args = owned_shell_args,
         .cases = cases,
-        .seed = seed,
+        .seed = resolved_seed,
         .case_filter = case_filter,
         .keep_temp = keep_temp,
         .strict_stderr = strict_stderr,
@@ -348,7 +352,7 @@ fn writeUsage(io: std.Io) !void {
         \\  --shell SHELL       reference shell (default: dash)
         \\  --shell-arg ARG     pass ARG to the reference shell
         \\  --cases N           number of generated cases (default: 100)
-        \\  --seed N            deterministic seed (default: 1)
+        \\  --seed N            deterministic seed (default: random)
         \\  --case N            run only one generated case index
         \\  --features LIST     comma-separated features: base,fd,params,lists,redir,cmdsub (default: all)
         \\  --print-cases       print each generated shell script before running it
