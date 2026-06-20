@@ -280,6 +280,19 @@
             .status = 0,
         },
         .{
+            .name = "nested command substitution inherited fd output bypasses outer substitution text",
+            .script =
+            \\{ exec 3>&1; x=$(printf '%s' "$(printf side >&3; printf main)"); printf '<%s>' "$x"; } | cat
+            \\printf '\n'
+            ,
+            .stdout =
+            \\side<main>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "nested command substitution inherits pipeline stderr as side output",
             .script =
             \\f(){ printf '%s\n' "$(printf '%s' "$(printf side >&2; printf ret)")"; return 3; }

@@ -6110,7 +6110,11 @@ fn appendExpansionOutput(
     defer frame.deinit();
     if (output.side_stdout.len != 0) {
         if (eval_context.command_substitution_depth != 0 or frameWithinCommandSubstitution(buffers.frame.*)) {
-            try buffers.stdout.appendSlice(buffers.allocator, output.side_stdout);
+            if (frameHasNonstandardPipelineCapture(buffers.frame.*)) {
+                try buffers.side_stdout.appendSlice(buffers.allocator, output.side_stdout);
+            } else {
+                try buffers.stdout.appendSlice(buffers.allocator, output.side_stdout);
+            }
         } else {
             try frame.write(1, output.side_stdout);
         }
@@ -6119,6 +6123,16 @@ fn appendExpansionOutput(
     for (output.diagnostics) |message| {
         try buffers.addDiagnosticMessage(message);
     }
+}
+
+fn frameHasNonstandardPipelineCapture(frame: execution_frame.ExecutionFrame) bool {
+    frame.validate();
+    for (frame.spec.fd_table.bindings.items) |binding| {
+        binding.validate();
+        if (binding.descriptor == 1 or binding.descriptor == 2) continue;
+        if (frameOutputEndpointCaptures(binding.endpoint, .pipeline_data)) return true;
+    }
+    return false;
 }
 
 fn appendRedirectionExpansionOutputToFrame(
