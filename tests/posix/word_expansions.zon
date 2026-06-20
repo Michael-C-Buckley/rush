@@ -504,6 +504,19 @@
             .status = 0,
         },
         .{
+            .name = "assignment command substitution does not leak captured newlines",
+            .script =
+            \\x="$(printf '%s\n\n' '')"
+            \\printf '<%s>\n' "$x"
+            ,
+            .stdout =
+            \\<>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "command substitution nests inside double quotes",
             .script =
             \\printf '<%s>\n' "$(printf '[%s]' "$(printf inner)")"

@@ -5874,6 +5874,87 @@ const RedirectionGuard = struct {
     }
 };
 
+const ScopedFrameFdRedirections = struct {
+    snapshots: std.ArrayList(Snapshot) = .empty,
+
+    const Snapshot = struct {
+        descriptor: runtime.fd.Descriptor,
+        endpoint: ?execution_frame.FdEndpoint,
+    };
+
+    fn apply(
+        self: *ScopedFrameFdRedirections,
+        allocator: std.mem.Allocator,
+        frame: *execution_frame.ExecutionFrame,
+        redirections: redirection_plan.RedirectionPlan,
+    ) EvalError!void {
+        frame.validate();
+        redirections.validate();
+        std.debug.assert(self.snapshots.items.len == 0);
+
+        errdefer self.restore(allocator, frame);
+        for (redirections.steps) |step| {
+            step.validate();
+            try self.recordTarget(allocator, frame.*, step.target());
+            try frame.spec.fd_table.applyRedirectionStep(allocator, step);
+        }
+        frame.validate();
+    }
+
+    fn restore(
+        self: *ScopedFrameFdRedirections,
+        allocator: std.mem.Allocator,
+        frame: *execution_frame.ExecutionFrame,
+    ) void {
+        if (self.snapshots.items.len == 0) return;
+        var index = self.snapshots.items.len;
+        while (index != 0) {
+            index -= 1;
+            restoreFrameFdBinding(frame, self.snapshots.items[index]);
+        }
+        frame.spec.fd_table.bindings.shrinkAndFree(allocator, frame.spec.fd_table.bindings.items.len);
+        self.snapshots.deinit(allocator);
+        self.* = .{};
+        frame.validate();
+    }
+
+    fn recordTarget(
+        self: *ScopedFrameFdRedirections,
+        allocator: std.mem.Allocator,
+        frame: execution_frame.ExecutionFrame,
+        descriptor: runtime.fd.Descriptor,
+    ) std.mem.Allocator.Error!void {
+        runtime.fd.assertValidDescriptor(descriptor);
+        for (self.snapshots.items) |snapshot| {
+            if (snapshot.descriptor == descriptor) return;
+        }
+        try self.snapshots.append(allocator, .{
+            .descriptor = descriptor,
+            .endpoint = frame.spec.fd_table.boundEndpoint(descriptor),
+        });
+    }
+};
+
+fn restoreFrameFdBinding(frame: *execution_frame.ExecutionFrame, snapshot: ScopedFrameFdRedirections.Snapshot) void {
+    runtime.fd.assertValidDescriptor(snapshot.descriptor);
+    const binding_index = frameFdBindingIndex(frame.spec.fd_table, snapshot.descriptor);
+    if (snapshot.endpoint) |endpoint| {
+        endpoint.validate();
+        const index = binding_index orelse unreachable;
+        frame.spec.fd_table.bindings.items[index] = .{ .descriptor = snapshot.descriptor, .endpoint = endpoint };
+    } else if (binding_index) |index| {
+        _ = frame.spec.fd_table.bindings.orderedRemove(index);
+    }
+}
+
+fn frameFdBindingIndex(table: execution_frame.FdTable, descriptor: runtime.fd.Descriptor) ?usize {
+    runtime.fd.assertValidDescriptor(descriptor);
+    for (table.bindings.items, 0..) |binding, index| {
+        if (binding.descriptor == descriptor) return index;
+    }
+    return null;
+}
+
 const RedirectionGuardResult = union(enum) {
     applied: RedirectionGuard,
     failure: redirection_plan.ApplyFailure,
@@ -6228,6 +6309,8 @@ fn evaluateCompoundPlanWithInput(
 
     var redirection_guard = RedirectionGuard.empty(.current_scoped);
     defer redirection_guard.restore();
+    var frame_redirection_guard: ScopedFrameFdRedirections = .{};
+    defer frame_redirection_guard.restore(evaluator.allocator, active_frame);
     var redirection_output_flushed = false;
     if (hasCompoundRedirections(plan)) {
         if (frameRoutesPipelineData(command_frame) and !redirectionPlanNeedsRuntimeFdEffects(plan.redirections)) {
@@ -6243,7 +6326,17 @@ fn evaluateCompoundPlanWithInput(
                 plan.kindName(),
             );
             switch (apply_result) {
-                .applied => |applied| redirection_guard = applied,
+                .applied => |applied| {
+                    redirection_guard = applied;
+                    if (compoundBodyUsesParentFrame(plan) and
+                        evaluator.external_stdio == .inherit and
+                        evaluator.commit_exec_redirections and
+                        evaluator.io != null and
+                        frameTargetsInheritedStandardDescriptors(active_frame.*, true))
+                    {
+                        try frame_redirection_guard.apply(evaluator.allocator, active_frame, plan.redirections);
+                    }
+                },
                 .failure => |failure| {
                     const status = consequence.statusForRedirectionFailure(failure.consequence);
                     const decision = consequence.decideForRedirectionFailure(
@@ -9117,7 +9210,7 @@ fn completeStatementChildResult(
         }
         if (child_result.control_flow == .normal) result.* = trap_result;
     }
-    if (eval_context.target == .current_shell) {
+    if (eval_context.target == .current_shell and buffers.frame.spec.kind.isParentVisible()) {
         try flushCurrentShellBufferedCommandOutput(
             buffers,
             eval_context,
@@ -9198,6 +9291,9 @@ fn evaluateStatementList(
         for (list.commands) |child_plan| {
             child_plan.validate();
             if (noexecSuppressesCommand(shell_state.*, eval_context)) break;
+            if (child_plan.target.isIsolatedFromParent()) {
+                try flushChildShellBufferedCommandOutput(buffers, eval_context);
+            }
             try flushBuffersForRedirectionTargetsBetweenCommands(
                 buffers,
                 eval_context,
@@ -9244,6 +9340,7 @@ fn evaluateStatementList(
         };
         if (!should_run) continue;
         if (noexecSuppressesCommand(shell_state.*, eval_context)) break;
+        try flushChildShellBufferedCommandOutput(buffers, eval_context);
 
         var child_context = eval_context;
         if (index + 1 < list.statements.len) {
@@ -10059,6 +10156,7 @@ fn flushBuffersForRedirectionTargetsBetweenCommands(
     const flush_stdout = buffers.stdout.items.len != 0 and redirectionTargetsDescriptor(redirections, 1);
     const flush_stderr = buffers.stderr.items.len != 0 and redirectionTargetsDescriptor(redirections, 2);
     if (!flush_stdout and !flush_stderr) return;
+    if (eval_context.target != .current_shell) return flushChildShellBufferedCommandOutput(buffers, eval_context);
     switch (external_stdio) {
         .capture => return,
         .capture_stdout => {
@@ -10276,12 +10374,17 @@ fn evaluateAndOrList(
             }
             if (child_control_flow == .normal) result = trap_result;
         }
-        try flushCurrentShellBufferedCommandOutput(
-            buffers,
-            eval_context,
-            evaluator.external_stdio,
-            evaluator.io != null,
-        );
+        if (eval_context.target == .current_shell) {
+            try flushCurrentShellBufferedCommandOutput(
+                buffers,
+                eval_context,
+                evaluator.external_stdio,
+                evaluator.io != null,
+            );
+        } else {
+            try flushChildShellBufferedCommandOutput(buffers, eval_context);
+            try flushLiveInheritedBufferedOutput(buffers, eval_context, evaluator.io != null);
+        }
         if (bashAssignmentErrorOutcomeAbortsSourceLine(eval_context, child_outcome)) break;
         if (child_control_flow != .normal) break;
     }
@@ -11170,9 +11273,9 @@ fn appendOutcomeBuffers(buffers: *EvaluationBuffers, command_outcome: outcome.Co
         }
         return;
     }
-    try buffers.side_stdout.appendSlice(buffers.allocator, command_outcome.side_stdout.items);
     var frame = try buffers.outputFrame();
     defer frame.deinit();
+    try frame.write(1, command_outcome.side_stdout.items);
     try frame.write(1, command_outcome.stdout.items);
     try frame.write(2, command_outcome.stderr.items);
     try buffers.pipeline_stdout.appendSlice(buffers.allocator, command_outcome.pipeline_stdout.items);
@@ -12901,9 +13004,16 @@ fn flushChildShellBufferedCommandOutput(
     eval_context: context.EvalContext,
 ) EvalError!void {
     eval_context.validate();
-    if (eval_context.target == .current_shell) return;
-    var frame = try buffers.outputFrame();
+    if (eval_context.command_substitution_depth != 0) return;
+    if (eval_context.target == .current_shell and buffers.frame.spec.kind.isParentVisible()) return;
+    var frame = OutputFrame.initInherited(buffers);
     defer frame.deinit();
+    if (buffers.side_stdout.items.len != 0) {
+        var side_stdout = buffers.side_stdout;
+        buffers.side_stdout = .empty;
+        defer side_stdout.deinit(buffers.allocator);
+        try frame.write(1, side_stdout.items);
+    }
     try frame.flushPendingStandardDescriptors();
 }
 

@@ -93,6 +93,19 @@
             .status = 0,
         },
         .{
+            .name = "nested subshell preserves output order before redirected command",
+            .script =
+            \\( ( printf 'three\n' ); ( printf 'two\n'; printf '\n' >out; ) )
+            ,
+            .stdout =
+            \\three
+            \\two
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "subshell exec redirection operand side output remains ordered and isolated",
             .script =
             \\exec 2>&1
