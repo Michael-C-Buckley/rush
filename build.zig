@@ -118,6 +118,9 @@ pub fn build(b: *std.Build) void {
     const conformance_step = b.step("conformance", "Run shell conformance tests");
     addConformanceTests(b, target, optimize, exe, conformance_step);
 
+    const differential_step = b.step("differential", "Run generated differential shell integration tests");
+    addDifferentialTests(b, target, optimize, exe, differential_step);
+
     const fuzz_step = b.step("fuzz", "Run all fuzz targets (combine with --fuzz to actually fuzz)");
     addFuzzTarget(b, fuzz_step, target, .{
         .step_name = "fuzz-parser",
@@ -138,6 +141,7 @@ pub fn build(b: *std.Build) void {
     const lint_step = b.step("lint", "Run ziglint");
     lint_step.dependOn(ziglint.addLint(b, ziglint_dep, &.{
         b.path("build.zig"),
+        b.path("fuzz"),
         b.path("src"),
         b.path("tests"),
     }));
@@ -301,6 +305,29 @@ fn conformanceArgsHaveSuiteFiles(args: []const []const u8) bool {
         return true;
     }
     return false;
+}
+
+fn addDifferentialTests(
+    b: *std.Build,
+    target: std.Build.ResolvedTarget,
+    optimize: std.builtin.OptimizeMode,
+    rush: *std.Build.Step.Compile,
+    differential_step: *std.Build.Step,
+) void {
+    const harness = b.addExecutable(.{
+        .name = "rush-differential-harness",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("fuzz/differential.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
+    });
+
+    const run = b.addRunArtifact(harness);
+    run.addArg("--rush");
+    run.addArtifactArg(rush);
+    if (b.args) |args| run.addArgs(args);
+    differential_step.dependOn(&run.step);
 }
 
 fn createRushRootModule(
