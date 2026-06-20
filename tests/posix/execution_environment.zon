@@ -622,6 +622,21 @@
             .status = 0,
         },
         .{
+            .name = "alias-timed chunks preserve exec redirections",
+            .script =
+            \\exec 3>&1
+            \\alias gone=':'
+            \\unalias gone
+            \\printf '%s\n' two >&3
+            ,
+            .stdout =
+            \\two
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "loop redirection does not isolate condition or body mutations",
             .script =
             \\i=0

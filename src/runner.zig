@@ -310,6 +310,7 @@ fn runSemanticCommandStringInternal(
         invocation.stdin_script_file,
         invocation.stdin_script_source_offset,
         true,
+        null,
     );
 }
 
@@ -401,6 +402,7 @@ fn runSemanticAliasTimingCommandString(
                     invocation.stdin_script_file,
                     invocation.stdin_script_source_offset,
                     false,
+                    &output_frame,
                 );
                 defer execution.deinit(allocator);
                 parser_resolver.active_frame = null;
@@ -667,6 +669,7 @@ fn runSemanticShellStateScriptWithoutAliasTiming(
         null,
         0,
         false,
+        null,
     );
 }
 
@@ -753,6 +756,7 @@ fn runSemanticAliasTimingShellStateScript(
                     null,
                     0,
                     false,
+                    &output_frame,
                 );
                 defer execution.deinit(allocator);
                 switch (execution) {
@@ -906,6 +910,7 @@ pub fn runInteractiveCommandStringWithExtensionHandlers(
         null,
         0,
         invocation.source == .command_string,
+        null,
     );
 }
 
@@ -921,6 +926,7 @@ fn runSemanticLoweredProgram(
     stdin_script_file: ?std.Io.File,
     stdin_script_source_offset: usize,
     run_exit_trap: bool,
+    shared_output_frame: ?*shell.eval.RunnerOutputFrame,
 ) !SemanticInvocationExecution {
     eval_context.validate();
     shell_state.validate();
@@ -930,11 +936,17 @@ fn runSemanticLoweredProgram(
     source_resolver.source_line_offset = source_line_offset;
     defer source_resolver.source_line_offset = previous_source_line_offset;
 
-    var output_frame = try shell.eval.RunnerOutputFrame.init(
-        allocator,
-        runnerOutputMode(evaluator.commit_exec_redirections),
-    );
-    defer output_frame.deinit();
+    var local_output_frame: shell.eval.RunnerOutputFrame = undefined;
+    const output_frame = if (shared_output_frame) |frame|
+        frame
+    else blk: {
+        local_output_frame = try shell.eval.RunnerOutputFrame.init(
+            allocator,
+            runnerOutputMode(evaluator.commit_exec_redirections),
+        );
+        break :blk &local_output_frame;
+    };
+    defer if (shared_output_frame == null) output_frame.deinit();
 
     var status: shell.ExitStatus = 0;
     var control_flow: shell.ControlFlow = .normal;
@@ -1057,7 +1069,7 @@ fn runSemanticLoweredProgram(
         try command_outcome.applyToShellState(shell_state, .{ .record_exit_control_flow = true });
         try configureRuntimeTrapMutations(evaluator, shell_state.*, command_outcome.state_delta);
         try appendPendingRuntimeTrapOutcome(
-            &output_frame,
+            output_frame,
             &status,
             &control_flow,
             evaluator,
@@ -1071,7 +1083,7 @@ fn runSemanticLoweredProgram(
     control_flow.validate();
     var final_status = control_flow.status(status);
     if (run_exit_trap) try appendSemanticExitTrap(
-        &output_frame,
+        output_frame,
         &final_status,
         evaluator,
         shell_state,
