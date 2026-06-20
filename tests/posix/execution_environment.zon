@@ -268,6 +268,18 @@
             .status = 0,
         },
         .{
+            .name = "nested command substitution keeps inherited pipeline output before outer output",
+            .script =
+            \\{ exec 3>&1; printf '%s\n' "$(printf '%s' "$(printf inner >&3; printf outer)")"; } | cat
+            ,
+            .stdout =
+            \\innerouter
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "command substitution stderr merge captures pattern side output outside nested result",
             .script =
             \\x=$(exec 2>&1; case y in "$(printf 'pattern\n' >&2; printf y)") printf value ;; esac)

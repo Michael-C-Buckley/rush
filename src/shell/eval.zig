@@ -4890,8 +4890,30 @@ fn routeDirectPipelineStageBuffers(buffers: *EvaluationBuffers) EvalError!void {
     buffers.frame.validate();
     std.debug.assert(frameRoutesPipelineData(buffers.frame.*));
 
+    try routeDirectPipelineStageSideStdout(buffers);
     try routeDirectPipelineStageBuffer(buffers, 1, &buffers.stdout);
     try routeDirectPipelineStageBuffer(buffers, 2, &buffers.stderr);
+}
+
+fn routeDirectPipelineStageSideStdout(buffers: *EvaluationBuffers) EvalError!void {
+    buffers.frame.validate();
+    if (buffers.side_stdout.items.len == 0) return;
+
+    switch (buffers.frame.spec.fd_table.endpoint(1)) {
+        .output => |output| switch (output) {
+            .capture => |channel| switch (channel) {
+                .pipeline_data => {
+                    try buffers.pipeline_stdout.appendSlice(buffers.allocator, buffers.side_stdout.items);
+                    buffers.side_stdout.items.len = 0;
+                },
+                .side_stdout, .side_stderr, .command_substitution_stdout => {},
+            },
+            .discard => buffers.side_stdout.items.len = 0,
+            .inherit_stdout, .inherit_stderr, .fd, .pipe_write, .path => {},
+        },
+        .closed => buffers.side_stdout.items.len = 0,
+        .input => buffers.side_stdout.items.len = 0,
+    }
 }
 
 fn routeDirectPipelineStageBuffer(
@@ -7156,7 +7178,11 @@ fn commandSubstitutionResultFromOutcome(
     const trimmed = trimCommandSubstitutionOutput(command_outcome.stdout.items);
     try appendCommandSubstitutionOutput(allocator, &result.output, trimmed);
     const trimmed_pipeline_stdout = trimCommandSubstitutionOutput(command_outcome.pipeline_stdout.items);
-    try appendCommandSubstitutionOutput(allocator, &result.output, trimmed_pipeline_stdout);
+    if (command_substitution_depth == 1) {
+        try appendCommandSubstitutionOutput(allocator, &result.output, trimmed_pipeline_stdout);
+    } else {
+        try result.side_stdout.appendSlice(allocator, command_outcome.pipeline_stdout.items);
+    }
     std.debug.assert(result.output.items.len <=
         trimmed.len + trimmed_pipeline_stdout.len + command_outcome.side_stdout.items.len);
     if (result.output.items.len != 0) std.debug.assert(result.output.items.ptr != command_outcome.stdout.items.ptr);
@@ -8007,6 +8033,12 @@ fn routePipelineStageOutcome(
     stage_outcome.validate();
     frame.validate();
     std.debug.assert(frame.spec.kind == .pipeline_stage);
+    try routePipelineStageOutcomeBuffer(
+        allocator,
+        frame.spec.fd_table.endpoint(1),
+        &stage_outcome.side_stdout,
+        &stage_outcome.pipeline_stdout,
+    );
     try routePipelineStageOutcomeBuffer(
         allocator,
         frame.spec.fd_table.endpoint(1),
@@ -11047,9 +11079,9 @@ fn appendOutcomeBuffers(buffers: *EvaluationBuffers, command_outcome: outcome.Co
         if (buffers.propagated_failure == null) buffers.propagated_failure = failure;
     }
     if (frameWithinCommandSubstitution(buffers.frame.*)) {
+        try buffers.side_stdout.appendSlice(buffers.allocator, command_outcome.side_stdout.items);
         try buffers.stdout.appendSlice(buffers.allocator, command_outcome.stdout.items);
         try buffers.stderr.appendSlice(buffers.allocator, command_outcome.stderr.items);
-        try buffers.side_stdout.appendSlice(buffers.allocator, command_outcome.side_stdout.items);
         try buffers.pipeline_stdout.appendSlice(buffers.allocator, command_outcome.pipeline_stdout.items);
         for (command_outcome.diagnostics.items) |diagnostic| {
             try buffers.addDiagnosticMessage(diagnostic.message);
@@ -11058,9 +11090,9 @@ fn appendOutcomeBuffers(buffers: *EvaluationBuffers, command_outcome: outcome.Co
     }
     var frame = try buffers.outputFrame();
     defer frame.deinit();
+    try frame.write(1, command_outcome.side_stdout.items);
     try frame.write(1, command_outcome.stdout.items);
     try frame.write(2, command_outcome.stderr.items);
-    try buffers.side_stdout.appendSlice(buffers.allocator, command_outcome.side_stdout.items);
     try buffers.pipeline_stdout.appendSlice(buffers.allocator, command_outcome.pipeline_stdout.items);
     for (command_outcome.diagnostics.items) |diagnostic| {
         try buffers.addDiagnosticMessage(diagnostic.message);
