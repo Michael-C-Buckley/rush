@@ -674,6 +674,13 @@ const Redirection = union(enum) {
             .stdout_to_stderr => try writer.writeAll(" >&2"),
         }
     }
+
+    fn mayFailBeforeCommand(self: Redirection) bool {
+        return switch (self) {
+            .stdin_file => true,
+            .stdout_file, .stderr_file, .stderr_to_stdout, .stdout_to_stderr => false,
+        };
+    }
 };
 
 const RedirectedSimple = struct {
@@ -687,15 +694,37 @@ const FunctionBodyOperand = union(enum) {
     print_first_arg,
     print_second_arg_default,
     print_quoted_args,
+    return_status: ReturnStatus,
+
+    const ReturnStatus = enum {
+        zero,
+        one,
+        two,
+        seven,
+
+        fn random(random_source: std.Random) ReturnStatus {
+            return @enumFromInt(random_source.uintLessThan(u3, 4));
+        }
+
+        fn value(self: ReturnStatus) u8 {
+            return switch (self) {
+                .zero => 0,
+                .one => 1,
+                .two => 2,
+                .seven => 7,
+            };
+        }
+    };
 
     fn random(random_source: std.Random, features: FeatureSet) FunctionBodyOperand {
-        if (!features.params) return .{ .command = ListOperand.random(random_source, features) };
-        return switch (random_source.uintLessThan(u3, 5)) {
+        const params_count: u8 = if (features.params) 4 else 0;
+        return switch (random_source.uintLessThan(u8, 2 + params_count)) {
             0 => .{ .command = ListOperand.random(random_source, features) },
-            1 => .print_arg_count,
-            2 => .print_first_arg,
-            3 => .print_second_arg_default,
-            4 => .print_quoted_args,
+            1 => .{ .return_status = ReturnStatus.random(random_source) },
+            2 => .print_arg_count,
+            3 => .print_first_arg,
+            4 => .print_second_arg_default,
+            5 => .print_quoted_args,
             else => unreachable,
         };
     }
@@ -707,6 +736,7 @@ const FunctionBodyOperand = union(enum) {
             .print_first_arg => try writer.writeAll("printf '%s\n' \"$1\""),
             .print_second_arg_default => try writer.writeAll("printf '%s\n' \"${2-default}\""),
             .print_quoted_args => try writer.writeAll("for x in \"$@\"; do printf '[%s]\n' \"$x\"; done"),
+            .return_status => |status| try writer.print("return {d}", .{status.value()}),
         }
     }
 };
@@ -717,6 +747,7 @@ const FunctionCase = struct {
     args: [2]Value,
     arg_count: usize,
     caller_positionals: ?PositionalSet,
+    print_status: bool,
     redirection: ?Redirection,
 
     fn random(random_source: std.Random, features: FeatureSet) FunctionCase {
@@ -733,6 +764,7 @@ const FunctionCase = struct {
                 PositionalSet.random(random_source)
             else
                 null,
+            .print_status = random_source.boolean(),
             .redirection = if (features.redir and random_source.boolean())
                 Redirection.random(random_source)
             else
@@ -753,6 +785,8 @@ const FunctionCase = struct {
         try writer.writeAll("; }; f");
         for (self.args[0..self.arg_count]) |arg| try writer.print(" {s}", .{arg.shell()});
         if (self.redirection) |redirection| try redirection.render(writer);
+        const status_is_portable = if (self.redirection) |redirection| !redirection.mayFailBeforeCommand() else true;
+        if (self.print_status and status_is_portable) try writer.writeAll("; printf '%s\n' \"$?\"");
         if (self.caller_positionals != null) {
             try writer.writeAll("; printf '%s\n' \"${1-default}\"");
         }
