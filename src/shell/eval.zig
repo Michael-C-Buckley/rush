@@ -7466,7 +7466,10 @@ fn evaluateSingleStagePipeline(
         buffers.frame,
     );
     defer stage_outcome.deinit();
-    try appendOutcomeBuffers(buffers, stage_outcome);
+    if (plan.negated)
+        try appendPipelineStageBuffers(buffers, stage_outcome, .parent_output)
+    else
+        try appendOutcomeBuffers(buffers, stage_outcome);
 
     const stage_control_flow = stage_outcome.effectiveControlFlow();
     statuses[0] = stage_control_flow.status(stage_outcome.status);
@@ -8039,7 +8042,9 @@ fn evaluateFallbackPipeline(
         );
         defer stage_frame.spec.fd_table.deinit(evaluator.allocator);
         var redirected_stage = stageWithTarget(stage, stage_target);
-        if (!redirectionPlanNeedsRuntimeFdEffects(pipelineStageRedirections(stage))) {
+        if (!redirectionPlanNeedsRuntimeFdEffects(pipelineStageRedirections(stage)) and
+            semanticHereDocStdinSource(pipelineStageRedirections(stage)) == null)
+        {
             clearStageRedirections(&redirected_stage);
         }
         var stage_outcome = if (stage.isExternal())
@@ -9151,7 +9156,7 @@ fn completeStatementChildOutcome(
         std.debug.assert(abort_bash_line == null);
     }
 
-    try appendOutcomeBuffers(buffers, child_outcome.*);
+    try appendStatementChildOutcomeBuffers(buffers, child_outcome.*);
     switch (state_disposition) {
         .commit_to_working => |target| {
             try applyOutcomeToWorkingState(shell_state, child_outcome, target);
@@ -11168,6 +11173,27 @@ fn appendOutcomeBuffers(buffers: *EvaluationBuffers, command_outcome: outcome.Co
     }
     try buffers.side_stdout.appendSlice(buffers.allocator, command_outcome.side_stdout.items);
     var frame = try buffers.outputFrame();
+    defer frame.deinit();
+    try frame.write(1, command_outcome.stdout.items);
+    try frame.write(2, command_outcome.stderr.items);
+    try buffers.pipeline_stdout.appendSlice(buffers.allocator, command_outcome.pipeline_stdout.items);
+    for (command_outcome.diagnostics.items) |diagnostic| {
+        try buffers.addDiagnosticMessage(diagnostic.message);
+    }
+}
+
+fn appendStatementChildOutcomeBuffers(buffers: *EvaluationBuffers, command_outcome: outcome.CommandOutcome) !void {
+    command_outcome.validate();
+    if (frameWithinCommandSubstitution(buffers.frame.*) or buffers.frame.spec.kind == .pipeline_stage)
+        return appendOutcomeBuffers(buffers, command_outcome);
+    if (command_outcome.propagated_failure) |failure| {
+        if (buffers.propagated_failure == null) buffers.propagated_failure = failure;
+    }
+    var side_frame = try buffers.outputFrame();
+    defer side_frame.deinit();
+    try side_frame.write(1, command_outcome.side_stdout.items);
+
+    var frame = OutputFrame.initOutcomeCapture(buffers);
     defer frame.deinit();
     try frame.write(1, command_outcome.stdout.items);
     try frame.write(2, command_outcome.stderr.items);
