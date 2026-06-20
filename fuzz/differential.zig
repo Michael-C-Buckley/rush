@@ -55,6 +55,10 @@ const FeatureSet = packed struct {
     break_continue: bool = true,
     arith: bool = true,
     heredoc: bool = true,
+    stress: bool = true,
+    source_eval: bool = true,
+    trap: bool = true,
+    corpus: bool = true,
 
     const default: FeatureSet = .{
         .fd = true,
@@ -73,6 +77,10 @@ const FeatureSet = packed struct {
         .break_continue = true,
         .arith = true,
         .heredoc = true,
+        .stress = true,
+        .source_eval = true,
+        .trap = true,
+        .corpus = true,
     };
 
     fn parse(text: []const u8) ?FeatureSet {
@@ -93,6 +101,10 @@ const FeatureSet = packed struct {
             .break_continue = false,
             .arith = false,
             .heredoc = false,
+            .stress = false,
+            .source_eval = false,
+            .trap = false,
+            .corpus = false,
         };
         var saw_feature = false;
         var iterator = std.mem.splitScalar(u8, text, ',');
@@ -148,6 +160,18 @@ const FeatureSet = packed struct {
             } else if (std.mem.eql(u8, feature, "heredoc")) {
                 features.heredoc = true;
                 saw_feature = true;
+            } else if (std.mem.eql(u8, feature, "stress")) {
+                features.stress = true;
+                saw_feature = true;
+            } else if (std.mem.eql(u8, feature, "source_eval")) {
+                features.source_eval = true;
+                saw_feature = true;
+            } else if (std.mem.eql(u8, feature, "trap")) {
+                features.trap = true;
+                saw_feature = true;
+            } else if (std.mem.eql(u8, feature, "corpus")) {
+                features.corpus = true;
+                saw_feature = true;
             } else {
                 return null;
             }
@@ -173,6 +197,10 @@ const FeatureSet = packed struct {
         if (self.break_continue) try writer.writeAll(",break_continue");
         if (self.arith) try writer.writeAll(",arith");
         if (self.heredoc) try writer.writeAll(",heredoc");
+        if (self.stress) try writer.writeAll(",stress");
+        if (self.source_eval) try writer.writeAll(",source_eval");
+        if (self.trap) try writer.writeAll(",trap");
+        if (self.corpus) try writer.writeAll(",corpus");
     }
 };
 
@@ -450,7 +478,8 @@ fn writeUsage(io: std.Io) !void {
         \\  --case N            run only one generated case index
         \\  --features LIST     comma-separated features:
         \\                       base,fd,params,lists,redir,cmdsub,func,alias,loops,ifs,cases,while,
-        \\                       pipeline,negation,break_continue,arith,heredoc (default: all)
+        \\                       pipeline,negation,break_continue,arith,heredoc,stress,source_eval,trap,corpus
+        \\                       (default: all)
         \\  --print-cases       print each generated shell script before running it
         \\  --timeout-ms N      per-command timeout in milliseconds, or 0 to disable (default: Debug 5000, Release 1000)
         \\  --keep-temp         keep the temporary sandbox
@@ -1345,6 +1374,260 @@ const HereDocProbe = enum {
     }
 };
 
+const FdRoutingProbe = enum {
+    save_stdout_across_file_redirect,
+    file_then_dup_order,
+    dup_then_file_order,
+    dup_chain_to_file,
+    closed_fd_fails_locally,
+
+    fn random(random_source: std.Random) FdRoutingProbe {
+        return @enumFromInt(random_source.uintLessThan(u3, 5));
+    }
+
+    fn render(self: FdRoutingProbe, writer: *std.Io.Writer) !void {
+        switch (self) {
+            .save_stdout_across_file_redirect => try writer.writeAll(
+                "exec 3>&1; printf '%s\n' file > out; printf '%s\n' saved >&3; exec 3>&-; cat out",
+            ),
+            .file_then_dup_order => try writer.writeAll(
+                "{ printf '%s\n' out; printf '%s\n' err >&2; } > out 2>&1; cat out",
+            ),
+            .dup_then_file_order => try writer.writeAll(
+                "{ printf '%s\n' out; printf '%s\n' err >&2; } 2>&1 > out; cat out",
+            ),
+            .dup_chain_to_file => try writer.writeAll(
+                "exec 3>out; exec 4>&3; printf '%s\n' chain >&4; exec 3>&-; exec 4>&-; cat out",
+            ),
+            .closed_fd_fails_locally => try writer.writeAll(
+                "exec 3>out; exec 3>&-; " ++
+                    "if ( printf '%s\n' closed >&3 ) 2>/dev/null; then printf '%s\n' bad; else printf '%s\n' ok; fi",
+            ),
+        }
+    }
+};
+
+const CommandSubstitutionStressProbe = enum {
+    merged_stderr,
+    nested_substitution,
+    fd_dup_inside_substitution,
+    pipeline_inside_substitution,
+    function_redirect_inside_substitution,
+
+    fn random(random_source: std.Random) CommandSubstitutionStressProbe {
+        return @enumFromInt(random_source.uintLessThan(u3, 5));
+    }
+
+    fn render(self: CommandSubstitutionStressProbe, writer: *std.Io.Writer) !void {
+        switch (self) {
+            .merged_stderr => try writer.writeAll(
+                "A=\"$({ printf '%s\\n' out; printf '%s\\n' err >&2; } 2>&1)\"; printf '[%s]\n' \"$A\"",
+            ),
+            .nested_substitution => try writer.writeAll(
+                "A=\"$(printf '%s' \"$(printf '%s' nested)\")\"; printf '[%s]\n' \"$A\"",
+            ),
+            .fd_dup_inside_substitution => try writer.writeAll(
+                "A=\"$(exec 3>&1; printf '%s\\n' fd3 >&3; printf '%s\\n' captured)\"; printf '[%s]\n' \"$A\"",
+            ),
+            .pipeline_inside_substitution => try writer.writeAll(
+                "A=\"$(printf '%s\\n' pipe | cat)\"; printf '[%s]\n' \"$A\"",
+            ),
+            .function_redirect_inside_substitution => try writer.writeAll(
+                "A=\"$(f() { printf '%s\\n' func; }; f 2>err)\"; printf '[%s]\n' \"$A\"; cat err",
+            ),
+        }
+    }
+};
+
+const CompoundRedirectionProbe = enum {
+    group_separate_streams,
+    group_file_then_dup,
+    group_dup_then_file,
+    subshell_saved_stdout,
+    if_body_redirected,
+
+    fn random(random_source: std.Random) CompoundRedirectionProbe {
+        return @enumFromInt(random_source.uintLessThan(u3, 5));
+    }
+
+    fn render(self: CompoundRedirectionProbe, writer: *std.Io.Writer) !void {
+        switch (self) {
+            .group_separate_streams => try writer.writeAll(
+                "{ printf '%s\n' out; printf '%s\n' err >&2; } >out 2>err; cat out; cat err",
+            ),
+            .group_file_then_dup => try writer.writeAll(
+                "{ printf '%s\n' out; printf '%s\n' err >&2; } >out 2>&1; cat out",
+            ),
+            .group_dup_then_file => try writer.writeAll(
+                "{ printf '%s\n' out; printf '%s\n' err >&2; } 2>&1 >out; cat out",
+            ),
+            .subshell_saved_stdout => try writer.writeAll(
+                "exec 3>&1; ( printf '%s\n' inner >&3 ) >out; exec 3>&-; cat out",
+            ),
+            .if_body_redirected => try writer.writeAll(
+                "if true; then printf '%s\n' branch; fi >out; cat out",
+            ),
+        }
+    }
+};
+
+const PipelineStressProbe = enum {
+    group_assignment_isolated,
+    function_output,
+    merged_stderr,
+    read_assignment_isolated,
+    command_substitution_pipeline,
+
+    fn random(random_source: std.Random) PipelineStressProbe {
+        return @enumFromInt(random_source.uintLessThan(u3, 5));
+    }
+
+    fn render(self: PipelineStressProbe, writer: *std.Io.Writer) !void {
+        switch (self) {
+            .group_assignment_isolated => try writer.writeAll(
+                "A=outer; { A=inner; printf '%s\n' pipe; } | cat >/dev/null; printf '[%s]\n' \"$A\"",
+            ),
+            .function_output => try writer.writeAll(
+                "f() { printf '%s\n' func; }; f | cat",
+            ),
+            .merged_stderr => try writer.writeAll(
+                "{ printf '%s\n' out; printf '%s\n' err >&2; } 2>&1 | cat",
+            ),
+            .read_assignment_isolated => try writer.writeAll(
+                "printf '%s\n' value | read A; printf '[%s]\n' \"${A-unset}\"",
+            ),
+            .command_substitution_pipeline => try writer.writeAll(
+                "A=\"$(printf '%s\\n' pipe | cat)\"; printf '[%s]\n' \"$A\"",
+            ),
+        }
+    }
+};
+
+const FunctionStressProbe = enum {
+    redirection_preserves_return_status,
+    subshell_shadowing,
+    command_substitution_positionals,
+    list_tail_status,
+
+    fn random(random_source: std.Random) FunctionStressProbe {
+        return @enumFromInt(random_source.uintLessThan(u3, 4));
+    }
+
+    fn render(self: FunctionStressProbe, writer: *std.Io.Writer) !void {
+        switch (self) {
+            .redirection_preserves_return_status => try writer.writeAll(
+                "f() { printf '%s\n' body; return 7; }; f >out; printf '[%s]\n' \"$?\"; cat out",
+            ),
+            .subshell_shadowing => try writer.writeAll(
+                "unset -f g 2>/dev/null; g() { printf '%s\n' outer; }; ( g() { printf '%s\n' inner; }; g ); g",
+            ),
+            .command_substitution_positionals => try writer.writeAll(
+                "set -- outer; f() { printf '[%s:%s]\n' \"$1\" \"${2-default}\"; }; " ++
+                    "A=\"$(f one two)\"; printf '%s\n' \"$A\"; printf '[%s]\n' \"$1\"",
+            ),
+            .list_tail_status => try writer.writeAll(
+                "f() { false; }; f || printf '%s\n' after",
+            ),
+        }
+    }
+};
+
+const SourceEvalProbe = enum {
+    dot_sets_function_state,
+    dot_alias_chunk,
+    eval_mutates_current_shell,
+    eval_redirection,
+    dot_preserves_positionals,
+
+    fn random(random_source: std.Random) SourceEvalProbe {
+        return @enumFromInt(random_source.uintLessThan(u3, 5));
+    }
+
+    fn render(self: SourceEvalProbe, writer: *std.Io.Writer) !void {
+        switch (self) {
+            .dot_sets_function_state => try writer.writeAll(
+                "printf '%s\n' 'A=sourced' 'f() { printf \"%s\\n\" \"$A\"; }' >s; . ./s; f",
+            ),
+            .dot_alias_chunk => try writer.writeAll(
+                "printf '%s\n' \"alias a='printf \\\"%s\\\\n\\\" sourced'\" 'a' >s; . ./s",
+            ),
+            .eval_mutates_current_shell => try writer.writeAll(
+                "A=outer; eval 'printf \"[%s]\\n\" \"$A\"; A=inner'; printf '[%s]\n' \"$A\"",
+            ),
+            .eval_redirection => try writer.writeAll(
+                "eval 'printf \"%s\\n\" eval >out'; cat out",
+            ),
+            .dot_preserves_positionals => try writer.writeAll(
+                "printf '%s\n' 'printf \"[%s]\\n\" \"$1\"' >s; set -- arg; . ./s; printf '[%s]\n' \"$1\"",
+            ),
+        }
+    }
+};
+
+const TrapProbe = enum {
+    exit_simple,
+    subshell_exit_order,
+    exit_appends_to_redirected_file,
+    function_installs_exit,
+    subshell_trap_does_not_leak,
+
+    fn random(random_source: std.Random) TrapProbe {
+        return @enumFromInt(random_source.uintLessThan(u3, 5));
+    }
+
+    fn render(self: TrapProbe, writer: *std.Io.Writer) !void {
+        switch (self) {
+            .exit_simple => try writer.writeAll(
+                "trap 'printf \"%s\\n\" exit' EXIT; printf '%s\n' body",
+            ),
+            .subshell_exit_order => try writer.writeAll(
+                "( trap 'printf \"%s\\n\" subexit' EXIT; printf '%s\n' subbody ); printf '%s\n' after",
+            ),
+            .exit_appends_to_redirected_file => try writer.writeAll(
+                "trap 'printf \"%s\\n\" trap >>out' EXIT; printf '%s\n' body >out; cat out",
+            ),
+            .function_installs_exit => try writer.writeAll(
+                "f() { trap 'printf \"%s\\n\" trap' EXIT; printf '%s\n' body; }; f; printf '%s\n' after",
+            ),
+            .subshell_trap_does_not_leak => try writer.writeAll(
+                "( trap 'printf \"%s\\n\" subtrap' EXIT; : ); printf '%s\n' outer",
+            ),
+        }
+    }
+};
+
+const CorpusProbe = enum {
+    fd_saved_around_command_substitution,
+    group_pipeline_redirection,
+    sourced_function_command_substitution,
+    function_redirection_status_list,
+    nested_scope_fd_restore,
+
+    fn random(random_source: std.Random) CorpusProbe {
+        return @enumFromInt(random_source.uintLessThan(u3, 5));
+    }
+
+    fn render(self: CorpusProbe, writer: *std.Io.Writer) !void {
+        switch (self) {
+            .fd_saved_around_command_substitution => try writer.writeAll(
+                "exec 3>&1; A=\"$(printf '%s\\n' captured)\"; printf '[%s]\n' \"$A\" >&3; exec 3>&-",
+            ),
+            .group_pipeline_redirection => try writer.writeAll(
+                "{ printf '%s\n' left; printf '%s\n' err >&2; } 2>&1 | cat >out; cat out",
+            ),
+            .sourced_function_command_substitution => try writer.writeAll(
+                "printf '%s\n' 'f() { printf \"%s\\n\" sourced; }' >s; . ./s; A=\"$(f)\"; printf '[%s]\n' \"$A\"",
+            ),
+            .function_redirection_status_list => try writer.writeAll(
+                "f() { printf '%s\n' body; return 1; }; f >out || printf '%s\n' failed; cat out",
+            ),
+            .nested_scope_fd_restore => try writer.writeAll(
+                "exec 3>&1; { ( printf '%s\n' sub >&3 ); printf '%s\n' group >out; }; exec 3>&-; cat out",
+            ),
+        }
+    }
+};
+
 const DirName = enum {
     d,
     e,
@@ -1467,6 +1750,14 @@ const Command = union(enum) {
     break_continue_probe: BreakContinueProbe,
     arithmetic_probe: ArithmeticProbe,
     heredoc_probe: HereDocProbe,
+    fd_routing_probe: FdRoutingProbe,
+    cmdsub_stress_probe: CommandSubstitutionStressProbe,
+    compound_redir_probe: CompoundRedirectionProbe,
+    pipeline_stress_probe: PipelineStressProbe,
+    function_stress_probe: FunctionStressProbe,
+    source_eval_probe: SourceEvalProbe,
+    trap_probe: TrapProbe,
+    corpus_probe: CorpusProbe,
     print_to_file: struct { value: Value, file: FileName },
     cat_file: FileName,
     subshell: []Command,
@@ -1547,9 +1838,17 @@ const Command = union(enum) {
             .inline_compound => if (depth < 2) 1 else 0,
         } else 0;
         const heredoc_count: u8 = if (features.heredoc and mode == .top_level) 1 else 0;
+        const stress_count: u8 = if (features.stress) switch (mode) {
+            .top_level => 5,
+            .inline_compound => if (depth < 2) 2 else 0,
+        } else 0;
+        const source_eval_count: u8 = if (features.source_eval and mode == .top_level) 1 else 0;
+        const trap_count: u8 = if (features.trap and mode == .top_level) 1 else 0;
+        const corpus_count: u8 = if (features.corpus and mode == .top_level) 1 else 0;
         const choice_count = base_count + fd_count + params_count + positional_count + lists_count + redir_count +
             cmdsub_count + func_count + alias_count + loops_count + ifs_count + cases_count + while_count +
-            pipeline_count + negation_count + break_continue_count + arith_count + heredoc_count;
+            pipeline_count + negation_count + break_continue_count + arith_count + heredoc_count + stress_count +
+            source_eval_count + trap_count + corpus_count;
         const choice = random.uintLessThan(
             u8,
             choice_count,
@@ -1669,6 +1968,21 @@ const Command = union(enum) {
         if (feature_choice < arith_count) return .{ .arithmetic_probe = ArithmeticProbe.random(random) };
         feature_choice -= arith_count;
         if (feature_choice < heredoc_count) return .{ .heredoc_probe = HereDocProbe.random(random) };
+        feature_choice -= heredoc_count;
+        if (feature_choice < stress_count) return switch (feature_choice) {
+            0 => .{ .fd_routing_probe = FdRoutingProbe.random(random) },
+            1 => .{ .cmdsub_stress_probe = CommandSubstitutionStressProbe.random(random) },
+            2 => .{ .compound_redir_probe = CompoundRedirectionProbe.random(random) },
+            3 => .{ .pipeline_stress_probe = PipelineStressProbe.random(random) },
+            4 => .{ .function_stress_probe = FunctionStressProbe.random(random) },
+            else => unreachable,
+        };
+        feature_choice -= stress_count;
+        if (feature_choice < source_eval_count) return .{ .source_eval_probe = SourceEvalProbe.random(random) };
+        feature_choice -= source_eval_count;
+        if (feature_choice < trap_count) return .{ .trap_probe = TrapProbe.random(random) };
+        feature_choice -= trap_count;
+        if (feature_choice < corpus_count) return .{ .corpus_probe = CorpusProbe.random(random) };
         unreachable;
     }
 
@@ -1728,6 +2042,14 @@ const Command = union(enum) {
             .break_continue_probe => |break_continue_probe| try break_continue_probe.render(writer),
             .arithmetic_probe => |arithmetic_probe| try arithmetic_probe.render(writer),
             .heredoc_probe => |heredoc_probe| try heredoc_probe.render(writer),
+            .fd_routing_probe => |fd_routing_probe| try fd_routing_probe.render(writer),
+            .cmdsub_stress_probe => |cmdsub_stress_probe| try cmdsub_stress_probe.render(writer),
+            .compound_redir_probe => |compound_redir_probe| try compound_redir_probe.render(writer),
+            .pipeline_stress_probe => |pipeline_stress_probe| try pipeline_stress_probe.render(writer),
+            .function_stress_probe => |function_stress_probe| try function_stress_probe.render(writer),
+            .source_eval_probe => |source_eval_probe| try source_eval_probe.render(writer),
+            .trap_probe => |trap_probe| try trap_probe.render(writer),
+            .corpus_probe => |corpus_probe| try corpus_probe.render(writer),
             .print_to_file => |print| try writer.print(
                 "printf '%s\\n' {s} > {s}",
                 .{ print.value.shell(), print.file.shell() },
