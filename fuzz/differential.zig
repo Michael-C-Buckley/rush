@@ -147,9 +147,13 @@ pub fn main(init: std.process.Init) !u8 {
         );
         defer reference.deinit(allocator);
 
-        if (try reportMismatch(allocator, config, case_index, script, rush, reference)) {
+        const mismatch = !resultsMatch(config, rush, reference);
+        if (mismatch) {
             failures += 1;
             keep_temp = true;
+            const shrunk = try shrinkScriptAlloc(allocator, init.io, &temp_root, config, case_index, script);
+            defer shrunk.deinit(allocator);
+            _ = try reportMismatch(allocator, config, case_index, shrunk.script, shrunk.rush, shrunk.reference);
             break;
         }
 
@@ -695,6 +699,143 @@ fn signalStatus(signal: u32) u8 {
     return if (value <= std.math.maxInt(u8)) @intCast(value) else std.math.maxInt(u8);
 }
 
+const ShrinkResult = struct {
+    script: []u8,
+    rush: RunResult,
+    reference: RunResult,
+
+    fn deinit(self: ShrinkResult, allocator: std.mem.Allocator) void {
+        allocator.free(self.script);
+        self.rush.deinit(allocator);
+        self.reference.deinit(allocator);
+    }
+};
+
+fn shrinkScriptAlloc(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    temp_root: *TempRoot,
+    config: Config,
+    case_index: usize,
+    script: []const u8,
+) !ShrinkResult {
+    var current = try allocator.dupe(u8, script);
+    errdefer allocator.free(current);
+    var attempt: usize = 0;
+    var changed = true;
+    while (changed) {
+        changed = false;
+        const probe_start = probeStart(current);
+        var line_start: usize = 0;
+        while (line_start < probe_start) {
+            const line_end = lineEnd(current, line_start);
+            const candidate = try removeRangeAlloc(allocator, current, line_start, line_end);
+            const candidate_attempt = attempt;
+            attempt += 1;
+            if (try scriptStillMismatches(allocator, io, temp_root, config, case_index, candidate_attempt, candidate)) {
+                allocator.free(current);
+                current = candidate;
+                changed = true;
+                break;
+            }
+            allocator.free(candidate);
+            line_start = line_end;
+        }
+    }
+
+    const rush_prefix = try std.fmt.allocPrint(allocator, "shrunk-rush-{d}", .{attempt});
+    defer allocator.free(rush_prefix);
+    const ref_prefix = try std.fmt.allocPrint(allocator, "shrunk-ref-{d}", .{attempt});
+    defer allocator.free(ref_prefix);
+    const rush = try runOne(
+        allocator,
+        io,
+        temp_root,
+        rush_prefix,
+        case_index,
+        config.rush_path,
+        &.{"--posix"},
+        current,
+    );
+    errdefer rush.deinit(allocator);
+    const reference = try runOne(
+        allocator,
+        io,
+        temp_root,
+        ref_prefix,
+        case_index,
+        config.shell,
+        config.shell_args,
+        current,
+    );
+    errdefer reference.deinit(allocator);
+    return .{ .script = current, .rush = rush, .reference = reference };
+}
+
+fn scriptStillMismatches(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    temp_root: *TempRoot,
+    config: Config,
+    case_index: usize,
+    attempt: usize,
+    script: []const u8,
+) !bool {
+    const rush_prefix = try std.fmt.allocPrint(allocator, "shrink-rush-{d}", .{attempt});
+    defer allocator.free(rush_prefix);
+    const ref_prefix = try std.fmt.allocPrint(allocator, "shrink-ref-{d}", .{attempt});
+    defer allocator.free(ref_prefix);
+    const rush = try runOne(
+        allocator,
+        io,
+        temp_root,
+        rush_prefix,
+        case_index,
+        config.rush_path,
+        &.{"--posix"},
+        script,
+    );
+    defer rush.deinit(allocator);
+    const reference = try runOne(
+        allocator,
+        io,
+        temp_root,
+        ref_prefix,
+        case_index,
+        config.shell,
+        config.shell_args,
+        script,
+    );
+    defer reference.deinit(allocator);
+    return !resultsMatch(config, rush, reference);
+}
+
+fn probeStart(script: []const u8) usize {
+    if (std.mem.find(u8, script, "printf '__RUSH_PROBE_PWD=")) |index| return index;
+    return script.len;
+}
+
+fn lineEnd(script: []const u8, start: usize) usize {
+    if (std.mem.findScalarPos(u8, script, start, '\n')) |newline| return newline + 1;
+    return script.len;
+}
+
+fn removeRangeAlloc(allocator: std.mem.Allocator, source: []const u8, start: usize, end: usize) ![]u8 {
+    var writer: std.Io.Writer.Allocating = .init(allocator);
+    errdefer writer.deinit();
+    try writer.writer.writeAll(source[0..start]);
+    try writer.writer.writeAll(source[end..]);
+    return writer.toOwnedSlice();
+}
+
+fn resultsMatch(config: Config, rush: RunResult, reference: RunResult) bool {
+    const stderr_matches = !config.strict_stderr or std.mem.eql(u8, rush.stderr, reference.stderr);
+    return rush.status == reference.status and
+        std.mem.eql(u8, rush.stdout, reference.stdout) and
+        stderr_matches and
+        filesEqual(rush.files, reference.files);
+}
+
 fn reportMismatch(
     allocator: std.mem.Allocator,
     config: Config,
@@ -703,11 +844,8 @@ fn reportMismatch(
     rush: RunResult,
     reference: RunResult,
 ) !bool {
+    if (resultsMatch(config, rush, reference)) return false;
     const stderr_matches = !config.strict_stderr or std.mem.eql(u8, rush.stderr, reference.stderr);
-    if (rush.status == reference.status and
-        std.mem.eql(u8, rush.stdout, reference.stdout) and
-        stderr_matches and
-        filesEqual(rush.files, reference.files)) return false;
 
     const replay_command = try replayCommandAlloc(allocator, config, case_index);
     defer allocator.free(replay_command);
