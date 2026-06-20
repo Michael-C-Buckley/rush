@@ -552,16 +552,19 @@ const CommandSubstitution = union(enum) {
     print_value: Value,
     print_value_with_blank_line: Value,
     print_stderr: Value,
+    function_case: CommandSubstitutionFunctionCase,
     true_cmd,
     false_cmd,
 
-    fn random(random_source: std.Random) CommandSubstitution {
-        return switch (random_source.uintLessThan(u3, 5)) {
+    fn random(random_source: std.Random, features: FeatureSet) CommandSubstitution {
+        const function_count: u8 = if (features.func) 1 else 0;
+        return switch (random_source.uintLessThan(u8, 5 + function_count)) {
             0 => .{ .print_value = Value.random(random_source) },
             1 => .{ .print_value_with_blank_line = Value.random(random_source) },
             2 => .{ .print_stderr = Value.random(random_source) },
             3 => .true_cmd,
             4 => .false_cmd,
+            5 => .{ .function_case = CommandSubstitutionFunctionCase.random(random_source, features) },
             else => unreachable,
         };
     }
@@ -571,6 +574,7 @@ const CommandSubstitution = union(enum) {
             .print_value => |value| try writer.print("printf '%s\\n' {s}", .{value.shell()}),
             .print_value_with_blank_line => |value| try writer.print("printf '%s\\n\\n' {s}", .{value.shell()}),
             .print_stderr => |value| try writer.print("printf '%s\\n' {s} >&2", .{value.shell()}),
+            .function_case => |function_case| try function_case.render(writer),
             .true_cmd => try writer.writeAll("true"),
             .false_cmd => try writer.writeAll("false"),
         }
@@ -587,10 +591,10 @@ const CommandSubstitutionAssignment = struct {
     variable: Variable,
     substitution: CommandSubstitution,
 
-    fn random(random_source: std.Random) CommandSubstitutionAssignment {
+    fn random(random_source: std.Random, features: FeatureSet) CommandSubstitutionAssignment {
         return .{
             .variable = Variable.random(random_source),
-            .substitution = CommandSubstitution.random(random_source),
+            .substitution = CommandSubstitution.random(random_source, features),
         };
     }
 
@@ -738,6 +742,39 @@ const FunctionBodyOperand = union(enum) {
             .print_quoted_args => try writer.writeAll("for x in \"$@\"; do printf '[%s]\n' \"$x\"; done"),
             .return_status => |status| try writer.print("return {d}", .{status.value()}),
         }
+    }
+};
+
+const CommandSubstitutionFunctionCase = struct {
+    body: [2]FunctionBodyOperand,
+    body_count: usize,
+    args: [2]Value,
+    arg_count: usize,
+    print_status: bool,
+
+    fn random(random_source: std.Random, features: FeatureSet) CommandSubstitutionFunctionCase {
+        var body: [2]FunctionBodyOperand = undefined;
+        for (&body) |*command| command.* = FunctionBodyOperand.random(random_source, features);
+        var args: [2]Value = undefined;
+        for (&args) |*arg| arg.* = Value.random(random_source);
+        return .{
+            .body = body,
+            .body_count = 1 + random_source.uintLessThan(usize, body.len),
+            .args = args,
+            .arg_count = random_source.uintLessThan(usize, args.len + 1),
+            .print_status = random_source.boolean(),
+        };
+    }
+
+    fn render(self: CommandSubstitutionFunctionCase, writer: *std.Io.Writer) !void {
+        try writer.writeAll("f() { ");
+        for (self.body[0..self.body_count], 0..) |command, index| {
+            if (index != 0) try writer.writeAll("; ");
+            try command.render(writer);
+        }
+        try writer.writeAll("; }; f");
+        for (self.args[0..self.arg_count]) |arg| try writer.print(" {s}", .{arg.shell()});
+        if (self.print_status) try writer.writeAll("; printf '%s\n' \"$?\"");
     }
 };
 
@@ -1044,8 +1081,8 @@ const Command = union(enum) {
         } };
         feature_choice -= redir_count;
         if (feature_choice < cmdsub_count) return switch (feature_choice) {
-            0 => .{ .print_cmdsub = CommandSubstitution.random(random) },
-            1 => .{ .assign_cmdsub = CommandSubstitutionAssignment.random(random) },
+            0 => .{ .print_cmdsub = CommandSubstitution.random(random, features) },
+            1 => .{ .assign_cmdsub = CommandSubstitutionAssignment.random(random, features) },
             else => unreachable,
         };
         feature_choice -= cmdsub_count;
