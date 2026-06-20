@@ -372,6 +372,38 @@ const DirName = enum {
     }
 };
 
+const Fd = enum {
+    fd3,
+    fd4,
+
+    fn random(random_source: std.Random) Fd {
+        return @enumFromInt(random_source.uintLessThan(u2, 2));
+    }
+
+    fn number(self: Fd) u8 {
+        return switch (self) {
+            .fd3 => 3,
+            .fd4 => 4,
+        };
+    }
+};
+
+const FdSource = enum {
+    stdout,
+    stderr,
+
+    fn random(random_source: std.Random) FdSource {
+        return @enumFromInt(random_source.uintLessThan(u2, 2));
+    }
+
+    fn number(self: FdSource) u8 {
+        return switch (self) {
+            .stdout => 1,
+            .stderr => 2,
+        };
+    }
+};
+
 const Command = union(enum) {
     noop,
     true_cmd,
@@ -383,11 +415,15 @@ const Command = union(enum) {
     subshell: []Command,
     group: []Command,
     mkdir_cd: DirName,
+    exec_open_fd: struct { fd: Fd, file: FileName, append: bool },
+    exec_close_fd: Fd,
+    exec_dup_fd: struct { target: Fd, source: FdSource },
+    print_to_fd: struct { fd: Fd, value: Value },
 
     fn generate(allocator: std.mem.Allocator, random: std.Random, mode: RenderMode, depth: usize) anyerror!Command {
         const choice_count: u8 = switch (mode) {
-            .top_level => if (depth < 2) 10 else 7,
-            .inline_compound => 5,
+            .top_level => if (depth < 2) 14 else 11,
+            .inline_compound => if (depth < 2) 9 else 5,
         };
         return switch (random.uintLessThan(u8, choice_count)) {
             0 => .noop,
@@ -400,6 +436,17 @@ const Command = union(enum) {
             7 => .{ .subshell = try generateCompoundCommands(allocator, random, depth + 1) },
             8 => .{ .group = try generateCompoundCommands(allocator, random, depth + 1) },
             9 => .{ .mkdir_cd = DirName.random(random) },
+            10 => .{ .exec_open_fd = .{
+                .fd = Fd.random(random),
+                .file = FileName.random(random),
+                .append = random.boolean(),
+            } },
+            11 => .{ .exec_close_fd = Fd.random(random) },
+            12 => target: {
+                const target = Fd.random(random);
+                break :target .{ .exec_dup_fd = .{ .target = target, .source = FdSource.random(random) } };
+            },
+            13 => .{ .print_to_fd = .{ .fd = Fd.random(random), .value = Value.random(random) } },
             else => unreachable,
         };
     }
@@ -430,6 +477,16 @@ const Command = union(enum) {
             .subshell => |commands| try renderCompound(writer, commands, "( ", ")"),
             .group => |commands| try renderCompound(writer, commands, "{ ", "}"),
             .mkdir_cd => |dir| try writer.print("mkdir -p {s}; cd {s}", .{ dir.shell(), dir.shell() }),
+            .exec_open_fd => |open| try writer.print(
+                "exec {d}{s}{s}",
+                .{ open.fd.number(), if (open.append) ">>" else ">", open.file.shell() },
+            ),
+            .exec_close_fd => |fd| try writer.print("exec {d}>&-", .{fd.number()}),
+            .exec_dup_fd => |dup| try writer.print("exec {d}>&{d}", .{ dup.target.number(), dup.source.number() }),
+            .print_to_fd => |print| try writer.print(
+                "printf '%s\\n' {s} >&{d}",
+                .{ print.value.shell(), print.fd.number() },
+            ),
         }
         if (mode == .top_level) try writer.writeByte('\n');
     }
@@ -467,6 +524,19 @@ fn renderCompound(
 fn renderProbe(writer: *std.Io.Writer) !void {
     try writer.writeAll("printf '__RUSH_PROBE_PWD=%s\\n' \"$PWD\"\n");
     try writer.writeAll("printf '__RUSH_PROBE_A=%s\\n' \"${A-unset}\"\n");
+    try renderFdProbe(writer, .fd3);
+    try renderFdProbe(writer, .fd4);
+}
+
+fn renderFdProbe(writer: *std.Io.Writer, fd: Fd) !void {
+    try writer.print(
+        \\if (: >&{d}) 2>/dev/null; then
+        \\printf '__RUSH_PROBE_FD{d}_WRITABLE=yes\n'
+        \\else
+        \\printf '__RUSH_PROBE_FD{d}_WRITABLE=no\n'
+        \\fi
+        \\
+    , .{ fd.number(), fd.number(), fd.number() });
 }
 
 fn runOne(
