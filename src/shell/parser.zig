@@ -3223,18 +3223,24 @@ const SyntaxParser = struct {
         }
         var saw_in = false;
         var saw_header_separator = false;
+        var saw_separator_after_in = false;
+        var saw_word_after_in = false;
         var saw_non_separator_after_name = false;
         while (!self.at(.eof) and
+            !self.atForWordAfterEmptyInList(saw_separator_after_in, saw_word_after_in) and
             !self.atForDoTerminator(saw_in, saw_header_separator, saw_non_separator_after_name) and
             !self.atForDoneBeforeDo(saw_in, saw_header_separator))
         {
             const token = self.current();
-            if (token.kind == .word and !saw_in and std.mem.eql(u8, token.lexeme(self.source), "in")) {
+            const token_is_in = token.kind == .word and !saw_in and std.mem.eql(u8, token.lexeme(self.source), "in");
+            if (token_is_in) {
                 saw_in = true;
             }
             if (isForHeaderSeparator(token.kind)) {
                 saw_header_separator = true;
+                if (saw_in) saw_separator_after_in = true;
             } else if (!token.kind.isTrivia()) {
+                if (saw_in and !token_is_in) saw_word_after_in = true;
                 saw_non_separator_after_name = true;
             }
             try self.appendCurrentTokenChildTo(&for_children);
@@ -3289,6 +3295,15 @@ const SyntaxParser = struct {
         try self.children.appendSlice(self.allocator, for_children.items);
         const span = spanForTokenRange(self.tokens, token_start, token_end);
         return self.addNode(.for_command, span, token_start, token_end, child_start, self.children.items.len);
+    }
+
+    fn atForWordAfterEmptyInList(
+        self: SyntaxParser,
+        saw_separator_after_in: bool,
+        saw_word_after_in: bool,
+    ) bool {
+        return saw_separator_after_in and !saw_word_after_in and !self.current().kind.isTrivia() and
+            !self.atWord("do") and !self.atWord("done");
     }
 
     fn atForDoTerminator(
@@ -4146,7 +4161,7 @@ fn wordEqualsRemovingLineContinuations(word: []const u8, expected: []const u8) b
 }
 
 fn isAssignmentWord(word: []const u8, features: compat.Features) bool {
-    if (std.mem.indexOf(u8, word, "\\\n")) |_| return isAssignmentWordRemovingLineContinuations(word);
+    if (std.mem.find(u8, word, "\\\n")) |_| return isAssignmentWordRemovingLineContinuations(word);
     return isAssignmentWordRaw(word, features);
 }
 
@@ -5574,6 +5589,17 @@ test "parser treats reserved-looking words literally in POSIX for word lists" {
         }
     }
     try std.testing.expect(found);
+}
+
+test "parser rejects POSIX for word list words after an in-list separator" {
+    var result = try parse(std.testing.allocator, "for x in\na b\ndo echo $x; done", .{});
+    defer result.deinit();
+
+    try std.testing.expect(result.incomplete);
+    try std.testing.expect(result.diagnostics.len >= 1);
+    try std.testing.expectEqual(DiagnosticKind.parse_error, result.diagnostics[0].kind);
+    try expectSpan(.init(0, 9), result.diagnostics[0].span);
+    try std.testing.expectEqualStrings("missing do in for command", result.diagnostics[0].message);
 }
 
 test "parser reports incomplete POSIX for commands" {

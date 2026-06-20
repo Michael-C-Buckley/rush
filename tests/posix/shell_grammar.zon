@@ -345,6 +345,18 @@
             .status = 0,
         },
         .{
+            .name = "for clause rejects word list words after newline following in",
+            .script =
+            \\for x in
+            \\a b
+            \\do printf '<%s>\n' "$x"; done
+            \\printf bad
+            ,
+            .stdout = "",
+            .stderr_match = .nonempty,
+            .status_match = .nonzero,
+        },
+        .{
             .name = "case clause may have no case items",
             .script =
             \\case x in
