@@ -337,7 +337,7 @@ fn normalizeInheritedPipelineCapturesForPipelineStage(fd_table: *execution_frame
     fd_table.validate();
     for (fd_table.bindings.items) |*binding| {
         binding.validate();
-        if (binding.descriptor == 1) continue;
+        if (binding.descriptor <= 2) continue;
         switch (binding.endpoint) {
             .output => |output| switch (output) {
                 .capture => |channel| if (channel == .pipeline_data) {
@@ -8018,12 +8018,16 @@ fn evaluateFallbackPipeline(
             pipelineStageRedirections(stage),
         );
         defer stage_frame.spec.fd_table.deinit(evaluator.allocator);
+        var redirected_stage = stageWithTarget(stage, stage_target);
+        if (!redirectionPlanNeedsRuntimeFdEffects(pipelineStageRedirections(stage))) {
+            clearStageRedirections(&redirected_stage);
+        }
         var stage_outcome = if (stage.isExternal())
             try evaluateExternalPipelineStage(
                 evaluator,
                 &stage_state,
                 stage_context,
-                stageWithTarget(stage, stage_target),
+                redirected_stage,
                 &stage_input,
                 &stage_frame,
             )
@@ -8032,7 +8036,7 @@ fn evaluateFallbackPipeline(
                 evaluator,
                 &stage_state,
                 stage_context,
-                stageWithTarget(stage, stage_target),
+                redirected_stage,
                 &stage_input,
                 &stage_frame,
             );

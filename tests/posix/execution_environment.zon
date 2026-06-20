@@ -403,6 +403,32 @@
             .status = 0,
         },
         .{
+            .name = "compound pipeline fd swap preserves stderr pipe snapshot",
+            .script =
+            \\{ exec 3>&1; { printf out; printf err >&2; } 2>&1 >&3 | sed 's/^/[p]/'; printf c; } | cat
+            \\printf '\n'
+            ,
+            .stdout =
+            \\out[p]errc
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "subshell pipeline fd swap preserves stderr pipe snapshot",
+            .script =
+            \\{ exec 3>&1; ( printf out; printf err >&2 ) 2>&1 >&3 | sed 's/^/[p]/'; printf c; } | cat
+            \\printf '\n'
+            ,
+            .stdout =
+            \\out[p]errc
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "nested command substitution keeps inherited pipeline output before outer output",
             .script =
             \\{ exec 3>&1; printf '%s\n' "$(printf '%s' "$(printf inner >&3; printf outer)")"; } | cat
