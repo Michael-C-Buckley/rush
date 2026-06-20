@@ -902,6 +902,33 @@ const FunctionRedefinitionProbe = enum {
     }
 };
 
+const FunctionUnsetProbe = enum {
+    same_scope,
+    subshell_unset,
+    group_unset,
+
+    fn random(random_source: std.Random) FunctionUnsetProbe {
+        return @enumFromInt(random_source.uintLessThan(u2, 3));
+    }
+
+    fn render(self: FunctionUnsetProbe, writer: *std.Io.Writer) !void {
+        try writer.writeAll("unset -f g 2>/dev/null; ");
+        switch (self) {
+            .same_scope => try writer.writeAll(
+                "g() { printf '%s\n' alive; }; unset -f g; g 2>/dev/null || printf '%s\n' missing",
+            ),
+            .subshell_unset => try writer.writeAll(
+                "g() { printf '%s\n' outer; }; ( unset -f g; g 2>/dev/null || printf '%s\n' inner-missing ); g",
+            ),
+            .group_unset => try writer.writeAll(
+                "g() { printf '%s\n' outer; }; " ++
+                    "{ unset -f g; g 2>/dev/null || printf '%s\n' group-missing; }; " ++
+                    "g 2>/dev/null || printf '%s\n' outer-missing",
+            ),
+        }
+    }
+};
+
 const DirName = enum {
     d,
     e,
@@ -1013,6 +1040,7 @@ const Command = union(enum) {
     function_case: FunctionCase,
     function_scope_probe: FunctionScopeProbe,
     function_redefinition_probe: FunctionRedefinitionProbe,
+    function_unset_probe: FunctionUnsetProbe,
     print_to_file: struct { value: Value, file: FileName },
     cat_file: FileName,
     subshell: []Command,
@@ -1056,7 +1084,7 @@ const Command = union(enum) {
             .inline_compound => 1,
         } else 0;
         const func_count: u8 = if (features.func) switch (mode) {
-            .top_level => 4,
+            .top_level => 5,
             .inline_compound => if (depth < 2) 1 else 0,
         } else 0;
         const choice_count = base_count + fd_count + params_count + positional_count + lists_count + redir_count +
@@ -1139,6 +1167,9 @@ const Command = union(enum) {
             if (mode == .top_level and feature_choice == 3) {
                 return .{ .function_redefinition_probe = FunctionRedefinitionProbe.random(random) };
             }
+            if (mode == .top_level and feature_choice == 4) {
+                return .{ .function_unset_probe = FunctionUnsetProbe.random(random) };
+            }
             return .{ .function_case = FunctionCase.random(random, features) };
         }
         unreachable;
@@ -1189,6 +1220,7 @@ const Command = union(enum) {
             .function_case => |function_case| try function_case.render(writer),
             .function_scope_probe => |scope_probe| try scope_probe.render(writer),
             .function_redefinition_probe => |redefinition_probe| try redefinition_probe.render(writer),
+            .function_unset_probe => |unset_probe| try unset_probe.render(writer),
             .print_to_file => |print| try writer.print(
                 "printf '%s\\n' {s} > {s}",
                 .{ print.value.shell(), print.file.shell() },
