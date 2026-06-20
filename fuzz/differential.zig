@@ -39,11 +39,26 @@ const FeatureSet = packed struct {
     lists: bool = true,
     redir: bool = true,
     cmdsub: bool = true,
+    func: bool = true,
 
-    const default: FeatureSet = .{ .fd = true, .params = true, .lists = true, .redir = true, .cmdsub = true };
+    const default: FeatureSet = .{
+        .fd = true,
+        .params = true,
+        .lists = true,
+        .redir = true,
+        .cmdsub = true,
+        .func = true,
+    };
 
     fn parse(text: []const u8) ?FeatureSet {
-        var features: FeatureSet = .{ .fd = false, .params = false, .lists = false, .redir = false, .cmdsub = false };
+        var features: FeatureSet = .{
+            .fd = false,
+            .params = false,
+            .lists = false,
+            .redir = false,
+            .cmdsub = false,
+            .func = false,
+        };
         var saw_feature = false;
         var iterator = std.mem.splitScalar(u8, text, ',');
         while (iterator.next()) |feature| {
@@ -65,6 +80,9 @@ const FeatureSet = packed struct {
             } else if (std.mem.eql(u8, feature, "cmdsub")) {
                 features.cmdsub = true;
                 saw_feature = true;
+            } else if (std.mem.eql(u8, feature, "func")) {
+                features.func = true;
+                saw_feature = true;
             } else {
                 return null;
             }
@@ -79,6 +97,7 @@ const FeatureSet = packed struct {
         if (self.lists) try writer.writeAll(",lists");
         if (self.redir) try writer.writeAll(",redir");
         if (self.cmdsub) try writer.writeAll(",cmdsub");
+        if (self.func) try writer.writeAll(",func");
     }
 };
 
@@ -354,7 +373,7 @@ fn writeUsage(io: std.Io) !void {
         \\  --cases N           number of generated cases (default: 100)
         \\  --seed N            deterministic seed (default: random)
         \\  --case N            run only one generated case index
-        \\  --features LIST     comma-separated features: base,fd,params,lists,redir,cmdsub (default: all)
+        \\  --features LIST     comma-separated features: base,fd,params,lists,redir,cmdsub,func (default: all)
         \\  --print-cases       print each generated shell script before running it
         \\  --timeout-ms N      per-command timeout in milliseconds, or 0 to disable (default: 5000)
         \\  --keep-temp         keep the temporary sandbox
@@ -657,6 +676,42 @@ const RedirectedSimple = struct {
     redirection: Redirection,
 };
 
+const FunctionCase = struct {
+    body: [2]ListOperand,
+    body_count: usize,
+    args: [2]Value,
+    arg_count: usize,
+    redirection: ?Redirection,
+
+    fn random(random_source: std.Random, features: FeatureSet) FunctionCase {
+        var body: [2]ListOperand = undefined;
+        for (&body) |*command| command.* = ListOperand.random(random_source, features);
+        var args: [2]Value = undefined;
+        for (&args) |*arg| arg.* = Value.random(random_source);
+        return .{
+            .body = body,
+            .body_count = 1 + random_source.uintLessThan(usize, body.len),
+            .args = args,
+            .arg_count = random_source.uintLessThan(usize, args.len + 1),
+            .redirection = if (features.redir and random_source.boolean())
+                Redirection.random(random_source)
+            else
+                null,
+        };
+    }
+
+    fn render(self: FunctionCase, writer: *std.Io.Writer) !void {
+        try writer.writeAll("f() { ");
+        for (self.body[0..self.body_count], 0..) |command, index| {
+            if (index != 0) try writer.writeAll("; ");
+            try command.render(writer);
+        }
+        try writer.writeAll("; }; f");
+        for (self.args[0..self.arg_count]) |arg| try writer.print(" {s}", .{arg.shell()});
+        if (self.redirection) |redirection| try redirection.render(writer);
+    }
+};
+
 const RedirectedCompound = struct {
     body: []Command,
     redirection: OutputRedirection,
@@ -770,6 +825,7 @@ const Command = union(enum) {
     print_cmdsub: CommandSubstitution,
     assign_cmdsub: CommandSubstitutionAssignment,
     redirected_simple: RedirectedSimple,
+    function_case: FunctionCase,
     print_to_file: struct { value: Value, file: FileName },
     cat_file: FileName,
     subshell: []Command,
@@ -812,9 +868,12 @@ const Command = union(enum) {
             .top_level => 2,
             .inline_compound => 1,
         } else 0;
+        const func_count: u8 = if (features.func and mode == .top_level) 2 else 0;
+        const choice_count = base_count + fd_count + params_count + positional_count + lists_count + redir_count +
+            cmdsub_count + func_count;
         const choice = random.uintLessThan(
             u8,
-            base_count + fd_count + params_count + positional_count + lists_count + redir_count + cmdsub_count,
+            choice_count,
         );
         if (choice < base_count) return switch (choice) {
             0 => .noop,
@@ -882,6 +941,8 @@ const Command = union(enum) {
             1 => .{ .assign_cmdsub = CommandSubstitutionAssignment.random(random) },
             else => unreachable,
         };
+        feature_choice -= cmdsub_count;
+        if (feature_choice < func_count) return .{ .function_case = FunctionCase.random(random, features) };
         unreachable;
     }
 
@@ -927,6 +988,7 @@ const Command = union(enum) {
                 try redirected.command.render(writer);
                 try redirected.redirection.render(writer);
             },
+            .function_case => |function_case| try function_case.render(writer),
             .print_to_file => |print| try writer.print(
                 "printf '%s\\n' {s} > {s}",
                 .{ print.value.shell(), print.file.shell() },
