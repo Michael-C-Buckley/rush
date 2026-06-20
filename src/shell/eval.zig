@@ -5627,6 +5627,7 @@ fn flushBufferedRedirectionOutput(
 
     if (!command_substitution_capture) {
         if (!buffers.frame.spec.kind.isParentVisible() and hasScopedExecRedirections(evaluator)) {
+            if (!scopedExecTargetsDescriptor(evaluator, 1) and !scopedExecTargetsDescriptor(evaluator, 2)) return;
             var routed_frame = try buffers.outputFrame();
             defer routed_frame.deinit();
             try routed_frame.flushPendingStandardDescriptors();
@@ -9496,6 +9497,7 @@ fn evaluateStatementList(
             child_plan.validate();
             if (noexecSuppressesCommand(shell_state.*, eval_context)) break;
             if (child_plan.target.isIsolatedFromParent()) {
+                try flushSubshellBufferedOutputBeforeNestedChild(buffers, eval_context);
                 try flushChildShellBufferedCommandOutput(buffers, eval_context);
             }
             try flushBuffersForRedirectionTargetsBetweenCommands(
@@ -9544,6 +9546,9 @@ fn evaluateStatementList(
         };
         if (!should_run) continue;
         if (noexecSuppressesCommand(shell_state.*, eval_context)) break;
+        if (statementPlanRunsIsolated(entry.plan)) {
+            try flushSubshellBufferedOutputBeforeNestedChild(buffers, eval_context);
+        }
         try flushChildShellBufferedCommandOutput(buffers, eval_context);
 
         var child_context = eval_context;
@@ -10630,6 +10635,27 @@ fn statementPlanCommitsStateToParent(plan: command_plan.StatementPlan) bool {
         .ir_source => |source| source.program.statements[source.statement_index].kind != .subshell,
         .simple, .pipeline, .source => true,
     };
+}
+
+fn statementPlanRunsIsolated(plan: command_plan.StatementPlan) bool {
+    plan.validate();
+    return switch (plan) {
+        .simple => |simple| simple.target.isIsolatedFromParent(),
+        .compound => |compound| compound.target.isIsolatedFromParent(),
+        .ir_source => |source| source.program.statements[source.statement_index].kind == .subshell,
+        .pipeline, .source => false,
+    };
+}
+
+fn flushSubshellBufferedOutputBeforeNestedChild(
+    buffers: *EvaluationBuffers,
+    eval_context: context.EvalContext,
+) EvalError!void {
+    eval_context.validate();
+    if (!evalContextCapturesSubshellOutput(eval_context)) return;
+    var frame = OutputFrame.initInherited(buffers);
+    defer frame.deinit();
+    try frame.flushPendingStandardDescriptors();
 }
 
 fn applyOutcomeStatusToWorkingState(
@@ -13493,6 +13519,15 @@ fn redirectionOrScopedExecTargetsDescriptor(
 fn hasScopedExecRedirections(evaluator: Evaluator) bool {
     const scoped_redirections = evaluator.scoped_exec_redirections orelse return false;
     return scoped_redirections.items.len != 0;
+}
+
+fn scopedExecTargetsDescriptor(evaluator: Evaluator, descriptor: runtime.fd.Descriptor) bool {
+    runtime.fd.assertValidDescriptor(descriptor);
+    const scoped_redirections = evaluator.scoped_exec_redirections orelse return false;
+    for (scoped_redirections.items) |scoped| {
+        if (redirectionTargetsDescriptor(scoped.redirections, descriptor)) return true;
+    }
+    return false;
 }
 
 fn externalNeedsBufferedStdin(plan: command_plan.CommandPlan, buffers: *EvaluationBuffers) bool {

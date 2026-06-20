@@ -169,6 +169,21 @@
             .status = 0,
         },
         .{
+            .name = "nested subshell flushes stdout before child output after exec redirection",
+            .script =
+            \\unset A
+            \\exec 3>&1
+            \\( printf '%s\n' until; exec 3>&2; ( printf '%s\n' "${A-default}"; : > a; ); )
+            ,
+            .stdout =
+            \\until
+            \\default
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "exec redirection before failed brace group command persists",
             .script =
             \\{ exec 3>>out; false <missing; }
