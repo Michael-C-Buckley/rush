@@ -23,11 +23,12 @@ const Config = struct {
 const FeatureSet = packed struct {
     fd: bool = true,
     params: bool = true,
+    lists: bool = true,
 
-    const default: FeatureSet = .{ .fd = true, .params = true };
+    const default: FeatureSet = .{ .fd = true, .params = true, .lists = true };
 
     fn parse(text: []const u8) ?FeatureSet {
-        var features: FeatureSet = .{ .fd = false, .params = false };
+        var features: FeatureSet = .{ .fd = false, .params = false, .lists = false };
         var saw_feature = false;
         var iterator = std.mem.splitScalar(u8, text, ',');
         while (iterator.next()) |feature| {
@@ -40,6 +41,9 @@ const FeatureSet = packed struct {
             } else if (std.mem.eql(u8, feature, "params")) {
                 features.params = true;
                 saw_feature = true;
+            } else if (std.mem.eql(u8, feature, "lists")) {
+                features.lists = true;
+                saw_feature = true;
             } else {
                 return null;
             }
@@ -51,6 +55,7 @@ const FeatureSet = packed struct {
         try writer.writeAll("base");
         if (self.fd) try writer.writeAll(",fd");
         if (self.params) try writer.writeAll(",params");
+        if (self.lists) try writer.writeAll(",lists");
     }
 };
 
@@ -296,7 +301,7 @@ fn writeUsage(io: std.Io) !void {
         \\  --cases N           number of generated cases (default: 100)
         \\  --seed N            deterministic seed (default: 1)
         \\  --case N            run only one generated case index
-        \\  --features LIST     comma-separated features: base,fd,params (default: base,fd,params)
+        \\  --features LIST     comma-separated features: base,fd,params,lists (default: all)
         \\  --keep-temp         keep the temporary sandbox
         \\  --strict-stderr     compare stderr exactly
         \\
@@ -487,6 +492,55 @@ const FdSource = enum {
     }
 };
 
+const ListOperator = enum {
+    and_if,
+    or_if,
+
+    fn random(random_source: std.Random) ListOperator {
+        return @enumFromInt(random_source.uintLessThan(u2, 2));
+    }
+
+    fn shell(self: ListOperator) []const u8 {
+        return switch (self) {
+            .and_if => "&&",
+            .or_if => "||",
+        };
+    }
+};
+
+const ListOperand = union(enum) {
+    noop,
+    true_cmd,
+    false_cmd,
+    print_stdout: Value,
+    print_expansion: Expansion,
+
+    fn random(random_source: std.Random, features: FeatureSet) ListOperand {
+        const count: u8 = if (features.params) 5 else 4;
+        return switch (random_source.uintLessThan(u8, count)) {
+            0 => .noop,
+            1 => .true_cmd,
+            2 => .false_cmd,
+            3 => .{ .print_stdout = Value.random(random_source) },
+            4 => .{ .print_expansion = Expansion.random(random_source) },
+            else => unreachable,
+        };
+    }
+
+    fn render(self: ListOperand, writer: *std.Io.Writer) !void {
+        switch (self) {
+            .noop => try writer.writeAll(":"),
+            .true_cmd => try writer.writeAll("true"),
+            .false_cmd => try writer.writeAll("false"),
+            .print_stdout => |value| try writer.print("printf '%s\\n' {s}", .{value.shell()}),
+            .print_expansion => |expansion| {
+                try writer.writeAll("printf '%s\\n' ");
+                try expansion.render(writer);
+            },
+        }
+    }
+};
+
 const Command = union(enum) {
     noop,
     true_cmd,
@@ -503,6 +557,7 @@ const Command = union(enum) {
     exec_close_fd: Fd,
     exec_dup_fd: struct { target: Fd, source: FdSource },
     print_to_fd: struct { fd: Fd, value: Value },
+    list: struct { left: ListOperand, operator: ListOperator, right: ListOperand },
 
     fn generate(
         allocator: std.mem.Allocator,
@@ -520,7 +575,8 @@ const Command = union(enum) {
             .inline_compound => if (depth < 2) 4 else 0,
         } else 0;
         const params_count: u8 = if (features.params) 1 else 0;
-        const choice = random.uintLessThan(u8, base_count + fd_count + params_count);
+        const lists_count: u8 = if (features.lists and mode == .top_level) 1 else 0;
+        const choice = random.uintLessThan(u8, base_count + fd_count + params_count + lists_count);
         if (choice < base_count) return switch (choice) {
             0 => .noop,
             1 => .true_cmd,
@@ -551,7 +607,12 @@ const Command = union(enum) {
             else => unreachable,
         };
 
-        return .{ .print_expansion = Expansion.random(random) };
+        if (choice - base_count - fd_count < params_count) return .{ .print_expansion = Expansion.random(random) };
+        return .{ .list = .{
+            .left = ListOperand.random(random, features),
+            .operator = ListOperator.random(random),
+            .right = ListOperand.random(random, features),
+        } };
     }
 
     fn deinit(self: *Command, allocator: std.mem.Allocator) void {
@@ -594,6 +655,11 @@ const Command = union(enum) {
                 "printf '%s\\n' {s} >&{d}",
                 .{ print.value.shell(), print.fd.number() },
             ),
+            .list => |list| {
+                try list.left.render(writer);
+                try writer.print(" {s} ", .{list.operator.shell()});
+                try list.right.render(writer);
+            },
         }
         if (mode == .top_level) try writer.writeByte('\n');
     }
