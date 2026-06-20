@@ -425,6 +425,22 @@ const Variable = enum {
     }
 };
 
+const PositionalParameter = enum {
+    one,
+    two,
+
+    fn random(random_source: std.Random) PositionalParameter {
+        return @enumFromInt(random_source.uintLessThan(u2, 2));
+    }
+
+    fn number(self: PositionalParameter) u8 {
+        return switch (self) {
+            .one => 1,
+            .two => 2,
+        };
+    }
+};
+
 const Assignment = struct {
     variable: Variable,
     value: Value,
@@ -442,13 +458,16 @@ const Expansion = union(enum) {
     quoted: Variable,
     default_unset: Variable,
     default_null: Variable,
+    positional_quoted: PositionalParameter,
+    positional_default_unset: PositionalParameter,
 
     fn random(random_source: std.Random) Expansion {
-        const variable = Variable.random(random_source);
-        return switch (random_source.uintLessThan(u2, 3)) {
-            0 => .{ .quoted = variable },
-            1 => .{ .default_unset = variable },
-            2 => .{ .default_null = variable },
+        return switch (random_source.uintLessThan(u3, 5)) {
+            0 => .{ .quoted = Variable.random(random_source) },
+            1 => .{ .default_unset = Variable.random(random_source) },
+            2 => .{ .default_null = Variable.random(random_source) },
+            3 => .{ .positional_quoted = PositionalParameter.random(random_source) },
+            4 => .{ .positional_default_unset = PositionalParameter.random(random_source) },
             else => unreachable,
         };
     }
@@ -458,7 +477,28 @@ const Expansion = union(enum) {
             .quoted => |variable| try writer.print("\"${s}\"", .{variable.shell()}),
             .default_unset => |variable| try writer.print("\"${{{s}-default}}\"", .{variable.shell()}),
             .default_null => |variable| try writer.print("\"${{{s}:-default}}\"", .{variable.shell()}),
+            .positional_quoted => |parameter| try writer.print("\"${d}\"", .{parameter.number()}),
+            .positional_default_unset => |parameter| try writer.print(
+                "\"${{{d}-default}}\"",
+                .{parameter.number()},
+            ),
         }
+    }
+};
+
+const PositionalSet = struct {
+    values: [3]Value,
+    count: usize,
+
+    fn random(random_source: std.Random) PositionalSet {
+        var values: [3]Value = undefined;
+        for (&values) |*value| value.* = Value.random(random_source);
+        return .{ .values = values, .count = random_source.uintLessThan(usize, values.len + 1) };
+    }
+
+    fn render(self: PositionalSet, writer: *std.Io.Writer) !void {
+        try writer.writeAll("set --");
+        for (self.values[0..self.count]) |value| try writer.print(" {s}", .{value.shell()});
     }
 };
 
@@ -596,6 +636,8 @@ const Command = union(enum) {
     assign: Assignment,
     export_assign: Assignment,
     unset: Variable,
+    set_positionals: PositionalSet,
+    shift_guarded,
     print_stdout: Value,
     print_expansion: Expansion,
     print_to_file: struct { value: Value, file: FileName },
@@ -627,8 +669,12 @@ const Command = union(enum) {
             .inline_compound => if (depth < 2) 4 else 0,
         } else 0;
         const params_count: u8 = if (features.params) 1 else 0;
+        const positional_count: u8 = if (features.params) switch (mode) {
+            .top_level => 2,
+            .inline_compound => 1,
+        } else 0;
         const lists_count: u8 = if (features.lists and mode == .top_level) 1 else 0;
-        const choice = random.uintLessThan(u8, base_count + fd_count + params_count + lists_count);
+        const choice = random.uintLessThan(u8, base_count + fd_count + params_count + positional_count + lists_count);
         if (choice < base_count) return switch (choice) {
             0 => .noop,
             1 => .true_cmd,
@@ -670,7 +716,14 @@ const Command = union(enum) {
             else => unreachable,
         };
 
-        if (choice - base_count - fd_count < params_count) return .{ .print_expansion = Expansion.random(random) };
+        var feature_choice = choice - base_count - fd_count;
+        if (feature_choice < params_count) return .{ .print_expansion = Expansion.random(random) };
+        feature_choice -= params_count;
+        if (feature_choice < positional_count) return switch (feature_choice) {
+            0 => .{ .set_positionals = PositionalSet.random(random) },
+            1 => .shift_guarded,
+            else => unreachable,
+        };
         return .{ .list = .{
             .left = ListOperand.random(random, features),
             .operator = ListOperator.random(random),
@@ -704,6 +757,8 @@ const Command = union(enum) {
                 try assignment.render(writer);
             },
             .unset => |variable| try writer.print("unset {s}", .{variable.shell()}),
+            .set_positionals => |positionals| try positionals.render(writer),
+            .shift_guarded => try writer.writeAll("if [ \"$#\" -gt 0 ]; then shift; fi"),
             .print_stdout => |value| try writer.print("printf '%s\\n' {s}", .{value.shell()}),
             .print_expansion => |expansion| {
                 try writer.writeAll("printf '%s\\n' ");
