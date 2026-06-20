@@ -676,16 +676,47 @@ const RedirectedSimple = struct {
     redirection: Redirection,
 };
 
+const FunctionBodyOperand = union(enum) {
+    command: ListOperand,
+    print_arg_count,
+    print_first_arg,
+    print_second_arg_default,
+    print_quoted_args,
+
+    fn random(random_source: std.Random, features: FeatureSet) FunctionBodyOperand {
+        if (!features.params) return .{ .command = ListOperand.random(random_source, features) };
+        return switch (random_source.uintLessThan(u3, 5)) {
+            0 => .{ .command = ListOperand.random(random_source, features) },
+            1 => .print_arg_count,
+            2 => .print_first_arg,
+            3 => .print_second_arg_default,
+            4 => .print_quoted_args,
+            else => unreachable,
+        };
+    }
+
+    fn render(self: FunctionBodyOperand, writer: *std.Io.Writer) !void {
+        switch (self) {
+            .command => |command| try command.render(writer),
+            .print_arg_count => try writer.writeAll("printf '%s\n' \"$#\""),
+            .print_first_arg => try writer.writeAll("printf '%s\n' \"$1\""),
+            .print_second_arg_default => try writer.writeAll("printf '%s\n' \"${2-default}\""),
+            .print_quoted_args => try writer.writeAll("for x in \"$@\"; do printf '[%s]\n' \"$x\"; done"),
+        }
+    }
+};
+
 const FunctionCase = struct {
-    body: [2]ListOperand,
+    body: [3]FunctionBodyOperand,
     body_count: usize,
     args: [2]Value,
     arg_count: usize,
+    caller_positionals: ?PositionalSet,
     redirection: ?Redirection,
 
     fn random(random_source: std.Random, features: FeatureSet) FunctionCase {
-        var body: [2]ListOperand = undefined;
-        for (&body) |*command| command.* = ListOperand.random(random_source, features);
+        var body: [3]FunctionBodyOperand = undefined;
+        for (&body) |*command| command.* = FunctionBodyOperand.random(random_source, features);
         var args: [2]Value = undefined;
         for (&args) |*arg| arg.* = Value.random(random_source);
         return .{
@@ -693,6 +724,10 @@ const FunctionCase = struct {
             .body_count = 1 + random_source.uintLessThan(usize, body.len),
             .args = args,
             .arg_count = random_source.uintLessThan(usize, args.len + 1),
+            .caller_positionals = if (features.params and random_source.boolean())
+                PositionalSet.random(random_source)
+            else
+                null,
             .redirection = if (features.redir and random_source.boolean())
                 Redirection.random(random_source)
             else
@@ -701,6 +736,10 @@ const FunctionCase = struct {
     }
 
     fn render(self: FunctionCase, writer: *std.Io.Writer) !void {
+        if (self.caller_positionals) |positionals| {
+            try positionals.render(writer);
+            try writer.writeAll("; ");
+        }
         try writer.writeAll("f() { ");
         for (self.body[0..self.body_count], 0..) |command, index| {
             if (index != 0) try writer.writeAll("; ");
@@ -709,6 +748,9 @@ const FunctionCase = struct {
         try writer.writeAll("; }; f");
         for (self.args[0..self.arg_count]) |arg| try writer.print(" {s}", .{arg.shell()});
         if (self.redirection) |redirection| try redirection.render(writer);
+        if (self.caller_positionals != null) {
+            try writer.writeAll("; printf '%s\n' \"${1-default}\"");
+        }
     }
 };
 
