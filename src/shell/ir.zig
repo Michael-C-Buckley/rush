@@ -1257,7 +1257,8 @@ fn lowerPipelineDirect(
     for (parsed.nodeChildren(node)) |child| switch (child) {
         .token => |token_index| {
             const token = parsed.tokens[token_index.index()];
-            if (token.kind == .word and wordEqualsRemovingLineContinuations(token.lexeme(parsed.source), "!")) negated = true;
+            if (token.kind == .word and
+                wordEqualsRemovingLineContinuations(token.lexeme(parsed.source), "!")) negated = true;
         },
         .node => |child_node_id| {
             const child_node = parsed.nodes[child_node_id.index()];
@@ -2283,7 +2284,8 @@ fn lowerPipeline(
     for (parsed.nodeChildren(node)) |child| switch (child) {
         .token => |token_index| {
             const token = parsed.tokens[token_index.index()];
-            if (token.kind == .word and wordEqualsRemovingLineContinuations(token.lexeme(parsed.source), "!")) negated = true;
+            if (token.kind == .word and
+                wordEqualsRemovingLineContinuations(token.lexeme(parsed.source), "!")) negated = true;
         },
         .node => |child_node_id| {
             const child_node = parsed.nodes[child_node_id.index()];
