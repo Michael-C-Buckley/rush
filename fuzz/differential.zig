@@ -858,6 +858,25 @@ const RedirectedCompound = struct {
     redirection: OutputRedirection,
 };
 
+const FunctionScopeProbe = enum {
+    subshell,
+    group,
+
+    fn random(random_source: std.Random) FunctionScopeProbe {
+        return @enumFromInt(random_source.uintLessThan(u2, 2));
+    }
+
+    fn render(self: FunctionScopeProbe, writer: *std.Io.Writer) !void {
+        try writer.writeAll("unset -f g 2>/dev/null; ");
+        switch (self) {
+            .subshell => try writer.writeAll(
+                "( g() { printf '%s\n' subshell; }; g ); g 2>/dev/null || printf '%s\n' missing",
+            ),
+            .group => try writer.writeAll("{ g() { printf '%s\n' group; }; g; }; g"),
+        }
+    }
+};
+
 const DirName = enum {
     d,
     e,
@@ -967,6 +986,7 @@ const Command = union(enum) {
     assign_cmdsub: CommandSubstitutionAssignment,
     redirected_simple: RedirectedSimple,
     function_case: FunctionCase,
+    function_scope_probe: FunctionScopeProbe,
     print_to_file: struct { value: Value, file: FileName },
     cat_file: FileName,
     subshell: []Command,
@@ -1010,7 +1030,7 @@ const Command = union(enum) {
             .inline_compound => 1,
         } else 0;
         const func_count: u8 = if (features.func) switch (mode) {
-            .top_level => 2,
+            .top_level => 3,
             .inline_compound => if (depth < 2) 1 else 0,
         } else 0;
         const choice_count = base_count + fd_count + params_count + positional_count + lists_count + redir_count +
@@ -1086,7 +1106,12 @@ const Command = union(enum) {
             else => unreachable,
         };
         feature_choice -= cmdsub_count;
-        if (feature_choice < func_count) return .{ .function_case = FunctionCase.random(random, features) };
+        if (feature_choice < func_count) {
+            if (mode == .top_level and feature_choice == 2) {
+                return .{ .function_scope_probe = FunctionScopeProbe.random(random) };
+            }
+            return .{ .function_case = FunctionCase.random(random, features) };
+        }
         unreachable;
     }
 
@@ -1133,6 +1158,7 @@ const Command = union(enum) {
                 try redirected.redirection.render(writer);
             },
             .function_case => |function_case| try function_case.render(writer),
+            .function_scope_probe => |scope_probe| try scope_probe.render(writer),
             .print_to_file => |print| try writer.print(
                 "printf '%s\\n' {s} > {s}",
                 .{ print.value.shell(), print.file.shell() },
