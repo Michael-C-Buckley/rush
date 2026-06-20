@@ -4204,6 +4204,8 @@ const EvaluationBuffers = struct {
     command_substitution_side_stdout: std.ArrayList(u8) = .empty,
     pipeline_stdout: std.ArrayList(u8) = .empty,
     diagnostics: std.ArrayList([]const u8) = .empty,
+    preserve_parent_visible_stdout_capture: bool = false,
+    fold_side_stdout_to_stdout: bool = false,
 
     fn init(
         allocator: std.mem.Allocator,
@@ -4235,15 +4237,18 @@ const EvaluationBuffers = struct {
         var routing = OutputRouting.init(self.allocator, .outcome_capture);
         errdefer routing.deinit();
         const command_substitution_context = frameWithinCommandSubstitution(self.frame.*);
+        const preserve_parent_visible_stdout = self.preserve_parent_visible_stdout_capture;
         try routing.setDestination(1, outputDestinationForFrameEndpointInContext(
             1,
             self.frame.spec.fd_table.endpoint(1),
             command_substitution_context,
+            preserve_parent_visible_stdout,
         ));
         try routing.setDestination(2, outputDestinationForFrameEndpointInContext(
             2,
             self.frame.spec.fd_table.endpoint(2),
             command_substitution_context,
+            preserve_parent_visible_stdout,
         ));
         for (self.frame.spec.fd_table.bindings.items) |binding| {
             if (binding.descriptor <= 2) continue;
@@ -4254,6 +4259,7 @@ const EvaluationBuffers = struct {
                         binding.descriptor,
                         binding.endpoint,
                         command_substitution_context,
+                        preserve_parent_visible_stdout,
                     ),
                 ),
                 .closed => try routing.setDestination(binding.descriptor, .closed),
@@ -4315,6 +4321,7 @@ fn outputDestinationForFrameEndpointInContext(
     descriptor: runtime.fd.Descriptor,
     endpoint: execution_frame.FdEndpoint,
     command_substitution_context: bool,
+    preserve_parent_visible_stdout: bool,
 ) OutputDestination {
     runtime.fd.assertValidDescriptor(descriptor);
     endpoint.validate();
@@ -4335,15 +4342,18 @@ fn outputDestinationForFrameEndpointInContext(
             } else .{ .host_descriptor = host_descriptor },
             .pipe_write => |host_descriptor| .{ .host_descriptor = host_descriptor },
             .path => .{ .host_descriptor = descriptor },
-            .capture => |channel| if (command_substitution_context) switch (channel) {
-                .command_substitution_stdout => if (descriptor == 1)
-                    .command_substitution_stdout_capture
-                else
-                    .command_substitution_side_stdout_capture,
-                .side_stdout => .side_stdout_capture,
-                .side_stderr => .outcome_stderr_capture,
-                .pipeline_data => .pipeline_data_capture,
-            } else outputDestinationForCaptureChannel(channel),
+            .capture => |channel| blk: {
+                if (preserve_parent_visible_stdout and channel == .side_stdout) break :blk .side_stdout_capture;
+                break :blk if (command_substitution_context) switch (channel) {
+                    .command_substitution_stdout => if (descriptor == 1)
+                        .command_substitution_stdout_capture
+                    else
+                        .command_substitution_side_stdout_capture,
+                    .side_stdout => .side_stdout_capture,
+                    .side_stderr => .outcome_stderr_capture,
+                    .pipeline_data => .pipeline_data_capture,
+                } else outputDestinationForCaptureChannel(channel);
+            },
             .discard => .closed,
         },
         .closed => .closed,
@@ -4539,11 +4549,14 @@ fn evaluatePlanWithInput(
     {
         if ((((eval_context.command_substitution_depth == 0 and eval_context.pipeline_depth != 0 and
             frameRoutesCapturedOutput(command_frame)) or frameRoutesPipelineData(command_frame)) or
-            (hasScopedExecRedirections(evaluator.*) and !command_frame.spec.kind.isParentVisible() and
+            (hasScopedExecRedirections(evaluator.*) and !frame.spec.kind.isParentVisible() and
                 redirectionPlanDuplicatesFromOpenSources(command_frame, effective_plan.redirections) and
                 !scopedExecClosesDuplicateSource(evaluator.scoped_exec_redirections, effective_plan.redirections))) and
             !redirectionPlanNeedsRuntimeFdEffects(effective_plan.redirections))
         {
+            if (hasScopedExecRedirections(evaluator.*) and !frame.spec.kind.isParentVisible()) {
+                buffers.preserve_parent_visible_stdout_capture = true;
+            }
             try emitSemanticRedirectionTransforms(evaluator.*, &buffers, effective_plan.redirections);
         } else {
             const apply_result = try applyRedirectionsForScope(
@@ -6244,6 +6257,7 @@ fn activeFrameOutputFrameForExpansion(
             1,
             buffers.frame.spec.fd_table.endpoint(1),
             command_substitution_context,
+            buffers.preserve_parent_visible_stdout_capture,
         ),
     );
     try routing.setDestination(
@@ -6252,6 +6266,7 @@ fn activeFrameOutputFrameForExpansion(
             2,
             buffers.frame.spec.fd_table.endpoint(2),
             command_substitution_context,
+            buffers.preserve_parent_visible_stdout_capture,
         ),
     );
     return OutputFrame.initOwnedRouting(buffers, routing);
@@ -9143,7 +9158,11 @@ fn commandOutcomeFromBuffers(
 
     var side_stdout: std.ArrayList(u8) = .empty;
     errdefer side_stdout.deinit(allocator);
-    try side_stdout.appendSlice(allocator, buffers.side_stdout.items);
+    if (buffers.fold_side_stdout_to_stdout) {
+        try stdout.appendSlice(allocator, buffers.side_stdout.items);
+    } else {
+        try side_stdout.appendSlice(allocator, buffers.side_stdout.items);
+    }
 
     var command_substitution_side_stdout: std.ArrayList(u8) = .empty;
     errdefer command_substitution_side_stdout.deinit(allocator);
@@ -11380,9 +11399,14 @@ fn appendStatementChildOutcomeBuffers(buffers: *EvaluationBuffers, command_outco
         buffers.allocator,
         command_outcome.command_substitution_side_stdout.items,
     );
-    var side_frame = try buffers.outputFrame();
-    defer side_frame.deinit();
-    try side_frame.write(1, command_outcome.side_stdout.items);
+    if (buffers.frame.spec.kind == .subshell) {
+        if (command_outcome.side_stdout.items.len != 0) buffers.fold_side_stdout_to_stdout = true;
+        try buffers.side_stdout.appendSlice(buffers.allocator, command_outcome.side_stdout.items);
+    } else {
+        var side_frame = try buffers.outputFrame();
+        defer side_frame.deinit();
+        try side_frame.write(1, command_outcome.side_stdout.items);
+    }
 
     var frame = OutputFrame.initOutcomeCapture(buffers);
     defer frame.deinit();
@@ -17955,6 +17979,7 @@ fn evaluatePrintfRouted(
             1,
             buffers.frame.spec.fd_table.endpoint(1),
             command_substitution_context,
+            buffers.preserve_parent_visible_stdout_capture,
         ),
     );
     try routing.setDestination(
@@ -17963,6 +17988,7 @@ fn evaluatePrintfRouted(
             2,
             buffers.frame.spec.fd_table.endpoint(2),
             command_substitution_context,
+            buffers.preserve_parent_visible_stdout_capture,
         ),
     );
     if ((stdout.items.len != 0 and routing.destination(1) == .closed) or
