@@ -6195,11 +6195,12 @@ fn evaluateCompoundPlanWithInput(
         plan.redirections,
     );
     defer command_frame.spec.fd_table.deinit(evaluator.allocator);
+    const active_frame = if (compoundBodyUsesParentFrame(plan)) frame else &command_frame;
     var frame_input = EvaluationInput.empty();
     var buffers = EvaluationBuffers.init(
         evaluator.allocator,
         input,
-        &command_frame,
+        active_frame,
     );
     defer buffers.deinit();
     buffers.useFrameFdTableInput(&frame_input, input);
@@ -6309,7 +6310,7 @@ fn evaluateCompoundPlanWithInput(
     if (redirection_guard.hasTransaction() and !redirection_output_flushed) {
         try flushBufferedRedirectionOutput(evaluator.*, &buffers, plan.redirections, eval_context, .{});
     }
-    if (frameRoutesCapturedOutput(command_frame) and eval_context.command_substitution_depth == 0 and
+    if (frameRoutesCapturedOutput(active_frame.*) and eval_context.command_substitution_depth == 0 and
         eval_context.pipeline_depth != 0)
     {
         try routeDirectPipelineStageBuffers(&buffers);
@@ -6323,6 +6324,24 @@ fn evaluateCompoundPlanWithInput(
         result.control_flow,
         &buffers,
     );
+}
+
+fn compoundBodyUsesParentFrame(plan: command_plan.CompoundCommandPlan) bool {
+    plan.validate();
+    if (!plan.target.allowsShellStateCommit()) return false;
+    if (hasCompoundRedirections(plan)) return false;
+    return switch (plan.body) {
+        .sequence, .brace_group => true,
+        .and_or_list,
+        .negation,
+        .if_clause,
+        .while_loop,
+        .until_loop,
+        .for_loop,
+        .case_clause,
+        .subshell,
+        => false,
+    };
 }
 
 pub fn evaluatePipelinePlan(

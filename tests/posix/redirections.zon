@@ -142,6 +142,19 @@
             .status = 0,
         },
         .{
+            .name = "exec redirection in brace group persists in current shell",
+            .script =
+            \\{ exec 4>&1; }
+            \\printf 'after\n' >&4
+            ,
+            .stdout =
+            \\after
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "nested command substitution side output preserves descriptor swap routing",
             .script =
             \\v=$(exec 3>&1 1>&2 2>&3; printf "$(printf inner >&2)"; printf outer >&2)
