@@ -940,9 +940,13 @@ const AliasProbe = enum {
     define_call,
     redefine,
     unalias_missing,
+    subshell_shadow,
+    group_redefine,
+    subshell_unalias,
+    group_unalias,
 
     fn random(random_source: std.Random) AliasProbe {
-        return @enumFromInt(random_source.uintLessThan(u2, 3));
+        return @enumFromInt(random_source.uintLessThan(u3, 7));
     }
 
     fn render(self: AliasProbe, writer: *std.Io.Writer) !void {
@@ -956,6 +960,23 @@ const AliasProbe = enum {
             ),
             .unalias_missing => try writer.writeAll(
                 "alias a='printf \"%s\\n\" alive'\na\nunalias a\na 2>/dev/null || printf '%s\n' missing",
+            ),
+            .subshell_shadow => try writer.writeAll(
+                "alias a='printf \"%s\\n\" outer'\n" ++
+                    "(\nalias a='printf \"%s\\n\" inner'\na\n)\na",
+            ),
+            .group_redefine => try writer.writeAll(
+                "alias a='printf \"%s\\n\" outer'\n" ++
+                    "{\nalias a='printf \"%s\\n\" inner'\na\n}\na",
+            ),
+            .subshell_unalias => try writer.writeAll(
+                "alias a='printf \"%s\\n\" outer'\n" ++
+                    "(\nunalias a\nalias a >/dev/null 2>&1 || printf '%s\n' inner-missing\n)\na",
+            ),
+            .group_unalias => try writer.writeAll(
+                "alias a='printf \"%s\\n\" outer'\n" ++
+                    "{\nunalias a\nalias a >/dev/null 2>&1 || printf '%s\n' group-missing\n}\n" ++
+                    "alias a >/dev/null 2>&1 || printf '%s\n' outer-missing",
             ),
         }
     }
