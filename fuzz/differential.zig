@@ -747,8 +747,26 @@ const FunctionCase = struct {
     args: [2]Value,
     arg_count: usize,
     caller_positionals: ?PositionalSet,
+    list_tail: ?FunctionListTail,
     print_status: bool,
     redirection: ?Redirection,
+
+    const FunctionListTail = struct {
+        operator: ListOperator,
+        command: ListOperand,
+
+        fn random(random_source: std.Random, features: FeatureSet) FunctionListTail {
+            return .{
+                .operator = ListOperator.random(random_source),
+                .command = ListOperand.random(random_source, features),
+            };
+        }
+
+        fn render(self: FunctionListTail, writer: *std.Io.Writer) !void {
+            try writer.print(" {s} ", .{self.operator.shell()});
+            try self.command.render(writer);
+        }
+    };
 
     fn random(random_source: std.Random, features: FeatureSet) FunctionCase {
         var body: [3]FunctionBodyOperand = undefined;
@@ -762,6 +780,10 @@ const FunctionCase = struct {
             .arg_count = random_source.uintLessThan(usize, args.len + 1),
             .caller_positionals = if (features.params and random_source.boolean())
                 PositionalSet.random(random_source)
+            else
+                null,
+            .list_tail = if (features.lists and random_source.boolean())
+                FunctionListTail.random(random_source, features)
             else
                 null,
             .print_status = random_source.boolean(),
@@ -785,6 +807,7 @@ const FunctionCase = struct {
         try writer.writeAll("; }; f");
         for (self.args[0..self.arg_count]) |arg| try writer.print(" {s}", .{arg.shell()});
         if (self.redirection) |redirection| try redirection.render(writer);
+        if (self.list_tail) |tail| try tail.render(writer);
         const status_is_portable = if (self.redirection) |redirection| !redirection.mayFailBeforeCommand() else true;
         if (self.print_status and status_is_portable) try writer.writeAll("; printf '%s\n' \"$?\"");
         if (self.caller_positionals != null) {
