@@ -22,11 +22,12 @@ const Config = struct {
 
 const FeatureSet = packed struct {
     fd: bool = true,
+    params: bool = true,
 
-    const default: FeatureSet = .{ .fd = true };
+    const default: FeatureSet = .{ .fd = true, .params = true };
 
     fn parse(text: []const u8) ?FeatureSet {
-        var features: FeatureSet = .{ .fd = false };
+        var features: FeatureSet = .{ .fd = false, .params = false };
         var saw_feature = false;
         var iterator = std.mem.splitScalar(u8, text, ',');
         while (iterator.next()) |feature| {
@@ -35,6 +36,9 @@ const FeatureSet = packed struct {
                 saw_feature = true;
             } else if (std.mem.eql(u8, feature, "fd")) {
                 features.fd = true;
+                saw_feature = true;
+            } else if (std.mem.eql(u8, feature, "params")) {
+                features.params = true;
                 saw_feature = true;
             } else {
                 return null;
@@ -46,6 +50,7 @@ const FeatureSet = packed struct {
     fn format(self: FeatureSet, writer: *std.Io.Writer) !void {
         try writer.writeAll("base");
         if (self.fd) try writer.writeAll(",fd");
+        if (self.params) try writer.writeAll(",params");
     }
 };
 
@@ -291,7 +296,7 @@ fn writeUsage(io: std.Io) !void {
         \\  --cases N           number of generated cases (default: 100)
         \\  --seed N            deterministic seed (default: 1)
         \\  --case N            run only one generated case index
-        \\  --features LIST     comma-separated features: base,fd (default: base,fd)
+        \\  --features LIST     comma-separated features: base,fd,params (default: base,fd,params)
         \\  --keep-temp         keep the temporary sandbox
         \\  --strict-stderr     compare stderr exactly
         \\
@@ -385,6 +390,43 @@ const Value = enum {
     }
 };
 
+const Variable = enum {
+    A,
+    B,
+
+    fn random(random_source: std.Random) Variable {
+        return @enumFromInt(random_source.uintLessThan(u2, 2));
+    }
+
+    fn shell(self: Variable) []const u8 {
+        return @tagName(self);
+    }
+};
+
+const Expansion = union(enum) {
+    quoted: Variable,
+    default_unset: Variable,
+    default_null: Variable,
+
+    fn random(random_source: std.Random) Expansion {
+        const variable = Variable.random(random_source);
+        return switch (random_source.uintLessThan(u2, 3)) {
+            0 => .{ .quoted = variable },
+            1 => .{ .default_unset = variable },
+            2 => .{ .default_null = variable },
+            else => unreachable,
+        };
+    }
+
+    fn render(self: Expansion, writer: *std.Io.Writer) !void {
+        switch (self) {
+            .quoted => |variable| try writer.print("\"${s}\"", .{variable.shell()}),
+            .default_unset => |variable| try writer.print("\"${{{s}-default}}\"", .{variable.shell()}),
+            .default_null => |variable| try writer.print("\"${{{s}:-default}}\"", .{variable.shell()}),
+        }
+    }
+};
+
 const FileName = enum {
     a,
     b,
@@ -451,6 +493,7 @@ const Command = union(enum) {
     false_cmd,
     assign_a: Value,
     print_stdout: Value,
+    print_expansion: Expansion,
     print_to_file: struct { value: Value, file: FileName },
     cat_file: FileName,
     subshell: []Command,
@@ -468,11 +511,17 @@ const Command = union(enum) {
         depth: usize,
         features: FeatureSet,
     ) anyerror!Command {
-        const choice_count: u8 = switch (mode) {
-            .top_level => if (features.fd) if (depth < 2) 14 else 11 else if (depth < 2) 10 else 7,
-            .inline_compound => if (features.fd and depth < 2) 9 else 5,
+        const base_count: u8 = switch (mode) {
+            .top_level => if (depth < 2) 10 else 7,
+            .inline_compound => 5,
         };
-        return switch (random.uintLessThan(u8, choice_count)) {
+        const fd_count: u8 = if (features.fd) switch (mode) {
+            .top_level => 4,
+            .inline_compound => if (depth < 2) 4 else 0,
+        } else 0;
+        const params_count: u8 = if (features.params) 1 else 0;
+        const choice = random.uintLessThan(u8, base_count + fd_count + params_count);
+        if (choice < base_count) return switch (choice) {
             0 => .noop,
             1 => .true_cmd,
             2 => .false_cmd,
@@ -483,19 +532,26 @@ const Command = union(enum) {
             7 => .{ .subshell = try generateCompoundCommands(allocator, random, depth + 1, features) },
             8 => .{ .group = try generateCompoundCommands(allocator, random, depth + 1, features) },
             9 => .{ .mkdir_cd = DirName.random(random) },
-            10 => .{ .exec_open_fd = .{
+            else => unreachable,
+        };
+
+        const fd_choice = choice - base_count;
+        if (fd_choice < fd_count) return switch (fd_choice) {
+            0 => .{ .exec_open_fd = .{
                 .fd = Fd.random(random),
                 .file = FileName.random(random),
                 .append = random.boolean(),
             } },
-            11 => .{ .exec_close_fd = Fd.random(random) },
-            12 => target: {
+            1 => .{ .exec_close_fd = Fd.random(random) },
+            2 => target: {
                 const target = Fd.random(random);
                 break :target .{ .exec_dup_fd = .{ .target = target, .source = FdSource.random(random) } };
             },
-            13 => .{ .print_to_fd = .{ .fd = Fd.random(random), .value = Value.random(random) } },
+            3 => .{ .print_to_fd = .{ .fd = Fd.random(random), .value = Value.random(random) } },
             else => unreachable,
         };
+
+        return .{ .print_expansion = Expansion.random(random) };
     }
 
     fn deinit(self: *Command, allocator: std.mem.Allocator) void {
@@ -516,6 +572,10 @@ const Command = union(enum) {
             .false_cmd => try writer.writeAll("false"),
             .assign_a => |value| try writer.print("A={s}", .{value.shell()}),
             .print_stdout => |value| try writer.print("printf '%s\\n' {s}", .{value.shell()}),
+            .print_expansion => |expansion| {
+                try writer.writeAll("printf '%s\\n' ");
+                try expansion.render(writer);
+            },
             .print_to_file => |print| try writer.print(
                 "printf '%s\\n' {s} > {s}",
                 .{ print.value.shell(), print.file.shell() },
