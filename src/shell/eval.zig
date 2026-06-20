@@ -6310,6 +6310,7 @@ fn evaluateCompoundPlanWithInput(
     if (redirection_guard.hasTransaction() and !redirection_output_flushed) {
         try flushBufferedRedirectionOutput(evaluator.*, &buffers, plan.redirections, eval_context, .{});
     }
+    if (plan.target.isIsolatedFromParent()) try flushChildShellBufferedCommandOutput(&buffers, eval_context);
     if (frameRoutesCapturedOutput(active_frame.*) and eval_context.command_substitution_depth == 0 and
         eval_context.pipeline_depth != 0)
     {
@@ -8574,7 +8575,14 @@ fn evaluateExternalPipelineStage(
     try appendPlanExpansionOutput(evaluator.*, eval_context, plan, &stage_buffers);
     try traceCommandPlanForEvaluation(evaluator, shell_state, eval_context, plan, input, frame, &stage_buffers);
 
-    const status = try runExternalWithPipelineInput(evaluator, shell_state.*, plan, resolution, &stage_buffers);
+    const status = try runExternalWithPipelineInput(
+        evaluator,
+        shell_state.*,
+        eval_context,
+        plan,
+        resolution,
+        &stage_buffers,
+    );
     state_delta.setLastStatus(status);
     assertCommandDeltaCompatible(plan, state_delta);
     return commandOutcomeFromBuffers(evaluator.allocator, eval_context, status, state_delta, .normal, &stage_buffers);
@@ -8878,6 +8886,7 @@ fn evaluateSimpleCommand(
         .external => |resolution| normalEvaluation(try evaluateExternal(
             evaluator,
             shell_state.*,
+            eval_context,
             plan,
             resolution,
             buffers,
@@ -9112,6 +9121,7 @@ fn completeStatementChildResult(
             evaluator.io != null,
         );
     } else {
+        try flushChildShellBufferedCommandOutput(buffers, eval_context);
         try flushLiveInheritedBufferedOutput(buffers, eval_context, evaluator.io != null);
     }
     return .{
@@ -12478,11 +12488,20 @@ fn appendTrapDiff(before: state.ShellState, after: state.ShellState, state_delta
 fn evaluateExternal(
     evaluator: *Evaluator,
     shell_state: state.ShellState,
+    eval_context: context.EvalContext,
     plan: command_plan.CommandPlan,
     resolution: command_plan.ExternalResolution,
     buffers: *EvaluationBuffers,
 ) EvalError!outcome.ExitStatus {
-    return evaluateExternalWithProcessEnvironment(evaluator, shell_state, plan, resolution, &.{}, buffers);
+    return evaluateExternalWithProcessEnvironment(
+        evaluator,
+        shell_state,
+        eval_context,
+        plan,
+        resolution,
+        &.{},
+        buffers,
+    );
 }
 
 const ExternalInvocation = struct {
@@ -12576,6 +12595,7 @@ const ExternalSpawnOptions = struct {
 fn evaluateExternalWithProcessEnvironment(
     evaluator: *Evaluator,
     shell_state: state.ShellState,
+    eval_context: context.EvalContext,
     plan: command_plan.CommandPlan,
     resolution: command_plan.ExternalResolution,
     process_overlay: []const assignment_runtime.ProcessEnvironmentEntry,
@@ -12594,6 +12614,7 @@ fn evaluateExternalWithProcessEnvironment(
         return runExternalWithPipelineInputWithProcessEnvironment(
             evaluator,
             shell_state,
+            eval_context,
             plan,
             resolution,
             process_overlay,
@@ -12668,16 +12689,21 @@ fn evaluateExternalWithProcessEnvironment(
         return normalizeWaitStatus(run_result.status);
     }
 
-    if (capturedExternalMode(evaluator.external_stdio)) |capture_mode| return evaluateCapturedExternal(
-        evaluator,
-        process_port,
-        fd_port,
-        plan,
-        invocation,
-        buffers,
-        capture_mode,
-        &.{},
-    );
+    const external_capture_mode = capturedExternalMode(evaluator.external_stdio) orelse
+        if (eval_context.target.isIsolatedFromParent()) CapturedExternalMode.stdout_and_stderr else null;
+    if (external_capture_mode) |capture_mode| {
+        try flushCapturedExternalPrecedingOutput(buffers, capture_mode);
+        return evaluateCapturedExternal(
+            evaluator,
+            process_port,
+            fd_port,
+            plan,
+            invocation,
+            buffers,
+            capture_mode,
+            &.{},
+        );
+    }
 
     try flushBuffersToInheritedDescriptors(buffers);
 
@@ -12798,6 +12824,32 @@ fn evaluateCapturedExternal(
     return normalizeWaitStatus(run_result.status);
 }
 
+fn flushCapturedExternalPrecedingOutput(
+    buffers: *EvaluationBuffers,
+    capture_mode: CapturedExternalMode,
+) EvalError!void {
+    var frame = switch (capture_mode) {
+        .stdout => OutputFrame.initOutcomeCapture(buffers),
+        .stdout_and_stderr => OutputFrame.initCommandSubstitution(buffers),
+    };
+    defer frame.deinit();
+    try frame.flushPendingStandardDescriptors();
+}
+
+fn flushChildShellBufferedCommandOutput(
+    buffers: *EvaluationBuffers,
+    eval_context: context.EvalContext,
+) EvalError!void {
+    eval_context.validate();
+    if (eval_context.target == .current_shell) return;
+    var frame = if (eval_context.command_substitution_depth != 0)
+        OutputFrame.initCommandSubstitution(buffers)
+    else
+        OutputFrame.initOutcomeCapture(buffers);
+    defer frame.deinit();
+    try frame.flushPendingStandardDescriptors();
+}
+
 fn appendCapturedExternalOutput(
     evaluator: Evaluator,
     buffers: *EvaluationBuffers,
@@ -12839,16 +12891,26 @@ fn appendCapturedExternalOutput(
 fn runExternalWithPipelineInput(
     evaluator: *Evaluator,
     shell_state: state.ShellState,
+    eval_context: context.EvalContext,
     plan: command_plan.CommandPlan,
     resolution: command_plan.ExternalResolution,
     buffers: *EvaluationBuffers,
 ) EvalError!outcome.ExitStatus {
-    return runExternalWithPipelineInputWithProcessEnvironment(evaluator, shell_state, plan, resolution, &.{}, buffers);
+    return runExternalWithPipelineInputWithProcessEnvironment(
+        evaluator,
+        shell_state,
+        eval_context,
+        plan,
+        resolution,
+        &.{},
+        buffers,
+    );
 }
 
 fn runExternalWithPipelineInputWithProcessEnvironment(
     evaluator: *Evaluator,
     shell_state: state.ShellState,
+    eval_context: context.EvalContext,
     plan: command_plan.CommandPlan,
     resolution: command_plan.ExternalResolution,
     process_overlay: []const assignment_runtime.ProcessEnvironmentEntry,
@@ -12864,7 +12926,11 @@ fn runExternalWithPipelineInputWithProcessEnvironment(
 
     var redirection_guard = RedirectionGuard.empty(.child_only);
     defer redirection_guard.restore();
-    if (capturedExternalMode(evaluator.external_stdio) == null and buffers.frame.spec.kind != .pipeline_stage) {
+    const external_capture_mode = capturedExternalMode(evaluator.external_stdio) orelse
+        if (eval_context.target.isIsolatedFromParent()) CapturedExternalMode.stdout_and_stderr else null;
+    if (external_capture_mode) |capture_mode| {
+        if (buffers.frame.spec.kind != .pipeline_stage) try flushCapturedExternalPrecedingOutput(buffers, capture_mode);
+    } else if (buffers.frame.spec.kind != .pipeline_stage) {
         try flushBuffersToInheritedDescriptors(buffers);
     }
     if (plan.redirections.steps.len != 0) {
@@ -13360,7 +13426,7 @@ fn evaluateBuiltin(
     }
     if (std.mem.eql(u8, definition.name, "env")) {
         return normalEvaluation(
-            try evaluateEnv(evaluator, shell_state, plan, &buffers.stdout, buffers),
+            try evaluateEnv(evaluator, shell_state, eval_context, plan, &buffers.stdout, buffers),
         );
     }
     if (std.mem.eql(u8, definition.name, "pwd")) {
@@ -14127,6 +14193,7 @@ fn sourcedTextLineEnd(source: []const u8, start: usize) usize {
 fn evaluateEnv(
     evaluator: *Evaluator,
     shell_state: state.ShellState,
+    eval_context: context.EvalContext,
     plan: command_plan.CommandPlan,
     stdout: *std.ArrayList(u8),
     buffers: *EvaluationBuffers,
@@ -14188,6 +14255,7 @@ fn evaluateEnv(
         return evaluateExternalWithProcessEnvironment(
             evaluator,
             shell_state,
+            eval_context,
             target_plan,
             resolution,
             process_overlay.entries.items,
@@ -15648,9 +15716,23 @@ fn evaluateExec(
         .target = .child_process,
     });
     const status = if (externalNeedsBufferedStdin(target_plan, buffers))
-        try runExternalWithPipelineInput(evaluator, shell_state, target_plan, resolution, buffers)
+        try runExternalWithPipelineInput(
+            evaluator,
+            shell_state,
+            context.EvalContext.forTarget(.current_shell),
+            target_plan,
+            resolution,
+            buffers,
+        )
     else
-        try evaluateExternal(evaluator, shell_state, target_plan, resolution, buffers);
+        try evaluateExternal(
+            evaluator,
+            shell_state,
+            context.EvalContext.forTarget(.current_shell),
+            target_plan,
+            resolution,
+            buffers,
+        );
     try state_delta.setTrap(state.TrapSignal.EXIT.name(), null);
     return .{ .status = status, .control_flow = .{ .exit = status } };
 }

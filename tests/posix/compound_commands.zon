@@ -79,6 +79,20 @@
             .status = 0,
         },
         .{
+            .name = "subshell preserves output order across builtin and external commands",
+            .script =
+            \\printf '\n' >in
+            \\( printf 'before\n'; cat <in )
+            ,
+            .stdout =
+            \\before
+            \\
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "subshell exec redirection operand side output remains ordered and isolated",
             .script =
             \\exec 2>&1
