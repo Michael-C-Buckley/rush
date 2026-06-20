@@ -69,6 +69,20 @@
             .status = 0,
         },
         .{
+            .name = "eval preserves here-doc bodies in constructed commands",
+            .script =
+            \\eval "cat <<EOF
+            \\hi
+            \\EOF"
+            ,
+            .stdout =
+            \\hi
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "dot returns the status of the last command in the file",
             .script =
             \\printf 'false\n' >file.sh

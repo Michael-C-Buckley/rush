@@ -13745,6 +13745,15 @@ fn evaluateSourcedTextChunks(
             };
             defer parsed.deinit();
             if (parsed.diagnostics.len == 0) {
+                const needs_more_here_doc = try sourcedTextChunkNeedsMoreHereDoc(
+                    evaluator.allocator,
+                    parsed,
+                    parse_source,
+                );
+                if (needs_more_here_doc and end < source.len) {
+                    end = sourcedTextLineEnd(source, end);
+                    continue;
+                }
                 const previous_alias_state = evaluator.alias_state;
                 evaluator.alias_state = &alias_snapshot;
                 defer evaluator.alias_state = previous_alias_state;
@@ -13774,6 +13783,100 @@ fn evaluateSourcedTextChunks(
         start = skipSourcedTextChunkSeparators(source, end);
     }
     return result;
+}
+
+fn sourcedTextChunkNeedsMoreHereDoc(
+    allocator: std.mem.Allocator,
+    parsed: parser.ParseResult,
+    source: []const u8,
+) !bool {
+    var body_index: usize = 0;
+    for (parsed.nodes) |node| {
+        if (node.kind != .redirection) continue;
+        const info = try sourcedTextHereDocInfo(allocator, parsed, node) orelse continue;
+        defer allocator.free(info.delimiter);
+        const body = sourcedTextHereDocBodyAt(parsed, body_index) orelse continue;
+        body_index += 1;
+        if (body.span.end != source.len) continue;
+        if (!sourceEndsWithHereDocDelimiterLine(source, info.delimiter, info.strip_tabs)) return true;
+    }
+    return false;
+}
+
+const SourcedTextHereDocInfo = struct {
+    delimiter: []const u8,
+    strip_tabs: bool,
+};
+
+fn sourcedTextHereDocInfo(
+    allocator: std.mem.Allocator,
+    parsed: parser.ParseResult,
+    node: parser.Node,
+) !?SourcedTextHereDocInfo {
+    var operator: parser.TokenKind = .invalid;
+    var target_token: ?usize = null;
+    for (parsed.nodeChildren(node)) |child| switch (child) {
+        .token => |token_id| {
+            const token = parsed.tokens[token_id.index()];
+            if (token.kind.isRedirectOperator()) operator = token.kind;
+        },
+        .node => |node_id| {
+            const child_node = parsed.nodes[node_id.index()];
+            if (child_node.kind == .word) target_token = child_node.token_start;
+        },
+    };
+    if (operator != .dless and operator != .dless_dash) return null;
+
+    const token_index = target_token orelse return null;
+    const raw = parsed.tokens[token_index].lexeme(parsed.source);
+    const normalized = try removeSourcedTextLineContinuations(allocator, raw);
+    defer allocator.free(normalized);
+    return .{
+        .delimiter = try expand.quoteRemove(allocator, normalized),
+        .strip_tabs = operator == .dless_dash,
+    };
+}
+
+fn removeSourcedTextLineContinuations(allocator: std.mem.Allocator, raw: []const u8) ![]const u8 {
+    if (std.mem.find(u8, raw, "\\\n") == null) return allocator.dupe(u8, raw);
+
+    var normalized: std.ArrayList(u8) = .empty;
+    errdefer normalized.deinit(allocator);
+    var index: usize = 0;
+    while (index < raw.len) {
+        if (raw[index] == '\\' and index + 1 < raw.len and raw[index + 1] == '\n') {
+            index += 2;
+            continue;
+        }
+        try normalized.append(allocator, raw[index]);
+        index += 1;
+    }
+    return normalized.toOwnedSlice(allocator);
+}
+
+fn sourcedTextHereDocBodyAt(parsed: parser.ParseResult, target_index: usize) ?parser.Node {
+    var current_index: usize = 0;
+    for (parsed.nodes) |node| {
+        if (node.kind != .here_doc_body) continue;
+        if (current_index == target_index) return node;
+        current_index += 1;
+    }
+    return null;
+}
+
+fn sourceEndsWithHereDocDelimiterLine(source: []const u8, delimiter: []const u8, strip_tabs: bool) bool {
+    if (source.len == 0) return false;
+    const line_end = if (source[source.len - 1] == '\n') source.len - 1 else source.len;
+    const raw_line_start = if (std.mem.findScalarLast(u8, source[0..line_end], '\n')) |newline|
+        newline + 1
+    else
+        0;
+    const line_start = if (strip_tabs) blk: {
+        var index = raw_line_start;
+        while (index < line_end and source[index] == '\t') : (index += 1) {}
+        break :blk index;
+    } else raw_line_start;
+    return std.mem.eql(u8, source[line_start..line_end], delimiter);
 }
 
 fn skipSourcedTextChunkSeparators(source: []const u8, start: usize) usize {
