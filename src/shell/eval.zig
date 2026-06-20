@@ -4201,6 +4201,7 @@ const EvaluationBuffers = struct {
     stdout: std.ArrayList(u8) = .empty,
     stderr: std.ArrayList(u8) = .empty,
     side_stdout: std.ArrayList(u8) = .empty,
+    command_substitution_side_stdout: std.ArrayList(u8) = .empty,
     pipeline_stdout: std.ArrayList(u8) = .empty,
     diagnostics: std.ArrayList([]const u8) = .empty,
 
@@ -4222,6 +4223,7 @@ const EvaluationBuffers = struct {
         self.stdout.deinit(self.allocator);
         self.stderr.deinit(self.allocator);
         self.side_stdout.deinit(self.allocator);
+        self.command_substitution_side_stdout.deinit(self.allocator);
         self.pipeline_stdout.deinit(self.allocator);
         for (self.diagnostics.items) |message| self.allocator.free(message);
         self.diagnostics.deinit(self.allocator);
@@ -4338,7 +4340,7 @@ fn outputDestinationForFrameEndpointInContext(
                     .command_substitution_stdout_capture
                 else
                     .command_substitution_side_stdout_capture,
-                .side_stdout => .command_substitution_side_stdout_capture,
+                .side_stdout => .side_stdout_capture,
                 .side_stderr => .outcome_stderr_capture,
                 .pipeline_data => .pipeline_data_capture,
             } else outputDestinationForCaptureChannel(channel),
@@ -4535,8 +4537,11 @@ fn evaluatePlanWithInput(
         effective_plan.class() != .external and
         effective_plan.class() != .function)
     {
-        if (((eval_context.command_substitution_depth == 0 and eval_context.pipeline_depth != 0 and
-            frameRoutesCapturedOutput(command_frame)) or frameRoutesPipelineData(command_frame)) and
+        if ((((eval_context.command_substitution_depth == 0 and eval_context.pipeline_depth != 0 and
+            frameRoutesCapturedOutput(command_frame)) or frameRoutesPipelineData(command_frame)) or
+            (hasScopedExecRedirections(evaluator.*) and !command_frame.spec.kind.isParentVisible() and
+                redirectionPlanDuplicatesFromOpenSources(command_frame, effective_plan.redirections) and
+                !scopedExecClosesDuplicateSource(evaluator.scoped_exec_redirections, effective_plan.redirections))) and
             !redirectionPlanNeedsRuntimeFdEffects(effective_plan.redirections))
         {
             try emitSemanticRedirectionTransforms(evaluator.*, &buffers, effective_plan.redirections);
@@ -4975,6 +4980,7 @@ fn moveBufferedOutput(
 const OutputDestination = union(enum) {
     outcome_stdout_capture,
     outcome_stderr_capture,
+    side_stdout_capture,
     command_substitution_side_stdout_capture,
     pipeline_data_capture,
     command_substitution_stdout_capture,
@@ -4986,6 +4992,7 @@ const OutputDestination = union(enum) {
         switch (self) {
             .outcome_stdout_capture,
             .outcome_stderr_capture,
+            .side_stdout_capture,
             .command_substitution_side_stdout_capture,
             .pipeline_data_capture,
             .command_substitution_stdout_capture,
@@ -5278,7 +5285,8 @@ const OutputFrame = struct {
             .outcome_stdout_capture,
             .command_substitution_stdout_capture,
             => try self.buffers.stdout.appendSlice(self.buffers.allocator, bytes),
-            .command_substitution_side_stdout_capture => try self.buffers.side_stdout.appendSlice(
+            .side_stdout_capture => try self.buffers.side_stdout.appendSlice(self.buffers.allocator, bytes),
+            .command_substitution_side_stdout_capture => try self.buffers.command_substitution_side_stdout.appendSlice(
                 self.buffers.allocator,
                 bytes,
             ),
@@ -5601,6 +5609,12 @@ fn flushBufferedRedirectionOutput(
     defer frame.deinit();
 
     if (!command_substitution_capture) {
+        if (!buffers.frame.spec.kind.isParentVisible() and hasScopedExecRedirections(evaluator)) {
+            var routed_frame = try buffers.outputFrame();
+            defer routed_frame.deinit();
+            try routed_frame.flushPendingStandardDescriptors();
+            return;
+        }
         if (evaluator.scoped_exec_redirections) |scoped_redirections| {
             for (scoped_redirections.items) |scoped| {
                 try frame.applyRedirectionsFlushingRouteChanges(scoped.redirections);
@@ -5716,6 +5730,62 @@ fn redirectionPlanNeedsRuntimeFdEffects(redirections: redirection_plan.Redirecti
         switch (step.effect) {
             .open_path => return true,
             .here_doc, .duplicate, .close => {},
+        }
+    }
+    return false;
+}
+
+fn redirectionPlanOnlyDuplicates(redirections: redirection_plan.RedirectionPlan) bool {
+    redirections.validate();
+    if (redirections.steps.len == 0) return false;
+    for (redirections.steps) |step| {
+        step.validate();
+        switch (step.effect) {
+            .duplicate => {},
+            .open_path, .here_doc, .close => return false,
+        }
+    }
+    return true;
+}
+
+fn redirectionPlanDuplicatesFromOpenSources(
+    frame: execution_frame.ExecutionFrame,
+    redirections: redirection_plan.RedirectionPlan,
+) bool {
+    frame.validate();
+    redirections.validate();
+    if (redirections.steps.len == 0) return false;
+    for (redirections.steps) |step| {
+        step.validate();
+        switch (step.effect) {
+            .duplicate => |duplicate| if (frame.spec.fd_table.endpoint(duplicate.source) == .closed) return false,
+            .open_path, .here_doc, .close => return false,
+        }
+    }
+    return true;
+}
+
+fn scopedExecClosesDuplicateSource(
+    scoped_redirections: ?*std.ArrayList(ScopedExecRedirection),
+    redirections: redirection_plan.RedirectionPlan,
+) bool {
+    redirections.validate();
+    const scoped_list = scoped_redirections orelse return false;
+    for (redirections.steps) |step| {
+        step.validate();
+        const source = switch (step.effect) {
+            .duplicate => |duplicate| duplicate.source,
+            .open_path, .here_doc, .close => continue,
+        };
+        for (scoped_list.items) |scoped| {
+            scoped.redirections.validate();
+            for (scoped.redirections.steps) |scoped_step| {
+                scoped_step.validate();
+                switch (scoped_step.effect) {
+                    .close => |close_step| if (close_step.target == source) return true,
+                    .open_path, .here_doc, .duplicate => {},
+                }
+            }
         }
     }
     return false;
@@ -5992,6 +6062,7 @@ fn diagnosticDestinationIsWritable(destination: OutputDestination) bool {
         .host_descriptor => |descriptor| descriptorIsOpen(descriptor),
         .outcome_stdout_capture,
         .outcome_stderr_capture,
+        .side_stdout_capture,
         .command_substitution_side_stdout_capture,
         .pipeline_data_capture,
         .command_substitution_stdout_capture,
@@ -6055,8 +6126,15 @@ fn flushBufferToDestination(
             try buffers.stderr.insertSlice(buffers.allocator, 0, bytes);
             buffers.stdout.items.len = 0;
         },
-        .command_substitution_side_stdout_capture => {
+        .side_stdout_capture => {
             try buffers.side_stdout.appendSlice(buffers.allocator, bytes);
+            switch (stream) {
+                .stdout => buffers.stdout.items.len = 0,
+                .stderr => buffers.stderr.items.len = 0,
+            }
+        },
+        .command_substitution_side_stdout_capture => {
+            try buffers.command_substitution_side_stdout.appendSlice(buffers.allocator, bytes);
             switch (stream) {
                 .stdout => buffers.stdout.items.len = 0,
                 .stderr => buffers.stderr.items.len = 0,
@@ -6115,7 +6193,11 @@ fn appendBytesToDestination(
         .outcome_stdout_capture,
         .command_substitution_stdout_capture,
         => try buffers.stdout.appendSlice(buffers.allocator, bytes),
-        .command_substitution_side_stdout_capture => try buffers.side_stdout.appendSlice(buffers.allocator, bytes),
+        .side_stdout_capture => try buffers.side_stdout.appendSlice(buffers.allocator, bytes),
+        .command_substitution_side_stdout_capture => try buffers.command_substitution_side_stdout.appendSlice(
+            buffers.allocator,
+            bytes,
+        ),
         .pipeline_data_capture => try buffers.pipeline_stdout.appendSlice(buffers.allocator, bytes),
         .outcome_stderr_capture,
         .command_substitution_stderr_capture,
@@ -6328,12 +6410,7 @@ fn evaluateCompoundPlanWithInput(
             switch (apply_result) {
                 .applied => |applied| {
                     redirection_guard = applied;
-                    if (compoundBodyUsesParentFrame(plan) and
-                        evaluator.external_stdio == .inherit and
-                        evaluator.commit_exec_redirections and
-                        evaluator.io != null and
-                        frameTargetsInheritedStandardDescriptors(active_frame.*, true))
-                    {
+                    if (compoundBodyUsesParentFrame(plan)) {
                         try frame_redirection_guard.apply(evaluator.allocator, active_frame, plan.redirections);
                     }
                 },
@@ -7335,9 +7412,10 @@ fn commandSubstitutionResultFromOutcome(
     var result = CommandSubstitutionResult.init(allocator, visible_status);
     errdefer result.deinit();
 
-    if (fold_side_stdout) {
-        try appendCommandSubstitutionOutput(allocator, &result.output, command_outcome.side_stdout.items);
-    }
+    if (fold_side_stdout)
+        try appendCommandSubstitutionOutput(allocator, &result.output, command_outcome.command_substitution_side_stdout.items)
+    else
+        try result.side_stdout.appendSlice(allocator, command_outcome.command_substitution_side_stdout.items);
     const trimmed = trimCommandSubstitutionOutput(command_outcome.stdout.items);
     try appendCommandSubstitutionOutput(allocator, &result.output, trimmed);
     const trimmed_pipeline_stdout = trimCommandSubstitutionOutput(command_outcome.pipeline_stdout.items);
@@ -7347,12 +7425,10 @@ fn commandSubstitutionResultFromOutcome(
         try result.side_stdout.appendSlice(allocator, command_outcome.pipeline_stdout.items);
     }
     std.debug.assert(result.output.items.len <=
-        trimmed.len + trimmed_pipeline_stdout.len + command_outcome.side_stdout.items.len);
+        trimmed.len + trimmed_pipeline_stdout.len + command_outcome.command_substitution_side_stdout.items.len);
     if (result.output.items.len != 0) std.debug.assert(result.output.items.ptr != command_outcome.stdout.items.ptr);
 
-    if (!fold_side_stdout) {
-        try result.side_stdout.appendSlice(allocator, command_outcome.side_stdout.items);
-    }
+    try result.side_stdout.appendSlice(allocator, command_outcome.side_stdout.items);
     try result.stderr.appendSlice(allocator, command_outcome.stderr.items);
     for (command_outcome.diagnostics.items) |diagnostic| {
         const owned_message = try allocator.dupe(u8, diagnostic.message);
@@ -9069,6 +9145,10 @@ fn commandOutcomeFromBuffers(
     errdefer side_stdout.deinit(allocator);
     try side_stdout.appendSlice(allocator, buffers.side_stdout.items);
 
+    var command_substitution_side_stdout: std.ArrayList(u8) = .empty;
+    errdefer command_substitution_side_stdout.deinit(allocator);
+    try command_substitution_side_stdout.appendSlice(allocator, buffers.command_substitution_side_stdout.items);
+
     var pipeline_stdout: std.ArrayList(u8) = .empty;
     errdefer pipeline_stdout.deinit(allocator);
     try pipeline_stdout.appendSlice(allocator, buffers.pipeline_stdout.items);
@@ -9093,6 +9173,7 @@ fn commandOutcomeFromBuffers(
     command_outcome.stdout = stdout;
     command_outcome.stderr = stderr;
     command_outcome.side_stdout = side_stdout;
+    command_outcome.command_substitution_side_stdout = command_substitution_side_stdout;
     command_outcome.pipeline_stdout = pipeline_stdout;
     command_outcome.diagnostics = diagnostics;
     command_outcome.propagated_failure = buffers.propagated_failure;
@@ -11264,6 +11345,10 @@ fn appendOutcomeBuffers(buffers: *EvaluationBuffers, command_outcome: outcome.Co
         if (buffers.propagated_failure == null) buffers.propagated_failure = failure;
     }
     try buffers.side_stdout.appendSlice(buffers.allocator, command_outcome.side_stdout.items);
+    try buffers.command_substitution_side_stdout.appendSlice(
+        buffers.allocator,
+        command_outcome.command_substitution_side_stdout.items,
+    );
     if (frameWithinCommandSubstitution(buffers.frame.*)) {
         try buffers.stdout.appendSlice(buffers.allocator, command_outcome.stdout.items);
         try buffers.stderr.appendSlice(buffers.allocator, command_outcome.stderr.items);
@@ -11291,6 +11376,10 @@ fn appendStatementChildOutcomeBuffers(buffers: *EvaluationBuffers, command_outco
     if (command_outcome.propagated_failure) |failure| {
         if (buffers.propagated_failure == null) buffers.propagated_failure = failure;
     }
+    try buffers.command_substitution_side_stdout.appendSlice(
+        buffers.allocator,
+        command_outcome.command_substitution_side_stdout.items,
+    );
     var side_frame = try buffers.outputFrame();
     defer side_frame.deinit();
     try side_frame.write(1, command_outcome.side_stdout.items);
@@ -11323,6 +11412,10 @@ fn appendPipelineStageBuffers(
     if (command_outcome.propagated_failure) |failure| {
         if (buffers.propagated_failure == null) buffers.propagated_failure = failure;
     }
+    try buffers.command_substitution_side_stdout.appendSlice(
+        buffers.allocator,
+        command_outcome.command_substitution_side_stdout.items,
+    );
     var side_frame = try buffers.outputFrame();
     defer side_frame.deinit();
     try side_frame.write(1, command_outcome.side_stdout.items);
@@ -12915,6 +13008,7 @@ fn outputDestinationCaptures(destination: OutputDestination) bool {
     return switch (destination) {
         .outcome_stdout_capture,
         .outcome_stderr_capture,
+        .side_stdout_capture,
         .command_substitution_side_stdout_capture,
         .pipeline_data_capture,
         .command_substitution_stdout_capture,

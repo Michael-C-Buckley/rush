@@ -95,6 +95,7 @@ pub const CommandOutcome = struct {
     stdout: std.ArrayList(u8) = .empty,
     stderr: std.ArrayList(u8) = .empty,
     side_stdout: std.ArrayList(u8) = .empty,
+    command_substitution_side_stdout: std.ArrayList(u8) = .empty,
     pipeline_stdout: std.ArrayList(u8) = .empty,
     diagnostics: std.ArrayList(Diagnostic) = .empty,
     state_delta: delta.StateDelta,
@@ -137,6 +138,7 @@ pub const CommandOutcome = struct {
         self.stdout.deinit(self.allocator);
         self.stderr.deinit(self.allocator);
         self.side_stdout.deinit(self.allocator);
+        self.command_substitution_side_stdout.deinit(self.allocator);
         self.pipeline_stdout.deinit(self.allocator);
         for (self.diagnostics.items) |diagnostic| {
             self.allocator.free(diagnostic.message);
