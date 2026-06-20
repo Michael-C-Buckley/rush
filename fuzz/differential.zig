@@ -707,6 +707,13 @@ const FileName = enum {
     }
 };
 
+const FileNameMask = u4;
+
+fn fileNameBit(file: FileName) FileNameMask {
+    const shift: std.math.Log2Int(FileNameMask) = @intCast(@intFromEnum(file));
+    return @as(FileNameMask, 1) << shift;
+}
+
 const OutputRedirection = struct {
     file: FileName,
     append: bool,
@@ -719,6 +726,23 @@ const OutputRedirection = struct {
         try writer.print(" {s} {s}", .{ if (self.append) ">>" else ">", self.file.shell() });
     }
 };
+
+fn randomOutputRedirectionAvoiding(random_source: std.Random, forbidden_files: FileNameMask) ?OutputRedirection {
+    const all_files = [_]FileName{ .a, .b, .c, .out };
+    var available: [all_files.len]FileName = undefined;
+    var available_count: usize = 0;
+    for (all_files) |file| {
+        if (forbidden_files & fileNameBit(file) == 0) {
+            available[available_count] = file;
+            available_count += 1;
+        }
+    }
+    if (available_count == 0) return null;
+    return .{
+        .file = available[random_source.uintLessThan(usize, available_count)],
+        .append = random_source.boolean(),
+    };
+}
 
 const Redirection = union(enum) {
     stdout_file: OutputRedirection,
@@ -1543,14 +1567,28 @@ const Command = union(enum) {
             9 => .{ .mkdir_cd = DirName.random(random) },
             10 => .{ .export_assign = Assignment.random(random) },
             11 => .{ .unset = Variable.random(random) },
-            12 => .{ .redirected_subshell = .{
-                .body = try generateCompoundCommands(allocator, random, depth + 1, features),
-                .redirection = OutputRedirection.random(random),
-            } },
-            13 => .{ .redirected_group = .{
-                .body = try generateCompoundCommands(allocator, random, depth + 1, features),
-                .redirection = OutputRedirection.random(random),
-            } },
+            12 => redirected: {
+                const body = try generateCompoundCommands(allocator, random, depth + 1, features);
+                const redirection = randomOutputRedirectionAvoiding(
+                    random,
+                    commandsFilesStreamedToInheritedStdout(body),
+                ) orelse break :redirected .{ .subshell = body };
+                break :redirected .{ .redirected_subshell = .{
+                    .body = body,
+                    .redirection = redirection,
+                } };
+            },
+            13 => redirected: {
+                const body = try generateCompoundCommands(allocator, random, depth + 1, features);
+                const redirection = randomOutputRedirectionAvoiding(
+                    random,
+                    commandsFilesStreamedToInheritedStdout(body),
+                ) orelse break :redirected .{ .group = body };
+                break :redirected .{ .redirected_group = .{
+                    .body = body,
+                    .redirection = redirection,
+                } };
+            },
             14 => .{ .print_expansion = Expansion.random(random) },
             else => unreachable,
         };
@@ -1724,7 +1762,25 @@ const Command = union(enum) {
         }
         if (mode == .top_level) try writer.writeByte('\n');
     }
+
+    fn filesStreamedToInheritedStdout(self: Command) FileNameMask {
+        return switch (self) {
+            .cat_file => |file| fileNameBit(file),
+            .subshell, .group => |commands| commandsFilesStreamedToInheritedStdout(commands),
+            .pipeline_probe => |probe| switch (probe) {
+                .redirected_input => fileNameBit(.a),
+                else => 0,
+            },
+            else => 0,
+        };
+    }
 };
+
+fn commandsFilesStreamedToInheritedStdout(commands: []const Command) FileNameMask {
+    var mask: FileNameMask = 0;
+    for (commands) |command| mask |= command.filesStreamedToInheritedStdout();
+    return mask;
+}
 
 fn generateCompoundCommands(
     allocator: std.mem.Allocator,
