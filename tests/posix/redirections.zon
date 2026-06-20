@@ -183,6 +183,22 @@
             .status = 0,
         },
         .{
+            .name = "subshell printf inherits exec redirection to nonstandard descriptor",
+            .script =
+            \\( exec 3>>out; printf '%s\n' '' >&3 )
+            \\printf 'after\n'
+            \\set -- $(wc -c <out)
+            \\printf 'bytes:%s\n' "$1"
+            ,
+            .stdout =
+            \\after
+            \\bytes:1
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "exec redirection in redirected brace group survives later redirection failure",
             .script =
             \\{ exec 3>>out; false <missing; } >>group

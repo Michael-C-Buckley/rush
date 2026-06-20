@@ -4552,6 +4552,8 @@ fn evaluatePlanWithInput(
             (hasScopedExecRedirections(evaluator.*) and !frame.spec.kind.isParentVisible() and
                 redirectionPlanDuplicatesFromOpenSources(command_frame, effective_plan.redirections) and
                 !scopedExecClosesDuplicateSource(evaluator.scoped_exec_redirections, effective_plan.redirections))) and
+            !redirectionPlanDuplicatesFromPathSources(command_frame, effective_plan.redirections) and
+            !scopedExecPathBacksDuplicateSource(evaluator.scoped_exec_redirections, effective_plan.redirections) and
             !redirectionPlanNeedsRuntimeFdEffects(effective_plan.redirections))
         {
             if (hasScopedExecRedirections(evaluator.*) and !frame.spec.kind.isParentVisible()) {
@@ -4891,6 +4893,7 @@ fn flushCurrentShellBufferedCommandOutput(
 ) EvalError!void {
     eval_context.validate();
     if (eval_context.target != .current_shell) return;
+    if (!buffers.frame.spec.kind.isParentVisible()) return;
     if (eval_context.command_substitution_depth != 0) return;
     switch (external_stdio) {
         .capture => {},
@@ -5779,6 +5782,34 @@ fn redirectionPlanDuplicatesFromOpenSources(
     return true;
 }
 
+fn redirectionPlanDuplicatesFromPathSources(
+    frame: execution_frame.ExecutionFrame,
+    redirections: redirection_plan.RedirectionPlan,
+) bool {
+    frame.validate();
+    redirections.validate();
+    for (redirections.steps) |step| {
+        step.validate();
+        switch (step.effect) {
+            .duplicate => |duplicate| switch (frame.spec.fd_table.endpoint(duplicate.source)) {
+                .output => |output| switch (output) {
+                    .path => return true,
+                    .inherit_stdout,
+                    .inherit_stderr,
+                    .fd,
+                    .pipe_write,
+                    .capture,
+                    .discard,
+                    => {},
+                },
+                .input, .closed => {},
+            },
+            .open_path, .here_doc, .close => {},
+        }
+    }
+    return false;
+}
+
 fn scopedExecClosesDuplicateSource(
     scoped_redirections: ?*std.ArrayList(ScopedExecRedirection),
     redirections: redirection_plan.RedirectionPlan,
@@ -5800,6 +5831,68 @@ fn scopedExecClosesDuplicateSource(
                     .open_path, .here_doc, .duplicate => {},
                 }
             }
+        }
+    }
+    return false;
+}
+
+fn scopedExecPathBacksDuplicateSource(
+    scoped_redirections: ?*std.ArrayList(ScopedExecRedirection),
+    redirections: redirection_plan.RedirectionPlan,
+) bool {
+    redirections.validate();
+    const scoped_list = scoped_redirections orelse return false;
+    if (scoped_list.items.len == 0) return false;
+    for (redirections.steps) |step| {
+        step.validate();
+        switch (step.effect) {
+            .duplicate => |duplicate| if (scopedDescriptorIsPathBacked(
+                scoped_list.*,
+                duplicate.source,
+                scoped_list.items.len - 1,
+                scoped_list.items[scoped_list.items.len - 1].redirections.steps.len,
+                0,
+            )) return true,
+            .open_path, .here_doc, .close => {},
+        }
+    }
+    return false;
+}
+
+fn scopedDescriptorIsPathBacked(
+    scoped_list: std.ArrayList(ScopedExecRedirection),
+    descriptor: runtime.fd.Descriptor,
+    stop_scoped_index: usize,
+    stop_step_index: usize,
+    depth: usize,
+) bool {
+    runtime.fd.assertValidDescriptor(descriptor);
+    std.debug.assert(scoped_list.items.len != 0);
+    std.debug.assert(stop_scoped_index < scoped_list.items.len);
+    std.debug.assert(stop_step_index <= scoped_list.items[stop_scoped_index].redirections.steps.len);
+    if (depth > 16) return false;
+
+    var scoped_index = stop_scoped_index + 1;
+    while (scoped_index != 0) {
+        scoped_index -= 1;
+        const steps = scoped_list.items[scoped_index].redirections.steps;
+        var step_index = if (scoped_index == stop_scoped_index) stop_step_index else steps.len;
+        while (step_index != 0) {
+            step_index -= 1;
+            const step = steps[step_index];
+            step.validate();
+            if (step.target() != descriptor) continue;
+            return switch (step.effect) {
+                .open_path => true,
+                .duplicate => |duplicate| scopedDescriptorIsPathBacked(
+                    scoped_list,
+                    duplicate.source,
+                    scoped_index,
+                    step_index,
+                    depth + 1,
+                ),
+                .here_doc, .close => false,
+            };
         }
     }
     return false;
@@ -6216,7 +6309,9 @@ fn appendBytesToDestination(
         .outcome_stderr_capture,
         .command_substitution_stderr_capture,
         => try buffers.stderr.appendSlice(buffers.allocator, bytes),
-        .host_descriptor => |descriptor| if (!writeAllDescriptor(descriptor, bytes)) return error.Unimplemented,
+        .host_descriptor => |descriptor| {
+            if (!writeAllDescriptor(descriptor, bytes)) return error.Unimplemented;
+        },
         .closed => {},
     }
 }
@@ -11407,8 +11502,7 @@ fn appendStatementChildOutcomeBuffers(buffers: *EvaluationBuffers, command_outco
         command_outcome.command_substitution_side_stdout.items,
     );
     if (buffers.frame.spec.kind == .subshell) {
-        if (command_outcome.side_stdout.items.len != 0) buffers.fold_side_stdout_to_stdout = true;
-        try buffers.side_stdout.appendSlice(buffers.allocator, command_outcome.side_stdout.items);
+        try buffers.stdout.appendSlice(buffers.allocator, command_outcome.side_stdout.items);
     } else if (buffers.frame.spec.kind == .trap_handler) {
         try buffers.stdout.appendSlice(buffers.allocator, command_outcome.side_stdout.items);
     } else {
@@ -13130,6 +13224,7 @@ fn flushChildShellBufferedCommandOutput(
     eval_context.validate();
     if (eval_context.command_substitution_depth != 0) return;
     if (buffers.frame.spec.kind == .trap_handler and !eval_context.interactive) return;
+    if (!buffers.frame.spec.kind.isParentVisible()) return;
     if (eval_context.target == .current_shell and buffers.frame.spec.kind.isParentVisible()) return;
     var frame = OutputFrame.initInherited(buffers);
     defer frame.deinit();
@@ -17988,35 +18083,13 @@ fn evaluatePrintfRouted(
 
     var status = try evaluatePrintf(allocator, argv, &stdout, &stderr);
 
-    var routing = OutputRouting.init(allocator, .outcome_capture);
-    defer routing.deinit();
-    const command_substitution_context = eval_context.command_substitution_depth != 0 or
-        frameWithinCommandSubstitution(buffers.frame.*);
-    try routing.setDestination(
-        1,
-        outputDestinationForFrameEndpointInContext(
-            1,
-            buffers.frame.spec.fd_table.endpoint(1),
-            command_substitution_context,
-            buffers.preserve_parent_visible_stdout_capture,
-        ),
-    );
-    try routing.setDestination(
-        2,
-        outputDestinationForFrameEndpointInContext(
-            2,
-            buffers.frame.spec.fd_table.endpoint(2),
-            command_substitution_context,
-            buffers.preserve_parent_visible_stdout_capture,
-        ),
-    );
-    if ((stdout.items.len != 0 and routing.destination(1) == .closed) or
-        (stderr.items.len != 0 and routing.destination(2) == .closed))
+    var frame = try buffers.outputFrame();
+    defer frame.deinit();
+    if ((stdout.items.len != 0 and frame.routingRef().destination(1) == .closed) or
+        (stderr.items.len != 0 and frame.routingRef().destination(2) == .closed))
     {
         status = 1;
     }
-    var frame = OutputFrame.initBorrowed(buffers, &routing);
-    defer frame.deinit();
     try frame.write(1, stdout.items);
     try frame.write(2, stderr.items);
     return status;

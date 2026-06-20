@@ -78,6 +78,22 @@
             .status = 1,
         },
         .{
+            .name = "function output order is preserved inside subshell loops",
+            .script =
+            \\( printf '%s\n' "${B-default}"; set -- one; f() { printf '%s\n' "$2"; false; for x in "$@"; do printf '[%s]\n' "$x"; done; }; f '' && false; printf '%s\n' "$?"; printf '%s\n' "${1-default}"; )
+            ,
+            .stdout =
+            \\default
+            \\
+            \\[]
+            \\1
+            \\one
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "deep tail-recursive function call chain exceeds one thousand calls",
             .script =
             \\f() { if [ "$1" -eq 0 ]; then printf 'ok\n'; else next=$(( $1 - 1 )); f "$next"; fi; }
