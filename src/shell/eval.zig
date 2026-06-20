@@ -12964,6 +12964,12 @@ fn externalCaptureMode(
     buffers: *EvaluationBuffers,
 ) EvalError!?CapturedExternalMode {
     plan.validate();
+    if (evaluator.external_stdio == .inherit and
+        eval_context.command_substitution_depth == 0 and
+        eval_context.pipeline_depth == 0)
+    {
+        return null;
+    }
     if (capturedExternalMode(evaluator.external_stdio) == null and
         !eval_context.target.isIsolatedFromParent()) return null;
 
@@ -12994,6 +13000,43 @@ fn outputDestinationCaptures(destination: OutputDestination) bool {
         .closed,
         => false,
     };
+}
+
+test "inherited foreground external stdio streams outside capture contexts" {
+    const external_resolution: command_plan.ExternalResolution = .{ .name = "external", .path = "/bin/external" };
+    const plan = command_plan.classifyExpandedSimpleCommand(.{
+        .command = .{ .argv = &[_][]const u8{"external"} },
+        .lookup = .{
+            .builtins = &.{},
+            .externals = &[_]command_plan.ExternalResolution{external_resolution},
+        },
+    });
+
+    var input = EvaluationInput.empty();
+    var frame = rootExecutionFrame(context.EvalContext.forTarget(.current_shell));
+    var buffers = EvaluationBuffers.init(std.testing.allocator, &input, &frame);
+    defer buffers.deinit();
+
+    var evaluator = Evaluator.init(std.testing.allocator);
+    evaluator.external_stdio = .inherit;
+
+    const foreground_context = context.EvalContext.forTarget(.child_process);
+    try std.testing.expectEqual(
+        @as(?CapturedExternalMode, null),
+        try externalCaptureMode(evaluator, foreground_context, plan, &buffers),
+    );
+
+    const substitution_context = context.EvalContext.forTarget(.current_shell)
+        .enterCommandSubstitution()
+        .withTarget(.child_process);
+    var substitution_frame = try commandSubstitutionExecutionFrame(std.testing.allocator, null, &frame);
+    defer substitution_frame.spec.fd_table.deinit(std.testing.allocator);
+    var substitution_buffers = EvaluationBuffers.init(std.testing.allocator, &input, &substitution_frame);
+    defer substitution_buffers.deinit();
+    try std.testing.expectEqual(
+        @as(?CapturedExternalMode, .stdout_and_stderr),
+        try externalCaptureMode(evaluator, substitution_context, plan, &substitution_buffers),
+    );
 }
 
 fn evaluateCapturedExternal(
