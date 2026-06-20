@@ -280,6 +280,7 @@ fn commandSubstitutionInheritedErrorEndpoint(output: execution_frame.OutputEndpo
     return switch (output) {
         .capture => |channel| switch (channel) {
             .command_substitution_stdout => .{ .capture = .side_stdout },
+            .pipeline_data => .{ .capture = .side_stdout },
             else => output,
         },
         else => output,
@@ -303,6 +304,7 @@ fn pipelineStageExecutionFrame(
     if (frameStandardDescriptorsAreDefault(parent_frame.*)) if (scoped_exec_redirections) |scoped_list| {
         for (scoped_list.items) |scoped| try fd_table.applyRedirectionPlan(allocator, scoped.redirections);
     };
+    normalizeInheritedPipelineCapturesForPipelineStage(&fd_table);
 
     const stdin: execution_frame.InputEndpoint = if (previous_stdin.len != 0)
         .{ .bytes = previous_stdin }
@@ -329,6 +331,24 @@ fn pipelineStageExecutionFrame(
     });
     frame.validate();
     return frame;
+}
+
+fn normalizeInheritedPipelineCapturesForPipelineStage(fd_table: *execution_frame.FdTable) void {
+    fd_table.validate();
+    for (fd_table.bindings.items) |*binding| {
+        binding.validate();
+        if (binding.descriptor == 1) continue;
+        switch (binding.endpoint) {
+            .output => |output| switch (output) {
+                .capture => |channel| if (channel == .pipeline_data) {
+                    binding.endpoint = .{ .output = .{ .capture = .side_stdout } };
+                },
+                else => {},
+            },
+            .input, .closed => {},
+        }
+    }
+    fd_table.validate();
 }
 
 fn pipelineStageInheritedInput(
@@ -6936,6 +6956,7 @@ fn evaluateCommandSubstitutionInState(
     const result = try commandSubstitutionResultFromOutcome(
         evaluator.allocator,
         substitution_context.command_substitution_depth,
+        substitution_context.command_substitution_depth == 1 and !frameRoutesPipelineData(parent_frame.*),
         visible_status,
         body_outcome,
     );
@@ -7164,6 +7185,7 @@ fn applyCommandSubstitutionOutcome(
 fn commandSubstitutionResultFromOutcome(
     allocator: std.mem.Allocator,
     command_substitution_depth: u32,
+    fold_side_stdout: bool,
     visible_status: outcome.ExitStatus,
     command_outcome: outcome.CommandOutcome,
 ) EvalError!CommandSubstitutionResult {
@@ -7172,7 +7194,7 @@ fn commandSubstitutionResultFromOutcome(
     var result = CommandSubstitutionResult.init(allocator, visible_status);
     errdefer result.deinit();
 
-    if (command_substitution_depth == 1) {
+    if (fold_side_stdout) {
         try appendCommandSubstitutionOutput(allocator, &result.output, command_outcome.side_stdout.items);
     }
     const trimmed = trimCommandSubstitutionOutput(command_outcome.stdout.items);
@@ -7187,7 +7209,7 @@ fn commandSubstitutionResultFromOutcome(
         trimmed.len + trimmed_pipeline_stdout.len + command_outcome.side_stdout.items.len);
     if (result.output.items.len != 0) std.debug.assert(result.output.items.ptr != command_outcome.stdout.items.ptr);
 
-    if (command_substitution_depth != 1) {
+    if (!fold_side_stdout) {
         try result.side_stdout.appendSlice(allocator, command_outcome.side_stdout.items);
     }
     try result.stderr.appendSlice(allocator, command_outcome.stderr.items);
@@ -8033,12 +8055,6 @@ fn routePipelineStageOutcome(
     stage_outcome.validate();
     frame.validate();
     std.debug.assert(frame.spec.kind == .pipeline_stage);
-    try routePipelineStageOutcomeBuffer(
-        allocator,
-        frame.spec.fd_table.endpoint(1),
-        &stage_outcome.side_stdout,
-        &stage_outcome.pipeline_stdout,
-    );
     try routePipelineStageOutcomeBuffer(
         allocator,
         frame.spec.fd_table.endpoint(1),
@@ -11117,6 +11133,10 @@ fn appendPipelineStageBuffers(
     if (command_outcome.propagated_failure) |failure| {
         if (buffers.propagated_failure == null) buffers.propagated_failure = failure;
     }
+    var side_frame = try buffers.outputFrame();
+    defer side_frame.deinit();
+    try side_frame.write(1, command_outcome.side_stdout.items);
+
     var frame = OutputFrame.initOutcomeCapture(buffers);
     defer frame.deinit();
     switch (route) {

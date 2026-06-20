@@ -280,6 +280,34 @@
             .status = 0,
         },
         .{
+            .name = "nested command substitution inherits pipeline stderr as side output",
+            .script =
+            \\f(){ printf '%s\n' "$(printf '%s' "$(printf side >&2; printf ret)")"; return 3; }
+            \\{ f; printf status:$?; } 2>&1 | cat
+            \\printf '\n'
+            ,
+            .stdout =
+            \\sideret
+            \\status:3
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "nested command substitution in pipeline keeps side output before command output",
+            .script =
+            \\( x=$(printf value); exec 2>&1; printf '[%s]' "$(printf err >&2; printf "$x")" ) | cat
+            \\printf '\n'
+            ,
+            .stdout =
+            \\err[value]
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "command substitution stderr merge captures pattern side output outside nested result",
             .script =
             \\x=$(exec 2>&1; case y in "$(printf 'pattern\n' >&2; printf y)") printf value ;; esac)
