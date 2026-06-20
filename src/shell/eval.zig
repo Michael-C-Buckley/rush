@@ -11258,6 +11258,13 @@ fn beginFunctionCallRedirections(
     std.debug.assert(!guard.hasTransaction());
     if (!hasRedirections(plan)) return null;
 
+    if (caller_context.command_substitution_depth == 0 and caller_context.pipeline_depth != 0 and
+        frameRoutesCapturedOutput(buffers.frame.*) and !redirectionPlanNeedsRuntimeFdEffects(plan.redirections))
+    {
+        try emitSemanticRedirectionTransforms(evaluator.*, buffers, plan.redirections);
+        return null;
+    }
+
     const apply_result = try applyRedirectionsForScope(
         evaluator.*,
         buffers,
@@ -11543,7 +11550,11 @@ const FunctionCommandInvocation = struct {
         result: SimpleEvalResult,
     ) EvalError!outcome.CommandOutcome {
         result.control_flow.validate();
-        if (frameRoutesPipelineData(self.command_frame)) try routeDirectPipelineStageBuffers(&self.buffers);
+        if (frameRoutesCapturedOutput(self.command_frame) and self.eval_context.command_substitution_depth == 0 and
+            self.eval_context.pipeline_depth != 0)
+        {
+            try routeDirectPipelineStageBuffers(&self.buffers);
+        }
         self.state_delta.setLastStatus(result.status);
         assertCommandDeltaCompatible(self.effective_plan, self.state_delta);
         const decision = consequence.decideForSimpleCommand(

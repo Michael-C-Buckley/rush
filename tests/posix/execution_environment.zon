@@ -375,6 +375,34 @@
             .status = 0,
         },
         .{
+            .name = "function call redirection to inherited stdout bypasses stage pipe",
+            .script =
+            \\f(){ printf a; }
+            \\{ exec 3>&1; f >&3 | cat; printf c; } | cat
+            \\printf '\n'
+            ,
+            .stdout =
+            \\ac
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "function scoped exec inherits redirected stage stdout",
+            .script =
+            \\f(){ exec 4>&1; printf a >&4; printf b; }
+            \\{ exec 3>&1; f 1>&3 | cat; printf c; } | cat
+            \\printf '\n'
+            ,
+            .stdout =
+            \\abc
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "nested command substitution keeps inherited pipeline output before outer output",
             .script =
             \\{ exec 3>&1; printf '%s\n' "$(printf '%s' "$(printf inner >&3; printf outer)")"; } | cat
