@@ -29,6 +29,7 @@ const expand = @import("expand.zig");
 const execution_frame = @import("execution_frame.zig");
 const ir = @import("ir.zig");
 const outcome = @import("outcome.zig");
+const output_routing = @import("output_routing.zig");
 const parser = @import("parser.zig");
 const pipeline_plan = @import("pipeline_plan.zig");
 const redirection_plan = @import("redirection_plan.zig");
@@ -36,6 +37,11 @@ const runtime = @import("../runtime.zig");
 const shell_expand = @import("expansion_context.zig");
 const state = @import("state.zig");
 const trap_semantics = @import("trap.zig");
+
+const OutputDestination = output_routing.OutputDestination;
+const OutputRouting = output_routing.OutputRouting;
+const frameWithinCommandSubstitution = output_routing.frameWithinCommandSubstitution;
+const outputDestinationForFrameEndpointInContext = output_routing.outputDestinationForFrameEndpointInContext;
 
 extern "c" fn snprintf(s: [*]u8, n: usize, format: [*:0]const u8, ...) c_int;
 
@@ -4234,38 +4240,12 @@ const EvaluationBuffers = struct {
 
     fn outputFrame(self: *EvaluationBuffers) !OutputFrame {
         self.frame.validate();
-        var routing = OutputRouting.init(self.allocator, .outcome_capture);
+        var routing = try OutputRouting.initForFrame(
+            self.allocator,
+            self.frame.*,
+            self.preserve_parent_visible_stdout_capture,
+        );
         errdefer routing.deinit();
-        const command_substitution_context = frameWithinCommandSubstitution(self.frame.*);
-        const preserve_parent_visible_stdout = self.preserve_parent_visible_stdout_capture;
-        try routing.setDestination(1, outputDestinationForFrameEndpointInContext(
-            1,
-            self.frame.spec.fd_table.endpoint(1),
-            command_substitution_context,
-            preserve_parent_visible_stdout,
-        ));
-        try routing.setDestination(2, outputDestinationForFrameEndpointInContext(
-            2,
-            self.frame.spec.fd_table.endpoint(2),
-            command_substitution_context,
-            preserve_parent_visible_stdout,
-        ));
-        for (self.frame.spec.fd_table.bindings.items) |binding| {
-            if (binding.descriptor <= 2) continue;
-            switch (binding.endpoint) {
-                .output => try routing.setDestination(
-                    binding.descriptor,
-                    outputDestinationForFrameEndpointInContext(
-                        binding.descriptor,
-                        binding.endpoint,
-                        command_substitution_context,
-                        preserve_parent_visible_stdout,
-                    ),
-                ),
-                .closed => try routing.setDestination(binding.descriptor, .closed),
-                .input => {},
-            }
-        }
         return OutputFrame.initOwnedRouting(self, routing);
     }
 
@@ -4315,61 +4295,127 @@ const EvaluationBuffers = struct {
         defer frame.deinit();
         try frame.diagnosticStore().append(message);
     }
-};
 
-fn outputDestinationForFrameEndpointInContext(
-    descriptor: runtime.fd.Descriptor,
-    endpoint: execution_frame.FdEndpoint,
-    command_substitution_context: bool,
-    preserve_parent_visible_stdout: bool,
-) OutputDestination {
-    runtime.fd.assertValidDescriptor(descriptor);
-    endpoint.validate();
-    return switch (endpoint) {
-        .output => |output| switch (output) {
-            .inherit_stdout => if (command_substitution_context)
-                .{ .host_descriptor = descriptor }
-            else
-                .{ .host_descriptor = descriptor },
-            .inherit_stderr => if (command_substitution_context)
-                .outcome_stderr_capture
-            else
-                .{ .host_descriptor = descriptor },
-            .fd => |host_descriptor| if (command_substitution_context) switch (host_descriptor) {
-                1 => .{ .host_descriptor = 1 },
-                2 => .outcome_stderr_capture,
-                else => .{ .host_descriptor = host_descriptor },
-            } else .{ .host_descriptor = host_descriptor },
-            .pipe_write => |host_descriptor| .{ .host_descriptor = host_descriptor },
-            .path => .{ .host_descriptor = descriptor },
-            .capture => |channel| blk: {
-                if (preserve_parent_visible_stdout and channel == .side_stdout) break :blk .side_stdout_capture;
-                break :blk if (command_substitution_context) switch (channel) {
-                    .command_substitution_stdout => if (descriptor == 1)
-                        .command_substitution_stdout_capture
-                    else
-                        .command_substitution_side_stdout_capture,
-                    .side_stdout => .side_stdout_capture,
-                    .side_stderr => .outcome_stderr_capture,
-                    .pipeline_data => .pipeline_data_capture,
-                } else outputDestinationForCaptureChannel(channel);
+    fn appendToDestination(
+        self: *EvaluationBuffers,
+        destination: OutputDestination,
+        bytes: []const u8,
+    ) EvalError!void {
+        destination.validate();
+        if (bytes.len == 0) return;
+        switch (destination) {
+            .outcome_stdout_capture,
+            .command_substitution_stdout_capture,
+            => try self.stdout.appendSlice(self.allocator, bytes),
+            .side_stdout_capture => try self.side_stdout.appendSlice(self.allocator, bytes),
+            .command_substitution_side_stdout_capture => try self.command_substitution_side_stdout.appendSlice(
+                self.allocator,
+                bytes,
+            ),
+            .pipeline_data_capture => try self.pipeline_stdout.appendSlice(self.allocator, bytes),
+            .outcome_stderr_capture,
+            .command_substitution_stderr_capture,
+            => try self.stderr.appendSlice(self.allocator, bytes),
+            .host_descriptor => |descriptor| {
+                if (!writeAllDescriptor(descriptor, bytes)) return error.Unimplemented;
             },
-            .discard => .closed,
-        },
-        .closed => .closed,
-        .input => .closed,
-    };
-}
+            .closed => {},
+        }
+    }
 
-fn frameWithinCommandSubstitution(frame: execution_frame.ExecutionFrame) bool {
-    frame.validate();
-    if (frame.spec.kind == .command_substitution) return true;
-    if (frame.spec.captures.contains(.command_substitution_stdout)) return true;
-    return switch (frame.parent) {
-        .kind => |kind| kind == .command_substitution,
-        .none => false,
-    };
-}
+    fn flushStreamToDestination(
+        self: *EvaluationBuffers,
+        stream: OutputStream,
+        destination: OutputDestination,
+    ) EvalError!void {
+        destination.validate();
+        const bytes = switch (stream) {
+            .stdout => self.stdout.items,
+            .stderr => self.stderr.items,
+        };
+        if (bytes.len == 0) return;
+
+        switch (destination) {
+            .command_substitution_stdout_capture => if (stream == .stderr) {
+                try self.stdout.appendSlice(self.allocator, bytes);
+                self.clearStream(stream);
+            },
+            .command_substitution_stderr_capture => if (stream == .stdout) {
+                try self.stderr.insertSlice(self.allocator, 0, bytes);
+                self.clearStream(stream);
+            },
+            .side_stdout_capture,
+            .command_substitution_side_stdout_capture,
+            .pipeline_data_capture,
+            .host_descriptor,
+            .closed,
+            => {
+                try self.appendToDestination(destination, bytes);
+                self.clearStream(stream);
+            },
+            .outcome_stdout_capture, .outcome_stderr_capture => {},
+        }
+    }
+
+    fn flushStandardToDestinations(
+        self: *EvaluationBuffers,
+        stdout_destination: OutputDestination,
+        stderr_destination: OutputDestination,
+    ) EvalError!void {
+        stdout_destination.validate();
+        stderr_destination.validate();
+        if (self.stdout.items.len == 0 and self.stderr.items.len == 0) return;
+
+        var stdout = self.stdout;
+        var stderr = self.stderr;
+        self.stdout = .empty;
+        self.stderr = .empty;
+        defer stdout.deinit(self.allocator);
+        defer stderr.deinit(self.allocator);
+
+        try self.appendToDestination(stdout_destination, stdout.items);
+        try self.appendToDestination(stderr_destination, stderr.items);
+    }
+
+    fn clearStream(self: *EvaluationBuffers, stream: OutputStream) void {
+        switch (stream) {
+            .stdout => self.stdout.items.len = 0,
+            .stderr => self.stderr.items.len = 0,
+        }
+    }
+
+    fn appendPropagatedFailure(self: *EvaluationBuffers, command_outcome: outcome.CommandOutcome) void {
+        command_outcome.validate();
+        if (command_outcome.propagated_failure) |failure| {
+            if (self.propagated_failure == null) self.propagated_failure = failure;
+        }
+    }
+
+    fn appendDiagnosticsFromOutcome(self: *EvaluationBuffers, command_outcome: outcome.CommandOutcome) !void {
+        command_outcome.validate();
+        for (command_outcome.diagnostics.items) |diagnostic| {
+            try self.addDiagnosticMessage(diagnostic.message);
+        }
+    }
+
+    fn appendCommandSubstitutionSideOutput(self: *EvaluationBuffers, command_outcome: outcome.CommandOutcome) !void {
+        command_outcome.validate();
+        try self.command_substitution_side_stdout.appendSlice(
+            self.allocator,
+            command_outcome.command_substitution_side_stdout.items,
+        );
+    }
+
+    fn appendSideOutput(self: *EvaluationBuffers, command_outcome: outcome.CommandOutcome) !void {
+        command_outcome.validate();
+        try self.side_stdout.appendSlice(self.allocator, command_outcome.side_stdout.items);
+    }
+
+    fn appendPipelineOutput(self: *EvaluationBuffers, command_outcome: outcome.CommandOutcome) !void {
+        command_outcome.validate();
+        try self.pipeline_stdout.appendSlice(self.allocator, command_outcome.pipeline_stdout.items);
+    }
+};
 
 fn frameStandardDescriptorsAreDefault(frame: execution_frame.ExecutionFrame) bool {
     frame.validate();
@@ -4380,15 +4426,6 @@ fn frameStandardDescriptorsAreDefault(frame: execution_frame.ExecutionFrame) boo
         execution_frame.FdEndpoint,
         .{ .output = frame.spec.stderr },
     ));
-}
-
-fn outputDestinationForCaptureChannel(channel: execution_frame.CaptureChannel) OutputDestination {
-    return switch (channel) {
-        .side_stdout => .outcome_stdout_capture,
-        .side_stderr => .outcome_stderr_capture,
-        .pipeline_data => .pipeline_data_capture,
-        .command_substitution_stdout => .command_substitution_stdout_capture,
-    };
 }
 
 const CwdGuard = struct {
@@ -4994,142 +5031,6 @@ fn moveBufferedOutput(
     source.items.len = 0;
 }
 
-const OutputDestination = union(enum) {
-    outcome_stdout_capture,
-    outcome_stderr_capture,
-    side_stdout_capture,
-    command_substitution_side_stdout_capture,
-    pipeline_data_capture,
-    command_substitution_stdout_capture,
-    command_substitution_stderr_capture,
-    host_descriptor: runtime.fd.Descriptor,
-    closed,
-
-    fn validate(self: OutputDestination) void {
-        switch (self) {
-            .outcome_stdout_capture,
-            .outcome_stderr_capture,
-            .side_stdout_capture,
-            .command_substitution_side_stdout_capture,
-            .pipeline_data_capture,
-            .command_substitution_stdout_capture,
-            .command_substitution_stderr_capture,
-            .closed,
-            => {},
-            .host_descriptor => |descriptor| runtime.fd.assertValidDescriptor(descriptor),
-        }
-    }
-};
-
-const OutputBinding = struct {
-    descriptor: runtime.fd.Descriptor,
-    destination: OutputDestination,
-
-    fn validate(self: OutputBinding) void {
-        runtime.fd.assertValidDescriptor(self.descriptor);
-        self.destination.validate();
-    }
-};
-
-const OutputRouting = struct {
-    const InitialMode = enum {
-        outcome_capture,
-        inherited,
-        command_substitution,
-    };
-
-    allocator: std.mem.Allocator,
-    initial_mode: InitialMode,
-    bindings: std.ArrayList(OutputBinding) = .empty,
-
-    fn init(allocator: std.mem.Allocator, initial_mode: InitialMode) OutputRouting {
-        return .{ .allocator = allocator, .initial_mode = initial_mode };
-    }
-
-    fn initCommandSubstitution(allocator: std.mem.Allocator) OutputRouting {
-        return init(allocator, .command_substitution);
-    }
-
-    fn deinit(self: *OutputRouting) void {
-        self.bindings.deinit(self.allocator);
-        self.* = undefined;
-    }
-
-    fn destination(self: OutputRouting, descriptor: runtime.fd.Descriptor) OutputDestination {
-        runtime.fd.assertValidDescriptor(descriptor);
-        if (self.boundDestination(descriptor)) |bound| return bound;
-        return self.defaultDestination(descriptor);
-    }
-
-    fn boundDestination(self: OutputRouting, descriptor: runtime.fd.Descriptor) ?OutputDestination {
-        runtime.fd.assertValidDescriptor(descriptor);
-        for (self.bindings.items) |binding| {
-            binding.validate();
-            if (binding.descriptor == descriptor) return binding.destination;
-        }
-        return null;
-    }
-
-    fn defaultDestination(self: OutputRouting, descriptor: runtime.fd.Descriptor) OutputDestination {
-        runtime.fd.assertValidDescriptor(descriptor);
-        return switch (self.initial_mode) {
-            .outcome_capture => switch (descriptor) {
-                1 => .outcome_stdout_capture,
-                2 => .outcome_stderr_capture,
-                else => .{ .host_descriptor = descriptor },
-            },
-            .inherited => .{ .host_descriptor = descriptor },
-            .command_substitution => switch (descriptor) {
-                1 => .command_substitution_stdout_capture,
-                2 => .command_substitution_stderr_capture,
-                else => .{ .host_descriptor = descriptor },
-            },
-        };
-    }
-
-    fn setDestination(
-        self: *OutputRouting,
-        descriptor: runtime.fd.Descriptor,
-        dest: OutputDestination,
-    ) !void {
-        runtime.fd.assertValidDescriptor(descriptor);
-        dest.validate();
-        for (self.bindings.items) |*binding| {
-            binding.validate();
-            if (binding.descriptor == descriptor) {
-                binding.destination = dest;
-                return;
-            }
-        }
-        try self.bindings.append(self.allocator, .{ .descriptor = descriptor, .destination = dest });
-    }
-
-    fn applyRedirectionStep(self: *OutputRouting, step: redirection_plan.RedirectionStep) !void {
-        step.validate();
-        switch (step.effect) {
-            .duplicate => |duplicate| {
-                const source_bound = self.boundDestination(duplicate.source) != null;
-                const source_destination = self.destination(duplicate.source);
-                const copied_destination = if (!source_bound and self.initial_mode == .inherited)
-                    switch (source_destination) {
-                        .host_descriptor => @as(OutputDestination, .{ .host_descriptor = duplicate.target }),
-                        else => source_destination,
-                    }
-                else
-                    source_destination;
-                try self.setDestination(duplicate.target, copied_destination);
-            },
-            .close => |close| try self.setDestination(close.target, .closed),
-            .open_path, .here_doc => try self.setDestination(step.target(), .{ .host_descriptor = step.target() }),
-        }
-    }
-
-    fn applyRedirections(self: *OutputRouting, redirections: redirection_plan.RedirectionPlan) !void {
-        redirections.validate();
-        for (redirections.steps) |step| try self.applyRedirectionStep(step);
-    }
-};
-
 pub const RunnerOutputWriteResult = struct {
     stdout_failed: bool = false,
     stderr_failed: bool = false,
@@ -5298,24 +5199,7 @@ const OutputFrame = struct {
         runtime.fd.assertValidDescriptor(descriptor);
         if (bytes.len == 0) return;
 
-        switch (self.routingRef().destination(descriptor)) {
-            .outcome_stdout_capture,
-            .command_substitution_stdout_capture,
-            => try self.buffers.stdout.appendSlice(self.buffers.allocator, bytes),
-            .side_stdout_capture => try self.buffers.side_stdout.appendSlice(self.buffers.allocator, bytes),
-            .command_substitution_side_stdout_capture => try self.buffers.command_substitution_side_stdout.appendSlice(
-                self.buffers.allocator,
-                bytes,
-            ),
-            .pipeline_data_capture => try self.buffers.pipeline_stdout.appendSlice(self.buffers.allocator, bytes),
-            .outcome_stderr_capture,
-            .command_substitution_stderr_capture,
-            => try self.buffers.stderr.appendSlice(self.buffers.allocator, bytes),
-            .host_descriptor => |host_descriptor| {
-                if (!writeAllDescriptor(host_descriptor, bytes)) return error.Unimplemented;
-            },
-            .closed => {},
-        }
+        try self.buffers.appendToDestination(self.routingRef().destination(descriptor), bytes);
     }
 
     fn appendDiagnosticOnly(context_ptr: *anyopaque, diagnostic: []const u8) execution_frame.OutputWriteError!void {
@@ -5328,15 +5212,14 @@ const OutputFrame = struct {
     fn flushPendingDescriptor(self: *OutputFrame, descriptor: runtime.fd.Descriptor) EvalError!void {
         runtime.fd.assertValidDescriptor(descriptor);
         switch (descriptor) {
-            1 => try flushBufferToDestination(self.buffers, .stdout, self.routingRef().destination(descriptor)),
-            2 => try flushBufferToDestination(self.buffers, .stderr, self.routingRef().destination(descriptor)),
+            1 => try self.buffers.flushStreamToDestination(.stdout, self.routingRef().destination(descriptor)),
+            2 => try self.buffers.flushStreamToDestination(.stderr, self.routingRef().destination(descriptor)),
             else => {},
         }
     }
 
     fn flushPendingStandardDescriptors(self: *OutputFrame) EvalError!void {
-        try flushStandardBuffersToDestinations(
-            self.buffers,
+        try self.buffers.flushStandardToDestinations(
             self.routingRef().destination(1),
             self.routingRef().destination(2),
         );
@@ -5429,94 +5312,6 @@ fn writeOutcomeToInheritedDescriptors(
     defer frame.deinit();
     try frame.write(1, stdout_bytes);
     try frame.write(2, stderr_bytes);
-}
-
-test "output routing defaults inherited descriptors to host descriptors" {
-    var routing = OutputRouting.init(std.testing.allocator, .inherited);
-    defer routing.deinit();
-
-    const stdout_destination: OutputDestination = .{ .host_descriptor = 1 };
-    const stderr_destination: OutputDestination = .{ .host_descriptor = 2 };
-    try std.testing.expectEqual(stdout_destination, routing.destination(1));
-    try std.testing.expectEqual(stderr_destination, routing.destination(2));
-}
-
-test "output routing defaults command substitution descriptors to captures" {
-    var routing = OutputRouting.initCommandSubstitution(std.testing.allocator);
-    defer routing.deinit();
-
-    try std.testing.expectEqual(OutputDestination.command_substitution_stdout_capture, routing.destination(1));
-    try std.testing.expectEqual(OutputDestination.command_substitution_stderr_capture, routing.destination(2));
-}
-
-test "output routing applies redirections in order" {
-    const stderr_to_stdout_then_stdout_file_steps = [_]redirection_plan.RedirectionStep{
-        redirection_plan.RedirectionStep.duplicate(0, 2, 1),
-        redirection_plan.RedirectionStep.openPath(1, 1, "out", .{ .access = .write_only, .create = true }),
-    };
-    const stderr_to_stdout_then_stdout_file_plan: redirection_plan.RedirectionPlan = .{
-        .steps = &stderr_to_stdout_then_stdout_file_steps,
-    };
-    var stderr_to_stdout_then_stdout_file = OutputRouting.initCommandSubstitution(std.testing.allocator);
-    defer stderr_to_stdout_then_stdout_file.deinit();
-    try stderr_to_stdout_then_stdout_file.applyRedirections(stderr_to_stdout_then_stdout_file_plan);
-
-    const stdout_file_then_stderr_to_stdout_steps = [_]redirection_plan.RedirectionStep{
-        redirection_plan.RedirectionStep.openPath(0, 1, "out", .{ .access = .write_only, .create = true }),
-        redirection_plan.RedirectionStep.duplicate(1, 2, 1),
-    };
-    const stdout_file_then_stderr_to_stdout_plan: redirection_plan.RedirectionPlan = .{
-        .steps = &stdout_file_then_stderr_to_stdout_steps,
-    };
-    var stdout_file_then_stderr_to_stdout = OutputRouting.initCommandSubstitution(std.testing.allocator);
-    defer stdout_file_then_stderr_to_stdout.deinit();
-    try stdout_file_then_stderr_to_stdout.applyRedirections(stdout_file_then_stderr_to_stdout_plan);
-
-    const file_destination: OutputDestination = .{ .host_descriptor = 1 };
-    try std.testing.expectEqual(file_destination, stderr_to_stdout_then_stdout_file.destination(1));
-    try std.testing.expectEqual(
-        OutputDestination.command_substitution_stdout_capture,
-        stderr_to_stdout_then_stdout_file.destination(2),
-    );
-    try std.testing.expectEqual(file_destination, stdout_file_then_stderr_to_stdout.destination(1));
-    try std.testing.expectEqual(file_destination, stdout_file_then_stderr_to_stdout.destination(2));
-}
-
-test "output routing duplicate copies current source destination" {
-    const steps = [_]redirection_plan.RedirectionStep{redirection_plan.RedirectionStep.duplicate(0, 1, 2)};
-    const plan: redirection_plan.RedirectionPlan = .{ .steps = &steps };
-    var routing = OutputRouting.initCommandSubstitution(std.testing.allocator);
-    defer routing.deinit();
-
-    try routing.applyRedirections(plan);
-
-    try std.testing.expectEqual(OutputDestination.command_substitution_stderr_capture, routing.destination(1));
-}
-
-test "output routing inherited duplicate survives source close" {
-    const steps = [_]redirection_plan.RedirectionStep{
-        redirection_plan.RedirectionStep.duplicate(0, 1, 2),
-        redirection_plan.RedirectionStep.close(1, 2),
-    };
-    const plan: redirection_plan.RedirectionPlan = .{ .steps = &steps };
-    var routing = OutputRouting.init(std.testing.allocator, .inherited);
-    defer routing.deinit();
-
-    try routing.applyRedirections(plan);
-
-    try std.testing.expectEqual(@as(OutputDestination, .{ .host_descriptor = 1 }), routing.destination(1));
-    try std.testing.expectEqual(OutputDestination.closed, routing.destination(2));
-}
-
-test "output routing close marks destination closed" {
-    const steps = [_]redirection_plan.RedirectionStep{redirection_plan.RedirectionStep.close(0, 1)};
-    const plan: redirection_plan.RedirectionPlan = .{ .steps = &steps };
-    var routing = OutputRouting.init(std.testing.allocator, .inherited);
-    defer routing.deinit();
-
-    try routing.applyRedirections(plan);
-
-    try std.testing.expectEqual(OutputDestination.closed, routing.destination(1));
 }
 
 test "output frame outcome capture writes stdout and stderr buffers" {
@@ -6212,110 +6007,6 @@ const RoutedOutputPrefix = struct {
         std.debug.assert(self.stderr <= buffers.stderr.items.len);
     }
 };
-
-fn flushBufferToDestination(
-    buffers: *EvaluationBuffers,
-    stream: OutputStream,
-    destination: OutputDestination,
-) EvalError!void {
-    destination.validate();
-    const bytes = switch (stream) {
-        .stdout => buffers.stdout.items,
-        .stderr => buffers.stderr.items,
-    };
-    if (bytes.len == 0) return;
-
-    switch (destination) {
-        .command_substitution_stdout_capture => if (stream == .stderr) {
-            try buffers.stdout.appendSlice(buffers.allocator, bytes);
-            buffers.stderr.items.len = 0;
-        },
-        .command_substitution_stderr_capture => if (stream == .stdout) {
-            try buffers.stderr.insertSlice(buffers.allocator, 0, bytes);
-            buffers.stdout.items.len = 0;
-        },
-        .side_stdout_capture => {
-            try buffers.side_stdout.appendSlice(buffers.allocator, bytes);
-            switch (stream) {
-                .stdout => buffers.stdout.items.len = 0,
-                .stderr => buffers.stderr.items.len = 0,
-            }
-        },
-        .command_substitution_side_stdout_capture => {
-            try buffers.command_substitution_side_stdout.appendSlice(buffers.allocator, bytes);
-            switch (stream) {
-                .stdout => buffers.stdout.items.len = 0,
-                .stderr => buffers.stderr.items.len = 0,
-            }
-        },
-        .pipeline_data_capture => {
-            try buffers.pipeline_stdout.appendSlice(buffers.allocator, bytes);
-            switch (stream) {
-                .stdout => buffers.stdout.items.len = 0,
-                .stderr => buffers.stderr.items.len = 0,
-            }
-        },
-        .host_descriptor => |descriptor| {
-            if (!writeAllDescriptor(descriptor, bytes)) return error.Unimplemented;
-            switch (stream) {
-                .stdout => buffers.stdout.items.len = 0,
-                .stderr => buffers.stderr.items.len = 0,
-            }
-        },
-        .outcome_stdout_capture, .outcome_stderr_capture => {},
-        .closed => switch (stream) {
-            .stdout => buffers.stdout.items.len = 0,
-            .stderr => buffers.stderr.items.len = 0,
-        },
-    }
-}
-
-fn flushStandardBuffersToDestinations(
-    buffers: *EvaluationBuffers,
-    stdout_destination: OutputDestination,
-    stderr_destination: OutputDestination,
-) EvalError!void {
-    stdout_destination.validate();
-    stderr_destination.validate();
-    if (buffers.stdout.items.len == 0 and buffers.stderr.items.len == 0) return;
-
-    var stdout = buffers.stdout;
-    var stderr = buffers.stderr;
-    buffers.stdout = .empty;
-    buffers.stderr = .empty;
-    defer stdout.deinit(buffers.allocator);
-    defer stderr.deinit(buffers.allocator);
-
-    try appendBytesToDestination(buffers, stdout_destination, stdout.items);
-    try appendBytesToDestination(buffers, stderr_destination, stderr.items);
-}
-
-fn appendBytesToDestination(
-    buffers: *EvaluationBuffers,
-    destination: OutputDestination,
-    bytes: []const u8,
-) EvalError!void {
-    destination.validate();
-    if (bytes.len == 0) return;
-    switch (destination) {
-        .outcome_stdout_capture,
-        .command_substitution_stdout_capture,
-        => try buffers.stdout.appendSlice(buffers.allocator, bytes),
-        .side_stdout_capture => try buffers.side_stdout.appendSlice(buffers.allocator, bytes),
-        .command_substitution_side_stdout_capture => try buffers.command_substitution_side_stdout.appendSlice(
-            buffers.allocator,
-            bytes,
-        ),
-        .pipeline_data_capture => try buffers.pipeline_stdout.appendSlice(buffers.allocator, bytes),
-        .outcome_stderr_capture,
-        .command_substitution_stderr_capture,
-        => try buffers.stderr.appendSlice(buffers.allocator, bytes),
-        .host_descriptor => |descriptor| {
-            if (!writeAllDescriptor(descriptor, bytes)) return error.Unimplemented;
-        },
-        .closed => {},
-    }
-}
 
 fn commandExpansionOutputFrame(
     evaluator: Evaluator,
@@ -11516,65 +11207,91 @@ fn applyOutcomeToWorkingState(
     };
 }
 
-fn appendOutcomeBuffers(buffers: *EvaluationBuffers, command_outcome: outcome.CommandOutcome) !void {
-    command_outcome.validate();
-    if (command_outcome.propagated_failure) |failure| {
-        if (buffers.propagated_failure == null) buffers.propagated_failure = failure;
+const BoundaryOutputFinalizer = struct {
+    buffers: *EvaluationBuffers,
+
+    fn init(buffers: *EvaluationBuffers) BoundaryOutputFinalizer {
+        buffers.frame.validate();
+        return .{ .buffers = buffers };
     }
-    try buffers.side_stdout.appendSlice(buffers.allocator, command_outcome.side_stdout.items);
-    try buffers.command_substitution_side_stdout.appendSlice(
-        buffers.allocator,
-        command_outcome.command_substitution_side_stdout.items,
-    );
-    if (frameWithinCommandSubstitution(buffers.frame.*)) {
-        try buffers.stdout.appendSlice(buffers.allocator, command_outcome.stdout.items);
-        try buffers.stderr.appendSlice(buffers.allocator, command_outcome.stderr.items);
-        try buffers.pipeline_stdout.appendSlice(buffers.allocator, command_outcome.pipeline_stdout.items);
-        for (command_outcome.diagnostics.items) |diagnostic| {
-            try buffers.addDiagnosticMessage(diagnostic.message);
+
+    fn appendOutcome(self: BoundaryOutputFinalizer, command_outcome: outcome.CommandOutcome) !void {
+        command_outcome.validate();
+        self.buffers.appendPropagatedFailure(command_outcome);
+        try self.buffers.appendSideOutput(command_outcome);
+        try self.buffers.appendCommandSubstitutionSideOutput(command_outcome);
+        if (frameWithinCommandSubstitution(self.buffers.frame.*)) {
+            try self.buffers.stdout.appendSlice(self.buffers.allocator, command_outcome.stdout.items);
+            try self.buffers.stderr.appendSlice(self.buffers.allocator, command_outcome.stderr.items);
+            try self.buffers.appendPipelineOutput(command_outcome);
+            try self.buffers.appendDiagnosticsFromOutcome(command_outcome);
+            return;
         }
-        return;
+        try self.buffers.appendPipelineOutput(command_outcome);
+        var frame = try self.buffers.outputFrame();
+        defer frame.deinit();
+        try frame.write(1, command_outcome.stdout.items);
+        try frame.write(2, command_outcome.stderr.items);
+        try self.buffers.appendDiagnosticsFromOutcome(command_outcome);
     }
-    try buffers.pipeline_stdout.appendSlice(buffers.allocator, command_outcome.pipeline_stdout.items);
-    var frame = try buffers.outputFrame();
-    defer frame.deinit();
-    try frame.write(1, command_outcome.stdout.items);
-    try frame.write(2, command_outcome.stderr.items);
-    for (command_outcome.diagnostics.items) |diagnostic| {
-        try buffers.addDiagnosticMessage(diagnostic.message);
+
+    fn appendStatementChild(self: BoundaryOutputFinalizer, command_outcome: outcome.CommandOutcome) !void {
+        command_outcome.validate();
+        if (frameWithinCommandSubstitution(self.buffers.frame.*) or self.buffers.frame.spec.kind == .pipeline_stage) {
+            return self.appendOutcome(command_outcome);
+        }
+        self.buffers.appendPropagatedFailure(command_outcome);
+        try self.buffers.appendCommandSubstitutionSideOutput(command_outcome);
+        switch (self.buffers.frame.spec.kind) {
+            .subshell, .trap_handler => try self.buffers.stdout.appendSlice(
+                self.buffers.allocator,
+                command_outcome.side_stdout.items,
+            ),
+            else => {
+                var side_frame = try self.buffers.outputFrame();
+                defer side_frame.deinit();
+                try side_frame.write(1, command_outcome.side_stdout.items);
+            },
+        }
+
+        try self.buffers.appendPipelineOutput(command_outcome);
+        var frame = OutputFrame.initOutcomeCapture(self.buffers);
+        defer frame.deinit();
+        try frame.write(1, command_outcome.stdout.items);
+        try frame.write(2, command_outcome.stderr.items);
+        try self.buffers.appendDiagnosticsFromOutcome(command_outcome);
     }
+
+    fn appendPipelineStage(
+        self: BoundaryOutputFinalizer,
+        command_outcome: outcome.CommandOutcome,
+        route: PipelineStageOutputRoute,
+    ) !void {
+        command_outcome.validate();
+        self.buffers.appendPropagatedFailure(command_outcome);
+        try self.buffers.appendCommandSubstitutionSideOutput(command_outcome);
+        var side_frame = try self.buffers.outputFrame();
+        defer side_frame.deinit();
+        try side_frame.write(1, command_outcome.side_stdout.items);
+
+        var frame = OutputFrame.initOutcomeCapture(self.buffers);
+        defer frame.deinit();
+        switch (route) {
+            .pipeline_data_only => {},
+            .parent_output => try frame.write(1, command_outcome.pipeline_stdout.items),
+        }
+        try frame.write(1, command_outcome.stdout.items);
+        try frame.write(2, command_outcome.stderr.items);
+        try self.buffers.appendDiagnosticsFromOutcome(command_outcome);
+    }
+};
+
+fn appendOutcomeBuffers(buffers: *EvaluationBuffers, command_outcome: outcome.CommandOutcome) !void {
+    try BoundaryOutputFinalizer.init(buffers).appendOutcome(command_outcome);
 }
 
 fn appendStatementChildOutcomeBuffers(buffers: *EvaluationBuffers, command_outcome: outcome.CommandOutcome) !void {
-    command_outcome.validate();
-    if (frameWithinCommandSubstitution(buffers.frame.*) or buffers.frame.spec.kind == .pipeline_stage) {
-        return appendOutcomeBuffers(buffers, command_outcome);
-    }
-    if (command_outcome.propagated_failure) |failure| {
-        if (buffers.propagated_failure == null) buffers.propagated_failure = failure;
-    }
-    try buffers.command_substitution_side_stdout.appendSlice(
-        buffers.allocator,
-        command_outcome.command_substitution_side_stdout.items,
-    );
-    if (buffers.frame.spec.kind == .subshell) {
-        try buffers.stdout.appendSlice(buffers.allocator, command_outcome.side_stdout.items);
-    } else if (buffers.frame.spec.kind == .trap_handler) {
-        try buffers.stdout.appendSlice(buffers.allocator, command_outcome.side_stdout.items);
-    } else {
-        var side_frame = try buffers.outputFrame();
-        defer side_frame.deinit();
-        try side_frame.write(1, command_outcome.side_stdout.items);
-    }
-
-    try buffers.pipeline_stdout.appendSlice(buffers.allocator, command_outcome.pipeline_stdout.items);
-    var frame = OutputFrame.initOutcomeCapture(buffers);
-    defer frame.deinit();
-    try frame.write(1, command_outcome.stdout.items);
-    try frame.write(2, command_outcome.stderr.items);
-    for (command_outcome.diagnostics.items) |diagnostic| {
-        try buffers.addDiagnosticMessage(diagnostic.message);
-    }
+    try BoundaryOutputFinalizer.init(buffers).appendStatementChild(command_outcome);
 }
 
 const PipelineStageOutputRoute = enum {
@@ -11591,29 +11308,7 @@ fn appendPipelineStageBuffers(
     command_outcome: outcome.CommandOutcome,
     route: PipelineStageOutputRoute,
 ) !void {
-    command_outcome.validate();
-    if (command_outcome.propagated_failure) |failure| {
-        if (buffers.propagated_failure == null) buffers.propagated_failure = failure;
-    }
-    try buffers.command_substitution_side_stdout.appendSlice(
-        buffers.allocator,
-        command_outcome.command_substitution_side_stdout.items,
-    );
-    var side_frame = try buffers.outputFrame();
-    defer side_frame.deinit();
-    try side_frame.write(1, command_outcome.side_stdout.items);
-
-    var frame = OutputFrame.initOutcomeCapture(buffers);
-    defer frame.deinit();
-    switch (route) {
-        .pipeline_data_only => {},
-        .parent_output => try frame.write(1, command_outcome.pipeline_stdout.items),
-    }
-    try frame.write(1, command_outcome.stdout.items);
-    try frame.write(2, command_outcome.stderr.items);
-    for (command_outcome.diagnostics.items) |diagnostic| {
-        try buffers.addDiagnosticMessage(diagnostic.message);
-    }
+    try BoundaryOutputFinalizer.init(buffers).appendPipelineStage(command_outcome, route);
 }
 
 fn hasCompoundRedirections(plan: command_plan.CompoundCommandPlan) bool {
