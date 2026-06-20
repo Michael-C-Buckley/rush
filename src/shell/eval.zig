@@ -10360,9 +10360,12 @@ fn flushBuffersForRedirectionTargetsBetweenCommands(
     const flush_stdout = buffers.stdout.items.len != 0 and redirectionTargetsDescriptor(redirections, 1);
     const flush_stderr = buffers.stderr.items.len != 0 and redirectionTargetsDescriptor(redirections, 2);
     if (!flush_stdout and !flush_stderr) return;
-    if (eval_context.target != .current_shell or eval_context.subshell_depth != 0) return;
+    if (!evalContextCanFlushBufferedOutputBetweenCommands(eval_context)) return;
     switch (external_stdio) {
-        .capture => return,
+        .capture => {
+            if (!evalContextCapturesSubshellOutput(eval_context)) return;
+            if (flush_stdout) try moveBufferedOutput(buffers.allocator, &buffers.stdout, &buffers.side_stdout);
+        },
         .capture_stdout => {
             if (!flush_stderr) return;
             var frame = OutputFrame.initInherited(buffers);
@@ -10371,6 +10374,19 @@ fn flushBuffersForRedirectionTargetsBetweenCommands(
         },
         .inherit_output, .inherit => try flushBuffersForRedirectionTargets(buffers, redirections),
     }
+}
+
+fn evalContextCanFlushBufferedOutputBetweenCommands(eval_context: context.EvalContext) bool {
+    eval_context.validate();
+    return switch (eval_context.target) {
+        .current_shell, .subshell => true,
+        .child_process => false,
+    };
+}
+
+fn evalContextCapturesSubshellOutput(eval_context: context.EvalContext) bool {
+    eval_context.validate();
+    return eval_context.target == .subshell or eval_context.subshell_depth != 0;
 }
 
 fn flushBuffersForSourceRedirectionTargets(
@@ -10382,9 +10398,13 @@ fn flushBuffersForSourceRedirectionTargets(
     eval_context.validate();
     source.validate();
     if (eval_context.command_substitution_depth != 0) return;
-    if (eval_context.target != .current_shell or eval_context.subshell_depth != 0) return;
-    if (!buffers.frame.spec.kind.isParentVisible()) return;
-    if (external_stdio == .capture) return;
+    if (!evalContextCanFlushBufferedOutputBetweenCommands(eval_context)) return;
+    if (external_stdio == .capture) {
+        if (!evalContextCapturesSubshellOutput(eval_context)) return;
+        if (source.targets_stdout) try moveBufferedOutput(buffers.allocator, &buffers.stdout, &buffers.side_stdout);
+        return;
+    }
+    if (!buffers.frame.spec.kind.isParentVisible() and !evalContextCapturesSubshellOutput(eval_context)) return;
     var frame = OutputFrame.initInherited(buffers);
     defer frame.deinit();
     if (source.targets_stdout and external_stdio != .capture_stdout) try frame.flushPendingDescriptor(1);
@@ -10400,9 +10420,13 @@ fn flushBuffersForIrSourceRedirectionTargets(
     eval_context.validate();
     source.validate();
     if (eval_context.command_substitution_depth != 0) return;
-    if (eval_context.target != .current_shell or eval_context.subshell_depth != 0) return;
-    if (!buffers.frame.spec.kind.isParentVisible()) return;
-    if (external_stdio == .capture) return;
+    if (!evalContextCanFlushBufferedOutputBetweenCommands(eval_context)) return;
+    if (external_stdio == .capture) {
+        if (!evalContextCapturesSubshellOutput(eval_context)) return;
+        if (source.targets_stdout) try moveBufferedOutput(buffers.allocator, &buffers.stdout, &buffers.side_stdout);
+        return;
+    }
+    if (!buffers.frame.spec.kind.isParentVisible() and !evalContextCapturesSubshellOutput(eval_context)) return;
     var frame = OutputFrame.initInherited(buffers);
     defer frame.deinit();
     if (source.targets_stdout and external_stdio != .capture_stdout) try frame.flushPendingDescriptor(1);

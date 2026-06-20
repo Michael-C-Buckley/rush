@@ -155,6 +155,20 @@
             .status = 0,
         },
         .{
+            .name = "subshell flushes stdout before later duplicate-output redirection",
+            .script =
+            \\{ exec 4>&1; }
+            \\( printf '[%s]\n' two; printf '%s\n' three >&4; )
+            ,
+            .stdout =
+            \\[two]
+            \\three
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "exec redirection before failed brace group command persists",
             .script =
             \\{ exec 3>>out; false <missing; }
