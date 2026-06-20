@@ -4923,6 +4923,7 @@ fn flushLiveInheritedBufferedOutput(
 
 fn frameTargetsInheritedStandardDescriptors(frame: execution_frame.ExecutionFrame, live_stdio: bool) bool {
     frame.validate();
+    if (frame.spec.kind == .trap_handler and !live_stdio) return false;
     const stdout_endpoint = frame.spec.fd_table.boundEndpoint(1) orelse
         @as(execution_frame.FdEndpoint, .{ .output = frame.spec.stdout });
     const stderr_endpoint = frame.spec.fd_table.boundEndpoint(2) orelse
@@ -6760,6 +6761,7 @@ fn executePendingTrapsWithFrame(
     try inheritScopedExecRedirectionsIntoTrapFrame(evaluator.*, &trap_frame);
     var input = EvaluationInput.empty();
     var buffers = EvaluationBuffers.init(evaluator.allocator, &input, &trap_frame);
+    buffers.fold_side_stdout_to_stdout = true;
     defer buffers.deinit();
     const pending_count = shell_state.pending_traps.items.len;
     const preserved_status = shell_state.last_status;
@@ -11402,6 +11404,8 @@ fn appendStatementChildOutcomeBuffers(buffers: *EvaluationBuffers, command_outco
     if (buffers.frame.spec.kind == .subshell) {
         if (command_outcome.side_stdout.items.len != 0) buffers.fold_side_stdout_to_stdout = true;
         try buffers.side_stdout.appendSlice(buffers.allocator, command_outcome.side_stdout.items);
+    } else if (buffers.frame.spec.kind == .trap_handler) {
+        try buffers.stdout.appendSlice(buffers.allocator, command_outcome.side_stdout.items);
     } else {
         var side_frame = try buffers.outputFrame();
         defer side_frame.deinit();
@@ -13123,6 +13127,7 @@ fn flushChildShellBufferedCommandOutput(
 ) EvalError!void {
     eval_context.validate();
     if (eval_context.command_substitution_depth != 0) return;
+    if (buffers.frame.spec.kind == .trap_handler and !eval_context.interactive) return;
     if (eval_context.target == .current_shell and buffers.frame.spec.kind.isParentVisible()) return;
     var frame = OutputFrame.initInherited(buffers);
     defer frame.deinit();
@@ -24405,6 +24410,7 @@ test "semantic evaluator uses child command status for bare function return" {
     var fake = FakeExternalRuntime.init(std.testing.allocator);
     defer fake.deinit();
     fake.wait_status = .{ .exited = 9 };
+    fake.run_status = .{ .exited = 9 };
     var evaluator = Evaluator.initWithExternalPorts(std.testing.allocator, fake.fdPort(), fake.processPort());
     var shell_state = state.ShellState.init(std.testing.allocator);
     defer shell_state.deinit();
