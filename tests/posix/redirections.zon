@@ -671,10 +671,10 @@
         .{
             .name = "external pipeline stage can redirect stderr in a longer pipeline",
             .script =
-            \\printf x | cat 2>/dev/null | wc -c
+            \\printf x | cat 2>/dev/null | wc -c | sed 's/^ *//'
             ,
             .stdout =
-            \\       1
+            \\1
             \\
             ,
             .stderr = "",

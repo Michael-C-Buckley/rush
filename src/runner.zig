@@ -3710,7 +3710,7 @@ test "hidden shell state external pipelines capture output without terminal stdi
     defer result.deinit();
 
     try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
-    try std.testing.expectEqualStrings("       0\n", result.stdout);
+    try std.testing.expect(std.mem.eql(u8, result.stdout, "       0\n") or std.mem.eql(u8, result.stdout, "0\n"));
     try std.testing.expectEqualStrings("", result.stderr);
 }
 
