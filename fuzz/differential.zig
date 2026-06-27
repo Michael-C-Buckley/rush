@@ -55,6 +55,7 @@ const FeatureSet = packed struct {
     break_continue: bool = true,
     arith: bool = true,
     words: bool = true,
+    param_ops: bool = true,
     heredoc: bool = true,
     stress: bool = true,
     source_eval: bool = true,
@@ -78,6 +79,7 @@ const FeatureSet = packed struct {
         .break_continue = true,
         .arith = true,
         .words = true,
+        .param_ops = true,
         .heredoc = true,
         .stress = true,
         .source_eval = true,
@@ -103,6 +105,7 @@ const FeatureSet = packed struct {
             .break_continue = false,
             .arith = false,
             .words = false,
+            .param_ops = false,
             .heredoc = false,
             .stress = false,
             .source_eval = false,
@@ -163,6 +166,9 @@ const FeatureSet = packed struct {
             } else if (std.mem.eql(u8, feature, "words")) {
                 features.words = true;
                 saw_feature = true;
+            } else if (std.mem.eql(u8, feature, "param_ops")) {
+                features.param_ops = true;
+                saw_feature = true;
             } else if (std.mem.eql(u8, feature, "heredoc")) {
                 features.heredoc = true;
                 saw_feature = true;
@@ -203,6 +209,7 @@ const FeatureSet = packed struct {
         if (self.break_continue) try writer.writeAll(",break_continue");
         if (self.arith) try writer.writeAll(",arith");
         if (self.words) try writer.writeAll(",words");
+        if (self.param_ops) try writer.writeAll(",param_ops");
         if (self.heredoc) try writer.writeAll(",heredoc");
         if (self.stress) try writer.writeAll(",stress");
         if (self.source_eval) try writer.writeAll(",source_eval");
@@ -325,6 +332,7 @@ pub fn main(init: std.process.Init) !u8 {
             break;
         }
 
+        cleanupPassingCaseRunDirs(init.io, &temp_root, case_index, config.keep_temp);
         completed += 1;
         progress.completeCase(completed);
     }
@@ -485,7 +493,8 @@ fn writeUsage(io: std.Io) !void {
         \\  --case N            run only one generated case index
         \\  --features LIST     comma-separated features:
         \\                       base,fd,params,lists,redir,cmdsub,func,alias,loops,ifs,cases,while,
-        \\                       pipeline,negation,break_continue,arith,words,heredoc,stress,source_eval,trap,corpus
+        \\                       pipeline,negation,break_continue,arith,words,param_ops,heredoc,stress,
+        \\                       source_eval,trap,corpus
         \\                       (default: all)
         \\  --print-cases       print each generated shell script before running it
         \\  --timeout-ms N      per-command timeout in milliseconds, or 0 to disable (default: Debug 5000, Release 1000)
@@ -516,6 +525,20 @@ fn createTempRoot(allocator: std.mem.Allocator, io: std.Io) !TempRoot {
         return .{ .path = path, .dir = try cwd.openDir(io, path, .{}) };
     }
     return error.TemporaryNameCollision;
+}
+
+fn cleanupPassingCaseRunDirs(io: std.Io, temp_root: *TempRoot, case_index: usize, keep_temp: bool) void {
+    if (keep_temp) return;
+    deleteCaseRunDir(io, temp_root, "rush", case_index);
+    deleteCaseRunDir(io, temp_root, "ref", case_index);
+}
+
+fn deleteCaseRunDir(io: std.Io, temp_root: *TempRoot, prefix: []const u8, case_index: usize) void {
+    var path_buffer: [64]u8 = undefined;
+    const path = std.fmt.bufPrint(&path_buffer, "{s}-{d}", .{ prefix, case_index }) catch unreachable;
+    temp_root.dir.deleteTree(io, path) catch |err| {
+        std.debug.print("differential: failed to remove passing sandbox {s}: {s}\n", .{ path, @errorName(err) });
+    };
 }
 
 fn generateScript(allocator: std.mem.Allocator, seed: u64, case_index: usize, features: FeatureSet) ![]u8 {
@@ -1393,6 +1416,50 @@ const WordExpansionProbe = enum {
     }
 };
 
+const ParameterExpansionProbe = enum {
+    assign_unset,
+    assign_null_with_colon,
+    alternate_set,
+    alternate_null_with_colon,
+    string_length,
+    quoted_at_preserves_fields,
+    quoted_star_joins_with_ifs,
+    status_after_lists,
+
+    fn random(random_source: std.Random) ParameterExpansionProbe {
+        return @enumFromInt(random_source.uintLessThan(u4, 8));
+    }
+
+    fn render(self: ParameterExpansionProbe, writer: *std.Io.Writer) !void {
+        switch (self) {
+            .assign_unset => try writer.writeAll(
+                "unset A; printf '[%s]\n' \"${A=value}\"; printf '[%s]\n' \"$A\"",
+            ),
+            .assign_null_with_colon => try writer.writeAll(
+                "A=; printf '[%s]\n' \"${A:=value}\"; printf '[%s]\n' \"$A\"",
+            ),
+            .alternate_set => try writer.writeAll(
+                "A=one; printf '[%s]\n' \"${A+alt}\"; unset A; printf '[%s]\n' \"${A+alt}\"",
+            ),
+            .alternate_null_with_colon => try writer.writeAll(
+                "A=; printf '[%s]\n' \"${A:+alt}\"; A=one; printf '[%s]\n' \"${A:+alt}\"",
+            ),
+            .string_length => try writer.writeAll(
+                "A=abcd; printf '[%s]\n' \"${#A}\"",
+            ),
+            .quoted_at_preserves_fields => try writer.writeAll(
+                "set -- 'one two' ''; for x in \"$@\"; do printf '[%s]\n' \"$x\"; done; printf '[%s]\n' \"$#\"",
+            ),
+            .quoted_star_joins_with_ifs => try writer.writeAll(
+                "set -- one two three; IFS=:; printf '[%s]\n' \"$*\"",
+            ),
+            .status_after_lists => try writer.writeAll(
+                "false || true; printf '[%s]\n' \"$?\"; false && true; printf '[%s]\n' \"$?\"",
+            ),
+        }
+    }
+};
+
 const HereDocProbe = enum {
     simple,
     quoted_delimiter,
@@ -1797,6 +1864,7 @@ const Command = union(enum) {
     break_continue_probe: BreakContinueProbe,
     arithmetic_probe: ArithmeticProbe,
     word_expansion_probe: WordExpansionProbe,
+    parameter_expansion_probe: ParameterExpansionProbe,
     heredoc_probe: HereDocProbe,
     fd_routing_probe: FdRoutingProbe,
     cmdsub_stress_probe: CommandSubstitutionStressProbe,
@@ -1889,6 +1957,10 @@ const Command = union(enum) {
             .top_level => 1,
             .inline_compound => if (depth < 2) 1 else 0,
         } else 0;
+        const param_ops_count: u8 = if (features.param_ops) switch (mode) {
+            .top_level => 1,
+            .inline_compound => if (depth < 2) 1 else 0,
+        } else 0;
         const heredoc_count: u8 = if (features.heredoc and mode == .top_level) 1 else 0;
         const stress_count: u8 = if (features.stress) switch (mode) {
             .top_level => 5,
@@ -1899,8 +1971,8 @@ const Command = union(enum) {
         const corpus_count: u8 = if (features.corpus and mode == .top_level) 1 else 0;
         const choice_count = base_count + fd_count + params_count + positional_count + lists_count + redir_count +
             cmdsub_count + func_count + alias_count + loops_count + ifs_count + cases_count + while_count +
-            pipeline_count + negation_count + break_continue_count + arith_count + words_count + heredoc_count +
-            stress_count + source_eval_count + trap_count + corpus_count;
+            pipeline_count + negation_count + break_continue_count + arith_count + words_count + param_ops_count +
+            heredoc_count + stress_count + source_eval_count + trap_count + corpus_count;
         const choice = random.uintLessThan(
             u8,
             choice_count,
@@ -2021,6 +2093,10 @@ const Command = union(enum) {
         feature_choice -= arith_count;
         if (feature_choice < words_count) return .{ .word_expansion_probe = WordExpansionProbe.random(random) };
         feature_choice -= words_count;
+        if (feature_choice < param_ops_count) {
+            return .{ .parameter_expansion_probe = ParameterExpansionProbe.random(random) };
+        }
+        feature_choice -= param_ops_count;
         if (feature_choice < heredoc_count) return .{ .heredoc_probe = HereDocProbe.random(random) };
         feature_choice -= heredoc_count;
         if (feature_choice < stress_count) return switch (feature_choice) {
@@ -2096,6 +2172,7 @@ const Command = union(enum) {
             .break_continue_probe => |break_continue_probe| try break_continue_probe.render(writer),
             .arithmetic_probe => |arithmetic_probe| try arithmetic_probe.render(writer),
             .word_expansion_probe => |word_expansion_probe| try word_expansion_probe.render(writer),
+            .parameter_expansion_probe => |parameter_expansion_probe| try parameter_expansion_probe.render(writer),
             .heredoc_probe => |heredoc_probe| try heredoc_probe.render(writer),
             .fd_routing_probe => |fd_routing_probe| try fd_routing_probe.render(writer),
             .cmdsub_stress_probe => |cmdsub_stress_probe| try cmdsub_stress_probe.render(writer),
