@@ -9274,7 +9274,7 @@ fn completeStatementChildOutcome(
     );
     if (statement_plan) |plan| {
         if (statementPlanFlushesSubshellOutputAfter(plan)) {
-            try flushSubshellBufferedOutputBeforeNestedChild(buffers, eval_context);
+            try flushSubshellBufferedOutputBeforeNestedChild(buffers, eval_context, evaluator.external_stdio);
         }
     }
     if (completion.flushed_child_output) {
@@ -9303,8 +9303,8 @@ fn evaluateStatementList(
         for (list.commands) |child_plan| {
             child_plan.validate();
             if (noexecSuppressesCommand(shell_state.*, eval_context)) break;
+            try flushSubshellBufferedOutputBeforeNestedChild(buffers, eval_context, evaluator.external_stdio);
             if (child_plan.target.isIsolatedFromParent()) {
-                try flushSubshellBufferedOutputBeforeNestedChild(buffers, eval_context);
                 try flushChildShellBufferedCommandOutput(buffers, eval_context);
             }
             try flushBuffersForRedirectionTargetsBetweenCommands(
@@ -9353,9 +9353,7 @@ fn evaluateStatementList(
         };
         if (!should_run) continue;
         if (noexecSuppressesCommand(shell_state.*, eval_context)) break;
-        if (statementPlanRunsIsolated(entry.plan)) {
-            try flushSubshellBufferedOutputBeforeNestedChild(buffers, eval_context);
-        }
+        try flushSubshellBufferedOutputBeforeNestedChild(buffers, eval_context, evaluator.external_stdio);
         try flushChildShellBufferedCommandOutput(buffers, eval_context);
 
         var child_context = eval_context;
@@ -10485,13 +10483,24 @@ fn irSourceSingleUnredirectedPipeline(source: command_plan.IrStatementPlan) bool
 fn flushSubshellBufferedOutputBeforeNestedChild(
     buffers: *EvaluationBuffers,
     eval_context: context.EvalContext,
+    external_stdio: ExternalStdio,
 ) EvalError!void {
     eval_context.validate();
     if (eval_context.command_substitution_depth != 0) return;
     if (!evalContextCapturesSubshellOutput(eval_context)) return;
-    var frame = OutputFrame.initInherited(buffers);
-    defer frame.deinit();
-    try frame.flushPendingStandardDescriptors();
+    switch (external_stdio) {
+        .capture => {},
+        .capture_stdout => {
+            var frame = OutputFrame.initInherited(buffers);
+            defer frame.deinit();
+            try frame.flushPendingDescriptor(2);
+        },
+        .inherit_output, .inherit => {
+            var frame = OutputFrame.initInherited(buffers);
+            defer frame.deinit();
+            try frame.flushPendingStandardDescriptors();
+        },
+    }
 }
 
 fn applyOutcomeStatusToWorkingState(

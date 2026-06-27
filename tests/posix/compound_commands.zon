@@ -93,6 +93,20 @@
             .status = 0,
         },
         .{
+            .name = "subshell preserves redirected builtin output order before external command",
+            .script =
+            \\printf 'file\n' >out
+            \\( printf 'before\n' 2>err; cat <out; printf 'after\n' >other )
+            ,
+            .stdout =
+            \\before
+            \\file
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "subshell preserves case command order before following redirection",
             .script =
             \\printf 'file\n' >out
