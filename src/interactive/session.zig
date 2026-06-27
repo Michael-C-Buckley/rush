@@ -998,7 +998,7 @@ pub fn run(
     var prompt_async_state: prompt_mod.AsyncState = .{};
     prompt_async_state.init(io, terminal.promptRedrawWakeFd());
     prompt_async_state.task_scheduler = prompt_mod.asyncTaskScheduler();
-    defer prompt_async_state.deinit();
+    defer prompt_async_state.deinitAbandoningTasks();
     var active_background_job_count = countActiveBackgroundJobs(interactive_shell.semantic_state);
 
     repl_loop: while (true) {
@@ -2370,10 +2370,14 @@ const PendingPromptAsyncScheduler = struct {
         self.scheduled = true;
         self.complete_context = request.complete_context;
         self.complete_fn = request.complete;
-        return .{ .context = self, .join_fn = join };
+        return .{ .context = self, .join_fn = join, .abandon_fn = abandon };
     }
 
     fn join(context: *anyopaque) void {
+        _ = context;
+    }
+
+    fn abandon(context: *anyopaque) void {
         _ = context;
     }
 };

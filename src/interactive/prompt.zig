@@ -105,6 +105,13 @@ const AsyncTask = struct {
     complete_context: ?*anyopaque,
     complete: extension_api.AsyncTaskComplete,
     thread: std.Thread = undefined,
+    lifecycle: std.atomic.Value(u8) = .init(@intFromEnum(Lifecycle.running)),
+
+    const Lifecycle = enum(u8) {
+        running,
+        completed,
+        abandoned,
+    };
 
     fn deinit(self: *AsyncTask) void {
         self.shell_state.deinit();
@@ -115,6 +122,11 @@ const AsyncTask = struct {
     }
 
     fn run(self: *AsyncTask) void {
+        defer self.finishRun();
+        self.runCommand();
+    }
+
+    fn runCommand(self: *AsyncTask) void {
         self.shell_state.scope = .current_shell;
         var result = runner.runHiddenShellStateCommandWithExtensionHandlers(
             self.allocator,
@@ -135,6 +147,20 @@ const AsyncTask = struct {
             .stdout = result.stdout,
             .stderr = result.stderr,
         });
+    }
+
+    fn finishRun(self: *AsyncTask) void {
+        if (self.lifecycle.cmpxchgStrong(
+            @intFromEnum(Lifecycle.running),
+            @intFromEnum(Lifecycle.completed),
+            .acq_rel,
+            .acquire,
+        ) == null) return;
+
+        std.debug.assert(self.lifecycle.load(.acquire) == @intFromEnum(Lifecycle.abandoned));
+        const allocator = self.allocator;
+        self.deinit();
+        allocator.destroy(self);
     }
 };
 
@@ -178,15 +204,29 @@ fn scheduleAsyncTask(
     errdefer task.deinit();
 
     task.thread = try std.Thread.spawn(.{}, AsyncTask.run, .{task});
-    return .{ .context = task, .join_fn = joinAsyncTask };
+    return .{ .context = task, .join_fn = joinAsyncTask, .abandon_fn = abandonAsyncTask };
 }
 
 fn joinAsyncTask(context: *anyopaque) void {
     const task: *AsyncTask = @ptrCast(@alignCast(context));
     const allocator = task.allocator;
     task.thread.join();
+    std.debug.assert(task.lifecycle.load(.acquire) == @intFromEnum(AsyncTask.Lifecycle.completed));
     task.deinit();
     allocator.destroy(task);
+}
+
+fn abandonAsyncTask(context: *anyopaque) void {
+    const task: *AsyncTask = @ptrCast(@alignCast(context));
+    task.thread.detach();
+    const previous = task.lifecycle.swap(@intFromEnum(AsyncTask.Lifecycle.abandoned), .acq_rel);
+    if (previous == @intFromEnum(AsyncTask.Lifecycle.completed)) {
+        const allocator = task.allocator;
+        task.deinit();
+        allocator.destroy(task);
+        return;
+    }
+    std.debug.assert(previous == @intFromEnum(AsyncTask.Lifecycle.running));
 }
 
 fn asyncTaskExtensionLookup(context: ?*anyopaque, name: []const u8) ?extension_api.HandlerSpec {
@@ -288,10 +328,14 @@ const TestAsyncScheduler = struct {
         const self: *TestAsyncScheduler = @ptrCast(@alignCast(context.?));
         std.debug.assert(self.scheduled == null);
         self.scheduled = .{ .complete_context = request.complete_context, .complete = request.complete };
-        return .{ .context = self, .join_fn = join };
+        return .{ .context = self, .join_fn = join, .abandon_fn = abandon };
     }
 
     fn join(context: *anyopaque) void {
+        _ = context;
+    }
+
+    fn abandon(context: *anyopaque) void {
         _ = context;
     }
 };
@@ -324,6 +368,31 @@ test "interactive prompt async returns cached stdout after hidden refresh" {
     const second = try render(std.testing.allocator, std.testing.io, &shell_state, .{ .async_state = &async_state });
     defer std.testing.allocator.free(second);
     try std.testing.expectEqualStrings("[async]", second);
+}
+
+test "interactive prompt async abandoned shutdown ignores late completion" {
+    var shell_state = shell.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    try shell_state.putFunction(.{
+        .name = "rush_prompt",
+        .source_body =
+        \\value="$(prompt_async sample --ttl 10000 -- /usr/bin/printf async)"
+        \\prompt text "[$value]"
+        ,
+    });
+
+    var scheduler: TestAsyncScheduler = .{};
+    var async_state: AsyncState = .{};
+    async_state.init(std.testing.io, null);
+    async_state.task_scheduler = scheduler.scheduler();
+
+    const prompt = try render(std.testing.allocator, std.testing.io, &shell_state, .{ .async_state = &async_state });
+    defer std.testing.allocator.free(prompt);
+    try std.testing.expectEqualStrings("[]", prompt);
+    try std.testing.expect(scheduler.scheduled != null);
+
+    async_state.deinitAbandoningTasks();
+    scheduler.complete("late");
 }
 
 test "interactive prompt async runs shell functions in hidden refresh" {

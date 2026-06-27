@@ -65,7 +65,7 @@ pub const AsyncState = struct {
         self.* = .{};
         self.io = io;
         self.redraw_fd = redraw_fd;
-        self.allocator = if (use_debug_allocator) self.debug_allocator.allocator() else std.heap.smp_allocator;
+        self.allocator = std.heap.smp_allocator;
     }
 
     pub fn deinit(self: *AsyncState) void {
@@ -74,6 +74,23 @@ pub const AsyncState = struct {
             self.allocator.free(entry.key);
             self.allocator.free(entry.cwd);
             self.allocator.free(entry.stdout);
+            entry.sink.release();
+            self.allocator.destroy(entry);
+        }
+        self.entries.deinit(self.allocator);
+        if (use_debug_allocator) std.debug.assert(self.debug_allocator.deinit() == .ok);
+        self.* = undefined;
+    }
+
+    pub fn deinitAbandoningTasks(self: *AsyncState) void {
+        for (self.entries.items) |entry| entry.sink.close();
+
+        for (self.entries.items) |entry| {
+            if (entry.task) |task| task.abandon();
+            self.allocator.free(entry.key);
+            self.allocator.free(entry.cwd);
+            self.allocator.free(entry.stdout);
+            entry.sink.release();
             self.allocator.destroy(entry);
         }
         self.entries.deinit(self.allocator);
@@ -153,6 +170,7 @@ pub const AsyncState = struct {
 
 const AsyncEntry = struct {
     state: *AsyncState,
+    sink: *AsyncCompletionSink,
     key: []const u8,
     cwd: []const u8,
     stdout: []const u8,
@@ -160,6 +178,52 @@ const AsyncEntry = struct {
     refreshing: bool = false,
     completed: bool = false,
     task: ?api.AsyncTask = null,
+};
+
+const AsyncCompletionSink = struct {
+    allocator: std.mem.Allocator,
+    refs: std.atomic.Value(usize) = .init(1),
+    io: std.Io,
+    mutex: std.Io.Mutex = .init,
+    closed: bool = false,
+    state: *AsyncState,
+    entry: *AsyncEntry,
+
+    fn create(allocator: std.mem.Allocator, state_value: *AsyncState, entry: *AsyncEntry) !*AsyncCompletionSink {
+        const sink = try allocator.create(AsyncCompletionSink);
+        sink.* = .{
+            .allocator = allocator,
+            .io = state_value.io,
+            .state = state_value,
+            .entry = entry,
+        };
+        return sink;
+    }
+
+    fn retain(self: *AsyncCompletionSink) void {
+        const previous = self.refs.fetchAdd(1, .acq_rel);
+        std.debug.assert(previous != 0);
+    }
+
+    fn release(self: *AsyncCompletionSink) void {
+        const previous = self.refs.fetchSub(1, .acq_rel);
+        std.debug.assert(previous != 0);
+        if (previous == 1) self.allocator.destroy(self);
+    }
+
+    fn close(self: *AsyncCompletionSink) void {
+        self.lock();
+        defer self.unlock();
+        self.closed = true;
+    }
+
+    fn lock(self: *AsyncCompletionSink) void {
+        self.mutex.lockUncancelable(self.io);
+    }
+
+    fn unlock(self: *AsyncCompletionSink) void {
+        self.mutex.unlock(self.io);
+    }
 };
 
 pub fn handlerFor(name: []const u8) ?api.HandlerSpec {
@@ -467,8 +531,11 @@ fn asyncEntry(async_state: *AsyncState, key: []const u8, cwd: []const u8) !*Asyn
     }
     const entry = try async_state.allocator.create(AsyncEntry);
     errdefer async_state.allocator.destroy(entry);
+    const sink = try AsyncCompletionSink.create(async_state.allocator, async_state, entry);
+    errdefer sink.release();
     entry.* = .{
         .state = async_state,
+        .sink = sink,
         .key = try async_state.allocator.dupe(u8, key),
         .cwd = try async_state.allocator.dupe(u8, cwd),
         .stdout = try async_state.allocator.dupe(u8, ""),
@@ -492,37 +559,47 @@ fn startPromptAsyncRefresh(
     if (entry.task) |task| task.join();
     entry.task = null;
 
+    entry.sink.retain();
+    errdefer entry.sink.release();
     entry.task = try task_scheduler.schedule(async_state.allocator, io, .{
         .shell_state = invocation.shell_state,
         .argv = command,
         .arg_zero = builder.arg_zero,
         .features = builder.features,
-        .complete_context = entry,
+        .complete_context = entry.sink,
         .complete = finishPromptAsyncRefresh,
     });
 }
 
 fn finishPromptAsyncRefresh(context: ?*anyopaque, result: api.AsyncTaskResult) void {
-    const entry: *AsyncEntry = @ptrCast(@alignCast(context.?));
-    const async_state = entry.state;
+    const sink: *AsyncCompletionSink = @ptrCast(@alignCast(context.?));
+    defer sink.release();
+    sink.lock();
+    defer sink.unlock();
+    if (sink.closed) return;
+
+    const async_state = sink.state;
     const stdout = async_state.allocator.dupe(u8, result.stdout) catch {
         async_state.lock();
+        const entry = sink.entry;
         entry.refreshing = false;
         async_state.noteRefreshEndedLocked();
         entry.completed = true;
-        async_state.unlock();
         async_state.requestRedraw();
+        async_state.unlock();
         return;
     };
+    errdefer async_state.allocator.free(stdout);
     async_state.lock();
+    const entry = sink.entry;
     async_state.allocator.free(entry.stdout);
     entry.stdout = stdout;
     entry.updated_ms = nowMillis(async_state.io);
     entry.refreshing = false;
     async_state.noteRefreshEndedLocked();
     entry.completed = true;
-    async_state.unlock();
     async_state.requestRedraw();
+    async_state.unlock();
 }
 
 fn nowMillis(io: std.Io) u64 {

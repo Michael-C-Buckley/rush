@@ -50,9 +50,14 @@ pub const AsyncTaskRequest = struct {
 pub const AsyncTask = struct {
     context: *anyopaque,
     join_fn: *const fn (*anyopaque) void,
+    abandon_fn: *const fn (*anyopaque) void,
 
     pub fn join(self: AsyncTask) void {
         self.join_fn(self.context);
+    }
+
+    pub fn abandon(self: AsyncTask) void {
+        self.abandon_fn(self.context);
     }
 };
 
