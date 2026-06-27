@@ -25,6 +25,7 @@ pub fn renderStatic(allocator: std.mem.Allocator, shell_state: *shell.ShellState
 pub const RenderOptions = struct {
     arg_zero: []const u8 = "rush",
     features: shell.compat.Features = .{},
+    previous_status: ?shell.ExitStatus = null,
     previous_duration_ms: ?i64 = null,
     async_state: ?*prompt_extension.AsyncState = null,
 };
@@ -60,6 +61,7 @@ pub fn render(
         error.ReadonlyVariable => unreachable,
     };
     defer working_state.deinit();
+    if (options.previous_status) |status| working_state.last_status = status;
 
     const plan = command_plan.classifyExpandedSimpleCommand(.{
         .command = .{ .argv = &[_][]const u8{"rush_prompt"} },
@@ -222,6 +224,24 @@ test "interactive prompt static fallback uses rush default prompt character" {
     defer std.testing.allocator.free(prompt);
 
     try std.testing.expectEqualStrings("● ", prompt);
+}
+
+test "interactive prompt render can use explicit previous status" {
+    var shell_state = shell.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    shell_state.last_status = 0;
+    try shell_state.putFunction(.{
+        .name = "rush_prompt",
+        .source_body =
+        \\status=$?
+        \\prompt text "$status"
+        ,
+    });
+
+    const prompt = try render(std.testing.allocator, std.testing.io, &shell_state, .{ .previous_status = 7 });
+    defer std.testing.allocator.free(prompt);
+
+    try std.testing.expectEqualStrings("7", prompt);
 }
 
 test "interactive prompt helpers use ShellState prompts and editing mode" {

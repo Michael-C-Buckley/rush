@@ -65,6 +65,7 @@ pub const Context = struct {
     arg_zero: []const u8 = "rush",
     cloned_arg_zero: ?[]const u8 = null,
     features: compat.Features = .{},
+    previous_status: shell.ExitStatus = 0,
     previous_duration_ms: ?i64 = null,
     prompt_async_state: ?*prompt_mod.AsyncState = null,
 };
@@ -284,6 +285,7 @@ fn refreshInteractivePrompt(context: *anyopaque, allocator: std.mem.Allocator, i
     return prompt_mod.render(allocator, io, interactive_context.semantic_state, .{
         .arg_zero = interactive_context.arg_zero,
         .features = interactive_context.features,
+        .previous_status = interactive_context.previous_status,
         .previous_duration_ms = interactive_context.previous_duration_ms,
         .async_state = interactive_context.prompt_async_state,
     });
@@ -776,6 +778,7 @@ pub fn run(
             .editor_state = &interactive_shell.editor_state,
             .arg_zero = options.arg_zero,
             .features = options.features,
+            .previous_status = last_status,
             .previous_duration_ms = last_command_duration_ms,
             .prompt_async_state = &prompt_async_state,
         };
@@ -793,6 +796,7 @@ pub fn run(
         const prompt_text = try prompt_mod.render(allocator, io, &interactive_shell.semantic_state, .{
             .arg_zero = options.arg_zero,
             .features = options.features,
+            .previous_status = last_status,
             .previous_duration_ms = last_command_duration_ms,
             .async_state = &prompt_async_state,
         });
@@ -818,6 +822,7 @@ pub fn run(
             .editor_state = &interactive_shell.editor_state,
             .arg_zero = options.arg_zero,
             .features = options.features,
+            .previous_status = last_status,
             .previous_duration_ms = last_command_duration_ms,
             .prompt_async_state = &prompt_async_state,
         };
@@ -1307,6 +1312,7 @@ pub fn runReplInput(allocator: std.mem.Allocator, io: std.Io, input: []const u8)
         try stderr.appendSlice(allocator, notifications);
         allocator.free(notifications);
         const prompt_text = try prompt_mod.render(allocator, io, &interactive_shell.semantic_state, .{
+            .previous_status = last_status,
             .previous_duration_ms = null,
         });
         try stdout.appendSlice(allocator, prompt_text);

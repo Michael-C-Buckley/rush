@@ -35,14 +35,15 @@ rush_prompt() {
     prompt text ' '
     prompt segment --fg yellow "$rush_prompt_git_info"
   fi
-  if test "$rush_prompt_status" = 0; then
-    if prompt async-pending; then
-      prompt text ' ○ '
-    else
-      prompt text ' ● '
-    fi
+  if prompt async-pending; then
+    rush_prompt_marker=' ○ '
   else
-    prompt segment --fg red ' ● '
+    rush_prompt_marker=' ● '
+  fi
+  if test "$rush_prompt_status" = 0; then
+    prompt text "$rush_prompt_marker"
+  else
+    prompt segment --fg red "$rush_prompt_marker"
   fi
 }
 
