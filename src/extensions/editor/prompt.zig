@@ -58,6 +58,9 @@ pub const AsyncState = struct {
     task_scheduler: ?api.AsyncTaskScheduler = null,
     mutex: std.Io.Mutex = .init,
     entries: std.ArrayList(*AsyncEntry) = .empty,
+    active_refresh_count: usize = 0,
+    pending_start_events: usize = 0,
+    pending_end_events: usize = 0,
 
     pub fn init(self: *AsyncState, io: std.Io, redraw_fd: ?std.posix.fd_t) void {
         self.* = .{};
@@ -104,6 +107,34 @@ pub const AsyncState = struct {
             }
         }
         return completed;
+    }
+
+    pub const LifecycleEvents = struct {
+        start_count: usize = 0,
+        end_count: usize = 0,
+    };
+
+    pub fn takeLifecycleEvents(self: *AsyncState) LifecycleEvents {
+        self.lock();
+        defer self.unlock();
+        const events: LifecycleEvents = .{
+            .start_count = self.pending_start_events,
+            .end_count = self.pending_end_events,
+        };
+        self.pending_start_events = 0;
+        self.pending_end_events = 0;
+        return events;
+    }
+
+    fn noteRefreshStartedLocked(self: *AsyncState) void {
+        if (self.active_refresh_count == 0) self.pending_start_events += 1;
+        self.active_refresh_count += 1;
+    }
+
+    fn noteRefreshEndedLocked(self: *AsyncState) void {
+        std.debug.assert(self.active_refresh_count != 0);
+        self.active_refresh_count -= 1;
+        if (self.active_refresh_count == 0) self.pending_end_events += 1;
     }
 
     fn lock(self: *AsyncState) void {
@@ -421,6 +452,7 @@ fn evaluatePromptAsync(handler_context: ?*anyopaque, invocation: *api.Invocation
         (entry.updated_ms == 0 or builder.now_ms >= entry.updated_ms + parsed.ttl_ms);
     if (should_refresh) {
         entry.refreshing = true;
+        async_state.noteRefreshStartedLocked();
         builder.async_refresh_started = true;
     }
     async_state.unlock();
@@ -437,6 +469,7 @@ fn evaluatePromptAsync(handler_context: ?*anyopaque, invocation: *api.Invocation
     ) catch |err| {
         async_state.lock();
         entry.refreshing = false;
+        async_state.noteRefreshEndedLocked();
         async_state.unlock();
         if (err == error.OutOfMemory) return error.OutOfMemory;
     };
@@ -522,6 +555,7 @@ fn finishPromptAsyncRefresh(context: ?*anyopaque, result: api.AsyncTaskResult) v
     const stdout = async_state.allocator.dupe(u8, result.stdout) catch {
         async_state.lock();
         entry.refreshing = false;
+        async_state.noteRefreshEndedLocked();
         entry.completed = true;
         async_state.unlock();
         async_state.requestRedraw();
@@ -532,6 +566,7 @@ fn finishPromptAsyncRefresh(context: ?*anyopaque, result: api.AsyncTaskResult) v
     entry.stdout = stdout;
     entry.updated_ms = nowMillis(async_state.io);
     entry.refreshing = false;
+    async_state.noteRefreshEndedLocked();
     entry.completed = true;
     async_state.unlock();
     async_state.requestRedraw();
@@ -638,7 +673,7 @@ test "prompt_frame selects frame from prompt render time" {
     defer state_delta.deinit();
     var invocation: api.Invocation = .{
         .allocator = std.testing.allocator,
-        .argv = &[_][]const u8{ "prompt_frame", "--interval", "180", "○", "◌", "◎", "◌" },
+        .argv = &[_][]const u8{ "prompt_frame", "--interval", "180", "◐", "◓", "◑", "◒" },
         .builtins = &.{},
         .shell_state = shell_state,
         .state_delta = &state_delta,
@@ -650,7 +685,7 @@ test "prompt_frame selects frame from prompt render time" {
 
     const result = try evaluatePromptFrame(&builder, &invocation);
     try std.testing.expectEqual(@as(u8, 0), result.status);
-    try std.testing.expectEqualStrings("◎\n", stdout.items);
+    try std.testing.expectEqualStrings("◑\n", stdout.items);
 }
 
 test "prompt_pwd shortens home-relative paths" {

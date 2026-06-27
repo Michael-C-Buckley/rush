@@ -25,7 +25,6 @@ const omitted_newline_marker = "\x1b[2m⏎\x1b[22m\r\n";
 const ignoreeof_message = "Use \"exit\" to leave the shell.\r\n";
 const stopped_jobs_exit_warning = "You have stopped jobs.\n";
 pub const immediate_notify_poll_ms = 50;
-pub const prompt_async_animation_interval_ms = 180;
 
 const OutputStream = enum { stdout, stderr };
 
@@ -272,14 +271,106 @@ pub fn runInteractiveIntervalHooks(
     if (try runInteractiveTimerHooks(interactive_context, allocator, io, &output)) {
         should_refresh_prompt = true;
     }
-    if (interactive_context.prompt_async_state) |async_state| {
-        if (async_state.hasRefreshing()) should_refresh_prompt = true;
+    if (try dispatchPromptAsyncLifecycleEvents(interactive_context, allocator, io)) {
+        should_refresh_prompt = true;
     }
 
     return .{
         .output = try output.toOwnedSlice(allocator),
         .refresh_prompt = should_refresh_prompt,
         .stop = semantic_state.pending_exit != null,
+    };
+}
+
+pub fn runInteractiveActivityEvent(
+    context: *anyopaque,
+    // ziglint-ignore: Z023 - opaque context must come first (run_activity_event callback ABI).
+    allocator: std.mem.Allocator,
+    // ziglint-ignore: Z023 - opaque context must come first (run_activity_event callback ABI).
+    io: std.Io,
+    event_name_text: []const u8,
+    args: []const []const u8,
+) !editor_driver.HookResult {
+    const interactive_context: *Context = @ptrCast(@alignCast(context));
+    const event_name = shell.EventName.parse(event_name_text) orelse return .{
+        .output = try allocator.dupe(u8, ""),
+        .refresh_prompt = false,
+    };
+    var output: std.ArrayList(u8) = .empty;
+    errdefer output.deinit(allocator);
+
+    const calls = try shell.event.orderedHookCalls(
+        allocator,
+        interactive_context.semantic_state.event_hooks.items,
+        event_name,
+    );
+    defer shell.event.freeHookCalls(allocator, calls);
+    if (calls.len == 0) return .{
+        .output = try output.toOwnedSlice(allocator),
+        .refresh_prompt = false,
+    };
+
+    const visible_status = interactive_context.semantic_state.last_status;
+    const visible_pipeline_statuses = try allocator.dupe(
+        shell.ExitStatus,
+        interactive_context.semantic_state.last_pipeline_statuses.items,
+    );
+    defer allocator.free(visible_pipeline_statuses);
+    errdefer interactive_context.semantic_state.last_status = visible_status;
+    for (calls) |call| {
+        try restoreInteractiveEventVisibleStatus(
+            interactive_context.semantic_state,
+            visible_status,
+            visible_pipeline_statuses,
+        );
+        if (interactive_context.semantic_state.getFunction(call.function_name) == null) {
+            const message = try std.fmt.allocPrint(
+                allocator,
+                "event: {s}: function not found\n",
+                .{call.function_name},
+            );
+            defer allocator.free(message);
+            try output.appendSlice(allocator, message);
+            continue;
+        }
+        var argv = try allocator.alloc([]const u8, args.len + 1);
+        defer allocator.free(argv);
+        argv[0] = call.function_name;
+        for (args, 0..) |arg, index| argv[index + 1] = arg;
+
+        const assignments = interactiveEventHookContextAssignments(event_name, call);
+        var result = try runner.runHiddenShellStateCommandWithExtensionHandlersApplyOptionsAndAssignments(
+            allocator,
+            io,
+            interactive_context.semantic_state,
+            argv,
+            &assignments,
+            interactive_context.arg_zero,
+            interactive_context.features,
+            .capture,
+            interactiveExtensionHandlers(interactive_context),
+            .{ .record_exit_control_flow = true },
+            1,
+        );
+        defer result.deinit();
+        try output.appendSlice(allocator, result.stdout);
+        try output.appendSlice(allocator, result.stderr);
+        try restoreInteractiveEventVisibleStatus(
+            interactive_context.semantic_state,
+            visible_status,
+            visible_pipeline_statuses,
+        );
+        if (interactive_context.semantic_state.pending_exit != null) break;
+    }
+    try restoreInteractiveEventVisibleStatus(
+        interactive_context.semantic_state,
+        visible_status,
+        visible_pipeline_statuses,
+    );
+    return .{
+        .output = try output.toOwnedSlice(allocator),
+        .refresh_prompt = true,
+        .stop = interactive_context.semantic_state.pending_exit != null,
     };
 }
 
@@ -294,14 +385,26 @@ pub fn nextInteractiveIntervalMs(context: *anyopaque, io: std.Io) !?u64 {
     if (shellStateWantsImmediateJobNotificationPoll(interactive_context.semantic_state)) {
         if (next_ms == null or immediate_notify_poll_ms < next_ms.?) next_ms = immediate_notify_poll_ms;
     }
-    if (interactive_context.prompt_async_state) |async_state| {
-        if (async_state.hasRefreshing() and
-            (next_ms == null or prompt_async_animation_interval_ms < next_ms.?))
-        {
-            next_ms = prompt_async_animation_interval_ms;
-        }
-    }
     return next_ms;
+}
+
+fn dispatchPromptAsyncLifecycleEvents(
+    context: *Context,
+    allocator: std.mem.Allocator,
+    io: std.Io,
+) !bool {
+    const async_state = context.prompt_async_state orelse return false;
+    const events = async_state.takeLifecycleEvents();
+    var dispatched = false;
+    for (0..events.start_count) |_| {
+        try runInteractiveEventHooks(context, allocator, io, .prompt_async_start, &.{ "prompt", "1" });
+        dispatched = true;
+    }
+    for (0..events.end_count) |_| {
+        try runInteractiveEventHooks(context, allocator, io, .prompt_async_end, &.{ "prompt", "0" });
+        dispatched = true;
+    }
+    return dispatched;
 }
 
 // ziglint-ignore: Z023 - signature is fixed by the refresh_prompt callback pointer type.
@@ -675,6 +778,39 @@ fn shellStateWantsImmediateJobNotificationPoll(shell_state: *const shell.ShellSt
     return false;
 }
 
+fn countActiveBackgroundJobs(shell_state: shell.ShellState) usize {
+    shell_state.validate();
+    var count: usize = 0;
+    for (shell_state.background_jobs.items) |job| {
+        job.validate();
+        if (job.state == .running) count += 1;
+    }
+    return count;
+}
+
+fn dispatchBackgroundJobLifecycleEvents(
+    context: *Context,
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    previous_count: *usize,
+) !void {
+    const current_count = countActiveBackgroundJobs(context.semantic_state.*);
+    if (current_count > previous_count.*) {
+        var buffer: [32]u8 = undefined;
+        const count_text = try std.fmt.bufPrint(&buffer, "{d}", .{current_count});
+        for (previous_count.*..current_count) |_| {
+            try runInteractiveEventHooks(context, allocator, io, .job_start, &.{ "job", count_text });
+        }
+    } else if (current_count < previous_count.*) {
+        var buffer: [32]u8 = undefined;
+        const count_text = try std.fmt.bufPrint(&buffer, "{d}", .{current_count});
+        for (current_count..previous_count.*) |_| {
+            try runInteractiveEventHooks(context, allocator, io, .job_end, &.{ "job", count_text });
+        }
+    }
+    previous_count.* = current_count;
+}
+
 fn interactivePendingExit(interactive_shell: *const Shell) ?shell.ExitStatus {
     if (!interactive_shell.semantic_enabled) return null;
     interactive_shell.semantic_state.validate();
@@ -778,6 +914,7 @@ pub fn run(
     prompt_async_state.init(io, terminal.promptRedrawWakeFd());
     prompt_async_state.task_scheduler = prompt_mod.asyncTaskScheduler();
     defer prompt_async_state.deinit();
+    var active_background_job_count = countActiveBackgroundJobs(interactive_shell.semantic_state);
 
     repl_loop: while (true) {
         if (interactivePendingExit(&interactive_shell)) |status| {
@@ -794,6 +931,21 @@ pub fn run(
             try allocator.dupe(u8, "");
         defer allocator.free(notifications);
         try writeAll(io, .stderr, notifications);
+        var job_event_context: Context = .{
+            .semantic_state = &interactive_shell.semantic_state,
+            .editor_state = &interactive_shell.editor_state,
+            .arg_zero = options.arg_zero,
+            .features = options.features,
+            .previous_status = last_status,
+            .previous_duration_ms = last_command_duration_ms,
+            .prompt_async_state = &prompt_async_state,
+        };
+        try dispatchBackgroundJobLifecycleEvents(
+            &job_event_context,
+            allocator,
+            io,
+            &active_background_job_count,
+        );
         if (interactivePendingExit(&interactive_shell)) |status| {
             last_status = status;
             break;
@@ -826,6 +978,7 @@ pub fn run(
             .async_state = &prompt_async_state,
         });
         defer allocator.free(prompt_text);
+        _ = try dispatchPromptAsyncLifecycleEvents(&prompt_prepare_context, allocator, io);
         var cwd_buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
         const cwd_len = std.Io.Dir.cwd().realPath(io, &cwd_buffer) catch 0;
         const physical_cwd = cwd_buffer[0..cwd_len];
@@ -858,6 +1011,7 @@ pub fn run(
             .hook_context = &interactive_context,
             .run_hooks = runInteractiveIntervalHooks,
             .next_hook_interval_ms = nextInteractiveIntervalMs,
+            .run_activity_event = runInteractiveActivityEvent,
             .prompt_context = &interactive_context,
             .refresh_prompt = refreshInteractivePrompt,
             .history = history_service.lineEditorView(io),
@@ -1960,7 +2114,7 @@ const PendingPromptAsyncScheduler = struct {
     }
 };
 
-test "prompt async refresh drives marker animation redraws" {
+test "prompt async refresh dispatches lifecycle events" {
     var shell_state = shell.ShellState.init(std.testing.allocator);
     defer shell_state.deinit();
     try shell_state.putFunction(.{
@@ -1969,6 +2123,15 @@ test "prompt async refresh drives marker animation redraws" {
         \\value="$(prompt_async sample --ttl 10000 -- unused)"
         \\prompt text "[$value]"
         ,
+    });
+    try shell_state.putFunction(.{
+        .name = "on_prompt_async",
+        .source_body = "PROMPT_ASYNC_EVENT=$RUSH_EVENT/$1/$2",
+    });
+    try shell_state.setEventHook(.{
+        .event = .prompt_async_start,
+        .name = "prompt-activity",
+        .function_name = "on_prompt_async",
     });
     var editor_state = EditorState.init(std.testing.allocator);
     defer editor_state.deinit();
@@ -1990,14 +2153,14 @@ test "prompt async refresh drives marker animation redraws" {
         .prompt_async_state = &async_state,
     };
 
-    try std.testing.expectEqual(
-        @as(?u64, prompt_async_animation_interval_ms),
-        try nextInteractiveIntervalMs(&context, std.testing.io),
-    );
     const hook_result = try runInteractiveIntervalHooks(&context, std.testing.allocator, std.testing.io);
     defer std.testing.allocator.free(hook_result.output);
     try std.testing.expectEqualStrings("", hook_result.output);
     try std.testing.expect(hook_result.refresh_prompt);
+    try std.testing.expectEqualStrings(
+        "prompt.async.start/prompt/1",
+        shell_state.getVariable("PROMPT_ASYNC_EVENT").?.value,
+    );
 }
 
 test "repl executes default config shell function wrappers" {

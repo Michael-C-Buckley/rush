@@ -27,6 +27,33 @@ rush_prompt_git() {
   printf '%s%s%s' "$branch" "$marker" "$arrows"
 }
 
+rush_prompt_activity_refresh() {
+  :
+}
+
+rush_prompt_activity_update() {
+  case "$1" in
+    prompt) rush_prompt_activity_prompt="$2" ;;
+    completion) rush_prompt_activity_completion="$2" ;;
+    job) rush_prompt_activity_jobs="$2" ;;
+  esac
+
+  if test "${rush_prompt_activity_prompt:-0}" != 0 || \
+     test "${rush_prompt_activity_completion:-0}" != 0 || \
+     test "${rush_prompt_activity_jobs:-0}" != 0; then
+    event add timer.tick prompt-activity rush_prompt_activity_refresh --every 180
+  else
+    event remove timer.tick prompt-activity
+  fi
+}
+
+event add prompt.async.start prompt-activity rush_prompt_activity_update
+event add prompt.async.end prompt-activity rush_prompt_activity_update
+event add completion.async.start prompt-activity rush_prompt_activity_update
+event add completion.async.end prompt-activity rush_prompt_activity_update
+event add job.start prompt-activity rush_prompt_activity_update
+event add job.end prompt-activity rush_prompt_activity_update
+
 rush_prompt() {
   rush_prompt_status=$?
   prompt segment --fg blue "$(prompt_pwd)"
@@ -35,8 +62,11 @@ rush_prompt() {
     prompt text ' '
     prompt segment --fg yellow "$rush_prompt_git_info"
   fi
-  if prompt async-pending; then
-    rush_prompt_marker=" $(prompt_frame --interval 180 ○ ◌ ◎ ◌) "
+  if prompt async-pending || \
+     test "${rush_prompt_activity_prompt:-0}" != 0 || \
+     test "${rush_prompt_activity_completion:-0}" != 0 || \
+     test "${rush_prompt_activity_jobs:-0}" != 0; then
+    rush_prompt_marker=" $(prompt_frame --interval 180 ◐ ◓ ◑ ◒) "
   else
     rush_prompt_marker=' ● '
   fi

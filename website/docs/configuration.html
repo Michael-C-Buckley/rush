@@ -135,7 +135,7 @@
 
   <h2 id="prompt"><a href="#prompt">Prompt</a></h2>
 
-  <p>Rush ships a default prompt: the current directory in blue, the Git branch in yellow with a <code>•</code> marker when the worktree is dirty and <code>↑</code>/<code>↓</code> commit counts against the upstream, and a <code>●</code> marker. While async prompt work is running, the marker animates through hollow dot frames. The marker turns red when the previous command failed.</p>
+  <p>Rush ships a default prompt: the current directory in blue, the Git branch in yellow with a <code>•</code> marker when the worktree is dirty and <code>↑</code>/<code>↓</code> commit counts against the upstream, and a <code>●</code> marker. While prompt, completion, or job activity is running, the marker animates through <code>◐</code>/<code>◓</code>/<code>◑</code>/<code>◒</code> frames. The marker turns red when the previous command failed.</p>
 
   <p>Define <code>rush_prompt</code> in your configuration to replace it.</p>
 
@@ -182,7 +182,7 @@ index:236
 
   <p><code>prompt_pwd</code> optionally shortens path components like fish. <code>-d</code>/<code>--dir-length</code> keeps the first N characters of each component (0, the default, disables shortening; a leading dot is preserved). <code>-D</code>/<code>--full-length-dirs</code> keeps the last N components at full length (default 1).</p>
 
-  <p><code>prompt_frame</code> prints one frame from its arguments based on prompt render time. Use it with <code>prompt async-pending</code> or a prompt refresh interval to animate prompt markers without mutating shell state.</p>
+  <p><code>prompt_frame</code> prints one frame from its arguments based on prompt render time. Use it with event-driven timers to animate prompt markers without mutating frame counters in shell state.</p>
 
   <pre><span class="cmd">prompt_pwd</span>                  <span class="comment"># ~/repos/rush</span>
 <span class="cmd">prompt_pwd</span> <span class="opt">-d</span> 1             <span class="comment"># ~/r/rush</span>

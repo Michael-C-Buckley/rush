@@ -5,11 +5,23 @@ const std = @import("std");
 pub const Name = enum {
     directory_change,
     prompt_prepare,
+    prompt_async_start,
+    prompt_async_end,
+    completion_async_start,
+    completion_async_end,
+    job_start,
+    job_end,
     timer_tick,
 
     pub fn parse(value: []const u8) ?Name {
         if (std.mem.eql(u8, value, "directory.change")) return .directory_change;
         if (std.mem.eql(u8, value, "prompt.prepare")) return .prompt_prepare;
+        if (std.mem.eql(u8, value, "prompt.async.start")) return .prompt_async_start;
+        if (std.mem.eql(u8, value, "prompt.async.end")) return .prompt_async_end;
+        if (std.mem.eql(u8, value, "completion.async.start")) return .completion_async_start;
+        if (std.mem.eql(u8, value, "completion.async.end")) return .completion_async_end;
+        if (std.mem.eql(u8, value, "job.start")) return .job_start;
+        if (std.mem.eql(u8, value, "job.end")) return .job_end;
         if (std.mem.eql(u8, value, "timer.tick")) return .timer_tick;
         return null;
     }
@@ -18,6 +30,12 @@ pub const Name = enum {
         return switch (self) {
             .directory_change => "directory.change",
             .prompt_prepare => "prompt.prepare",
+            .prompt_async_start => "prompt.async.start",
+            .prompt_async_end => "prompt.async.end",
+            .completion_async_start => "completion.async.start",
+            .completion_async_end => "completion.async.end",
+            .job_start => "job.start",
+            .job_end => "job.end",
             .timer_tick => "timer.tick",
         };
     }
@@ -36,7 +54,15 @@ pub const Registration = struct {
         assertValidFunctionName(self.function_name);
         switch (self.event) {
             .timer_tick => std.debug.assert((self.every_ms orelse 0) != 0),
-            .directory_change, .prompt_prepare => {
+            .directory_change,
+            .prompt_prepare,
+            .prompt_async_start,
+            .prompt_async_end,
+            .completion_async_start,
+            .completion_async_end,
+            .job_start,
+            .job_end,
+            => {
                 std.debug.assert(self.every_ms == null);
                 std.debug.assert(self.next_tick_ms == null);
             },
@@ -216,6 +242,12 @@ pub fn isValidFunctionName(name: []const u8) bool {
 test "event names parse and render" {
     try std.testing.expectEqual(Name.directory_change, Name.parse("directory.change").?);
     try std.testing.expectEqual(Name.prompt_prepare, Name.parse("prompt.prepare").?);
+    try std.testing.expectEqual(Name.prompt_async_start, Name.parse("prompt.async.start").?);
+    try std.testing.expectEqual(Name.prompt_async_end, Name.parse("prompt.async.end").?);
+    try std.testing.expectEqual(Name.completion_async_start, Name.parse("completion.async.start").?);
+    try std.testing.expectEqual(Name.completion_async_end, Name.parse("completion.async.end").?);
+    try std.testing.expectEqual(Name.job_start, Name.parse("job.start").?);
+    try std.testing.expectEqual(Name.job_end, Name.parse("job.end").?);
     try std.testing.expectEqual(Name.timer_tick, Name.parse("timer.tick").?);
     try std.testing.expectEqual(@as(?Name, null), Name.parse("chpwd"));
     try std.testing.expectEqualStrings("directory.change", Name.directory_change.text());

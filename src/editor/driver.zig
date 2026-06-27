@@ -62,6 +62,13 @@ pub const ReadLineOptions = struct {
     hook_context: ?*anyopaque = null,
     run_hooks: ?*const fn (*anyopaque, std.mem.Allocator, std.Io) anyerror!HookResult = null,
     next_hook_interval_ms: ?*const fn (*anyopaque, std.Io) anyerror!?u64 = null,
+    run_activity_event: ?*const fn (
+        *anyopaque,
+        std.mem.Allocator,
+        std.Io,
+        []const u8,
+        []const []const u8,
+    ) anyerror!HookResult = null,
     prompt_context: ?*anyopaque = null,
     refresh_prompt: ?*const fn (
         *anyopaque,
@@ -382,6 +389,7 @@ pub const TerminalSession = struct {
             null;
         var next_completion_flash_clear_ms: ?u64 = null;
         var next_hook_interval_ms = try nextHookIntervalDeadlineMs(read_options, self.io);
+        var completion_async_event_active = self.completion.active != null;
         read_loop: while (true) {
             while (session.state == .editing or session.state == .history_search) {
                 var render_needed = false;
@@ -423,6 +431,12 @@ pub const TerminalSession = struct {
                     next_prompt_refresh_ms = nowMs(self.io) + read_options.prompt_refresh_interval_ms.?;
                 }
                 try self.startReadyCompletion(read_options);
+                if (try self.syncCompletionActivityEvent(
+                    read_options,
+                    &session,
+                    &render_needed,
+                    &completion_async_event_active,
+                )) return self.finishInterruptedReadLine();
                 self.events.clearRetainingCapacity();
                 self.terminal_parser.resetEventText();
                 var hook_ready = false;
@@ -540,6 +554,12 @@ pub const TerminalSession = struct {
                 }
                 if (session.state == .editing or session.state == .history_search) {
                     try self.startReadyCompletion(read_options);
+                    if (try self.syncCompletionActivityEvent(
+                        read_options,
+                        &session,
+                        &render_needed,
+                        &completion_async_event_active,
+                    )) return self.finishInterruptedReadLine();
                     if (render_needed) {
                         if (session.takePromptInvalidation() and
                             read_options.refresh_prompt != null and
@@ -602,6 +622,17 @@ pub const TerminalSession = struct {
                     continue :read_loop;
                 },
                 .submitted => {
+                    if (completion_async_event_active) {
+                        var render_needed = false;
+                        if (try self.runActivityEvent(
+                            read_options,
+                            &session,
+                            &render_needed,
+                            "completion.async.end",
+                            &.{ "completion", "0" },
+                        )) return self.finishInterruptedReadLine();
+                        completion_async_event_active = false;
+                    }
                     // Accepting the line may have rewritten the buffer (e.g.
                     // abbreviation expansion on Enter); paint the final text so
                     // the scrollback shows the command that actually runs.
@@ -621,12 +652,34 @@ pub const TerminalSession = struct {
                     return .{ .submitted = session.takeSubmittedLine().? };
                 },
                 .canceled => {
+                    if (completion_async_event_active) {
+                        var render_needed = false;
+                        if (try self.runActivityEvent(
+                            read_options,
+                            &session,
+                            &render_needed,
+                            "completion.async.end",
+                            &.{ "completion", "0" },
+                        )) return self.finishInterruptedReadLine();
+                        completion_async_event_active = false;
+                    }
                     try self.clearRenderedRowsAfterFirst();
                     self.renderer.reset(self.allocator);
                     try writeTtyAll(&self.tty, semantic_input_cancel ++ "^C\r\n");
                     return .canceled;
                 },
                 .eof => {
+                    if (completion_async_event_active) {
+                        var render_needed = false;
+                        if (try self.runActivityEvent(
+                            read_options,
+                            &session,
+                            &render_needed,
+                            "completion.async.end",
+                            &.{ "completion", "0" },
+                        )) return self.finishInterruptedReadLine();
+                        completion_async_event_active = false;
+                    }
                     try self.clearRenderedRowsAfterFirst();
                     self.renderer.reset(self.allocator);
                     try writeTtyAll(&self.tty, "\r\n");
@@ -738,6 +791,50 @@ pub const TerminalSession = struct {
     ) !bool {
         if (options.run_hooks == null or options.hook_context == null) return false;
         const hook_result = try options.run_hooks.?(options.hook_context.?, self.allocator, self.io);
+        defer self.allocator.free(hook_result.output);
+        if (hook_result.output.len != 0) try self.writeInterruptOutput(hook_result.output);
+        if (hook_result.refresh_prompt or hook_result.output.len != 0) {
+            render_needed.* = true;
+            session.invalidatePrompt();
+        }
+        return hook_result.stop;
+    }
+
+    fn syncCompletionActivityEvent(
+        self: *TerminalSession,
+        options: ReadLineOptions,
+        session: *line_editor.LineSession,
+        render_needed: *bool,
+        event_active: *bool,
+    ) !bool {
+        const active = self.completion.active != null;
+        if (active == event_active.*) return false;
+        event_active.* = active;
+        return self.runActivityEvent(
+            options,
+            session,
+            render_needed,
+            if (active) "completion.async.start" else "completion.async.end",
+            if (active) &.{ "completion", "1" } else &.{ "completion", "0" },
+        );
+    }
+
+    fn runActivityEvent(
+        self: *TerminalSession,
+        options: ReadLineOptions,
+        session: *line_editor.LineSession,
+        render_needed: *bool,
+        event_name: []const u8,
+        args: []const []const u8,
+    ) !bool {
+        if (options.run_activity_event == null or options.hook_context == null) return false;
+        const hook_result = try options.run_activity_event.?(
+            options.hook_context.?,
+            self.allocator,
+            self.io,
+            event_name,
+            args,
+        );
         defer self.allocator.free(hook_result.output);
         if (hook_result.output.len != 0) try self.writeInterruptOutput(hook_result.output);
         if (hook_result.refresh_prompt or hook_result.output.len != 0) {

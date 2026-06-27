@@ -50,6 +50,12 @@ timer.tick
     <dd>Runs after a successful current-shell directory change has committed. The hook function receives the old directory as <code>$1</code> and the new directory as <code>$2</code>.</dd>
     <dt><code>prompt.prepare</code></dt>
     <dd>Runs on the real interactive shell state before Rush renders each prompt.</dd>
+    <dt><code>prompt.async.start</code>, <code>prompt.async.end</code></dt>
+    <dd>Run when <code>prompt_async</code> refresh work transitions between inactive and active. The hook function receives <code>$1</code> as <code>prompt</code> and <code>$2</code> as the active count, <code>1</code> for start and <code>0</code> for end.</dd>
+    <dt><code>completion.async.start</code>, <code>completion.async.end</code></dt>
+    <dd>Run when asynchronous completion work transitions between inactive and active. The hook function receives <code>$1</code> as <code>completion</code> and <code>$2</code> as the active count, <code>1</code> for start and <code>0</code> for end.</dd>
+    <dt><code>job.start</code>, <code>job.end</code></dt>
+    <dd>Run when interactive background jobs become active or inactive. The hook function receives <code>$1</code> as <code>job</code> and <code>$2</code> as the current active background job count.</dd>
     <dt><code>timer.tick</code></dt>
     <dd>Runs while the interactive line editor is idle after the registration's <code>--every</code> interval. The hook function receives the registration name as <code>$1</code>.</dd>
   </dl>

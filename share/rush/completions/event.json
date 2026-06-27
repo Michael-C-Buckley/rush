@@ -9,6 +9,12 @@
         "values": [
           { "value": "directory.change", "description": "after the current directory changes" },
           { "value": "prompt.prepare", "description": "before each prompt render" },
+          { "value": "prompt.async.start", "description": "when prompt async work becomes active" },
+          { "value": "prompt.async.end", "description": "when prompt async work becomes inactive" },
+          { "value": "completion.async.start", "description": "when completion async work starts" },
+          { "value": "completion.async.end", "description": "when completion async work ends" },
+          { "value": "job.start", "description": "when background jobs become active" },
+          { "value": "job.end", "description": "when background jobs become inactive" },
           { "value": "timer.tick", "description": "while the editor is idle" }
         ]
       },
