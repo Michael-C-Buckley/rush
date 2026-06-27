@@ -54,6 +54,7 @@ const FeatureSet = packed struct {
     negation: bool = true,
     break_continue: bool = true,
     arith: bool = true,
+    words: bool = true,
     heredoc: bool = true,
     stress: bool = true,
     source_eval: bool = true,
@@ -76,6 +77,7 @@ const FeatureSet = packed struct {
         .negation = true,
         .break_continue = true,
         .arith = true,
+        .words = true,
         .heredoc = true,
         .stress = true,
         .source_eval = true,
@@ -100,6 +102,7 @@ const FeatureSet = packed struct {
             .negation = false,
             .break_continue = false,
             .arith = false,
+            .words = false,
             .heredoc = false,
             .stress = false,
             .source_eval = false,
@@ -157,6 +160,9 @@ const FeatureSet = packed struct {
             } else if (std.mem.eql(u8, feature, "arith")) {
                 features.arith = true;
                 saw_feature = true;
+            } else if (std.mem.eql(u8, feature, "words")) {
+                features.words = true;
+                saw_feature = true;
             } else if (std.mem.eql(u8, feature, "heredoc")) {
                 features.heredoc = true;
                 saw_feature = true;
@@ -196,6 +202,7 @@ const FeatureSet = packed struct {
         if (self.negation) try writer.writeAll(",negation");
         if (self.break_continue) try writer.writeAll(",break_continue");
         if (self.arith) try writer.writeAll(",arith");
+        if (self.words) try writer.writeAll(",words");
         if (self.heredoc) try writer.writeAll(",heredoc");
         if (self.stress) try writer.writeAll(",stress");
         if (self.source_eval) try writer.writeAll(",source_eval");
@@ -478,7 +485,7 @@ fn writeUsage(io: std.Io) !void {
         \\  --case N            run only one generated case index
         \\  --features LIST     comma-separated features:
         \\                       base,fd,params,lists,redir,cmdsub,func,alias,loops,ifs,cases,while,
-        \\                       pipeline,negation,break_continue,arith,heredoc,stress,source_eval,trap,corpus
+        \\                       pipeline,negation,break_continue,arith,words,heredoc,stress,source_eval,trap,corpus
         \\                       (default: all)
         \\  --print-cases       print each generated shell script before running it
         \\  --timeout-ms N      per-command timeout in milliseconds, or 0 to disable (default: Debug 5000, Release 1000)
@@ -1346,6 +1353,46 @@ const ArithmeticProbe = enum {
     }
 };
 
+const WordExpansionProbe = enum {
+    field_splitting,
+    quoted_field,
+    ifs_non_whitespace_empty_field,
+    pathname_sorted,
+    pathname_unmatched_literal,
+    noglob_literal,
+    assignment_no_field_splitting,
+
+    fn random(random_source: std.Random) WordExpansionProbe {
+        return @enumFromInt(random_source.uintLessThan(u3, 7));
+    }
+
+    fn render(self: WordExpansionProbe, writer: *std.Io.Writer) !void {
+        switch (self) {
+            .field_splitting => try writer.writeAll(
+                "A='one  two'; printf '[%s]\n' $A",
+            ),
+            .quoted_field => try writer.writeAll(
+                "A='one  two'; printf '[%s]\n' \"$A\"",
+            ),
+            .ifs_non_whitespace_empty_field => try writer.writeAll(
+                "IFS=:; A='a::b:'; for x in $A; do printf '[%s]\n' \"$x\"; done",
+            ),
+            .pathname_sorted => try writer.writeAll(
+                "touch c b a; printf '[%s]\n' *",
+            ),
+            .pathname_unmatched_literal => try writer.writeAll(
+                "printf '[%s]\n' no-match-*",
+            ),
+            .noglob_literal => try writer.writeAll(
+                "touch a; set -f; printf '[%s]\n' *; set +f",
+            ),
+            .assignment_no_field_splitting => try writer.writeAll(
+                "A='one two'; B=$A; printf '[%s]\n' \"$B\"",
+            ),
+        }
+    }
+};
+
 const HereDocProbe = enum {
     simple,
     quoted_delimiter,
@@ -1749,6 +1796,7 @@ const Command = union(enum) {
     negation_probe: NegationProbe,
     break_continue_probe: BreakContinueProbe,
     arithmetic_probe: ArithmeticProbe,
+    word_expansion_probe: WordExpansionProbe,
     heredoc_probe: HereDocProbe,
     fd_routing_probe: FdRoutingProbe,
     cmdsub_stress_probe: CommandSubstitutionStressProbe,
@@ -1837,6 +1885,10 @@ const Command = union(enum) {
             .top_level => 1,
             .inline_compound => if (depth < 2) 1 else 0,
         } else 0;
+        const words_count: u8 = if (features.words) switch (mode) {
+            .top_level => 1,
+            .inline_compound => if (depth < 2) 1 else 0,
+        } else 0;
         const heredoc_count: u8 = if (features.heredoc and mode == .top_level) 1 else 0;
         const stress_count: u8 = if (features.stress) switch (mode) {
             .top_level => 5,
@@ -1847,8 +1899,8 @@ const Command = union(enum) {
         const corpus_count: u8 = if (features.corpus and mode == .top_level) 1 else 0;
         const choice_count = base_count + fd_count + params_count + positional_count + lists_count + redir_count +
             cmdsub_count + func_count + alias_count + loops_count + ifs_count + cases_count + while_count +
-            pipeline_count + negation_count + break_continue_count + arith_count + heredoc_count + stress_count +
-            source_eval_count + trap_count + corpus_count;
+            pipeline_count + negation_count + break_continue_count + arith_count + words_count + heredoc_count +
+            stress_count + source_eval_count + trap_count + corpus_count;
         const choice = random.uintLessThan(
             u8,
             choice_count,
@@ -1967,6 +2019,8 @@ const Command = union(enum) {
         feature_choice -= break_continue_count;
         if (feature_choice < arith_count) return .{ .arithmetic_probe = ArithmeticProbe.random(random) };
         feature_choice -= arith_count;
+        if (feature_choice < words_count) return .{ .word_expansion_probe = WordExpansionProbe.random(random) };
+        feature_choice -= words_count;
         if (feature_choice < heredoc_count) return .{ .heredoc_probe = HereDocProbe.random(random) };
         feature_choice -= heredoc_count;
         if (feature_choice < stress_count) return switch (feature_choice) {
@@ -2041,6 +2095,7 @@ const Command = union(enum) {
             .negation_probe => |negation_probe| try negation_probe.render(writer),
             .break_continue_probe => |break_continue_probe| try break_continue_probe.render(writer),
             .arithmetic_probe => |arithmetic_probe| try arithmetic_probe.render(writer),
+            .word_expansion_probe => |word_expansion_probe| try word_expansion_probe.render(writer),
             .heredoc_probe => |heredoc_probe| try heredoc_probe.render(writer),
             .fd_routing_probe => |fd_routing_probe| try fd_routing_probe.render(writer),
             .cmdsub_stress_probe => |cmdsub_stress_probe| try cmdsub_stress_probe.render(writer),
