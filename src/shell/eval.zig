@@ -9272,6 +9272,11 @@ fn completeStatementChildOutcome(
         result,
         buffers,
     );
+    if (statement_plan) |plan| {
+        if (statementPlanFlushesSubshellOutputAfter(plan)) {
+            try flushSubshellBufferedOutputBeforeNestedChild(buffers, eval_context);
+        }
+    }
     if (completion.flushed_child_output) {
         if (statement_plan) |plan| {
             if (bashAssignmentErrorAbortsSourceLine(eval_context, plan, child_outcome.*)) {
@@ -10456,11 +10461,33 @@ fn statementPlanRunsIsolated(plan: command_plan.StatementPlan) bool {
     };
 }
 
+fn statementPlanFlushesSubshellOutputAfter(plan: command_plan.StatementPlan) bool {
+    plan.validate();
+    return switch (plan) {
+        .compound => |compound| compound.target.isIsolatedFromParent(),
+        .ir_source => |source| irSourceSingleUnredirectedPipeline(source),
+        .simple,
+        .pipeline,
+        .source,
+        => false,
+    };
+}
+
+fn irSourceSingleUnredirectedPipeline(source: command_plan.IrStatementPlan) bool {
+    source.validate();
+    const statement = source.program.statements[source.statement_index];
+    if (statement.kind != .pipeline) return false;
+    const pipeline = source.program.pipelines[statement.index];
+    if (pipeline.command_indexes.len != 1 or pipeline.stage_spans.len != 1 or pipeline.negated) return false;
+    return source.program.commands[pipeline.command_indexes[0]].redirections.len == 0;
+}
+
 fn flushSubshellBufferedOutputBeforeNestedChild(
     buffers: *EvaluationBuffers,
     eval_context: context.EvalContext,
 ) EvalError!void {
     eval_context.validate();
+    if (eval_context.command_substitution_depth != 0) return;
     if (!evalContextCapturesSubshellOutput(eval_context)) return;
     var frame = OutputFrame.initInherited(buffers);
     defer frame.deinit();

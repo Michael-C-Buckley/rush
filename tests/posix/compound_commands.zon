@@ -93,6 +93,20 @@
             .status = 0,
         },
         .{
+            .name = "subshell preserves case command order before following redirection",
+            .script =
+            \\printf 'file\n' >out
+            \\( case one in one) printf 'case\n' ;; esac; cat <out; )
+            ,
+            .stdout =
+            \\case
+            \\file
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "nested subshell preserves output order before redirected command",
             .script =
             \\( ( printf 'three\n' ); ( printf 'two\n'; printf '\n' >out; ) )

@@ -1097,11 +1097,17 @@ fn lowerListNode(
     }
 
     var previous_statement_end: ?usize = null;
-    for (parsed.nodeChildren(list_node)) |child| {
-        const child_node_id = switch (child) {
-            .node => |node_id| node_id,
-            .token => continue,
-        };
+    var child_node_ids: std.ArrayList(parser.NodeId) = .empty;
+    defer child_node_ids.deinit(allocator);
+    for (parsed.nodeChildren(list_node)) |child| switch (child) {
+        .node => |node_id| {
+            if (isStatementNode(parsed.nodes[node_id.index()].kind)) try child_node_ids.append(allocator, node_id);
+        },
+        .token => {},
+    };
+    std.mem.sort(parser.NodeId, child_node_ids.items, parsed, lessThanNodeIdTokenStart);
+
+    for (child_node_ids.items) |child_node_id| {
         const child_node = parsed.nodes[child_node_id.index()];
         var statement: Statement = switch (child_node.kind) {
             .pipeline => blk: {
@@ -1198,6 +1204,7 @@ fn lowerListNode(
 }
 
 fn nextListStatementStart(parsed: parser.ParseResult, list_node: parser.Node, after_token: usize) usize {
+    var next_start = list_node.token_end;
     for (parsed.nodeChildren(list_node)) |child| {
         const child_node_id = switch (child) {
             .node => |node_id| node_id,
@@ -1205,9 +1212,16 @@ fn nextListStatementStart(parsed: parser.ParseResult, list_node: parser.Node, af
         };
         const child_node = parsed.nodes[child_node_id.index()];
         if (!isStatementNode(child_node.kind) or child_node.token_start <= after_token) continue;
-        return child_node.token_start;
+        next_start = @min(next_start, child_node.token_start);
     }
-    return list_node.token_end;
+    return next_start;
+}
+
+fn lessThanNodeIdTokenStart(parsed: parser.ParseResult, a: parser.NodeId, b: parser.NodeId) bool {
+    const a_node = parsed.nodes[a.index()];
+    const b_node = parsed.nodes[b.index()];
+    if (a_node.span.start == b_node.span.start) return a_node.span.end < b_node.span.end;
+    return a_node.span.start < b_node.span.start;
 }
 
 fn isStatementNode(kind: parser.NodeKind) bool {
@@ -2872,6 +2886,40 @@ test "lower caches nested compound body programs" {
     const outer_body = program.subshells[0].body_program orelse return error.ExpectedBodyProgram;
     try std.testing.expectEqual(@as(usize, 1), outer_body.subshells.len);
     try std.testing.expect(outer_body.subshells[0].body_program != null);
+}
+
+test "lower orders nested compound body statements by source position" {
+    var parsed = try parser.parse(
+        std.testing.allocator,
+        "( case one in one) printf '%s\\n' two;; esac; cat < out; )",
+        .{},
+    );
+    defer parsed.deinit();
+
+    var program = try lowerSimpleCommands(std.testing.allocator, parsed);
+    defer program.deinit();
+
+    const body = program.subshells[0].body_program orelse return error.ExpectedBodyProgram;
+    try std.testing.expectEqual(@as(usize, 2), body.statements.len);
+    try std.testing.expectEqual(StatementKind.case_command, body.statements[0].kind);
+    try std.testing.expectEqual(StatementKind.pipeline, body.statements[1].kind);
+}
+
+test "lower orders nested simple pipeline body statements by source position" {
+    var parsed = try parser.parse(std.testing.allocator, "( printf before; cat < in )", .{});
+    defer parsed.deinit();
+
+    var program = try lowerSimpleCommands(std.testing.allocator, parsed);
+    defer program.deinit();
+
+    const body = program.subshells[0].body_program orelse return error.ExpectedBodyProgram;
+    try std.testing.expectEqual(@as(usize, 2), body.statements.len);
+    try std.testing.expectEqual(StatementKind.pipeline, body.statements[0].kind);
+    try std.testing.expectEqual(StatementKind.pipeline, body.statements[1].kind);
+    const first_pipeline = body.pipelines[body.statements[0].index];
+    const second_pipeline = body.pipelines[body.statements[1].index];
+    try std.testing.expectEqualStrings("printf", body.commands[first_pipeline.command_indexes[0]].argv[0].text);
+    try std.testing.expectEqualStrings("cat", body.commands[second_pipeline.command_indexes[0]].argv[0].text);
 }
 
 test "lower preserves POSIX pipeline negation" {
