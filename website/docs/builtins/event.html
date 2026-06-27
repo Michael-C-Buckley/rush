@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>rush event builtin</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header class="site-header">
+    <div><a href="../../index.html">rush</a></div>
+    <nav class="site-nav" aria-label="Primary">
+      <a href="../index.html">docs</a>
+      <a href="https://github.com/rockorager/rush">source</a>
+    </nav>
+  </header>
+
+  <h1 id="event"><a href="#event">EVENT(1)</a></h1>
+
+  <h2 id="name"><a href="#name">NAME</a></h2>
+
+  <p>event - manage named shell event hook registrations.</p>
+
+  <h2 id="synopsis"><a href="#synopsis">SYNOPSIS</a></h2>
+
+  <pre><span class="cmd">event</span> add <span class="var">event</span> <span class="var">name</span> <span class="var">function</span> [<span class="opt">--priority</span> <span class="var">number</span>]
+<span class="cmd">event</span> remove <span class="var">event</span> <span class="var">name</span>
+<span class="cmd">event</span> list [<span class="var">event</span>]</pre>
+
+  <h2 id="description"><a href="#description">DESCRIPTION</a></h2>
+
+  <p><code>event</code> registers shell functions to run when Rush observes shell events. Registrations are named so configuration can replace or remove one hook without disturbing others. If an <code>event add</code> command uses an existing <var>event</var> and <var>name</var>, it replaces that registration.</p>
+
+  <p>Hooks run in ascending priority order, then by registration name. The default priority is zero. Hook execution preserves the visible last status and pipeline statuses unless the hook exits the shell.</p>
+
+  <h2 id="events"><a href="#events">EVENTS</a></h2>
+
+  <dl>
+    <dt><code>directory.change</code></dt>
+    <dd>Runs after a successful current-shell directory change has committed. The hook function receives the old directory as <code>$1</code> and the new directory as <code>$2</code>.</dd>
+    <dt><code>prompt.prepare</code></dt>
+    <dd>Runs on the real interactive shell state before Rush renders each prompt.</dd>
+  </dl>
+
+  <h2 id="example"><a href="#example">EXAMPLE</a></h2>
+
+  <pre><span class="cmd">sync_project_env</span>() {
+  <span class="kw">if</span> test <span class="opt">-f</span> .envrc; <span class="kw">then</span>
+    <span class="cmd">.</span> ./.envrc
+  <span class="kw">fi</span>
+}
+
+<span class="cmd">remember_prompt_cwd</span>() {
+  <span class="var">rush_prompt_cwd</span>=<span class="str">"$PWD"</span>
+}
+
+<span class="cmd">event</span> add directory.change project-env sync_project_env --priority -10
+<span class="cmd">event</span> add prompt.prepare prompt-cwd remember_prompt_cwd</pre>
+
+  <h2 id="exit-status"><a href="#exit-status">EXIT STATUS</a></h2>
+
+  <p>Zero on success and two for usage errors.</p>
+
+  <h2 id="see-also"><a href="#see-also">SEE ALSO</a></h2>
+
+  <p><a href="index.html">rush-builtins(7)</a>, <a href="prompt.html">prompt(1)</a>, <a href="prompt_async.html">prompt_async(1)</a>, <a href="../configuration.html">rush configuration</a>.</p>
+
+</body>
+</html>

@@ -10,6 +10,7 @@ const abbr = @import("editor/abbr.zig");
 const prompt = @import("editor/prompt.zig");
 const rush_complete = @import("editor/rush_complete.zig");
 const color = @import("color.zig");
+const event = @import("event.zig");
 
 pub fn lookup(name: []const u8) ?api.HandlerSpec {
     if (local.handlerFor(name)) |handler| return handler;
@@ -20,5 +21,6 @@ pub fn lookup(name: []const u8) ?api.HandlerSpec {
     if (prompt.handlerFor(name)) |handler| return handler;
     if (rush_complete.handlerForContext(name, null)) |handler| return handler;
     if (color.handlerFor(name)) |handler| return handler;
+    if (event.handlerFor(name)) |handler| return handler;
     return null;
 }

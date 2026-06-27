@@ -25,6 +25,7 @@ const compat = @import("compat.zig");
 const consequence = @import("consequence.zig");
 const context = @import("context.zig");
 const delta = @import("delta.zig");
+const shell_event = @import("event.zig");
 const expand = @import("expand.zig");
 const execution_frame = @import("execution_frame.zig");
 const ir = @import("ir.zig");
@@ -100,6 +101,8 @@ pub const Evaluator = struct {
     extension_handler_lookup: ?*const fn (?*anyopaque, []const u8) ?extension_api.HandlerSpec = null,
     alias_state: ?*state.ShellState = null,
     history_entries: []const CommandHistoryEntry = &.{},
+    event_dispatch_depth: u32 = 0,
+    directory_change_event_observed: bool = false,
 
     pub fn init(allocator: std.mem.Allocator) Evaluator {
         return .{ .allocator = allocator, .shell_pid = currentProcessId() };
@@ -9255,7 +9258,7 @@ fn completeStatementChildOutcome(
     try appendStatementChildOutcomeBuffers(buffers, child_outcome.*);
     switch (state_disposition) {
         .commit_to_working => |target| {
-            try applyOutcomeToWorkingState(shell_state, child_outcome, target);
+            try applyOutcomeToWorkingStateAndRunEvents(evaluator, shell_state, eval_context, child_outcome, target, buffers);
             try configureRuntimeTrapMutations(evaluator, shell_state.*, child_outcome.state_delta);
         },
         .discard_except_status => try applyOutcomeStatusToWorkingState(shell_state, child_outcome.*),
@@ -10398,7 +10401,14 @@ fn evaluateAndOrList(
         defer child_outcome.deinit();
 
         try appendOutcomeBuffers(buffers, child_outcome);
-        try applyOutcomeToWorkingState(shell_state, &child_outcome, entry.command.target);
+        try applyOutcomeToWorkingStateAndRunEvents(
+            evaluator,
+            shell_state,
+            eval_context,
+            &child_outcome,
+            entry.command.target,
+            buffers,
+        );
         try configureRuntimeTrapMutations(evaluator, shell_state.*, child_outcome.state_delta);
 
         const child_control_flow = child_outcome.effectiveControlFlow();
@@ -11310,6 +11320,121 @@ fn applyOutcomeToWorkingState(
     command_outcome.validate();
     std.debug.assert(command_outcome.state_delta.target == target);
     command_outcome.applyToShellState(shell_state, .{}) catch |err| switch (err) {
+        error.OutOfMemory => return error.OutOfMemory,
+        error.ReadonlyVariable => unreachable,
+    };
+}
+
+fn applyOutcomeToWorkingStateAndRunEvents(
+    evaluator: *Evaluator,
+    shell_state: *state.ShellState,
+    eval_context: context.EvalContext,
+    command_outcome: *outcome.CommandOutcome,
+    target: context.ExecutionTarget,
+    buffers: *EvaluationBuffers,
+) EvalError!void {
+    command_outcome.validate();
+    eval_context.validate();
+    const old_cwd = try evaluator.allocator.dupe(u8, shell_state.logical_cwd);
+    defer evaluator.allocator.free(old_cwd);
+
+    try applyOutcomeToWorkingState(shell_state, command_outcome, target);
+
+    if (target != .current_shell or !eval_context.interactive) return;
+    const new_cwd = shell_state.logical_cwd;
+    if (old_cwd.len == 0 or new_cwd.len == 0 or std.mem.eql(u8, old_cwd, new_cwd)) return;
+    evaluator.directory_change_event_observed = true;
+    if (evaluator.event_dispatch_depth != 0) return;
+    const owned_new_cwd = try evaluator.allocator.dupe(u8, new_cwd);
+    defer evaluator.allocator.free(owned_new_cwd);
+    try runEventHooksPreservingStatus(
+        evaluator,
+        shell_state,
+        eval_context,
+        .directory_change,
+        &.{ old_cwd, owned_new_cwd },
+        buffers,
+    );
+}
+
+fn runEventHooksPreservingStatus(
+    evaluator: *Evaluator,
+    shell_state: *state.ShellState,
+    eval_context: context.EvalContext,
+    event_name: shell_event.Name,
+    args: []const []const u8,
+    buffers: *EvaluationBuffers,
+) EvalError!void {
+    shell_state.validate();
+    eval_context.validate();
+    if (eval_context.target != .current_shell or !eval_context.interactive) return;
+    if (evaluator.event_dispatch_depth != 0) return;
+
+    const calls = try shell_event.orderedHookCalls(evaluator.allocator, shell_state.event_hooks.items, event_name);
+    defer shell_event.freeHookCalls(evaluator.allocator, calls);
+    if (calls.len == 0) return;
+
+    const visible_status = shell_state.last_status;
+    const visible_pipeline_statuses = try evaluator.allocator.dupe(state.ExitStatus, shell_state.last_pipeline_statuses.items);
+    defer evaluator.allocator.free(visible_pipeline_statuses);
+    evaluator.event_dispatch_depth += 1;
+    defer evaluator.event_dispatch_depth -= 1;
+    errdefer shell_state.last_status = visible_status;
+
+    for (calls) |call| {
+        try restoreEventVisibleStatus(shell_state, visible_status, visible_pipeline_statuses);
+        try runEventHookFunction(evaluator, shell_state, eval_context, call, args, buffers);
+        try restoreEventVisibleStatus(shell_state, visible_status, visible_pipeline_statuses);
+        if (shell_state.pending_exit != null) break;
+    }
+    try restoreEventVisibleStatus(shell_state, visible_status, visible_pipeline_statuses);
+}
+
+fn restoreEventVisibleStatus(
+    shell_state: *state.ShellState,
+    visible_status: state.ExitStatus,
+    visible_pipeline_statuses: []const state.ExitStatus,
+) EvalError!void {
+    shell_state.last_status = visible_status;
+    shell_state.setLastPipelineStatuses(visible_pipeline_statuses) catch |err| switch (err) {
+        error.OutOfMemory => return error.OutOfMemory,
+    };
+}
+
+fn runEventHookFunction(
+    evaluator: *Evaluator,
+    shell_state: *state.ShellState,
+    eval_context: context.EvalContext,
+    call: shell_event.HookCall,
+    args: []const []const u8,
+    buffers: *EvaluationBuffers,
+) EvalError!void {
+    const function = shell_state.getFunction(call.function_name) orelse {
+        try buffers.stderr.print(evaluator.allocator, "event: {s}: function not found\n", .{call.function_name});
+        return;
+    };
+    var argv = try evaluator.allocator.alloc([]const u8, args.len + 1);
+    defer evaluator.allocator.free(argv);
+    argv[0] = call.function_name;
+    for (args, 0..) |arg, index| argv[index + 1] = arg;
+
+    const plan = command_plan.classifyExpandedSimpleCommand(.{
+        .command = .{ .argv = argv },
+        .lookup = .{ .functions = &.{function} },
+        .target = .current_shell,
+    });
+    var hook_outcome = try evaluatePlanWithInput(
+        evaluator,
+        shell_state,
+        eval_context.withTarget(.current_shell),
+        plan,
+        buffers.stdin,
+        buffers.frame,
+    );
+    defer hook_outcome.deinit();
+
+    try appendOutcomeBuffers(buffers, hook_outcome);
+    hook_outcome.applyToShellState(shell_state, .{ .record_exit_control_flow = true }) catch |err| switch (err) {
         error.OutOfMemory => return error.OutOfMemory,
         error.ReadonlyVariable => unreachable,
     };

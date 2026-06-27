@@ -7,6 +7,7 @@
 const std = @import("std");
 const command_plan = @import("command_plan.zig");
 const context = @import("context.zig");
+const event = @import("event.zig");
 const state = @import("state.zig");
 
 pub const DeltaState = enum {
@@ -79,6 +80,8 @@ pub const StateDelta = struct {
     alias_sets: std.ArrayList(NameValueMutation) = .empty,
     alias_unsets: std.ArrayList([]const u8) = .empty,
     clear_aliases: bool = false,
+    event_hook_sets: std.ArrayList(event.Registration) = .empty,
+    event_hook_removals: std.ArrayList(event.Removal) = .empty,
     trap_mutations: std.ArrayList(TrapMutation) = .empty,
     pending_trap_enqueues: std.ArrayList(state.TrapSignal) = .empty,
     pending_trap_consume_count: usize = 0,
@@ -128,6 +131,10 @@ pub const StateDelta = struct {
         self.alias_sets.deinit(self.allocator);
         for (self.alias_unsets.items) |name| self.allocator.free(name);
         self.alias_unsets.deinit(self.allocator);
+        for (self.event_hook_sets.items) |*registration| registration.deinit(self.allocator);
+        self.event_hook_sets.deinit(self.allocator);
+        for (self.event_hook_removals.items) |*removal| removal.deinit(self.allocator);
+        self.event_hook_removals.deinit(self.allocator);
         for (self.trap_mutations.items) |mutation| {
             self.allocator.free(mutation.name);
             if (mutation.action) |action| self.allocator.free(action);
@@ -179,6 +186,8 @@ pub const StateDelta = struct {
         for (self.alias_sets.items) |mutation| try cloned.setAlias(mutation.name, mutation.value);
         for (self.alias_unsets.items) |name| try cloned.unsetAlias(name);
         if (self.clear_aliases) cloned.clearAliases();
+        for (self.event_hook_sets.items) |registration| try cloned.setEventHook(registration);
+        for (self.event_hook_removals.items) |removal| try cloned.removeEventHook(removal);
         for (self.trap_mutations.items) |mutation| try cloned.setTrap(mutation.name, mutation.action);
         for (self.pending_trap_enqueues.items) |signal| try cloned.enqueuePendingTrap(signal);
         if (self.pending_trap_consume_count != 0) cloned.consumePendingTraps(self.pending_trap_consume_count);
@@ -212,6 +221,8 @@ pub const StateDelta = struct {
             self.alias_sets.items.len == 0 and
             self.alias_unsets.items.len == 0 and
             !self.clear_aliases and
+            self.event_hook_sets.items.len == 0 and
+            self.event_hook_removals.items.len == 0 and
             self.trap_mutations.items.len == 0 and
             self.pending_trap_enqueues.items.len == 0 and
             self.pending_trap_consume_count == 0 and
@@ -395,6 +406,48 @@ pub const StateDelta = struct {
     pub fn clearAliases(self: *StateDelta) void {
         self.assertPending();
         self.clear_aliases = true;
+    }
+
+    pub fn setEventHook(self: *StateDelta, registration: event.Registration) !void {
+        self.assertPending();
+        registration.validate();
+
+        for (self.event_hook_sets.items) |*existing| {
+            if (existing.event != registration.event or !std.mem.eql(u8, existing.name, registration.name)) continue;
+            const replacement = try registration.clone(self.allocator);
+            existing.deinit(self.allocator);
+            existing.* = replacement;
+            return;
+        }
+
+        const owned_registration = try registration.clone(self.allocator);
+        errdefer {
+            var mutable = owned_registration;
+            mutable.deinit(self.allocator);
+        }
+        try self.event_hook_sets.append(self.allocator, owned_registration);
+    }
+
+    pub fn removeEventHook(self: *StateDelta, removal: event.Removal) !void {
+        self.assertPending();
+        removal.validate();
+
+        for (self.event_hook_sets.items, 0..) |*existing, index| {
+            if (existing.event != removal.event or !std.mem.eql(u8, existing.name, removal.name)) continue;
+            var removed = self.event_hook_sets.orderedRemove(index);
+            removed.deinit(self.allocator);
+            return;
+        }
+        for (self.event_hook_removals.items) |existing| {
+            if (existing.event == removal.event and std.mem.eql(u8, existing.name, removal.name)) return;
+        }
+
+        const owned_removal = try removal.clone(self.allocator);
+        errdefer {
+            var mutable = owned_removal;
+            mutable.deinit(self.allocator);
+        }
+        try self.event_hook_removals.append(self.allocator, owned_removal);
     }
 
     pub fn setTrap(self: *StateDelta, name: []const u8, action: ?[]const u8) !void {
@@ -625,6 +678,8 @@ pub const StateDelta = struct {
         if (self.clear_aliases) shell_state.clearAliases();
         for (self.alias_sets.items) |mutation| try shell_state.setAlias(mutation.name, mutation.value);
         for (self.alias_unsets.items) |name| _ = shell_state.unsetAlias(name);
+        for (self.event_hook_sets.items) |registration| try shell_state.setEventHook(registration);
+        for (self.event_hook_removals.items) |removal| _ = shell_state.removeEventHook(removal);
         for (self.trap_mutations.items) |mutation| {
             if (mutation.action) |action| {
                 try shell_state.setTrap(mutation.name, action);

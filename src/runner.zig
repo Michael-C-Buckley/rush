@@ -20,6 +20,10 @@ pub const ExtensionHandlers = struct {
     }
 };
 
+fn bundledExtensionLookup(_: ?*anyopaque, name: []const u8) ?extension_api.HandlerSpec {
+    return @import("extensions/handlers.zig").lookup(name);
+}
+
 pub const Options = struct {
     io: ?std.Io = null,
     allow_external: bool = true,
@@ -311,6 +315,7 @@ fn runSemanticCommandStringInternal(
         invocation.stdin_script_source_offset,
         true,
         null,
+        .{},
     );
 }
 
@@ -403,6 +408,7 @@ fn runSemanticAliasTimingCommandString(
                     invocation.stdin_script_source_offset,
                     false,
                     &output_frame,
+                    .{},
                 );
                 defer execution.deinit(allocator);
                 parser_resolver.active_frame = null;
@@ -548,6 +554,32 @@ pub fn runHiddenShellStateCommandWithExtensionHandlers(
     external_stdio: runtime.ExternalStdio,
     extension_handlers: ExtensionHandlers,
 ) !CommandResult {
+    return runHiddenShellStateCommandWithExtensionHandlersApplyOptions(
+        allocator,
+        io,
+        shell_state,
+        argv,
+        arg_zero,
+        features,
+        external_stdio,
+        extension_handlers,
+        .{},
+        0,
+    );
+}
+
+pub fn runHiddenShellStateCommandWithExtensionHandlersApplyOptions(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    shell_state: *shell.ShellState,
+    argv: []const []const u8,
+    arg_zero: []const u8,
+    features: compat.Features,
+    external_stdio: runtime.ExternalStdio,
+    extension_handlers: ExtensionHandlers,
+    apply_options: shell.CommandOutcome.ApplyOptions,
+    event_dispatch_depth: u32,
+) !CommandResult {
     shell_state.validate();
     std.debug.assert(shell_state.scope == .current_shell);
     std.debug.assert(argv.len != 0);
@@ -560,6 +592,7 @@ pub fn runHiddenShellStateCommandWithExtensionHandlers(
     evaluator.io = io;
     evaluator.read_stdin_from_fd = false;
     evaluator.external_stdio = external_stdio;
+    evaluator.event_dispatch_depth = event_dispatch_depth;
     extension_handlers.apply(&evaluator);
 
     const command: shell.command_plan.ExpandedSimpleCommand = .{ .argv = argv };
@@ -608,7 +641,7 @@ pub fn runHiddenShellStateCommandWithExtensionHandlers(
         &hidden_frame,
     );
     defer outcome.deinit();
-    try outcome.applyToShellState(shell_state, .{});
+    try outcome.applyToShellState(shell_state, apply_options);
     return .{
         .allocator = allocator,
         .status = outcome.status,
@@ -677,6 +710,7 @@ fn runSemanticShellStateScriptWithoutAliasTiming(
         0,
         false,
         null,
+        extension_handlers,
     );
 }
 
@@ -764,6 +798,7 @@ fn runSemanticAliasTimingShellStateScript(
                     0,
                     false,
                     &output_frame,
+                    extension_handlers,
                 );
                 defer execution.deinit(allocator);
                 switch (execution) {
@@ -925,6 +960,7 @@ pub fn runInteractiveCommandStringWithExtensionHandlers(
         0,
         invocation.source == .command_string,
         null,
+        extension_handlers,
     );
 }
 
@@ -941,6 +977,7 @@ fn runSemanticLoweredProgram(
     stdin_script_source_offset: usize,
     run_exit_trap: bool,
     shared_output_frame: ?*shell.eval.RunnerOutputFrame,
+    extension_handlers: ExtensionHandlers,
 ) !SemanticInvocationExecution {
     eval_context.validate();
     shell_state.validate();
@@ -1030,6 +1067,7 @@ fn runSemanticLoweredProgram(
             if (flush_result.stdout_failed or flush_result.stderr_failed) return error.Unimplemented;
         }
 
+        evaluator.directory_change_event_observed = false;
         var command_outcome = if (statement.async_after) blk: {
             var background_plan = (try semanticBackgroundPipelinePlan(allocator, body)) orelse
                 return semanticUnsupported(
@@ -1080,7 +1118,20 @@ fn runSemanticLoweredProgram(
         if (bashAssignmentErrorAbortsSourceLine(eval_context.features, statement_source, command_outcome)) {
             abort_bash_line = semanticSourceLine(script, statement.span.start);
         }
+        const old_cwd = try allocator.dupe(u8, shell_state.logical_cwd);
+        defer allocator.free(old_cwd);
         try command_outcome.applyToShellState(shell_state, .{ .record_exit_control_flow = true });
+        if (!evaluator.directory_change_event_observed) {
+            try appendDirectoryChangeEventOutcome(
+                allocator,
+                evaluator,
+                output_frame,
+                shell_state,
+                eval_context,
+                old_cwd,
+                extension_handlers,
+            );
+        }
         try configureRuntimeTrapMutations(evaluator, shell_state.*, command_outcome.state_delta);
         try appendPendingRuntimeTrapOutcome(
             output_frame,
@@ -1111,6 +1162,78 @@ fn runSemanticLoweredProgram(
         .stdout = runner_output.stdout,
         .stderr = runner_output.stderr,
     } };
+}
+
+fn appendDirectoryChangeEventOutcome(
+    allocator: std.mem.Allocator,
+    evaluator: *shell.eval.Evaluator,
+    output_frame: *shell.eval.RunnerOutputFrame,
+    shell_state: *shell.ShellState,
+    eval_context: shell.EvalContext,
+    old_cwd: []const u8,
+    extension_handlers: ExtensionHandlers,
+) !void {
+    if (!eval_context.interactive or eval_context.target != .current_shell) return;
+    const io = evaluator.io orelse return;
+    const new_cwd = shell_state.logical_cwd;
+    if (old_cwd.len == 0 or new_cwd.len == 0 or std.mem.eql(u8, old_cwd, new_cwd)) return;
+
+    const calls = try shell.event.orderedHookCalls(allocator, shell_state.event_hooks.items, .directory_change);
+    defer shell.event.freeHookCalls(allocator, calls);
+    if (calls.len == 0) return;
+
+    const owned_new_cwd = try allocator.dupe(u8, new_cwd);
+    defer allocator.free(owned_new_cwd);
+    const visible_status = shell_state.last_status;
+    const visible_pipeline_statuses = try allocator.dupe(shell.ExitStatus, shell_state.last_pipeline_statuses.items);
+    defer allocator.free(visible_pipeline_statuses);
+    errdefer shell_state.last_status = visible_status;
+
+    for (calls) |call| {
+        try restoreEventVisibleStatus(shell_state, visible_status, visible_pipeline_statuses);
+        if (shell_state.getFunction(call.function_name) == null) {
+            const message = try std.fmt.allocPrint(
+                allocator,
+                "event: {s}: function not found\n",
+                .{call.function_name},
+            );
+            defer allocator.free(message);
+            const write_result = try output_frame.writeOutcome("", message);
+            applyOutputWriteResultToShellState(shell_state, write_result);
+            continue;
+        }
+        var result = try runHiddenShellStateCommandWithExtensionHandlersApplyOptions(
+            allocator,
+            io,
+            shell_state,
+            &.{ call.function_name, old_cwd, owned_new_cwd },
+            evaluator.arg_zero,
+            evaluator.features,
+            .capture,
+            extension_handlers,
+            .{ .record_exit_control_flow = true },
+            1,
+        );
+        defer result.deinit();
+        const write_result = try output_frame.writeOutcome(result.stdout, result.stderr);
+        applyOutputWriteResultToShellState(shell_state, write_result);
+        try restoreEventVisibleStatus(shell_state, visible_status, visible_pipeline_statuses);
+        if (shell_state.pending_exit != null) break;
+    }
+    try restoreEventVisibleStatus(shell_state, visible_status, visible_pipeline_statuses);
+}
+
+fn restoreEventVisibleStatus(
+    shell_state: *shell.ShellState,
+    visible_status: shell.ExitStatus,
+    visible_pipeline_statuses: []const shell.ExitStatus,
+) !void {
+    shell_state.last_status = visible_status;
+    try shell_state.setLastPipelineStatuses(visible_pipeline_statuses);
+}
+
+fn applyOutputWriteResultToShellState(shell_state: *shell.ShellState, write_result: shell.eval.RunnerOutputWriteResult) void {
+    if (write_result.stdout_failed or write_result.stderr_failed) shell_state.last_status = 1;
 }
 
 fn semanticNoexecSuppressesStatement(shell_state: shell.ShellState, eval_context: shell.EvalContext) bool {
@@ -3074,6 +3197,202 @@ test "semantic interactive invocation dispatches shell state builtins" {
             try std.testing.expect(shell_state.options.noglob);
             try std.testing.expect(shell_state.getVariable("GONE") == null);
             try std.testing.expect(shell_state.getTrapForSignal(.EXIT) != null);
+        },
+    }
+}
+
+test "semantic interactive invocation runs directory change hooks before following command" {
+    const original_cwd = try std.process.currentPathAlloc(std.testing.io, std.testing.allocator);
+    defer std.testing.allocator.free(original_cwd);
+    defer std.process.setCurrentPath(std.testing.io, original_cwd) catch {};
+
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    try tmp.dir.createDir(std.testing.io, "target", .default_dir);
+    var tmp_root_buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
+    const tmp_root_len = try tmp.dir.realPath(std.testing.io, &tmp_root_buffer);
+    const tmp_root = tmp_root_buffer[0..tmp_root_len];
+    const target_path = try std.fs.path.join(std.testing.allocator, &.{ tmp_root, "target" });
+    defer std.testing.allocator.free(target_path);
+
+    var shell_state = shell.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    try shell.startup.initializeInvocationState(std.testing.allocator, std.testing.io, &shell_state, null, &.{}, .{});
+
+    const script = try std.fmt.allocPrint(std.testing.allocator,
+        \\on_cd() {{ HOOK_SEEN=yes; false; }}
+        \\event add directory.change env-sync on_cd
+        \\cd "{s}" && printf 'hook=%s status=%s\n' "$HOOK_SEEN" "$?"
+    , .{target_path});
+    defer std.testing.allocator.free(script);
+    var execution = try runInteractiveCommandStringWithExtensionHandlers(
+        std.testing.allocator,
+        std.testing.io,
+        &shell_state,
+        script,
+        shell.InvocationContext.init(.{ .arg_zero = "rush", .source = .interactive, .interactive = true }),
+        .capture,
+        false,
+        .{ .lookup = bundledExtensionLookup },
+    );
+    defer execution.deinit(std.testing.allocator);
+
+    switch (execution) {
+        .unsupported => return error.ExpectedSemanticExecution,
+        .output => |result| {
+            try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
+            try std.testing.expectEqualStrings("hook=yes status=0\n", result.stdout);
+            try std.testing.expectEqualStrings("", result.stderr);
+        },
+    }
+}
+
+test "semantic interactive invocation does not fire directory hooks retroactively" {
+    const original_cwd = try std.process.currentPathAlloc(std.testing.io, std.testing.allocator);
+    defer std.testing.allocator.free(original_cwd);
+    defer std.process.setCurrentPath(std.testing.io, original_cwd) catch {};
+
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    try tmp.dir.createDir(std.testing.io, "target", .default_dir);
+    var tmp_root_buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
+    const tmp_root_len = try tmp.dir.realPath(std.testing.io, &tmp_root_buffer);
+    const tmp_root = tmp_root_buffer[0..tmp_root_len];
+    const target_path = try std.fs.path.join(std.testing.allocator, &.{ tmp_root, "target" });
+    defer std.testing.allocator.free(target_path);
+
+    var shell_state = shell.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    try shell.startup.initializeInvocationState(std.testing.allocator, std.testing.io, &shell_state, null, &.{}, .{});
+
+    const script = try std.fmt.allocPrint(std.testing.allocator,
+        \\late_cd() {{ LATE=yes; }}
+        \\{{ cd "{s}"; event add directory.change late late_cd; }}
+        \\printf 'late=%s\n' "$LATE"
+    , .{target_path});
+    defer std.testing.allocator.free(script);
+    var execution = try runInteractiveCommandStringWithExtensionHandlers(
+        std.testing.allocator,
+        std.testing.io,
+        &shell_state,
+        script,
+        shell.InvocationContext.init(.{ .arg_zero = "rush", .source = .interactive, .interactive = true }),
+        .capture,
+        false,
+        .{ .lookup = bundledExtensionLookup },
+    );
+    defer execution.deinit(std.testing.allocator);
+
+    switch (execution) {
+        .unsupported => return error.ExpectedSemanticExecution,
+        .output => |result| {
+            try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
+            try std.testing.expectEqualStrings("late=\n", result.stdout);
+            try std.testing.expectEqualStrings("", result.stderr);
+        },
+    }
+}
+
+test "semantic interactive invocation suppresses recursive directory hook dispatch" {
+    const original_cwd = try std.process.currentPathAlloc(std.testing.io, std.testing.allocator);
+    defer std.testing.allocator.free(original_cwd);
+    defer std.process.setCurrentPath(std.testing.io, original_cwd) catch {};
+
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    try tmp.dir.createDir(std.testing.io, "first", .default_dir);
+    try tmp.dir.createDir(std.testing.io, "second", .default_dir);
+    var tmp_root_buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
+    const tmp_root_len = try tmp.dir.realPath(std.testing.io, &tmp_root_buffer);
+    const tmp_root = tmp_root_buffer[0..tmp_root_len];
+    const first_path = try std.fs.path.join(std.testing.allocator, &.{ tmp_root, "first" });
+    defer std.testing.allocator.free(first_path);
+    const second_path = try std.fs.path.join(std.testing.allocator, &.{ tmp_root, "second" });
+    defer std.testing.allocator.free(second_path);
+
+    var shell_state = shell.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    try shell.startup.initializeInvocationState(std.testing.allocator, std.testing.io, &shell_state, null, &.{}, .{});
+
+    const script = try std.fmt.allocPrint(std.testing.allocator,
+        \\SECOND={s}
+        \\on_cd() {{ if test "$COUNT" = ""; then COUNT=1; else COUNT=recursive; fi; cd "$SECOND"; }}
+        \\event add directory.change nested on_cd
+        \\cd "{s}"
+        \\printf 'count=%s pwd=%s\n' "$COUNT" "$PWD"
+    , .{ second_path, first_path });
+    defer std.testing.allocator.free(script);
+    var execution = try runInteractiveCommandStringWithExtensionHandlers(
+        std.testing.allocator,
+        std.testing.io,
+        &shell_state,
+        script,
+        shell.InvocationContext.init(.{ .arg_zero = "rush", .source = .interactive, .interactive = true }),
+        .capture,
+        false,
+        .{ .lookup = bundledExtensionLookup },
+    );
+    defer execution.deinit(std.testing.allocator);
+
+    switch (execution) {
+        .unsupported => return error.ExpectedSemanticExecution,
+        .output => |result| {
+            const expected = try std.fmt.allocPrint(
+                std.testing.allocator,
+                "count=1 pwd={s}\n",
+                .{second_path},
+            );
+            defer std.testing.allocator.free(expected);
+            try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
+            try std.testing.expectEqualStrings(expected, result.stdout);
+            try std.testing.expectEqualStrings("", result.stderr);
+        },
+    }
+}
+
+test "semantic interactive invocation honors exit from directory hook" {
+    const original_cwd = try std.process.currentPathAlloc(std.testing.io, std.testing.allocator);
+    defer std.testing.allocator.free(original_cwd);
+    defer std.process.setCurrentPath(std.testing.io, original_cwd) catch {};
+
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    try tmp.dir.createDir(std.testing.io, "target", .default_dir);
+    var tmp_root_buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
+    const tmp_root_len = try tmp.dir.realPath(std.testing.io, &tmp_root_buffer);
+    const tmp_root = tmp_root_buffer[0..tmp_root_len];
+    const target_path = try std.fs.path.join(std.testing.allocator, &.{ tmp_root, "target" });
+    defer std.testing.allocator.free(target_path);
+
+    var shell_state = shell.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    try shell.startup.initializeInvocationState(std.testing.allocator, std.testing.io, &shell_state, null, &.{}, .{});
+
+    const script = try std.fmt.allocPrint(std.testing.allocator,
+        \\on_cd() {{ exit 7; }}
+        \\event add directory.change stop on_cd
+        \\cd "{s}"
+        \\printf 'after\n'
+    , .{target_path});
+    defer std.testing.allocator.free(script);
+    var execution = try runInteractiveCommandStringWithExtensionHandlers(
+        std.testing.allocator,
+        std.testing.io,
+        &shell_state,
+        script,
+        shell.InvocationContext.init(.{ .arg_zero = "rush", .source = .interactive, .interactive = true }),
+        .capture,
+        false,
+        .{ .lookup = bundledExtensionLookup },
+    );
+    defer execution.deinit(std.testing.allocator);
+
+    switch (execution) {
+        .unsupported => return error.ExpectedSemanticExecution,
+        .output => |result| {
+            try std.testing.expectEqual(@as(shell.ExitStatus, 7), result.status);
+            try std.testing.expectEqualStrings("", result.stdout);
+            try std.testing.expectEqualStrings("", result.stderr);
         },
     }
 }

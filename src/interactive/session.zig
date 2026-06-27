@@ -96,6 +96,66 @@ fn interactiveExtensionLookup(context: ?*anyopaque, name: []const u8) ?extension
     return extension_handlers.lookup(name);
 }
 
+fn runInteractiveEventHooks(
+    context: *Context,
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    event_name: shell.EventName,
+    args: []const []const u8,
+) !void {
+    context.semantic_state.validate();
+    const calls = try shell.event.orderedHookCalls(allocator, context.semantic_state.event_hooks.items, event_name);
+    defer shell.event.freeHookCalls(allocator, calls);
+    if (calls.len == 0) return;
+
+    const visible_status = context.semantic_state.last_status;
+    const visible_pipeline_statuses = try allocator.dupe(shell.ExitStatus, context.semantic_state.last_pipeline_statuses.items);
+    defer allocator.free(visible_pipeline_statuses);
+    errdefer context.semantic_state.last_status = visible_status;
+    for (calls) |call| {
+        try restoreInteractiveEventVisibleStatus(context.semantic_state, visible_status, visible_pipeline_statuses);
+        if (context.semantic_state.getFunction(call.function_name) == null) {
+            try writeAll(io, .stderr, "event: ");
+            try writeAll(io, .stderr, call.function_name);
+            try writeAll(io, .stderr, ": function not found\n");
+            continue;
+        }
+
+        var argv = try allocator.alloc([]const u8, args.len + 1);
+        defer allocator.free(argv);
+        argv[0] = call.function_name;
+        for (args, 0..) |arg, index| argv[index + 1] = arg;
+
+        var result = try runner.runHiddenShellStateCommandWithExtensionHandlersApplyOptions(
+            allocator,
+            io,
+            context.semantic_state,
+            argv,
+            context.arg_zero,
+            context.features,
+            .capture,
+            interactiveExtensionHandlers(context),
+            .{ .record_exit_control_flow = true },
+            1,
+        );
+        defer result.deinit();
+        try writeAll(io, .stdout, result.stdout);
+        try writeAll(io, .stderr, result.stderr);
+        try restoreInteractiveEventVisibleStatus(context.semantic_state, visible_status, visible_pipeline_statuses);
+        if (context.semantic_state.pending_exit != null) break;
+    }
+    try restoreInteractiveEventVisibleStatus(context.semantic_state, visible_status, visible_pipeline_statuses);
+}
+
+fn restoreInteractiveEventVisibleStatus(
+    shell_state: *shell.ShellState,
+    visible_status: shell.ExitStatus,
+    visible_pipeline_statuses: []const shell.ExitStatus,
+) !void {
+    shell_state.last_status = visible_status;
+    try shell_state.setLastPipelineStatuses(visible_pipeline_statuses);
+}
+
 pub fn runInteractiveIntervalHooks(
     context: *anyopaque,
     // ziglint-ignore: Z023 - opaque context must come first (run_hooks callback ABI).
@@ -636,6 +696,25 @@ pub fn run(
             try allocator.dupe(u8, "");
         defer allocator.free(notifications);
         try writeAll(io, .stderr, notifications);
+        if (interactivePendingExit(&interactive_shell)) |status| {
+            last_status = status;
+            break;
+        }
+        var prompt_prepare_context: Context = .{
+            .semantic_state = &interactive_shell.semantic_state,
+            .editor_state = &interactive_shell.editor_state,
+            .arg_zero = options.arg_zero,
+            .features = options.features,
+            .previous_duration_ms = last_command_duration_ms,
+            .prompt_async_state = &prompt_async_state,
+        };
+        try runInteractiveEventHooks(
+            &prompt_prepare_context,
+            allocator,
+            io,
+            .prompt_prepare,
+            &.{},
+        );
         if (interactivePendingExit(&interactive_shell)) |status| {
             last_status = status;
             break;

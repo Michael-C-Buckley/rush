@@ -9,6 +9,7 @@ const context = @import("context.zig");
 const runtime_process = @import("../runtime/process.zig");
 const trap_semantics = @import("trap.zig");
 const expand = @import("expand.zig");
+const event = @import("event.zig");
 
 pub const ExitStatus = u8;
 pub const TrapSignal = trap_semantics.Signal;
@@ -444,6 +445,7 @@ pub const ShellState = struct {
     borrowed_functions: bool = false,
     aliases: std.StringHashMapUnmanaged(Alias) = .empty,
     traps: std.StringHashMapUnmanaged(Trap) = .empty,
+    event_hooks: std.ArrayList(event.Registration) = .empty,
     positionals: std.ArrayList([]const u8) = .empty,
     options: ShellOptions = .{},
     shopts: ShellShopts = .{},
@@ -511,6 +513,9 @@ pub const ShellState = struct {
         }
         self.traps.deinit(self.allocator);
 
+        for (self.event_hooks.items) |*hook| hook.deinit(self.allocator);
+        self.event_hooks.deinit(self.allocator);
+
         freePositionals(self.allocator, self.positionals.items);
         self.positionals.deinit(self.allocator);
         if (self.logical_cwd.len != 0) self.allocator.free(self.logical_cwd);
@@ -553,6 +558,8 @@ pub const ShellState = struct {
 
         var traps = self.traps.iterator();
         while (traps.next()) |entry| try cloned.setTrap(entry.key_ptr.*, entry.value_ptr.action);
+
+        for (self.event_hooks.items) |hook| try cloned.setEventHook(hook);
 
         try cloned.replacePositionals(self.positionals.items);
         if (self.logical_cwd.len != 0) try cloned.setLogicalCwd(self.logical_cwd);
@@ -598,6 +605,8 @@ pub const ShellState = struct {
 
         var traps = self.traps.iterator();
         while (traps.next()) |entry| try cloned.setTrap(entry.key_ptr.*, entry.value_ptr.action);
+
+        for (self.event_hooks.items) |hook| try cloned.setEventHook(hook);
 
         try cloned.replacePositionals(self.positionals.items);
         if (self.logical_cwd.len != 0) try cloned.setLogicalCwd(self.logical_cwd);
@@ -923,6 +932,39 @@ pub const ShellState = struct {
     pub fn clearTrapForSignal(self: *ShellState, signal: TrapSignal) void {
         signal.validate();
         self.clearTrap(signal.name());
+    }
+
+    pub fn setEventHook(self: *ShellState, registration: event.Registration) !void {
+        registration.validate();
+        const owned_registration = try registration.clone(self.allocator);
+        errdefer {
+            var mutable = owned_registration;
+            mutable.deinit(self.allocator);
+        }
+
+        for (self.event_hooks.items) |*existing| {
+            if (existing.event != registration.event or !std.mem.eql(u8, existing.name, registration.name)) continue;
+            existing.deinit(self.allocator);
+            existing.* = owned_registration;
+            self.validate();
+            return;
+        }
+
+        try self.event_hooks.append(self.allocator, owned_registration);
+        self.validate();
+    }
+
+    pub fn removeEventHook(self: *ShellState, removal: event.Removal) bool {
+        removal.validate();
+        for (self.event_hooks.items, 0..) |*existing, index| {
+            if (existing.event != removal.event or !std.mem.eql(u8, existing.name, removal.name)) continue;
+            var removed = self.event_hooks.orderedRemove(index);
+            removed.deinit(self.allocator);
+            self.validate();
+            return true;
+        }
+        self.validate();
+        return false;
     }
 
     pub fn appendPendingTrap(self: *ShellState, signal: TrapSignal) !void {
@@ -1258,6 +1300,12 @@ pub const ShellState = struct {
         while (traps.next()) |entry| {
             assertValidTrapName(entry.key_ptr.*);
             entry.value_ptr.validate();
+        }
+        for (self.event_hooks.items, 0..) |hook, index| {
+            hook.validate();
+            for (self.event_hooks.items[index + 1 ..]) |other| {
+                std.debug.assert(hook.event != other.event or !std.mem.eql(u8, hook.name, other.name));
+            }
         }
         for (self.pending_traps.items) |signal| signal.validate();
         self.getopts_cursor.validate();
