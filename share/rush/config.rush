@@ -34,7 +34,7 @@ rush_prompt_git() {
 
 # Timer hook used only to force prompt redraws while activity is in flight.
 rush_prompt_activity_refresh() {
-  # The event dispatcher redraws after hooks run; no state change is needed.
+  # Timer hook dispatch requests a prompt refresh; no state change is needed.
   :
 }
 
