@@ -28,7 +28,7 @@ fn evaluate(context: ?*anyopaque, invocation: *api.Invocation) !api.EvaluationRe
 }
 
 fn evaluateAdd(invocation: *api.Invocation) !api.EvaluationResult {
-    if (invocation.argv.len != 5 and invocation.argv.len != 7) return api.EvaluationResult.normal(try usage(invocation));
+    if (invocation.argv.len < 5) return api.EvaluationResult.normal(try usage(invocation));
     const event_name = shell_event.Name.parse(invocation.argv[2]) orelse {
         return api.EvaluationResult.normal(try invocation.usageError("event", "unsupported event"));
     };
@@ -39,19 +39,35 @@ fn evaluateAdd(invocation: *api.Invocation) !api.EvaluationResult {
         return api.EvaluationResult.normal(try invocation.usageError("event", "invalid function name"));
     }
     var priority: i32 = 0;
-    if (invocation.argv.len == 7) {
-        if (!std.mem.eql(u8, invocation.argv[5], "--priority")) {
+    var every_ms: ?u64 = null;
+    var index: usize = 5;
+    while (index < invocation.argv.len) {
+        const option = invocation.argv[index];
+        if (index + 1 >= invocation.argv.len) return api.EvaluationResult.normal(try usage(invocation));
+        if (std.mem.eql(u8, option, "--priority")) {
+            priority = std.fmt.parseInt(i32, invocation.argv[index + 1], 10) catch {
+                return api.EvaluationResult.normal(try invocation.usageError("event", "invalid priority"));
+            };
+        } else if (std.mem.eql(u8, option, "--every")) {
+            every_ms = std.fmt.parseInt(u64, invocation.argv[index + 1], 10) catch {
+                return api.EvaluationResult.normal(try invocation.usageError("event", "invalid interval"));
+            };
+            if (every_ms.? == 0) return api.EvaluationResult.normal(try invocation.usageError("event", "invalid interval"));
+        } else {
             return api.EvaluationResult.normal(try invocation.usageError("event", "unsupported option"));
         }
-        priority = std.fmt.parseInt(i32, invocation.argv[6], 10) catch {
-            return api.EvaluationResult.normal(try invocation.usageError("event", "invalid priority"));
-        };
+        index += 2;
+    }
+    if (event_name == .timer_tick and every_ms == null) return api.EvaluationResult.normal(try usage(invocation));
+    if (event_name != .timer_tick and every_ms != null) {
+        return api.EvaluationResult.normal(try invocation.usageError("event", "unsupported option"));
     }
     try invocation.state_delta.setEventHook(.{
         .event = event_name,
         .name = invocation.argv[3],
         .function_name = invocation.argv[4],
         .priority = priority,
+        .every_ms = every_ms,
     });
     return api.EvaluationResult.normal(0);
 }
@@ -82,11 +98,15 @@ fn evaluateList(invocation: *api.Invocation) !api.EvaluationResult {
     }
     std.mem.sort(shell_event.Registration, hooks.items, {}, lessThanRegistration);
     for (hooks.items) |registration| {
-        try invocation.stdout.print(
-            invocation.allocator,
-            "event add {s} {s} {s} --priority {d}\n",
-            .{ registration.event.text(), registration.name, registration.function_name, registration.priority },
-        );
+        try invocation.stdout.print(invocation.allocator, "event add {s} {s} {s}", .{
+            registration.event.text(),
+            registration.name,
+            registration.function_name,
+        });
+        if (registration.every_ms) |every_ms| {
+            try invocation.stdout.print(invocation.allocator, " --every {d}", .{every_ms});
+        }
+        try invocation.stdout.print(invocation.allocator, " --priority {d}\n", .{registration.priority});
     }
     return api.EvaluationResult.normal(0);
 }
@@ -103,7 +123,7 @@ fn lessThanRegistration(_: void, left: shell_event.Registration, right: shell_ev
 fn usage(invocation: *api.Invocation) !u8 {
     return invocation.usageError(
         "event",
-        "usage: event add EVENT NAME FUNCTION [--priority N] | event remove EVENT NAME | event list [EVENT]",
+        "usage: event add EVENT NAME FUNCTION [--priority N] [--every MS] | event remove EVENT NAME | event list [EVENT]",
     );
 }
 
@@ -168,4 +188,35 @@ test "event add defaults priority to zero" {
     try std.testing.expectEqual(@as(u8, 0), result.status);
     try std.testing.expectEqual(@as(usize, 1), state_delta.event_hook_sets.items.len);
     try std.testing.expectEqual(@as(i32, 0), state_delta.event_hook_sets.items[0].priority);
+}
+
+test "event add records timer interval" {
+    var shell_state = @import("../shell/state.zig").ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    var state_delta = @import("../shell/delta.zig").StateDelta.init(std.testing.allocator, .current_shell);
+    defer state_delta.deinit();
+    var stdout: std.ArrayList(u8) = .empty;
+    defer stdout.deinit(std.testing.allocator);
+    var stderr: std.ArrayList(u8) = .empty;
+    defer stderr.deinit(std.testing.allocator);
+    var diagnostics: std.ArrayList([]const u8) = .empty;
+    defer diagnostics.deinit(std.testing.allocator);
+
+    var invocation: api.Invocation = .{
+        .allocator = std.testing.allocator,
+        .argv = &.{ "event", "add", "timer.tick", "clock", "on_clock", "--every", "1000" },
+        .builtins = &.{},
+        .shell_state = shell_state,
+        .state_delta = &state_delta,
+        .eval_context = @import("../shell/context.zig").EvalContext.forTarget(.current_shell),
+        .stdout = &stdout,
+        .stderr = &stderr,
+        .diagnostics = &diagnostics,
+    };
+    const result = try evaluate(null, &invocation);
+
+    try std.testing.expectEqual(@as(u8, 0), result.status);
+    try std.testing.expectEqual(@as(usize, 1), state_delta.event_hook_sets.items.len);
+    try std.testing.expectEqual(shell_event.Name.timer_tick, state_delta.event_hook_sets.items[0].event);
+    try std.testing.expectEqual(@as(?u64, 1000), state_delta.event_hook_sets.items[0].every_ms);
 }

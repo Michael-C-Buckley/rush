@@ -51,6 +51,10 @@ fn monotonicTimestamp(io: std.Io) std.Io.Clock.Timestamp {
     return std.Io.Clock.Timestamp.now(io, .awake);
 }
 
+fn monotonicMillis(io: std.Io) u64 {
+    return @intCast(monotonicTimestamp(io).raw.toMilliseconds());
+}
+
 fn durationMillis(start: std.Io.Clock.Timestamp, end: std.Io.Clock.Timestamp) i64 {
     return @max(start.durationTo(end).raw.toMilliseconds(), 0);
 }
@@ -156,6 +160,56 @@ fn restoreInteractiveEventVisibleStatus(
     try shell_state.setLastPipelineStatuses(visible_pipeline_statuses);
 }
 
+fn runInteractiveTimerHooks(
+    context: *Context,
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    output: *std.ArrayList(u8),
+) !bool {
+    context.semantic_state.validate();
+    const calls = try shell.event.dueTimerHookCalls(
+        allocator,
+        context.semantic_state.event_hooks.items,
+        monotonicMillis(io),
+    );
+    defer shell.event.freeHookCalls(allocator, calls);
+    if (calls.len == 0) return false;
+
+    const visible_status = context.semantic_state.last_status;
+    const visible_pipeline_statuses = try allocator.dupe(shell.ExitStatus, context.semantic_state.last_pipeline_statuses.items);
+    defer allocator.free(visible_pipeline_statuses);
+    errdefer context.semantic_state.last_status = visible_status;
+    for (calls) |call| {
+        try restoreInteractiveEventVisibleStatus(context.semantic_state, visible_status, visible_pipeline_statuses);
+        if (context.semantic_state.getFunction(call.function_name) == null) {
+            const message = try std.fmt.allocPrint(allocator, "event: {s}: function not found\n", .{call.function_name});
+            defer allocator.free(message);
+            try output.appendSlice(allocator, message);
+            continue;
+        }
+
+        var result = try runner.runHiddenShellStateCommandWithExtensionHandlersApplyOptions(
+            allocator,
+            io,
+            context.semantic_state,
+            &.{ call.function_name, call.name },
+            context.arg_zero,
+            context.features,
+            .capture,
+            interactiveExtensionHandlers(context),
+            .{ .record_exit_control_flow = true },
+            1,
+        );
+        defer result.deinit();
+        try output.appendSlice(allocator, result.stdout);
+        try output.appendSlice(allocator, result.stderr);
+        try restoreInteractiveEventVisibleStatus(context.semantic_state, visible_status, visible_pipeline_statuses);
+        if (context.semantic_state.pending_exit != null) break;
+    }
+    try restoreInteractiveEventVisibleStatus(context.semantic_state, visible_status, visible_pipeline_statuses);
+    return true;
+}
+
 pub fn runInteractiveIntervalHooks(
     context: *anyopaque,
     // ziglint-ignore: Z023 - opaque context must come first (run_hooks callback ABI).
@@ -189,6 +243,10 @@ pub fn runInteractiveIntervalHooks(
         try output.appendSlice(allocator, notifications);
     }
 
+    if (try runInteractiveTimerHooks(interactive_context, allocator, io, &output)) {
+        should_refresh_prompt = true;
+    }
+
     return .{
         .output = try output.toOwnedSlice(allocator),
         .refresh_prompt = should_refresh_prompt,
@@ -199,12 +257,12 @@ pub fn runInteractiveIntervalHooks(
 // ziglint-ignore: Z023 - signature is fixed by the next_hook_interval_ms
 // callback pointer type; the opaque context must come first.
 pub fn nextInteractiveIntervalMs(context: *anyopaque, io: std.Io) !?u64 {
-    _ = io;
     const interactive_context: *Context = @ptrCast(@alignCast(context));
+    var next_ms = shell.event.nextTimerDelayMs(interactive_context.semantic_state.event_hooks.items, monotonicMillis(io));
     if (shellStateWantsImmediateJobNotificationPoll(interactive_context.semantic_state)) {
-        return immediate_notify_poll_ms;
+        if (next_ms == null or immediate_notify_poll_ms < next_ms.?) next_ms = immediate_notify_poll_ms;
     }
-    return null;
+    return next_ms;
 }
 
 // ziglint-ignore: Z023 - signature is fixed by the refresh_prompt callback pointer type.
@@ -1357,6 +1415,31 @@ test "interactive semantic job notifications drain from ShellState" {
     try std.testing.expectEqualStrings("[1] Done sleep 1\n", hook_result.output);
     try std.testing.expectEqual(@as(usize, 0), shell_state.pending_job_notifications.items.len);
     try std.testing.expectEqual(@as(?u64, null), try nextInteractiveIntervalMs(&context, std.testing.io));
+}
+test "interactive timer events run due hooks" {
+    var shell_state = shell.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    try shell_state.setEventHook(.{
+        .event = .timer_tick,
+        .name = "clock",
+        .function_name = "on_clock",
+        .every_ms = 1000,
+        .next_tick_ms = 0,
+    });
+    try shell_state.putFunction(.{ .name = "on_clock", .source_body = "TICKED=$1" });
+    var editor_state = EditorState.init(std.testing.allocator);
+    defer editor_state.deinit();
+    var context: Context = .{ .semantic_state = &shell_state, .editor_state = &editor_state };
+
+    const hook_result = try runInteractiveIntervalHooks(&context, std.testing.allocator, std.testing.io);
+    defer std.testing.allocator.free(hook_result.output);
+
+    try std.testing.expectEqualStrings("", hook_result.output);
+    try std.testing.expect(hook_result.refresh_prompt);
+    try std.testing.expect(!hook_result.stop);
+    try std.testing.expectEqualStrings("clock", shell_state.getVariable("TICKED").?.value);
+    try std.testing.expect(shell_state.event_hooks.items[0].next_tick_ms != null);
+    try std.testing.expect(shell_state.event_hooks.items[0].next_tick_ms.? > monotonicMillis(std.testing.io));
 }
 test "interactive hooks dispatch pending semantic signal trap" {
     var shell_state = shell.ShellState.init(std.testing.allocator);

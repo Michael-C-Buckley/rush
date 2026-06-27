@@ -149,9 +149,9 @@ index:236
 <span class="cmd">prompt_time</span> FORMAT
 <span class="cmd">prompt_async</span> KEY <span class="opt">--ttl</span> MS <span class="opt">--</span> COMMAND...
 <span class="cmd">event</span> add EVENT NAME FUNCTION [<span class="opt">--priority</span> N]
+<span class="cmd">event</span> add timer.tick NAME FUNCTION <span class="opt">--every</span> MS [<span class="opt">--priority</span> N]
 <span class="cmd">event</span> remove EVENT NAME
-<span class="cmd">event</span> list [EVENT]
-<span class="cmd">interval</span> NAME <span class="opt">--interval</span> MS FUNCTION</pre>
+<span class="cmd">event</span> list [EVENT]</pre>
 
   <p><code>prompt repaint</code> is the low-level redraw primitive for hooks and hidden refresh jobs. It schedules a prompt redraw when Rush is editing a command line and does not write prompt or input bytes directly.</p>
 
@@ -195,7 +195,7 @@ index:236
 
   <h2 id="hooks"><a href="#hooks">Hooks and intervals</a></h2>
 
-  <p><code>event</code> registers lower-level hooks for advanced interactive setups. <code>prompt.prepare</code> hooks run on the real shell state before each prompt render. <code>directory.change</code> hooks run after a successful current-shell directory change and receive the old and new directories as <code>$1</code> and <code>$2</code>. Hooks preserve the visible <code>$?</code> by default. Named intervals run while the editor is idle and receive the interval name.</p>
+  <p><code>event</code> registers lower-level hooks for advanced interactive setups. <code>prompt.prepare</code> hooks run on the real shell state before each prompt render. <code>directory.change</code> hooks run after a successful current-shell directory change and receive the old and new directories as <code>$1</code> and <code>$2</code>. <code>timer.tick</code> hooks run while the editor is idle after their <code>--every</code> interval and receive the registration name as <code>$1</code>. Hooks preserve the visible <code>$?</code> by default.</p>
 
   <pre><span class="cmd">on_prompt_prepare</span>() {
   <span class="comment"># Update cheap prompt variables before rendering.</span>
@@ -213,7 +213,7 @@ index:236
 
 <span class="cmd">event</span> add prompt.prepare prompt-vars on_prompt_prepare
 <span class="cmd">event</span> add directory.change cwd-repaint on_directory_change
-<span class="cmd">interval</span> clock <span class="opt">--interval</span> 1000 on_clock</pre>
+<span class="cmd">event</span> add timer.tick clock on_clock <span class="opt">--every</span> 1000</pre>
 
   <p>Prefer <code>prompt_async</code>, timers, and hooks over slow synchronous command substitutions in <code>rush_prompt</code>. They keep prompt rendering responsive and route redraws through <code>prompt repaint</code> instead of writing to the terminal from background contexts.</p>
 

@@ -24,6 +24,7 @@
   <h2 id="synopsis"><a href="#synopsis">SYNOPSIS</a></h2>
 
   <pre><span class="cmd">event</span> add <span class="var">event</span> <span class="var">name</span> <span class="var">function</span> [<span class="opt">--priority</span> <span class="var">number</span>]
+<span class="cmd">event</span> add <span class="kw">timer.tick</span> <span class="var">name</span> <span class="var">function</span> <span class="opt">--every</span> <span class="var">milliseconds</span> [<span class="opt">--priority</span> <span class="var">number</span>]
 <span class="cmd">event</span> remove <span class="var">event</span> <span class="var">name</span>
 <span class="cmd">event</span> list [<span class="var">event</span>]</pre>
 
@@ -40,6 +41,8 @@
     <dd>Runs after a successful current-shell directory change has committed. The hook function receives the old directory as <code>$1</code> and the new directory as <code>$2</code>.</dd>
     <dt><code>prompt.prepare</code></dt>
     <dd>Runs on the real interactive shell state before Rush renders each prompt.</dd>
+    <dt><code>timer.tick</code></dt>
+    <dd>Runs while the interactive line editor is idle after the registration's <code>--every</code> interval. The hook function receives the registration name as <code>$1</code>.</dd>
   </dl>
 
   <h2 id="example"><a href="#example">EXAMPLE</a></h2>
@@ -55,7 +58,8 @@
 }
 
 <span class="cmd">event</span> add directory.change project-env sync_project_env --priority -10
-<span class="cmd">event</span> add prompt.prepare prompt-cwd remember_prompt_cwd</pre>
+<span class="cmd">event</span> add prompt.prepare prompt-cwd remember_prompt_cwd
+<span class="cmd">event</span> add timer.tick clock remember_prompt_cwd --every 1000</pre>
 
   <h2 id="exit-status"><a href="#exit-status">EXIT STATUS</a></h2>
 
