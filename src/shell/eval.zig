@@ -4685,6 +4685,14 @@ fn evaluatePlanWithInput(
     std.debug.assert(plan.target == eval_context.target);
     if (plan.target.allowsShellStateCommit()) std.debug.assert(shell_state.acceptsExecutionTarget(plan.target));
 
+    if (canEvaluateNoOpBuiltinDirectly(shell_state.*, plan)) {
+        var state_delta = delta.StateDelta.init(evaluator.allocator, plan.target);
+        state_delta.setLastStatus(0);
+        var command_outcome = outcome.CommandOutcome.init(evaluator.allocator, 0, state_delta);
+        command_outcome.validateForContext(eval_context);
+        return command_outcome;
+    }
+
     var effective_plan = plan;
     var filtered_assignments: ?[]command_plan.Assignment = null;
     defer if (filtered_assignments) |assignments| evaluator.allocator.free(assignments);
@@ -4929,6 +4937,23 @@ fn evaluatePlanWithInput(
     try appendBuiltinDiagnostic(&command_outcome, effective_plan, result.status);
     command_outcome.validateForContext(eval_context);
     return command_outcome;
+}
+
+fn canEvaluateNoOpBuiltinDirectly(shell_state: state.ShellState, plan: command_plan.CommandPlan) bool {
+    if (shell_state.options.enabled(.xtrace)) return false;
+    if (plan.assignments.len != 0) return false;
+    if (plan.redirections.steps.len != 0) return false;
+    if (plan.argv.len == 0) return false;
+    if (!std.mem.eql(u8, plan.argv[0], ":")) return false;
+    if (!expansionOutputEmpty(plan.expansion_output)) return false;
+    return switch (plan.classification) {
+        .special_builtin => |definition| std.mem.eql(u8, definition.name, ":"),
+        else => false,
+    };
+}
+
+fn expansionOutputEmpty(output: command_plan.ExpansionOutput) bool {
+    return output.stderr.len == 0 and output.side_stdout.len == 0 and output.diagnostics.len == 0;
 }
 
 fn simpleCommandOutputAlreadyRouted(plan: command_plan.CommandPlan) bool {
@@ -18861,6 +18886,22 @@ test "semantic evaluator executes colon true and false builtins" {
     try std.testing.expectEqual(@as(outcome.ExitStatus, 1), false_outcome.status);
     try false_outcome.commitDelta(&shell_state, .current_shell);
     try std.testing.expectEqual(@as(state.ExitStatus, 1), shell_state.last_status);
+}
+
+test "semantic evaluator direct no-op builtin path preserves observable side effect guards" {
+    var shell_state = state.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+
+    const colon_plan = command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{":"} } });
+    try std.testing.expect(canEvaluateNoOpBuiltinDirectly(shell_state, colon_plan));
+
+    shell_state.options.set(.xtrace, true);
+    try std.testing.expect(!canEvaluateNoOpBuiltinDirectly(shell_state, colon_plan));
+    shell_state.options.set(.xtrace, false);
+
+    var output_plan = colon_plan;
+    output_plan.expansion_output = .{ .stderr = "side effect" };
+    try std.testing.expect(!canEvaluateNoOpBuiltinDirectly(shell_state, output_plan));
 }
 
 test "semantic evaluator captures echo output in CommandOutcome" {
