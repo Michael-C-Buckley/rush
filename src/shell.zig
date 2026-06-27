@@ -21,6 +21,7 @@ pub const ir = @import("shell/ir.zig");
 pub const parser = @import("shell/parser.zig");
 pub const outcome = @import("shell/outcome.zig");
 pub const output_routing = @import("shell/output_routing.zig");
+pub const path_search = @import("shell/path_search.zig");
 pub const pipeline_plan = @import("shell/pipeline_plan.zig");
 pub const redirection_plan = @import("shell/redirection_plan.zig");
 pub const state = @import("shell/state.zig");

@@ -7,6 +7,7 @@ const extension_handlers = @import("extensions/handlers.zig");
 const extension_rush_complete = @import("extensions/editor/rush_complete.zig");
 const ir = @import("shell/ir.zig");
 const parser = @import("shell/parser.zig");
+const path_search = @import("shell/path_search.zig");
 const runner = @import("runner.zig");
 const runtime = @import("runtime.zig");
 const shell_state_mod = @import("shell/state.zig");
@@ -2445,54 +2446,59 @@ fn commandCandidates(
         .replace_end = replace_end,
     });
 
-    if (shell_state.getVariable("PATH")) |path_variable| {
-        var path_iter = std.mem.splitScalar(u8, path_variable.value, ':');
-        while (path_iter.next()) |directory| try appendPathExecutableCandidates(
-            allocator,
-            io,
-            &builder,
-            directory,
-            replace_start,
-            replace_end,
-        );
-    }
+    if (shell_state.getVariable("PATH")) |path_variable| try appendPathExecutableCandidates(
+        allocator,
+        io,
+        &builder,
+        path_variable.value,
+        replace_start,
+        replace_end,
+    );
 
     return builder.finish(allocator);
 }
+
+const PathExecutableCandidateContext = struct {
+    allocator: std.mem.Allocator,
+    builder: *Builder,
+    replace_start: usize,
+    replace_end: usize,
+};
 
 fn appendPathExecutableCandidates(
     allocator: std.mem.Allocator,
     io: std.Io,
     builder: *Builder,
-    directory: []const u8,
+    path_value: []const u8,
     replace_start: usize,
     replace_end: usize,
 ) !void {
-    const dir_path = if (directory.len == 0) "." else directory;
     var adapter = runtime.PosixAdapter.init(io);
     const fs_port = adapter.fsPort();
-    var entries = fs_port.listDir(.{
+    var context: PathExecutableCandidateContext = .{
         .allocator = allocator,
-        .path = dir_path,
-        .attributes = .{ .kind = true, .executable = true },
-    }) catch |err| switch (err) {
-        error.FileNotFound, error.NotDir, error.AccessDenied => return,
-        else => return err,
+        .builder = builder,
+        .replace_start = replace_start,
+        .replace_end = replace_end,
     };
-    defer entries.deinit();
+    try path_search.scanPathExecutables(allocator, fs_port, path_value, .{
+        .context = &context,
+        .visit_fn = appendPathExecutableCandidate,
+    });
+}
 
-    for (entries.entries) |entry| {
-        if (entry.name.len == 0) continue;
-        if (entry.name[0] == '.') continue;
-        if (entry.kind == .directory) continue;
-        if (entry.executable != true) continue;
-        try builder.appendCandidateIfMissing(allocator, .{
-            .value = entry.name,
-            .kind = .command,
-            .replace_start = replace_start,
-            .replace_end = replace_end,
-        });
-    }
+fn appendPathExecutableCandidate(
+    context: *anyopaque,
+    executable: path_search.Executable,
+) !void {
+    const candidate_context: *PathExecutableCandidateContext = @ptrCast(@alignCast(context));
+    if (executable.name[0] == '.') return;
+    try candidate_context.builder.appendCandidateIfMissing(candidate_context.allocator, .{
+        .value = executable.name,
+        .kind = .command,
+        .replace_start = candidate_context.replace_start,
+        .replace_end = candidate_context.replace_end,
+    });
 }
 
 fn pathDirectoryToOpen(dir_prefix: []const u8) []const u8 {
