@@ -1658,7 +1658,7 @@ const SourceLowerer = struct {
             .failure => |trap_failure| return .{ .failure = trap_failure },
             .list => |list| list,
         };
-        const source_backed = self.owner.expand_aliases or command.redirections.len != 0;
+        const source_backed = command.redirections.len != 0;
         const condition_source: ?[]const u8 = if (source_backed)
             try self.allocator.dupe(u8, command.condition)
         else
@@ -1723,17 +1723,10 @@ const SourceLowerer = struct {
             break :blk command_plan.ForWords{ .source = source_words };
         };
         const name = try self.allocator.dupe(u8, command.name);
-        const source_backed = self.owner.expand_aliases;
-        const body_source: ?[]const u8 = if (source_backed)
-            try self.allocator.dupe(u8, command.body)
-        else
-            null;
-        const body: command_plan.StatementList = if (source_backed) .{} else blk: {
-            const lowered = try self.lowerStatementListSourceAtLine(command.body, command.body_line_offset, target);
-            break :blk switch (lowered) {
-                .failure => |trap_failure| return .{ .failure = trap_failure },
-                .list => |list| list,
-            };
+        const body_result = try self.lowerStatementListSourceAtLine(command.body, command.body_line_offset, target);
+        const body: command_plan.StatementList = switch (body_result) {
+            .failure => |trap_failure| return .{ .failure = trap_failure },
+            .list => |list| list,
         };
         const plan: command_plan.CompoundCommandPlan = .{
             .target = target,
@@ -1741,7 +1734,6 @@ const SourceLowerer = struct {
             .body = .{ .for_loop = .{
                 .variable_name = name,
                 .words = words,
-                .body_source = body_source,
                 .body = body,
             } },
         };
@@ -20503,7 +20495,7 @@ test "semantic parser trap resolver uses lazy IR for alias-disabled for loops" {
     try std.testing.expectEqualStrings("a\nb\n", outcome_body.stdout.items);
 }
 
-test "semantic parser trap resolver keeps loops source-backed when aliases are enabled" {
+test "semantic parser trap resolver lowers alias-enabled loops once" {
     var shell_state = state.ShellState.init(std.testing.allocator);
     defer shell_state.deinit();
     var evaluator = Evaluator.init(std.testing.allocator);
@@ -20537,8 +20529,10 @@ test "semantic parser trap resolver keeps loops source-backed when aliases are e
         },
         else => return error.ExpectedCompoundPlan,
     };
-    try std.testing.expect(loop.condition_source != null);
-    try std.testing.expect(loop.body_source != null);
+    try std.testing.expect(loop.condition_source == null);
+    try std.testing.expect(loop.body_source == null);
+    try std.testing.expect(loop.condition.statements.len != 0);
+    try std.testing.expect(loop.body.statements.len != 0);
 
     const for_plan = switch (list.statements[1].plan) {
         .compound => |compound| switch (compound.body) {
@@ -20547,8 +20541,8 @@ test "semantic parser trap resolver keeps loops source-backed when aliases are e
         },
         else => return error.ExpectedCompoundPlan,
     };
-    try std.testing.expect(for_plan.body_source != null);
-    try std.testing.expectEqual(@as(usize, 0), for_plan.body.statements.len);
+    try std.testing.expect(for_plan.body_source == null);
+    try std.testing.expect(for_plan.body.statements.len != 0);
 }
 
 test "semantic parser trap resolver lowers redirection operators for trap actions" {
