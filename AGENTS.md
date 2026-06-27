@@ -1,5 +1,12 @@
 # AGENTS.md
 
+## Engineering Priorities
+
+When making code changes, always prefer correctness over shortcuts. Do not
+paper over bugs, weaken tests, hard-code narrow cases, or choose expedient
+workarounds when a sound fix is within scope; take the time to preserve the
+intended semantics and verify the change appropriately.
+
 ## Zig Development
 
 Use `zigdoc` to discover current APIs for the Zig standard library and any third-party dependencies before coding.
