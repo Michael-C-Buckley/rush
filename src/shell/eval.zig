@@ -12843,33 +12843,39 @@ fn appendFunctionFrameDelta(
     std.debug.assert(state_delta.target.allowsShellStateCommit());
     std.debug.assert(state_delta.positionals == null);
 
-    var after_variables = after.variables.iterator();
-    while (after_variables.next()) |entry| {
-        const name = entry.key_ptr.*;
-        if (frame.excludesVariable(name)) continue;
-        const next = entry.value_ptr.*;
-        if (before.getVariable(name)) |previous| {
-            std.debug.assert(!previous.readonly or next.readonly);
-            if (!std.mem.eql(u8, previous.value, next.value)) {
+    if (after.variables_mutated) {
+        var after_variables = after.variables.iterator();
+        while (after_variables.next()) |entry| {
+            const name = entry.key_ptr.*;
+            if (frame.excludesVariable(name)) continue;
+            const next = entry.value_ptr.*;
+            if (before.getVariable(name)) |previous| {
+                std.debug.assert(!previous.readonly or next.readonly);
+                if (!std.mem.eql(u8, previous.value, next.value)) {
+                    try state_delta.assignVariable(
+                        name,
+                        next.value,
+                        .{ .exported = next.exported, .readonly = next.readonly },
+                    );
+                    continue;
+                }
+                if (previous.exported != next.exported) try state_delta.setVariableExported(name, next.exported);
+                if (!previous.readonly and next.readonly) try state_delta.setVariableReadonly(name);
+            } else {
                 try state_delta.assignVariable(
                     name,
                     next.value,
                     .{ .exported = next.exported, .readonly = next.readonly },
                 );
-                continue;
             }
-            if (previous.exported != next.exported) try state_delta.setVariableExported(name, next.exported);
-            if (!previous.readonly and next.readonly) try state_delta.setVariableReadonly(name);
-        } else {
-            try state_delta.assignVariable(name, next.value, .{ .exported = next.exported, .readonly = next.readonly });
         }
-    }
 
-    var before_variables = before.variables.iterator();
-    while (before_variables.next()) |entry| {
-        const name = entry.key_ptr.*;
-        if (frame.excludesVariable(name)) continue;
-        if (!after.variables.contains(name)) try state_delta.unsetVariable(name);
+        var before_variables = before.variables.iterator();
+        while (before_variables.next()) |entry| {
+            const name = entry.key_ptr.*;
+            if (frame.excludesVariable(name)) continue;
+            if (!after.variables.contains(name)) try state_delta.unsetVariable(name);
+        }
     }
 
     if (after.functions_mutated) {

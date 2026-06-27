@@ -16,6 +16,7 @@ pub const ExitStatus = u8;
 pub const TrapSignal = trap_semantics.Signal;
 pub const TrapDisposition = trap_semantics.Disposition;
 pub const TrapDelivery = trap_semantics.Delivery;
+pub const ShellStateCloneError = error{ OutOfMemory, ReadonlyVariable };
 
 pub const Scope = enum {
     current_shell,
@@ -442,6 +443,8 @@ pub const ShellState = struct {
     allocator: std.mem.Allocator,
     scope: Scope = .current_shell,
     variables: std.StringHashMapUnmanaged(Variable) = .empty,
+    borrowed_variables: bool = false,
+    variables_mutated: bool = false,
     functions: std.StringHashMapUnmanaged(command_plan.FunctionDefinition) = .empty,
     borrowed_functions: bool = false,
     functions_mutated: bool = false,
@@ -483,12 +486,14 @@ pub const ShellState = struct {
     }
 
     pub fn deinit(self: *ShellState) void {
-        var variables = self.variables.iterator();
-        while (variables.next()) |entry| {
-            self.allocator.free(entry.key_ptr.*);
-            self.allocator.free(entry.value_ptr.value);
+        if (!self.borrowed_variables) {
+            var variables = self.variables.iterator();
+            while (variables.next()) |entry| {
+                self.allocator.free(entry.key_ptr.*);
+                self.allocator.free(entry.value_ptr.value);
+            }
+            self.variables.deinit(self.allocator);
         }
-        self.variables.deinit(self.allocator);
 
         if (!self.borrowed_functions) {
             var functions = self.functions.iterator();
@@ -529,7 +534,7 @@ pub const ShellState = struct {
         self.* = undefined;
     }
 
-    pub fn clone(self: *const ShellState, allocator: std.mem.Allocator) !ShellState {
+    pub fn clone(self: *const ShellState, allocator: std.mem.Allocator) ShellStateCloneError!ShellState {
         var cloned = ShellState.init(allocator);
         errdefer cloned.deinit();
 
@@ -542,13 +547,8 @@ pub const ShellState = struct {
         cloned.trap_execution = self.trap_execution;
         cloned.warned_stopped_jobs_on_exit = self.warned_stopped_jobs_on_exit;
 
-        var variables = self.variables.iterator();
-        while (variables.next()) |entry| {
-            try cloned.putVariable(entry.key_ptr.*, entry.value_ptr.value, .{
-                .exported = entry.value_ptr.exported,
-                .readonly = entry.value_ptr.readonly,
-            });
-        }
+        try cloned.copyVariablesFrom(self);
+        cloned.variables_mutated = false;
 
         var functions = self.functions.iterator();
         while (functions.next()) |entry| try cloned.putFunction(entry.value_ptr.*);
@@ -577,7 +577,10 @@ pub const ShellState = struct {
         return cloned;
     }
 
-    pub fn cloneBorrowingFunctions(self: *const ShellState, allocator: std.mem.Allocator) !ShellState {
+    pub fn cloneBorrowingFunctions(
+        self: *const ShellState,
+        allocator: std.mem.Allocator,
+    ) ShellStateCloneError!ShellState {
         var cloned = ShellState.init(allocator);
         errdefer cloned.deinit();
 
@@ -590,13 +593,9 @@ pub const ShellState = struct {
         cloned.trap_execution = self.trap_execution;
         cloned.warned_stopped_jobs_on_exit = self.warned_stopped_jobs_on_exit;
 
-        var variables = self.variables.iterator();
-        while (variables.next()) |entry| {
-            try cloned.putVariable(entry.key_ptr.*, entry.value_ptr.value, .{
-                .exported = entry.value_ptr.exported,
-                .readonly = entry.value_ptr.readonly,
-            });
-        }
+        cloned.variables = self.variables;
+        cloned.borrowed_variables = true;
+        cloned.variables_mutated = false;
 
         cloned.functions = self.functions;
         cloned.borrowed_functions = true;
@@ -625,7 +624,10 @@ pub const ShellState = struct {
         return cloned;
     }
 
-    pub fn snapshotForSubshell(self: *const ShellState, allocator: std.mem.Allocator) !ShellState {
+    pub fn snapshotForSubshell(
+        self: *const ShellState,
+        allocator: std.mem.Allocator,
+    ) ShellStateCloneError!ShellState {
         var snapshot = try self.clone(allocator);
         errdefer snapshot.deinit();
         try snapshot.clearCaughtTrapsForSubshell();
@@ -678,15 +680,19 @@ pub const ShellState = struct {
         if (self.variables.getEntry(name)) |entry| {
             const previous = entry.value_ptr.*;
             if (previous.readonly) return error.ReadonlyVariable;
+            try self.ensureOwnedVariables();
+            const owned_entry = self.variables.getEntry(name).?;
+            const owned_previous = owned_entry.value_ptr.*;
 
             const owned_value = try self.allocator.dupe(u8, value);
-            self.allocator.free(previous.value);
-            entry.value_ptr.* = .{
+            self.allocator.free(owned_previous.value);
+            owned_entry.value_ptr.* = .{
                 .value = owned_value,
-                .exported = attributes.exported orelse previous.exported,
-                .readonly = previous.readonly or attributes.readonly,
+                .exported = attributes.exported orelse owned_previous.exported,
+                .readonly = owned_previous.readonly or attributes.readonly,
             };
         } else {
+            try self.ensureOwnedVariables();
             const owned_name = try self.allocator.dupe(u8, name);
             errdefer self.allocator.free(owned_name);
             const owned_value = try self.allocator.dupe(u8, value);
@@ -699,6 +705,7 @@ pub const ShellState = struct {
             });
         }
 
+        self.variables_mutated = true;
         self.validate();
     }
 
@@ -706,16 +713,19 @@ pub const ShellState = struct {
         assertValidVariableName(name);
         std.debug.assert(std.mem.startsWith(u8, name, "rush_"));
 
-        if (self.variables.getEntry(name)) |entry| {
-            const previous = entry.value_ptr.*;
+        if (self.variables.contains(name)) {
+            try self.ensureOwnedVariables();
+            const owned_entry = self.variables.getEntry(name).?;
+            const owned_previous = owned_entry.value_ptr.*;
             const owned_value = try self.allocator.dupe(u8, value);
-            self.allocator.free(previous.value);
-            entry.value_ptr.* = .{
+            self.allocator.free(owned_previous.value);
+            owned_entry.value_ptr.* = .{
                 .value = owned_value,
-                .exported = previous.exported,
-                .readonly = previous.readonly,
+                .exported = owned_previous.exported,
+                .readonly = owned_previous.readonly,
             };
         } else {
+            try self.ensureOwnedVariables();
             const owned_name = try self.allocator.dupe(u8, name);
             errdefer self.allocator.free(owned_name);
             const owned_value = try self.allocator.dupe(u8, value);
@@ -724,14 +734,17 @@ pub const ShellState = struct {
             try self.variables.put(self.allocator, owned_name, .{ .value = owned_value });
         }
 
+        self.variables_mutated = true;
         self.validate();
     }
 
     pub fn setVariableExported(self: *ShellState, name: []const u8, enabled: bool) !void {
         assertValidVariableName(name);
 
-        if (self.variables.getEntry(name)) |entry| {
-            entry.value_ptr.exported = enabled;
+        if (self.variables.contains(name)) {
+            try self.ensureOwnedVariables();
+            self.variables.getEntry(name).?.value_ptr.exported = enabled;
+            self.variables_mutated = true;
         } else {
             std.debug.assert(enabled);
             try self.putVariable(name, "", .{ .exported = true });
@@ -743,8 +756,10 @@ pub const ShellState = struct {
     pub fn setVariableReadonly(self: *ShellState, name: []const u8) !void {
         assertValidVariableName(name);
 
-        if (self.variables.getEntry(name)) |entry| {
-            entry.value_ptr.readonly = true;
+        if (self.variables.contains(name)) {
+            try self.ensureOwnedVariables();
+            self.variables.getEntry(name).?.value_ptr.readonly = true;
+            self.variables_mutated = true;
         } else {
             try self.putVariable(name, "", .{ .readonly = true });
         }
@@ -755,10 +770,16 @@ pub const ShellState = struct {
     pub fn unsetVariable(self: *ShellState, name: []const u8) !void {
         assertValidVariableName(name);
         if (self.isVariableReadonly(name)) return error.ReadonlyVariable;
+        if (!self.variables.contains(name)) {
+            self.validate();
+            return;
+        }
 
+        try self.ensureOwnedVariables();
         if (self.variables.fetchRemove(name)) |entry| {
             self.allocator.free(entry.key);
             self.allocator.free(entry.value.value);
+            self.variables_mutated = true;
         }
 
         self.validate();
@@ -834,6 +855,33 @@ pub const ShellState = struct {
 
         self.functions = owned;
         self.borrowed_functions = false;
+        self.validate();
+    }
+
+    fn copyVariablesFrom(self: *ShellState, source: *const ShellState) !void {
+        var variables = source.variables.iterator();
+        while (variables.next()) |entry| {
+            const owned_name = try self.allocator.dupe(u8, entry.key_ptr.*);
+            errdefer self.allocator.free(owned_name);
+            const owned_value = try self.allocator.dupe(u8, entry.value_ptr.value);
+            errdefer self.allocator.free(owned_value);
+            try self.variables.put(self.allocator, owned_name, .{
+                .value = owned_value,
+                .exported = entry.value_ptr.exported,
+                .readonly = entry.value_ptr.readonly,
+            });
+        }
+    }
+
+    fn ensureOwnedVariables(self: *ShellState) !void {
+        if (!self.borrowed_variables) return;
+
+        var owned = ShellState.init(self.allocator);
+        errdefer owned.deinit();
+        try owned.copyVariablesFrom(self);
+        self.variables = owned.variables;
+        owned.variables = .empty;
+        self.borrowed_variables = false;
         self.validate();
     }
 
