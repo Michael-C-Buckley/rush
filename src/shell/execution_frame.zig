@@ -16,6 +16,7 @@
 //!   never assertions.
 
 const std = @import("std");
+const zig_builtin = @import("builtin");
 
 const context = @import("context.zig");
 const outcome = @import("outcome.zig");
@@ -486,6 +487,7 @@ pub const ExecutionFrame = struct {
     }
 
     pub fn validate(self: ExecutionFrame) void {
+        if (!executionFrameValidationEnabled()) return;
         self.spec.validate();
         self.parent.validate();
     }
@@ -539,6 +541,13 @@ pub const DiagnosticStore = struct {
         try self.append_fn(self.context, diagnostic);
     }
 };
+
+fn executionFrameValidationEnabled() bool {
+    return switch (zig_builtin.mode) {
+        .Debug => true,
+        .ReleaseSafe, .ReleaseFast, .ReleaseSmall => false,
+    };
+}
 
 pub const ParentBoundary = union(enum) {
     none,
