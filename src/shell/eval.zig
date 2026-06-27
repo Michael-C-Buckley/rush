@@ -11429,7 +11429,7 @@ fn runEventHooksPreservingStatus(
 
     for (calls) |call| {
         try restoreEventVisibleStatus(shell_state, visible_status, visible_pipeline_statuses);
-        try runEventHookFunction(evaluator, shell_state, eval_context, call, args, buffers);
+        try runEventHookFunction(evaluator, shell_state, eval_context, event_name, call, args, buffers);
         try restoreEventVisibleStatus(shell_state, visible_status, visible_pipeline_statuses);
         if (shell_state.pending_exit != null) break;
     }
@@ -11451,6 +11451,7 @@ fn runEventHookFunction(
     evaluator: *Evaluator,
     shell_state: *state.ShellState,
     eval_context: context.EvalContext,
+    event_name: shell_event.Name,
     call: shell_event.HookCall,
     args: []const []const u8,
     buffers: *EvaluationBuffers,
@@ -11463,9 +11464,13 @@ fn runEventHookFunction(
     defer evaluator.allocator.free(argv);
     argv[0] = call.function_name;
     for (args, 0..) |arg, index| argv[index + 1] = arg;
+    const assignments = [_]command_plan.Assignment{
+        .{ .name = "RUSH_EVENT", .value = event_name.text() },
+        .{ .name = "RUSH_EVENT_HOOK", .value = call.name },
+    };
 
     const plan = command_plan.classifyExpandedSimpleCommand(.{
-        .command = .{ .argv = argv },
+        .command = .{ .assignments = &assignments, .argv = argv },
         .lookup = .{ .functions = &.{function} },
         .target = .current_shell,
     });

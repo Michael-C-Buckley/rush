@@ -90,20 +90,45 @@ fn evaluateRemove(invocation: *api.Invocation) !api.EvaluationResult {
 }
 
 fn evaluateList(invocation: *api.Invocation) !api.EvaluationResult {
-    if (invocation.argv.len > 3) return api.EvaluationResult.normal(try usage(invocation));
-    const filter = if (invocation.argv.len == 3) shell_event.Name.parse(invocation.argv[2]) orelse {
-        return api.EvaluationResult.normal(try invocation.usageError("event", "unsupported event"));
-    } else null;
+    if (invocation.argv.len > 4) return api.EvaluationResult.normal(try usage(invocation));
+    var json = false;
+    var filter: ?shell_event.Name = null;
+    for (invocation.argv[2..]) |arg| {
+        if (std.mem.eql(u8, arg, "--json")) {
+            if (json) return api.EvaluationResult.normal(try usage(invocation));
+            json = true;
+            continue;
+        }
+        if (filter != null) return api.EvaluationResult.normal(try usage(invocation));
+        filter = shell_event.Name.parse(arg) orelse {
+            return api.EvaluationResult.normal(try invocation.usageError("event", "unsupported event"));
+        };
+    }
 
-    var hooks: std.ArrayList(shell_event.Registration) = .empty;
+    var hooks = try sortedRegistrations(invocation, filter);
     defer hooks.deinit(invocation.allocator);
+    if (json) return evaluateListJson(invocation, hooks.items);
+    try evaluateListText(invocation, hooks.items);
+    return api.EvaluationResult.normal(0);
+}
+
+fn sortedRegistrations(
+    invocation: *api.Invocation,
+    filter: ?shell_event.Name,
+) !std.ArrayList(shell_event.Registration) {
+    var hooks: std.ArrayList(shell_event.Registration) = .empty;
+    errdefer hooks.deinit(invocation.allocator);
     for (invocation.shell_state.event_hooks.items) |registration| {
         if (filter) |event_name| if (registration.event != event_name) continue;
         try hooks.append(invocation.allocator, registration);
     }
     std.mem.sort(shell_event.Registration, hooks.items, {}, lessThanRegistration);
+    return hooks;
+}
+
+fn evaluateListText(invocation: *api.Invocation, hooks: []const shell_event.Registration) !void {
     var current_event: ?shell_event.Name = null;
-    for (hooks.items) |registration| {
+    for (hooks) |registration| {
         if (current_event == null or current_event.? != registration.event) {
             current_event = registration.event;
             try invocation.stdout.print(invocation.allocator, "{s}\n", .{registration.event.text()});
@@ -118,7 +143,55 @@ fn evaluateList(invocation: *api.Invocation) !api.EvaluationResult {
         }
         try invocation.stdout.print(invocation.allocator, " {s}\n", .{registration.function_name});
     }
+}
+
+fn evaluateListJson(invocation: *api.Invocation, hooks: []const shell_event.Registration) !api.EvaluationResult {
+    if (hooks.len == 0) {
+        try invocation.stdout.appendSlice(invocation.allocator, "[]\n");
+        return api.EvaluationResult.normal(0);
+    }
+    try invocation.stdout.appendSlice(invocation.allocator, "[\n");
+    for (hooks, 0..) |registration, index| {
+        if (index != 0) try invocation.stdout.appendSlice(invocation.allocator, ",\n");
+        try invocation.stdout.appendSlice(invocation.allocator, "{\"event\":");
+        try writeJsonString(invocation, registration.event.text());
+        try invocation.stdout.appendSlice(invocation.allocator, ",\"name\":");
+        try writeJsonString(invocation, registration.name);
+        try invocation.stdout.appendSlice(invocation.allocator, ",\"function\":");
+        try writeJsonString(invocation, registration.function_name);
+        try invocation.stdout.print(invocation.allocator, ",\"priority\":{d}", .{registration.priority});
+        if (registration.every_ms) |every_ms| {
+            try invocation.stdout.print(invocation.allocator, ",\"every_ms\":{d}", .{every_ms});
+        }
+        try invocation.stdout.append(invocation.allocator, '}');
+    }
+    try invocation.stdout.appendSlice(invocation.allocator, "\n]\n");
     return api.EvaluationResult.normal(0);
+}
+
+fn writeJsonString(invocation: *api.Invocation, value: []const u8) !void {
+    try invocation.stdout.append(invocation.allocator, '"');
+    for (value) |byte| {
+        switch (byte) {
+            '"' => try invocation.stdout.appendSlice(invocation.allocator, "\\\""),
+            '\\' => try invocation.stdout.appendSlice(invocation.allocator, "\\\\"),
+            '\n' => try invocation.stdout.appendSlice(invocation.allocator, "\\n"),
+            '\r' => try invocation.stdout.appendSlice(invocation.allocator, "\\r"),
+            '\t' => try invocation.stdout.appendSlice(invocation.allocator, "\\t"),
+            else => if (byte < 0x20)
+                try writeJsonControlEscape(invocation, byte)
+            else
+                try invocation.stdout.append(invocation.allocator, byte),
+        }
+    }
+    try invocation.stdout.append(invocation.allocator, '"');
+}
+
+fn writeJsonControlEscape(invocation: *api.Invocation, byte: u8) !void {
+    const hex = "0123456789abcdef";
+    try invocation.stdout.appendSlice(invocation.allocator, "\\u00");
+    try invocation.stdout.append(invocation.allocator, hex[byte >> 4]);
+    try invocation.stdout.append(invocation.allocator, hex[byte & 0x0f]);
 }
 
 fn lessThanRegistration(_: void, left: shell_event.Registration, right: shell_event.Registration) bool {
@@ -135,7 +208,7 @@ fn usage(invocation: *api.Invocation) !u8 {
         "event",
         "usage: " ++
             "event add EVENT NAME FUNCTION [--priority N] [--every MS] | " ++
-            "event remove EVENT NAME | event list [EVENT]",
+            "event remove EVENT NAME | event list [--json] [EVENT]",
     );
 }
 
@@ -284,6 +357,53 @@ test "event list groups registrations by event" {
         \\  direnv priority=-10 rush_direnv_hook
         \\timer.tick
         \\  clock priority=0 every=1000ms on_clock
+        \\
+    , stdout.items);
+}
+
+test "event list json prints machine-readable registrations" {
+    var shell_state = shell_state_mod.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    try shell_state.setEventHook(.{
+        .event = .directory_change,
+        .name = "direnv",
+        .function_name = "rush_direnv_hook",
+        .priority = -10,
+    });
+    try shell_state.setEventHook(.{
+        .event = .timer_tick,
+        .name = "clock",
+        .function_name = "on_clock",
+        .every_ms = 1000,
+    });
+    var state_delta = shell_delta.StateDelta.init(std.testing.allocator, .current_shell);
+    defer state_delta.deinit();
+    var stdout: std.ArrayList(u8) = .empty;
+    defer stdout.deinit(std.testing.allocator);
+    var stderr: std.ArrayList(u8) = .empty;
+    defer stderr.deinit(std.testing.allocator);
+    var diagnostics: std.ArrayList([]const u8) = .empty;
+    defer diagnostics.deinit(std.testing.allocator);
+
+    var invocation: api.Invocation = .{
+        .allocator = std.testing.allocator,
+        .argv = &.{ "event", "list", "--json" },
+        .builtins = &.{},
+        .shell_state = shell_state,
+        .state_delta = &state_delta,
+        .eval_context = shell_context.EvalContext.forTarget(.current_shell),
+        .stdout = &stdout,
+        .stderr = &stderr,
+        .diagnostics = &diagnostics,
+    };
+    const result = try evaluate(null, &invocation);
+
+    try std.testing.expectEqual(@as(u8, 0), result.status);
+    try std.testing.expectEqualStrings(
+        \\[
+        \\{"event":"directory.change","name":"direnv","function":"rush_direnv_hook","priority":-10},
+        \\{"event":"timer.tick","name":"clock","function":"on_clock","priority":0,"every_ms":1000}
+        \\]
         \\
     , stdout.items);
 }

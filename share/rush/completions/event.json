@@ -44,6 +44,9 @@
       {
         "name": "list",
         "description": "list registered hooks",
+        "options": [
+          { "long": "json", "description": "print registrations as json" }
+        ],
         "arguments": {
           "states": [
             { "name": "event", "index": 0, "provider": "event.names", "description": "event to list" }

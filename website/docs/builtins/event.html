@@ -26,7 +26,7 @@
   <pre><span class="cmd">event</span> add <span class="var">event</span> <span class="var">name</span> <span class="var">function</span> [<span class="opt">--priority</span> <span class="var">number</span>]
 <span class="cmd">event</span> add <span class="kw">timer.tick</span> <span class="var">name</span> <span class="var">function</span> <span class="opt">--every</span> <span class="var">milliseconds</span> [<span class="opt">--priority</span> <span class="var">number</span>]
 <span class="cmd">event</span> remove <span class="var">event</span> <span class="var">name</span>
-<span class="cmd">event</span> list [<span class="var">event</span>]</pre>
+<span class="cmd">event</span> list [<span class="opt">--json</span>] [<span class="var">event</span>]</pre>
 
   <h2 id="description"><a href="#description">DESCRIPTION</a></h2>
 
@@ -34,12 +34,14 @@
 
   <p>Hooks run in ascending priority order, then by registration name. The default priority is zero. Hook execution preserves the visible last status and pipeline statuses unless the hook exits the shell.</p>
 
-  <p><code>event list</code> prints registrations grouped by event. Each hook line shows the registration name, priority, optional timer interval, and function name.</p>
+  <p><code>event list</code> prints registrations grouped by event. Each hook line shows the registration name, priority, optional timer interval, and function name. <code>event list --json</code> prints a machine-readable array with <code>event</code>, <code>name</code>, <code>function</code>, <code>priority</code>, and optional <code>every_ms</code> fields.</p>
 
   <pre>directory.change
   direnv priority=0 rush_direnv_hook
 timer.tick
   clock priority=0 every=1000ms on_clock</pre>
+
+  <p>Every hook receives <code>RUSH_EVENT</code> and <code>RUSH_EVENT_HOOK</code> assignment-prefix variables while the hook function runs. <code>RUSH_EVENT</code> is the event name and <code>RUSH_EVENT_HOOK</code> is the registration name. These variables do not persist after the hook returns.</p>
 
   <h2 id="events"><a href="#events">EVENTS</a></h2>
 

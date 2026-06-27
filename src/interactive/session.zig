@@ -135,11 +135,13 @@ fn runInteractiveEventHooks(
         argv[0] = call.function_name;
         for (args, 0..) |arg, index| argv[index + 1] = arg;
 
-        var result = try runner.runHiddenShellStateCommandWithExtensionHandlersApplyOptions(
+        const assignments = interactiveEventHookContextAssignments(event_name, call);
+        var result = try runner.runHiddenShellStateCommandWithExtensionHandlersApplyOptionsAndAssignments(
             allocator,
             io,
             context.semantic_state,
             argv,
+            &assignments,
             context.arg_zero,
             context.features,
             .capture,
@@ -163,6 +165,16 @@ fn restoreInteractiveEventVisibleStatus(
 ) !void {
     shell_state.last_status = visible_status;
     try shell_state.setLastPipelineStatuses(visible_pipeline_statuses);
+}
+
+fn interactiveEventHookContextAssignments(
+    event_name: shell.EventName,
+    call: shell.event.HookCall,
+) [2]shell.command_plan.Assignment {
+    return .{
+        .{ .name = "RUSH_EVENT", .value = event_name.text() },
+        .{ .name = "RUSH_EVENT_HOOK", .value = call.name },
+    };
 }
 
 fn runInteractiveTimerHooks(
@@ -200,11 +212,13 @@ fn runInteractiveTimerHooks(
             continue;
         }
 
-        var result = try runner.runHiddenShellStateCommandWithExtensionHandlersApplyOptions(
+        const assignments = interactiveEventHookContextAssignments(.timer_tick, call);
+        var result = try runner.runHiddenShellStateCommandWithExtensionHandlersApplyOptionsAndAssignments(
             allocator,
             io,
             context.semantic_state,
             &.{ call.function_name, call.name },
+            &assignments,
             context.arg_zero,
             context.features,
             .capture,
@@ -1456,7 +1470,10 @@ test "interactive timer events run due hooks" {
         .every_ms = 1000,
         .next_tick_ms = 0,
     });
-    try shell_state.putFunction(.{ .name = "on_clock", .source_body = "TICKED=$1" });
+    try shell_state.putFunction(.{
+        .name = "on_clock",
+        .source_body = "TICKED=$1; EVENT=$RUSH_EVENT; HOOK=$RUSH_EVENT_HOOK",
+    });
     var editor_state = EditorState.init(std.testing.allocator);
     defer editor_state.deinit();
     var context: Context = .{ .semantic_state = &shell_state, .editor_state = &editor_state };
@@ -1468,6 +1485,10 @@ test "interactive timer events run due hooks" {
     try std.testing.expect(hook_result.refresh_prompt);
     try std.testing.expect(!hook_result.stop);
     try std.testing.expectEqualStrings("clock", shell_state.getVariable("TICKED").?.value);
+    try std.testing.expectEqualStrings("timer.tick", shell_state.getVariable("EVENT").?.value);
+    try std.testing.expectEqualStrings("clock", shell_state.getVariable("HOOK").?.value);
+    try std.testing.expectEqual(@as(?shell.Variable, null), shell_state.getVariable("RUSH_EVENT"));
+    try std.testing.expectEqual(@as(?shell.Variable, null), shell_state.getVariable("RUSH_EVENT_HOOK"));
     try std.testing.expect(shell_state.event_hooks.items[0].next_tick_ms != null);
     try std.testing.expect(shell_state.event_hooks.items[0].next_tick_ms.? > monotonicMillis(std.testing.io));
 }

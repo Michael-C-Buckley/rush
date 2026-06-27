@@ -581,10 +581,39 @@ pub fn runHiddenShellStateCommandWithExtensionHandlersApplyOptions(
     apply_options: shell.CommandOutcome.ApplyOptions,
     event_dispatch_depth: u32,
 ) !CommandResult {
+    return runHiddenShellStateCommandWithExtensionHandlersApplyOptionsAndAssignments(
+        allocator,
+        io,
+        shell_state,
+        argv,
+        &.{},
+        arg_zero,
+        features,
+        external_stdio,
+        extension_handlers,
+        apply_options,
+        event_dispatch_depth,
+    );
+}
+
+pub fn runHiddenShellStateCommandWithExtensionHandlersApplyOptionsAndAssignments(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    shell_state: *shell.ShellState,
+    argv: []const []const u8,
+    assignments: []const shell.command_plan.Assignment,
+    arg_zero: []const u8,
+    features: compat.Features,
+    external_stdio: runtime.ExternalStdio,
+    extension_handlers: ExtensionHandlers,
+    apply_options: shell.CommandOutcome.ApplyOptions,
+    event_dispatch_depth: u32,
+) !CommandResult {
     shell_state.validate();
     std.debug.assert(shell_state.scope == .current_shell);
     std.debug.assert(argv.len != 0);
     std.debug.assert(arg_zero.len != 0);
+    for (assignments) |assignment| assignment.validate();
 
     var adapter = runtime.PosixAdapter.init(io);
     var evaluator = shell.eval.Evaluator.initWithRuntimePorts(allocator, runtime.posixPorts(&adapter));
@@ -596,7 +625,7 @@ pub fn runHiddenShellStateCommandWithExtensionHandlersApplyOptions(
     evaluator.event_dispatch_depth = event_dispatch_depth;
     extension_handlers.apply(&evaluator);
 
-    const command: shell.command_plan.ExpandedSimpleCommand = .{ .argv = argv };
+    const command: shell.command_plan.ExpandedSimpleCommand = .{ .assignments = assignments, .argv = argv };
     var functions: std.ArrayList(shell.command_plan.FunctionDefinition) = .empty;
     defer functions.deinit(allocator);
     var function_iterator = shell_state.functions.iterator();
@@ -1203,11 +1232,13 @@ fn appendDirectoryChangeEventOutcome(
             applyOutputWriteResultToShellState(shell_state, write_result);
             continue;
         }
-        var result = try runHiddenShellStateCommandWithExtensionHandlersApplyOptions(
+        const assignments = eventHookContextAssignments(.directory_change, call);
+        var result = try runHiddenShellStateCommandWithExtensionHandlersApplyOptionsAndAssignments(
             allocator,
             io,
             shell_state,
             &.{ call.function_name, old_cwd, owned_new_cwd },
+            &assignments,
             evaluator.arg_zero,
             evaluator.features,
             .capture,
@@ -1238,6 +1269,16 @@ fn applyOutputWriteResultToShellState(
     write_result: shell.eval.RunnerOutputWriteResult,
 ) void {
     if (write_result.stdout_failed or write_result.stderr_failed) shell_state.last_status = 1;
+}
+
+fn eventHookContextAssignments(
+    event_name: shell.EventName,
+    call: shell.event.HookCall,
+) [2]shell.command_plan.Assignment {
+    return .{
+        .{ .name = "RUSH_EVENT", .value = event_name.text() },
+        .{ .name = "RUSH_EVENT_HOOK", .value = call.name },
+    };
 }
 
 fn semanticNoexecSuppressesStatement(shell_state: shell.ShellState, eval_context: shell.EvalContext) bool {
@@ -3224,9 +3265,9 @@ test "semantic interactive invocation runs directory change hooks before followi
     try shell.startup.initializeInvocationState(std.testing.allocator, std.testing.io, &shell_state, null, &.{}, .{});
 
     const script = try std.fmt.allocPrint(std.testing.allocator,
-        \\on_cd() {{ HOOK_SEEN=yes; false; }}
+        \\on_cd() {{ HOOK_SEEN="$RUSH_EVENT/$RUSH_EVENT_HOOK"; false; }}
         \\event add directory.change env-sync on_cd
-        \\cd "{s}" && printf 'hook=%s status=%s\n' "$HOOK_SEEN" "$?"
+        \\cd "{s}" && printf 'hook=%s status=%s event=%s\n' "$HOOK_SEEN" "$?" "$RUSH_EVENT"
     , .{target_path});
     defer std.testing.allocator.free(script);
     var execution = try runInteractiveCommandStringWithExtensionHandlers(
@@ -3245,7 +3286,7 @@ test "semantic interactive invocation runs directory change hooks before followi
         .unsupported => return error.ExpectedSemanticExecution,
         .output => |result| {
             try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
-            try std.testing.expectEqualStrings("hook=yes status=0\n", result.stdout);
+            try std.testing.expectEqualStrings("hook=directory.change/env-sync status=0 event=\n", result.stdout);
             try std.testing.expectEqualStrings("", result.stderr);
         },
     }
