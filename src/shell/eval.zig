@@ -806,7 +806,6 @@ pub const ParserBackedSourceResolver = struct {
         shell_state: *state.ShellState,
     ) !TrapActionBody {
         self.validate();
-        shell_state.validate();
         std.debug.assert(statement_index < program.statements.len);
         std.debug.assert(shell_state.acceptsExecutionTarget(eval_context.target));
 
@@ -848,7 +847,6 @@ pub const ParserBackedSourceResolver = struct {
         shell_state: *state.ShellState,
     ) !TrapActionBody {
         self.validate();
-        shell_state.validate();
         std.debug.assert(statement_index < program.statements.len);
         std.debug.assert(shell_state.acceptsExecutionTarget(eval_context.target));
 
@@ -875,7 +873,6 @@ pub const ParserBackedSourceResolver = struct {
         source_line_number: usize,
     ) !TrapActionBody {
         self.validate();
-        shell_state.validate();
         std.debug.assert(statement_index < program.statements.len);
         std.debug.assert(shell_state.acceptsExecutionTarget(eval_context.target));
         std.debug.assert(source_line_number != 0);
@@ -991,7 +988,6 @@ const ParserCommandSubstitutionResolver = struct {
     fn validate(self: ParserCommandSubstitutionResolver) void {
         self.owner.validate();
         if (self.signal) |signal| signal.validate();
-        self.expansion_context.shell_state.validate();
         self.expansion_context.eval_context.validate();
         std.debug.assert(
             self.expansion_context.shell_state.acceptsExecutionTarget(self.expansion_context.eval_context.target),
@@ -1062,8 +1058,8 @@ const SourceExpansionCommandSubstitutions = struct {
         lowerer: *SourceLowerer,
         expansion_eval_context: context.EvalContext,
     ) void {
-        lowerer.shell_state.validate();
         expansion_eval_context.validate();
+        std.debug.assert(lowerer.shell_state.acceptsExecutionTarget(expansion_eval_context.target));
         self.resolver = .{
             .owner = lowerer.owner,
             .signal = lowerer.signal,
@@ -3407,7 +3403,6 @@ const FunctionBodyCursor = struct {
         shell_state: *state.ShellState,
         buffers: *EvaluationBuffers,
     ) EvalError!FunctionCursorStep {
-        shell_state.validate();
         while (true) {
             std.debug.assert(self.frames.items.len != 0);
             const frame_index = self.frames.items.len - 1;
@@ -4633,7 +4628,6 @@ fn evaluatePlanWithInput(
     input: *EvaluationInput,
     frame: *execution_frame.ExecutionFrame,
 ) EvalError!outcome.CommandOutcome {
-    shell_state.validate();
     eval_context.validate();
     plan.validate();
     input.validate();
@@ -10125,7 +10119,6 @@ fn traceCommandPlanForEvaluation(
     trace_frame: *execution_frame.ExecutionFrame,
     buffers: *EvaluationBuffers,
 ) EvalError!void {
-    shell_state.validate();
     eval_context.validate();
     plan.validate();
     trace_input.validate();
@@ -10441,7 +10434,6 @@ fn evaluateStatementPlan(
     input: *EvaluationInput,
     frame: *execution_frame.ExecutionFrame,
 ) EvalError!outcome.CommandOutcome {
-    shell_state.validate();
     eval_context.validate();
     plan.validate();
     input.validate();

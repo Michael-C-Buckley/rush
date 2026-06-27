@@ -213,7 +213,6 @@ pub const CommandOutcome = struct {
         options: ApplyOptions,
     ) !void {
         self.validate();
-        shell_state.validate();
 
         const target = self.state_delta.target;
         if (target.allowsShellStateCommit() and shell_state.acceptsExecutionTarget(target)) {
@@ -230,7 +229,6 @@ pub const CommandOutcome = struct {
                 .normal, .break_loop, .continue_loop, .return_from_scope => {},
             }
         }
-        shell_state.validate();
     }
 };
 

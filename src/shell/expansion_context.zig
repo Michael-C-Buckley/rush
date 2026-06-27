@@ -91,7 +91,6 @@ pub const ShellExpansion = struct {
     };
 
     pub fn init(allocator: std.mem.Allocator, options: Init) ShellExpansion {
-        options.shell_state.validate();
         options.eval_context.validate();
         assertExpansionTargetState(options.shell_state.*, options.eval_context);
         const adapter: ShellExpansion = .{
@@ -335,7 +334,6 @@ pub const ShellExpansion = struct {
     }
 
     pub fn validate(self: ShellExpansion) void {
-        self.shell_state.validate();
         self.eval_context.validate();
         assertExpansionTargetState(self.shell_state.*, self.eval_context);
         if (self.command_substitution.runFn != null) std.debug.assert(self.command_substitution.context != null);

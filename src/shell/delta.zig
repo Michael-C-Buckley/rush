@@ -705,7 +705,6 @@ pub const StateDelta = struct {
         for (self.job_notifications.items) |notification| try shell_state.appendJobNotification(notification);
         if (self.job_markers) |markers| shell_state.setJobMarkers(markers.current_job_id, markers.previous_job_id);
 
-        shell_state.validate();
         self.state = .consumed;
     }
 
