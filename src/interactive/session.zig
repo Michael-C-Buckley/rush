@@ -68,6 +68,7 @@ pub const Context = struct {
     previous_status: shell.ExitStatus = 0,
     previous_duration_ms: ?i64 = null,
     prompt_async_state: ?*prompt_mod.AsyncState = null,
+    active_background_job_count: ?*usize = null,
 };
 
 pub const EditorState = struct {
@@ -260,6 +261,19 @@ pub fn runInteractiveIntervalHooks(
         try output.appendSlice(allocator, result.stdout);
         try output.appendSlice(allocator, result.stderr);
         should_refresh_prompt = true;
+    }
+
+    try refreshInteractiveSemanticJobs(allocator, io, semantic_state);
+    if (interactive_context.active_background_job_count) |active_count| {
+        if (try dispatchBackgroundJobLifecycleActivityEvents(
+            interactive_context,
+            allocator,
+            io,
+            active_count,
+            &output,
+        )) {
+            should_refresh_prompt = true;
+        }
     }
 
     if (semantic_state.options.notify) {
@@ -721,6 +735,29 @@ fn drainInteractiveSemanticJobNotifications(
     return output;
 }
 
+fn refreshInteractiveSemanticJobs(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    shell_state: *shell.ShellState,
+) !void {
+    shell_state.validate();
+    std.debug.assert(shell_state.scope == .current_shell);
+    if (shell_state.background_jobs.items.len == 0) return;
+
+    var adapter = runtime.PosixAdapter.init(io);
+    var evaluator = shell.eval.Evaluator.initWithRuntimePorts(allocator, runtime.posixPorts(&adapter));
+    evaluator.io = io;
+    const eval_context = shell.EvalContext.init(.{
+        .target = .current_shell,
+        .source = .interactive,
+        .interactive = true,
+    });
+    var outcome = try shell.eval.refreshJobTable(&evaluator, shell_state, eval_context);
+    defer outcome.deinit();
+    try outcome.commitDelta(shell_state, .current_shell);
+    shell_state.validate();
+}
+
 fn executeInteractivePendingTraps(
     allocator: std.mem.Allocator,
     io: std.Io,
@@ -813,6 +850,50 @@ fn dispatchBackgroundJobLifecycleEvents(
         }
     }
     previous_count.* = current_count;
+}
+
+fn dispatchBackgroundJobLifecycleActivityEvents(
+    context: *Context,
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    previous_count: *usize,
+    output: *std.ArrayList(u8),
+) !bool {
+    const current_count = countActiveBackgroundJobs(context.semantic_state.*);
+    var should_refresh_prompt = false;
+    if (current_count > previous_count.*) {
+        var buffer: [32]u8 = undefined;
+        const count_text = try std.fmt.bufPrint(&buffer, "{d}", .{current_count});
+        for (previous_count.*..current_count) |_| {
+            const hook_result = try runInteractiveActivityEvent(
+                context,
+                allocator,
+                io,
+                "job.start",
+                &.{ "job", count_text },
+            );
+            defer allocator.free(hook_result.output);
+            try output.appendSlice(allocator, hook_result.output);
+            should_refresh_prompt = should_refresh_prompt or hook_result.refresh_prompt or hook_result.output.len != 0;
+        }
+    } else if (current_count < previous_count.*) {
+        var buffer: [32]u8 = undefined;
+        const count_text = try std.fmt.bufPrint(&buffer, "{d}", .{current_count});
+        for (current_count..previous_count.*) |_| {
+            const hook_result = try runInteractiveActivityEvent(
+                context,
+                allocator,
+                io,
+                "job.end",
+                &.{ "job", count_text },
+            );
+            defer allocator.free(hook_result.output);
+            try output.appendSlice(allocator, hook_result.output);
+            should_refresh_prompt = should_refresh_prompt or hook_result.refresh_prompt or hook_result.output.len != 0;
+        }
+    }
+    previous_count.* = current_count;
+    return should_refresh_prompt;
 }
 
 fn interactivePendingExit(interactive_shell: *const Shell) ?shell.ExitStatus {
@@ -943,6 +1024,7 @@ pub fn run(
             .previous_status = last_status,
             .previous_duration_ms = last_command_duration_ms,
             .prompt_async_state = &prompt_async_state,
+            .active_background_job_count = &active_background_job_count,
         };
         try dispatchBackgroundJobLifecycleEvents(
             &job_event_context,
@@ -962,6 +1044,7 @@ pub fn run(
             .previous_status = last_status,
             .previous_duration_ms = last_command_duration_ms,
             .prompt_async_state = &prompt_async_state,
+            .active_background_job_count = &active_background_job_count,
         };
         try runInteractiveEventHooks(
             &prompt_prepare_context,
@@ -1007,6 +1090,7 @@ pub fn run(
             .previous_status = last_status,
             .previous_duration_ms = last_command_duration_ms,
             .prompt_async_state = &prompt_async_state,
+            .active_background_job_count = &active_background_job_count,
         };
         const ui_theme = interactiveUiTheme(interactive_shell.semantic_state);
         const read_options: editor_driver.ReadLineOptions = .{
@@ -1650,6 +1734,88 @@ test "interactive timer events run due hooks" {
     try std.testing.expect(shell_state.event_hooks.items[0].next_tick_ms != null);
     try std.testing.expect(shell_state.event_hooks.items[0].next_tick_ms.? > monotonicMillis(std.testing.io));
 }
+
+test "interactive event hooks can register timer hooks from shell functions" {
+    var shell_state = shell.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    try shell_state.putFunction(.{
+        .name = "on_job_start",
+        .source_body = "event add timer.tick prompt-activity on_tick --every 180",
+    });
+    try shell_state.putFunction(.{ .name = "on_tick", .source_body = ":" });
+    try shell_state.setEventHook(.{
+        .event = .job_start,
+        .name = "prompt-activity",
+        .function_name = "on_job_start",
+    });
+    var editor_state = EditorState.init(std.testing.allocator);
+    defer editor_state.deinit();
+    var context: Context = .{ .semantic_state = &shell_state, .editor_state = &editor_state };
+
+    const hook_result = try runInteractiveActivityEvent(
+        &context,
+        std.testing.allocator,
+        std.testing.io,
+        "job.start",
+        &.{ "job", "1" },
+    );
+    defer std.testing.allocator.free(hook_result.output);
+
+    try std.testing.expectEqualStrings("", hook_result.output);
+    try std.testing.expect(hook_result.refresh_prompt);
+    try std.testing.expect(!hook_result.stop);
+    const registration = shell_state.event_hooks.items[1];
+    try std.testing.expectEqual(shell.EventName.timer_tick, registration.event);
+    try std.testing.expectEqualStrings("prompt-activity", registration.name);
+    try std.testing.expectEqualStrings("on_tick", registration.function_name);
+    try std.testing.expectEqual(@as(?u64, 180), registration.every_ms);
+    try std.testing.expectEqual(@as(?u64, null), registration.next_tick_ms);
+}
+
+test "interactive interval hooks dispatch background job end lifecycle" {
+    var shell_state = shell.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    try shell_state.putFunction(.{
+        .name = "on_job_end",
+        .source_body = "JOB_EVENT=$RUSH_EVENT/$1/$2; event remove timer.tick prompt-activity",
+    });
+    try shell_state.setEventHook(.{
+        .event = .job_end,
+        .name = "prompt-activity",
+        .function_name = "on_job_end",
+    });
+    try shell_state.setEventHook(.{
+        .event = .timer_tick,
+        .name = "prompt-activity",
+        .function_name = "on_tick",
+        .every_ms = 180,
+    });
+    var editor_state = EditorState.init(std.testing.allocator);
+    defer editor_state.deinit();
+    var active_count: usize = 1;
+    var context: Context = .{
+        .semantic_state = &shell_state,
+        .editor_state = &editor_state,
+        .active_background_job_count = &active_count,
+    };
+    var output: std.ArrayList(u8) = .empty;
+    defer output.deinit(std.testing.allocator);
+
+    try std.testing.expect(try dispatchBackgroundJobLifecycleActivityEvents(
+        &context,
+        std.testing.allocator,
+        std.testing.io,
+        &active_count,
+        &output,
+    ));
+
+    try std.testing.expectEqualStrings("", output.items);
+    try std.testing.expectEqual(@as(usize, 0), active_count);
+    try std.testing.expectEqualStrings("job.end/job/0", shell_state.getVariable("JOB_EVENT").?.value);
+    try std.testing.expectEqual(@as(usize, 1), shell_state.event_hooks.items.len);
+    try std.testing.expectEqual(shell.EventName.job_end, shell_state.event_hooks.items[0].event);
+}
+
 test "interactive hooks dispatch pending semantic signal trap" {
     var shell_state = shell.ShellState.init(std.testing.allocator);
     defer shell_state.deinit();

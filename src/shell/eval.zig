@@ -6597,6 +6597,28 @@ pub fn drainJobNotifications(
     return command_outcome;
 }
 
+pub fn refreshJobTable(
+    evaluator: *Evaluator,
+    shell_state: *state.ShellState,
+    eval_context: context.EvalContext,
+) EvalError!outcome.CommandOutcome {
+    shell_state.validate();
+    eval_context.validate();
+    std.debug.assert(eval_context.target.allowsShellStateCommit());
+    std.debug.assert(shell_state.acceptsExecutionTarget(eval_context.target));
+
+    var refreshed_state = try refreshedBackgroundJobState(evaluator, shell_state.*, null);
+    defer refreshed_state.deinit();
+
+    var state_delta = delta.StateDelta.init(evaluator.allocator, eval_context.target);
+    errdefer state_delta.deinit();
+    try appendJobTableDiff(shell_state.*, refreshed_state, &state_delta);
+
+    var command_outcome = outcome.CommandOutcome.init(evaluator.allocator, shell_state.last_status, state_delta);
+    command_outcome.validateForContext(eval_context);
+    return command_outcome;
+}
+
 pub fn executePendingTraps(
     evaluator: *Evaluator,
     shell_state: *state.ShellState,
@@ -12673,6 +12695,7 @@ fn appendFunctionFrameDelta(
     try appendShoptDiff(before.shopts, after.shopts, state_delta);
     try appendAliasDiff(before, after, state_delta);
     try appendTrapDiff(before, after, state_delta);
+    try appendEventHookDiff(before, after, state_delta);
     if (!std.mem.eql(
         u8,
         before.logical_cwd,
@@ -12769,6 +12792,7 @@ fn appendShellStateDiffExcludingVariables(
     try appendShoptDiff(before.shopts, after.shopts, state_delta);
     try appendAliasDiff(before, after, state_delta);
     try appendTrapDiff(before, after, state_delta);
+    try appendEventHookDiff(before, after, state_delta);
     if (!positionalsEqual(
         before.positionals.items,
         after.positionals.items,
@@ -12863,6 +12887,43 @@ fn appendTrapDiff(before: state.ShellState, after: state.ShellState, state_delta
     while (before_traps.next()) |entry| {
         if (!after.traps.contains(entry.key_ptr.*)) try state_delta.setTrap(entry.key_ptr.*, null);
     }
+}
+
+fn appendEventHookDiff(before: state.ShellState, after: state.ShellState, state_delta: *delta.StateDelta) !void {
+    for (after.event_hooks.items) |registration| {
+        if (findEventHook(before.event_hooks.items, registration.event, registration.name)) |previous| {
+            if (eventHooksEqual(previous, registration)) continue;
+        }
+        try state_delta.setEventHook(registration);
+    }
+
+    for (before.event_hooks.items) |registration| {
+        if (findEventHook(after.event_hooks.items, registration.event, registration.name) != null) continue;
+        try state_delta.removeEventHook(.{ .event = registration.event, .name = registration.name });
+    }
+}
+
+fn findEventHook(
+    registrations: []const shell_event.Registration,
+    event_name: shell_event.Name,
+    name: []const u8,
+) ?shell_event.Registration {
+    for (registrations) |registration| {
+        registration.validate();
+        if (registration.event == event_name and std.mem.eql(u8, registration.name, name)) return registration;
+    }
+    return null;
+}
+
+fn eventHooksEqual(left: shell_event.Registration, right: shell_event.Registration) bool {
+    left.validate();
+    right.validate();
+    return left.event == right.event and
+        std.mem.eql(u8, left.name, right.name) and
+        std.mem.eql(u8, left.function_name, right.function_name) and
+        left.priority == right.priority and
+        left.every_ms == right.every_ms and
+        left.next_tick_ms == right.next_tick_ms;
 }
 
 fn evaluateExternal(
@@ -13831,6 +13892,14 @@ fn shellStateMutationFingerprint(shell_state: state.ShellState) u64 {
     while (traps.next()) |entry| {
         hasher.update(entry.key_ptr.*);
         hasher.update(entry.value_ptr.action);
+    }
+    for (shell_state.event_hooks.items) |registration| {
+        hasher.update(registration.event.text());
+        hasher.update(registration.name);
+        hasher.update(registration.function_name);
+        hasher.update(std.mem.asBytes(&registration.priority));
+        if (registration.every_ms) |every_ms| hasher.update(std.mem.asBytes(&every_ms));
+        if (registration.next_tick_ms) |next_tick_ms| hasher.update(std.mem.asBytes(&next_tick_ms));
     }
     hasher.update(std.mem.asBytes(&shell_state.options));
     hasher.update(shell_state.logical_cwd);
@@ -22951,6 +23020,42 @@ test "semantic drained done job notification removes completed job" {
     defer jobs_result.deinit();
     try std.testing.expectEqual(@as(outcome.ExitStatus, 0), jobs_result.status);
     try std.testing.expectEqualStrings("", jobs_result.stdout.items);
+}
+
+test "semantic job table refresh marks completed jobs without draining notifications" {
+    var fake = FakeExternalRuntime.init(std.testing.allocator);
+    defer fake.deinit();
+    var evaluator = Evaluator.initWithExternalPorts(std.testing.allocator, fake.fdPort(), fake.processPort());
+    var shell_state = state.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    shell_state.options.set(.monitor, true);
+
+    try appendSemanticTestJob(&shell_state, 1, 7001, 7001, "sleep 1", .running);
+    fake.setPollWaitStatuses(&.{.{ .exited = 5 }});
+
+    var refresh = try refreshJobTable(
+        &evaluator,
+        &shell_state,
+        context.EvalContext.forTarget(.current_shell),
+    );
+    defer refresh.deinit();
+    try std.testing.expectEqualStrings("", refresh.stdout.items);
+    try refresh.commitDelta(&shell_state, .current_shell);
+
+    try std.testing.expectEqual(@as(usize, 1), shell_state.background_jobs.items.len);
+    try std.testing.expectEqual(state.JobState.done, shell_state.background_jobs.items[0].state);
+    try std.testing.expectEqual(@as(usize, 1), shell_state.pending_job_notifications.items.len);
+
+    var done_notifications = try drainJobNotifications(
+        &evaluator,
+        &shell_state,
+        context.EvalContext.forTarget(.current_shell),
+    );
+    defer done_notifications.deinit();
+    try std.testing.expectEqualStrings("[1] Done(5) sleep 1\n", done_notifications.stdout.items);
+    try done_notifications.commitDelta(&shell_state, .current_shell);
+    try std.testing.expectEqual(@as(usize, 0), shell_state.background_jobs.items.len);
+    try std.testing.expectEqual(@as(usize, 0), shell_state.pending_job_notifications.items.len);
 }
 
 test "semantic jobs builtin supports pid and long operands with diagnostics" {
