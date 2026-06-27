@@ -266,11 +266,14 @@ fn runSemanticCommandStringInternal(
         );
     }
 
-    var parsed = try parser.parse(allocator, script, .{
+    var invocation_arena = std.heap.ArenaAllocator.init(allocator);
+    defer invocation_arena.deinit();
+    const invocation_allocator = invocation_arena.allocator();
+
+    const parsed = try parser.parse(invocation_allocator, script, .{
         .features = invocation.features.withStrictDiagnostics(),
         .collect_command_substitution_nodes = false,
     });
-    defer parsed.deinit();
     if (parsed.diagnostics.len != 0) {
         return .{ .output = try parseDiagnosticsWithOptions(allocator, script, parsed.diagnostics, .{
             .source_path = source_path,
@@ -278,8 +281,7 @@ fn runSemanticCommandStringInternal(
         }) };
     }
 
-    var program = try ir.lowerSimpleCommands(allocator, parsed);
-    defer program.deinit();
+    const program = try ir.lowerSimpleCommands(invocation_allocator, parsed);
     if (try semanticPreflightUnsupported(allocator, program, invocation.features, false, false, false)) |message| {
         return semanticUnsupported(allocator, message);
     }
@@ -1032,6 +1034,8 @@ fn runSemanticLoweredProgram(
     var status: shell.ExitStatus = 0;
     var control_flow: shell.ControlFlow = .normal;
     var abort_bash_line: ?usize = null;
+    var statement_arena = std.heap.ArenaAllocator.init(allocator);
+    defer statement_arena.deinit();
     for (program.statements, 0..) |statement, statement_index| {
         std.debug.assert(statement.span.start <= statement.span.end);
         std.debug.assert(statement.span.end <= script.len);
@@ -1053,8 +1057,11 @@ fn runSemanticLoweredProgram(
         if (!should_run) continue;
         if (semanticNoexecSuppressesStatement(shell_state.*, eval_context)) break;
 
-        var statement_fragment = try ir.statementSourceFragment(allocator, program, statement_index);
-        defer statement_fragment.deinit(allocator);
+        const statement_allocator = statement_arena.allocator();
+        defer _ = statement_arena.reset(.retain_capacity);
+
+        var statement_fragment = try ir.statementSourceFragment(statement_allocator, program, statement_index);
+        defer statement_fragment.deinit(statement_allocator);
         const statement_end = statement_fragment.consumed_end;
         const statement_source = statement_fragment.syntax_span.slice(program.source);
         std.debug.assert(statement_source.len != 0);
@@ -1068,19 +1075,23 @@ fn runSemanticLoweredProgram(
         syncSemanticStdinScriptOffset(stdin_script_file, stdin_script_source_offset, script, statement_end);
         source_resolver.active_frame = output_frame.execution_frame_value;
         var body = if (statement.async_after) body: {
-            const statement_script = try statement_fragment.render(allocator, program.source, .{ .trim_syntax = true });
-            defer allocator.free(statement_script);
+            const statement_script = try statement_fragment.render(
+                statement_allocator,
+                program.source,
+                .{ .trim_syntax = true },
+            );
+            defer statement_allocator.free(statement_script);
             const previous_statement_source_line_offset = source_resolver.source_line_offset;
             source_resolver.source_line_offset = source_line_offset + semanticSourceLine(script, statement.span.start);
             defer source_resolver.source_line_offset = previous_statement_source_line_offset;
-            break :body (try source_resolver.lowerSource(
-                allocator,
+            break :body (try source_resolver.lowerSourceScratch(
+                statement_allocator,
                 statement_script,
                 statement_context,
                 shell_state,
             )) orelse return semanticUnsupported(allocator, "semantic parser lowering returned no body");
-        } else try source_resolver.lowerProgramStatement(
-            allocator,
+        } else try source_resolver.lowerProgramStatementScratch(
+            statement_allocator,
             program,
             statement_index,
             statement_context,
@@ -1099,13 +1110,13 @@ fn runSemanticLoweredProgram(
 
         evaluator.directory_change_event_observed = false;
         var command_outcome = if (statement.async_after) blk: {
-            var background_plan = (try semanticBackgroundPipelinePlan(allocator, body)) orelse
+            var background_plan = (try semanticBackgroundPipelinePlan(statement_allocator, body)) orelse
                 return semanticUnsupported(
                     allocator,
                     // ziglint-ignore: Z024 user-visible diagnostic; wrapping would inject a newline into stderr
                     "semantic executor production preflight keeps unsupported background statements outside the switched slice",
                 );
-            defer background_plan.deinit(allocator);
+            defer background_plan.deinit(statement_allocator);
             break :blk shell.eval.evaluatePipelinePlan(
                 evaluator,
                 shell_state,
@@ -1148,8 +1159,8 @@ fn runSemanticLoweredProgram(
         if (bashAssignmentErrorAbortsSourceLine(eval_context.features, statement_source, command_outcome)) {
             abort_bash_line = semanticSourceLine(script, statement.span.start);
         }
-        const old_cwd = try allocator.dupe(u8, shell_state.logical_cwd);
-        defer allocator.free(old_cwd);
+        const old_cwd = try statement_allocator.dupe(u8, shell_state.logical_cwd);
+        defer statement_allocator.free(old_cwd);
         try command_outcome.applyToShellState(shell_state, .{ .record_exit_control_flow = true });
         if (!evaluator.directory_change_event_observed) {
             try appendDirectoryChangeEventOutcome(

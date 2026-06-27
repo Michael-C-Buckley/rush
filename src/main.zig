@@ -1,6 +1,7 @@
 //! Application entry point.
 
 const std = @import("std");
+const builtin = @import("builtin");
 
 pub const compat = @import("shell/compat.zig");
 pub const parser = @import("shell/parser.zig");
@@ -36,21 +37,42 @@ const parseShellInvocation = cli_invocation.parse;
 const shouldRunInteractiveStandardInput = cli_invocation.shouldRunInteractiveStandardInput;
 const isLoginArgZero = cli_invocation.isLoginArgZero;
 
-pub fn main(init: std.process.Init) !u8 {
-    const allocator = init.gpa;
-    const args = try init.minimal.args.toSlice(init.arena.allocator());
+const use_debug_allocator = builtin.mode == .Debug;
+const AppDebugAllocator = if (use_debug_allocator) std.heap.DebugAllocator(.{}) else void;
+
+pub fn main(init: std.process.Init.Minimal) !u8 {
+    var debug_allocator: AppDebugAllocator = if (use_debug_allocator) .init else {};
+    defer if (use_debug_allocator) {
+        _ = debug_allocator.deinit();
+    };
+    const allocator = if (use_debug_allocator) debug_allocator.allocator() else std.heap.smp_allocator;
+
+    var arena = std.heap.ArenaAllocator.init(allocator);
+    defer arena.deinit();
+
+    var io_threaded: std.Io.Threaded = .init(allocator, .{
+        .argv0 = .init(.{ .vector = init.args.vector }),
+        .environ = init.environ,
+    });
+    defer io_threaded.deinit();
+    const io = io_threaded.io();
+
+    var environ_map = try std.process.Environ.createMap(init.environ, allocator);
+    defer environ_map.deinit();
+
+    const args = try init.args.toSlice(arena.allocator());
     const login_shell = isLoginArgZero(args[0]);
 
-    if (args.len == 1 and stdinIsTty(init.io)) {
-        return runInteractive(allocator, init.io, init.environ_map, .{ .arg_zero = args[0], .login = login_shell });
+    if (args.len == 1 and stdinIsTty(io)) {
+        return runInteractive(allocator, io, &environ_map, .{ .arg_zero = args[0], .login = login_shell });
     }
 
     if (args.len == 2 and std.mem.eql(u8, args[1], "--login")) {
-        return runInteractive(allocator, init.io, init.environ_map, .{ .arg_zero = args[0], .login = true });
+        return runInteractive(allocator, io, &environ_map, .{ .arg_zero = args[0], .login = true });
     }
 
     if (args.len == 2 and std.mem.eql(u8, args[1], "--help")) {
-        try writeAll(init.io, .stdout, usage);
+        try writeAll(io, .stdout, usage);
         return 0;
     }
 
@@ -59,12 +81,12 @@ pub fn main(init: std.process.Init) !u8 {
         .source = "-",
         .arg_zero = args[0],
     } else parseShellInvocation(args) orelse {
-        try writeAll(init.io, .stderr, usage);
+        try writeAll(io, .stderr, usage);
         return 2;
     };
 
-    if (shouldRunInteractiveStandardInput(invocation, stdinIsTty(init.io), stderrIsTty(init.io))) {
-        return runInteractive(allocator, init.io, init.environ_map, .{
+    if (shouldRunInteractiveStandardInput(invocation, stdinIsTty(io), stderrIsTty(io))) {
+        return runInteractive(allocator, io, &environ_map, .{
             .arg_zero = invocation.arg_zero,
             .login = login_shell,
             .features = invocation.features,
@@ -76,30 +98,30 @@ pub fn main(init: std.process.Init) !u8 {
 
     var result = runShellInvocationWithEnvironment(
         allocator,
-        init.io,
+        io,
         invocation,
-        init.environ_map,
+        &environ_map,
         .inherit,
         login_shell,
     ) catch |err| switch (err) {
         error.FileNotFound => {
-            try writeScriptReadError(init.io, invocation.source, "file not found");
+            try writeScriptReadError(io, invocation.source, "file not found");
             return 2;
         },
         error.AccessDenied, error.PermissionDenied => {
-            try writeScriptReadError(init.io, invocation.source, "permission denied");
+            try writeScriptReadError(io, invocation.source, "permission denied");
             return 2;
         },
         error.IsDir => {
-            try writeScriptReadError(init.io, invocation.source, "is a directory");
+            try writeScriptReadError(io, invocation.source, "is a directory");
             return 2;
         },
         else => |e| return e,
     };
     defer result.deinit();
 
-    try writeAll(init.io, .stdout, result.stdout);
-    try writeAll(init.io, .stderr, result.stderr);
+    try writeAll(io, .stdout, result.stdout);
+    try writeAll(io, .stderr, result.stderr);
     return result.status;
 }
 

@@ -768,6 +768,36 @@ pub const ParserBackedSourceResolver = struct {
         return self.lowerSourceWithSignal(allocator, source, null, eval_context, shell_state);
     }
 
+    pub fn lowerSourceScratch(
+        self: *ParserBackedSourceResolver,
+        allocator: std.mem.Allocator,
+        source: []const u8,
+        eval_context: context.EvalContext,
+        shell_state: *state.ShellState,
+    ) !?TrapActionBody {
+        self.validate();
+        shell_state.validate();
+        std.debug.assert(shell_state.acceptsExecutionTarget(eval_context.target));
+
+        var lowering_eval_context = eval_context;
+        lowering_eval_context.features = self.features;
+        lowering_eval_context.validate();
+
+        var lowerer: SourceLowerer = .{
+            .allocator = allocator,
+            .owner = self,
+            .shell_state = shell_state,
+            .eval_context = lowering_eval_context,
+            .signal = null,
+            .local_functions = .empty,
+            .source_line_offset = self.source_line_offset,
+        };
+
+        const payload = try lowerer.lower(source);
+        payload.validate();
+        return trapActionBodyFromPayload(payload);
+    }
+
     pub fn lowerProgramStatement(
         self: *ParserBackedSourceResolver,
         allocator: std.mem.Allocator,
@@ -808,6 +838,42 @@ pub const ParserBackedSourceResolver = struct {
         );
         payload.validate();
         return .{ .owned = OwnedTrapActionBody.init(allocator, arena, payload) };
+    }
+
+    pub fn lowerProgramStatementScratch(
+        self: *ParserBackedSourceResolver,
+        allocator: std.mem.Allocator,
+        program: ir.Program,
+        statement_index: usize,
+        eval_context: context.EvalContext,
+        shell_state: *state.ShellState,
+    ) !TrapActionBody {
+        self.validate();
+        shell_state.validate();
+        std.debug.assert(statement_index < program.statements.len);
+        std.debug.assert(shell_state.acceptsExecutionTarget(eval_context.target));
+
+        var lowering_eval_context = eval_context;
+        lowering_eval_context.features = self.features;
+        lowering_eval_context.validate();
+
+        var lowerer: SourceLowerer = .{
+            .allocator = allocator,
+            .owner = self,
+            .shell_state = shell_state,
+            .eval_context = lowering_eval_context,
+            .signal = null,
+            .local_functions = .empty,
+            .source_line_offset = self.source_line_offset,
+        };
+
+        const payload = try lowerer.lowerSingleStatement(
+            program,
+            program.statements[statement_index],
+            lowering_eval_context.target,
+        );
+        payload.validate();
+        return trapActionBodyFromPayload(payload);
     }
 
     pub fn validate(self: ParserBackedSourceResolver) void {
@@ -872,6 +938,16 @@ pub const ParserBackedSourceResolver = struct {
         return .{ .owned = OwnedTrapActionBody.init(allocator, arena, payload) };
     }
 };
+
+fn trapActionBodyFromPayload(payload: TrapActionBodyPayload) TrapActionBody {
+    payload.validate();
+    return switch (payload) {
+        .simple => |plan| .{ .simple = plan },
+        .compound => |plan| .{ .compound = plan },
+        .pipeline => |plan| .{ .pipeline = plan },
+        .failure => |failure| .{ .failure = failure },
+    };
+}
 
 const ParserCommandSubstitutionResolver = struct {
     owner: *ParserBackedSourceResolver,
