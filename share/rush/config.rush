@@ -9,9 +9,11 @@
 # Report background job completion promptly while sitting at the prompt.
 set -o notify
 
+# Return compact git branch/status/upstream text for the default prompt.
 rush_prompt_git() {
   branch="$(git branch --show-current 2>/dev/null)"
   if test -z "$branch"; then
+    # Detached HEAD: show the short commit instead of leaving git blank.
     branch="$(git rev-parse --short HEAD 2>/dev/null)"
     test -n "$branch" || return 0
   fi
@@ -30,10 +32,13 @@ rush_prompt_git() {
   printf '%s%s%s' "$branch" "$marker" "$arrows"
 }
 
+# Timer hook used only to force prompt redraws while activity is in flight.
 rush_prompt_activity_refresh() {
+  # The event dispatcher redraws after hooks run; no state change is needed.
   :
 }
 
+# Track prompt, completion, and job activity so the prompt can animate.
 rush_prompt_activity_update() {
   case "$1" in
     prompt) rush_prompt_activity_prompt="$2" ;;
@@ -44,6 +49,7 @@ rush_prompt_activity_update() {
   if test "${rush_prompt_activity_prompt:-0}" != 0 || \
      test "${rush_prompt_activity_completion:-0}" != 0 || \
      test "${rush_prompt_activity_jobs:-0}" != 0; then
+    # Keep the redraw timer installed only while something is active.
     event add timer.tick prompt-activity rush_prompt_activity_refresh --every 120
   else
     event remove timer.tick prompt-activity
@@ -57,6 +63,7 @@ event add completion.async.end prompt-activity rush_prompt_activity_update
 event add job.start prompt-activity rush_prompt_activity_update
 event add job.end prompt-activity rush_prompt_activity_update
 
+# Test whether a terminal-reported color is a strict #rrggbb value.
 rush_prompt_activity_is_rgb() {
   case "$1" in
     \#[[:xdigit:]][[:xdigit:]][[:xdigit:]][[:xdigit:]][[:xdigit:]][[:xdigit:]]) return 0 ;;
@@ -64,13 +71,16 @@ rush_prompt_activity_is_rgb() {
   return 1
 }
 
+# Check that the colors needed for the smooth truecolor activity fade exist.
 rush_prompt_activity_rgb_ready() {
   rush_prompt_activity_is_rgb "${rush_color_foreground-}" && \
   rush_prompt_activity_is_rgb "${rush_color_background-}" && \
   rush_prompt_activity_is_rgb "${rush_color_red-}"
 }
 
+# Build one frame color for the activity dot by fading toward the background.
 rush_prompt_activity_color() {
+  # Stop at 70% toward the background so the dimmest frame stays visible.
   prompt_frame --interval 120 \
     "$1" \
     "$(color blend "$1" "$rush_color_background" 3)" \
@@ -102,9 +112,11 @@ rush_prompt_activity_color() {
     "$(color blend "$1" "$rush_color_background" 3)"
 }
 
+# Render the default prompt: cwd, async git info, and status/activity marker.
 rush_prompt() {
   rush_prompt_status=$?
   prompt segment --fg blue "$(prompt_pwd)"
+  # Run git status asynchronously so slow repositories do not block editing.
   rush_prompt_git_info="$(prompt_async git --ttl 2000 -- rush_prompt_git)"
   if test "$rush_prompt_git_info" != ""; then
     prompt text ' '
@@ -120,6 +132,7 @@ rush_prompt() {
   fi
 
   if test "$rush_prompt_active" = 1 && rush_prompt_activity_rgb_ready; then
+    # Prefer the smooth truecolor fade when terminal RGB reports are known.
     if test "$rush_prompt_status" = 0; then
       rush_prompt_marker_color="$(rush_prompt_activity_color "$rush_color_foreground")"
     else
@@ -127,6 +140,7 @@ rush_prompt() {
     fi
     prompt segment --fg "$rush_prompt_marker_color" ' ● '
   elif test "$rush_prompt_active" = 1; then
+    # Fall back to a plain text spinner for terminals without RGB reports.
     rush_prompt_marker=" $(prompt_frame --interval 180 ◐ ◓ ◑ ◒) "
     if test "$rush_prompt_status" = 0; then
       prompt text "$rush_prompt_marker"
@@ -146,6 +160,7 @@ rush_prompt() {
 # for example:
 #   event add directory.change direnv rush_direnv_hook
 #   event add directory.change mise rush_mise_hook
+# Import direnv's exported environment changes after directory changes.
 rush_direnv_hook() {
   local rush_direnv_output
   if ! command -v direnv >/dev/null 2>&1; then
@@ -157,6 +172,7 @@ $rush_direnv_output
 __rush_direnv_json__
 }
 
+# Import mise's shell environment changes after directory changes.
 rush_mise_hook() {
   local rush_mise_output
   if ! command -v mise >/dev/null 2>&1; then
@@ -247,6 +263,7 @@ grep() {
   fi
 }
 
+# Colorized diff wrapper; command bypasses the function to avoid recursion.
 diff() {
   if test -z "$rush_diff_color_opt"; then
     if command diff --color=auto /dev/null /dev/null >/dev/null 2>&1; then
