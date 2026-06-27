@@ -4,6 +4,7 @@
 //! `StateDelta` commit points.
 
 const std = @import("std");
+const zig_builtin = @import("builtin");
 const command_plan = @import("command_plan.zig");
 const context = @import("context.zig");
 const runtime_process = @import("../runtime/process.zig");
@@ -1283,6 +1284,8 @@ pub const ShellState = struct {
     }
 
     pub fn validate(self: ShellState) void {
+        if (comptime !shellStateValidationEnabled()) return;
+
         var variables = self.variables.iterator();
         while (variables.next()) |entry| {
             assertValidVariableName(entry.key_ptr.*);
@@ -1322,6 +1325,13 @@ pub const ShellState = struct {
         if (self.logical_cwd.len != 0) assertValidLogicalCwd(self.logical_cwd);
     }
 };
+
+fn shellStateValidationEnabled() bool {
+    return switch (zig_builtin.mode) {
+        .Debug, .ReleaseSafe => true,
+        .ReleaseFast, .ReleaseSmall => false,
+    };
+}
 
 pub fn assertValidVariableName(name: []const u8) void {
     std.debug.assert(name.len != 0);

@@ -8,6 +8,7 @@
 const std = @import("std");
 const default_builtins = @import("../builtins.zig");
 const builtin = @import("builtin.zig");
+const zig_builtin = @import("builtin");
 const context = @import("context.zig");
 const ir = @import("ir.zig");
 const redirection_plan = @import("redirection_plan.zig");
@@ -38,6 +39,8 @@ pub const FunctionDefinition = struct {
     redirections: redirection_plan.RedirectionPlan = .{},
 
     pub fn validate(self: FunctionDefinition) void {
+        if (comptime !functionDefinitionValidationEnabled()) return;
+
         state.assertValidVariableName(self.name);
         self.body.validate();
         if (self.source_body) |source_body| {
@@ -56,6 +59,13 @@ pub const FunctionDefinition = struct {
             self.body.statements.len != 0 or self.body.commands.len != 0;
     }
 };
+
+fn functionDefinitionValidationEnabled() bool {
+    return switch (zig_builtin.mode) {
+        .Debug, .ReleaseSafe => true,
+        .ReleaseFast, .ReleaseSmall => false,
+    };
+}
 
 pub const FunctionBody = StatementList;
 
