@@ -62,8 +62,8 @@ pub const FunctionDefinition = struct {
 
 fn functionDefinitionValidationEnabled() bool {
     return switch (zig_builtin.mode) {
-        .Debug, .ReleaseSafe => true,
-        .ReleaseFast, .ReleaseSmall => false,
+        .Debug => true,
+        .ReleaseSafe, .ReleaseFast, .ReleaseSmall => false,
     };
 }
 

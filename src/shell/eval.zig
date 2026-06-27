@@ -14071,8 +14071,8 @@ fn signalStatus(signal: u8) outcome.ExitStatus {
 
 fn shellStateMutationFingerprintEnabled() bool {
     return switch (zig_builtin.mode) {
-        .Debug, .ReleaseSafe => true,
-        .ReleaseFast, .ReleaseSmall => false,
+        .Debug => true,
+        .ReleaseSafe, .ReleaseFast, .ReleaseSmall => false,
     };
 }
 
