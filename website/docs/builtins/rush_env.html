@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>rush rush_env builtin</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header class="site-header">
+    <div><a href="../../index.html">rush</a></div>
+    <nav class="site-nav" aria-label="Primary">
+      <a href="../index.html">docs</a>
+      <a href="https://github.com/rockorager/rush">source</a>
+    </nav>
+  </header>
+
+  <h1 id="rush-env"><a href="#rush-env">RUSH_ENV(1)</a></h1>
+
+  <h2 id="name"><a href="#name">NAME</a></h2>
+
+  <p>rush_env - import environment updates from standard input.</p>
+
+  <h2 id="synopsis"><a href="#synopsis">SYNOPSIS</a></h2>
+
+  <pre><span class="cmd">rush_env</span> import-json
+<span class="cmd">rush_env</span> import-sh</pre>
+
+  <h2 id="description"><a href="#description">DESCRIPTION</a></h2>
+
+  <p><code>rush_env import-json</code> reads standard input as a JSON object and applies the object to the current shell environment. String values set and export variables. <code>null</code> values unset variables. Other JSON values are rejected.</p>
+
+  <p><code>rush_env import-sh</code> reads a narrow Bash-style environment script from standard input: <code>export NAME=value</code> lines set and export variables, and <code>unset NAME</code> lines unset variables. Any other command syntax is rejected instead of evaluated.</p>
+
+  <p>Imported names must be valid shell variable names. This keeps imported state representable as normal Rush shell variables.</p>
+
+  <h2 id="example"><a href="#example">EXAMPLE</a></h2>
+
+  <pre><span class="cmd">rush_direnv_hook</span>() {
+  <span class="kw">if</span> ! <span class="cmd">command</span> <span class="opt">-v</span> direnv &gt;/dev/null 2&gt;&amp;1; <span class="kw">then</span>
+    <span class="kw">return</span> 0
+  <span class="kw">fi</span>
+  <span class="var">output</span>=<span class="str">"$(direnv export json)"</span> || <span class="kw">return</span> $?
+  <span class="cmd">rush_env</span> import-json &lt;&lt;EOF
+<span class="var">$output</span>
+EOF
+}
+
+<span class="cmd">event</span> add directory.change direnv rush_direnv_hook</pre>
+
+  <pre><span class="cmd">rush_mise_hook</span>() {
+  <span class="kw">if</span> ! <span class="cmd">command</span> <span class="opt">-v</span> mise &gt;/dev/null 2&gt;&amp;1; <span class="kw">then</span>
+    <span class="kw">return</span> 0
+  <span class="kw">fi</span>
+  <span class="var">output</span>=<span class="str">"$(mise hook-env -s bash --quiet)"</span> || <span class="kw">return</span> $?
+  <span class="cmd">rush_env</span> import-sh &lt;&lt;EOF
+<span class="var">$output</span>
+EOF
+}
+
+<span class="cmd">event</span> add directory.change mise rush_mise_hook</pre>
+
+  <h2 id="exit-status"><a href="#exit-status">EXIT STATUS</a></h2>
+
+  <p>Zero when the environment is applied, one for invalid environment input, and two for usage errors.</p>
+
+  <h2 id="see-also"><a href="#see-also">SEE ALSO</a></h2>
+
+  <p><a href="index.html">rush-builtins(7)</a>, <a href="event.html">event(1)</a>, <a href="../configuration.html">rush configuration</a>.</p>
+
+</body>
+</html>

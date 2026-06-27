@@ -14102,6 +14102,7 @@ fn evaluateExtensionBuiltin(
         .eval_context = eval_context,
         .function_scope = extensionFunctionScope(evaluator),
         .external_resolver = extensionExternalResolver(&external_resolver_context),
+        .stdin = extensionStdinReader(buffers.stdin),
         .source_evaluator = extensionSourceEvaluator(&source_evaluator_context),
         .stdout = &buffers.stdout,
         .stderr = &buffers.stderr,
@@ -14164,6 +14165,18 @@ fn resolveAllExtensionExternals(
         resolver_context.shell_state,
         command,
     );
+}
+
+fn extensionStdinReader(input: *EvaluationInput) extension_api.StdinReader {
+    return .{
+        .context = input,
+        .take_remaining = takeExtensionStdinRemaining,
+    };
+}
+
+fn takeExtensionStdinRemaining(opaque_input: *anyopaque) []const u8 {
+    const input: *EvaluationInput = @ptrCast(@alignCast(opaque_input));
+    return input.takeRemaining();
 }
 
 const ExtensionSourceEvaluatorContext = struct {

@@ -36,7 +36,7 @@
 
   <p>POSIX leaves a non-absolute expanded <span class="var">$ENV</span> pathname unspecified; Rush currently accepts it relative to the current working directory. Rush is not intended to be installed setuid/setgid and does not add a differing-real/effective-ID suppression layer around <span class="var">$ENV</span>. Point <span class="var">$ENV</span> at a trusted file and avoid group- or world-writable startup files or containing directories.</p>
 
-  <p>The embedded defaults define the <a href="#prompt">default prompt</a>, colorized <code>ls</code>, <code>grep</code>, and <code>diff</code> functions (color flags are probed once per session and only colorize terminals), and <code>ll</code> and <code>la</code> <a href="#abbreviations">abbreviations</a> for <code>ls -lh</code> and <code>ls -lAh</code>. Redefine, <code>unset -f</code>, or <code>abbr --erase</code> any of them in a later file to opt out.</p>
+  <p>The embedded defaults define the <a href="#prompt">default prompt</a>, opt-in <a href="#project-environments">project environment hook helpers</a>, colorized <code>ls</code>, <code>grep</code>, and <code>diff</code> functions (color flags are probed once per session and only colorize terminals), and <code>ll</code> and <code>la</code> <a href="#abbreviations">abbreviations</a> for <code>ls -lh</code> and <code>ls -lAh</code>. Redefine, <code>unset -f</code>, or <code>abbr --erase</code> any of them in a later file to opt out.</p>
 
   <h2 id="abbreviations"><a href="#abbreviations">Abbreviations</a></h2>
 
@@ -139,6 +139,15 @@ index:236
   <pre><span class="cmd">prompt_pwd</span>                  <span class="comment"># ~/repos/rush</span>
 <span class="cmd">prompt_pwd</span> <span class="opt">-d</span> 1             <span class="comment"># ~/r/rush</span>
 <span class="cmd">prompt_pwd</span> <span class="opt">-d</span> 1 <span class="opt">-D</span> 2        <span class="comment"># ~/repos/rush</span></pre>
+
+  <h2 id="project-environments"><a href="#project-environments">Project environments</a></h2>
+
+  <p>Rush ships opt-in helper functions for tools that export per-directory environments. They use <code>rush_env</code> to apply environment diffs natively, so configuration does not need to evaluate shell code from the tool.</p>
+
+  <pre><span class="cmd">event</span> add directory.change direnv rush_direnv_hook
+<span class="cmd">event</span> add directory.change mise rush_mise_hook</pre>
+
+  <p><code>rush_direnv_hook</code> runs <code>direnv export json</code>. <code>rush_mise_hook</code> runs <code>mise hook-env -s bash --quiet</code> and accepts only environment mutation lines from its output. Both helpers return successfully when the corresponding tool is not installed, and neither helper is registered by default.</p>
 
   <h2 id="async-prompt"><a href="#async-prompt">Async prompt updates</a></h2>
 

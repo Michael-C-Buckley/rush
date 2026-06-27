@@ -120,6 +120,15 @@ pub const ExternalResolver = struct {
     }
 };
 
+pub const StdinReader = struct {
+    context: *anyopaque,
+    take_remaining: *const fn (*anyopaque) []const u8,
+
+    pub fn takeRemaining(self: StdinReader) []const u8 {
+        return self.take_remaining(self.context);
+    }
+};
+
 pub fn freeExternalResolutions(
     allocator: std.mem.Allocator,
     resolutions: []const command_plan.ExternalResolution,
@@ -159,6 +168,7 @@ pub const Invocation = struct {
     eval_context: context.EvalContext,
     function_scope: ?FunctionScope = null,
     external_resolver: ?ExternalResolver = null,
+    stdin: ?StdinReader = null,
     source_evaluator: ?SourceEvaluator = null,
     stdout: *std.ArrayList(u8),
     stderr: *std.ArrayList(u8),

@@ -9,9 +9,14 @@ const shell_builtin = @import("shell/builtin.zig");
 pub const color = @import("extensions/color.zig");
 pub const compat = @import("extensions/compat.zig");
 pub const editor = @import("extensions/editor.zig");
+pub const env_import = @import("extensions/env_import.zig");
 pub const event = @import("extensions/event.zig");
 
-pub const default_builtins = editor.builtins ++ color.builtins ++ compat.builtins ++ event.builtins;
+pub const default_builtins = editor.builtins ++
+    color.builtins ++
+    compat.builtins ++
+    env_import.builtins ++
+    event.builtins;
 pub const default_registry: []const shell_builtin.Builtin = &default_builtins;
 
 test "bundled Rush extensions classify their builtins as extensions" {
