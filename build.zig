@@ -163,6 +163,23 @@ pub fn build(b: *std.Build) void {
     );
     glob_bench_step.dependOn(&run_glob_bench.step);
 
+    const linux_fs_bench_module = b.createModule(.{
+        .root_source_file = b.path("tests/linux_fs_bench.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    const linux_fs_bench = b.addExecutable(.{
+        .name = "rush-linux-fs-bench",
+        .root_module = linux_fs_bench_module,
+    });
+    const run_linux_fs_bench = b.addRunArtifact(linux_fs_bench);
+    if (b.args) |args| run_linux_fs_bench.addArgs(args);
+    const linux_fs_bench_step = b.step(
+        "bench-linux-fs",
+        "Benchmark Linux directory metadata strategies, including io_uring statx batching",
+    );
+    linux_fs_bench_step.dependOn(&run_linux_fs_bench.step);
+
     const compile_check_step = b.step("compile-check", "Compile-check Linux/macOS/BSD targets");
     addCompileChecks(b, compile_check_step, optimize, build_config, use_system_sqlite);
 

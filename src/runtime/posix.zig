@@ -51,6 +51,7 @@ const macos_vdir = 2;
 const macos_vlnk = 5;
 const macos_bulk_buffer_len = 1024 * 1024;
 const posix_x_ok = 1;
+const linux_statx_size_mask: std.os.linux.STATX = .{ .SIZE = true };
 
 pub const Adapter = struct {
     io: std.Io,
@@ -425,15 +426,46 @@ fn fillListDirMetadata(
     attributes: fs.ListDirAttributes,
 ) fs.ListDirError!void {
     if (attributes.size) {
-        const stat = dir.statFile(io, entry.name, .{}) catch |err| switch (err) {
-            error.FileNotFound, error.AccessDenied, error.PermissionDenied => null,
-            else => |stat_err| return stat_err,
-        };
-        if (stat) |metadata| entry.size = metadata.size;
+        if (comptime builtin.os.tag == .linux) {
+            entry.size = try linuxListDirEntrySize(dir, entry.name);
+        } else {
+            const stat = dir.statFile(io, entry.name, .{}) catch |err| switch (err) {
+                error.FileNotFound, error.AccessDenied, error.PermissionDenied => null,
+                else => |stat_err| return stat_err,
+            };
+            if (stat) |metadata| entry.size = metadata.size;
+        }
     }
     if (attributes.executable) {
         entry.executable = try executableAccess(io, dir, entry.name);
     }
+}
+
+fn linuxListDirEntrySize(dir: std.Io.Dir, name: []const u8) fs.ListDirError!?u64 {
+    if (comptime builtin.os.tag != .linux) unreachable;
+    if (name.len > std.Io.Dir.max_name_bytes) return error.NameTooLong;
+
+    var name_buffer: [std.Io.Dir.max_name_bytes + 1]u8 = undefined;
+    @memcpy(name_buffer[0..name.len], name);
+    name_buffer[name.len] = 0;
+    const name_z = name_buffer[0..name.len :0];
+
+    var statx_result: std.os.linux.Statx = undefined;
+    const rc = std.os.linux.statx(dir.handle, name_z.ptr, 0, linux_statx_size_mask, &statx_result);
+    switch (std.os.linux.errno(rc)) {
+        .SUCCESS => {},
+        .NOENT, .ACCES, .PERM => return null,
+        .LOOP => return error.SymLinkLoop,
+        .NAMETOOLONG => return error.NameTooLong,
+        .NOMEM => return error.SystemResources,
+        .NOTDIR => return error.NotDir,
+        .IO => return error.InputOutput,
+        .OVERFLOW, .FBIG => return error.FileTooBig,
+        .BADF, .FAULT, .INVAL => return error.Unexpected,
+        else => return error.Unexpected,
+    }
+    if (!statx_result.mask.SIZE) return null;
+    return statx_result.size;
 }
 
 fn executableAccess(io: std.Io, dir: std.Io.Dir, name: []const u8) fs.ListDirError!bool {
