@@ -11811,7 +11811,6 @@ fn cloneFunctionFrameState(
     evaluator: *Evaluator,
     shell_state: *state.ShellState,
 ) EvalError!state.ShellState {
-    shell_state.validate();
     return shell_state.cloneBorrowingFunctions(evaluator.allocator) catch |err| switch (err) {
         error.OutOfMemory => return error.OutOfMemory,
         error.ReadonlyVariable => unreachable,
@@ -11827,11 +11826,10 @@ fn beginFunctionCallRedirections(
     guard: *RedirectionGuard,
     buffers: *EvaluationBuffers,
 ) EvalError!?SimpleEvalResult {
-    shell_state.validate();
     caller_context.validate();
-    validateFunctionCall(plan, definition);
     std.debug.assert(!guard.hasTransaction());
     if (!hasRedirections(plan)) return null;
+    validateFunctionCall(plan, definition);
 
     if (caller_context.command_substitution_depth == 0 and caller_context.pipeline_depth != 0 and
         frameRoutesCapturedOutput(buffers.frame.*) and !redirectionPlanNeedsRuntimeFdEffects(plan.redirections))
@@ -11868,11 +11866,10 @@ fn beginFunctionDefinitionRedirections(
     guard: *RedirectionGuard,
     buffers: *EvaluationBuffers,
 ) EvalError!?SimpleEvalResult {
-    shell_state.validate();
     caller_context.validate();
-    validateFunctionCall(plan, definition);
     std.debug.assert(!guard.hasTransaction());
     if (definition.redirections.steps.len == 0) return null;
+    validateFunctionCall(plan, definition);
 
     const apply_result = try applyRedirectionsForScope(
         evaluator.*,
@@ -11897,7 +11894,6 @@ fn beginFunctionFrameState(
     frame_state: *state.ShellState,
     plan: command_plan.CommandPlan,
 ) EvalError!void {
-    frame_state.validate();
     plan.validate();
     try applyFunctionAssignmentPrefixes(frame_state, frame_state.*, plan);
     try frame_state.replacePositionals(plan.argv[1..]);
@@ -11985,7 +11981,6 @@ fn startFunctionCallFrame(
     buffers: *EvaluationBuffers,
 ) EvalError!FunctionStartResult {
     const call_frame = try activation.beginCallFrame(caller_context, plan, owns_plan);
-    activation.validate();
 
     try flushBuffersForFunctionRedirectionTargets(buffers, call_frame.plan, call_frame.definition);
 
@@ -12342,8 +12337,6 @@ fn finishFunctionLifecycle(
     buffers: *EvaluationBuffers,
     body_result: SimpleEvalResult,
 ) EvalError!SimpleEvalResult {
-    shell_state.validate();
-    frame_state.validate();
     function_context.validate();
     validateFunctionCall(plan, definition);
 
