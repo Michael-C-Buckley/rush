@@ -612,12 +612,15 @@ pub const ExpandedSimpleCommand = struct {
 };
 
 pub const LookupSnapshot = struct {
+    /// Builtin registries are validated when constructed. The default registry
+    /// is compile-time data, and embedder-owned registries go through
+    /// `BuiltinRegistry.register*`, so command classification does not rescan
+    /// the entire registry on every simple command.
     builtins: []const builtin.Builtin = default_builtins.default_registry,
     functions: []const FunctionDefinition = &.{},
     externals: []const ExternalResolution = &.{},
 
     pub fn validate(self: LookupSnapshot) void {
-        builtin.assertUniqueNames(self.builtins);
         assertUniqueFunctionNames(self.functions);
         assertUniqueExternalNames(self.externals);
     }
