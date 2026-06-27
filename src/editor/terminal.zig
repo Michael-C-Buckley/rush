@@ -5,6 +5,10 @@ const vaxis = @import("vaxis");
 
 const line_editor = @import("session.zig");
 
+const kitty_keyboard_set = "\x1b[={d}u";
+const legacy_kitty_keyboard_flags: u5 = 0;
+const editor_kitty_keyboard_flags: u5 = @bitCast(vaxis.Key.KittyFlags{});
+
 pub const Event = union(enum) {
     key_press: line_editor.KeyEvent,
     key_release: line_editor.KeyEvent,
@@ -38,6 +42,7 @@ pub const Capability = enum {
 
 pub const Capabilities = struct {
     kitty_keyboard: bool = false,
+    kitty_keyboard_handoff: bool = false,
     kitty_graphics: bool = false,
     rgb: bool = false,
     sgr_pixels: bool = false,
@@ -106,10 +111,7 @@ pub const Capabilities = struct {
         switch (capability) {
             .kitty_keyboard => {
                 if (!self.kitty_keyboard) {
-                    const flags: u5 = @bitCast(vaxis.Key.KittyFlags{});
-                    const sequence = try std.fmt.allocPrint(allocator, vaxis.ctlseqs.csi_u_push, .{flags});
-                    defer allocator.free(sequence);
-                    try output.appendSlice(allocator, sequence);
+                    try appendKittyKeyboardSetSequence(allocator, output, editor_kitty_keyboard_flags);
                 }
                 self.kitty_keyboard = true;
             },
@@ -134,17 +136,50 @@ pub const Capabilities = struct {
         }
     }
 
+    pub fn appendSuspendSequences(
+        self: *Capabilities,
+        allocator: std.mem.Allocator,
+        output: *std.ArrayList(u8),
+    ) !void {
+        if (self.kitty_keyboard and !self.kitty_keyboard_handoff) {
+            try appendKittyKeyboardSetSequence(allocator, output, legacy_kitty_keyboard_flags);
+            self.kitty_keyboard_handoff = true;
+        }
+        if (self.unicode) try output.appendSlice(allocator, vaxis.ctlseqs.unicode_reset);
+        if (self.color_scheme_updates) try output.appendSlice(allocator, vaxis.ctlseqs.color_scheme_reset);
+        if (self.in_band_resize_enabled) try output.appendSlice(allocator, vaxis.ctlseqs.in_band_resize_reset);
+        if (self.bracketed_paste) try output.appendSlice(allocator, vaxis.ctlseqs.bp_reset);
+        self.unicode = false;
+        self.color_scheme_updates = false;
+        self.in_band_resize_enabled = false;
+        self.in_band_resize = false;
+        self.bracketed_paste = false;
+    }
+
+    pub fn appendResumeSequences(
+        self: *Capabilities,
+        allocator: std.mem.Allocator,
+        output: *std.ArrayList(u8),
+    ) !void {
+        if (!self.kitty_keyboard_handoff) return;
+        try appendKittyKeyboardSetSequence(allocator, output, editor_kitty_keyboard_flags);
+        self.kitty_keyboard_handoff = false;
+    }
+
     pub fn appendResetSequences(
         self: *Capabilities,
         allocator: std.mem.Allocator,
         output: *std.ArrayList(u8),
     ) !void {
-        if (self.kitty_keyboard) try output.appendSlice(allocator, vaxis.ctlseqs.csi_u_pop);
+        if (self.kitty_keyboard or self.kitty_keyboard_handoff) {
+            try appendKittyKeyboardSetSequence(allocator, output, legacy_kitty_keyboard_flags);
+        }
         if (self.unicode) try output.appendSlice(allocator, vaxis.ctlseqs.unicode_reset);
         if (self.color_scheme_updates) try output.appendSlice(allocator, vaxis.ctlseqs.color_scheme_reset);
         if (self.in_band_resize_enabled) try output.appendSlice(allocator, vaxis.ctlseqs.in_band_resize_reset);
         if (self.bracketed_paste) try output.appendSlice(allocator, vaxis.ctlseqs.bp_reset);
         self.kitty_keyboard = false;
+        self.kitty_keyboard_handoff = false;
         self.unicode = false;
         self.color_scheme_updates = false;
         self.in_band_resize_enabled = false;
@@ -152,6 +187,16 @@ pub const Capabilities = struct {
         self.bracketed_paste = false;
     }
 };
+
+fn appendKittyKeyboardSetSequence(
+    allocator: std.mem.Allocator,
+    output: *std.ArrayList(u8),
+    flags: u5,
+) !void {
+    const sequence = try std.fmt.allocPrint(allocator, kitty_keyboard_set, .{flags});
+    defer allocator.free(sequence);
+    try output.appendSlice(allocator, sequence);
+}
 
 pub const Parser = struct {
     allocator: std.mem.Allocator,
@@ -369,10 +414,43 @@ test "terminal capability reset plans active-mode cleanup" {
     try std.testing.expect(!capabilities.unicode);
     try std.testing.expect(!capabilities.color_scheme_updates);
     try std.testing.expect(!capabilities.bracketed_paste);
-    try std.testing.expect(std.mem.indexOf(u8, output.items, vaxis.ctlseqs.csi_u_pop) != null);
+    try std.testing.expect(std.mem.indexOf(u8, output.items, "\x1b[=0u") != null);
     try std.testing.expect(std.mem.indexOf(u8, output.items, vaxis.ctlseqs.unicode_reset) != null);
     try std.testing.expect(std.mem.indexOf(u8, output.items, vaxis.ctlseqs.color_scheme_reset) != null);
     try std.testing.expect(std.mem.indexOf(u8, output.items, vaxis.ctlseqs.bp_reset) != null);
+}
+
+test "terminal capability suspend forces legacy keyboard during command handoff" {
+    var capabilities: Capabilities = .{
+        .kitty_keyboard = true,
+        .unicode = true,
+        .bracketed_paste = true,
+    };
+    var output: std.ArrayList(u8) = .empty;
+    defer output.deinit(std.testing.allocator);
+
+    try capabilities.appendSuspendSequences(std.testing.allocator, &output);
+
+    try std.testing.expect(capabilities.kitty_keyboard);
+    try std.testing.expect(capabilities.kitty_keyboard_handoff);
+    try std.testing.expect(!capabilities.unicode);
+    try std.testing.expect(!capabilities.bracketed_paste);
+    try std.testing.expect(std.mem.indexOf(u8, output.items, "\x1b[=0u") != null);
+    try std.testing.expect(std.mem.indexOf(u8, output.items, vaxis.ctlseqs.unicode_reset) != null);
+    try std.testing.expect(std.mem.indexOf(u8, output.items, vaxis.ctlseqs.bp_reset) != null);
+
+    output.clearRetainingCapacity();
+    try capabilities.appendResumeSequences(std.testing.allocator, &output);
+    const editor_sequence = try std.fmt.allocPrint(
+        std.testing.allocator,
+        kitty_keyboard_set,
+        .{editor_kitty_keyboard_flags},
+    );
+    defer std.testing.allocator.free(editor_sequence);
+
+    try std.testing.expect(capabilities.kitty_keyboard);
+    try std.testing.expect(!capabilities.kitty_keyboard_handoff);
+    try std.testing.expectEqualStrings(editor_sequence, output.items);
 }
 
 test "terminal parser emits text keys" {

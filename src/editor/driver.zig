@@ -256,13 +256,14 @@ pub const TerminalSession = struct {
 
     pub fn leaveEditorMode(self: *TerminalSession) !void {
         self.renderer.reset(self.allocator);
-        self.resetTerminalCapabilities();
+        self.suspendTerminalCapabilities();
         self.query_batch_sent = false;
         try self.suspendRawMode();
     }
 
     pub fn enterEditorMode(self: *TerminalSession) !void {
         try self.resumeRawMode();
+        try self.resumeTerminalCapabilities();
         try self.writeInitialQuerySequences();
         self.query_batch_sent = true;
     }
@@ -292,6 +293,25 @@ pub const TerminalSession = struct {
         var output: std.ArrayList(u8) = .empty;
         defer output.deinit(self.allocator);
         try self.capabilities.appendApplySequence(self.allocator, &output, capability);
+        try self.writeTerminalSequence(output.items);
+    }
+
+    fn suspendTerminalCapabilities(self: *TerminalSession) void {
+        var output: std.ArrayList(u8) = .empty;
+        defer output.deinit(self.allocator);
+        self.capabilities.appendSuspendSequences(self.allocator, &output) catch |err| {
+            log.debug("failed to plan terminal capability suspension: {}", .{err});
+            return;
+        };
+        self.writeTerminalSequence(output.items) catch |err| {
+            log.debug("failed to suspend terminal capabilities: {}", .{err});
+        };
+    }
+
+    fn resumeTerminalCapabilities(self: *TerminalSession) !void {
+        var output: std.ArrayList(u8) = .empty;
+        defer output.deinit(self.allocator);
+        try self.capabilities.appendResumeSequences(self.allocator, &output);
         try self.writeTerminalSequence(output.items);
     }
 
