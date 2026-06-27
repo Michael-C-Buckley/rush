@@ -2725,13 +2725,7 @@ fn wordRefFromToken(allocator: std.mem.Allocator, parsed: parser.ParseResult, to
 fn wordRefFromSpan(allocator: std.mem.Allocator, parsed: parser.ParseResult, span: parser.Span) !WordRef {
     const raw = try wordRawForExpansion(allocator, parsed.source, span);
     errdefer allocator.free(raw);
-    const text = expand.expandWordScalar(allocator, raw, .{}) catch |err| switch (err) {
-        error.NounsetParameter,
-        error.ParameterExpansionFailed,
-        error.ArithmeticExpansionFailed,
-        => try allocator.dupe(u8, raw),
-        else => return err,
-    };
+    const text = try expand.quoteRemove(allocator, raw);
     errdefer allocator.free(text);
     return .{
         .span = span,
@@ -2892,6 +2886,19 @@ test "lower removes quotes from execution words" {
     try std.testing.expectEqualStrings("hello world", command.argv[1].text);
     try std.testing.expectEqualStrings("again", command.argv[2].text);
     try std.testing.expectEqualStrings("a b", command.argv[3].text);
+}
+
+test "lower keeps dynamic word text unexpanded" {
+    var parsed = try parser.parse(std.testing.allocator, "echo $name $((1 + 2)) $(printf hi)", .{});
+    defer parsed.deinit();
+
+    var program = try lowerSimpleCommands(std.testing.allocator, parsed);
+    defer program.deinit();
+
+    const command = program.commands[0];
+    try std.testing.expectEqualStrings("$name", command.argv[1].text);
+    try std.testing.expectEqualStrings("$((1 + 2))", command.argv[2].text);
+    try std.testing.expectEqualStrings("$(printf hi)", command.argv[3].text);
 }
 
 test "lower preserves unpaired EOF backslash literals" {
