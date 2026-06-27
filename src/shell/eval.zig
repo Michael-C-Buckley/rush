@@ -3625,39 +3625,72 @@ const FunctionBodyCursor = struct {
                     try self.pushCompound(compound.body, child_context, false);
                     return self.step(evaluator, shell_state, buffers);
                 },
-                .source => |source| if (try ownedFunctionCallFromSourceForCursor(
-                    evaluator,
-                    shell_state,
-                    child_context,
-                    source,
-                )) |owned_plan| {
-                    list_cursor.pending_call = .{
-                        .state_disposition = .{ .commit_to_working = owned_plan.target },
-                        .statement_plan = entry.plan,
-                    };
-                    return .{ .call_function = .{
-                        .plan = owned_plan,
-                        .eval_context = child_context.withTarget(owned_plan.target),
-                        .owns_plan = true,
-                    } };
-                },
-                .ir_source => |source| if (try ownedFunctionCallFromIrSourceForCursor(
-                    evaluator,
-                    shell_state,
-                    child_context,
-                    source,
-                )) |owned_plan| {
-                    list_cursor.pending_call = .{
-                        .state_disposition = .{ .commit_to_working = owned_plan.target },
-                        .statement_plan = entry.plan,
-                    };
-                    return .{ .call_function = .{
-                        .plan = owned_plan,
-                        .eval_context = child_context.withTarget(owned_plan.target),
-                        .owns_plan = true,
-                    } };
-                },
+                .source, .ir_source => {},
                 .pipeline => {},
+            }
+
+            var source_body: ?TrapActionBody = switch (entry.plan) {
+                .source => |source| try lowerSourceStatementForCursor(
+                    evaluator,
+                    shell_state,
+                    child_context,
+                    source,
+                    buffers.stdin,
+                    buffers.frame,
+                ),
+                .ir_source => |source| try lowerIrSourceStatementForCursor(
+                    evaluator,
+                    shell_state,
+                    child_context,
+                    source,
+                    buffers.stdin,
+                    buffers.frame,
+                ),
+                .simple, .compound, .pipeline => null,
+            };
+            if (source_body) |*body| {
+                defer body.deinit();
+                if (try ownedFunctionCallFromTrapActionBodyForCursor(evaluator.allocator, body.*)) |owned_plan| {
+                    list_cursor.pending_call = .{
+                        .state_disposition = .{ .commit_to_working = owned_plan.target },
+                        .statement_plan = entry.plan,
+                    };
+                    return .{ .call_function = .{
+                        .plan = owned_plan,
+                        .eval_context = child_context.withTarget(owned_plan.target),
+                        .owns_plan = true,
+                    } };
+                }
+
+                var child_outcome = try evaluateTrapActionBodyWithInputInFrame(
+                    evaluator,
+                    shell_state,
+                    child_context,
+                    body.*,
+                    buffers.stdin,
+                    buffers.frame,
+                );
+                defer child_outcome.deinit();
+
+                const state_disposition: StatementChildStateDisposition =
+                    if (statementPlanCommitsStateToParent(entry.plan))
+                        .{ .commit_to_working = child_outcome.state_delta.target }
+                    else
+                        .discard_except_status;
+                const completion = try completeStatementChildOutcome(
+                    evaluator,
+                    shell_state,
+                    list_cursor.eval_context,
+                    &child_outcome,
+                    state_disposition,
+                    entry.plan,
+                    &list_cursor.abort_bash_line,
+                    &list_cursor.result,
+                    buffers,
+                );
+                list_cursor.index += 1;
+                if (completion.stop_list) break;
+                continue;
             }
 
             var child_outcome = try evaluateStatementPlan(
@@ -4023,18 +4056,26 @@ fn functionCursorCanSuspendSimpleCall(plan: command_plan.CommandPlan) bool {
     return plan.class() == .function and plan.target.allowsShellStateCommit();
 }
 
-fn ownedFunctionCallFromSourceForCursor(
+fn lowerSourceStatementForCursor(
     evaluator: *Evaluator,
     shell_state: *state.ShellState,
     eval_context: context.EvalContext,
     source_plan: command_plan.SourceStatementPlan,
-) EvalError!?command_plan.CommandPlan {
+    input: ?*EvaluationInput,
+    frame: ?*execution_frame.ExecutionFrame,
+) EvalError!TrapActionBody {
+    eval_context.validate();
     source_plan.validate();
+    if (input) |active_input| active_input.validate();
+    if (frame) |active_frame| active_frame.validate();
+
     var parser_resolver = ParserBackedSourceResolver.init(evaluator);
     parser_resolver.features = evaluator.features;
     parser_resolver.arg_zero = evaluator.arg_zero;
     parser_resolver.expand_aliases = source_plan.expand_aliases and shell_state.shopts.enabled(.expand_aliases);
     parser_resolver.alias_state = evaluator.alias_state;
+    parser_resolver.active_frame = frame;
+    parser_resolver.active_input = input;
     parser_resolver.source_line_offset = source_plan.line;
     var body = (parser_resolver.lowerSource(
         evaluator.allocator,
@@ -4043,24 +4084,32 @@ fn ownedFunctionCallFromSourceForCursor(
         shell_state,
     ) catch |err| switch (err) {
         error.OutOfMemory => return error.OutOfMemory,
-        else => return null,
-    }) orelse return null;
-    defer body.deinit();
-    return ownedFunctionCallFromTrapActionBodyForCursor(evaluator.allocator, body);
+        else => return error.Unimplemented,
+    }) orelse return error.Unimplemented;
+    body.validate();
+    return body;
 }
 
-fn ownedFunctionCallFromIrSourceForCursor(
+fn lowerIrSourceStatementForCursor(
     evaluator: *Evaluator,
     shell_state: *state.ShellState,
     eval_context: context.EvalContext,
     source_plan: command_plan.IrStatementPlan,
-) EvalError!?command_plan.CommandPlan {
+    input: ?*EvaluationInput,
+    frame: ?*execution_frame.ExecutionFrame,
+) EvalError!TrapActionBody {
+    eval_context.validate();
     source_plan.validate();
+    if (input) |active_input| active_input.validate();
+    if (frame) |active_frame| active_frame.validate();
+
     var parser_resolver = ParserBackedSourceResolver.init(evaluator);
     parser_resolver.features = evaluator.features;
     parser_resolver.arg_zero = evaluator.arg_zero;
     parser_resolver.expand_aliases = source_plan.expand_aliases and shell_state.shopts.enabled(.expand_aliases);
     parser_resolver.alias_state = evaluator.alias_state;
+    parser_resolver.active_frame = frame;
+    parser_resolver.active_input = input;
     parser_resolver.source_line_offset = source_plan.line -| sourceLineIndex(
         source_plan.program.source,
         source_plan.program.statements[source_plan.statement_index].span.start,
@@ -4073,10 +4122,10 @@ fn ownedFunctionCallFromIrSourceForCursor(
         shell_state,
     ) catch |err| switch (err) {
         error.OutOfMemory => return error.OutOfMemory,
-        else => return null,
+        else => return error.Unimplemented,
     });
-    defer body.deinit();
-    return ownedFunctionCallFromTrapActionBodyForCursor(evaluator.allocator, body);
+    body.validate();
+    return body;
 }
 
 fn ownedFunctionCallFromTrapActionBodyForCursor(
