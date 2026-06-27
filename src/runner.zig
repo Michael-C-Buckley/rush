@@ -1034,6 +1034,8 @@ fn runSemanticLoweredProgram(
     var status: shell.ExitStatus = 0;
     var control_flow: shell.ControlFlow = .normal;
     var abort_bash_line: ?usize = null;
+    const source_lines = try SourceLineIndex.init(allocator, script);
+    defer source_lines.deinit(allocator);
     var statement_arena = std.heap.ArenaAllocator.init(allocator);
     defer statement_arena.deinit();
     for (program.statements, 0..) |statement, statement_index| {
@@ -1042,7 +1044,7 @@ fn runSemanticLoweredProgram(
         if (semanticStdinScriptConsumedStatement(stdin_script_file, stdin_script_source_offset, statement.span.start))
             continue;
         if (abort_bash_line) |line| {
-            if (semanticSourceLine(script, statement.span.start) == line) continue;
+            if (source_lines.lineIndex(statement.span.start) == line) continue;
             abort_bash_line = null;
         }
 
@@ -1057,6 +1059,8 @@ fn runSemanticLoweredProgram(
         if (!should_run) continue;
         if (semanticNoexecSuppressesStatement(shell_state.*, eval_context)) break;
 
+        const statement_line_index = source_lines.lineIndex(statement.span.start);
+        const statement_line_number = source_line_offset + statement_line_index + 1;
         const statement_allocator = statement_arena.allocator();
         defer _ = statement_arena.reset(.retain_capacity);
 
@@ -1082,7 +1086,7 @@ fn runSemanticLoweredProgram(
             );
             defer statement_allocator.free(statement_script);
             const previous_statement_source_line_offset = source_resolver.source_line_offset;
-            source_resolver.source_line_offset = source_line_offset + semanticSourceLine(script, statement.span.start);
+            source_resolver.source_line_offset = source_line_offset + statement_line_index;
             defer source_resolver.source_line_offset = previous_statement_source_line_offset;
             break :body (try source_resolver.lowerSourceScratch(
                 statement_allocator,
@@ -1090,12 +1094,13 @@ fn runSemanticLoweredProgram(
                 statement_context,
                 shell_state,
             )) orelse return semanticUnsupported(allocator, "semantic parser lowering returned no body");
-        } else try source_resolver.lowerProgramStatementScratch(
+        } else try source_resolver.lowerProgramStatementScratchAtLine(
             statement_allocator,
             program,
             statement_index,
             statement_context,
             shell_state,
+            statement_line_number,
         );
         defer body.deinit();
 
@@ -1157,7 +1162,7 @@ fn runSemanticLoweredProgram(
         status = command_outcome.status;
         control_flow = command_outcome.effectiveControlFlow();
         if (bashAssignmentErrorAbortsSourceLine(eval_context.features, statement_source, command_outcome)) {
-            abort_bash_line = semanticSourceLine(script, statement.span.start);
+            abort_bash_line = statement_line_index;
         }
         const old_cwd = try statement_allocator.dupe(u8, shell_state.logical_cwd);
         defer statement_allocator.free(old_cwd);
@@ -1297,6 +1302,37 @@ fn semanticNoexecSuppressesStatement(shell_state: shell.ShellState, eval_context
     eval_context.validate();
     return shell_state.options.noexec and !eval_context.interactive;
 }
+
+const SourceLineIndex = struct {
+    newline_offsets: []usize,
+
+    fn init(allocator: std.mem.Allocator, source: []const u8) !SourceLineIndex {
+        var offsets: std.ArrayList(usize) = .empty;
+        errdefer offsets.deinit(allocator);
+        for (source, 0..) |byte, index| {
+            if (byte == '\n') try offsets.append(allocator, index);
+        }
+        return .{ .newline_offsets = try offsets.toOwnedSlice(allocator) };
+    }
+
+    fn deinit(self: SourceLineIndex, allocator: std.mem.Allocator) void {
+        allocator.free(self.newline_offsets);
+    }
+
+    fn lineIndex(self: SourceLineIndex, offset: usize) usize {
+        var low: usize = 0;
+        var high: usize = self.newline_offsets.len;
+        while (low < high) {
+            const mid = low + (high - low) / 2;
+            if (self.newline_offsets[mid] < offset) {
+                low = mid + 1;
+            } else {
+                high = mid;
+            }
+        }
+        return low;
+    }
+};
 
 fn semanticSourceLine(source: []const u8, offset: usize) usize {
     std.debug.assert(offset <= source.len);

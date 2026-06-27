@@ -853,6 +853,34 @@ pub const ParserBackedSourceResolver = struct {
         std.debug.assert(statement_index < program.statements.len);
         std.debug.assert(shell_state.acceptsExecutionTarget(eval_context.target));
 
+        return self.lowerProgramStatementScratchAtLine(
+            allocator,
+            program,
+            statement_index,
+            eval_context,
+            shell_state,
+            self.source_line_offset + SourceLowerer.statementLine(
+                program.source,
+                program.statements[statement_index].span.start,
+            ) + 1,
+        );
+    }
+
+    pub fn lowerProgramStatementScratchAtLine(
+        self: *ParserBackedSourceResolver,
+        allocator: std.mem.Allocator,
+        program: ir.Program,
+        statement_index: usize,
+        eval_context: context.EvalContext,
+        shell_state: *state.ShellState,
+        source_line_number: usize,
+    ) !TrapActionBody {
+        self.validate();
+        shell_state.validate();
+        std.debug.assert(statement_index < program.statements.len);
+        std.debug.assert(shell_state.acceptsExecutionTarget(eval_context.target));
+        std.debug.assert(source_line_number != 0);
+
         var lowering_eval_context = eval_context;
         lowering_eval_context.features = self.features;
         lowering_eval_context.validate();
@@ -867,10 +895,11 @@ pub const ParserBackedSourceResolver = struct {
             .source_line_offset = self.source_line_offset,
         };
 
-        const payload = try lowerer.lowerSingleStatement(
+        const payload = try lowerer.lowerSingleStatementAtLine(
             program,
             program.statements[statement_index],
             lowering_eval_context.target,
+            source_line_number,
         );
         payload.validate();
         return trapActionBodyFromPayload(payload);
@@ -1164,8 +1193,24 @@ const SourceLowerer = struct {
         statement: ir.Statement,
         target: context.ExecutionTarget,
     ) !TrapActionBodyPayload {
+        return self.lowerSingleStatementAtLine(
+            program,
+            statement,
+            target,
+            self.sourceLineNumber(program.source, statement.span.start),
+        );
+    }
+
+    fn lowerSingleStatementAtLine(
+        self: *SourceLowerer,
+        program: ir.Program,
+        statement: ir.Statement,
+        target: context.ExecutionTarget,
+        source_line_number: usize,
+    ) !TrapActionBodyPayload {
+        std.debug.assert(source_line_number != 0);
         const previous_line_number = self.current_line_number;
-        self.current_line_number = self.sourceLineNumber(program.source, statement.span.start);
+        self.current_line_number = source_line_number;
         defer self.current_line_number = previous_line_number;
 
         if (statement.async_after) return self.unsupportedShapeFailure(
