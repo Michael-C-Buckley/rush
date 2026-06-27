@@ -1864,12 +1864,7 @@ fn ownedFunctionBodySource(
     const body_start = sourceStart(parsed, token_start);
     const body_end = sourceEnd(parsed, token_end);
     const body = parsed.source[body_start..body_end];
-    if (std.mem.indexOf(u8, body, "<<") == null) return ownedSourceWithHereDocs(
-        allocator,
-        parsed,
-        body_start,
-        body_end,
-    );
+    if (std.mem.indexOf(u8, body, "<<") == null) return allocator.dupe(u8, body);
 
     const function_line = sourceLineBounds(parsed.source, function_node.span.start);
     var synthetic: std.ArrayList(u8) = .empty;
