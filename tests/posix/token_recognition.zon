@@ -95,6 +95,25 @@
             .status = 0,
         },
         .{
+            .name = "alias substitution after command substitution here document uses current aliases",
+            .script =
+            \\value="$(cat <<EOF
+            \\$(printf inner)
+            \\EOF
+            \\)"
+            \\printf '<%s>\n' "$value"
+            \\alias hi='printf "%s\n" alias'
+            \\hi
+            ,
+            .stdout =
+            \\<inner>
+            \\alias
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "alias substitution applies while evaluating eval text",
             .script =
             \\alias hi='printf "%s\n" alias'

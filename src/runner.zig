@@ -441,7 +441,7 @@ fn runSemanticAliasTimingCommandString(
                     },
                 ) };
             }
-            end = extendSemanticHereDocChunk(script, start, semanticLineEnd(script, end));
+            end = extendSemanticHereDocChunk(script, end, semanticLineEnd(script, end));
         }
         if (stop_for_pending_exit) break;
         start = skipSemanticChunkSeparators(script, end);
@@ -858,7 +858,7 @@ fn runSemanticAliasTimingShellStateScript(
                     },
                 ) };
             }
-            end = extendSemanticHereDocChunk(script, start, semanticLineEnd(script, end));
+            end = extendSemanticHereDocChunk(script, end, semanticLineEnd(script, end));
         }
         if (stop_for_pending_exit) break;
         start = skipSemanticChunkSeparators(script, end);
