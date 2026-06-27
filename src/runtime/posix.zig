@@ -276,9 +276,9 @@ fn listDir(context: *anyopaque, request: fs.ListDirRequest) fs.ListDirError!fs.L
     var dir = try std.Io.Dir.cwd().openDir(adapter.io, request.path, .{ .iterate = true });
     defer dir.close(adapter.io);
 
-    var entries: std.ArrayList([]const u8) = .empty;
+    var entries: std.ArrayList(fs.ListDirEntry) = .empty;
     errdefer {
-        for (entries.items) |entry| request.allocator.free(entry);
+        for (entries.items) |entry| request.allocator.free(entry.name);
         entries.deinit(request.allocator);
     }
 
@@ -287,7 +287,10 @@ fn listDir(context: *anyopaque, request: fs.ListDirRequest) fs.ListDirError!fs.L
         if (entry.name.len == 0) continue;
         const owned_name = try request.allocator.dupe(u8, entry.name);
         errdefer request.allocator.free(owned_name);
-        try entries.append(request.allocator, owned_name);
+        try entries.append(request.allocator, .{
+            .name = owned_name,
+            .kind = fs.EntryKind.fromStd(entry.kind),
+        });
     }
 
     return .{

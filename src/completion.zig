@@ -2374,28 +2374,30 @@ fn pathCandidatesWithOptions(
     else
         try allocator.dupe(u8, dir_path_raw);
     defer allocator.free(dir_path);
-    var dir = std.Io.Dir.cwd().openDir(io, dir_path, .{ .iterate = true }) catch |err| switch (err) {
+    var adapter = runtime.PosixAdapter.init(io);
+    const fs_port = adapter.fsPort();
+    var entries = fs_port.listDir(.{ .allocator = allocator, .path = dir_path }) catch |err| switch (err) {
         error.FileNotFound, error.NotDir, error.AccessDenied => return &.{},
         else => return err,
     };
-    defer dir.close(io);
+    defer entries.deinit();
 
     var builder: Builder = .{};
     errdefer builder.deinit(allocator);
 
     const include_hidden = std.mem.startsWith(u8, entry_prefix, ".");
-    var iterator = dir.iterate();
-    while (try iterator.next(io)) |entry| {
-        if (entry.name.len == 0) continue;
-        if (std.mem.eql(u8, entry.name, ".") or std.mem.eql(u8, entry.name, "..")) continue;
-        if (!include_hidden and entry.name[0] == '.') continue;
-        if (!std.mem.startsWith(u8, entry.name, entry_prefix)) continue;
+    for (entries.entries) |entry| {
+        const name = entry.name;
+        if (name.len == 0) continue;
+        if (std.mem.eql(u8, name, ".") or std.mem.eql(u8, name, "..")) continue;
+        if (!include_hidden and name[0] == '.') continue;
+        if (!std.mem.startsWith(u8, name, entry_prefix)) continue;
 
         const is_directory = entry.kind == .directory;
         if (options.directories_only and !is_directory) continue;
-        const value = try pathCandidateValue(allocator, dir_prefix, entry.name, is_directory);
+        const value = try pathCandidateValue(allocator, dir_prefix, name, is_directory);
         defer allocator.free(value);
-        const display = try pathCandidateValue(allocator, "", entry.name, is_directory);
+        const display = try pathCandidateValue(allocator, "", name, is_directory);
         defer allocator.free(display);
         try builder.appendCandidate(allocator, .{
             .value = value,

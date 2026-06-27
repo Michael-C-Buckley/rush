@@ -116,11 +116,15 @@ pub const CommandSubstitution = struct {
     }
 };
 
+pub const PathnameEntry = struct {
+    name: []const u8,
+};
+
 pub const PathnameEntries = struct {
-    entries: []const []const u8,
+    entries: []const PathnameEntry,
 
     pub fn deinit(self: *PathnameEntries, allocator: std.mem.Allocator) void {
-        for (self.entries) |entry| allocator.free(entry);
+        for (self.entries) |entry| allocator.free(entry.name);
         allocator.free(self.entries);
         self.* = undefined;
     }
@@ -6228,9 +6232,9 @@ fn listPathnameDirWithIo(
     };
     defer dir.close(context.io);
 
-    var entries: std.ArrayList([]const u8) = .empty;
+    var entries: std.ArrayList(PathnameEntry) = .empty;
     errdefer {
-        for (entries.items) |entry| allocator.free(entry);
+        for (entries.items) |entry| allocator.free(entry.name);
         entries.deinit(allocator);
     }
 
@@ -6239,7 +6243,7 @@ fn listPathnameDirWithIo(
         if (entry.name.len == 0) continue;
         const owned_name = try allocator.dupe(u8, entry.name);
         errdefer allocator.free(owned_name);
-        try entries.append(allocator, owned_name);
+        try entries.append(allocator, .{ .name = owned_name });
     }
 
     return .{ .entries = try entries.toOwnedSlice(allocator) };
@@ -6441,7 +6445,8 @@ fn appendGlobComponentMatches(
     };
     defer entries.deinit(allocator);
 
-    for (entries.entries) |entry_name| {
+    for (entries.entries) |entry| {
+        const entry_name = entry.name;
         if (entry_name.len == 0) continue;
         if (entry_name[0] == '.' and
             !options.dotglob and

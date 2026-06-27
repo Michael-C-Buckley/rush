@@ -134,6 +134,31 @@ pub fn build(b: *std.Build) void {
     fuzz_step.dependOn(shell_fuzz_step);
     for (shell_fuzz_targets) |fuzz_target| addFuzzTarget(b, shell_fuzz_step, target, fuzz_target);
 
+    const glob_bench_module = b.createModule(.{
+        .root_source_file = b.path("tests/glob_bench.zig"),
+        .target = target,
+        .optimize = optimize,
+        .link_libc = true,
+    });
+    const glob_expand_module = b.createModule(.{
+        .root_source_file = b.path("src/shell/expand.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    glob_expand_module.addImport("uucode", uucode);
+    glob_bench_module.addImport("rush_expand", glob_expand_module);
+    const glob_bench = b.addExecutable(.{
+        .name = "rush-glob-bench",
+        .root_module = glob_bench_module,
+    });
+    const run_glob_bench = b.addRunArtifact(glob_bench);
+    if (b.args) |args| run_glob_bench.addArgs(args);
+    const glob_bench_step = b.step(
+        "bench-glob",
+        "Benchmark current glob expansion against macOS bulk directory listing",
+    );
+    glob_bench_step.dependOn(&run_glob_bench.step);
+
     const compile_check_step = b.step("compile-check", "Compile-check Linux/macOS/BSD targets");
     addCompileChecks(b, compile_check_step, optimize, build_config, use_system_sqlite);
 

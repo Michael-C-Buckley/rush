@@ -4,6 +4,7 @@ const std = @import("std");
 
 const api = @import("../api.zig");
 const editor_completion = @import("../../editor/completion.zig");
+const runtime = @import("../../runtime.zig");
 const shell_builtin = @import("../../shell/builtin.zig");
 const shell_state_mod = @import("../../shell/state.zig");
 const expand = @import("../../shell/expand.zig");
@@ -330,22 +331,24 @@ fn appendPathCandidates(state: *State, directories_only: bool) !void {
     else
         try state.allocator.dupe(u8, dir_path_raw);
     defer state.allocator.free(dir_path);
-    var dir = std.Io.Dir.cwd().openDir(state.io, dir_path, .{ .iterate = true }) catch |err| switch (err) {
+    var adapter = runtime.PosixAdapter.init(state.io);
+    const fs_port = adapter.fsPort();
+    var entries = fs_port.listDir(.{ .allocator = state.allocator, .path = dir_path }) catch |err| switch (err) {
         error.FileNotFound, error.NotDir, error.AccessDenied => return,
         else => return err,
     };
-    defer dir.close(state.io);
+    defer entries.deinit();
     const include_hidden = std.mem.startsWith(u8, entry_prefix, ".");
-    var iterator = dir.iterate();
-    while (try iterator.next(state.io)) |entry| {
-        if (entry.name.len == 0) continue;
-        if (!include_hidden and entry.name[0] == '.') continue;
-        if (!std.mem.startsWith(u8, entry.name, entry_prefix)) continue;
+    for (entries.entries) |entry| {
+        const name = entry.name;
+        if (name.len == 0) continue;
+        if (!include_hidden and name[0] == '.') continue;
+        if (!std.mem.startsWith(u8, name, entry_prefix)) continue;
         const is_directory = entry.kind == .directory;
         if (directories_only and !is_directory) continue;
-        const value = try pathCandidateValue(state.allocator, dir_prefix, entry.name, is_directory);
+        const value = try pathCandidateValue(state.allocator, dir_prefix, name, is_directory);
         errdefer state.allocator.free(value);
-        const display = try pathCandidateValue(state.allocator, "", entry.name, is_directory);
+        const display = try pathCandidateValue(state.allocator, "", name, is_directory);
         errdefer state.allocator.free(display);
         try state.candidates.append(state.allocator, .{
             .value = value,

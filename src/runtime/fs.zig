@@ -123,11 +123,45 @@ pub const InspectPathResult = struct {
     }
 };
 
+pub const EntryKind = enum {
+    unknown,
+    file,
+    directory,
+    symlink,
+    other,
+
+    pub fn fromStd(kind: std.Io.File.Kind) EntryKind {
+        return switch (kind) {
+            .unknown => .unknown,
+            .file => .file,
+            .directory => .directory,
+            .sym_link => .symlink,
+            .block_device,
+            .character_device,
+            .named_pipe,
+            .unix_domain_socket,
+            .whiteout,
+            .door,
+            .event_port,
+            => .other,
+        };
+    }
+};
+
+pub const ListDirEntry = struct {
+    name: []const u8,
+    kind: EntryKind = .unknown,
+
+    pub fn validate(self: ListDirEntry) void {
+        std.debug.assert(self.name.len != 0);
+    }
+};
+
 pub const ListDirRequest = struct {
     allocator: std.mem.Allocator,
     path: Path,
 
-    /// `path` is borrowed for the duration of the call. Returned names are
+    /// `path` is borrowed for the duration of the call. Returned entry names are
     /// owned by `allocator`; callers must release them with `ListDirResult.deinit`.
     pub fn init(allocator: std.mem.Allocator, path: Path) ListDirRequest {
         const request: ListDirRequest = .{ .allocator = allocator, .path = path };
@@ -142,22 +176,22 @@ pub const ListDirRequest = struct {
 
 pub const ListDirResult = struct {
     allocator: std.mem.Allocator,
-    entries: []const []const u8,
+    entries: []const ListDirEntry,
 
     pub fn deinit(self: *ListDirResult) void {
-        for (self.entries) |entry| self.allocator.free(entry);
+        for (self.entries) |entry| self.allocator.free(entry.name);
         self.allocator.free(self.entries);
         self.* = undefined;
     }
 
-    pub fn release(self: *ListDirResult) []const []const u8 {
+    pub fn release(self: *ListDirResult) []const ListDirEntry {
         const entries = self.entries;
         self.entries = &.{};
         return entries;
     }
 
     pub fn validate(self: ListDirResult) void {
-        for (self.entries) |entry| std.debug.assert(entry.len != 0);
+        for (self.entries) |entry| entry.validate();
     }
 };
 

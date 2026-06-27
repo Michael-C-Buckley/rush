@@ -419,7 +419,26 @@ fn listPathnameDir(
         error.FileNotFound, error.NotDir => return .{ .entries = &.{} },
         else => return err,
     };
-    return .{ .entries = entries.release() };
+    return pathnameEntriesFromRuntime(allocator, &entries);
+}
+
+fn pathnameEntriesFromRuntime(
+    allocator: std.mem.Allocator,
+    runtime_entries: *runtime.fs.ListDirResult,
+) !expansion.PathnameEntries {
+    const released = runtime_entries.release();
+    errdefer {
+        for (released) |entry| allocator.free(entry.name);
+        allocator.free(released);
+    }
+
+    const entries = try allocator.alloc(expansion.PathnameEntry, released.len);
+    errdefer allocator.free(entries);
+    for (released, entries) |source, *dest| {
+        dest.* = .{ .name = source.name };
+    }
+    allocator.free(released);
+    return .{ .entries = entries };
 }
 
 fn pathnameExists(opaque_context: ?*anyopaque, path: []const u8) !bool {
