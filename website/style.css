@@ -53,6 +53,39 @@ th {
   background: light-dark(#f2f2f2, #1f1f1f);
 }
 
+@media (max-width: 700px) {
+  table,
+  thead,
+  tbody,
+  tr,
+  th,
+  td {
+    display: block;
+  }
+
+  thead {
+    display: none;
+  }
+
+  tr {
+    border-bottom: 1px solid light-dark(#dddddd, #333333);
+    padding: 1ch 0;
+  }
+
+  td {
+    border-bottom: 0;
+    padding: 0.5ch 0;
+  }
+
+  td:first-child {
+    font-weight: bold;
+  }
+
+  td code {
+    overflow-wrap: anywhere;
+  }
+}
+
 dl {
   display: grid;
   grid-template-columns: max-content 1fr;
