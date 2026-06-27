@@ -25,6 +25,7 @@ const omitted_newline_marker = "\x1b[2m⏎\x1b[22m\r\n";
 const ignoreeof_message = "Use \"exit\" to leave the shell.\r\n";
 const stopped_jobs_exit_warning = "You have stopped jobs.\n";
 pub const immediate_notify_poll_ms = 50;
+pub const prompt_async_animation_interval_ms = 180;
 
 const OutputStream = enum { stdout, stderr };
 
@@ -257,6 +258,9 @@ pub fn runInteractiveIntervalHooks(
     if (try runInteractiveTimerHooks(interactive_context, allocator, io, &output)) {
         should_refresh_prompt = true;
     }
+    if (interactive_context.prompt_async_state) |async_state| {
+        if (async_state.hasRefreshing()) should_refresh_prompt = true;
+    }
 
     return .{
         .output = try output.toOwnedSlice(allocator),
@@ -275,6 +279,13 @@ pub fn nextInteractiveIntervalMs(context: *anyopaque, io: std.Io) !?u64 {
     );
     if (shellStateWantsImmediateJobNotificationPoll(interactive_context.semantic_state)) {
         if (next_ms == null or immediate_notify_poll_ms < next_ms.?) next_ms = immediate_notify_poll_ms;
+    }
+    if (interactive_context.prompt_async_state) |async_state| {
+        if (async_state.hasRefreshing() and
+            (next_ms == null or prompt_async_animation_interval_ms < next_ms.?))
+        {
+            next_ms = prompt_async_animation_interval_ms;
+        }
     }
     return next_ms;
 }
@@ -1899,6 +1910,73 @@ test "repl uses default rush_prompt" {
 
     try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
     try std.testing.expectEqualStrings(expected, result.stdout);
+}
+
+const PendingPromptAsyncScheduler = struct {
+    scheduled: bool = false,
+
+    fn scheduler(self: *PendingPromptAsyncScheduler) extension_api.AsyncTaskScheduler {
+        return .{ .context = self, .schedule_fn = schedule };
+    }
+
+    fn schedule(
+        allocator: std.mem.Allocator,
+        io: std.Io,
+        context: ?*anyopaque,
+        request: extension_api.AsyncTaskRequest,
+    ) !extension_api.AsyncTask {
+        _ = allocator;
+        _ = io;
+        _ = request;
+        const self: *PendingPromptAsyncScheduler = @ptrCast(@alignCast(context.?));
+        std.debug.assert(!self.scheduled);
+        self.scheduled = true;
+        return .{ .context = self, .join_fn = join };
+    }
+
+    fn join(context: *anyopaque) void {
+        _ = context;
+    }
+};
+
+test "prompt async refresh drives marker animation redraws" {
+    var shell_state = shell.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    try shell_state.putFunction(.{
+        .name = "rush_prompt",
+        .source_body =
+        \\value="$(prompt_async sample --ttl 10000 -- unused)"
+        \\prompt text "[$value]"
+        ,
+    });
+    var editor_state = EditorState.init(std.testing.allocator);
+    defer editor_state.deinit();
+    var scheduler: PendingPromptAsyncScheduler = .{};
+    var async_state: prompt_mod.AsyncState = .{};
+    async_state.init(std.testing.io, null);
+    async_state.task_scheduler = scheduler.scheduler();
+    defer async_state.deinit();
+
+    const prompt = try prompt_mod.render(std.testing.allocator, std.testing.io, &shell_state, .{
+        .async_state = &async_state,
+    });
+    defer std.testing.allocator.free(prompt);
+    try std.testing.expectEqualStrings("[]", prompt);
+    try std.testing.expect(scheduler.scheduled);
+    var context: Context = .{
+        .semantic_state = &shell_state,
+        .editor_state = &editor_state,
+        .prompt_async_state = &async_state,
+    };
+
+    try std.testing.expectEqual(
+        @as(?u64, prompt_async_animation_interval_ms),
+        try nextInteractiveIntervalMs(&context, std.testing.io),
+    );
+    const hook_result = try runInteractiveIntervalHooks(&context, std.testing.allocator, std.testing.io);
+    defer std.testing.allocator.free(hook_result.output);
+    try std.testing.expectEqualStrings("", hook_result.output);
+    try std.testing.expect(hook_result.refresh_prompt);
 }
 
 test "repl executes default config shell function wrappers" {

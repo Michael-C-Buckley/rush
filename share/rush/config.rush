@@ -36,7 +36,7 @@ rush_prompt() {
     prompt segment --fg yellow "$rush_prompt_git_info"
   fi
   if prompt async-pending; then
-    rush_prompt_marker=' ○ '
+    rush_prompt_marker=" $(prompt_frame --interval 180 ○ ◌ ◎ ◌) "
   else
     rush_prompt_marker=' ● '
   fi
