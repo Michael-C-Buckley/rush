@@ -17,13 +17,11 @@
 
   <h1 id="advanced-features"><a href="#advanced-features">Advanced features</a></h1>
 
-  <p>Rush is a shell, but its interactive editor is also a terminal application. It speaks modern terminal protocols when they are available, falls back when they are not, and exposes useful state back to normal Rush scripts.</p>
-
-  <p>The goal is not a separate configuration language. The interesting parts of the terminal become shell variables and builtins, so the same language that runs commands can also shape the prompt, completions, and editor UI.</p>
+  <p>Rush exposes interactive editor state through shell variables and builtins. Use the shell language to configure prompts, completions, and UI styles.</p>
 
   <h2 id="adaptive-ui-theme"><a href="#adaptive-ui-theme">Adaptive UI theme</a></h2>
 
-  <p>Rush can theme completion menus, autosuggestions, history matches, and diagnostics with <code>rush_style_*</code> variables. Those variables are read once at the start of each prompt and cached for rendering, so the editor does not re-run shell code for every frame.</p>
+  <p>Set <code>rush_style_*</code> variables to theme completions, autosuggestions, history matches, and diagnostics. Rush reads them before each prompt and caches them for rendering.</p>
 
   <pre><span class="cmd">rush_style</span>() {
   <span class="kw">if</span> <span class="cmd">test</span> <span class="str">"$rush_color_scheme"</span> = light; <span class="kw">then</span>
@@ -38,15 +36,15 @@
   rush_style_history_match=<span class="str">'fg=yellow,bold'</span>
 }</pre>
 
-  <p><code>rush_style</code> runs once during interactive startup, and again when the terminal reports that its color scheme or palette changed. Before calling it for a scheme change, Rush sets <code>rush_color_scheme</code> to <code>dark</code>, <code>light</code>, or <code>unknown</code>.</p>
+  <p>Define <code>rush_style</code> to recompute styles at startup and when the terminal reports a color-scheme or palette change. Rush sets <code>rush_color_scheme</code> to <code>dark</code>, <code>light</code>, or <code>unknown</code> first.</p>
 
-  <p>Before the normal capability query batch, Rush asks the terminal for the current foreground, background, and ANSI palette colors 0 through 7. When reports arrive, Rush sets variables such as <code>rush_color_foreground</code>, <code>rush_color_background</code>, <code>rush_color_blue</code>, and <code>rush_color_cyan</code> to <code>#rrggbb</code> values. If a terminal does not report them, Rush does not invent defaults; configs can use normal shell fallback syntax like <code>${rush_color_blue-#0000ff}</code>.</p>
+  <p>Rush also asks for foreground, background, and ANSI colors 0 through 7. Reported colors become <code>#rrggbb</code> variables such as <code>rush_color_foreground</code>, <code>rush_color_background</code>, and <code>rush_color_blue</code>. Use shell fallbacks for missing reports, such as <code>${rush_color_blue-#0000ff}</code>.</p>
 
-  <p>On terminals that support color-scheme notifications, Rush subscribes to those updates. When the terminal switches between light and dark, Rush re-queries the palette, requests device attributes again, updates Rush-owned variables, reruns <code>rush_style</code>, and repaints the editor.</p>
+  <p>When supported, Rush subscribes to color-scheme changes, refreshes color variables, reruns <code>rush_style</code>, and repaints the editor.</p>
 
   <h2 id="color-utilities"><a href="#color-utilities">Color utilities</a></h2>
 
-  <p>The <code>color</code> builtin turns reported terminal colors into derived colors that compose in command substitution.</p>
+  <p>Use <code>color</code> to derive truecolor values in command substitutions.</p>
 
   <pre><span class="cmd">color</span> dim <span class="str">'#204080'</span> 25
 <span class="comment">#183060</span>
@@ -54,16 +52,14 @@
 <span class="cmd">color</span> blend <span class="str">'#000000'</span> <span class="str">'#ffffff'</span> 50
 <span class="comment">#808080</span></pre>
 
-  <p><code>color dim COLOR PERCENT</code> blends a <code>#rrggbb</code> color toward black. <code>color blend COLOR COLOR PERCENT</code> blends the first color toward the second. Invalid input exits with status <code>2</code>, writes a diagnostic to stderr, and writes nothing to stdout. If that produces an invalid <code>rush_style_*</code> value, the host-side style parser ignores it and falls back to the default style for that role.</p>
+  <p><code>color dim COLOR PERCENT</code> blends toward black. <code>color blend COLOR COLOR PERCENT</code> blends toward the second color. Invalid input exits <code>2</code>, writes stderr, and writes no stdout.</p>
 
   <h2 id="editor-feedback"><a href="#editor-feedback">Editor feedback</a></h2>
 
-  <p>The line editor provides small pieces of immediate feedback without committing to a full-screen UI. Completion misses briefly flash the word being completed. Ctrl-C clears the current prompt when there is text, and otherwise leaves an empty prompt alone. Completion entries use role-specific styles so files, directories, options, variables, functions, descriptions, and the selected row can all be distinct while still following the terminal theme.</p>
+  <p>The line editor gives lightweight feedback: failed completions flash the current word, Ctrl-C clears non-empty input, and completion roles use separate styles.</p>
 
   <h2 id="terminal-protocols"><a href="#terminal-protocols">Terminal protocols</a></h2>
 
-  <p>Rush probes terminal capabilities instead of assuming them. It can use modern keyboard protocols, bracketed paste, in-band resize information, color-scheme reports, palette reports, and other device responses when supported. Unsupported or unanswered queries simply time out or remain unknown, and the editor continues with conservative behavior.</p>
-
-  <p>This is why advanced features are incremental: a capable terminal gets adaptive colors and richer input, while older terminals still get a working shell.</p>
+  <p>Rush probes terminal capabilities instead of assuming them. It uses modern keyboard protocols, bracketed paste, in-band resize, color-scheme reports, and palette reports when available. Unsupported queries time out; the editor keeps working with conservative defaults.</p>
 </body>
 </html>

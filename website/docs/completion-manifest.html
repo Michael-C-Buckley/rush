@@ -17,11 +17,11 @@
 
   <h1 id="completion-manifest-schema"><a href="#completion-manifest-schema">Completion manifest schema</a></h1>
 
-  <p>This page documents the JSON shape of Rush completion manifests. The canonical machine-readable schema is:</p>
+  <p>Use this page as a guide. Validate manifests against the canonical schema:</p>
 
   <pre>https://rush.horse/completion/schema/v1.schema.json</pre>
 
-  <p>The schema files and examples live under <code>website/completion/schema/</code>. This page is only a human-readable guide to that schema; the JSON Schema is the source of truth for validation. For an end-to-end authoring guide, see <a href="completions.html">Writing completions</a>.</p>
+  <p>Schema files and examples live under <code>website/completion/schema/</code>. For an authoring guide, see <a href="completions.html">Writing completions</a>.</p>
 
   <h2 id="minimal-shape"><a href="#minimal-shape">Minimal shape</a></h2>
 
@@ -37,7 +37,7 @@
 
   <h2 id="command"><a href="#command">Command objects</a></h2>
 
-  <p>A command object describes one command node. The root command and nested subcommands use the same shape.</p>
+  <p>Use command objects for the root command and subcommands.</p>
 
   <pre>{
   <span class="str">"name"</span>: <span class="comment">string or non-empty string array</span>,
@@ -77,23 +77,23 @@
 
   <p><code>spellings</code> is for literal option tokens that do not fit short or long sugar, such as single-dash long options or plus-prefixed toggles. <code>value</code> may be one value object or an array of value objects for multi-word option values.</p>
 
-  <p><code>priority</code> is a signed 8-bit integer relevance hint accepted on commands, options, and static enum values. Higher values prefer a candidate among otherwise comparable matches; Rush still performs final query-aware ordering. Omit it for the default priority <code>0</code>. Use small bands consistently: <code>1</code>-<code>9</code> for a slight preference, <code>10</code>-<code>49</code> for strong context, <code>50</code>-<code>99</code> for exceptional context such as the current branch or active target, and negative values are allowed specifically to derank fallback candidates.</p>
+  <p><code>priority</code> is a signed 8-bit ranking hint. Omit it for <code>0</code>. Use positive values to promote candidates and negative values to derank fallbacks.</p>
 
   <h2 id="providers"><a href="#providers">Providers</a></h2>
 
-  <p>Providers are reusable candidate sources referenced by options, arguments, and dynamic command or option slots. The schema accepts three provider shapes:</p>
+  <p>Reference providers from options, arguments, and dynamic command or option slots. Use one of three shapes:</p>
 
   <pre>{ <span class="str">"function"</span>: <span class="str">"__rush_complete_git_branches"</span> }
 { <span class="str">"builtin"</span>: <span class="str">"directories"</span> }
 { <span class="str">"values"</span>: [<span class="str">"auto"</span>, <span class="str">"always"</span>, <span class="str">"never"</span>] }</pre>
 
-  <p>Static enum values may be strings or objects with <code>value</code>, <code>display</code>, <code>description</code>, <code>tag</code>, <code>suffix</code>, <code>removableSuffix</code>, <code>priority</code>, and <code>noSpace</code>. Higher <code>priority</code> values prefer a candidate among otherwise comparable matches; Rush still performs final query-aware ordering.</p>
+  <p>Static enum values may be strings or objects with <code>value</code>, <code>display</code>, <code>description</code>, <code>tag</code>, <code>suffix</code>, <code>removableSuffix</code>, <code>priority</code>, and <code>noSpace</code>.</p>
 
-  <p>Provider references may be a single provider id, an inline provider object, or an ordered array of provider references.</p>
+  <p>A provider reference may be a provider id, an inline provider object, or an ordered array of references.</p>
 
   <h2 id="arguments"><a href="#arguments">Arguments</a></h2>
 
-  <p>An argument model requires <code>states</code>. Each state requires <code>name</code> and may define an index, provider, grammar, repeatability, conditions, and transitions.</p>
+  <p>An argument model requires <code>states</code>. Each state requires <code>name</code> and may define index, provider, grammar, repeatability, conditions, and transitions.</p>
 
   <pre>{
   <span class="str">"arguments"</span>: {
@@ -119,7 +119,7 @@
 
   <p>Conditions can combine <code>all</code>, <code>any</code>, and <code>not</code>, or test option presence, option absence, exact option values, terminator state, previous argument state, and argument count.</p>
 
-  <p>Value grammars describe structured option or argument values. The schema includes enum, list, key/value, path, and string grammar shapes. List and key/value grammars define separators and nested value descriptions.</p>
+  <p>Value grammars describe structured values: enum, list, key/value, path, and string. List and key/value grammars also define separators and nested values.</p>
 
   <h2 id="platforms-and-variants"><a href="#platforms-and-variants">Platforms and variants</a></h2>
 
@@ -129,7 +129,7 @@
 
   <h2 id="examples"><a href="#examples">Examples</a></h2>
 
-  <p>Valid and invalid schema examples are published beside the schema:</p>
+  <p>Examples live beside the schema:</p>
 
   <pre>https://rush.horse/completion/schema/examples/git-slice.valid.json
 https://rush.horse/completion/schema/examples/precommand.valid.json

@@ -30,34 +30,34 @@
 
   <h2 id="description"><a href="#description">DESCRIPTION</a></h2>
 
-  <p><code>event</code> registers shell functions to run when Rush observes shell events. Registrations are named so configuration can replace or remove one hook without disturbing others. If an <code>event add</code> command uses an existing <var>event</var> and <var>name</var>, it replaces that registration.</p>
+  <p><code>event</code> registers shell functions for Rush shell events. Registrations are named. Reusing an <var>event</var> and <var>name</var> replaces that hook.</p>
 
-  <p>Hooks run in ascending priority order, then by registration name. The default priority is zero. Hook execution preserves the visible last status and pipeline statuses unless the hook exits the shell.</p>
+  <p>Hooks run by ascending priority, then registration name. The default priority is zero. Hooks preserve visible status unless they exit the shell.</p>
 
-  <p><code>event list</code> prints registrations grouped by event. Each hook line shows the registration name, priority, optional timer interval, and function name. <code>event list --json</code> prints a machine-readable array with <code>event</code>, <code>name</code>, <code>function</code>, <code>priority</code>, and optional <code>every_ms</code> fields.</p>
+  <p><code>event list</code> prints hooks grouped by event. <code>event list --json</code> prints objects with <code>event</code>, <code>name</code>, <code>function</code>, <code>priority</code>, and optional <code>every_ms</code>.</p>
 
   <pre>directory.change
   direnv priority=0 rush_direnv_hook
 timer.tick
   clock priority=0 every=1000ms on_clock</pre>
 
-  <p>Every hook receives <code>RUSH_EVENT</code> and <code>RUSH_EVENT_HOOK</code> assignment-prefix variables while the hook function runs. <code>RUSH_EVENT</code> is the event name and <code>RUSH_EVENT_HOOK</code> is the registration name. These variables do not persist after the hook returns.</p>
+  <p>Hooks receive temporary <code>RUSH_EVENT</code> and <code>RUSH_EVENT_HOOK</code> assignment-prefix variables while they run.</p>
 
   <h2 id="events"><a href="#events">EVENTS</a></h2>
 
   <dl>
     <dt><code>directory.change</code></dt>
-    <dd>Runs after a successful current-shell directory change has committed. The hook function receives the old directory as <code>$1</code> and the new directory as <code>$2</code>.</dd>
+    <dd>Runs after a successful current-shell directory change. Receives old directory as <code>$1</code> and new directory as <code>$2</code>.</dd>
     <dt><code>prompt.prepare</code></dt>
     <dd>Runs on the real interactive shell state before Rush renders each prompt.</dd>
     <dt><code>prompt.async.start</code>, <code>prompt.async.end</code></dt>
-    <dd>Run when <code>prompt_async</code> refresh work transitions between inactive and active. The hook function receives <code>$1</code> as <code>prompt</code> and <code>$2</code> as the active count, <code>1</code> for start and <code>0</code> for end.</dd>
+    <dd>Run when <code>prompt_async</code> refresh work starts or ends. Receive <code>$1=prompt</code> and <code>$2</code> as the active count.</dd>
     <dt><code>completion.async.start</code>, <code>completion.async.end</code></dt>
-    <dd>Run when asynchronous completion work transitions between inactive and active. The hook function receives <code>$1</code> as <code>completion</code> and <code>$2</code> as the active count, <code>1</code> for start and <code>0</code> for end.</dd>
+    <dd>Run when asynchronous completion work starts or ends. Receive <code>$1=completion</code> and <code>$2</code> as the active count.</dd>
     <dt><code>job.start</code>, <code>job.end</code></dt>
-    <dd>Run when interactive background jobs become active or inactive. The hook function receives <code>$1</code> as <code>job</code> and <code>$2</code> as the current active background job count.</dd>
+    <dd>Run when interactive background jobs become active or inactive. Receive <code>$1=job</code> and <code>$2</code> as the active job count.</dd>
     <dt><code>timer.tick</code></dt>
-    <dd>Runs while the interactive line editor is idle after the registration's <code>--every</code> interval. The hook function receives the registration name as <code>$1</code>.</dd>
+    <dd>Runs while the line editor is idle after the registration's <code>--every</code> interval. Receives the registration name as <code>$1</code>.</dd>
   </dl>
 
   <h2 id="example"><a href="#example">EXAMPLE</a></h2>
@@ -78,12 +78,12 @@ timer.tick
 
   <h2 id="recipes"><a href="#recipes">RECIPES</a></h2>
 
-  <p>Enable the bundled project-environment helpers explicitly in a later config file:</p>
+  <p>Enable bundled project-environment helpers in a later config file:</p>
 
   <pre><span class="cmd">event</span> add directory.change direnv rush_direnv_hook
 <span class="cmd">event</span> add directory.change mise rush_mise_hook</pre>
 
-  <p>Replace a hook by reusing its event and registration name, or remove it when a project wants a different policy:</p>
+  <p>Replace or remove hooks by event/name:</p>
 
   <pre><span class="cmd">event</span> add directory.change direnv my_direnv_hook
 <span class="cmd">event</span> remove directory.change mise</pre>

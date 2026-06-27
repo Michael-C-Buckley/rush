@@ -23,13 +23,13 @@
 
   <h2 id="description"><a href="#description">DESCRIPTION</a></h2>
 
-  <p>Builtins are commands executed by Rush itself instead of by searching <code>PATH</code>. POSIX builtins are part of the shell core. Compatibility and Rush-specific builtins are extension builtins included by the default Rush registry.</p>
+  <p>Builtins are commands Rush executes without searching <code>PATH</code>. POSIX builtins are shell core. Compatibility and Rush-specific builtins are default extensions.</p>
 
-  <p>Embedders may provide their own extension builtin registry. Extension builtins are regular builtins; POSIX special builtin behavior is reserved for the shell core.</p>
+  <p>Embedders may provide another extension builtin registry. POSIX special builtin behavior stays in the shell core.</p>
 
   <h2 id="posix-special-builtins"><a href="#posix-special-builtins">POSIX SPECIAL BUILTINS</a></h2>
 
-  <p>Rush provides the POSIX special builtin names. Special builtins are found before shell functions and have POSIX-defined error and assignment semantics.</p>
+  <p>Rush provides POSIX special builtins. They resolve before functions and use POSIX-defined error and assignment semantics.</p>
 
   <dl>
     <dt><a href="colon.html"><code>:</code></a></dt><dd>Return success without doing anything.</dd>
@@ -51,7 +51,7 @@
 
   <h2 id="posix-regular-builtins"><a href="#posix-regular-builtins">POSIX REGULAR BUILTINS</a></h2>
 
-  <p>Rush also provides POSIX regular builtin names. Regular builtins follow normal command lookup order and may be shadowed by functions.</p>
+  <p>Rush also provides POSIX regular builtins. They follow normal command lookup and may be shadowed by functions.</p>
 
   <dl>
     <dt><a href="test-bracket.html"><code>[</code></a></dt><dd>Evaluate a conditional expression; synonym for <code>test</code> requiring a closing <code>]</code>.</dd>
@@ -81,7 +81,7 @@
 
   <h2 id="compatibility-builtins"><a href="#compatibility-builtins">COMPATIBILITY BUILTINS</a></h2>
 
-  <p>Compatibility builtins are non-POSIX extension builtins included by the default Rush registry because they are common in interactive shell configuration and portable shell-adjacent scripts.</p>
+  <p>Compatibility builtins are non-POSIX extensions included because they are common in interactive config and shell-adjacent scripts.</p>
 
   <dl>
     <dt><a href="local.html"><code>local</code></a></dt><dd>Declare variables local to the current function invocation.</dd>
@@ -92,7 +92,7 @@
 
   <h2 id="rush-builtins-section"><a href="#rush-builtins-section">RUSH BUILTINS</a></h2>
 
-  <p>Rush-specific builtins expose interactive shell features through normal shell commands.</p>
+  <p>Rush-specific builtins expose interactive features through shell commands.</p>
 
   <dl>
     <dt><a href="abbr.html"><code>abbr</code></a></dt><dd>Manage fish-style interactive abbreviations.</dd>

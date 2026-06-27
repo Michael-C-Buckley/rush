@@ -21,7 +21,7 @@
 
   <h2 id="files"><a href="#files">Files</a></h2>
 
-  <p>Interactive startup sources configuration in the order below. Defaults embedded in the rush binary load first, so every later file can override them. Missing files are skipped silently.</p>
+  <p>Interactive startup sources these files in order. Later files override earlier ones. Missing files are skipped.</p>
 
   <pre>embedded default configuration   (ships inside the rush binary)
 <span class="var">$ENV</span>
@@ -30,13 +30,13 @@
 <span class="var">$sysconfdir</span>/rush/config.rush
 <span class="var">$XDG_CONFIG_HOME</span>/rush/config.rush</pre>
 
-  <p>Before reading <span class="var">$ENV</span>, Rush applies shell parameter expansion to its value, so paths such as <code>$HOME/.rushrc</code> and <code>${ENV_DIR}/startup.rush</code> are resolved before the file is sourced. Rush does not apply field splitting or pathname expansion to the resulting startup pathname.</p>
+  <p>Rush expands <span class="var">$ENV</span> with shell parameter expansion before sourcing it. It does not apply field splitting or pathname expansion.</p>
 
-  <p>User paths fall back to <span class="var">$HOME</span><code>/.config/rush/</code> when <span class="var">$XDG_CONFIG_HOME</span> is unset. <span class="var">$sysconfdir</span> is fixed at build time: it defaults to <code>etc</code> inside the install prefix, and packagers set it to <code>/etc</code> with <code>zig build -Dsysconfdir=/etc</code>.</p>
+  <p>If <span class="var">$XDG_CONFIG_HOME</span> is unset, user paths use <span class="var">$HOME</span><code>/.config/rush/</code>. <span class="var">$sysconfdir</span> defaults to <code>etc</code> under the install prefix; packagers can set it with <code>zig build -Dsysconfdir=/etc</code>.</p>
 
-  <p>POSIX leaves a non-absolute expanded <span class="var">$ENV</span> pathname unspecified; Rush currently accepts it relative to the current working directory. Rush is not intended to be installed setuid/setgid and does not add a differing-real/effective-ID suppression layer around <span class="var">$ENV</span>. Point <span class="var">$ENV</span> at a trusted file and avoid group- or world-writable startup files or containing directories.</p>
+  <p>Point <span class="var">$ENV</span> at a trusted file. Rush accepts relative expanded <span class="var">$ENV</span> paths against the current directory and is not designed for setuid/setgid installation.</p>
 
-  <p>The embedded defaults define the <a href="#prompt">default prompt</a>, opt-in <a href="#project-environments">project environment hook helpers</a>, colorized <code>ls</code>, <code>grep</code>, and <code>diff</code> functions (color flags are probed once per session and only colorize terminals), and <code>ll</code> and <code>la</code> <a href="#abbreviations">abbreviations</a> for <code>ls -lh</code> and <code>ls -lAh</code>. Redefine, <code>unset -f</code>, or <code>abbr --erase</code> any of them in a later file to opt out.</p>
+  <p>The embedded defaults define the <a href="#prompt">default prompt</a>, opt-in <a href="#project-environments">project environment hooks</a>, colorized <code>ls</code>/<code>grep</code>/<code>diff</code> wrappers, and <code>ll</code>/<code>la</code> <a href="#abbreviations">abbreviations</a>. Redefine, <code>unset -f</code>, or <code>abbr --erase</code> them in a later file to opt out.</p>
 
   <h2 id="abbreviations"><a href="#abbreviations">Abbreviations</a></h2>
 
@@ -48,15 +48,15 @@
 <span class="cmd">abbr</span> <span class="opt">--list</span>
 <span class="cmd">abbr</span> <span class="opt">--erase</span> gs</pre>
 
-  <p>Abbreviations expand only while editing an interactive command line. When the command word exactly matches an abbreviation, accepting the word or line with space, Enter, or Tab rewrites the buffer to the expanded command so you can inspect or edit it before execution. Tab expands first, then runs completion for the expanded command.</p>
+  <p>Abbreviations expand only in the interactive editor. Space, Enter, or Tab rewrites a matching command word before execution. Tab expands first, then completes the expanded command.</p>
 
-  <p><code>abbr</code> is different from <code>alias</code>. An abbreviation is editor text expansion and does not change script execution. An alias is shell command aliasing and is expanded by the shell when scripts run. Normal <code>alias</code> definitions do not expand in the editor.</p>
+  <p>Use <code>abbr</code> for editor text expansion. Use <code>alias</code> for shell command aliasing in executed code.</p>
 
   <p>Place <code>abbr</code> commands in your Rush configuration file to persist them across interactive sessions.</p>
 
   <h2 id="ui-styles"><a href="#ui-styles">UI styles</a></h2>
 
-  <p>Interactive editor colors are configured with lowercase shell variables. Values are comma-separated style options, so normal shell expansion works before Rush stores the variable.</p>
+  <p>Configure editor colors with lowercase shell variables. Values are comma-separated style options.</p>
 
   <pre>rush_style() {
   if test "$rush_color_scheme" = light; then
@@ -79,7 +79,7 @@
   rush_style_diagnostic_error='ul=curly,ul_color=red'
 }</pre>
 
-  <p>If <code>rush_style</code> is defined, Rush calls it once during interactive startup and again when the terminal reports a color-scheme or palette change. Normal commands do not call <code>rush_style</code>; Rush reads the current <code>rush_style_*</code> variables before each prompt, so assignments made by commands take effect on the next prompt.</p>
+  <p>If <code>rush_style</code> exists, Rush calls it at interactive startup and after terminal color changes. Rush reads <code>rush_style_*</code> before each prompt, so later assignments apply on the next prompt.</p>
 
   <p>Before each color-scheme call, Rush sets these Rush-owned variables for the hook:</p>
 
@@ -102,13 +102,13 @@
     </tbody>
   </table>
 
-  <p>The RGB variables are only defined after the terminal reports them, so configs can provide their own fallbacks with normal shell expansion.</p>
+  <p>RGB variables exist only after the terminal reports them. Use normal shell fallbacks when needed.</p>
 
   <p>Supported options are <code>fg=&lt;color&gt;</code>, <code>bg=&lt;color&gt;</code>, <code>ul=&lt;style&gt;</code>, <code>ul_color=&lt;color&gt;</code>, <code>bold</code>, <code>dim</code>, <code>italic</code>, <code>reverse</code>, and <code>strike</code>. Underline styles are <code>none</code>, <code>single</code>, <code>double</code>, <code>curly</code>, <code>dotted</code>, and <code>dashed</code>.</p>
 
   <p>Colors use the same names as prompt colors: <code>default</code>, <code>black</code>, <code>red</code>, <code>green</code>, <code>yellow</code>, <code>blue</code>, <code>magenta</code>, <code>cyan</code>, <code>white</code>, their <code>bright-</code> variants, <code>index:N</code> or <code>N</code> for 256-color palette entries, and <code>#rrggbb</code> truecolor values.</p>
 
-  <p>The <code>color</code> builtin can derive truecolor values for dynamic styles. <code>color dim COLOR PERCENT</code> blends a <code>#rrggbb</code> color toward black by <code>PERCENT</code>; <code>color blend COLOR COLOR PERCENT</code> blends the first color toward the second by <code>PERCENT</code>. Invalid color input exits with status <code>2</code>, writes a diagnostic to stderr, and writes nothing to stdout; if that produces an invalid <code>rush_style_*</code> value, Rush falls back to the default style for that role.</p>
+  <p>Use <code>color dim COLOR PERCENT</code> and <code>color blend COLOR COLOR PERCENT</code> to derive truecolor style values. Invalid input exits <code>2</code>, writes stderr, and writes no stdout.</p>
 
   <p>Available style variables are:</p>
 
@@ -140,7 +140,7 @@
 
   <h2 id="prompt"><a href="#prompt">Prompt</a></h2>
 
-  <p>Rush ships a default prompt: the current directory in blue, the Git branch in yellow with a <code>•</code> marker when the worktree is dirty and <code>↑</code>/<code>↓</code> commit counts against the upstream, and a <code>●</code> marker. While prompt or completion activity is running, the marker animates through <code>◐</code>/<code>◓</code>/<code>◑</code>/<code>◒</code> frames. The marker turns red when the previous command failed.</p>
+  <p>The default prompt shows the current directory, Git branch, dirty marker, upstream counts, and a status marker. Prompt or completion activity animates the marker. Failed commands turn it red.</p>
 
   <p>Define <code>rush_prompt</code> in your configuration to replace it.</p>
 
@@ -158,7 +158,7 @@
 <span class="cmd">prompt</span> newline
 <span class="cmd">prompt</span> async-pending</pre>
 
-  <p><code>prompt text</code> appends plain text. <code>prompt segment</code> appends styled text. <code>prompt newline</code> starts a new prompt line. <code>prompt async-pending</code> tests whether a <code>prompt_async</code> refresh is currently running.</p>
+  <p>Use <code>prompt text</code> for plain text, <code>prompt segment</code> for styled text, <code>prompt newline</code> for a new line, and <code>prompt async-pending</code> to test active async prompt work.</p>
 
   <h2 id="segment-options"><a href="#segment-options">Segment options</a></h2>
 
@@ -183,7 +183,7 @@ index:236
   <pre><span class="cmd">prompt_pwd</span> [<span class="opt">-d</span> N] [<span class="opt">-D</span> N]   <span class="comment"># current directory, with $HOME shortened to ~</span>
 <span class="cmd">prompt_duration</span>             <span class="comment"># previous command duration</span></pre>
 
-  <p><code>prompt_pwd</code> optionally shortens path components like fish. <code>-d</code>/<code>--dir-length</code> keeps the first N characters of each component (0, the default, disables shortening; a leading dot is preserved). <code>-D</code>/<code>--full-length-dirs</code> keeps the last N components at full length (default 1).</p>
+  <p><code>prompt_pwd</code> shortens paths like fish. <code>-d</code>/<code>--dir-length</code> keeps the first N characters of each component. <code>-D</code>/<code>--full-length-dirs</code> keeps the last N components at full length.</p>
 
   <pre><span class="cmd">prompt_pwd</span>                  <span class="comment"># ~/repos/rush</span>
 <span class="cmd">prompt_pwd</span> <span class="opt">-d</span> 1             <span class="comment"># ~/r/rush</span>
@@ -191,22 +191,22 @@ index:236
 
   <h2 id="project-environments"><a href="#project-environments">Project environments</a></h2>
 
-  <p>Rush ships opt-in helper functions for tools that export per-directory environments. They use <code>rush_env</code> to apply environment diffs natively, so configuration does not need to evaluate shell code from the tool.</p>
+  <p>Rush ships opt-in helpers for tools that export per-directory environments. They use <code>rush_env</code> so config does not need to evaluate tool-generated shell code.</p>
 
   <pre><span class="cmd">event</span> add directory.change direnv rush_direnv_hook
 <span class="cmd">event</span> add directory.change mise rush_mise_hook</pre>
 
-  <p><code>rush_direnv_hook</code> runs <code>direnv export json</code>. <code>rush_mise_hook</code> runs <code>mise hook-env -s bash --quiet</code> and accepts only environment mutation lines from its output. Both helpers return successfully when the corresponding tool is not installed, and neither helper is registered by default.</p>
+  <p><code>rush_direnv_hook</code> runs <code>direnv export json</code>. <code>rush_mise_hook</code> runs <code>mise hook-env -s bash --quiet</code> and accepts only environment mutations. Neither helper is registered by default.</p>
 
   <h2 id="async-prompt"><a href="#async-prompt">Async prompt updates</a></h2>
 
-  <p>Prompts should stay fast. Use the async prompt helpers for Git status and other data that may be slow to compute, and use <code>timer.tick</code> hooks for values that should change while the editor is waiting for input. Async refreshes and timer hooks request prompt redraws through the line editor.</p>
+  <p>Keep prompts fast. Use <code>prompt_async</code> for slow data such as Git status. Use <code>timer.tick</code> hooks for values that change while the editor is idle.</p>
 
   <pre><span class="cmd">prompt_async</span> KEY <span class="opt">--ttl</span> MS <span class="opt">--</span> COMMAND...</pre>
 
-  <p><code>prompt_async</code> returns cached stdout immediately. When the cache is missing or stale, Rush starts <code>COMMAND</code> as a hidden refresh and returns the old cached value, or nothing if no value has been cached yet. When the hidden command exits, Rush automatically requests a safe prompt redraw; the next render sees the fresh cached stdout. Cache entries are keyed by the current directory plus the explicit key. Duplicate refreshes for the same key are coalesced. Stderr is suppressed by default, and hidden refreshes preserve the interactive last status.</p>
+  <p><code>prompt_async</code> returns cached stdout immediately. When the cache is missing or stale, Rush starts <code>COMMAND</code> hidden and returns the old value, or nothing. When the command exits, Rush redraws the prompt. Cache keys include the current directory and explicit key.</p>
 
-  <p>For prompt animations, keep frame state in a shell variable and advance it from a <code>timer.tick</code> hook while activity is active. The default configuration uses this pattern for its activity marker.</p>
+  <p>For animations, store the frame in a shell variable and advance it from a <code>timer.tick</code> hook while activity is active.</p>
 
   <pre><span class="cmd">rush_prompt</span>() {
   <span class="cmd">prompt</span> segment <span class="opt">--fg</span> bright-blue <span class="str">"$(prompt_pwd)"</span>
@@ -236,7 +236,14 @@ index:236
 
   <h2 id="hooks"><a href="#hooks">Hooks and intervals</a></h2>
 
-  <p><code>event</code> registers lower-level hooks for advanced interactive setups. <code>prompt.prepare</code> hooks run on the real shell state before each prompt render. <code>directory.change</code> hooks run after a successful current-shell directory change and receive the old and new directories as <code>$1</code> and <code>$2</code>. <code>timer.tick</code> hooks run while the editor is idle after their <code>--every</code> interval and receive the registration name as <code>$1</code>. Activity hooks such as <code>prompt.async.start</code>, <code>completion.async.start</code>, and <code>job.start</code> receive the activity kind as <code>$1</code> and the active count as <code>$2</code>. Hooks preserve the visible <code>$?</code> by default.</p>
+  <p>Use <code>event</code> for advanced interactive hooks. Hooks preserve the visible <code>$?</code> by default.</p>
+
+  <ul>
+    <li><code>prompt.prepare</code>: before each prompt render.</li>
+    <li><code>directory.change</code>: after <code>cd</code>; receives old and new directories as <code>$1</code> and <code>$2</code>.</li>
+    <li><code>timer.tick</code>: while the editor is idle; receives the registration name as <code>$1</code>.</li>
+    <li>Activity hooks: receive kind as <code>$1</code> and active count as <code>$2</code>.</li>
+  </ul>
 
   <pre><span class="cmd">event</span> add EVENT NAME FUNCTION [<span class="opt">--priority</span> N]
 <span class="cmd">event</span> add timer.tick NAME FUNCTION <span class="opt">--every</span> MS [<span class="opt">--priority</span> N]
@@ -260,19 +267,19 @@ index:236
 <span class="cmd">event</span> add directory.change cwd-repaint on_directory_change
 <span class="cmd">event</span> add timer.tick clock on_clock <span class="opt">--every</span> 1000</pre>
 
-  <p>Use <code>event list</code> to inspect active hooks and their run order. A later <code>event add</code> with the same event and registration name replaces the old hook; <code>event remove EVENT NAME</code> removes it.</p>
+  <p>Use <code>event list</code> to inspect hooks. Reusing an event/name pair replaces that hook. Use <code>event remove EVENT NAME</code> to remove it.</p>
 
   <pre><span class="cmd">event</span> list
 <span class="cmd">event</span> list directory.change
 <span class="cmd">event</span> remove directory.change cwd-repaint</pre>
 
-  <p>Common recipes are: register <code>rush_direnv_hook</code> or <code>rush_mise_hook</code> on <code>directory.change</code>, precompute cheap prompt variables in <code>prompt.prepare</code>, and use <code>timer.tick</code> for clocks or other idle updates.</p>
+  <p>Common recipes: register project environment hooks on <code>directory.change</code>, precompute prompt variables in <code>prompt.prepare</code>, and use <code>timer.tick</code> for clocks.</p>
 
-  <p>Prefer <code>prompt_async</code>, timers, and hooks over slow synchronous command substitutions in <code>rush_prompt</code>. They keep prompt rendering responsive and route redraws through the editor instead of writing to the terminal from background contexts.</p>
+  <p>Prefer <code>prompt_async</code>, timers, and hooks over slow command substitutions in <code>rush_prompt</code>.</p>
 
   <h2 id="ps1"><a href="#ps1">PS1 fallback</a></h2>
 
-  <p>If <code>rush_prompt</code> is not defined, Rush uses <code>PS1</code>. Rush initializes <code>PS1</code> to <code>● </code> and <code>PS2</code> to <code>&gt; </code> for interactive shells. The default prompt is a <code>rush_prompt</code> function, so unset it to use a plain <code>PS1</code> prompt.</p>
+  <p>If <code>rush_prompt</code> is not defined, Rush uses <code>PS1</code>. Unset the default function to use a plain <code>PS1</code> prompt.</p>
 
   <pre><span class="cmd">unset</span> <span class="opt">-f</span> rush_prompt
 <span class="var">PS1</span>=<span class="str">'rush● '</span>

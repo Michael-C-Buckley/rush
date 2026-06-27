@@ -17,48 +17,48 @@
 
   <h1 id="compatibility-notes"><a href="#compatibility-notes">Compatibility notes</a></h1>
 
-  <p>Rush aims to be useful to people who already know Bash, while also providing a POSIX mode for scripts that want POSIX-facing behavior. This page records known, intentional, or currently accepted compatibility differences when another shell's behavior is a common reference point.</p>
+  <p>This page records known compatibility differences when POSIX, Bash, or common system shells are useful reference points.</p>
 
-  <p>These notes are not a complete compatibility matrix. They are for cases where Rush makes a deliberate choice, where common system shells disagree, or where an older Bash version behaves differently from current Bash. The decision-making rules live in the <a href="conformance.html">conformance policy</a>.</p>
+  <p>This is not a full matrix. For decision rules, see the <a href="conformance.html">conformance policy</a>.</p>
 
   <h2 id="current-scope"><a href="#current-scope">Current scope</a></h2>
 
   <h3 id="c-locale-shell-semantics"><a href="#c-locale-shell-semantics">C locale shell semantics</a></h3>
 
-  <p>Rush currently implements shell semantics as if the active locale were the POSIX/C locale. Locale-sensitive behavior such as pathname expansion ordering, bracket expression collation, and character classes does not yet follow <code>LC_COLLATE</code> or <code>LC_CTYPE</code>.</p>
+  <p>Rush currently uses POSIX/C-locale shell semantics. Pathname ordering, bracket expression collation, and character classes do not yet follow <code>LC_COLLATE</code> or <code>LC_CTYPE</code>.</p>
 
-  <p>For example, Rush sorts pathname expansion matches by byte value. In a UTF-8 locale such as <code>en_US.UTF-8</code>, shells that apply locale collation may order mixed-case names differently:</p>
+  <p>Rush sorts pathname expansion matches by byte value. Locale-aware shells may order mixed-case names differently:</p>
 
   <pre><span class="cmd">touch</span> b a AGENTS.md LICENSE README.md
 <span class="cmd">printf</span> <span class="str">'&lt;%s&gt;\n'</span> *</pre>
 
-  <p>Rush prints uppercase names before lowercase names, matching C-locale byte ordering. Scripts that require portable ordering should set <code>LC_ALL=C</code> explicitly before relying on pathname expansion order.</p>
+  <p>Rush prints uppercase names before lowercase names. Set <code>LC_ALL=C</code> before relying on portable pathname order.</p>
 
   <h2 id="posix-mode"><a href="#posix-mode">POSIX mode</a></h2>
 
   <h3 id="assigning-defaults-to-positional-parameters"><a href="#assigning-defaults-to-positional-parameters">Assigning defaults to positional parameters</a></h3>
 
-  <p>Rush treats an attempt to assign a default value to a positional parameter with <code>${parameter:=word}</code> as a fatal expansion error when the assignment would be required.</p>
+  <p>Rush treats required <code>${parameter:=word}</code> assignment to a positional parameter as a fatal expansion error.</p>
 
   <pre><span class="cmd">set</span> <span class="opt">--</span> <span class="str">''</span>
 <span class="cmd">printf</span> <span class="str">'%s\n'</span> <span class="var">${1:=fallback}</span>
 <span class="cmd">printf</span> <span class="str">'after\n'</span></pre>
 
-  <p>POSIX parameter assignment through <code>:=</code> assigns only shell variables; positional parameters cannot be assigned this way. Rush reports the error and does not print <code>after</code>. This matches dash, ksh93, and yash. Bash 3.2 and Bash 5.3 in POSIX mode report the error but continue executing the script. zsh 5.9 in <code>sh</code> emulation assigns the positional parameter and continues.</p>
+  <p>POSIX <code>:=</code> assigns only shell variables. Rush reports the error and does not print <code>after</code>. This matches dash, ksh93, and yash. Bash POSIX mode reports the error but continues; zsh <code>sh</code> emulation assigns the parameter.</p>
 
   <h3 id="non-integer-arithmetic-variables"><a href="#non-integer-arithmetic-variables">Non-integer variables in arithmetic expansion</a></h3>
 
-  <p>Rush treats a variable whose contents are not a valid integer constant as an arithmetic expansion error when the variable is used as an arithmetic operand.</p>
+  <p>Rush treats non-integer variable contents as an arithmetic expansion error when used as an operand.</p>
 
   <pre>x=abc
 <span class="cmd">printf</span> <span class="str">'%s\n'</span> <span class="str">"$((x))"</span>
 <span class="cmd">printf</span> <span class="str">'after\n'</span></pre>
 
-  <p>POSIX requires arithmetic expansion to fail with a diagnostic when the contents of a shell variable used in the expression are not recognized by the shell. Rush reports the error and does not print <code>after</code>. This matches dash and ksh93. Bash 3.2 and Bash 5.3 in POSIX mode instead expand this case to <code>0</code> and continue executing the script.</p>
+  <p>Rush reports the error and does not print <code>after</code>. This matches dash and ksh93. Bash POSIX mode expands this case to <code>0</code> and continues.</p>
 
   <h3 id="invalid-break-and-continue-counts"><a href="#invalid-break-and-continue-counts">Invalid break and continue counts</a></h3>
 
-  <p>Rush treats <code>break</code> and <code>continue</code> operands that are not positive decimal integers as fatal errors in a non-interactive shell.</p>
+  <p>Rush treats non-positive or non-decimal <code>break</code>/<code>continue</code> operands as fatal errors in non-interactive shells.</p>
 
   <pre><span class="kw">for</span> x <span class="kw">in</span> a b
 <span class="kw">do</span>
@@ -66,17 +66,17 @@
   <span class="cmd">printf</span> <span class="str">'after\n'</span>
 <span class="kw">done</span></pre>
 
-  <p>POSIX specifies that applications using <code>break</code> or <code>continue</code> with an operand shall use a positive decimal integer. Rush reports the error and exits the non-interactive script. This matches dash and yash. Bash 3.2 and Bash 5.3 in POSIX mode report <code>break 0</code> and <code>continue 0</code> as errors but continue executing the surrounding script with status 1 for the failed special built-in.</p>
+  <p>Rush reports the error and exits. This matches dash and yash. Bash POSIX mode reports status 1 for the failed special builtin and continues.</p>
 
   <h2 id="bash"><a href="#bash">Bash</a></h2>
 
   <h3 id="bash-3-2"><a href="#bash-3-2">Bash 3.2</a></h3>
 
-  <p>macOS still ships Bash 3.2 as <code>/bin/bash</code>. Rush does not treat Bash 3.2 behavior as the sole Bash compatibility target when newer Bash versions and POSIX-mode shells agree on different behavior.</p>
+  <p>macOS still ships Bash 3.2 as <code>/bin/bash</code>. Rush does not treat it as the sole Bash target.</p>
 
   <h4 id="readonly-unset-posix"><a href="#readonly-unset-posix">Unsetting readonly variables in POSIX mode</a></h4>
 
-  <p>In non-interactive POSIX mode, Rush treats an attempt to <code>unset</code> a readonly variable as a fatal error for the current shell execution environment.</p>
+  <p>In non-interactive POSIX mode, unsetting a readonly variable is fatal.</p>
 
   <pre><span class="cmd">readonly</span> ro=value
 <span class="cmd">unset</span> ro
@@ -86,7 +86,7 @@
 
   <h4 id="case-fall-through-posix"><a href="#case-fall-through-posix">POSIX case fall-through with ;&</a></h4>
 
-  <p>Rush accepts the POSIX <code>;&amp;</code> case clause terminator, which executes the matching clause and then continues by executing subsequent clause bodies without testing their patterns until a <code>;;</code> terminator or the end of the <code>case</code> command.</p>
+  <p>Rush accepts POSIX <code>;&amp;</code>: execute the matching clause, then continue through later clause bodies until <code>;;</code> or <code>esac</code>.</p>
 
   <pre><span class="kw">case</span> x <span class="kw">in</span>
   x) <span class="cmd">printf</span> <span class="str">'one\n'</span> ;&amp;
@@ -97,13 +97,13 @@
 
   <h4 id="case-test-next-posix"><a href="#case-test-next-posix">Bash case test-next with ;;&amp; in POSIX mode</a></h4>
 
-  <p>Rush supports the Bash-style <code>;;&amp;</code> case clause terminator in its default mode, but rejects it when <code>--posix</code> is requested because POSIX defines <code>;;</code> and <code>;&amp;</code>, not <code>;;&amp;</code>.</p>
+  <p>Rush supports Bash-style <code>;;&amp;</code> in default mode and rejects it under <code>--posix</code>. POSIX defines <code>;;</code> and <code>;&amp;</code>, not <code>;;&amp;</code>.</p>
 
-  <p>Bash 5.3 accepts <code>;;&amp;</code> even when started with <code>--posix</code>. Rush intentionally diverges there so <code>--posix</code> remains a stricter POSIX-facing mode.</p>
+  <p>Bash 5.3 accepts <code>;;&amp;</code> even with <code>--posix</code>. Rush keeps <code>--posix</code> stricter.</p>
 
   <h4 id="alias-after-leading-redirection-posix"><a href="#alias-after-leading-redirection-posix">Alias substitution after leading redirections in POSIX mode</a></h4>
 
-  <p>Rush recognizes the first command word as an alias candidate even when a simple command starts with one or more redirections.</p>
+  <p>Rush checks the first command word for aliases even after leading redirections.</p>
 
   <pre><span class="cmd">alias</span> say=<span class="str">'printf alias-hit\\n'</span>
 &gt;/tmp/rush-alias.out <span class="cmd">say</span>
