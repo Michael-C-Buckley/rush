@@ -1,0 +1,22 @@
+# Preview
+
+This repository's previewable surface is the static documentation site in
+`website/`. There is no package-manager dev server, login, or seed data.
+
+Start the preview server from the repository root:
+
+```sh
+python3 -m http.server 4173 --directory website
+```
+
+Expected URL:
+
+```text
+http://127.0.0.1:4173/
+```
+
+Verify readiness with:
+
+```sh
+curl -fsS http://127.0.0.1:4173/ >/dev/null
+```

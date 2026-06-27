@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$repo_root"
+
+if command -v mise >/dev/null 2>&1; then
+  mise_bin="$(command -v mise)"
+else
+  if ! command -v curl >/dev/null 2>&1; then
+    printf >&2 'error: curl is required to install mise.\n'
+    exit 1
+  fi
+
+  mise_bin="${MISE_INSTALL_PATH:-$HOME/.local/bin/mise}"
+  curl -fsSL https://mise.run | MISE_INSTALL_PATH="$mise_bin" sh
+fi
+
+"$mise_bin" install --yes
+"$mise_bin" exec --yes -- zig build --fetch=all
