@@ -8,6 +8,7 @@ const uucode = @import("uucode");
 const zig_builtin = @import("builtin");
 const compat = @import("compat.zig");
 const parser = @import("parser.zig");
+const runtime = @import("../runtime.zig");
 
 pub const EnvLookup = struct {
     context: ?*const anyopaque = null,
@@ -328,7 +329,7 @@ pub fn expandWord(allocator: std.mem.Allocator, raw: []const u8, options: Option
         if (options.pathname_lookup.enabled()) {
             try applyPathnameExpansion(allocator, options.pathname_lookup, &fields, pathname_options);
         } else if (options.io) |io| {
-            var io_context: IoPathnameLookupContext = .{ .io = io };
+            var io_context = IoPathnameLookupContext.init(io);
             try applyPathnameExpansion(allocator, ioPathnameLookup(&io_context), &fields, pathname_options);
         }
     }
@@ -6207,7 +6208,11 @@ const PathnameExpansionOptions = struct {
 };
 
 const IoPathnameLookupContext = struct {
-    io: std.Io,
+    adapter: runtime.PosixAdapter,
+
+    fn init(io: std.Io) IoPathnameLookupContext {
+        return .{ .adapter = runtime.PosixAdapter.init(io) };
+    }
 };
 
 fn ioPathnameLookup(context: *IoPathnameLookupContext) PathnameLookup {
@@ -6226,38 +6231,42 @@ fn listPathnameDirWithIo(
 ) !PathnameEntries {
     std.debug.assert(opaque_context != null);
     const context: *IoPathnameLookupContext = @ptrCast(@alignCast(opaque_context.?));
-    var dir = std.Io.Dir.cwd().openDir(context.io, path, .{ .iterate = true }) catch |err| switch (err) {
+    const fs_port = context.adapter.fsPort();
+    var runtime_entries = fs_port.listDir(.{ .allocator = allocator, .path = path }) catch |err| switch (err) {
         error.FileNotFound, error.NotDir => return .{ .entries = &.{} },
         else => return err,
     };
-    defer dir.close(context.io);
+    return pathnameEntriesFromRuntime(allocator, &runtime_entries);
+}
 
-    var entries: std.ArrayList(PathnameEntry) = .empty;
+fn pathnameEntriesFromRuntime(
+    allocator: std.mem.Allocator,
+    runtime_entries: *runtime.fs.ListDirResult,
+) !PathnameEntries {
+    const released = runtime_entries.release();
     errdefer {
-        for (entries.items) |entry| allocator.free(entry.name);
-        entries.deinit(allocator);
+        for (released) |entry| allocator.free(entry.name);
+        allocator.free(released);
     }
 
-    var iterator = dir.iterate();
-    while (try iterator.next(context.io)) |entry| {
-        if (entry.name.len == 0) continue;
-        const owned_name = try allocator.dupe(u8, entry.name);
-        errdefer allocator.free(owned_name);
-        try entries.append(allocator, .{ .name = owned_name });
+    const entries = try allocator.alloc(PathnameEntry, released.len);
+    errdefer allocator.free(entries);
+    for (released, entries) |source, *dest| {
+        dest.* = .{ .name = source.name };
     }
-
-    return .{ .entries = try entries.toOwnedSlice(allocator) };
+    allocator.free(released);
+    return .{ .entries = entries };
 }
 
 fn pathnameExistsWithIo(opaque_context: ?*anyopaque, path: []const u8) !bool {
     std.debug.assert(opaque_context != null);
     const context: *IoPathnameLookupContext = @ptrCast(@alignCast(opaque_context.?));
     if (path.len == 0) return true;
-    var file = std.Io.Dir.cwd().openFile(context.io, path, .{}) catch |err| switch (err) {
+    const fs_port = context.adapter.fsPort();
+    _ = fs_port.inspectPath(.{ .path = path }) catch |err| switch (err) {
         error.FileNotFound, error.NotDir => return false,
         else => return err,
     };
-    file.close(context.io);
     return true;
 }
 
@@ -6265,11 +6274,12 @@ fn pathnameIsDirectoryWithIo(opaque_context: ?*anyopaque, path: []const u8) !boo
     std.debug.assert(opaque_context != null);
     const context: *IoPathnameLookupContext = @ptrCast(@alignCast(opaque_context.?));
     if (path.len == 0) return true;
-    const stat = std.Io.Dir.cwd().statFile(context.io, path, .{}) catch |err| switch (err) {
+    const fs_port = context.adapter.fsPort();
+    const metadata = fs_port.inspectPath(.{ .path = path }) catch |err| switch (err) {
         error.FileNotFound, error.NotDir => return false,
         else => return err,
     };
-    return stat.kind == .directory;
+    return metadata.stat.kind == .directory;
 }
 
 fn applyPathnameExpansion(
@@ -6309,7 +6319,7 @@ fn applyPathnameExpansion(
 }
 
 pub fn expandPathnamePattern(allocator: std.mem.Allocator, io: std.Io, pattern: []const u8) ![][]const u8 {
-    var io_context: IoPathnameLookupContext = .{ .io = io };
+    var io_context = IoPathnameLookupContext.init(io);
     return expandPathnamePatternWithLookupOptions(allocator, ioPathnameLookup(&io_context), pattern, .{});
 }
 
@@ -6344,7 +6354,7 @@ pub fn expandPathnameExpansionPattern(
     io: std.Io,
     pattern: ExpansionPattern,
 ) ![][]const u8 {
-    var io_context: IoPathnameLookupContext = .{ .io = io };
+    var io_context = IoPathnameLookupContext.init(io);
     return expandPathnameExpansionPatternWithLookupOptions(allocator, ioPathnameLookup(&io_context), pattern, .{});
 }
 

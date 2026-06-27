@@ -3,8 +3,10 @@
 const std = @import("std");
 const builtin = @import("builtin");
 
-const expand = @import("rush_expand");
-const runtime_posix = @import("rush_runtime_posix");
+const rush = @import("rush");
+
+const expand = rush.expand;
+const runtime_posix = rush.runtime.posix;
 
 const c = if (builtin.os.tag == .macos) @cImport({
     @cInclude("fcntl.h");
