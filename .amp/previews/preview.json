@@ -1,0 +1,15 @@
+{
+  "actions": [
+    {
+      "label": "Start docs preview",
+      "message": "Start the Rush documentation preview"
+    }
+  ],
+  "notes": [
+    {
+      "title": "Preview surface",
+      "body": "Rush previews are the static docs in website/."
+    }
+  ],
+  "links": []
+}

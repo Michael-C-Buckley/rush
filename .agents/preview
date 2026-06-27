@@ -1,22 +1,34 @@
 # Preview
 
-This repository's previewable surface is the static documentation site in
-`website/`. There is no package-manager dev server, login, or seed data.
+Rush's previewable surface is the static documentation site in `website/`.
+There is no package-manager dev server, login, database, or seed data.
 
-Start the preview server from the repository root:
+Run this from the repository root as a normal foreground shell command:
 
 ```sh
-python3 -m http.server 4173 --directory website
+python3 -m http.server 4173 --bind 0.0.0.0 --directory website
 ```
 
-Expected URL:
-
-```text
-http://127.0.0.1:4173/
-```
-
-Verify readiness with:
+Wait until this succeeds:
 
 ```sh
 curl -fsS http://127.0.0.1:4173/ >/dev/null
 ```
+
+Then make sure the Preview tab has a link for the docs preview. For a local
+non-orb session, write `.amp/previews/rush-docs.json` with:
+
+```json
+{
+  "links": [
+    { "label": "Rush docs", "url": "http://localhost:4173/" }
+  ]
+}
+```
+
+If running inside an orb, do not share raw `localhost` or `127.0.0.1` URLs with
+the user. Use whatever preview URL mechanism is configured for the orb, validate
+the external URL with `curl -fsS`, and write that URL to
+`.amp/previews/rush-docs.json` instead. Tailscale is one supported option, but
+not a requirement. If no orb preview mechanism is configured, say so instead of
+guessing a URL.
