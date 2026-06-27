@@ -12872,17 +12872,19 @@ fn appendFunctionFrameDelta(
         if (!after.variables.contains(name)) try state_delta.unsetVariable(name);
     }
 
-    var after_functions = after.functions.iterator();
-    while (after_functions.next()) |entry| {
-        if (before.getFunction(entry.key_ptr.*)) |previous| {
-            if (functionDefinitionDefinitelyEqual(previous, entry.value_ptr.*)) continue;
+    if (after.functions_mutated) {
+        var after_functions = after.functions.iterator();
+        while (after_functions.next()) |entry| {
+            if (before.getFunction(entry.key_ptr.*)) |previous| {
+                if (functionDefinitionDefinitelyEqual(previous, entry.value_ptr.*)) continue;
+            }
+            try state_delta.setFunction(entry.value_ptr.*);
         }
-        try state_delta.setFunction(entry.value_ptr.*);
-    }
 
-    var before_functions = before.functions.iterator();
-    while (before_functions.next()) |entry| {
-        if (!after.functions.contains(entry.key_ptr.*)) try state_delta.unsetFunction(entry.key_ptr.*);
+        var before_functions = before.functions.iterator();
+        while (before_functions.next()) |entry| {
+            if (!after.functions.contains(entry.key_ptr.*)) try state_delta.unsetFunction(entry.key_ptr.*);
+        }
     }
 
     try appendOptionDiff(before.options, after.options, state_delta);

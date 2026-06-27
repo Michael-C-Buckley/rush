@@ -444,6 +444,7 @@ pub const ShellState = struct {
     variables: std.StringHashMapUnmanaged(Variable) = .empty,
     functions: std.StringHashMapUnmanaged(command_plan.FunctionDefinition) = .empty,
     borrowed_functions: bool = false,
+    functions_mutated: bool = false,
     aliases: std.StringHashMapUnmanaged(Alias) = .empty,
     traps: std.StringHashMapUnmanaged(Trap) = .empty,
     event_hooks: std.ArrayList(event.Registration) = .empty,
@@ -572,6 +573,7 @@ pub const ShellState = struct {
         cloned.previous_job_id = self.previous_job_id;
         cloned.last_background_pid = self.last_background_pid;
         for (self.pending_job_notifications.items) |notification| try cloned.appendJobNotification(notification);
+        cloned.functions_mutated = false;
 
         cloned.validate();
         return cloned;
@@ -600,6 +602,7 @@ pub const ShellState = struct {
 
         cloned.functions = try self.functions.clone(allocator);
         cloned.borrowed_functions = true;
+        cloned.functions_mutated = false;
 
         var aliases = self.aliases.iterator();
         while (aliases.next()) |entry| try cloned.setAlias(entry.key_ptr.*, entry.value_ptr.value);
@@ -788,6 +791,7 @@ pub const ShellState = struct {
         }
 
         result.value_ptr.* = owned_definition;
+        self.functions_mutated = true;
         self.validate();
     }
 
@@ -798,6 +802,7 @@ pub const ShellState = struct {
                 self.allocator.free(entry.key);
                 freeFunctionDefinition(self.allocator, entry.value);
             }
+            self.functions_mutated = true;
         }
         self.validate();
     }
