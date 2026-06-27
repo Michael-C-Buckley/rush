@@ -1716,9 +1716,14 @@ const CorpusProbe = enum {
     sourced_function_command_substitution,
     function_redirection_status_list,
     nested_scope_fd_restore,
+    function_definition_redirection,
+    heredoc_function_redirection,
+    alias_reserved_word_compound,
+    assignment_before_function_scope,
+    nested_command_substitution_heredoc,
 
     fn random(random_source: std.Random) CorpusProbe {
-        return @enumFromInt(random_source.uintLessThan(u3, 5));
+        return @enumFromInt(random_source.uintLessThan(u4, 10));
     }
 
     fn render(self: CorpusProbe, writer: *std.Io.Writer) !void {
@@ -1737,6 +1742,21 @@ const CorpusProbe = enum {
             ),
             .nested_scope_fd_restore => try writer.writeAll(
                 "exec 3>&1; { ( printf '%s\n' sub >&3 ); printf '%s\n' group >out; }; exec 3>&-; cat out",
+            ),
+            .function_definition_redirection => try writer.writeAll(
+                "f() { printf '%s\n' body; } >out; printf '%s\n' after-def; f; printf '%s\n' after-call; cat out",
+            ),
+            .heredoc_function_redirection => try writer.writeAll(
+                "f() { cat <<EOF\nbody\nEOF\n} >out\nf\ncat out",
+            ),
+            .alias_reserved_word_compound => try writer.writeAll(
+                "alias begin='if true; then'\nbegin printf '%s\n' yes; fi",
+            ),
+            .assignment_before_function_scope => try writer.writeAll(
+                "f() { printf '[%s]\n' \"$A\"; A=changed; }; A=outer; A=temp f; printf '[%s]\n' \"$A\"",
+            ),
+            .nested_command_substitution_heredoc => try writer.writeAll(
+                "A=\"$(cat <<EOF\n$(printf inner)\nEOF\n)\"; printf '[%s]\n' \"$A\"",
             ),
         }
     }
