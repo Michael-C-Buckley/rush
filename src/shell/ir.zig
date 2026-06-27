@@ -1131,6 +1131,8 @@ fn lowerListNode(
     };
     std.mem.sort(parser.NodeId, child_node_ids.items, parsed, lessThanNodeIdTokenStart);
 
+    var line_cursor_offset: usize = 0;
+    var line_cursor_index: usize = 0;
     for (child_node_ids.items, 0..) |child_node_id, child_index| {
         const child_node = parsed.nodes[child_node_id.index()];
         const next_statement_start = if (child_index + 1 < child_node_ids.items.len)
@@ -1176,7 +1178,19 @@ fn lowerListNode(
             },
             .function_definition => blk: {
                 const index = function_definitions.items.len;
-                try function_definitions.append(allocator, try lowerFunctionDefinition(allocator, parsed, child_node));
+                const body_line_offset = if (functionBodyTokenRange(parsed, child_node)) |body_range|
+                    advanceSourceLineIndex(
+                        parsed.source,
+                        &line_cursor_offset,
+                        &line_cursor_index,
+                        sourceStart(parsed, body_range.start),
+                    )
+                else
+                    null;
+                try function_definitions.append(
+                    allocator,
+                    try lowerFunctionDefinitionWithBodyLineOffset(allocator, parsed, child_node, body_line_offset),
+                );
                 break :blk .{ .kind = .function_definition, .index = index, .span = child_node.span };
             },
             .bash_test_command => blk: {
@@ -1830,6 +1844,15 @@ fn lowerFunctionDefinition(
     parsed: parser.ParseResult,
     node: parser.Node,
 ) !FunctionDefinition {
+    return lowerFunctionDefinitionWithBodyLineOffset(allocator, parsed, node, null);
+}
+
+fn lowerFunctionDefinitionWithBodyLineOffset(
+    allocator: std.mem.Allocator,
+    parsed: parser.ParseResult,
+    node: parser.Node,
+    maybe_body_line_offset: ?usize,
+) !FunctionDefinition {
     std.debug.assert(node.kind == .function_definition);
     var body_node: ?parser.Node = null;
     var open_brace: ?usize = null;
@@ -1877,7 +1900,8 @@ fn lowerFunctionDefinition(
         .span = node.span,
         .name = name,
         .body = body,
-        .body_line_offset = sourceLineIndex(parsed.source, sourceStart(parsed, body_start)),
+        .body_line_offset = maybe_body_line_offset orelse
+            sourceLineIndex(parsed.source, sourceStart(parsed, body_start)),
         .redirections = try redirections.toOwnedSlice(allocator),
     };
 }
@@ -2653,6 +2677,25 @@ fn sourceLineIndex(source: []const u8, offset: usize) usize {
         if (byte == '\n') line += 1;
     }
     return line;
+}
+
+fn advanceSourceLineIndex(
+    source: []const u8,
+    cursor_offset: *usize,
+    cursor_line: *usize,
+    offset: usize,
+) usize {
+    std.debug.assert(offset <= source.len);
+    if (offset < cursor_offset.*) {
+        cursor_offset.* = offset;
+        cursor_line.* = sourceLineIndex(source, offset);
+        return cursor_line.*;
+    }
+    for (source[cursor_offset.*..offset]) |byte| {
+        if (byte == '\n') cursor_line.* += 1;
+    }
+    cursor_offset.* = offset;
+    return cursor_line.*;
 }
 
 fn hereDocBodyStartFromLine(source: []const u8, line: SourceLine) ?usize {
