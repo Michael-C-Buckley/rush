@@ -19,6 +19,7 @@ const assignment_runtime = @import("assignment.zig");
 const default_builtins = @import("../builtins.zig");
 const extension_api = @import("../extensions/api.zig");
 const extension_handlers = @import("../extensions/handlers.zig");
+const zig_builtin = @import("builtin");
 const builtin = @import("builtin.zig");
 const command_plan = @import("command_plan.zig");
 const compat = @import("compat.zig");
@@ -7216,8 +7217,10 @@ fn evaluateCommandSubstitutionSnapshot(
     substitution_context.validate();
     assertCommandSubstitutionContext(substitution_context);
     body.validate();
-    const parent_fingerprint = shellStateMutationFingerprint(parent_state.*);
-    defer std.debug.assert(shellStateMutationFingerprint(parent_state.*) == parent_fingerprint);
+    if (comptime shellStateMutationFingerprintEnabled()) {
+        const parent_fingerprint = shellStateMutationFingerprint(parent_state.*);
+        defer std.debug.assert(shellStateMutationFingerprint(parent_state.*) == parent_fingerprint);
+    }
 
     var substitution_state = parent_state.snapshotForSubshell(evaluator.allocator) catch |err| switch (err) {
         error.OutOfMemory => return error.OutOfMemory,
@@ -7667,7 +7670,10 @@ fn runSemanticCommandSubstitution(
     expansion_context.validate();
 
     const parent_state = expansion_context.shell_state;
-    const parent_fingerprint = shellStateMutationFingerprint(parent_state.*);
+    const parent_fingerprint = if (comptime shellStateMutationFingerprintEnabled())
+        shellStateMutationFingerprint(parent_state.*)
+    else
+        0;
     const previous_eval_context = expansion_context.eval_context;
     const substitution_context = previous_eval_context.enterCommandSubstitution();
     assertCommandSubstitutionContext(substitution_context);
@@ -7692,7 +7698,9 @@ fn runSemanticCommandSubstitution(
         expansion_context.shell_state = parent_state;
         expansion_context.eval_context = previous_eval_context;
         expansion_context.validate();
-        std.debug.assert(shellStateMutationFingerprint(parent_state.*) == parent_fingerprint);
+        if (comptime shellStateMutationFingerprintEnabled()) {
+            std.debug.assert(shellStateMutationFingerprint(parent_state.*) == parent_fingerprint);
+        }
     }
 
     var body = (try expansion_context.resolver.resolve(allocator, script)) orelse return error.Unimplemented;
@@ -12409,8 +12417,10 @@ fn evaluateFunction(
     buffers: *EvaluationBuffers,
 ) EvalError!SimpleEvalResult {
     validateFunctionCall(plan, definition);
-    const shell_state_before = shellStateMutationFingerprint(shell_state.*);
-    defer std.debug.assert(shellStateMutationFingerprint(shell_state.*) == shell_state_before);
+    if (comptime shellStateMutationFingerprintEnabled()) {
+        const shell_state_before = shellStateMutationFingerprint(shell_state.*);
+        defer std.debug.assert(shellStateMutationFingerprint(shell_state.*) == shell_state_before);
+    }
 
     var stack: std.ArrayList(*ActiveFunctionCall) = .empty;
     defer {
@@ -13226,8 +13236,10 @@ fn evaluateExternalWithProcessEnvironment(
     process_overlay: []const assignment_runtime.ProcessEnvironmentEntry,
     buffers: *EvaluationBuffers,
 ) EvalError!outcome.ExitStatus {
-    const shell_state_before = shellStateMutationFingerprint(shell_state);
-    defer std.debug.assert(shellStateMutationFingerprint(shell_state) == shell_state_before);
+    if (comptime shellStateMutationFingerprintEnabled()) {
+        const shell_state_before = shellStateMutationFingerprint(shell_state);
+        defer std.debug.assert(shellStateMutationFingerprint(shell_state) == shell_state_before);
+    }
 
     const fd_port = evaluator.fd_port orelse return error.Unimplemented;
     const process_port = evaluator.process_port orelse return error.Unimplemented;
@@ -13614,8 +13626,10 @@ fn runExternalWithPipelineInputWithProcessEnvironment(
     process_overlay: []const assignment_runtime.ProcessEnvironmentEntry,
     buffers: *EvaluationBuffers,
 ) EvalError!outcome.ExitStatus {
-    const shell_state_before = shellStateMutationFingerprint(shell_state);
-    defer std.debug.assert(shellStateMutationFingerprint(shell_state) == shell_state_before);
+    if (comptime shellStateMutationFingerprintEnabled()) {
+        const shell_state_before = shellStateMutationFingerprint(shell_state);
+        defer std.debug.assert(shellStateMutationFingerprint(shell_state) == shell_state_before);
+    }
 
     const process_port = evaluator.process_port orelse return error.Unimplemented;
 
@@ -14051,6 +14065,13 @@ fn signalStatus(signal: u8) outcome.ExitStatus {
     std.debug.assert(signal != 0);
     const value: u16 = 128 + @as(u16, signal);
     return if (value <= std.math.maxInt(outcome.ExitStatus)) @intCast(value) else std.math.maxInt(outcome.ExitStatus);
+}
+
+fn shellStateMutationFingerprintEnabled() bool {
+    return switch (zig_builtin.mode) {
+        .Debug, .ReleaseSafe => true,
+        .ReleaseFast, .ReleaseSmall => false,
+    };
 }
 
 fn shellStateMutationFingerprint(shell_state: state.ShellState) u64 {
