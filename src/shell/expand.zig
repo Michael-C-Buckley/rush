@@ -286,10 +286,14 @@ const ExpandedWordFields = struct {
 
 pub fn expandWord(allocator: std.mem.Allocator, raw: []const u8, options: Options) !ExpansionResult {
     _ = options.features;
-    const tilde_expanded = try expandTilde(allocator, raw, options.env);
-    defer allocator.free(tilde_expanded);
+    const tilde_expanded: ?[]const u8 = if (raw.len != 0 and raw[0] == '~')
+        try expandTilde(allocator, raw, options.env)
+    else
+        null;
+    defer if (tilde_expanded) |expanded| allocator.free(expanded);
+    const expansion_input = tilde_expanded orelse raw;
 
-    var parts = try parseWordParts(allocator, tilde_expanded);
+    var parts = try parseWordParts(allocator, expansion_input);
     defer parts.deinit();
     const pathname_expansion_safe = !hasQuotedGlobSyntax(parts, .{ .extglob = options.extglob });
 
