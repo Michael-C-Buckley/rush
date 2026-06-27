@@ -444,5 +444,6 @@ test "embedded default config sets prompt defaults without clobbering inherited 
     });
     try std.testing.expectEqualStrings("inherited> ", shell_state.getVariable("PS1").?.value);
     try std.testing.expectEqualStrings("> ", shell_state.getVariable("PS2").?.value);
+    try std.testing.expect(shell_state.options.notify);
     try std.testing.expect(abbr_state.saw_ll);
 }

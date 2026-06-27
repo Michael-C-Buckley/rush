@@ -6,6 +6,9 @@
 : "${PS1=● }"
 : "${PS2=> }"
 
+# Report background job completion promptly while sitting at the prompt.
+set -o notify
+
 rush_prompt_git() {
   branch="$(git branch --show-current 2>/dev/null)"
   if test -z "$branch"; then
@@ -41,7 +44,7 @@ rush_prompt_activity_update() {
   if test "${rush_prompt_activity_prompt:-0}" != 0 || \
      test "${rush_prompt_activity_completion:-0}" != 0 || \
      test "${rush_prompt_activity_jobs:-0}" != 0; then
-    event add timer.tick prompt-activity rush_prompt_activity_refresh --every 180
+    event add timer.tick prompt-activity rush_prompt_activity_refresh --every 120
   else
     event remove timer.tick prompt-activity
   fi
@@ -53,6 +56,51 @@ event add completion.async.start prompt-activity rush_prompt_activity_update
 event add completion.async.end prompt-activity rush_prompt_activity_update
 event add job.start prompt-activity rush_prompt_activity_update
 event add job.end prompt-activity rush_prompt_activity_update
+
+rush_prompt_activity_is_rgb() {
+  case "$1" in
+    \#[[:xdigit:]][[:xdigit:]][[:xdigit:]][[:xdigit:]][[:xdigit:]][[:xdigit:]]) return 0 ;;
+  esac
+  return 1
+}
+
+rush_prompt_activity_rgb_ready() {
+  rush_prompt_activity_is_rgb "${rush_color_foreground-}" && \
+  rush_prompt_activity_is_rgb "${rush_color_background-}" && \
+  rush_prompt_activity_is_rgb "${rush_color_red-}"
+}
+
+rush_prompt_activity_color() {
+  prompt_frame --interval 120 \
+    "$1" \
+    "$(color blend "$1" "$rush_color_background" 3)" \
+    "$(color blend "$1" "$rush_color_background" 6)" \
+    "$(color blend "$1" "$rush_color_background" 10)" \
+    "$(color blend "$1" "$rush_color_background" 14)" \
+    "$(color blend "$1" "$rush_color_background" 18)" \
+    "$(color blend "$1" "$rush_color_background" 23)" \
+    "$(color blend "$1" "$rush_color_background" 28)" \
+    "$(color blend "$1" "$rush_color_background" 34)" \
+    "$(color blend "$1" "$rush_color_background" 40)" \
+    "$(color blend "$1" "$rush_color_background" 46)" \
+    "$(color blend "$1" "$rush_color_background" 52)" \
+    "$(color blend "$1" "$rush_color_background" 58)" \
+    "$(color blend "$1" "$rush_color_background" 64)" \
+    "$(color blend "$1" "$rush_color_background" 70)" \
+    "$(color blend "$1" "$rush_color_background" 64)" \
+    "$(color blend "$1" "$rush_color_background" 58)" \
+    "$(color blend "$1" "$rush_color_background" 52)" \
+    "$(color blend "$1" "$rush_color_background" 46)" \
+    "$(color blend "$1" "$rush_color_background" 40)" \
+    "$(color blend "$1" "$rush_color_background" 34)" \
+    "$(color blend "$1" "$rush_color_background" 28)" \
+    "$(color blend "$1" "$rush_color_background" 23)" \
+    "$(color blend "$1" "$rush_color_background" 18)" \
+    "$(color blend "$1" "$rush_color_background" 14)" \
+    "$(color blend "$1" "$rush_color_background" 10)" \
+    "$(color blend "$1" "$rush_color_background" 6)" \
+    "$(color blend "$1" "$rush_color_background" 3)"
+}
 
 rush_prompt() {
   rush_prompt_status=$?
@@ -66,13 +114,30 @@ rush_prompt() {
      test "${rush_prompt_activity_prompt:-0}" != 0 || \
      test "${rush_prompt_activity_completion:-0}" != 0 || \
      test "${rush_prompt_activity_jobs:-0}" != 0; then
-    rush_prompt_marker=" $(prompt_frame --interval 180 ◐ ◓ ◑ ◒) "
+    rush_prompt_active=1
   else
-    rush_prompt_marker=' ● '
+    rush_prompt_active=0
   fi
-  if test "$rush_prompt_status" = 0; then
+
+  if test "$rush_prompt_active" = 1 && rush_prompt_activity_rgb_ready; then
+    if test "$rush_prompt_status" = 0; then
+      rush_prompt_marker_color="$(rush_prompt_activity_color "$rush_color_foreground")"
+    else
+      rush_prompt_marker_color="$(rush_prompt_activity_color "$rush_color_red")"
+    fi
+    prompt segment --fg "$rush_prompt_marker_color" ' ● '
+  elif test "$rush_prompt_active" = 1; then
+    rush_prompt_marker=" $(prompt_frame --interval 180 ◐ ◓ ◑ ◒) "
+    if test "$rush_prompt_status" = 0; then
+      prompt text "$rush_prompt_marker"
+    else
+      prompt segment --fg red "$rush_prompt_marker"
+    fi
+  elif test "$rush_prompt_status" = 0; then
+    rush_prompt_marker=' ● '
     prompt text "$rush_prompt_marker"
   else
+    rush_prompt_marker=' ● '
     prompt segment --fg red "$rush_prompt_marker"
   fi
 }
