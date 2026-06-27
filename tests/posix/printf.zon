@@ -1,0 +1,122 @@
+.{
+    .name = "printf utility",
+    .mode = .posix,
+    .cases = .{
+        .{
+            .name = "format operand reuses conversions and supplies zero for missing numeric operands",
+            .script =
+            \\printf '<%5d><%4d>\n' 1 21 321 4321 54321
+            ,
+            .stdout =
+            \\<    1><  21>
+            \\<  321><4321>
+            \\<54321><   0>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "integer operands are parsed as C integer constants",
+            .script =
+            \\printf '<%d>\n' 10 010 0x10
+            ,
+            .stdout =
+            \\<10>
+            \\<8>
+            \\<16>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "quoted integer constants diagnose trailing bytes",
+            .script =
+            \\printf '<%d>\n' \'3 '"+3' "'-3"
+            ,
+            .stdout =
+            \\<51>
+            \\<43>
+            \\<45>
+            \\
+            ,
+            .stderr_match = .nonempty,
+            .status = 1,
+        },
+        .{
+            .name = "format operand recognizes octal but not hexadecimal byte escapes",
+            .script =
+            \\printf 'A\101Z\n'
+            \\printf 'A\x41Z\n'
+            ,
+            .stdout =
+            \\AAZ
+            \\A\x41Z
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "octal escapes wrap to one output byte",
+            .script =
+            \\printf '\400\377' | od -An -tx1
+            \\printf '%b' '\0777' | od -An -tx1
+            ,
+            .stdout =
+            \\ 00 ff
+            \\ ff
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "percent b recognizes escapes and stops output at c escape",
+            .script =
+            \\printf '<%b><after>\n' 'A\0101B\cC' NEXT
+            ,
+            .stdout = "<AAB",
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "numbered conversion specifications reuse by highest consumed argument",
+            .script =
+            \\printf '<%2$s:%1$s>\n' a b c d
+            ,
+            .stdout =
+            \\<b:a>
+            \\<d:c>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "floating point extension formats decimal scientific general and hexadecimal conversions",
+            .script =
+            \\LC_ALL=C printf '<%f><%.2f><%e><%E><%g><%G><%a><%A>\n' 1.5 1.5 1000 1000 1000 1000 1.5 1.5
+            ,
+            .stdout =
+            \\<1.500000><1.50><1.000000e+03><1.000000E+03><1000><1000><0x1.8p+0><0X1.8P+0>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "floating point extension applies flags precision width and partial numeric diagnostics",
+            .script =
+            \\LC_ALL=C printf '<%+ f><%+010.2f><% 10.2e><%-10.3g><%#.0f><%#.3g><%.0f><%.1f><%.0g><%.0a><%010.2a><%.1a><%.2f><%.2f>\n' 1.5 1.5 1.5 1000 1 1000 2.5 1.25 2.5 1.5 1.5 0x1.08p0 ' 1.5 ' 0x10.1p2x
+            ,
+            .stdout =
+            \\<+1.500000><+000001.50><  1.50e+00><1e+03     ><1.><1.00e+03><2><1.2><2><0x2p+0><0x01.80p+0><0x1.0p+0><1.50><64.25>
+            \\
+            ,
+            .stderr_match = .nonempty,
+            .status = 1,
+        },
+    },
+}
