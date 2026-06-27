@@ -569,6 +569,13 @@ fn freeByteSlices(allocator: std.mem.Allocator, slices: []const []const u8) void
 }
 
 pub fn lowerSimpleCommands(allocator: std.mem.Allocator, parsed: parser.ParseResult) !Program {
+    if (rootListNode(parsed)) |list_node| return lowerListNode(
+        allocator,
+        parsed,
+        list_node,
+        .init(0, parsed.source.len),
+    );
+
     var commands: std.ArrayList(SimpleCommand) = .empty;
     var pipelines: std.ArrayList(Pipeline) = .empty;
     var if_commands: std.ArrayList(IfCommand) = .empty;
@@ -825,6 +832,23 @@ pub fn lowerSimpleCommands(allocator: std.mem.Allocator, parsed: parser.ParseRes
         .subshells = try subshells.toOwnedSlice(allocator),
         .statements = try statements.toOwnedSlice(allocator),
     };
+}
+
+fn rootListNode(parsed: parser.ParseResult) ?parser.Node {
+    var list_node: ?parser.Node = null;
+    for (parsed.nodeChildren(parsed.root())) |child| switch (child) {
+        .node => |node_id| {
+            const node = parsed.nodes[node_id.index()];
+            if (node.kind != .list) return null;
+            if (list_node != null) return null;
+            list_node = node;
+        },
+        .token => |token_id| {
+            const token = parsed.tokens[token_id.index()];
+            if (!token.kind.isTrivia() and token.kind != .eof) return null;
+        },
+    };
+    return list_node;
 }
 
 pub fn statementSourceFragment(
@@ -1107,15 +1131,19 @@ fn lowerListNode(
     };
     std.mem.sort(parser.NodeId, child_node_ids.items, parsed, lessThanNodeIdTokenStart);
 
-    for (child_node_ids.items) |child_node_id| {
+    for (child_node_ids.items, 0..) |child_node_id, child_index| {
         const child_node = parsed.nodes[child_node_id.index()];
+        const next_statement_start = if (child_index + 1 < child_node_ids.items.len)
+            parsed.nodes[child_node_ids.items[child_index + 1].index()].token_start
+        else
+            list_node.token_end;
         var statement: Statement = switch (child_node.kind) {
             .pipeline => blk: {
                 var lowered = try lowerPipelineDirect(allocator, parsed, child_node, &commands);
                 lowered.async_after = statementHasAsyncTerminator(
                     parsed.tokens,
                     child_node.token_end,
-                    nextListStatementStart(parsed, list_node, child_node.token_end),
+                    next_statement_start,
                 );
                 const pipeline_index = pipelines.items.len;
                 try pipelines.append(allocator, lowered);
@@ -1174,7 +1202,7 @@ fn lowerListNode(
         statement.async_after = statementHasAsyncTerminator(
             parsed.tokens,
             child_node.token_end,
-            nextListStatementStart(parsed, list_node, child_node.token_end),
+            next_statement_start,
         );
         if (statement.kind == .pipeline) pipelines.items[statement.index].async_after = statement.async_after;
         previous_statement_end = if (previous_statement_end) |previous_end|
