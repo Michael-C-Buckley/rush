@@ -330,7 +330,6 @@ test "POSIX builtin registry excludes Rush extension builtins" {
         "prompt",
         "prompt_async",
         "prompt_duration",
-        "prompt_frame",
         "prompt_pwd",
         "rush_complete",
         "shopt",

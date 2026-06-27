@@ -16,7 +16,6 @@ pub const builtins = [_]shell_builtin.Builtin{
     shell_builtin.Builtin.initExtension("prompt", .extension_state),
     shell_builtin.Builtin.initExtension("prompt_pwd", .output),
     shell_builtin.Builtin.initExtension("prompt_duration", .output),
-    shell_builtin.Builtin.initExtension("prompt_frame", .output),
     shell_builtin.Builtin.initExtension("prompt_async", .extension_state),
 };
 
@@ -173,10 +172,6 @@ pub fn handlerForContext(name: []const u8, handler_context: ?*anyopaque) ?api.Ha
     if (std.mem.eql(u8, name, "prompt_duration")) return .{
         .context = handler_context,
         .handler = evaluatePromptDuration,
-    };
-    if (std.mem.eql(u8, name, "prompt_frame")) return .{
-        .context = handler_context,
-        .handler = evaluatePromptFrame,
     };
     if (std.mem.eql(u8, name, "prompt_async")) return .{
         .context = handler_context,
@@ -386,48 +381,6 @@ fn evaluatePromptDuration(handler_context: ?*anyopaque, invocation: *api.Invocat
     return api.EvaluationResult.normal(0);
 }
 
-fn evaluatePromptFrame(handler_context: ?*anyopaque, invocation: *api.Invocation) !api.EvaluationResult {
-    std.debug.assert(invocation.argv.len != 0);
-    std.debug.assert(std.mem.eql(u8, invocation.argv[0], "prompt_frame"));
-    const builder: *Builder = if (handler_context) |ctx| @ptrCast(@alignCast(ctx)) else {
-        return api.EvaluationResult.normal(try invocation.usageError(
-            "prompt_frame",
-            "only available while rendering prompt",
-        ));
-    };
-    const options = parsePromptFrame(invocation.argv) orelse {
-        return api.EvaluationResult.normal(try promptFrameUsage(invocation));
-    };
-    const frame_index = (builder.now_ms / options.interval_ms) % options.frames.len;
-    try invocation.stdout.print(invocation.allocator, "{s}\n", .{options.frames[frame_index]});
-    return api.EvaluationResult.normal(0);
-}
-
-const PromptFrameOptions = struct {
-    interval_ms: u64 = 180,
-    frames: []const []const u8,
-};
-
-fn parsePromptFrame(argv: []const []const u8) ?PromptFrameOptions {
-    var options: PromptFrameOptions = .{ .frames = &.{} };
-    var index: usize = 1;
-    while (index < argv.len) {
-        const arg = argv[index];
-        if (std.mem.eql(u8, arg, "--interval")) {
-            index += 1;
-            if (index >= argv.len) return null;
-            options.interval_ms = std.fmt.parseInt(u64, argv[index], 10) catch return null;
-            if (options.interval_ms == 0) return null;
-            index += 1;
-            continue;
-        }
-        break;
-    }
-    if (index >= argv.len) return null;
-    options.frames = argv[index..];
-    return options;
-}
-
 fn evaluatePromptAsync(handler_context: ?*anyopaque, invocation: *api.Invocation) !api.EvaluationResult {
     std.debug.assert(invocation.argv.len != 0);
     std.debug.assert(std.mem.eql(u8, invocation.argv[0], "prompt_async"));
@@ -583,13 +536,6 @@ fn promptAsyncUsage(invocation: *api.Invocation) !u8 {
     );
 }
 
-fn promptFrameUsage(invocation: *api.Invocation) !u8 {
-    return invocation.usageError(
-        "prompt_frame",
-        "usage: prompt_frame [--interval MS] TEXT...",
-    );
-}
-
 fn promptUsage(invocation: *api.Invocation) !u8 {
     return invocation.usageError(
         "prompt",
@@ -655,37 +601,6 @@ test "prompt async-pending reports refresh started during render" {
     try std.testing.expectEqual(@as(u8, 1), (try evaluatePrompt(&builder, &invocation)).status);
     builder.async_refresh_started = true;
     try std.testing.expectEqual(@as(u8, 0), (try evaluatePrompt(&builder, &invocation)).status);
-}
-
-test "prompt_frame selects frame from prompt render time" {
-    var builder = Builder.init(std.testing.allocator);
-    defer builder.deinit();
-    builder.now_ms = 360;
-    var stdout: std.ArrayList(u8) = .empty;
-    defer stdout.deinit(std.testing.allocator);
-    var stderr: std.ArrayList(u8) = .empty;
-    defer stderr.deinit(std.testing.allocator);
-    var diagnostics: std.ArrayList([]const u8) = .empty;
-    defer diagnostics.deinit(std.testing.allocator);
-    var shell_state = state.ShellState.init(std.testing.allocator);
-    defer shell_state.deinit();
-    var state_delta = delta.StateDelta.init(std.testing.allocator, .current_shell);
-    defer state_delta.deinit();
-    var invocation: api.Invocation = .{
-        .allocator = std.testing.allocator,
-        .argv = &[_][]const u8{ "prompt_frame", "--interval", "180", "◐", "◓", "◑", "◒" },
-        .builtins = &.{},
-        .shell_state = shell_state,
-        .state_delta = &state_delta,
-        .eval_context = shell_context.EvalContext.forTarget(.current_shell),
-        .stdout = &stdout,
-        .stderr = &stderr,
-        .diagnostics = &diagnostics,
-    };
-
-    const result = try evaluatePromptFrame(&builder, &invocation);
-    try std.testing.expectEqual(@as(u8, 0), result.status);
-    try std.testing.expectEqualStrings("◑\n", stdout.items);
 }
 
 test "prompt_pwd shortens home-relative paths" {

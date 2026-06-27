@@ -32,10 +32,9 @@ rush_prompt_git() {
   printf '%s%s%s' "$branch" "$marker" "$arrows"
 }
 
-# Timer hook used only to force prompt redraws while activity is in flight.
+# Timer hook advances the activity animation and requests redraws while active.
 rush_prompt_activity_refresh() {
-  # Timer hook dispatch requests a prompt refresh; no state change is needed.
-  :
+  rush_prompt_activity_frame=$(((${rush_prompt_activity_frame:-0} + 1) % 28))
 }
 
 # Track prompt and completion activity so the prompt can animate.
@@ -51,6 +50,7 @@ rush_prompt_activity_update() {
     event add timer.tick prompt-activity rush_prompt_activity_refresh --every 120
   else
     event remove timer.tick prompt-activity
+    rush_prompt_activity_frame=0
   fi
 }
 
@@ -77,35 +77,38 @@ rush_prompt_activity_rgb_ready() {
 # Build one frame color for the activity dot by fading toward the background.
 rush_prompt_activity_color() {
   # Stop at 70% toward the background so the dimmest frame stays visible.
-  prompt_frame --interval 120 \
-    "$1" \
-    "$(color blend "$1" "$rush_color_background" 3)" \
-    "$(color blend "$1" "$rush_color_background" 6)" \
-    "$(color blend "$1" "$rush_color_background" 10)" \
-    "$(color blend "$1" "$rush_color_background" 14)" \
-    "$(color blend "$1" "$rush_color_background" 18)" \
-    "$(color blend "$1" "$rush_color_background" 23)" \
-    "$(color blend "$1" "$rush_color_background" 28)" \
-    "$(color blend "$1" "$rush_color_background" 34)" \
-    "$(color blend "$1" "$rush_color_background" 40)" \
-    "$(color blend "$1" "$rush_color_background" 46)" \
-    "$(color blend "$1" "$rush_color_background" 52)" \
-    "$(color blend "$1" "$rush_color_background" 58)" \
-    "$(color blend "$1" "$rush_color_background" 64)" \
-    "$(color blend "$1" "$rush_color_background" 70)" \
-    "$(color blend "$1" "$rush_color_background" 64)" \
-    "$(color blend "$1" "$rush_color_background" 58)" \
-    "$(color blend "$1" "$rush_color_background" 52)" \
-    "$(color blend "$1" "$rush_color_background" 46)" \
-    "$(color blend "$1" "$rush_color_background" 40)" \
-    "$(color blend "$1" "$rush_color_background" 34)" \
-    "$(color blend "$1" "$rush_color_background" 28)" \
-    "$(color blend "$1" "$rush_color_background" 23)" \
-    "$(color blend "$1" "$rush_color_background" 18)" \
-    "$(color blend "$1" "$rush_color_background" 14)" \
-    "$(color blend "$1" "$rush_color_background" 10)" \
-    "$(color blend "$1" "$rush_color_background" 6)" \
-    "$(color blend "$1" "$rush_color_background" 3)"
+  case "$(( ${rush_prompt_activity_frame:-0} % 28 ))" in
+    0) rush_prompt_activity_percent=0 ;;
+    1|27) rush_prompt_activity_percent=3 ;;
+    2|26) rush_prompt_activity_percent=6 ;;
+    3|25) rush_prompt_activity_percent=10 ;;
+    4|24) rush_prompt_activity_percent=14 ;;
+    5|23) rush_prompt_activity_percent=18 ;;
+    6|22) rush_prompt_activity_percent=23 ;;
+    7|21) rush_prompt_activity_percent=28 ;;
+    8|20) rush_prompt_activity_percent=34 ;;
+    9|19) rush_prompt_activity_percent=40 ;;
+    10|18) rush_prompt_activity_percent=46 ;;
+    11|17) rush_prompt_activity_percent=52 ;;
+    12|16) rush_prompt_activity_percent=58 ;;
+    13|15) rush_prompt_activity_percent=64 ;;
+    *) rush_prompt_activity_percent=70 ;;
+  esac
+
+  if test "$rush_prompt_activity_percent" = 0; then
+    printf '%s\n' "$1"
+  else
+    color blend "$1" "$rush_color_background" "$rush_prompt_activity_percent"
+  fi
+}
+
+rush_prompt_activity_marker() {
+  case "$(( ${rush_prompt_activity_frame:-0} % 4 ))" in
+    0) printf ' ◐\n' ;;
+    1) printf ' ◓\n' ;;
+    2) printf ' ◑\n' ;;
+    *) printf ' ◒\n' ;;
+  esac
 }
 
 # Render the default prompt: cwd, async git info, and status/activity marker.
@@ -136,7 +139,7 @@ rush_prompt() {
     prompt segment --fg "$rush_prompt_marker_color" ' ● '
   elif test "$rush_prompt_active" = 1; then
     # Fall back to a plain text spinner for terminals without RGB reports.
-    rush_prompt_marker=" $(prompt_frame --interval 180 ◐ ◓ ◑ ◒) "
+    rush_prompt_marker="$(rush_prompt_activity_marker) "
     if test "$rush_prompt_status" = 0; then
       prompt text "$rush_prompt_marker"
     else

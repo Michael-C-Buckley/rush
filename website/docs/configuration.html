@@ -118,12 +118,17 @@
     </thead>
     <tbody>
       <tr><td><code>rush_style_completion_selected</code></td><td>Selected completion candidate</td></tr>
+      <tr><td><code>rush_style_completion_command</code></td><td>Command-name completion candidate</td></tr>
+      <tr><td><code>rush_style_completion_builtin</code></td><td>Builtin completion candidate</td></tr>
+      <tr><td><code>rush_style_completion_subcommand</code></td><td>Subcommand completion candidate</td></tr>
+      <tr><td><code>rush_style_completion_plain</code></td><td>Plain completion candidate</td></tr>
       <tr><td><code>rush_style_completion_directory</code></td><td>Directory completion candidate</td></tr>
       <tr><td><code>rush_style_completion_option</code></td><td>Option completion candidate</td></tr>
       <tr><td><code>rush_style_completion_variable</code></td><td>Variable completion candidate</td></tr>
       <tr><td><code>rush_style_completion_function</code></td><td>Function completion candidate</td></tr>
       <tr><td><code>rush_style_completion_file</code></td><td>File completion candidate</td></tr>
       <tr><td><code>rush_style_completion_description</code></td><td>Completion description text</td></tr>
+      <tr><td><code>rush_style_completion_summary</code></td><td>Completion menu summary text</td></tr>
       <tr><td><code>rush_style_completion_flash</code></td><td>Transient completion flash feedback</td></tr>
       <tr><td><code>rush_style_history_match</code></td><td>History search match highlight</td></tr>
       <tr><td><code>rush_style_autosuggestion</code></td><td>Inline autosuggestion text</td></tr>
@@ -135,7 +140,7 @@
 
   <h2 id="prompt"><a href="#prompt">Prompt</a></h2>
 
-  <p>Rush ships a default prompt: the current directory in blue, the Git branch in yellow with a <code>•</code> marker when the worktree is dirty and <code>↑</code>/<code>↓</code> commit counts against the upstream, and a <code>●</code> marker. While prompt, completion, or job activity is running, the marker animates through <code>◐</code>/<code>◓</code>/<code>◑</code>/<code>◒</code> frames. The marker turns red when the previous command failed.</p>
+  <p>Rush ships a default prompt: the current directory in blue, the Git branch in yellow with a <code>•</code> marker when the worktree is dirty and <code>↑</code>/<code>↓</code> commit counts against the upstream, and a <code>●</code> marker. While prompt or completion activity is running, the marker animates through <code>◐</code>/<code>◓</code>/<code>◑</code>/<code>◒</code> frames. The marker turns red when the previous command failed.</p>
 
   <p>Define <code>rush_prompt</code> in your configuration to replace it.</p>
 
@@ -163,7 +168,6 @@
 <span class="opt">--dim</span>
 <span class="opt">--italic</span>
 <span class="opt">--underline</span>
-<span class="opt">--blink</span>
 <span class="opt">--reverse</span>
 <span class="opt">--strikethrough</span></pre>
 
@@ -177,12 +181,9 @@ index:236
   <h2 id="helpers"><a href="#helpers">Helpers</a></h2>
 
   <pre><span class="cmd">prompt_pwd</span> [<span class="opt">-d</span> N] [<span class="opt">-D</span> N]   <span class="comment"># current directory, with $HOME shortened to ~</span>
-<span class="cmd">prompt_duration</span>             <span class="comment"># previous command duration</span>
-<span class="cmd">prompt_frame</span> [<span class="opt">--interval</span> MS] TEXT...  <span class="comment"># time-based prompt animation frame</span></pre>
+<span class="cmd">prompt_duration</span>             <span class="comment"># previous command duration</span></pre>
 
   <p><code>prompt_pwd</code> optionally shortens path components like fish. <code>-d</code>/<code>--dir-length</code> keeps the first N characters of each component (0, the default, disables shortening; a leading dot is preserved). <code>-D</code>/<code>--full-length-dirs</code> keeps the last N components at full length (default 1).</p>
-
-  <p><code>prompt_frame</code> prints one frame from its arguments based on prompt render time. Use it with event-driven timers to animate prompt markers without mutating frame counters in shell state.</p>
 
   <pre><span class="cmd">prompt_pwd</span>                  <span class="comment"># ~/repos/rush</span>
 <span class="cmd">prompt_pwd</span> <span class="opt">-d</span> 1             <span class="comment"># ~/r/rush</span>
@@ -199,26 +200,13 @@ index:236
 
   <h2 id="async-prompt"><a href="#async-prompt">Async prompt updates</a></h2>
 
-  <p>Prompts should stay fast. Use the async prompt helpers for clocks, Git status, and other data that may change while the editor is waiting for input. Background work requests a safe redraw with <code>prompt repaint</code>; Rush rerenders the prompt and input line through the line editor.</p>
+  <p>Prompts should stay fast. Use the async prompt helpers for Git status and other data that may be slow to compute, and use <code>timer.tick</code> hooks for values that should change while the editor is waiting for input. Async refreshes and timer hooks request prompt redraws through the line editor.</p>
 
-  <pre><span class="cmd">prompt</span> repaint
-<span class="cmd">prompt</span> refresh <span class="opt">--interval</span> MS
-<span class="cmd">prompt_time</span> FORMAT
-<span class="cmd">prompt_async</span> KEY <span class="opt">--ttl</span> MS <span class="opt">--</span> COMMAND...</pre>
+  <pre><span class="cmd">prompt_async</span> KEY <span class="opt">--ttl</span> MS <span class="opt">--</span> COMMAND...</pre>
 
-  <p><code>prompt repaint</code> is the low-level redraw primitive for hooks and hidden refresh jobs. It schedules a prompt redraw when Rush is editing a command line and does not write prompt or input bytes directly.</p>
+  <p><code>prompt_async</code> returns cached stdout immediately. When the cache is missing or stale, Rush starts <code>COMMAND</code> as a hidden refresh and returns the old cached value, or nothing if no value has been cached yet. When the hidden command exits, Rush automatically requests a safe prompt redraw; the next render sees the fresh cached stdout. Cache entries are keyed by the current directory plus the explicit key. Duplicate refreshes for the same key are coalesced. Stderr is suppressed by default, and hidden refreshes preserve the interactive last status.</p>
 
-  <p><code>prompt refresh --interval MS</code> asks Rush to rerender the prompt periodically while the editor is idle. Timers are suspended while a foreground command is running.</p>
-
-  <p><code>prompt_time FORMAT</code> formats the current time using <a href="https://github.com/rockorager/zeit">zeit</a>. Both strftime formats and Go-style layouts are supported.</p>
-
-  <pre><span class="cmd">rush_prompt</span>() {
-  <span class="cmd">prompt</span> segment <span class="opt">--fg</span> yellow <span class="str">"$(prompt_time %H:%M:%S)"</span>
-  <span class="cmd">prompt</span> refresh <span class="opt">--interval</span> 1000
-  <span class="cmd">prompt</span> text <span class="str">' ● '</span>
-}</pre>
-
-  <p><code>prompt_async</code> returns cached stdout immediately. When the cache is missing or stale, Rush starts <code>COMMAND</code> as a hidden refresh and returns the old cached value, or nothing if no value has been cached yet. When the hidden command exits, Rush automatically requests a safe prompt redraw; the next render sees the fresh cached stdout. You do not need to call <code>prompt repaint</code> after <code>prompt_async</code>. Cache entries are keyed by the current directory plus the explicit key. Duplicate refreshes for the same key are coalesced. Stderr is suppressed by default, and hidden refreshes preserve the interactive last status.</p>
+  <p>For prompt animations, keep frame state in a shell variable and advance it from a <code>timer.tick</code> hook while activity is active. The default configuration uses this pattern for its activity marker.</p>
 
   <pre><span class="cmd">rush_prompt</span>() {
   <span class="cmd">prompt</span> segment <span class="opt">--fg</span> bright-blue <span class="str">"$(prompt_pwd)"</span>
@@ -248,7 +236,7 @@ index:236
 
   <h2 id="hooks"><a href="#hooks">Hooks and intervals</a></h2>
 
-  <p><code>event</code> registers lower-level hooks for advanced interactive setups. <code>prompt.prepare</code> hooks run on the real shell state before each prompt render. <code>directory.change</code> hooks run after a successful current-shell directory change and receive the old and new directories as <code>$1</code> and <code>$2</code>. <code>timer.tick</code> hooks run while the editor is idle after their <code>--every</code> interval and receive the registration name as <code>$1</code>. Hooks preserve the visible <code>$?</code> by default.</p>
+  <p><code>event</code> registers lower-level hooks for advanced interactive setups. <code>prompt.prepare</code> hooks run on the real shell state before each prompt render. <code>directory.change</code> hooks run after a successful current-shell directory change and receive the old and new directories as <code>$1</code> and <code>$2</code>. <code>timer.tick</code> hooks run while the editor is idle after their <code>--every</code> interval and receive the registration name as <code>$1</code>. Activity hooks such as <code>prompt.async.start</code>, <code>completion.async.start</code>, and <code>job.start</code> receive the activity kind as <code>$1</code> and the active count as <code>$2</code>. Hooks preserve the visible <code>$?</code> by default.</p>
 
   <pre><span class="cmd">event</span> add EVENT NAME FUNCTION [<span class="opt">--priority</span> N]
 <span class="cmd">event</span> add timer.tick NAME FUNCTION <span class="opt">--every</span> MS [<span class="opt">--priority</span> N]
@@ -266,7 +254,6 @@ index:236
 
 <span class="cmd">on_clock</span>() {
   <span class="var">CLOCK</span>=<span class="str">"$(date +%H:%M:%S)"</span>
-  <span class="cmd">prompt</span> repaint
 }
 
 <span class="cmd">event</span> add prompt.prepare prompt-vars on_prompt_prepare
@@ -279,9 +266,9 @@ index:236
 <span class="cmd">event</span> list directory.change
 <span class="cmd">event</span> remove directory.change cwd-repaint</pre>
 
-  <p>Common recipes are: register <code>rush_direnv_hook</code> or <code>rush_mise_hook</code> on <code>directory.change</code>, precompute cheap prompt variables in <code>prompt.prepare</code>, and use <code>timer.tick</code> with <code>prompt repaint</code> for clocks or other idle updates.</p>
+  <p>Common recipes are: register <code>rush_direnv_hook</code> or <code>rush_mise_hook</code> on <code>directory.change</code>, precompute cheap prompt variables in <code>prompt.prepare</code>, and use <code>timer.tick</code> for clocks or other idle updates.</p>
 
-  <p>Prefer <code>prompt_async</code>, timers, and hooks over slow synchronous command substitutions in <code>rush_prompt</code>. They keep prompt rendering responsive and route redraws through <code>prompt repaint</code> instead of writing to the terminal from background contexts.</p>
+  <p>Prefer <code>prompt_async</code>, timers, and hooks over slow synchronous command substitutions in <code>rush_prompt</code>. They keep prompt rendering responsive and route redraws through the editor instead of writing to the terminal from background contexts.</p>
 
   <h2 id="ps1"><a href="#ps1">PS1 fallback</a></h2>
 
