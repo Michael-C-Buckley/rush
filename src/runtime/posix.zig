@@ -310,19 +310,25 @@ fn listDir(context: *anyopaque, request: fs.ListDirRequest) fs.ListDirError!fs.L
     const adapter = adapterFromContext(context);
     request.validate();
 
-    if (comptime builtin.os.tag == .macos) {
-        if (request.attributes.needsStatLikeMetadata()) {
-            return listDirMacosBulk(adapter, request) catch |err| switch (err) {
-                error.BulkUnsupported => listDirIterating(adapter, request),
-                else => |list_err| list_err,
-            };
-        }
-    }
+    if (request.attributes.needsStatLikeMetadata()) return listDirWithStatLikeMetadata(adapter, request);
 
-    return listDirIterating(adapter, request);
+    return listDirByIterator(adapter, request);
 }
 
-fn listDirIterating(adapter: *Adapter, request: fs.ListDirRequest) fs.ListDirError!fs.ListDirResult {
+fn listDirWithStatLikeMetadata(adapter: *Adapter, request: fs.ListDirRequest) fs.ListDirError!fs.ListDirResult {
+    request.validate();
+
+    if (comptime builtin.os.tag == .macos) {
+        return listDirMacosBulk(adapter, request) catch |err| switch (err) {
+            error.BulkUnsupported => listDirByIterator(adapter, request),
+            else => |list_err| list_err,
+        };
+    }
+
+    return listDirByIterator(adapter, request);
+}
+
+fn listDirByIterator(adapter: *Adapter, request: fs.ListDirRequest) fs.ListDirError!fs.ListDirResult {
     request.validate();
 
     var dir = try std.Io.Dir.cwd().openDir(adapter.io, request.path, .{ .iterate = true });
@@ -1400,6 +1406,33 @@ test "runtime posix adapter performs cwd and access smoke operations" {
     try fs_port.changeCwd(.{ .path = cwd.path });
 }
 
+test "runtime posix adapter listDir defaults to names and kinds only" {
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    try tmp.dir.writeFile(std.testing.io, .{ .sub_path = "note.txt", .data = "hello" });
+    try tmp.dir.createDir(std.testing.io, "subdir", .default_dir);
+
+    var tmp_root_buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
+    const tmp_root_len = try tmp.dir.realPath(std.testing.io, &tmp_root_buffer);
+    const tmp_root = tmp_root_buffer[0..tmp_root_len];
+
+    var adapter = Adapter.init(std.testing.io);
+    const fs_port = adapter.fsPort();
+    var entries = try fs_port.listDir(.{ .allocator = std.testing.allocator, .path = tmp_root });
+    defer entries.deinit();
+
+    const note = try expectListDirEntry(entries.entries, "note.txt");
+    try std.testing.expectEqual(fs.EntryKind.file, note.kind);
+    try std.testing.expectEqual(@as(?u64, null), note.size);
+    try std.testing.expectEqual(@as(?bool, null), note.executable);
+
+    const subdir = try expectListDirEntry(entries.entries, "subdir");
+    try std.testing.expectEqual(fs.EntryKind.directory, subdir.kind);
+    try std.testing.expectEqual(@as(?u64, null), subdir.size);
+    try std.testing.expectEqual(@as(?bool, null), subdir.executable);
+}
+
 test "runtime posix adapter lists requested directory entry metadata" {
     var tmp = std.testing.tmpDir(.{});
     defer tmp.cleanup();
@@ -1408,6 +1441,7 @@ test "runtime posix adapter lists requested directory entry metadata" {
     executable.close(std.testing.io);
     try tmp.dir.writeFile(std.testing.io, .{ .sub_path = "note.txt", .data = "hello" });
     try tmp.dir.symLink(std.testing.io, "note.txt", "note-link", .{});
+    try tmp.dir.symLink(std.testing.io, "rush-tool", "tool-link", .{});
 
     var tmp_root_buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
     const tmp_root_len = try tmp.dir.realPath(std.testing.io, &tmp_root_buffer);
@@ -1425,6 +1459,7 @@ test "runtime posix adapter lists requested directory entry metadata" {
     var saw_executable = false;
     var saw_note = false;
     var saw_note_link = false;
+    var saw_tool_link = false;
     for (entries.entries) |entry| {
         if (std.mem.eql(u8, entry.name, "rush-tool")) {
             saw_executable = true;
@@ -1439,11 +1474,45 @@ test "runtime posix adapter lists requested directory entry metadata" {
             saw_note_link = true;
             try std.testing.expectEqual(fs.EntryKind.symlink, entry.kind);
             try std.testing.expectEqual(@as(?bool, false), entry.executable);
+        } else if (std.mem.eql(u8, entry.name, "tool-link")) {
+            saw_tool_link = true;
+            try std.testing.expectEqual(fs.EntryKind.symlink, entry.kind);
+            try std.testing.expectEqual(@as(?bool, true), entry.executable);
         }
     }
     try std.testing.expect(saw_executable);
     try std.testing.expect(saw_note);
     try std.testing.expect(saw_note_link);
+    try std.testing.expect(saw_tool_link);
+}
+
+test "runtime posix adapter listDir reports missing and non-directory paths" {
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    try tmp.dir.writeFile(std.testing.io, .{ .sub_path = "plain", .data = "hello" });
+
+    var tmp_root_buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
+    const tmp_root_len = try tmp.dir.realPath(std.testing.io, &tmp_root_buffer);
+    const tmp_root = tmp_root_buffer[0..tmp_root_len];
+
+    const allocator = std.testing.allocator;
+    const file_path = try std.fmt.allocPrint(allocator, "{s}/plain", .{tmp_root});
+    defer allocator.free(file_path);
+    const missing_path = try std.fmt.allocPrint(allocator, "{s}/missing", .{tmp_root});
+    defer allocator.free(missing_path);
+
+    var adapter = Adapter.init(std.testing.io);
+    const fs_port = adapter.fsPort();
+    try std.testing.expectError(error.NotDir, fs_port.listDir(.{ .allocator = allocator, .path = file_path }));
+    try std.testing.expectError(error.FileNotFound, fs_port.listDir(.{ .allocator = allocator, .path = missing_path }));
+}
+
+fn expectListDirEntry(entries: []const fs.ListDirEntry, name: []const u8) !fs.ListDirEntry {
+    for (entries) |entry| {
+        if (std.mem.eql(u8, entry.name, name)) return entry;
+    }
+    return error.TestUnexpectedResult;
 }
 
 test "runtime posix adapter spawns and waits for a simple process" {
