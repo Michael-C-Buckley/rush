@@ -490,9 +490,7 @@ pub const ShellState = struct {
         }
         self.variables.deinit(self.allocator);
 
-        if (self.borrowed_functions) {
-            self.functions.deinit(self.allocator);
-        } else {
+        if (!self.borrowed_functions) {
             var functions = self.functions.iterator();
             while (functions.next()) |entry| {
                 self.allocator.free(entry.key_ptr.*);
@@ -600,7 +598,7 @@ pub const ShellState = struct {
             });
         }
 
-        cloned.functions = try self.functions.clone(allocator);
+        cloned.functions = self.functions;
         cloned.borrowed_functions = true;
         cloned.functions_mutated = false;
 
@@ -795,13 +793,16 @@ pub const ShellState = struct {
         self.validate();
     }
 
-    pub fn unsetFunction(self: *ShellState, name: []const u8) void {
+    pub fn unsetFunction(self: *ShellState, name: []const u8) !void {
         assertValidVariableName(name);
+        if (!self.functions.contains(name)) {
+            self.validate();
+            return;
+        }
+        try self.ensureOwnedFunctions();
         if (self.functions.fetchRemove(name)) |entry| {
-            if (!self.borrowed_functions) {
-                self.allocator.free(entry.key);
-                freeFunctionDefinition(self.allocator, entry.value);
-            }
+            self.allocator.free(entry.key);
+            freeFunctionDefinition(self.allocator, entry.value);
             self.functions_mutated = true;
         }
         self.validate();
@@ -831,7 +832,6 @@ pub const ShellState = struct {
             }
         }
 
-        self.functions.deinit(self.allocator);
         self.functions = owned;
         self.borrowed_functions = false;
         self.validate();

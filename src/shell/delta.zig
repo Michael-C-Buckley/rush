@@ -668,7 +668,7 @@ pub const StateDelta = struct {
         }
         for (self.variable_unsets.items) |name| try shell_state.unsetVariable(name);
         for (self.function_sets.items) |definition| try shell_state.putFunction(definition);
-        for (self.function_unsets.items) |name| shell_state.unsetFunction(name);
+        for (self.function_unsets.items) |name| try shell_state.unsetFunction(name);
         for (self.option_changes.items) |change| {
             shell_state.options.set(change.option, change.enabled);
         }
