@@ -2078,7 +2078,8 @@ const SourceLowerer = struct {
     ) !command_plan.LookupSnapshot {
         var functions: std.ArrayList(command_plan.FunctionDefinition) = .empty;
         errdefer functions.deinit(self.allocator);
-        if (commandLookupName(command)) |name| {
+        const lookup_name = commandLookupName(command);
+        if (lookup_name) |name| {
             if (self.localFunction(name)) |definition| {
                 try functions.append(self.allocator, definition);
             } else if (isFunctionLookupName(name)) {
@@ -2093,13 +2094,13 @@ const SourceLowerer = struct {
 
         var externals: std.ArrayList(command_plan.ExternalResolution) = .empty;
         errdefer externals.deinit(self.allocator);
-        if (commandLookupName(command)) |name| {
+        if (lookup_name) |name| if (externalLookupCanWin(command, functions.items)) {
             for (self.owner.externals) |external| {
                 external.validate();
                 if (std.mem.eql(u8, external.name, name)) try externals.append(self.allocator, external);
             }
             if (try self.resolveExternal(command)) |external| try externals.append(self.allocator, external);
-        }
+        };
 
         return .{
             .functions = try functions.toOwnedSlice(self.allocator),
@@ -2138,6 +2139,17 @@ const SourceLowerer = struct {
             if (!(std.ascii.isAlphanumeric(byte) or byte == '_')) return false;
         }
         return true;
+    }
+
+    fn externalLookupCanWin(
+        command: command_plan.ExpandedSimpleCommand,
+        functions: []const command_plan.FunctionDefinition,
+    ) bool {
+        const plan = command_plan.classifyExpandedSimpleCommand(.{
+            .command = command,
+            .lookup = .{ .functions = functions },
+        });
+        return plan.class() == .not_found;
     }
 
     const LoweredRedirections = union(enum) {
