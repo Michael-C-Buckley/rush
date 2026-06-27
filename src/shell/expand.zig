@@ -6239,7 +6239,7 @@ fn listPathnameDirWithIo(
     return pathnameEntriesFromRuntime(allocator, &runtime_entries);
 }
 
-fn pathnameEntriesFromRuntime(
+pub fn pathnameEntriesFromRuntime(
     allocator: std.mem.Allocator,
     runtime_entries: *runtime.fs.ListDirResult,
 ) !PathnameEntries {
