@@ -2253,15 +2253,18 @@ fn styledHistorySearchLabel(
     query: []const u8,
     theme: UiTheme,
 ) ![]const u8 {
-    const positions = (try completion.fuzzyMatchPositions(allocator, text, query)) orelse
-        return try allocator.dupe(u8, text);
+    const display_text = try singleLineHistorySearchText(allocator, text);
+    defer allocator.free(display_text);
+
+    const positions = (try completion.fuzzyMatchPositions(allocator, display_text, query)) orelse
+        return try allocator.dupe(u8, display_text);
     defer allocator.free(positions);
-    if (positions.len == 0) return allocator.dupe(u8, text);
+    if (positions.len == 0) return allocator.dupe(u8, display_text);
 
     var label: std.ArrayList(u8) = .empty;
     errdefer label.deinit(allocator);
     var position_index: usize = 0;
-    for (text, 0..) |byte, index| {
+    for (display_text, 0..) |byte, index| {
         if (position_index < positions.len and positions[position_index] == index) {
             try appendUiStyleStart(allocator, &label, theme.history_match);
             try label.append(allocator, byte);
@@ -2270,6 +2273,18 @@ fn styledHistorySearchLabel(
         } else {
             try label.append(allocator, byte);
         }
+    }
+    return label.toOwnedSlice(allocator);
+}
+
+fn singleLineHistorySearchText(allocator: std.mem.Allocator, text: []const u8) ![]const u8 {
+    var label: std.ArrayList(u8) = .empty;
+    errdefer label.deinit(allocator);
+    for (text) |byte| {
+        try label.append(allocator, switch (byte) {
+            '\r', '\n' => ' ',
+            else => byte,
+        });
     }
     return label.toOwnedSlice(allocator);
 }
@@ -4072,6 +4087,35 @@ test "history search first tab advances the already-open menu" {
     try session.handleKey(.{ .key = .enter });
     try std.testing.expectEqual(LineSession.State.editing, session.state);
     try std.testing.expectEqualStrings("git status", session.editor.buffer.text());
+}
+
+test "history search renders multiline commands as single menu rows" {
+    const entries = [_][]const u8{ "printf one\ntwo", "printf three" };
+    var history: TestHistorySearch = .{ .entries = &entries };
+    var session = try LineSession.initWithOptions(std.testing.allocator, .{ .bytes = "$ " }, .{
+        .context = &history,
+        .search = testSearchHistoryEntry,
+    });
+    defer session.deinit();
+
+    try session.handleKey(.{ .key = .text, .text = "printf" });
+    try session.handleKey(.{ .key = .ctrl_r });
+    try applyTestHistoryRequests(&session);
+
+    var frame = try session.renderFrame(std.testing.allocator, .{ .synchronized_output = false });
+    defer frame.deinit(std.testing.allocator);
+
+    var multiline_row: ?[]const u8 = null;
+    for (frame.lines) |line| {
+        if (std.mem.indexOf(u8, line, "one two") != null) {
+            multiline_row = line;
+            break;
+        }
+    }
+
+    try std.testing.expect(multiline_row != null);
+    try std.testing.expect(std.mem.indexOfScalar(u8, multiline_row.?, '\n') == null);
+    try std.testing.expect(std.mem.indexOfScalar(u8, multiline_row.?, '\r') == null);
 }
 
 test "history search menu line-feeds when diff adds rows" {
