@@ -1398,6 +1398,8 @@ fn semanticContextForCommand(
         .option
     else if (pending_option_value != null)
         .option_value
+    else if (parser_context.kind == .command)
+        .command
     else if (parser_context.kind == .redirect_target)
         .redirect_target
     else if (path.items.len == 0 and manifestHasSubcommands(state, command.argv[0].text))
@@ -3474,6 +3476,50 @@ test "manifest completion orders subcommands and options by priority" {
     defer option_application.deinit(std.testing.allocator);
     try std.testing.expectEqualStrings("--apricot", option_application.ambiguous[0].value);
     try std.testing.expectEqualStrings("--alpha", option_application.ambiguous[1].value);
+}
+
+test "manifest completion does not replace the root command word with a subcommand" {
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    try tmp.dir.writeFile(std.testing.io, .{
+        .sub_path = "tool.json",
+        .data =
+        \\
+        \\{
+        \\  "manifestVersion": 1,
+        \\  "command": {
+        \\    "name": "tool",
+        \\    "subcommands": [
+        \\      { "name": "toolbox", "description": "run toolbox" }
+        \\    ]
+        \\  }
+        \\}
+        \\
+        ,
+    });
+    var manifest_path_buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
+    const tmp_root_len = try tmp.dir.realPath(std.testing.io, &manifest_path_buffer);
+    const tmp_root = manifest_path_buffer[0..tmp_root_len];
+    const manifest_path = try std.fs.path.join(std.testing.allocator, &.{ tmp_root, "tool.json" });
+    defer std.testing.allocator.free(manifest_path);
+
+    var completion_state = State.init(std.testing.allocator);
+    defer completion_state.deinit();
+    try loadManifestFile(std.testing.allocator, std.testing.io, &completion_state, manifest_path);
+
+    var shell_state = shell_state_mod.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    const application = try manifestApplication(
+        std.testing.allocator,
+        std.testing.io,
+        &completion_state,
+        shell_state,
+        "tool",
+        "tool".len,
+    );
+    defer application.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(Application.none, application);
 }
 
 test "manifest completion uses dynamic option providers" {
