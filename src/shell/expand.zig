@@ -326,11 +326,13 @@ pub fn expandWord(allocator: std.mem.Allocator, raw: []const u8, options: Option
             .dotglob = options.pathname_dotglob,
             .extglob = options.extglob,
         };
-        if (options.pathname_lookup.enabled()) {
-            try applyPathnameExpansion(allocator, options.pathname_lookup, &fields, pathname_options);
-        } else if (options.io) |io| {
-            var io_context = IoPathnameLookupContext.init(io);
-            try applyPathnameExpansion(allocator, ioPathnameLookup(&io_context), &fields, pathname_options);
+        if (fieldsHaveGlobSyntax(fields.items, pathname_options)) {
+            if (options.pathname_lookup.enabled()) {
+                try applyPathnameExpansion(allocator, options.pathname_lookup, &fields, pathname_options);
+            } else if (options.io) |io| {
+                var io_context = IoPathnameLookupContext.init(io);
+                try applyPathnameExpansion(allocator, ioPathnameLookup(&io_context), &fields, pathname_options);
+            }
         }
     }
 
@@ -6316,6 +6318,13 @@ fn applyPathnameExpansion(
 
     fields.deinit(allocator);
     fields.* = expanded;
+}
+
+fn fieldsHaveGlobSyntax(fields: []const []const u8, options: PathnameExpansionOptions) bool {
+    for (fields) |field| {
+        if (hasGlobSyntaxWithOptions(field, .{ .extglob = options.extglob })) return true;
+    }
+    return false;
 }
 
 pub fn expandPathnamePattern(allocator: std.mem.Allocator, io: std.Io, pattern: []const u8) ![][]const u8 {
