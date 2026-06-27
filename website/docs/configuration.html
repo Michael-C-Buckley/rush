@@ -224,6 +224,14 @@ index:236
 <span class="cmd">event</span> add directory.change cwd-repaint on_directory_change
 <span class="cmd">event</span> add timer.tick clock on_clock <span class="opt">--every</span> 1000</pre>
 
+  <p>Use <code>event list</code> to inspect active hooks and their run order. A later <code>event add</code> with the same event and registration name replaces the old hook; <code>event remove EVENT NAME</code> removes it.</p>
+
+  <pre><span class="cmd">event</span> list
+<span class="cmd">event</span> list directory.change
+<span class="cmd">event</span> remove directory.change cwd-repaint</pre>
+
+  <p>Common recipes are: register <code>rush_direnv_hook</code> or <code>rush_mise_hook</code> on <code>directory.change</code>, precompute cheap prompt variables in <code>prompt.prepare</code>, and use <code>timer.tick</code> with <code>prompt repaint</code> for clocks or other idle updates.</p>
+
   <p>Prefer <code>prompt_async</code>, timers, and hooks over slow synchronous command substitutions in <code>rush_prompt</code>. They keep prompt rendering responsive and route redraws through <code>prompt repaint</code> instead of writing to the terminal from background contexts.</p>
 
   <h2 id="ps1"><a href="#ps1">PS1 fallback</a></h2>

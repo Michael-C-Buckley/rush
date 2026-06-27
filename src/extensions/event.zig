@@ -4,7 +4,10 @@ const std = @import("std");
 
 const api = @import("api.zig");
 const shell_builtin = @import("../shell/builtin.zig");
+const shell_context = @import("../shell/context.zig");
+const shell_delta = @import("../shell/delta.zig");
 const shell_event = @import("../shell/event.zig");
+const shell_state_mod = @import("../shell/state.zig");
 
 pub const builtins = [_]shell_builtin.Builtin{
     shell_builtin.Builtin.initExtension("event", .shell_state),
@@ -52,7 +55,9 @@ fn evaluateAdd(invocation: *api.Invocation) !api.EvaluationResult {
             every_ms = std.fmt.parseInt(u64, invocation.argv[index + 1], 10) catch {
                 return api.EvaluationResult.normal(try invocation.usageError("event", "invalid interval"));
             };
-            if (every_ms.? == 0) return api.EvaluationResult.normal(try invocation.usageError("event", "invalid interval"));
+            if (every_ms.? == 0) {
+                return api.EvaluationResult.normal(try invocation.usageError("event", "invalid interval"));
+            }
         } else {
             return api.EvaluationResult.normal(try invocation.usageError("event", "unsupported option"));
         }
@@ -97,16 +102,21 @@ fn evaluateList(invocation: *api.Invocation) !api.EvaluationResult {
         try hooks.append(invocation.allocator, registration);
     }
     std.mem.sort(shell_event.Registration, hooks.items, {}, lessThanRegistration);
+    var current_event: ?shell_event.Name = null;
     for (hooks.items) |registration| {
-        try invocation.stdout.print(invocation.allocator, "event add {s} {s} {s}", .{
-            registration.event.text(),
+        if (current_event == null or current_event.? != registration.event) {
+            current_event = registration.event;
+            try invocation.stdout.print(invocation.allocator, "{s}\n", .{registration.event.text()});
+        }
+
+        try invocation.stdout.print(invocation.allocator, "  {s} priority={d}", .{
             registration.name,
-            registration.function_name,
+            registration.priority,
         });
         if (registration.every_ms) |every_ms| {
-            try invocation.stdout.print(invocation.allocator, " --every {d}", .{every_ms});
+            try invocation.stdout.print(invocation.allocator, " every={d}ms", .{every_ms});
         }
-        try invocation.stdout.print(invocation.allocator, " --priority {d}\n", .{registration.priority});
+        try invocation.stdout.print(invocation.allocator, " {s}\n", .{registration.function_name});
     }
     return api.EvaluationResult.normal(0);
 }
@@ -123,14 +133,16 @@ fn lessThanRegistration(_: void, left: shell_event.Registration, right: shell_ev
 fn usage(invocation: *api.Invocation) !u8 {
     return invocation.usageError(
         "event",
-        "usage: event add EVENT NAME FUNCTION [--priority N] [--every MS] | event remove EVENT NAME | event list [EVENT]",
+        "usage: " ++
+            "event add EVENT NAME FUNCTION [--priority N] [--every MS] | " ++
+            "event remove EVENT NAME | event list [EVENT]",
     );
 }
 
 test "event add records registration in state delta" {
-    var shell_state = @import("../shell/state.zig").ShellState.init(std.testing.allocator);
+    var shell_state = shell_state_mod.ShellState.init(std.testing.allocator);
     defer shell_state.deinit();
-    var state_delta = @import("../shell/delta.zig").StateDelta.init(std.testing.allocator, .current_shell);
+    var state_delta = shell_delta.StateDelta.init(std.testing.allocator, .current_shell);
     defer state_delta.deinit();
     var stdout: std.ArrayList(u8) = .empty;
     defer stdout.deinit(std.testing.allocator);
@@ -141,11 +153,19 @@ test "event add records registration in state delta" {
 
     var invocation: api.Invocation = .{
         .allocator = std.testing.allocator,
-        .argv = &.{ "event", "add", "directory.change", "direnv", "sync_direnv", "--priority", "40" },
+        .argv = &.{
+            "event",
+            "add",
+            "directory.change",
+            "direnv",
+            "sync_direnv",
+            "--priority",
+            "40",
+        },
         .builtins = &.{},
         .shell_state = shell_state,
         .state_delta = &state_delta,
-        .eval_context = @import("../shell/context.zig").EvalContext.forTarget(.current_shell),
+        .eval_context = shell_context.EvalContext.forTarget(.current_shell),
         .stdout = &stdout,
         .stderr = &stderr,
         .diagnostics = &diagnostics,
@@ -161,9 +181,9 @@ test "event add records registration in state delta" {
 }
 
 test "event add defaults priority to zero" {
-    var shell_state = @import("../shell/state.zig").ShellState.init(std.testing.allocator);
+    var shell_state = shell_state_mod.ShellState.init(std.testing.allocator);
     defer shell_state.deinit();
-    var state_delta = @import("../shell/delta.zig").StateDelta.init(std.testing.allocator, .current_shell);
+    var state_delta = shell_delta.StateDelta.init(std.testing.allocator, .current_shell);
     defer state_delta.deinit();
     var stdout: std.ArrayList(u8) = .empty;
     defer stdout.deinit(std.testing.allocator);
@@ -178,7 +198,7 @@ test "event add defaults priority to zero" {
         .builtins = &.{},
         .shell_state = shell_state,
         .state_delta = &state_delta,
-        .eval_context = @import("../shell/context.zig").EvalContext.forTarget(.current_shell),
+        .eval_context = shell_context.EvalContext.forTarget(.current_shell),
         .stdout = &stdout,
         .stderr = &stderr,
         .diagnostics = &diagnostics,
@@ -191,9 +211,9 @@ test "event add defaults priority to zero" {
 }
 
 test "event add records timer interval" {
-    var shell_state = @import("../shell/state.zig").ShellState.init(std.testing.allocator);
+    var shell_state = shell_state_mod.ShellState.init(std.testing.allocator);
     defer shell_state.deinit();
-    var state_delta = @import("../shell/delta.zig").StateDelta.init(std.testing.allocator, .current_shell);
+    var state_delta = shell_delta.StateDelta.init(std.testing.allocator, .current_shell);
     defer state_delta.deinit();
     var stdout: std.ArrayList(u8) = .empty;
     defer stdout.deinit(std.testing.allocator);
@@ -208,7 +228,7 @@ test "event add records timer interval" {
         .builtins = &.{},
         .shell_state = shell_state,
         .state_delta = &state_delta,
-        .eval_context = @import("../shell/context.zig").EvalContext.forTarget(.current_shell),
+        .eval_context = shell_context.EvalContext.forTarget(.current_shell),
         .stdout = &stdout,
         .stderr = &stderr,
         .diagnostics = &diagnostics,
@@ -219,4 +239,51 @@ test "event add records timer interval" {
     try std.testing.expectEqual(@as(usize, 1), state_delta.event_hook_sets.items.len);
     try std.testing.expectEqual(shell_event.Name.timer_tick, state_delta.event_hook_sets.items[0].event);
     try std.testing.expectEqual(@as(?u64, 1000), state_delta.event_hook_sets.items[0].every_ms);
+}
+
+test "event list groups registrations by event" {
+    var shell_state = shell_state_mod.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    try shell_state.setEventHook(.{
+        .event = .directory_change,
+        .name = "direnv",
+        .function_name = "rush_direnv_hook",
+        .priority = -10,
+    });
+    try shell_state.setEventHook(.{
+        .event = .timer_tick,
+        .name = "clock",
+        .function_name = "on_clock",
+        .every_ms = 1000,
+    });
+    var state_delta = shell_delta.StateDelta.init(std.testing.allocator, .current_shell);
+    defer state_delta.deinit();
+    var stdout: std.ArrayList(u8) = .empty;
+    defer stdout.deinit(std.testing.allocator);
+    var stderr: std.ArrayList(u8) = .empty;
+    defer stderr.deinit(std.testing.allocator);
+    var diagnostics: std.ArrayList([]const u8) = .empty;
+    defer diagnostics.deinit(std.testing.allocator);
+
+    var invocation: api.Invocation = .{
+        .allocator = std.testing.allocator,
+        .argv = &.{ "event", "list" },
+        .builtins = &.{},
+        .shell_state = shell_state,
+        .state_delta = &state_delta,
+        .eval_context = shell_context.EvalContext.forTarget(.current_shell),
+        .stdout = &stdout,
+        .stderr = &stderr,
+        .diagnostics = &diagnostics,
+    };
+    const result = try evaluate(null, &invocation);
+
+    try std.testing.expectEqual(@as(u8, 0), result.status);
+    try std.testing.expectEqualStrings(
+        \\directory.change
+        \\  direnv priority=-10 rush_direnv_hook
+        \\timer.tick
+        \\  clock priority=0 every=1000ms on_clock
+        \\
+    , stdout.items);
 }

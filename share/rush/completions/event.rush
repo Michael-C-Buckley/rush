@@ -1,0 +1,16 @@
+__rush_complete_event_registrations() {
+  event_name="$(rush_complete operand 0)"
+  test -n "$event_name" || return 0
+
+  event list "$event_name" 2>/dev/null |
+    while read name rest; do
+      case "$name" in
+        ''|directory.change|prompt.prepare|timer.tick) continue ;;
+      esac
+      rush_complete candidate "$name" --kind plain --description "registered hook"
+    done
+}
+
+__rush_complete_event_functions() {
+  rush_complete functions
+}

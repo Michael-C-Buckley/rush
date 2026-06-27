@@ -1,0 +1,55 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "event",
+    "description": "manage shell event hooks",
+    "providers": {
+      "event.names": {
+        "values": [
+          { "value": "directory.change", "description": "after the current directory changes" },
+          { "value": "prompt.prepare", "description": "before each prompt render" },
+          { "value": "timer.tick", "description": "while the editor is idle" }
+        ]
+      },
+      "event.registrations": { "function": "__rush_complete_event_registrations" },
+      "event.functions": { "function": "__rush_complete_event_functions" }
+    },
+    "subcommands": [
+      {
+        "name": "add",
+        "description": "add or replace a hook",
+        "options": [
+          { "long": "priority", "value": { "name": "number" }, "description": "set hook ordering priority" },
+          { "long": "every", "value": { "name": "milliseconds" }, "description": "set timer interval" }
+        ],
+        "arguments": {
+          "states": [
+            { "name": "event", "index": 0, "provider": "event.names", "description": "event to observe" },
+            { "name": "name", "index": 1, "description": "registration name" },
+            { "name": "function", "index": 2, "provider": "event.functions", "description": "function to run" }
+          ]
+        }
+      },
+      {
+        "name": "remove",
+        "description": "remove a hook",
+        "arguments": {
+          "states": [
+            { "name": "event", "index": 0, "provider": "event.names", "description": "event to edit" },
+            { "name": "name", "index": 1, "provider": "event.registrations", "description": "registration to remove" }
+          ]
+        }
+      },
+      {
+        "name": "list",
+        "description": "list registered hooks",
+        "arguments": {
+          "states": [
+            { "name": "event", "index": 0, "provider": "event.names", "description": "event to list" }
+          ]
+        }
+      }
+    ]
+  }
+}

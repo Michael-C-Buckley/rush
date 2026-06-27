@@ -34,6 +34,13 @@
 
   <p>Hooks run in ascending priority order, then by registration name. The default priority is zero. Hook execution preserves the visible last status and pipeline statuses unless the hook exits the shell.</p>
 
+  <p><code>event list</code> prints registrations grouped by event. Each hook line shows the registration name, priority, optional timer interval, and function name.</p>
+
+  <pre>directory.change
+  direnv priority=0 rush_direnv_hook
+timer.tick
+  clock priority=0 every=1000ms on_clock</pre>
+
   <h2 id="events"><a href="#events">EVENTS</a></h2>
 
   <dl>
@@ -60,6 +67,18 @@
 <span class="cmd">event</span> add directory.change project-env sync_project_env --priority -10
 <span class="cmd">event</span> add prompt.prepare prompt-cwd remember_prompt_cwd
 <span class="cmd">event</span> add timer.tick clock remember_prompt_cwd --every 1000</pre>
+
+  <h2 id="recipes"><a href="#recipes">RECIPES</a></h2>
+
+  <p>Enable the bundled project-environment helpers explicitly in a later config file:</p>
+
+  <pre><span class="cmd">event</span> add directory.change direnv rush_direnv_hook
+<span class="cmd">event</span> add directory.change mise rush_mise_hook</pre>
+
+  <p>Replace a hook by reusing its event and registration name, or remove it when a project wants a different policy:</p>
+
+  <pre><span class="cmd">event</span> add directory.change direnv my_direnv_hook
+<span class="cmd">event</span> remove directory.change mise</pre>
 
   <h2 id="exit-status"><a href="#exit-status">EXIT STATUS</a></h2>
 
