@@ -35,6 +35,24 @@ pre {
   overflow-x: auto;
 }
 
+table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 2ch 0;
+}
+
+th,
+td {
+  border-bottom: 1px solid light-dark(#dddddd, #333333);
+  padding: 0.75ch 1ch;
+  text-align: left;
+  vertical-align: top;
+}
+
+th {
+  background: light-dark(#f2f2f2, #1f1f1f);
+}
+
 dl {
   display: grid;
   grid-template-columns: max-content 1fr;

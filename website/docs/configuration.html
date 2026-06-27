@@ -79,7 +79,30 @@
   rush_style_diagnostic_error='ul=curly,ul_color=red'
 }</pre>
 
-  <p>If <code>rush_style</code> is defined, Rush calls it once during interactive startup and again when the terminal reports a color-scheme or palette change. Before each color-scheme call, Rush sets the Rush-owned <code>rush_color_scheme</code> variable to <code>dark</code>, <code>light</code>, or <code>unknown</code>. When the terminal reports colors, Rush sets <code>rush_color_foreground</code>, <code>rush_color_background</code>, and <code>rush_color_black</code>, <code>rush_color_red</code>, <code>rush_color_green</code>, <code>rush_color_yellow</code>, <code>rush_color_blue</code>, <code>rush_color_magenta</code>, <code>rush_color_cyan</code>, and <code>rush_color_white</code> to <code>#rrggbb</code> values. These RGB variables are only defined after the terminal reports them, so configs can provide their own fallbacks with normal shell expansion. Normal commands do not call <code>rush_style</code>; Rush reads the current <code>rush_style_*</code> variables before each prompt, so assignments made by commands take effect on the next prompt.</p>
+  <p>If <code>rush_style</code> is defined, Rush calls it once during interactive startup and again when the terminal reports a color-scheme or palette change. Normal commands do not call <code>rush_style</code>; Rush reads the current <code>rush_style_*</code> variables before each prompt, so assignments made by commands take effect on the next prompt.</p>
+
+  <p>Before each color-scheme call, Rush sets these Rush-owned variables for the hook:</p>
+
+  <table>
+    <thead>
+      <tr><th>Variable</th><th>Value</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>rush_color_scheme</code></td><td><code>dark</code>, <code>light</code>, or <code>unknown</code></td></tr>
+      <tr><td><code>rush_color_foreground</code></td><td>Terminal foreground as <code>#rrggbb</code>, when reported</td></tr>
+      <tr><td><code>rush_color_background</code></td><td>Terminal background as <code>#rrggbb</code>, when reported</td></tr>
+      <tr><td><code>rush_color_black</code></td><td>Terminal black palette entry as <code>#rrggbb</code>, when reported</td></tr>
+      <tr><td><code>rush_color_red</code></td><td>Terminal red palette entry as <code>#rrggbb</code>, when reported</td></tr>
+      <tr><td><code>rush_color_green</code></td><td>Terminal green palette entry as <code>#rrggbb</code>, when reported</td></tr>
+      <tr><td><code>rush_color_yellow</code></td><td>Terminal yellow palette entry as <code>#rrggbb</code>, when reported</td></tr>
+      <tr><td><code>rush_color_blue</code></td><td>Terminal blue palette entry as <code>#rrggbb</code>, when reported</td></tr>
+      <tr><td><code>rush_color_magenta</code></td><td>Terminal magenta palette entry as <code>#rrggbb</code>, when reported</td></tr>
+      <tr><td><code>rush_color_cyan</code></td><td>Terminal cyan palette entry as <code>#rrggbb</code>, when reported</td></tr>
+      <tr><td><code>rush_color_white</code></td><td>Terminal white palette entry as <code>#rrggbb</code>, when reported</td></tr>
+    </tbody>
+  </table>
+
+  <p>The RGB variables are only defined after the terminal reports them, so configs can provide their own fallbacks with normal shell expansion.</p>
 
   <p>Supported options are <code>fg=&lt;color&gt;</code>, <code>bg=&lt;color&gt;</code>, <code>ul=&lt;style&gt;</code>, <code>ul_color=&lt;color&gt;</code>, <code>bold</code>, <code>dim</code>, <code>italic</code>, <code>reverse</code>, and <code>strike</code>. Underline styles are <code>none</code>, <code>single</code>, <code>double</code>, <code>curly</code>, <code>dotted</code>, and <code>dashed</code>.</p>
 
@@ -87,7 +110,28 @@
 
   <p>The <code>color</code> builtin can derive truecolor values for dynamic styles. <code>color dim COLOR PERCENT</code> blends a <code>#rrggbb</code> color toward black by <code>PERCENT</code>; <code>color blend COLOR COLOR PERCENT</code> blends the first color toward the second by <code>PERCENT</code>. Invalid color input exits with status <code>2</code>, writes a diagnostic to stderr, and writes nothing to stdout; if that produces an invalid <code>rush_style_*</code> value, Rush falls back to the default style for that role.</p>
 
-  <p>Available style variables are <code>rush_style_completion_selected</code>, <code>rush_style_completion_directory</code>, <code>rush_style_completion_option</code>, <code>rush_style_completion_variable</code>, <code>rush_style_completion_function</code>, <code>rush_style_completion_file</code>, <code>rush_style_completion_description</code>, <code>rush_style_completion_flash</code>, <code>rush_style_history_match</code>, <code>rush_style_autosuggestion</code>, and <code>rush_style_diagnostic_error</code>. Invalid style values are ignored and the default for that role is used.</p>
+  <p>Available style variables are:</p>
+
+  <table>
+    <thead>
+      <tr><th>Variable</th><th>Styled role</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>rush_style_completion_selected</code></td><td>Selected completion candidate</td></tr>
+      <tr><td><code>rush_style_completion_directory</code></td><td>Directory completion candidate</td></tr>
+      <tr><td><code>rush_style_completion_option</code></td><td>Option completion candidate</td></tr>
+      <tr><td><code>rush_style_completion_variable</code></td><td>Variable completion candidate</td></tr>
+      <tr><td><code>rush_style_completion_function</code></td><td>Function completion candidate</td></tr>
+      <tr><td><code>rush_style_completion_file</code></td><td>File completion candidate</td></tr>
+      <tr><td><code>rush_style_completion_description</code></td><td>Completion description text</td></tr>
+      <tr><td><code>rush_style_completion_flash</code></td><td>Transient completion flash feedback</td></tr>
+      <tr><td><code>rush_style_history_match</code></td><td>History search match highlight</td></tr>
+      <tr><td><code>rush_style_autosuggestion</code></td><td>Inline autosuggestion text</td></tr>
+      <tr><td><code>rush_style_diagnostic_error</code></td><td>Editor diagnostic error underline</td></tr>
+    </tbody>
+  </table>
+
+  <p>Invalid style values are ignored and the default for that role is used.</p>
 
   <h2 id="prompt"><a href="#prompt">Prompt</a></h2>
 
@@ -156,11 +200,7 @@ index:236
   <pre><span class="cmd">prompt</span> repaint
 <span class="cmd">prompt</span> refresh <span class="opt">--interval</span> MS
 <span class="cmd">prompt_time</span> FORMAT
-<span class="cmd">prompt_async</span> KEY <span class="opt">--ttl</span> MS <span class="opt">--</span> COMMAND...
-<span class="cmd">event</span> add EVENT NAME FUNCTION [<span class="opt">--priority</span> N]
-<span class="cmd">event</span> add timer.tick NAME FUNCTION <span class="opt">--every</span> MS [<span class="opt">--priority</span> N]
-<span class="cmd">event</span> remove EVENT NAME
-<span class="cmd">event</span> list [EVENT]</pre>
+<span class="cmd">prompt_async</span> KEY <span class="opt">--ttl</span> MS <span class="opt">--</span> COMMAND...</pre>
 
   <p><code>prompt repaint</code> is the low-level redraw primitive for hooks and hidden refresh jobs. It schedules a prompt redraw when Rush is editing a command line and does not write prompt or input bytes directly.</p>
 
@@ -205,6 +245,11 @@ index:236
   <h2 id="hooks"><a href="#hooks">Hooks and intervals</a></h2>
 
   <p><code>event</code> registers lower-level hooks for advanced interactive setups. <code>prompt.prepare</code> hooks run on the real shell state before each prompt render. <code>directory.change</code> hooks run after a successful current-shell directory change and receive the old and new directories as <code>$1</code> and <code>$2</code>. <code>timer.tick</code> hooks run while the editor is idle after their <code>--every</code> interval and receive the registration name as <code>$1</code>. Hooks preserve the visible <code>$?</code> by default.</p>
+
+  <pre><span class="cmd">event</span> add EVENT NAME FUNCTION [<span class="opt">--priority</span> N]
+<span class="cmd">event</span> add timer.tick NAME FUNCTION <span class="opt">--every</span> MS [<span class="opt">--priority</span> N]
+<span class="cmd">event</span> remove EVENT NAME
+<span class="cmd">event</span> list [EVENT]</pre>
 
   <pre><span class="cmd">on_prompt_prepare</span>() {
   <span class="comment"># Update cheap prompt variables before rendering.</span>
