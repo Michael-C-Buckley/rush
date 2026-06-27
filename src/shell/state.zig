@@ -1063,7 +1063,6 @@ pub const ShellState = struct {
         freePositionals(self.allocator, self.positionals.items);
         self.positionals.deinit(self.allocator);
         self.positionals = replacement;
-        self.validate();
     }
 
     pub fn setLogicalCwd(self: *ShellState, cwd: []const u8) !void {
