@@ -6709,7 +6709,6 @@ pub fn observeRuntimeSignal(
     shell_state: *state.ShellState,
     eval_context: context.EvalContext,
 ) EvalError!?RuntimeSignalObservation {
-    shell_state.validate();
     eval_context.validate();
     std.debug.assert(eval_context.target.allowsShellStateCommit());
     std.debug.assert(shell_state.acceptsExecutionTarget(eval_context.target));
@@ -6720,6 +6719,7 @@ pub fn observeRuntimeSignal(
     } orelse return null;
     event.validate();
     const signal = state.TrapSignal.fromRuntimeNumber(event.signal) orelse return error.Unimplemented;
+    shell_state.validate();
 
     var state_delta = delta.StateDelta.init(evaluator.allocator, eval_context.target);
     errdefer state_delta.deinit();
@@ -6834,7 +6834,6 @@ fn executePendingTrapsWithFrame(
     resolver: TrapActionResolver,
     parent_frame: *execution_frame.ExecutionFrame,
 ) EvalError!?outcome.CommandOutcome {
-    shell_state.validate();
     eval_context.validate();
     resolver.validate();
     parent_frame.validate();
@@ -6844,6 +6843,7 @@ fn executePendingTrapsWithFrame(
 
     if (shell_state.pending_traps.items.len == 0) {
         const pending_exit = shell_state.pending_exit orelse return null;
+        shell_state.validate();
         var state_delta = delta.StateDelta.init(evaluator.allocator, eval_context.target);
         errdefer state_delta.deinit();
         state_delta.clearPendingExit();
@@ -6857,6 +6857,8 @@ fn executePendingTrapsWithFrame(
         command_outcome.validateForContext(eval_context);
         return command_outcome;
     }
+
+    shell_state.validate();
 
     shell_state.beginTrapExecution();
     defer shell_state.endTrapExecution();
@@ -7126,10 +7128,12 @@ fn configureRuntimeTrapMutations(
     shell_state: state.ShellState,
     state_delta: delta.StateDelta,
 ) EvalError!void {
-    shell_state.validate();
     if (!state_delta.target.allowsShellStateCommit()) return;
     if (!shell_state.acceptsExecutionTarget(state_delta.target)) return;
     if (evaluator.signal_port == null) return;
+    if (state_delta.trap_mutations.items.len == 0) return;
+
+    shell_state.validate();
 
     for (state_delta.trap_mutations.items) |mutation| {
         const signal = state.TrapSignal.fromName(mutation.name) orelse continue;
@@ -7144,7 +7148,6 @@ fn runCurrentShellRuntimeTrapBoundary(
     eval_context: context.EvalContext,
     buffers: *EvaluationBuffers,
 ) EvalError!?SimpleEvalResult {
-    shell_state.validate();
     eval_context.validate();
     if (eval_context.target != .current_shell) return null;
     if (!shell_state.acceptsExecutionTarget(.current_shell)) return null;
@@ -9413,7 +9416,6 @@ fn completeStatementChildResult(
     result: *SimpleEvalResult,
     buffers: *EvaluationBuffers,
 ) EvalError!StatementChildCompletion {
-    shell_state.validate();
     eval_context.validate();
     child_result.control_flow.validate();
 
