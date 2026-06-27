@@ -5,6 +5,7 @@ const std = @import("std");
 const default_builtins = @import("builtins.zig");
 const cli_invocation = @import("invocation.zig");
 const extension_api = @import("extensions/api.zig");
+const extension_handler_registry = @import("extensions/handlers.zig");
 const runtime = @import("runtime.zig");
 const shell = @import("shell.zig");
 const compat = shell.compat;
@@ -21,7 +22,7 @@ pub const ExtensionHandlers = struct {
 };
 
 fn bundledExtensionLookup(_: ?*anyopaque, name: []const u8) ?extension_api.HandlerSpec {
-    return @import("extensions/handlers.zig").lookup(name);
+    return extension_handler_registry.lookup(name);
 }
 
 pub const Options = struct {
@@ -1232,7 +1233,10 @@ fn restoreEventVisibleStatus(
     try shell_state.setLastPipelineStatuses(visible_pipeline_statuses);
 }
 
-fn applyOutputWriteResultToShellState(shell_state: *shell.ShellState, write_result: shell.eval.RunnerOutputWriteResult) void {
+fn applyOutputWriteResultToShellState(
+    shell_state: *shell.ShellState,
+    write_result: shell.eval.RunnerOutputWriteResult,
+) void {
     if (write_result.stdout_failed or write_result.stderr_failed) shell_state.last_status = 1;
 }
 

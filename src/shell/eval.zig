@@ -9258,7 +9258,14 @@ fn completeStatementChildOutcome(
     try appendStatementChildOutcomeBuffers(buffers, child_outcome.*);
     switch (state_disposition) {
         .commit_to_working => |target| {
-            try applyOutcomeToWorkingStateAndRunEvents(evaluator, shell_state, eval_context, child_outcome, target, buffers);
+            try applyOutcomeToWorkingStateAndRunEvents(
+                evaluator,
+                shell_state,
+                eval_context,
+                child_outcome,
+                target,
+                buffers,
+            );
             try configureRuntimeTrapMutations(evaluator, shell_state.*, child_outcome.state_delta);
         },
         .discard_except_status => try applyOutcomeStatusToWorkingState(shell_state, child_outcome.*),
@@ -11411,7 +11418,10 @@ fn runEventHooksPreservingStatus(
     if (calls.len == 0) return;
 
     const visible_status = shell_state.last_status;
-    const visible_pipeline_statuses = try evaluator.allocator.dupe(state.ExitStatus, shell_state.last_pipeline_statuses.items);
+    const visible_pipeline_statuses = try evaluator.allocator.dupe(
+        state.ExitStatus,
+        shell_state.last_pipeline_statuses.items,
+    );
     defer evaluator.allocator.free(visible_pipeline_statuses);
     evaluator.event_dispatch_depth += 1;
     defer evaluator.event_dispatch_depth -= 1;

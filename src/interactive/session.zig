@@ -113,7 +113,10 @@ fn runInteractiveEventHooks(
     if (calls.len == 0) return;
 
     const visible_status = context.semantic_state.last_status;
-    const visible_pipeline_statuses = try allocator.dupe(shell.ExitStatus, context.semantic_state.last_pipeline_statuses.items);
+    const visible_pipeline_statuses = try allocator.dupe(
+        shell.ExitStatus,
+        context.semantic_state.last_pipeline_statuses.items,
+    );
     defer allocator.free(visible_pipeline_statuses);
     errdefer context.semantic_state.last_status = visible_status;
     for (calls) |call| {
@@ -176,13 +179,20 @@ fn runInteractiveTimerHooks(
     if (calls.len == 0) return false;
 
     const visible_status = context.semantic_state.last_status;
-    const visible_pipeline_statuses = try allocator.dupe(shell.ExitStatus, context.semantic_state.last_pipeline_statuses.items);
+    const visible_pipeline_statuses = try allocator.dupe(
+        shell.ExitStatus,
+        context.semantic_state.last_pipeline_statuses.items,
+    );
     defer allocator.free(visible_pipeline_statuses);
     errdefer context.semantic_state.last_status = visible_status;
     for (calls) |call| {
         try restoreInteractiveEventVisibleStatus(context.semantic_state, visible_status, visible_pipeline_statuses);
         if (context.semantic_state.getFunction(call.function_name) == null) {
-            const message = try std.fmt.allocPrint(allocator, "event: {s}: function not found\n", .{call.function_name});
+            const message = try std.fmt.allocPrint(
+                allocator,
+                "event: {s}: function not found\n",
+                .{call.function_name},
+            );
             defer allocator.free(message);
             try output.appendSlice(allocator, message);
             continue;
@@ -258,7 +268,10 @@ pub fn runInteractiveIntervalHooks(
 // callback pointer type; the opaque context must come first.
 pub fn nextInteractiveIntervalMs(context: *anyopaque, io: std.Io) !?u64 {
     const interactive_context: *Context = @ptrCast(@alignCast(context));
-    var next_ms = shell.event.nextTimerDelayMs(interactive_context.semantic_state.event_hooks.items, monotonicMillis(io));
+    var next_ms = shell.event.nextTimerDelayMs(
+        interactive_context.semantic_state.event_hooks.items,
+        monotonicMillis(io),
+    );
     if (shellStateWantsImmediateJobNotificationPoll(interactive_context.semantic_state)) {
         if (next_ms == null or immediate_notify_poll_ms < next_ms.?) next_ms = immediate_notify_poll_ms;
     }
