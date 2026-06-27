@@ -135,13 +135,13 @@
 
   <h2 id="prompt"><a href="#prompt">Prompt</a></h2>
 
-  <p>Rush ships a default prompt: the current directory in blue, the Git branch in yellow with a <code>•</code> marker when the worktree is dirty and <code>↑</code>/<code>↓</code> commit counts against the upstream, and a <code>$</code> that turns red when the previous command failed.</p>
+  <p>Rush ships a default prompt: the current directory in blue, the Git branch in yellow with a <code>•</code> marker when the worktree is dirty and <code>↑</code>/<code>↓</code> commit counts against the upstream, and a <code>●</code> that turns red when the previous command failed. While async prompt work is running, the prompt marker becomes <code>○</code>.</p>
 
   <p>Define <code>rush_prompt</code> in your configuration to replace it.</p>
 
   <pre><span class="cmd">rush_prompt</span>() {
   <span class="cmd">prompt</span> segment <span class="opt">--fg</span> blue <span class="str">"$(prompt_pwd)"</span>
-  <span class="cmd">prompt</span> text <span class="str">' $ '</span>
+  <span class="cmd">prompt</span> text <span class="str">' ● '</span>
 }</pre>
 
   <p>The <code>prompt</code> command is only available while Rush is rendering the prompt.</p>
@@ -150,9 +150,10 @@
 
   <pre><span class="cmd">prompt</span> text TEXT...
 <span class="cmd">prompt</span> segment [OPTIONS] TEXT...
-<span class="cmd">prompt</span> newline</pre>
+<span class="cmd">prompt</span> newline
+<span class="cmd">prompt</span> async-pending</pre>
 
-  <p><code>prompt text</code> appends plain text. <code>prompt segment</code> appends styled text. <code>prompt newline</code> starts a new prompt line.</p>
+  <p><code>prompt text</code> appends plain text. <code>prompt segment</code> appends styled text. <code>prompt newline</code> starts a new prompt line. <code>prompt async-pending</code> tests whether a <code>prompt_async</code> refresh is currently running.</p>
 
   <h2 id="segment-options"><a href="#segment-options">Segment options</a></h2>
 
@@ -211,7 +212,7 @@ index:236
   <pre><span class="cmd">rush_prompt</span>() {
   <span class="cmd">prompt</span> segment <span class="opt">--fg</span> yellow <span class="str">"$(prompt_time %H:%M:%S)"</span>
   <span class="cmd">prompt</span> refresh <span class="opt">--interval</span> 1000
-  <span class="cmd">prompt</span> text <span class="str">' $ '</span>
+  <span class="cmd">prompt</span> text <span class="str">' ● '</span>
 }</pre>
 
   <p><code>prompt_async</code> returns cached stdout immediately. When the cache is missing or stale, Rush starts <code>COMMAND</code> as a hidden refresh and returns the old cached value, or nothing if no value has been cached yet. When the hidden command exits, Rush automatically requests a safe prompt redraw; the next render sees the fresh cached stdout. You do not need to call <code>prompt repaint</code> after <code>prompt_async</code>. Cache entries are keyed by the current directory plus the explicit key. Duplicate refreshes for the same key are coalesced. Stderr is suppressed by default, and hidden refreshes preserve the interactive last status.</p>
@@ -225,7 +226,7 @@ index:236
     <span class="cmd">prompt</span> segment <span class="opt">--fg</span> green <span class="str">"$git_branch"</span>
   <span class="kw">fi</span>
 
-  <span class="cmd">prompt</span> text <span class="str">' $ '</span>
+  <span class="cmd">prompt</span> text <span class="str">' ● '</span>
 }</pre>
 
   <p>Save <code>$?</code> before running other commands in a prompt if you want to display the previous command status.</p>
@@ -239,7 +240,7 @@ index:236
   <span class="kw">fi</span>
 
   <span class="cmd">prompt</span> segment <span class="opt">--fg</span> bright-blue <span class="str">"$(prompt_pwd)"</span>
-  <span class="cmd">prompt</span> text <span class="str">' $ '</span>
+  <span class="cmd">prompt</span> text <span class="str">' ● '</span>
 }</pre>
 
   <h2 id="hooks"><a href="#hooks">Hooks and intervals</a></h2>
@@ -281,10 +282,10 @@ index:236
 
   <h2 id="ps1"><a href="#ps1">PS1 fallback</a></h2>
 
-  <p>If <code>rush_prompt</code> is not defined, Rush uses <code>PS1</code>. Rush initializes <code>PS1</code> to <code>$ </code> and <code>PS2</code> to <code>&gt; </code> for interactive shells. The default prompt is a <code>rush_prompt</code> function, so unset it to use a plain <code>PS1</code> prompt.</p>
+  <p>If <code>rush_prompt</code> is not defined, Rush uses <code>PS1</code>. Rush initializes <code>PS1</code> to <code>● </code> and <code>PS2</code> to <code>&gt; </code> for interactive shells. The default prompt is a <code>rush_prompt</code> function, so unset it to use a plain <code>PS1</code> prompt.</p>
 
   <pre><span class="cmd">unset</span> <span class="opt">-f</span> rush_prompt
-<span class="var">PS1</span>=<span class="str">'rush$ '</span>
+<span class="var">PS1</span>=<span class="str">'rush● '</span>
 <span class="var">PS2</span>=<span class="str">'&gt; '</span></pre>
 
   <h2 id="example"><a href="#example">Example</a></h2>
@@ -299,7 +300,7 @@ index:236
     <span class="cmd">prompt</span> segment <span class="opt">--dim</span> <span class="str">"$(prompt_duration)"</span>
   <span class="kw">fi</span>
 
-  <span class="cmd">prompt</span> text <span class="str">' $ '</span>
+  <span class="cmd">prompt</span> text <span class="str">' ● '</span>
 }</pre>
 
   <h2 id="status"><a href="#status">Status</a></h2>

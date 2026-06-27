@@ -3,7 +3,7 @@
 # ($sysconfdir/rush) and user (~/.config/rush) config can override it.
 
 # Prompt defaults; assigned only when unset so inherited values win.
-: "${PS1=$ }"
+: "${PS1=● }"
 : "${PS2=> }"
 
 rush_prompt_git() {
@@ -36,9 +36,13 @@ rush_prompt() {
     prompt segment --fg yellow "$rush_prompt_git_info"
   fi
   if test "$rush_prompt_status" = 0; then
-    prompt text ' $ '
+    if prompt async-pending; then
+      prompt text ' ○ '
+    else
+      prompt text ' ● '
+    fi
   else
-    prompt segment --fg red ' $ '
+    prompt segment --fg red ' ● '
   fi
 }
 

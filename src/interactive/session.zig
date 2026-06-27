@@ -1378,8 +1378,8 @@ test "runReplInput executes lines and tracks status" {
     defer std.testing.allocator.free(cwd);
     const expected = try std.fmt.allocPrint(
         std.testing.allocator,
-        "\x1b[38;5;4m{s}\x1b[39m $ " ++
-            "\x1b[38;5;4m{s}\x1b[39m\x1b[38;5;1m $ \x1b[39m",
+        "\x1b[38;5;4m{s}\x1b[39m ● " ++
+            "\x1b[38;5;4m{s}\x1b[39m\x1b[38;5;1m ● \x1b[39m",
         .{ cwd, cwd },
     );
     defer std.testing.allocator.free(expected);
@@ -1885,8 +1885,8 @@ test "repl uses default rush_prompt" {
     defer std.testing.allocator.free(cwd);
     const expected = try std.fmt.allocPrint(
         std.testing.allocator,
-        "\x1b[38;5;4m{s}\x1b[39m $ " ++
-            "\x1b[38;5;4m{s}\x1b[39m $ ",
+        "\x1b[38;5;4m{s}\x1b[39m ● " ++
+            "\x1b[38;5;4m{s}\x1b[39m ● ",
         .{ cwd, cwd },
     );
     defer std.testing.allocator.free(expected);

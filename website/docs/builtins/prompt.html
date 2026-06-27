@@ -25,19 +25,20 @@
 
   <pre><span class="cmd">prompt</span> <span class="kw">text</span> <span class="var">text</span>...
 <span class="cmd">prompt</span> <span class="kw">segment</span> [<span class="opt">--fg</span> <span class="var">color</span>] [<span class="opt">--bg</span> <span class="var">color</span>] [<span class="opt">--bold</span>] [<span class="opt">--dim</span>] [<span class="opt">--italic</span>] [<span class="opt">--underline</span>] [<span class="opt">--reverse</span>] [<span class="opt">--strikethrough</span>] <span class="var">text</span>...
-<span class="cmd">prompt</span> <span class="kw">newline</span></pre>
+<span class="cmd">prompt</span> <span class="kw">newline</span>
+<span class="cmd">prompt</span> <span class="kw">async-pending</span></pre>
 
   <h2 id="description"><a href="#description">DESCRIPTION</a></h2>
 
   <p><code>prompt</code> appends content to the prompt currently being rendered by <code>rush_prompt</code>. It is only available while Rush is rendering the interactive prompt.</p>
 
-  <p><code>prompt text</code> appends plain text. <code>prompt segment</code> appends styled text. <code>prompt newline</code> starts a new prompt line.</p>
+  <p><code>prompt text</code> appends plain text. <code>prompt segment</code> appends styled text. <code>prompt newline</code> starts a new prompt line. <code>prompt async-pending</code> exits successfully when a <code>prompt_async</code> refresh is currently running, and exits non-zero otherwise.</p>
 
   <p>Colors accept the same values as Rush editor styles: <code>default</code>, ANSI color names, bright color names, 256-color indexes, and <code>#rrggbb</code> truecolor values.</p>
 
   <h2 id="exit-status"><a href="#exit-status">EXIT STATUS</a></h2>
 
-  <p>Zero on success and two for usage errors or invalid style options.</p>
+  <p>Zero on success, one when <code>prompt async-pending</code> has no running refresh, and two for usage errors or invalid style options.</p>
 
   <h2 id="see-also"><a href="#see-also">SEE ALSO</a></h2>
 

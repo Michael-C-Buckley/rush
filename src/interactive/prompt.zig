@@ -19,7 +19,7 @@ pub fn text(shell_state: *shell.ShellState, name: []const u8, fallback: []const 
 }
 
 pub fn renderStatic(allocator: std.mem.Allocator, shell_state: *shell.ShellState) ![]const u8 {
-    return allocator.dupe(u8, text(shell_state, "PS1", "$ "));
+    return allocator.dupe(u8, text(shell_state, "PS1", "● "));
 }
 
 pub const RenderOptions = struct {
@@ -214,6 +214,16 @@ fn nowMillis(io: std.Io) u64 {
     return @intCast(std.Io.Clock.Timestamp.now(io, .awake).raw.toMilliseconds());
 }
 
+test "interactive prompt static fallback uses rush default prompt character" {
+    var shell_state = shell.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+
+    const prompt = try renderStatic(std.testing.allocator, &shell_state);
+    defer std.testing.allocator.free(prompt);
+
+    try std.testing.expectEqualStrings("● ", prompt);
+}
+
 test "interactive prompt helpers use ShellState prompts and editing mode" {
     var shell_state = shell.ShellState.init(std.testing.allocator);
     defer shell_state.deinit();
@@ -230,6 +240,42 @@ test "interactive prompt helpers use ShellState prompts and editing mode" {
     try std.testing.expectEqual(line_editor.EditingMode.vi, interactive_input.editingMode(shell_state.options));
 }
 
+const TestAsyncScheduler = struct {
+    scheduled: ?Scheduled = null,
+
+    const Scheduled = struct {
+        complete_context: ?*anyopaque,
+        complete: extension_api.AsyncTaskComplete,
+    };
+
+    fn scheduler(self: *TestAsyncScheduler) extension_api.AsyncTaskScheduler {
+        return .{ .context = self, .schedule_fn = schedule };
+    }
+
+    fn complete(self: *TestAsyncScheduler, stdout: []const u8) void {
+        const scheduled = self.scheduled.?;
+        scheduled.complete(scheduled.complete_context, .{ .status = 0, .stdout = stdout });
+    }
+
+    fn schedule(
+        allocator: std.mem.Allocator,
+        io: std.Io,
+        context: ?*anyopaque,
+        request: extension_api.AsyncTaskRequest,
+    ) !extension_api.AsyncTask {
+        _ = allocator;
+        _ = io;
+        const self: *TestAsyncScheduler = @ptrCast(@alignCast(context.?));
+        std.debug.assert(self.scheduled == null);
+        self.scheduled = .{ .complete_context = request.complete_context, .complete = request.complete };
+        return .{ .context = self, .join_fn = join };
+    }
+
+    fn join(context: *anyopaque) void {
+        _ = context;
+    }
+};
+
 test "interactive prompt async returns cached stdout after hidden refresh" {
     var shell_state = shell.ShellState.init(std.testing.allocator);
     defer shell_state.deinit();
@@ -241,20 +287,19 @@ test "interactive prompt async returns cached stdout after hidden refresh" {
         ,
     });
 
+    var scheduler: TestAsyncScheduler = .{};
     var async_state: AsyncState = .{};
     async_state.init(std.testing.io, null);
-    async_state.task_scheduler = asyncTaskScheduler();
+    async_state.task_scheduler = scheduler.scheduler();
     defer async_state.deinit();
 
     const first = try render(std.testing.allocator, std.testing.io, &shell_state, .{ .async_state = &async_state });
     defer std.testing.allocator.free(first);
     try std.testing.expectEqualStrings("[]", first);
+    try std.testing.expect(scheduler.scheduled != null);
 
-    var attempts: usize = 0;
-    while (!async_state.takeCompleted()) : (attempts += 1) {
-        if (attempts > 1_000_000) return error.AsyncPromptRefreshTimedOut;
-        std.atomic.spinLoopHint();
-    }
+    scheduler.complete("async");
+    try std.testing.expect(async_state.takeCompleted());
 
     const second = try render(std.testing.allocator, std.testing.io, &shell_state, .{ .async_state = &async_state });
     defer std.testing.allocator.free(second);

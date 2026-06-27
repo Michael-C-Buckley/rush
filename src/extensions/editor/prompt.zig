@@ -24,6 +24,7 @@ pub const Builder = struct {
     bytes: std.ArrayList(u8) = .empty,
     previous_duration_ms: ?i64 = null,
     async_state: ?*AsyncState = null,
+    async_refresh_started: bool = false,
     io: ?std.Io = null,
     now_ms: u64 = 0,
     arg_zero: []const u8 = "rush",
@@ -81,6 +82,13 @@ pub const AsyncState = struct {
         self.lock();
         defer self.unlock();
         for (self.entries.items) |entry| if (entry.refreshing or entry.completed) return true;
+        return false;
+    }
+
+    pub fn hasRefreshing(self: *AsyncState) bool {
+        self.lock();
+        defer self.unlock();
+        for (self.entries.items) |entry| if (entry.refreshing) return true;
         return false;
     }
 
@@ -155,6 +163,7 @@ fn evaluatePrompt(handler_context: ?*anyopaque, invocation: *api.Invocation) !ap
     if (std.mem.eql(u8, invocation.argv[1], "text")) return evaluatePromptText(builder, invocation);
     if (std.mem.eql(u8, invocation.argv[1], "segment")) return evaluatePromptSegment(builder, invocation);
     if (std.mem.eql(u8, invocation.argv[1], "newline")) return evaluatePromptNewline(builder, invocation);
+    if (std.mem.eql(u8, invocation.argv[1], "async-pending")) return evaluatePromptAsyncPending(builder, invocation);
     return api.EvaluationResult.normal(try invocation.usageError("prompt", "unsupported command"));
 }
 
@@ -204,6 +213,13 @@ fn evaluatePromptNewline(builder: *Builder, invocation: *api.Invocation) !api.Ev
     if (invocation.argv.len != 2) return api.EvaluationResult.normal(try promptUsage(invocation));
     try builder.bytes.append(builder.allocator, '\n');
     return api.EvaluationResult.normal(0);
+}
+
+fn evaluatePromptAsyncPending(builder: *Builder, invocation: *api.Invocation) !api.EvaluationResult {
+    if (invocation.argv.len != 2) return api.EvaluationResult.normal(try promptUsage(invocation));
+    if (builder.async_refresh_started) return api.EvaluationResult.normal(0);
+    const async_state = builder.async_state orelse return api.EvaluationResult.normal(1);
+    return api.EvaluationResult.normal(if (async_state.hasRefreshing()) 0 else 1);
 }
 
 fn appendPromptText(builder: *Builder, args: []const []const u8) !void {
@@ -356,7 +372,10 @@ fn evaluatePromptAsync(handler_context: ?*anyopaque, invocation: *api.Invocation
     const cached_stdout = try invocation.allocator.dupe(u8, entry.stdout);
     const should_refresh = !entry.refreshing and
         (entry.updated_ms == 0 or builder.now_ms >= entry.updated_ms + parsed.ttl_ms);
-    if (should_refresh) entry.refreshing = true;
+    if (should_refresh) {
+        entry.refreshing = true;
+        builder.async_refresh_started = true;
+    }
     async_state.unlock();
     defer invocation.allocator.free(cached_stdout);
 
@@ -485,7 +504,7 @@ fn promptAsyncUsage(invocation: *api.Invocation) !u8 {
 fn promptUsage(invocation: *api.Invocation) !u8 {
     return invocation.usageError(
         "prompt",
-        "usage: prompt text TEXT... | prompt segment [OPTIONS] TEXT... | prompt newline",
+        "usage: prompt text TEXT... | prompt segment [OPTIONS] TEXT... | prompt newline | prompt async-pending",
     );
 }
 
@@ -517,6 +536,36 @@ test "prompt builder appends styled segments through userdata" {
     const result = try evaluatePrompt(&builder, &invocation);
     try std.testing.expectEqual(@as(u8, 0), result.status);
     try std.testing.expectEqualStrings("\x1b[38;5;4mrush\x1b[39m", builder.bytes.items);
+}
+
+test "prompt async-pending reports refresh started during render" {
+    var builder = Builder.init(std.testing.allocator);
+    defer builder.deinit();
+    var stdout: std.ArrayList(u8) = .empty;
+    defer stdout.deinit(std.testing.allocator);
+    var stderr: std.ArrayList(u8) = .empty;
+    defer stderr.deinit(std.testing.allocator);
+    var diagnostics: std.ArrayList([]const u8) = .empty;
+    defer diagnostics.deinit(std.testing.allocator);
+    var shell_state = state.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    var state_delta = delta.StateDelta.init(std.testing.allocator, .current_shell);
+    defer state_delta.deinit();
+    var invocation: api.Invocation = .{
+        .allocator = std.testing.allocator,
+        .argv = &[_][]const u8{ "prompt", "async-pending" },
+        .builtins = &.{},
+        .shell_state = shell_state,
+        .state_delta = &state_delta,
+        .eval_context = shell_context.EvalContext.forTarget(.current_shell),
+        .stdout = &stdout,
+        .stderr = &stderr,
+        .diagnostics = &diagnostics,
+    };
+
+    try std.testing.expectEqual(@as(u8, 1), (try evaluatePrompt(&builder, &invocation)).status);
+    builder.async_refresh_started = true;
+    try std.testing.expectEqual(@as(u8, 0), (try evaluatePrompt(&builder, &invocation)).status);
 }
 
 test "prompt_pwd shortens home-relative paths" {
