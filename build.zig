@@ -59,7 +59,31 @@ pub fn build(b: *std.Build) void {
     });
     exe.stack_size = rush_stack_size;
 
-    b.installArtifact(exe);
+    const install_exe = b.addInstallArtifact(exe, .{});
+    const register_shell = b.addSystemCommand(&.{
+        "sh",
+        "-c",
+        \\shell=$1
+        \\shells=/etc/shells
+        \\
+        \\if [ -f "$shells" ] && grep -Fxq "$shell" "$shells"; then
+        \\  exit 0
+        \\fi
+        \\
+        \\if { [ -f "$shells" ] && [ -w "$shells" ]; } || { [ ! -e "$shells" ] && [ -w /etc ]; }; then
+        \\  printf '%s\n' "$shell" >>"$shells"
+        \\  printf 'registered %s in %s\n' "$shell" "$shells" >&2
+        \\else
+        \\  printf 'note: %s is not listed in %s\n' "$shell" "$shells" >&2
+        \\  printf 'note: rerun install with permission to allow chsh/login-shell use\n' >&2
+        \\fi
+        ,
+        "sh",
+        b.getInstallPath(.bin, "rush"),
+    });
+    register_shell.setName("register rush in /etc/shells");
+    register_shell.step.dependOn(&install_exe.step);
+    b.getInstallStep().dependOn(&register_shell.step);
     b.installDirectory(.{
         .source_dir = b.path("share/rush/completions"),
         .install_dir = .{ .custom = "share/rush/completions" },
