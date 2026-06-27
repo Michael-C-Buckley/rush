@@ -2079,20 +2079,28 @@ const SourceLowerer = struct {
     ) !command_plan.LookupSnapshot {
         var functions: std.ArrayList(command_plan.FunctionDefinition) = .empty;
         errdefer functions.deinit(self.allocator);
-        try functions.appendSlice(self.allocator, self.local_functions.items);
-        var iterator = self.shell_state.functions.iterator();
-        while (iterator.next()) |entry| {
-            if (self.localFunction(entry.key_ptr.*) != null) continue;
-            try functions.append(
-                self.allocator,
-                try command_plan.cloneFunctionDefinition(self.allocator, entry.value_ptr.*),
-            );
+        if (commandLookupName(command)) |name| {
+            if (self.localFunction(name)) |definition| {
+                try functions.append(self.allocator, definition);
+            } else if (isFunctionLookupName(name)) {
+                if (self.shell_state.getFunction(name)) |definition| {
+                    try functions.append(
+                        self.allocator,
+                        try command_plan.cloneFunctionDefinition(self.allocator, definition),
+                    );
+                }
+            }
         }
 
         var externals: std.ArrayList(command_plan.ExternalResolution) = .empty;
         errdefer externals.deinit(self.allocator);
-        try externals.appendSlice(self.allocator, self.owner.externals);
-        if (try self.resolveExternal(command)) |external| try externals.append(self.allocator, external);
+        if (commandLookupName(command)) |name| {
+            for (self.owner.externals) |external| {
+                external.validate();
+                if (std.mem.eql(u8, external.name, name)) try externals.append(self.allocator, external);
+            }
+            if (try self.resolveExternal(command)) |external| try externals.append(self.allocator, external);
+        }
 
         return .{
             .functions = try functions.toOwnedSlice(self.allocator),
@@ -2115,6 +2123,22 @@ const SourceLowerer = struct {
             if (std.mem.eql(u8, definition.name, name)) return definition;
         }
         return null;
+    }
+
+    fn commandLookupName(command: command_plan.ExpandedSimpleCommand) ?[]const u8 {
+        command.validate();
+        if (command.argv.len == 0) return null;
+        if (command.argv[0].len == 0) return null;
+        return command.argv[0];
+    }
+
+    fn isFunctionLookupName(name: []const u8) bool {
+        if (name.len == 0) return false;
+        if (!(std.ascii.isAlphabetic(name[0]) or name[0] == '_')) return false;
+        for (name[1..]) |byte| {
+            if (!(std.ascii.isAlphanumeric(byte) or byte == '_')) return false;
+        }
+        return true;
     }
 
     const LoweredRedirections = union(enum) {
