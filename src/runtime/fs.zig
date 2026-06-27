@@ -159,6 +159,12 @@ pub const ListDirEntry = struct {
     }
 };
 
+/// Attribute selection for directory scans.
+///
+/// The default is the cheap shell-facing scan: entry names plus directory-entry
+/// kind where the platform can provide it. Optional metadata is demand-driven;
+/// callers must request fields such as `size` or `executable` before consuming
+/// them. Unrequested optional fields remain `null`.
 pub const ListDirAttributes = struct {
     kind: bool = true,
     size: bool = false,
