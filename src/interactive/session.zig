@@ -410,13 +410,17 @@ fn dispatchPromptAsyncLifecycleEvents(
 // ziglint-ignore: Z023 - signature is fixed by the refresh_prompt callback pointer type.
 fn refreshInteractivePrompt(context: *anyopaque, allocator: std.mem.Allocator, io: std.Io) ![]const u8 {
     const interactive_context: *Context = @ptrCast(@alignCast(context));
-    return prompt_mod.render(allocator, io, interactive_context.semantic_state, .{
+    _ = try dispatchPromptAsyncLifecycleEvents(interactive_context, allocator, io);
+    const prompt = try prompt_mod.render(allocator, io, interactive_context.semantic_state, .{
         .arg_zero = interactive_context.arg_zero,
         .features = interactive_context.features,
         .previous_status = interactive_context.previous_status,
         .previous_duration_ms = interactive_context.previous_duration_ms,
         .async_state = interactive_context.prompt_async_state,
     });
+    errdefer allocator.free(prompt);
+    _ = try dispatchPromptAsyncLifecycleEvents(interactive_context, allocator, io);
+    return prompt;
 }
 
 // ziglint-ignore: Z023 - signature is fixed by the expand_abbreviation callback pointer type.
@@ -2089,9 +2093,16 @@ test "repl uses default rush_prompt" {
 
 const PendingPromptAsyncScheduler = struct {
     scheduled: bool = false,
+    complete_context: ?*anyopaque = null,
+    complete_fn: ?extension_api.AsyncTaskComplete = null,
 
     fn scheduler(self: *PendingPromptAsyncScheduler) extension_api.AsyncTaskScheduler {
         return .{ .context = self, .schedule_fn = schedule };
+    }
+
+    fn complete(self: *PendingPromptAsyncScheduler, stdout: []const u8) void {
+        const complete_fn = self.complete_fn.?;
+        complete_fn(self.complete_context, .{ .status = 0, .stdout = stdout });
     }
 
     fn schedule(
@@ -2102,10 +2113,11 @@ const PendingPromptAsyncScheduler = struct {
     ) !extension_api.AsyncTask {
         _ = allocator;
         _ = io;
-        _ = request;
         const self: *PendingPromptAsyncScheduler = @ptrCast(@alignCast(context.?));
         std.debug.assert(!self.scheduled);
         self.scheduled = true;
+        self.complete_context = request.complete_context;
+        self.complete_fn = request.complete;
         return .{ .context = self, .join_fn = join };
     }
 
@@ -2133,6 +2145,11 @@ test "prompt async refresh dispatches lifecycle events" {
         .name = "prompt-activity",
         .function_name = "on_prompt_async",
     });
+    try shell_state.setEventHook(.{
+        .event = .prompt_async_end,
+        .name = "prompt-activity",
+        .function_name = "on_prompt_async",
+    });
     var editor_state = EditorState.init(std.testing.allocator);
     defer editor_state.deinit();
     var scheduler: PendingPromptAsyncScheduler = .{};
@@ -2141,24 +2158,27 @@ test "prompt async refresh dispatches lifecycle events" {
     async_state.task_scheduler = scheduler.scheduler();
     defer async_state.deinit();
 
-    const prompt = try prompt_mod.render(std.testing.allocator, std.testing.io, &shell_state, .{
-        .async_state = &async_state,
-    });
-    defer std.testing.allocator.free(prompt);
-    try std.testing.expectEqualStrings("[]", prompt);
-    try std.testing.expect(scheduler.scheduled);
     var context: Context = .{
         .semantic_state = &shell_state,
         .editor_state = &editor_state,
         .prompt_async_state = &async_state,
     };
 
-    const hook_result = try runInteractiveIntervalHooks(&context, std.testing.allocator, std.testing.io);
-    defer std.testing.allocator.free(hook_result.output);
-    try std.testing.expectEqualStrings("", hook_result.output);
-    try std.testing.expect(hook_result.refresh_prompt);
+    const prompt = try refreshInteractivePrompt(&context, std.testing.allocator, std.testing.io);
+    defer std.testing.allocator.free(prompt);
+    try std.testing.expectEqualStrings("[]", prompt);
+    try std.testing.expect(scheduler.scheduled);
     try std.testing.expectEqualStrings(
         "prompt.async.start/prompt/1",
+        shell_state.getVariable("PROMPT_ASYNC_EVENT").?.value,
+    );
+
+    scheduler.complete("async");
+    const refreshed = try refreshInteractivePrompt(&context, std.testing.allocator, std.testing.io);
+    defer std.testing.allocator.free(refreshed);
+    try std.testing.expectEqualStrings("[async]", refreshed);
+    try std.testing.expectEqualStrings(
+        "prompt.async.end/prompt/0",
         shell_state.getVariable("PROMPT_ASYNC_EVENT").?.value,
     );
 }
