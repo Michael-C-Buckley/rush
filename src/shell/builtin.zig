@@ -3,6 +3,7 @@
 //! Builtin dispatch is semantic shell behavior.
 
 const std = @import("std");
+const zig_builtin = @import("builtin");
 
 pub const BuiltinKind = enum {
     regular,
@@ -84,6 +85,7 @@ pub const Builtin = struct {
     }
 
     pub fn validate(self: Builtin) void {
+        if (!builtinValidationEnabled()) return;
         std.debug.assert(self.name.len != 0);
         if (self.origin == .extension) {
             std.debug.assert(self.kind == .regular);
@@ -249,11 +251,27 @@ pub fn lookupIn(registry: []const Builtin, name: []const u8) ?Builtin {
 }
 
 pub fn isSpecialBuiltin(name: []const u8) bool {
-    const definition = lookup(name) orelse return false;
-    return definition.kind == .special;
+    return matchesName(name, &.{
+        ":",
+        ".",
+        "break",
+        "continue",
+        "eval",
+        "exec",
+        "exit",
+        "export",
+        "readonly",
+        "return",
+        "set",
+        "shift",
+        "times",
+        "trap",
+        "unset",
+    });
 }
 
 pub fn assertUniqueNames(registry: []const Builtin) void {
+    if (!builtinValidationEnabled()) return;
     for (registry, 0..) |left, left_index| {
         left.validate();
         for (registry[left_index + 1 ..]) |right| {
@@ -261,6 +279,13 @@ pub fn assertUniqueNames(registry: []const Builtin) void {
             std.debug.assert(!std.mem.eql(u8, left.name, right.name));
         }
     }
+}
+
+fn builtinValidationEnabled() bool {
+    return switch (zig_builtin.mode) {
+        .Debug => true,
+        .ReleaseSafe, .ReleaseFast, .ReleaseSmall => false,
+    };
 }
 
 test "builtin registry classifies POSIX special builtins separately" {
