@@ -208,12 +208,12 @@ pub fn previousWordStart(bytes: []const u8, cursor_byte: usize) usize {
     var i = cursor_byte;
     while (i != 0) {
         const previous = previousCodepointStart(bytes, i);
-        if (!isAsciiWhitespace(bytes[previous])) break;
+        if (!isWordSeparator(bytes[previous])) break;
         i = previous;
     }
     while (i != 0) {
         const previous = previousCodepointStart(bytes, i);
-        if (isAsciiWhitespace(bytes[previous])) break;
+        if (isWordSeparator(bytes[previous])) break;
         i = previous;
     }
     return i;
@@ -222,11 +222,11 @@ pub fn previousWordStart(bytes: []const u8, cursor_byte: usize) usize {
 pub fn nextWordEnd(bytes: []const u8, cursor_byte: usize) usize {
     var i = cursor_byte;
     while (i < bytes.len) {
-        if (!isAsciiWhitespace(bytes[i])) break;
+        if (!isWordSeparator(bytes[i])) break;
         i = nextCodepointEnd(bytes, i);
     }
     while (i < bytes.len) {
-        if (isAsciiWhitespace(bytes[i])) break;
+        if (isWordSeparator(bytes[i])) break;
         i = nextCodepointEnd(bytes, i);
     }
     return i;
@@ -250,6 +250,10 @@ fn isAsciiWhitespace(byte: u8) bool {
         ' ', '\t', '\n', '\r' => true,
         else => false,
     };
+}
+
+fn isWordSeparator(byte: u8) bool {
+    return byte == '/' or isAsciiWhitespace(byte);
 }
 
 test "edit buffer inserts and deletes utf8 graphemes" {
@@ -311,6 +315,25 @@ test "edit buffer moves and deletes by shell words" {
     try std.testing.expectEqual(@as(usize, "git ".len), buffer.cursor_byte);
     buffer.deleteNextWord();
     try std.testing.expectEqualStrings("git ", buffer.text());
+}
+
+test "edit buffer treats path separators as word boundaries" {
+    var buffer = EditBuffer.init(std.testing.allocator);
+    defer buffer.deinit();
+
+    try buffer.insertText("cat src/editor/buffer.zig");
+    buffer.deletePreviousWord();
+    try std.testing.expectEqualStrings("cat src/editor/", buffer.text());
+    try std.testing.expectEqual(@as(usize, "cat src/editor/".len), buffer.cursor_byte);
+
+    buffer.deletePreviousWord();
+    try std.testing.expectEqualStrings("cat src/", buffer.text());
+    try std.testing.expectEqual(@as(usize, "cat src/".len), buffer.cursor_byte);
+
+    buffer.moveWordLeft();
+    try std.testing.expectEqual(@as(usize, "cat ".len), buffer.cursor_byte);
+    buffer.moveWordRight();
+    try std.testing.expectEqual(@as(usize, "cat src".len), buffer.cursor_byte);
 }
 
 test "edit buffer kills to start and end" {
