@@ -2469,18 +2469,23 @@ fn appendPathExecutableCandidates(
     replace_end: usize,
 ) !void {
     const dir_path = if (directory.len == 0) "." else directory;
-    var dir = std.Io.Dir.cwd().openDir(io, dir_path, .{ .iterate = true }) catch |err| switch (err) {
+    var adapter = runtime.PosixAdapter.init(io);
+    const fs_port = adapter.fsPort();
+    var entries = fs_port.listDir(.{
+        .allocator = allocator,
+        .path = dir_path,
+        .attributes = .{ .kind = true, .executable = true },
+    }) catch |err| switch (err) {
         error.FileNotFound, error.NotDir, error.AccessDenied => return,
         else => return err,
     };
-    defer dir.close(io);
+    defer entries.deinit();
 
-    var iterator = dir.iterate();
-    while (try iterator.next(io)) |entry| {
+    for (entries.entries) |entry| {
         if (entry.name.len == 0) continue;
         if (entry.name[0] == '.') continue;
         if (entry.kind == .directory) continue;
-        dir.access(io, entry.name, .{ .execute = true }) catch continue;
+        if (entry.executable != true) continue;
         try builder.appendCandidateIfMissing(allocator, .{
             .value = entry.name,
             .kind = .command,

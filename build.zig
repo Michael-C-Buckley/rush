@@ -147,6 +147,12 @@ pub fn build(b: *std.Build) void {
     });
     glob_expand_module.addImport("uucode", uucode);
     glob_bench_module.addImport("rush_expand", glob_expand_module);
+    glob_bench_module.addImport("rush_runtime_posix", b.createModule(.{
+        .root_source_file = b.path("src/runtime/posix.zig"),
+        .target = target,
+        .optimize = optimize,
+        .link_libc = true,
+    }));
     const glob_bench = b.addExecutable(.{
         .name = "rush-glob-bench",
         .root_module = glob_bench_module,

@@ -14,6 +14,43 @@ const runtime_signal = @import("signal.zig");
 
 extern "c" fn tcgetpgrp(fd: std.c.fd_t) std.c.pid_t;
 extern "c" fn tcsetpgrp(fd: std.c.fd_t, pgrp: std.c.pid_t) c_int;
+extern "c" fn getattrlistbulk(
+    dirfd: std.c.fd_t,
+    attr_list: *MacosAttrList,
+    attr_buf: *anyopaque,
+    attr_buf_size: usize,
+    options: u64,
+) c_int;
+
+const MacosAttrList = extern struct {
+    bitmapcount: u16,
+    reserved: u16 = 0,
+    commonattr: u32 = 0,
+    volattr: u32 = 0,
+    dirattr: u32 = 0,
+    fileattr: u32 = 0,
+    forkattr: u32 = 0,
+};
+
+const MacosAttributeSet = extern struct {
+    commonattr: u32,
+    volattr: u32,
+    dirattr: u32,
+    fileattr: u32,
+    forkattr: u32,
+};
+
+const macos_attr_bit_map_count = 5;
+const macos_attr_cmn_name = 0x00000001;
+const macos_attr_cmn_objtype = 0x00000008;
+const macos_attr_cmn_useraccess = 0x00200000;
+const macos_attr_cmn_returned_attrs = 0x80000000;
+const macos_attr_file_datalength = 0x00000200;
+const macos_vreg = 1;
+const macos_vdir = 2;
+const macos_vlnk = 5;
+const macos_bulk_buffer_len = 1024 * 1024;
+const posix_x_ok = 1;
 
 pub const Adapter = struct {
     io: std.Io,
@@ -273,6 +310,21 @@ fn listDir(context: *anyopaque, request: fs.ListDirRequest) fs.ListDirError!fs.L
     const adapter = adapterFromContext(context);
     request.validate();
 
+    if (comptime builtin.os.tag == .macos) {
+        if (request.attributes.needsStatLikeMetadata()) {
+            return listDirMacosBulk(adapter, request) catch |err| switch (err) {
+                error.BulkUnsupported => listDirIterating(adapter, request),
+                else => |list_err| list_err,
+            };
+        }
+    }
+
+    return listDirIterating(adapter, request);
+}
+
+fn listDirIterating(adapter: *Adapter, request: fs.ListDirRequest) fs.ListDirError!fs.ListDirResult {
+    request.validate();
+
     var dir = try std.Io.Dir.cwd().openDir(adapter.io, request.path, .{ .iterate = true });
     defer dir.close(adapter.io);
 
@@ -287,16 +339,228 @@ fn listDir(context: *anyopaque, request: fs.ListDirRequest) fs.ListDirError!fs.L
         if (entry.name.len == 0) continue;
         const owned_name = try request.allocator.dupe(u8, entry.name);
         errdefer request.allocator.free(owned_name);
-        try entries.append(request.allocator, .{
+        var list_entry: fs.ListDirEntry = .{
             .name = owned_name,
             .kind = fs.EntryKind.fromStd(entry.kind),
-        });
+        };
+        try fillListDirMetadata(adapter.io, dir, &list_entry, request.attributes);
+        try entries.append(request.allocator, list_entry);
     }
 
     return .{
         .allocator = request.allocator,
         .entries = try entries.toOwnedSlice(request.allocator),
     };
+}
+
+const ListDirMacosBulkError = fs.ListDirError || error{BulkUnsupported};
+
+fn listDirMacosBulk(adapter: *Adapter, request: fs.ListDirRequest) ListDirMacosBulkError!fs.ListDirResult {
+    request.validate();
+
+    var dir = try std.Io.Dir.cwd().openDir(adapter.io, request.path, .{ .iterate = true });
+    defer dir.close(adapter.io);
+
+    const buffer = try request.allocator.alloc(u8, macos_bulk_buffer_len);
+    defer request.allocator.free(buffer);
+
+    var entries: std.ArrayList(fs.ListDirEntry) = .empty;
+    errdefer {
+        for (entries.items) |entry| request.allocator.free(entry.name);
+        entries.deinit(request.allocator);
+    }
+
+    var attr_list: MacosAttrList = .{
+        .bitmapcount = macos_attr_bit_map_count,
+        .commonattr = macos_attr_cmn_returned_attrs | macos_attr_cmn_name,
+    };
+    if (request.attributes.kind or request.attributes.executable) attr_list.commonattr |= macos_attr_cmn_objtype;
+    if (request.attributes.executable) attr_list.commonattr |= macos_attr_cmn_useraccess;
+    if (request.attributes.size) attr_list.fileattr |= macos_attr_file_datalength;
+
+    while (true) {
+        const count = getattrlistbulk(dir.handle, &attr_list, buffer.ptr, buffer.len, 0);
+        if (count < 0) return macosBulkErrnoToListDirError();
+        if (count == 0) break;
+
+        var offset: usize = 0;
+        var entry_index: usize = 0;
+        while (entry_index < @as(usize, @intCast(count))) : (entry_index += 1) {
+            const parsed = try parseMacosBulkEntry(buffer, offset, request.attributes);
+            offset += parsed.record_len;
+            if (parsed.name.len == 0) continue;
+            if (std.mem.eql(u8, parsed.name, ".") or std.mem.eql(u8, parsed.name, "..")) continue;
+
+            const executable = if (request.attributes.executable and parsed.is_symlink)
+                try executableAccess(adapter.io, dir, parsed.name)
+            else
+                parsed.executable;
+            const owned_name = try request.allocator.dupe(u8, parsed.name);
+            errdefer request.allocator.free(owned_name);
+            try entries.append(request.allocator, .{
+                .name = owned_name,
+                .kind = parsed.kind,
+                .size = parsed.size,
+                .executable = executable,
+            });
+        }
+    }
+
+    return .{
+        .allocator = request.allocator,
+        .entries = try entries.toOwnedSlice(request.allocator),
+    };
+}
+
+fn fillListDirMetadata(
+    io: std.Io,
+    dir: std.Io.Dir,
+    entry: *fs.ListDirEntry,
+    attributes: fs.ListDirAttributes,
+) fs.ListDirError!void {
+    if (attributes.size) {
+        const stat = dir.statFile(io, entry.name, .{}) catch |err| switch (err) {
+            error.FileNotFound, error.AccessDenied, error.PermissionDenied => null,
+            else => |stat_err| return stat_err,
+        };
+        if (stat) |metadata| entry.size = metadata.size;
+    }
+    if (attributes.executable) {
+        entry.executable = try executableAccess(io, dir, entry.name);
+    }
+}
+
+fn executableAccess(io: std.Io, dir: std.Io.Dir, name: []const u8) fs.ListDirError!bool {
+    dir.access(io, name, .{ .execute = true }) catch |err| switch (err) {
+        error.FileNotFound,
+        error.AccessDenied,
+        error.PermissionDenied,
+        error.SymLinkLoop,
+        error.ReadOnlyFileSystem,
+        => return false,
+        else => |access_err| return access_err,
+    };
+    return true;
+}
+
+const MacosBulkEntry = struct {
+    record_len: usize,
+    name: []const u8,
+    kind: fs.EntryKind,
+    is_symlink: bool,
+    size: ?u64,
+    executable: ?bool,
+};
+
+fn parseMacosBulkEntry(
+    buffer: []const u8,
+    offset: usize,
+    attributes: fs.ListDirAttributes,
+) ListDirMacosBulkError!MacosBulkEntry {
+    if (offset + @sizeOf(u32) + @sizeOf(MacosAttributeSet) > buffer.len) return error.Unexpected;
+    const record_len = readNativeInt(u32, buffer[offset..][0..4]);
+    if (record_len == 0 or offset + record_len > buffer.len) return error.Unexpected;
+
+    var cursor = offset + @sizeOf(u32);
+    const returned_attrs = readNativeStruct(MacosAttributeSet, buffer[cursor..][0..@sizeOf(MacosAttributeSet)]);
+    cursor += @sizeOf(MacosAttributeSet);
+    if (returned_attrs.commonattr & macos_attr_cmn_name == 0) return error.Unexpected;
+
+    const name_ref = try readMacosAttrReference(buffer, offset, record_len, cursor);
+    cursor += @sizeOf(MacosAttrReference);
+
+    var parsed_kind: fs.EntryKind = .unknown;
+    const reads_kind = attributes.kind or attributes.executable;
+    if (reads_kind) {
+        if (returned_attrs.commonattr & macos_attr_cmn_objtype == 0) return error.BulkUnsupported;
+        if (cursor + @sizeOf(u32) > offset + record_len) return error.Unexpected;
+        parsed_kind = macosEntryKind(readNativeInt(u32, buffer[cursor..][0..4]));
+        cursor += @sizeOf(u32);
+    }
+
+    var executable: ?bool = null;
+    if (attributes.executable) {
+        if (returned_attrs.commonattr & macos_attr_cmn_useraccess == 0) return error.BulkUnsupported;
+        if (cursor + @sizeOf(u32) > offset + record_len) return error.Unexpected;
+        const user_access = readNativeInt(u32, buffer[cursor..][0..4]);
+        executable = user_access & posix_x_ok != 0;
+        cursor += @sizeOf(u32);
+    }
+
+    var size: ?u64 = null;
+    if (attributes.size) {
+        if (returned_attrs.fileattr & macos_attr_file_datalength == 0) return error.BulkUnsupported;
+        if (cursor + @sizeOf(i64) > offset + record_len) return error.Unexpected;
+        const data_length = readNativeInt(i64, buffer[cursor..][0..8]);
+        if (data_length < 0) return error.Unexpected;
+        size = @intCast(data_length);
+    }
+
+    return .{
+        .record_len = record_len,
+        .name = name_ref,
+        .kind = if (attributes.kind) parsed_kind else .unknown,
+        .is_symlink = parsed_kind == .symlink,
+        .size = size,
+        .executable = executable,
+    };
+}
+
+const MacosAttrReference = extern struct {
+    offset: i32,
+    length: u32,
+};
+
+fn readMacosAttrReference(
+    buffer: []const u8,
+    record_offset: usize,
+    record_len: usize,
+    reference_offset: usize,
+) fs.ListDirError![]const u8 {
+    if (reference_offset + @sizeOf(MacosAttrReference) > record_offset + record_len) return error.Unexpected;
+    const reference = readNativeStruct(
+        MacosAttrReference,
+        buffer[reference_offset..][0..@sizeOf(MacosAttrReference)],
+    );
+    if (reference.offset < 0) return error.Unexpected;
+    const name_start = reference_offset + @as(usize, @intCast(reference.offset));
+    if (name_start > record_offset + record_len or
+        name_start + reference.length > record_offset + record_len) return error.Unexpected;
+    return std.mem.sliceTo(buffer[name_start .. name_start + reference.length], 0);
+}
+
+fn macosEntryKind(vtype: u32) fs.EntryKind {
+    return switch (vtype) {
+        macos_vreg => .file,
+        macos_vdir => .directory,
+        macos_vlnk => .symlink,
+        else => .other,
+    };
+}
+
+fn macosBulkErrnoToListDirError() ListDirMacosBulkError {
+    return switch (std.c.errno(-1)) {
+        .SUCCESS => error.Unexpected,
+        .INTR, .INVAL, .OPNOTSUPP => error.BulkUnsupported,
+        .ACCES => error.AccessDenied,
+        .PERM => error.PermissionDenied,
+        .BADF => error.Unexpected,
+        .FAULT => error.Unexpected,
+        .IO => error.InputOutput,
+        .LOOP => error.SymLinkLoop,
+        .NOENT => error.FileNotFound,
+        .NOMEM => error.SystemResources,
+        .NOTDIR => error.NotDir,
+        else => error.Unexpected,
+    };
+}
+
+fn readNativeInt(comptime T: type, bytes: *const [@divExact(@typeInfo(T).int.bits, 8)]u8) T {
+    return std.mem.readInt(T, bytes, builtin.cpu.arch.endian());
+}
+
+fn readNativeStruct(comptime T: type, bytes: *const [@sizeOf(T)]u8) T {
+    return std.mem.bytesToValue(T, bytes);
 }
 
 fn setFileCreationMask(
@@ -1134,6 +1398,52 @@ test "runtime posix adapter performs cwd and access smoke operations" {
     const metadata = try fs_port.inspectPath(.{ .path = "." });
     try std.testing.expectEqual(std.Io.File.Kind.directory, metadata.stat.kind);
     try fs_port.changeCwd(.{ .path = cwd.path });
+}
+
+test "runtime posix adapter lists requested directory entry metadata" {
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    var executable = try tmp.dir.createFile(std.testing.io, "rush-tool", .{ .permissions = .executable_file });
+    executable.close(std.testing.io);
+    try tmp.dir.writeFile(std.testing.io, .{ .sub_path = "note.txt", .data = "hello" });
+    try tmp.dir.symLink(std.testing.io, "note.txt", "note-link", .{});
+
+    var tmp_root_buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
+    const tmp_root_len = try tmp.dir.realPath(std.testing.io, &tmp_root_buffer);
+    const tmp_root = tmp_root_buffer[0..tmp_root_len];
+
+    var adapter = Adapter.init(std.testing.io);
+    const fs_port = adapter.fsPort();
+    var entries = try fs_port.listDir(.{
+        .allocator = std.testing.allocator,
+        .path = tmp_root,
+        .attributes = .{ .kind = true, .size = true, .executable = true },
+    });
+    defer entries.deinit();
+
+    var saw_executable = false;
+    var saw_note = false;
+    var saw_note_link = false;
+    for (entries.entries) |entry| {
+        if (std.mem.eql(u8, entry.name, "rush-tool")) {
+            saw_executable = true;
+            try std.testing.expectEqual(fs.EntryKind.file, entry.kind);
+            try std.testing.expectEqual(@as(?bool, true), entry.executable);
+        } else if (std.mem.eql(u8, entry.name, "note.txt")) {
+            saw_note = true;
+            try std.testing.expectEqual(fs.EntryKind.file, entry.kind);
+            try std.testing.expectEqual(@as(?u64, 5), entry.size);
+            try std.testing.expectEqual(@as(?bool, false), entry.executable);
+        } else if (std.mem.eql(u8, entry.name, "note-link")) {
+            saw_note_link = true;
+            try std.testing.expectEqual(fs.EntryKind.symlink, entry.kind);
+            try std.testing.expectEqual(@as(?bool, false), entry.executable);
+        }
+    }
+    try std.testing.expect(saw_executable);
+    try std.testing.expect(saw_note);
+    try std.testing.expect(saw_note_link);
 }
 
 test "runtime posix adapter spawns and waits for a simple process" {

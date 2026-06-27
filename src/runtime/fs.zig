@@ -151,15 +151,28 @@ pub const EntryKind = enum {
 pub const ListDirEntry = struct {
     name: []const u8,
     kind: EntryKind = .unknown,
+    size: ?u64 = null,
+    executable: ?bool = null,
 
     pub fn validate(self: ListDirEntry) void {
         std.debug.assert(self.name.len != 0);
     }
 };
 
+pub const ListDirAttributes = struct {
+    kind: bool = true,
+    size: bool = false,
+    executable: bool = false,
+
+    pub fn needsStatLikeMetadata(self: ListDirAttributes) bool {
+        return self.size or self.executable;
+    }
+};
+
 pub const ListDirRequest = struct {
     allocator: std.mem.Allocator,
     path: Path,
+    attributes: ListDirAttributes = .{},
 
     /// `path` is borrowed for the duration of the call. Returned entry names are
     /// owned by `allocator`; callers must release them with `ListDirResult.deinit`.
@@ -223,7 +236,12 @@ pub const GetCwdError = std.process.CurrentPathError;
 pub const ChangeCwdError = std.process.SetCurrentPathError;
 pub const AccessError = std.Io.Dir.AccessError;
 pub const InspectPathError = std.Io.Dir.StatFileError;
-pub const ListDirError = std.mem.Allocator.Error || std.Io.Dir.OpenError || std.Io.Dir.Iterator.Error;
+pub const ListDirError = std.mem.Allocator.Error ||
+    std.Io.Dir.OpenError ||
+    std.Io.Dir.Iterator.Error ||
+    std.Io.Dir.StatFileError ||
+    std.Io.Dir.AccessError ||
+    error{Unexpected};
 pub const SetFileCreationMaskError = error{Unexpected};
 
 pub const GetCwdFn = *const fn (*anyopaque, GetCwdRequest) GetCwdError!GetCwdResult;
