@@ -38,17 +38,15 @@ rush_prompt_activity_refresh() {
   :
 }
 
-# Track prompt, completion, and job activity so the prompt can animate.
+# Track prompt and completion activity so the prompt can animate.
 rush_prompt_activity_update() {
   case "$1" in
     prompt) rush_prompt_activity_prompt="$2" ;;
     completion) rush_prompt_activity_completion="$2" ;;
-    job) rush_prompt_activity_jobs="$2" ;;
   esac
 
   if test "${rush_prompt_activity_prompt:-0}" != 0 || \
-     test "${rush_prompt_activity_completion:-0}" != 0 || \
-     test "${rush_prompt_activity_jobs:-0}" != 0; then
+     test "${rush_prompt_activity_completion:-0}" != 0; then
     # Keep the redraw timer installed only while something is active.
     event add timer.tick prompt-activity rush_prompt_activity_refresh --every 120
   else
@@ -60,8 +58,6 @@ event add prompt.async.start prompt-activity rush_prompt_activity_update
 event add prompt.async.end prompt-activity rush_prompt_activity_update
 event add completion.async.start prompt-activity rush_prompt_activity_update
 event add completion.async.end prompt-activity rush_prompt_activity_update
-event add job.start prompt-activity rush_prompt_activity_update
-event add job.end prompt-activity rush_prompt_activity_update
 
 # Test whether a terminal-reported color is a strict #rrggbb value.
 rush_prompt_activity_is_rgb() {
@@ -124,8 +120,7 @@ rush_prompt() {
   fi
   if prompt async-pending || \
      test "${rush_prompt_activity_prompt:-0}" != 0 || \
-     test "${rush_prompt_activity_completion:-0}" != 0 || \
-     test "${rush_prompt_activity_jobs:-0}" != 0; then
+     test "${rush_prompt_activity_completion:-0}" != 0; then
     rush_prompt_active=1
   else
     rush_prompt_active=0

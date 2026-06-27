@@ -2282,7 +2282,7 @@ test "default rush_prompt fades activity dot when rgb colors are known" {
     try interactive_shell.semantic_state.putRushStateVariable("rush_color_foreground", "#ffffff");
     try interactive_shell.semantic_state.putRushStateVariable("rush_color_background", "#000000");
     try interactive_shell.semantic_state.putRushStateVariable("rush_color_red", "#ff0000");
-    try interactive_shell.semantic_state.putRushStateVariable("rush_prompt_activity_jobs", "1");
+    try interactive_shell.semantic_state.putRushStateVariable("rush_prompt_activity_prompt", "1");
 
     const prompt = try prompt_mod.render(
         std.testing.allocator,
@@ -2294,6 +2294,49 @@ test "default rush_prompt fades activity dot when rgb colors are known" {
 
     try std.testing.expect(std.mem.indexOf(u8, prompt, "●") != null);
     try std.testing.expect(std.mem.indexOf(u8, prompt, "\x1b[38;2;") != null);
+    try std.testing.expect(std.mem.indexOf(u8, prompt, "◐") == null);
+    try std.testing.expect(std.mem.indexOf(u8, prompt, "◓") == null);
+    try std.testing.expect(std.mem.indexOf(u8, prompt, "◑") == null);
+    try std.testing.expect(std.mem.indexOf(u8, prompt, "◒") == null);
+}
+
+test "default rush_prompt does not animate for background jobs" {
+    var interactive_shell = Shell.init(std.testing.allocator);
+    defer interactive_shell.deinit();
+    var env = std.process.Environ.Map.init(std.testing.allocator);
+    defer env.deinit();
+    try interactive_shell.initializeSemanticStartup(std.testing.io, &env, .{ .arg_zero = "rush" });
+
+    var context: Context = .{
+        .semantic_state = &interactive_shell.semantic_state,
+        .editor_state = &interactive_shell.editor_state,
+        .arg_zero = "rush",
+    };
+    var config_result = try startup.sourceDefaultConfig(
+        std.testing.allocator,
+        std.testing.io,
+        &interactive_shell.semantic_state,
+        "rush",
+        .{},
+        interactiveExtensionHandlers(&context),
+    );
+    defer config_result.deinit();
+
+    try interactive_shell.semantic_state.putRushStateVariable("rush_color_foreground", "#ffffff");
+    try interactive_shell.semantic_state.putRushStateVariable("rush_color_background", "#000000");
+    try interactive_shell.semantic_state.putRushStateVariable("rush_color_red", "#ff0000");
+    try interactive_shell.semantic_state.putRushStateVariable("rush_prompt_activity_jobs", "1");
+
+    const prompt = try prompt_mod.render(
+        std.testing.allocator,
+        std.testing.io,
+        &interactive_shell.semantic_state,
+        .{},
+    );
+    defer std.testing.allocator.free(prompt);
+
+    try std.testing.expect(std.mem.indexOf(u8, prompt, "●") != null);
+    try std.testing.expect(std.mem.indexOf(u8, prompt, "\x1b[38;2;") == null);
     try std.testing.expect(std.mem.indexOf(u8, prompt, "◐") == null);
     try std.testing.expect(std.mem.indexOf(u8, prompt, "◓") == null);
     try std.testing.expect(std.mem.indexOf(u8, prompt, "◑") == null);
