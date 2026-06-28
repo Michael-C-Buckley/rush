@@ -1116,6 +1116,16 @@ fn lookupSemanticAliasForParser(opaque_context: *anyopaque, name: []const u8) ?[
     return alias.value;
 }
 
+fn cloneAliasStateForParser(allocator: std.mem.Allocator, shell_state: *const state.ShellState) !state.ShellState {
+    var alias_state = state.ShellState.init(allocator);
+    errdefer alias_state.deinit();
+
+    var aliases = shell_state.aliases.iterator();
+    while (aliases.next()) |entry| try alias_state.setAlias(entry.key_ptr.*, entry.value_ptr.value);
+
+    return alias_state;
+}
+
 fn isSemanticAliasName(name: []const u8) bool {
     if (name.len == 0) return false;
     for (name) |byte| {
@@ -6628,6 +6638,8 @@ fn evaluateCompoundPlanWithInput(
     frame.validate();
     std.debug.assert(plan.target == eval_context.target);
     if (plan.target == .current_shell) std.debug.assert(shell_state.acceptsExecutionTarget(.current_shell));
+    const creates_isolated_boundary = plan.body == .subshell or
+        (plan.target.isIsolatedFromParent() and !shell_state.acceptsExecutionTarget(plan.target));
 
     var state_delta = delta.StateDelta.init(evaluator.allocator, plan.target);
     errdefer state_delta.deinit();
@@ -6650,7 +6662,7 @@ fn evaluateCompoundPlanWithInput(
     defer buffers.deinit();
     buffers.useFrameFdTableInput(&frame_input, input);
     var cwd_guard: CwdGuard = .{};
-    if (plan.target.isIsolatedFromParent()) cwd_guard.capture(evaluator);
+    if (creates_isolated_boundary) cwd_guard.capture(evaluator);
     defer cwd_guard.restore();
 
     var scoped_exec_redirections: std.ArrayList(ScopedExecRedirection) = .empty;
@@ -6723,7 +6735,12 @@ fn evaluateCompoundPlanWithInput(
         redirection_output_flushed = true;
     }
 
-    var working_state = try workingStateForCompound(evaluator.allocator, shell_state.*, plan.target);
+    var working_state = try workingStateForCompound(
+        evaluator.allocator,
+        shell_state.*,
+        plan.target,
+        creates_isolated_boundary,
+    );
     defer working_state.deinit();
 
     var result = try evaluateCompoundBody(evaluator, &working_state, eval_context, plan.body, &buffers);
@@ -9685,11 +9702,15 @@ fn workingStateForCompound(
     allocator: std.mem.Allocator,
     shell_state: state.ShellState,
     target: context.ExecutionTarget,
+    creates_isolated_boundary: bool,
 ) EvalError!state.ShellState {
     shell_state.validate();
     return switch (target) {
         .current_shell => shell_state.cloneBorrowingFunctions(allocator),
-        .subshell => shell_state.snapshotForSubshell(allocator),
+        .subshell => if (creates_isolated_boundary)
+            shell_state.snapshotForSubshell(allocator)
+        else
+            shell_state.cloneBorrowingFunctions(allocator),
         .child_process => shell_state.clone(allocator),
     } catch |err| switch (err) {
         error.OutOfMemory => return error.OutOfMemory,
@@ -15304,9 +15325,8 @@ fn evaluateSourcedTextChunks(
             const chunk = std.mem.trim(u8, source[start..end], " \t\r\n;");
             if (chunk.len == 0) break;
 
-            var alias_snapshot = shell_state.clone(evaluator.allocator) catch |err| switch (err) {
+            var alias_snapshot = cloneAliasStateForParser(evaluator.allocator, shell_state) catch |err| switch (err) {
                 error.OutOfMemory => return error.OutOfMemory,
-                error.ReadonlyVariable => unreachable,
             };
             defer alias_snapshot.deinit();
 
