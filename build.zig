@@ -101,6 +101,8 @@ pub fn build(b: *std.Build) void {
         .exclude_extensions = &.{},
         .blank_extensions = &.{},
     });
+    b.installFile("share/vim/vimfiles/ftdetect/rush.vim", "share/vim/vimfiles/ftdetect/rush.vim");
+    b.installFile("share/nvim/site/ftdetect/rush.lua", "share/nvim/site/ftdetect/rush.lua");
     b.installFile(default_config_path, default_config_path);
 
     const run_cmd = b.addRunArtifact(exe);
