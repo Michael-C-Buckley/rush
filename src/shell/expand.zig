@@ -287,6 +287,7 @@ const ExpandedWordFields = struct {
 const LeadingTildeExpansion = struct {
     text: []const u8,
     quoted_glob: bool = false,
+    quoted_glob_prefix_len: usize = 0,
 };
 
 fn expandLeadingTilde(allocator: std.mem.Allocator, raw: []const u8, env: EnvLookup) !LeadingTildeExpansion {
@@ -299,6 +300,7 @@ fn expandLeadingTilde(allocator: std.mem.Allocator, raw: []const u8, env: EnvLoo
     return .{
         .text = try std.mem.concat(allocator, u8, &.{ home, raw[end..] }),
         .quoted_glob = hasGlobSyntax(home),
+        .quoted_glob_prefix_len = if (hasGlobSyntax(home)) home.len else 0,
     };
 }
 
@@ -338,13 +340,30 @@ pub fn expandWord(allocator: std.mem.Allocator, raw: []const u8, options: Option
         try fields.append(allocator, try current.toOwnedSlice(allocator));
     }
 
-    if (options.pathname_expansion and pathname_expansion_safe and !quoted_expansion_glob) {
+    if (options.pathname_expansion) {
         const pathname_options: PathnameExpansionOptions = .{
             .nullglob = options.pathname_nullglob,
             .dotglob = options.pathname_dotglob,
             .extglob = options.extglob,
         };
-        if (fieldsHaveGlobSyntax(fields.items, pathname_options)) {
+        if (fields.items.len == 1 and !try wordPartsHaveDynamicExpansion(allocator, parts)) {
+            var pattern = try expandPatternWord(allocator, tilde_expanded.text, options);
+            defer pattern.deinit(allocator);
+            if (tilde_expanded.quoted_glob_prefix_len != 0) {
+                @memset(
+                    @constCast(pattern.special[0..@min(pattern.special.len, tilde_expanded.quoted_glob_prefix_len)]),
+                    false,
+                );
+            }
+            if (patternHasGlobSyntaxWithOptions(pattern, .{ .extglob = pathname_options.extglob })) {
+                if (options.pathname_lookup.enabled()) {
+                    try applySinglePathnameExpansionPattern(allocator, options.pathname_lookup, &fields, pattern, pathname_options);
+                } else if (options.io) |io| {
+                    var io_context = IoPathnameLookupContext.init(io);
+                    try applySinglePathnameExpansionPattern(allocator, ioPathnameLookup(&io_context), &fields, pattern, pathname_options);
+                }
+            }
+        } else if (pathname_expansion_safe and !quoted_expansion_glob and fieldsHaveGlobSyntax(fields.items, pathname_options)) {
             if (options.pathname_lookup.enabled()) {
                 try applyPathnameExpansion(allocator, options.pathname_lookup, &fields, pathname_options);
             } else if (options.io) |io| {
@@ -398,6 +417,37 @@ fn expandWordFieldsNoPathname(allocator: std.mem.Allocator, raw: []const u8, opt
         .fields = try fields.toOwnedSlice(allocator),
         .quoted_glob = quoted_expansion_glob,
     };
+}
+
+fn wordPartsHaveDynamicExpansion(allocator: std.mem.Allocator, parts: WordParts) !bool {
+    for (parts.parts) |part| switch (part.kind) {
+        .parameter, .arithmetic, .command_substitution => return true,
+        .double_quoted => if (try doubleQuotedTextHasDynamicExpansion(allocator, part.value(parts.raw))) return true,
+        else => {},
+    };
+    return false;
+}
+
+fn doubleQuotedTextHasDynamicExpansion(allocator: std.mem.Allocator, text: []const u8) !bool {
+    var index: usize = 0;
+    while (index < text.len) {
+        if (text[index] == '\\' and index + 1 < text.len) {
+            index += 2;
+            continue;
+        }
+        if (text[index] == '$' or text[index] == '`') {
+            const part = (try substitutionPart(allocator, text, index)) orelse {
+                index += 1;
+                continue;
+            };
+            return switch (part.kind) {
+                .parameter, .arithmetic, .command_substitution => true,
+                else => unreachable,
+            };
+        }
+        index += 1;
+    }
+    return false;
 }
 
 fn appendWordPartsUnquoted(
@@ -6338,6 +6388,23 @@ fn applyPathnameExpansion(
     fields.* = expanded;
 }
 
+fn applySinglePathnameExpansionPattern(
+    allocator: std.mem.Allocator,
+    lookup: PathnameLookup,
+    fields: *std.ArrayList([]const u8),
+    pattern: ExpansionPattern,
+    options: PathnameExpansionOptions,
+) !void {
+    std.debug.assert(fields.items.len == 1);
+    const matches = try expandPathnameExpansionPatternWithLookupOptions(allocator, lookup, pattern, options);
+    defer allocator.free(matches);
+    if (matches.len == 0 and !options.nullglob) return;
+
+    allocator.free(fields.items[0]);
+    fields.clearRetainingCapacity();
+    try fields.appendSlice(allocator, matches);
+}
+
 fn fieldsHaveGlobSyntax(fields: []const []const u8, options: PathnameExpansionOptions) bool {
     for (fields) |field| {
         if (hasGlobSyntaxWithOptions(field, .{ .extglob = options.extglob })) return true;
@@ -10524,6 +10591,19 @@ test "quoted parameter expansion is not subject to pathname expansion" {
     try std.testing.expectEqual(@as(usize, 2), unquoted.fields.len);
     try std.testing.expectEqualStrings(a, unquoted.fields[0]);
     try std.testing.expectEqualStrings(b, unquoted.fields[1]);
+}
+
+test "pathname expansion keeps quoted adjacent pattern characters literal" {
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, "rush-quoted-adjacent-*[");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, "rush-quoted-adjacent-*[") catch {};
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = "rush-quoted-adjacent-*[/a", .data = "" });
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = "rush-quoted-adjacent-*[/b", .data = "" });
+
+    var expanded = try expandWord(std.testing.allocator, "\"rush-quoted-adjacent-*[\"/*", .{ .io = std.testing.io });
+    defer expanded.deinit();
+    try std.testing.expectEqual(@as(usize, 2), expanded.fields.len);
+    try std.testing.expectEqualStrings("rush-quoted-adjacent-*[/a", expanded.fields[0]);
+    try std.testing.expectEqualStrings("rush-quoted-adjacent-*[/b", expanded.fields[1]);
 }
 
 test "tilde expansion result is not subject to pathname expansion" {

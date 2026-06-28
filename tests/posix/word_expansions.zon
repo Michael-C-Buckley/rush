@@ -1428,6 +1428,22 @@
             .status = 0,
         },
         .{
+            .name = "pathname expansion applies to unquoted patterns adjacent to quoted literals",
+            .script =
+            \\mkdir 'foo*['
+            \\: >'foo*[/a'
+            \\: >'foo*[/b'
+            \\printf '<%s>\n' "foo*["/*
+            ,
+            .stdout =
+            \\<foo*[/a>
+            \\<foo*[/b>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "pathname expansion does not apply to assignment values",
             .script =
             \\: >a.txt
