@@ -8,6 +8,7 @@ pub const parser = @import("shell/parser.zig");
 pub const expand = @import("shell/expand.zig");
 pub const ir = @import("shell/ir.zig");
 pub const history = @import("history.zig");
+pub const assets = @import("assets.zig");
 pub const builtins = @import("builtins.zig");
 pub const extensions = @import("extensions.zig");
 pub const cli_invocation = @import("invocation.zig");

@@ -1,0 +1,6 @@
+# Use colors in diff output, if supported.
+if command -v diff >/dev/null 2>&1 && command diff --color=auto /dev/null /dev/null >/dev/null 2>&1; then
+  diff() {
+    command diff --color=auto "$@"
+  }
+fi

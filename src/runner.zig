@@ -2,6 +2,7 @@
 
 const std = @import("std");
 
+const assets = @import("assets.zig");
 const default_builtins = @import("builtins.zig");
 const cli_invocation = @import("invocation.zig");
 const extension_api = @import("extensions/api.zig");
@@ -15,11 +16,23 @@ const ir = shell.ir;
 pub const ExtensionHandlers = struct {
     context: ?*anyopaque = null,
     lookup: ?*const fn (?*anyopaque, []const u8) ?extension_api.HandlerSpec = null,
+    function_autoload: shell.eval.FunctionAutoload = .{},
 
     fn apply(self: ExtensionHandlers, evaluator: *shell.eval.Evaluator) void {
         if (self.lookup) |lookup_fn| evaluator.setExtensionHandlerLookup(self.context, lookup_fn);
+        if (self.function_autoload.lookup != null) {
+            evaluator.function_autoload = self.function_autoload;
+        } else {
+            installDefaultFunctionAutoload(evaluator);
+        }
     }
 };
+
+fn installDefaultFunctionAutoload(evaluator: *shell.eval.Evaluator) void {
+    if (evaluator.function_autoload.lookup != null) return;
+    if (!evaluator.features.isBash()) return;
+    evaluator.function_autoload = assets.functionAutoload();
+}
 
 fn bundledExtensionLookup(_: ?*anyopaque, name: []const u8) ?extension_api.HandlerSpec {
     return extension_handler_registry.lookup(name);
@@ -300,6 +313,7 @@ fn runSemanticCommandStringInternal(
     evaluator.read_stdin_from_fd = true;
     evaluator.external_stdio = semanticEvaluatorExternalStdio(external_stdio, live_stdio);
     evaluator.commit_exec_redirections = live_stdio and external_stdio == .inherit;
+    installDefaultFunctionAutoload(&evaluator);
     var parser_resolver = shell.ParserBackedSourceResolver.init(&evaluator);
     parser_resolver.features = invocation.features;
     parser_resolver.arg_zero = invocation.arg_zero;
@@ -360,6 +374,7 @@ fn runSemanticAliasTimingCommandString(
     evaluator.read_stdin_from_fd = true;
     evaluator.external_stdio = semanticEvaluatorExternalStdio(external_stdio, live_stdio);
     evaluator.commit_exec_redirections = live_stdio and external_stdio == .inherit;
+    installDefaultFunctionAutoload(&evaluator);
     var parser_resolver = shell.ParserBackedSourceResolver.init(&evaluator);
     parser_resolver.features = invocation.features;
     parser_resolver.arg_zero = invocation.arg_zero;
@@ -2322,6 +2337,75 @@ test "command string operands set the command name and positional parameters" {
     try std.testing.expectEqualStrings("myname:2:a:b c\na b c\n", result.stdout);
     try std.testing.expectEqualStrings("", result.stderr);
 }
+
+test "non-interactive Rush mode autoloads user functions" {
+    const root = "rush-test-noninteractive-function-autoload";
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, root ++ "/rush/functions");
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{
+        .sub_path = root ++ "/rush/functions/hello.rush",
+        .data =
+        \\printf 'autoload noise\n'
+        \\hello() {
+        \\  printf 'hello %s\n' "$1"
+        \\}
+        \\
+        ,
+    });
+
+    var env = std.process.Environ.Map.init(std.testing.allocator);
+    defer env.deinit();
+    try env.put("XDG_CONFIG_HOME", root);
+
+    var result = try runCommandStringWithEnvironment(
+        std.testing.allocator,
+        std.testing.io,
+        "hello rush",
+        .{ .io = std.testing.io, .features = .bash(), .arg_zero = "rush" },
+        &env,
+        &.{},
+        .{},
+    );
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("hello rush\n", result.stdout);
+    try std.testing.expectEqualStrings("", result.stderr);
+}
+
+test "non-interactive POSIX mode does not autoload user functions" {
+    const root = "rush-test-posix-function-autoload";
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, root ++ "/rush/functions");
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{
+        .sub_path = root ++ "/rush/functions/hello.rush",
+        .data =
+        \\hello() {
+        \\  printf 'hello %s\n' "$1"
+        \\}
+        \\
+        ,
+    });
+
+    var env = std.process.Environ.Map.init(std.testing.allocator);
+    defer env.deinit();
+    try env.put("XDG_CONFIG_HOME", root);
+
+    var result = try runCommandStringWithEnvironment(
+        std.testing.allocator,
+        std.testing.io,
+        "hello rush",
+        .{ .io = std.testing.io, .features = .posix(), .arg_zero = "rush" },
+        &env,
+        &.{},
+        .{},
+    );
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(shell.ExitStatus, 127), result.status);
+    try std.testing.expectEqualStrings("", result.stdout);
+}
+
 test "command string invocation preserves trailing EOF backslash literal" {
     var result = try runCommandStringWithEnvironment(
         std.testing.allocator,

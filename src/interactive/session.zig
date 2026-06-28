@@ -1,7 +1,6 @@
 //! Interactive shell session orchestration.
 
 const std = @import("std");
-const build_config = @import("build_config");
 
 const compat = @import("../shell/compat.zig");
 const completion = @import("../completion.zig");
@@ -16,6 +15,7 @@ const runner = @import("../runner.zig");
 const runtime = @import("../runtime.zig");
 const shell = @import("../shell.zig");
 
+const assets = @import("../assets.zig");
 const interactive_input = @import("input.zig");
 const prompt_mod = @import("prompt.zig");
 const signals = @import("signals.zig");
@@ -90,7 +90,10 @@ pub const EditorState = struct {
 };
 
 fn interactiveExtensionHandlers(context: *Context) runner.ExtensionHandlers {
-    return .{ .context = context, .lookup = interactiveExtensionLookup };
+    return .{
+        .context = context,
+        .lookup = interactiveExtensionLookup,
+    };
 }
 
 fn interactiveExtensionLookup(context: ?*anyopaque, name: []const u8) ?extension_api.HandlerSpec {
@@ -549,16 +552,14 @@ fn loadInteractiveCompletionAssets(
     const root = try completion.rootForCompletion(allocator, source, cursor) orelse return;
     defer allocator.free(root);
 
-    try loadInteractiveCompletionAssetsFromDir(
+    var dirs = try assets.searchDirs(
         allocator,
-        io,
-        interactive_context,
-        build_config.datadir ++ "/rush/completions",
-        root,
+        interactive_context.semantic_state.*,
+        .completions,
+        .data_first,
     );
-    const user_dir = try userCompletionDirectory(allocator, interactive_context.semantic_state.*);
-    defer if (user_dir) |path| allocator.free(path);
-    if (user_dir) |path| try loadInteractiveCompletionAssetsFromDir(allocator, io, interactive_context, path, root);
+    defer dirs.deinit();
+    for (dirs.paths) |path| try loadInteractiveCompletionAssetsFromDir(allocator, io, interactive_context, path, root);
 }
 
 fn loadInteractiveCompletionAssetsFromDir(
@@ -612,21 +613,6 @@ fn sourceInteractiveCompletionCompanion(
     );
     defer result.deinit();
     try interactive_context.editor_state.completions.markLoadedCompanion(path);
-}
-
-fn userCompletionDirectory(allocator: std.mem.Allocator, shell_state: shell.ShellState) !?[]const u8 {
-    shell_state.validate();
-    if (shell_state.getVariable("XDG_CONFIG_HOME")) |xdg_config_home| {
-        if (xdg_config_home.value.len != 0) {
-            return try std.fs.path.join(allocator, &.{ xdg_config_home.value, "rush", "completions" });
-        }
-    }
-    if (shell_state.getVariable("HOME")) |home| {
-        if (home.value.len != 0) {
-            return try std.fs.path.join(allocator, &.{ home.value, ".config", "rush", "completions" });
-        }
-    }
-    return null;
 }
 
 test "interactive completion lazily loads user manifest and companion script" {
@@ -2439,17 +2425,59 @@ test "prompt async refresh dispatches lifecycle events" {
     );
 }
 
-test "repl executes default config shell function wrappers" {
-    var result = try runReplInput(std.testing.allocator, std.testing.io,
-        \\PATH=/bin:/usr/bin:/usr/local/bin:/opt/homebrew/bin
-        \\ls >/dev/null
-        \\exit
+test "interactive command string autoloads shipped shell function wrappers" {
+    var env = std.process.Environ.Map.init(std.testing.allocator);
+    defer env.deinit();
+    try env.put("XDG_DATA_HOME", "share");
+    try env.put("PATH", "/bin:/usr/bin:/usr/local/bin:/opt/homebrew/bin");
+
+    var result = try runCommandStringWithEnvironment(
+        std.testing.allocator,
+        std.testing.io,
+        "ls >/dev/null; printf x | grep x >/dev/null; diff /dev/null /dev/null; type ls grep diff",
+        .{ .io = std.testing.io, .allow_external = true, .features = .bash(), .arg_zero = "rush" },
+        &env,
+        &.{},
+        .{ .arg_zero = "rush" },
+        .{},
     );
     defer result.deinit();
 
     try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings(
+        \\ls is a shell function
+        \\grep is a shell function
+        \\diff is a shell function
+        \\
+    , result.stdout);
     try std.testing.expectEqualStrings("", result.stderr);
-    try std.testing.expect(std.mem.indexOf(u8, result.stdout, "semantic interactive executor") == null);
+}
+
+test "interactive command string autoloads shipped project environment hooks" {
+    var env = std.process.Environ.Map.init(std.testing.allocator);
+    defer env.deinit();
+    try env.put("XDG_DATA_HOME", "share");
+    try env.put("PATH", "");
+
+    var result = try runCommandStringWithEnvironment(
+        std.testing.allocator,
+        std.testing.io,
+        "rush_direnv_hook; rush_mise_hook; type rush_direnv_hook rush_mise_hook",
+        .{ .io = std.testing.io, .allow_external = true, .features = .bash(), .arg_zero = "rush" },
+        &env,
+        &.{},
+        .{ .arg_zero = "rush" },
+        .{},
+    );
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings(
+        \\rush_direnv_hook is a shell function
+        \\rush_mise_hook is a shell function
+        \\
+    , result.stdout);
+    try std.testing.expectEqualStrings("", result.stderr);
 }
 
 test "interactive startup enables monitor by default for tty stdin" {
@@ -2538,6 +2566,42 @@ test "interactive command string invocation sources user alias config" {
 
     try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
     try std.testing.expectEqualStrings("ll='echo listed'\nlisted\n", result.stdout);
+    try std.testing.expectEqualStrings("", result.stderr);
+}
+
+test "interactive command string autoloads user functions" {
+    const root = "rush-test-function-autoload";
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, root ++ "/rush/functions");
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{
+        .sub_path = root ++ "/rush/functions/hello.rush",
+        .data =
+        \\printf 'autoload noise\n'
+        \\hello() {
+        \\  printf 'hello %s\n' "$1"
+        \\}
+        \\
+        ,
+    });
+
+    var env = std.process.Environ.Map.init(std.testing.allocator);
+    defer env.deinit();
+    try env.put("XDG_CONFIG_HOME", root);
+
+    var result = try runCommandStringWithEnvironment(
+        std.testing.allocator,
+        std.testing.io,
+        "hello rush",
+        .{ .io = std.testing.io, .allow_external = true, .features = .bash(), .arg_zero = "rush" },
+        &env,
+        &.{},
+        .{ .arg_zero = "rush" },
+        .{},
+    );
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("hello rush\n", result.stdout);
     try std.testing.expectEqualStrings("", result.stderr);
 }
 

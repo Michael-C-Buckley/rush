@@ -12,13 +12,7 @@ const compile_check_targets = [_][]const u8{
 };
 
 const rush_stack_size = 128 * 1024 * 1024;
-const default_config_paths = [_][]const u8{
-    "share/rush/defaults/session.rush",
-    "share/rush/defaults/prompt.rush",
-    "share/rush/defaults/project_env.rush",
-    "share/rush/defaults/commands.rush",
-    "share/rush/defaults/style.rush",
-};
+const default_config_path = "share/rush/config.rush";
 
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
@@ -100,13 +94,14 @@ pub fn build(b: *std.Build) void {
         .blank_extensions = &.{},
     });
     b.installDirectory(.{
-        .source_dir = b.path("share/rush/defaults"),
-        .install_dir = .{ .custom = "share/rush/defaults" },
+        .source_dir = b.path("share/rush/functions"),
+        .install_dir = .{ .custom = "share/rush/functions" },
         .install_subdir = "",
         .include_extensions = &.{".rush"},
         .exclude_extensions = &.{},
         .blank_extensions = &.{},
     });
+    b.installFile(default_config_path, default_config_path);
 
     const run_cmd = b.addRunArtifact(exe);
     run_cmd.step.dependOn(b.getInstallStep());
@@ -444,27 +439,7 @@ fn createRushRootModule(
 }
 
 fn generatedDefaultConfig(b: *std.Build) std.Build.LazyPath {
-    var contents: std.ArrayList(u8) = .empty;
-    defer contents.deinit(b.allocator);
-
-    for (default_config_paths) |path| {
-        if (contents.items.len != 0) contents.append(b.allocator, '\n') catch @panic("OOM");
-        const header = std.fmt.allocPrint(b.allocator, "# ---- {s} ----\n", .{path}) catch @panic("OOM");
-        defer b.allocator.free(header);
-        contents.appendSlice(b.allocator, header) catch @panic("OOM");
-        const file_contents = std.Io.Dir.cwd().readFileAlloc(
-            b.graph.io,
-            path,
-            b.allocator,
-            .limited(1024 * 1024),
-        ) catch |err| std.debug.panic("cannot read {s}: {s}", .{ path, @errorName(err) });
-        defer b.allocator.free(file_contents);
-        contents.appendSlice(b.allocator, file_contents) catch @panic("OOM");
-        if (!std.mem.endsWith(u8, file_contents, "\n")) contents.append(b.allocator, '\n') catch @panic("OOM");
-    }
-
-    const write_files = b.addWriteFiles();
-    return write_files.add("config.rush", contents.items);
+    return b.path(default_config_path);
 }
 
 const FuzzTargetOptions = struct {

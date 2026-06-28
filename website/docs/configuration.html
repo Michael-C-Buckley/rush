@@ -36,7 +36,9 @@
 
   <p>Point <span class="var">$ENV</span> at a trusted file. Rush accepts relative expanded <span class="var">$ENV</span> paths against the current directory and is not designed for setuid/setgid installation.</p>
 
-  <p>The embedded defaults live in <code>share/rush/defaults</code> and define the <a href="#prompt">default prompt</a>, opt-in <a href="#project-environments">project environment hooks</a>, colorized <code>ls</code>/<code>grep</code>/<code>diff</code> wrappers, and <code>ll</code>/<code>la</code> <a href="#abbreviations">abbreviations</a>. Redefine, <code>unset -f</code>, or <code>abbr --erase</code> them in a later file to opt out.</p>
+  <p>The embedded defaults come from <code>share/rush/config.rush</code> and define the <a href="#prompt">default prompt</a>, style defaults, and <code>ll</code>/<code>la</code> <a href="#abbreviations">abbreviations</a>. Redefine or <code>abbr --erase</code> them in a later file to opt out.</p>
+
+  <p>Rush-mode shells autoload functions from <code>rush/functions</code> search directories when a matching command name is used. User configuration functions are searched before system and data-directory functions. For example, <code>$XDG_CONFIG_HOME/rush/functions/hello.rush</code> can define <code>hello()</code> without being sourced during startup. Shipped autoload functions in <code>share/rush/functions</code> include colorized <code>ls</code>/<code>grep</code>/<code>diff</code> helpers and opt-in <a href="#project-environments">project environment hooks</a>. POSIX mode does not autoload Rush functions.</p>
 
   <h2 id="abbreviations"><a href="#abbreviations">Abbreviations</a></h2>
 
@@ -196,7 +198,7 @@ index:236
   <pre><span class="cmd">event</span> add directory.change direnv rush_direnv_hook
 <span class="cmd">event</span> add directory.change mise rush_mise_hook</pre>
 
-  <p><code>rush_direnv_hook</code> runs <code>direnv export json</code>. <code>rush_mise_hook</code> runs <code>mise hook-env -s bash --quiet</code> and accepts only environment mutations. Neither helper is registered by default.</p>
+  <p><code>rush_direnv_hook</code> and <code>rush_mise_hook</code> are shipped autoload functions. <code>rush_direnv_hook</code> runs <code>direnv export json</code>. <code>rush_mise_hook</code> runs <code>mise hook-env -s bash --quiet</code> and accepts only environment mutations. Neither helper is registered by default.</p>
 
   <h2 id="async-prompt"><a href="#async-prompt">Async prompt updates</a></h2>
 

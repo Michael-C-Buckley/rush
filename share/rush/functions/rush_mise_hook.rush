@@ -1,0 +1,11 @@
+# Import mise's shell environment changes after directory changes.
+rush_mise_hook() {
+  local rush_mise_output
+  if ! command -v mise >/dev/null 2>&1; then
+    return 0
+  fi
+  rush_mise_output="$(mise hook-env -s bash --quiet)" || return $?
+  rush_env import-sh <<__rush_mise_env__
+$rush_mise_output
+__rush_mise_env__
+}

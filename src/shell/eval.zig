@@ -66,6 +66,39 @@ pub const CommandHistoryEntry = struct {
     }
 };
 
+pub const FunctionAutoloadSource = struct {
+    path: []const u8,
+    source: []const u8,
+
+    pub fn validate(self: FunctionAutoloadSource) void {
+        std.debug.assert(self.path.len != 0);
+    }
+};
+
+pub const FunctionAutoload = struct {
+    context: ?*anyopaque = null,
+    lookup: ?*const fn (
+        ?*anyopaque,
+        std.mem.Allocator,
+        std.Io,
+        state.ShellState,
+        []const u8,
+    ) anyerror!?FunctionAutoloadSource = null,
+
+    fn find(
+        self: FunctionAutoload,
+        allocator: std.mem.Allocator,
+        io: std.Io,
+        shell_state: state.ShellState,
+        name: []const u8,
+    ) !?FunctionAutoloadSource {
+        const lookup_fn = self.lookup orelse return null;
+        const source = try lookup_fn(self.context, allocator, io, shell_state, name);
+        if (source) |autoload_source| autoload_source.validate();
+        return source;
+    }
+};
+
 const ScopedExecRedirection = struct {
     applied: ?redirection_plan.FdTransaction = null,
     redirections: redirection_plan.RedirectionPlan,
@@ -101,6 +134,8 @@ pub const Evaluator = struct {
     extension_handler_lookup: ?*const fn (?*anyopaque, []const u8) ?extension_api.HandlerSpec = null,
     alias_state: ?*state.ShellState = null,
     history_entries: []const CommandHistoryEntry = &.{},
+    function_autoload: FunctionAutoload = .{},
+    autoloading_function: ?[]const u8 = null,
     event_dispatch_depth: u32 = 0,
     directory_change_event_observed: bool = false,
 
@@ -2072,10 +2107,14 @@ const SourceLowerer = struct {
             if (self.localFunction(name)) |definition| {
                 try functions.append(self.allocator, definition);
             } else if (isFunctionLookupName(name)) {
-                if (self.shell_state.getFunction(name)) |definition| {
+                const definition = self.shell_state.getFunction(name) orelse blk: {
+                    try self.autoloadFunction(name);
+                    break :blk self.shell_state.getFunction(name);
+                };
+                if (definition) |function_definition| {
                     try functions.append(
                         self.allocator,
-                        try command_plan.cloneFunctionDefinition(self.allocator, definition),
+                        try command_plan.cloneFunctionDefinition(self.allocator, function_definition),
                     );
                 }
             }
@@ -2095,6 +2134,58 @@ const SourceLowerer = struct {
             .functions = try functions.toOwnedSlice(self.allocator),
             .externals = try externals.toOwnedSlice(self.allocator),
         };
+    }
+
+    fn autoloadFunction(self: *SourceLowerer, name: []const u8) !void {
+        if (self.specialBuiltin(name) != null) return;
+        if (self.owner.evaluator.autoloading_function) |loading| {
+            if (std.mem.eql(u8, loading, name)) return;
+        }
+        const io = self.owner.evaluator.io orelse return;
+        const autoload_source = try self.owner.evaluator.function_autoload.find(
+            self.allocator,
+            io,
+            self.shell_state.*,
+            name,
+        ) orelse return;
+        defer self.allocator.free(autoload_source.path);
+        defer self.allocator.free(autoload_source.source);
+        autoload_source.validate();
+        const previous_autoloading_function = self.owner.evaluator.autoloading_function;
+        self.owner.evaluator.autoloading_function = name;
+        defer self.owner.evaluator.autoloading_function = previous_autoloading_function;
+        try self.evaluateAutoloadDiscardingOutput(autoload_source.source);
+    }
+
+    fn evaluateAutoloadDiscardingOutput(self: *SourceLowerer, source: []const u8) !void {
+        var input = EvaluationInput.empty();
+        const target = self.eval_context.target;
+        var frame = execution_frame.ExecutionFrame.init(.{
+            .kind = if (target == .current_shell) .current_shell_command else .subshell,
+            .eval_target = target,
+            .stdout = .discard,
+            .stderr = .discard,
+            .mutation_policy = if (target == .current_shell) .commit_to_parent_shell else .commit_within_subshell,
+        });
+        defer frame.spec.fd_table.deinit(self.owner.evaluator.allocator);
+        var buffers = EvaluationBuffers.init(self.owner.evaluator.allocator, &input, &frame);
+        defer buffers.deinit();
+        _ = try evaluateStatementListSourceAtLine(
+            self.owner.evaluator,
+            self.shell_state,
+            self.eval_context,
+            source,
+            0,
+            &buffers,
+        );
+    }
+
+    fn specialBuiltin(self: SourceLowerer, name: []const u8) ?builtin.Builtin {
+        for (self.owner.evaluator.builtin_definitions) |definition| {
+            definition.validate();
+            if (definition.kind == .special and std.mem.eql(u8, definition.name, name)) return definition;
+        }
+        return null;
     }
 
     fn rememberLocalFunction(self: *SourceLowerer, definition: command_plan.FunctionDefinition) !void {

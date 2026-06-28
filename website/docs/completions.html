@@ -21,7 +21,7 @@
     <dt><code>name.json</code></dt><dd>Command tree, options, arguments, and provider references.</dd>
     <dt><code>name.rush</code></dt><dd>Optional provider functions used by <code>{ "function": "..." }</code> manifest providers.</dd>
   </dl>
-  <p>Rush loads files lazily for the command being completed. System completions load before user completions. Put user completions in <code>$XDG_CONFIG_HOME/rush/completions</code>, or <code>~/.config/rush/completions</code> when <code>XDG_CONFIG_HOME</code> is unset.</p>
+  <p>Rush loads files lazily for the command being completed. Completion search directories include Rush data directories and user configuration directories; system/data completions load before user configuration completions. Put user completions in <code>$XDG_CONFIG_HOME/rush/completions</code>, or <code>~/.config/rush/completions</code> when <code>XDG_CONFIG_HOME</code> is unset.</p>
   <p>Set <code>priority</code> on commands, options, or static enum values to rank candidates. Use signed 8-bit values: <code>0</code> is default, positive values promote, and negative values derank fallback candidates.</p>
 
   <h2 id="minimal-static-completion"><a href="#minimal-static-completion">Minimal static completion</a></h2>

@@ -1,0 +1,6 @@
+# Match colors for grep, if supported.
+if echo x | command grep --color=auto x >/dev/null 2>&1; then
+  grep() {
+    command grep --color=auto "$@"
+  }
+fi

@@ -83,10 +83,13 @@ $XDG_CONFIG_HOME/rush/config.rush
 ```
 
 If `XDG_CONFIG_HOME` is unset, user files fall back to
-`$HOME/.config/rush/`. The embedded defaults live in
-[`share/rush/defaults`](share/rush/defaults) and define prompt defaults,
-colorized `ls`/`grep`/`diff` helpers, and `ll`/`la` abbreviations that later
-config files can override or erase.
+`$HOME/.config/rush/`. The embedded defaults come from
+[`share/rush/config.rush`](share/rush/config.rush) and define prompt defaults,
+style defaults, and `ll`/`la` abbreviations that later config files can
+override or erase. Rush-mode shells also autoload functions from
+`rush/functions` search directories when a matching function name is used;
+shipped defaults include colorized `ls`/`grep`/`diff` helpers and opt-in
+project-environment hooks there.
 
 More configuration and prompt examples are in
 [`website/docs/configuration.html`](website/docs/configuration.html) and

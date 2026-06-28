@@ -78,7 +78,7 @@ timer.tick
 
   <h2 id="recipes"><a href="#recipes">RECIPES</a></h2>
 
-  <p>Enable bundled project-environment helpers in a later config file:</p>
+  <p>Enable bundled project-environment helpers in a later config file. These helper functions are autoloaded from <code>share/rush/functions</code> when the hook first runs:</p>
 
   <pre><span class="cmd">event</span> add directory.change direnv rush_direnv_hook
 <span class="cmd">event</span> add directory.change mise rush_mise_hook</pre>

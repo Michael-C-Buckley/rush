@@ -1,0 +1,11 @@
+# Import direnv's exported environment changes after directory changes.
+rush_direnv_hook() {
+  local rush_direnv_output
+  if ! command -v direnv >/dev/null 2>&1; then
+    return 0
+  fi
+  rush_direnv_output="$(direnv export json)" || return $?
+  rush_env import-json <<__rush_direnv_json__
+$rush_direnv_output
+__rush_direnv_json__
+}
