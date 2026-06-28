@@ -29,6 +29,8 @@
 
   <p><code>unset</code> is a POSIX special builtin provided by Rush. Unset variables or functions.</p>
 
+  <p>In Rush mode, <code>unset -f name</code> also suppresses <a href="../configuration.html#autoloaded-functions">autoloading</a> of <code>name</code> for the current shell. Defining <code>name()</code> again clears that suppression.</p>
+
   <p>This page summarizes the builtin in Rush documentation. POSIX is the normative reference for detailed portable behavior.</p>
 
   <h2 id="exit-status"><a href="#exit-status">EXIT STATUS</a></h2>

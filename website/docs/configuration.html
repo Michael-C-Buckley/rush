@@ -38,7 +38,29 @@
 
   <p>The embedded defaults come from <code>share/rush/config.rush</code> and define the <a href="#prompt">default prompt</a>, style defaults, and <code>ll</code>/<code>la</code> <a href="#abbreviations">abbreviations</a>. Redefine or <code>abbr --erase</code> them in a later file to opt out.</p>
 
-  <p>Rush-mode shells autoload functions from <code>rush/functions</code> search directories when a matching command name is used. User configuration functions are searched before system and data-directory functions. For example, <code>$XDG_CONFIG_HOME/rush/functions/hello.rush</code> can define <code>hello()</code> without being sourced during startup. Shipped autoload functions in <code>share/rush/functions</code> include colorized <code>ls</code>/<code>grep</code>/<code>diff</code> helpers and opt-in <a href="#project-environments">project environment hooks</a>. POSIX mode does not autoload Rush functions.</p>
+  <h2 id="autoloaded-functions"><a href="#autoloaded-functions">Autoloaded functions</a></h2>
+
+  <p>Rush-mode shells load functions lazily from <code>rush/functions</code> search directories. A file named <code>foo.rush</code> is the autoload source for a function named <code>foo</code>. Rush sources that file the first time <code>foo</code> is used as a command name, instead of sourcing every function during startup.</p>
+
+  <pre><span class="var">$XDG_CONFIG_HOME</span>/rush/functions/foo.rush
+
+<span class="cmd">foo</span>() {
+  <span class="cmd">printf</span> <span class="str">'hello from foo\n'</span>
+}</pre>
+
+  <p>If <span class="var">$XDG_CONFIG_HOME</span> is unset, user function files fall back to <span class="var">$HOME</span><code>/.config/rush/functions</code>.</p>
+
+  <p>Function autoload lookup searches configuration directories before data directories, in this order:</p>
+
+  <pre><span class="var">$XDG_CONFIG_HOME</span>/rush/functions
+<span class="var">$sysconfdir</span>/rush/functions
+<span class="var">$XDG_DATA_HOME</span>/rush/functions
+each <span class="var">$XDG_DATA_DIRS</span> entry + /rush/functions
+<span class="var">$datadir</span>/rush/functions</pre>
+
+  <p>If a name exists in more than one directory, the first matching file wins. Shipped autoload functions in <code>share/rush/functions</code> include colorized <code>ls</code>/<code>grep</code>/<code>diff</code> helpers and opt-in <a href="#project-environments">project environment hooks</a>.</p>
+
+  <p>Command and function-name completion include autoloadable functions without sourcing them. <code>unset -f foo</code> removes a loaded <code>foo</code> function and suppresses future autoload of <code>foo</code> in the current shell. Defining <code>foo()</code> again clears that suppression. POSIX mode does not autoload Rush functions.</p>
 
   <h2 id="abbreviations"><a href="#abbreviations">Abbreviations</a></h2>
 
