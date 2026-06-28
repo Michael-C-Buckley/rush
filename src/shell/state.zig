@@ -1232,6 +1232,7 @@ pub const ShellState = struct {
         self.background_jobs.items[index].deinit(self.allocator);
         _ = self.background_jobs.orderedRemove(index);
         self.repairCurrentJobsAfterRemoval(id);
+        if (self.background_jobs.items.len == 0) self.next_job_id = 1;
         self.validate();
     }
 
@@ -1683,4 +1684,5 @@ test "ShellState owns interactive terminal interrupt and stopped-job policies" {
     shell_state.removeBackgroundJobById(1);
     try std.testing.expect(!shell_state.shouldWarnBeforeExitWithStoppedJobs());
     try std.testing.expect(!shell_state.warned_stopped_jobs_on_exit);
+    try std.testing.expectEqual(@as(usize, 1), shell_state.next_job_id);
 }

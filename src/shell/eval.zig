@@ -14754,6 +14754,7 @@ fn evaluateBuiltin(
     ));
     if (std.mem.eql(u8, definition.name, "kill")) return normalEvaluation(try evaluateKill(
         evaluator,
+        shell_state,
         plan.argv,
         buffers,
     ));
@@ -16154,9 +16155,11 @@ fn assignOptind(state_delta: *delta.StateDelta, optind: usize) !void {
 
 fn evaluateKill(
     evaluator: *Evaluator,
+    shell_state: state.ShellState,
     argv: []const []const u8,
     buffers: *EvaluationBuffers,
 ) !outcome.ExitStatus {
+    shell_state.validate();
     std.debug.assert(argv.len != 0);
     std.debug.assert(std.mem.eql(u8, argv[0], "kill"));
     if (argv.len == 1) return builtinUsageError(buffers, "kill", "missing operand");
@@ -16181,7 +16184,7 @@ fn evaluateKill(
     const signal_port = evaluator.signal_port orelse return error.Unimplemented;
     var status: outcome.ExitStatus = 0;
     for (argv[index..]) |operand| {
-        const process = parseKillProcess(operand) orelse {
+        const process = resolveKillProcess(shell_state, operand) orelse {
             const message = try std.fmt.allocPrint(buffers.allocator, "{s}: invalid process id", .{operand});
             defer buffers.allocator.free(message);
             try buffers.addBuiltinDiagnostic("kill", message);
@@ -16201,6 +16204,16 @@ fn evaluateKill(
         };
     }
     return status;
+}
+
+fn resolveKillProcess(shell_state: state.ShellState, operand: []const u8) ?runtime.process.ProcessId {
+    shell_state.validate();
+    if (std.mem.startsWith(u8, operand, "%")) {
+        if (!shell_state.options.enabled(.monitor)) return null;
+        const job = findBackgroundJobBySpec(shell_state, operand) orelse return null;
+        return if (job.process_group) |process_group| -process_group else job.pid;
+    }
+    return parseKillProcess(operand);
 }
 
 fn evaluateKillList(args: []const []const u8, buffers: *EvaluationBuffers) !outcome.ExitStatus {
@@ -17660,19 +17673,24 @@ fn evaluateWait(
 
     var status: outcome.ExitStatus = 0;
     if (argv.len == 1) {
+        var interrupted_status: ?outcome.ExitStatus = null;
         var index: usize = 0;
         while (index < wait_state.background_jobs.items.len) {
             const job = &wait_state.background_jobs.items[index];
             status = try waitBackgroundJobUntilTerminated(evaluator, shell_state, eval_context, state_delta, job);
-            if (status > 128) break;
+            const interrupted = status > 128 and job.state != .done;
             if (job.state == .done) {
                 wait_state.removeBackgroundJobById(job.id);
             } else {
                 index += 1;
             }
+            if (interrupted) {
+                interrupted_status = status;
+                break;
+            }
         }
         try appendJobTableDiff(shell_state, wait_state, state_delta);
-        return if (status > 128) status else 0;
+        return interrupted_status orelse 0;
     }
 
     wait_operands: for (argv[1..]) |operand| {
@@ -17680,8 +17698,8 @@ fn evaluateWait(
             .job_id => |job_id| {
                 const job = wait_state.findBackgroundJobPtrById(job_id) orelse unreachable;
                 status = try waitBackgroundJobUntilTerminated(evaluator, shell_state, eval_context, state_delta, job);
-                if (status > 128) break :wait_operands;
                 if (job.state == .done) wait_state.removeBackgroundJobById(job_id);
+                if (status > 128) break :wait_operands;
             },
             .unknown => status = 127,
             .invalid => status = try builtinStatusError(buffers, 1, "wait", "not a pid or valid job spec"),
@@ -19796,6 +19814,18 @@ test "semantic evaluator evaluates kill through signal runtime" {
     defer list_result.deinit();
     try std.testing.expectEqual(@as(outcome.ExitStatus, 0), list_result.status);
     try std.testing.expectEqualStrings("TERM\n", list_result.stdout.items);
+
+    shell_state.options.set(.monitor, true);
+    try appendSemanticTestJob(&shell_state, 1, 8001, 8001, "sleep 1", .running);
+    const job_plan = command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{
+        "kill",
+        "%1",
+    } } });
+    var job_result = try evaluatePlan(&evaluator, &shell_state, eval_context, job_plan);
+    defer job_result.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 0), job_result.status);
+    try std.testing.expectEqual(@as(i32, -8001), fake_signal.sent_processes[4]);
+    try std.testing.expectEqual(signalNumber(.TERM), fake_signal.sent_signals[4]);
 
     const invalid_plan = command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{
         "kill",
