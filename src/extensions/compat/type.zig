@@ -5,6 +5,7 @@ const std = @import("std");
 const api = @import("../api.zig");
 const shell_builtin = @import("../../shell/builtin.zig");
 const outcome = @import("../../shell/outcome.zig");
+const parser = @import("../../shell/parser.zig");
 
 pub fn handlerFor(name: []const u8) ?api.HandlerSpec {
     if (!std.mem.eql(u8, name, "type")) return null;
@@ -83,6 +84,12 @@ fn describeCommand(invocation: *api.Invocation, options: TypeOptions, name: []co
     }
 
     if (shell_lookup_enabled) {
+        if (!options.path_only and parser.isAliasReservedWord(name)) {
+            try printReservedWord(invocation, options, name);
+            if (!options.all) return true;
+            found = true;
+        }
+
         if (lookupBuiltin(invocation.builtins, name, .special) != null) {
             try printBuiltin(invocation, options, name, .special);
             if (!options.all) return true;
@@ -120,6 +127,11 @@ fn describeCommand(invocation: *api.Invocation, options: TypeOptions, name: []co
     }
 
     return found;
+}
+
+fn printReservedWord(invocation: *api.Invocation, options: TypeOptions, name: []const u8) !void {
+    if (options.type_only) return invocation.stdout.appendSlice(invocation.allocator, "keyword\n");
+    try invocation.stdout.print(invocation.allocator, "{s} is a shell keyword\n", .{name});
 }
 
 fn printAlias(invocation: *api.Invocation, options: TypeOptions, name: []const u8, value: []const u8) !void {

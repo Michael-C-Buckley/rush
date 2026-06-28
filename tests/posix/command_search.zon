@@ -370,6 +370,7 @@
             \\case $lookup in *while*keyword*|*while*reserved*) printf '<%s>\n' verbose ;;
             \\    *) printf '<%s>\n' bad ;;
             \\esac
+            \\type do >/dev/null
             ,
             .stdout =
             \\<terse-if>
