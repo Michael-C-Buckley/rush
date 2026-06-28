@@ -15354,20 +15354,36 @@ fn evaluateSourcedTextChunks(
                 break;
             }
             if (!parsed.incomplete or end >= source.len) {
-                return evaluateStatementListSourceAtLine(
-                    evaluator,
-                    shell_state,
-                    eval_context,
-                    chunk,
-                    sourceLineIndex(source, start),
-                    buffers,
-                );
+                const failure = try sourcedTextParserFailure(evaluator.allocator, shell_state.*, parsed);
+                defer evaluator.allocator.free(failure.message);
+                return simpleResultFromTrapActionFailure(evaluator, shell_state.*, eval_context, failure, buffers);
             }
             end = sourcedTextLineEnd(source, end);
         }
         start = skipSourcedTextChunkSeparators(source, end);
     }
     return result;
+}
+
+fn sourcedTextParserFailure(
+    allocator: std.mem.Allocator,
+    shell_state: state.ShellState,
+    parsed: parser.ParseResult,
+) !TrapActionFailure {
+    shell_state.validate();
+    std.debug.assert(parsed.diagnostics.len != 0 or parsed.incomplete);
+    const status: outcome.ExitStatus = if (shell_state.last_status == 0) 2 else shell_state.last_status;
+    if (parsed.diagnostics.len != 0) {
+        const message = try std.fmt.allocPrint(allocator, "parse error: {s}", .{parsed.diagnostics[0].message});
+        const trap_failure: TrapActionFailure = .{ .kind = .parse_error, .status = status, .message = message };
+        trap_failure.validate();
+        return trap_failure;
+    }
+
+    const message = try allocator.dupe(u8, "parse error: incomplete source");
+    const trap_failure: TrapActionFailure = .{ .kind = .parse_error, .status = status, .message = message };
+    trap_failure.validate();
+    return trap_failure;
 }
 
 fn sourcedTextChunkNeedsMoreHereDoc(
@@ -24100,6 +24116,19 @@ test "semantic evaluator treats eval parse errors as special builtin shell error
     try std.testing.expectEqual(@as(outcome.ExitStatus, 2), command_result.status);
     try std.testing.expectEqual(outcome.ControlFlow.normal, command_result.control_flow);
     command_result.discardDelta(.current_shell);
+
+    const incomplete_plan = command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{
+        "eval",
+        "if",
+    } } });
+    var incomplete_result = try evaluatePlan(&evaluator, &shell_state, eval_context, incomplete_plan);
+    defer incomplete_result.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 2), incomplete_result.status);
+    try std.testing.expectEqual(
+        outcome.ControlFlow{ .fatal = 2 }, // ziglint-ignore: Z010 (expectEqual peer)
+        incomplete_result.control_flow,
+    );
+    incomplete_result.discardDelta(.current_shell);
 }
 
 test "semantic evaluator treats nonzero eval command status as a status not a utility error" {

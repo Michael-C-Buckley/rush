@@ -54,6 +54,16 @@
             .status = 0,
         },
         .{
+            .name = "eval parse error exits a non-interactive shell",
+            .script =
+            \\eval "if"
+            \\printf 'after\n'
+            ,
+            .stdout = "",
+            .stderr_match = .nonempty,
+            .status = 2,
+        },
+        .{
             .name = "eval sees and persists assignment prefix variables",
             .script =
             \\A=outer
