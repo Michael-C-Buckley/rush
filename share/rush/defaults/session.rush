@@ -1,0 +1,10 @@
+# Default interactive session settings embedded in the rush binary at build time.
+# These run before $ENV, profiles, and system/user config, so later files can
+# override them.
+
+# Prompt defaults; assigned only when unset so inherited values win.
+: "${PS1=● }"
+: "${PS2=> }"
+
+# Report background job completion promptly while sitting at the prompt.
+set -o notify

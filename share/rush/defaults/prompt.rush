@@ -1,13 +1,4 @@
-# Default configuration embedded in the rush binary at build time.
-# It runs first at interactive startup, so $ENV, profiles, and system
-# ($sysconfdir/rush) and user (~/.config/rush) config can override it.
-
-# Prompt defaults; assigned only when unset so inherited values win.
-: "${PS1=● }"
-: "${PS2=> }"
-
-# Report background job completion promptly while sitting at the prompt.
-set -o notify
+# Default prompt: cwd, async Git info, and status/activity marker.
 
 # Return compact git branch/status/upstream text for the default prompt.
 rush_prompt_git() {
@@ -111,7 +102,6 @@ rush_prompt_activity_marker() {
   esac
 }
 
-# Render the default prompt: cwd, async git info, and status/activity marker.
 rush_prompt() {
   rush_prompt_status=$?
   prompt segment --fg blue "$(prompt_pwd)"
@@ -151,128 +141,5 @@ rush_prompt() {
   else
     rush_prompt_marker=' ● '
     prompt segment --fg red "$rush_prompt_marker"
-  fi
-}
-
-# Opt-in project environment hooks. Register these from a later config file,
-# for example:
-#   event add directory.change direnv rush_direnv_hook
-#   event add directory.change mise rush_mise_hook
-# Import direnv's exported environment changes after directory changes.
-rush_direnv_hook() {
-  local rush_direnv_output
-  if ! command -v direnv >/dev/null 2>&1; then
-    return 0
-  fi
-  rush_direnv_output="$(direnv export json)" || return $?
-  rush_env import-json <<__rush_direnv_json__
-$rush_direnv_output
-__rush_direnv_json__
-}
-
-# Import mise's shell environment changes after directory changes.
-rush_mise_hook() {
-  local rush_mise_output
-  if ! command -v mise >/dev/null 2>&1; then
-    return 0
-  fi
-  rush_mise_output="$(mise hook-env -s bash --quiet)" || return $?
-  rush_env import-sh <<__rush_mise_env__
-$rush_mise_output
-__rush_mise_env__
-}
-
-# Colorized ls by default, like fish. The flag is probed once per
-# session and cached; --color=auto and -G only emit color when stdout
-# is a terminal. command bypasses this function, so it cannot recurse.
-ls() {
-  if test -z "$rush_ls_color_opt"; then
-    if command ls --color=auto / >/dev/null 2>&1; then
-      rush_ls_color_opt='--color=auto'
-    elif command ls -G / >/dev/null 2>&1; then
-      rush_ls_color_opt='-G'
-    else
-      rush_ls_color_opt='none'
-    fi
-  fi
-  if test "$rush_ls_color_opt" = none; then
-    command ls "$@"
-  else
-    command ls "$rush_ls_color_opt" "$@"
-  fi
-}
-
-# Editor abbreviations: typing ll or la expands to the real command so
-# the executed line and history show the actual flags.
-abbr ll 'ls -lh'
-abbr la 'ls -lAh'
-
-# Default editor theme. If terminal color reports are unavailable, leave
-# Rush's built-in base-theme styles in place. Once the full 0-7 palette is
-# reported, derive softer colors from the user's actual terminal theme.
-rush_style() {
-  if test -z "${rush_color_foreground-}" || \
-     test -z "${rush_color_background-}" || \
-     test -z "${rush_color_black-}" || \
-     test -z "${rush_color_red-}" || \
-     test -z "${rush_color_green-}" || \
-     test -z "${rush_color_yellow-}" || \
-     test -z "${rush_color_blue-}" || \
-     test -z "${rush_color_magenta-}" || \
-     test -z "${rush_color_cyan-}" || \
-     test -z "${rush_color_white-}"; then
-    return 0
-  fi
-
-  rush_style_completion_directory="fg=$(color blend "$rush_color_blue" "$rush_color_foreground" 12)"
-  rush_style_completion_option="fg=$(color blend "$rush_color_green" "$rush_color_foreground" 12)"
-  rush_style_completion_variable="fg=$(color blend "$rush_color_magenta" "$rush_color_foreground" 10)"
-  rush_style_completion_function="fg=$(color blend "$rush_color_cyan" "$rush_color_foreground" 10)"
-  rush_style_completion_file="fg=$rush_color_foreground"
-  rush_style_completion_description="fg=$(color blend "$rush_color_foreground" "$rush_color_background" 45)"
-  rush_style_completion_summary="$rush_style_completion_description"
-  rush_style_history_match="fg=$(color blend "$rush_color_yellow" "$rush_color_foreground" 12),bold"
-  rush_style_autosuggestion="fg=$(color blend "$rush_color_foreground" "$rush_color_background" 50)"
-  rush_style_diagnostic_error="ul=curly,ul_color=$rush_color_red"
-
-  if test "$rush_color_scheme" = light; then
-    rush_style_completion_selected="bg=$(color blend "$rush_color_background" "$rush_color_blue" 20)"
-    rush_style_completion_flash="fg=$rush_color_foreground,bg=$(color blend "$rush_color_yellow" "$rush_color_background" 25),bold"
-  else
-    rush_style_completion_selected="bg=$(color blend "$rush_color_background" "$rush_color_blue" 38)"
-    rush_style_completion_flash="fg=$rush_color_background,bg=$(color blend "$rush_color_yellow" "$rush_color_foreground" 20),bold"
-  fi
-}
-
-# Colorized grep and diff, probed and cached like ls; --color=auto
-# only emits color when stdout is a terminal.
-grep() {
-  if test -z "$rush_grep_color_opt"; then
-    if echo x | command grep --color=auto x >/dev/null 2>&1; then
-      rush_grep_color_opt='--color=auto'
-    else
-      rush_grep_color_opt='none'
-    fi
-  fi
-  if test "$rush_grep_color_opt" = none; then
-    command grep "$@"
-  else
-    command grep "$rush_grep_color_opt" "$@"
-  fi
-}
-
-# Colorized diff wrapper; command bypasses the function to avoid recursion.
-diff() {
-  if test -z "$rush_diff_color_opt"; then
-    if command diff --color=auto /dev/null /dev/null >/dev/null 2>&1; then
-      rush_diff_color_opt='--color=auto'
-    else
-      rush_diff_color_opt='none'
-    fi
-  fi
-  if test "$rush_diff_color_opt" = none; then
-    command diff "$@"
-  else
-    command diff "$rush_diff_color_opt" "$@"
   fi
 }

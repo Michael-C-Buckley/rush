@@ -84,7 +84,7 @@ $XDG_CONFIG_HOME/rush/config.rush
 
 If `XDG_CONFIG_HOME` is unset, user files fall back to
 `$HOME/.config/rush/`. The embedded defaults live in
-[`share/rush/config.rush`](share/rush/config.rush) and define prompt defaults,
+[`share/rush/defaults`](share/rush/defaults) and define prompt defaults,
 colorized `ls`/`grep`/`diff` helpers, and `ll`/`la` abbreviations that later
 config files can override or erase.
 

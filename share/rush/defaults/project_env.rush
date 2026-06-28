@@ -1,0 +1,28 @@
+# Opt-in project environment hooks. Register these from a later config file,
+# for example:
+#   event add directory.change direnv rush_direnv_hook
+#   event add directory.change mise rush_mise_hook
+
+# Import direnv's exported environment changes after directory changes.
+rush_direnv_hook() {
+  local rush_direnv_output
+  if ! command -v direnv >/dev/null 2>&1; then
+    return 0
+  fi
+  rush_direnv_output="$(direnv export json)" || return $?
+  rush_env import-json <<__rush_direnv_json__
+$rush_direnv_output
+__rush_direnv_json__
+}
+
+# Import mise's shell environment changes after directory changes.
+rush_mise_hook() {
+  local rush_mise_output
+  if ! command -v mise >/dev/null 2>&1; then
+    return 0
+  fi
+  rush_mise_output="$(mise hook-env -s bash --quiet)" || return $?
+  rush_env import-sh <<__rush_mise_env__
+$rush_mise_output
+__rush_mise_env__
+}

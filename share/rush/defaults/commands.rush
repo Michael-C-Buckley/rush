@@ -1,0 +1,39 @@
+# Friendly interactive command defaults.
+
+# Colorized ls by default, like fish. The flag is probed once per
+# session and cached; --color=auto and -G only emit color when stdout
+# is a terminal. command bypasses this function, so it cannot recurse.
+ls() {
+  if test -z "$rush_ls_color_opt"; then
+    if command ls --color=auto / >/dev/null 2>&1; then
+      rush_ls_color_opt='--color=auto'
+    elif command ls -G / >/dev/null 2>&1; then
+      rush_ls_color_opt='-G'
+    else
+      rush_ls_color_opt='none'
+    fi
+  fi
+  if test "$rush_ls_color_opt" = none; then
+    command ls "$@"
+  else
+    command ls "$rush_ls_color_opt" "$@"
+  fi
+}
+
+# Editor abbreviations: typing ll or la expands to the real command so
+# the executed line and history show the actual flags.
+abbr ll 'ls -lh'
+abbr la 'ls -lAh'
+
+# Colorize grep and diff when the installed implementation supports it.
+if echo x | command grep --color=auto x >/dev/null 2>&1; then
+  grep() {
+    command grep --color=auto "$@"
+  }
+fi
+
+if command diff --color=auto /dev/null /dev/null >/dev/null 2>&1; then
+  diff() {
+    command diff --color=auto "$@"
+  }
+fi
