@@ -14,11 +14,19 @@ const ir = @import("ir.zig");
 const redirection_plan = @import("redirection_plan.zig");
 const state = @import("state.zig");
 
+fn commandPlanValidationEnabled() bool {
+    return switch (zig_builtin.mode) {
+        .Debug, .ReleaseSafe => true,
+        .ReleaseFast, .ReleaseSmall => false,
+    };
+}
+
 pub const Assignment = struct {
     name: []const u8,
     value: []const u8,
 
     pub fn validate(self: Assignment) void {
+        if (comptime !commandPlanValidationEnabled()) return;
         state.assertValidVariableName(self.name);
     }
 };
@@ -39,49 +47,29 @@ pub const FunctionDefinition = struct {
     redirections: redirection_plan.RedirectionPlan = .{},
 
     pub fn validate(self: FunctionDefinition) void {
-        if (comptime !functionDefinitionValidationEnabled()) return;
+        if (comptime !commandPlanValidationEnabled()) return;
 
         state.assertValidVariableName(self.name);
-        self.body.validate();
-        if (self.source_body) |source_body| {
-            std.debug.assert(std.mem.indexOfScalar(u8, source_body, 0) == null);
-        }
         if (self.source_body_program) |program| {
             std.debug.assert(self.source_body != null);
             std.debug.assert(program.source.len == self.source_body.?.len);
         }
-        validateRedirections(self.redirections);
     }
 
     pub fn hasExecutableBody(self: FunctionDefinition) bool {
-        self.validate();
         return self.source_body != null or self.source_body_program != null or
-            self.body.statements.len != 0 or self.body.commands.len != 0;
+            self.body.statements.len != 0;
     }
 };
-
-fn functionDefinitionValidationEnabled() bool {
-    return switch (zig_builtin.mode) {
-        .Debug => true,
-        .ReleaseSafe, .ReleaseFast, .ReleaseSmall => false,
-    };
-}
 
 pub const FunctionBody = StatementList;
-
-pub const CommandList = struct {
-    commands: []const CommandPlan = &.{},
-
-    pub fn validate(self: CommandList) void {
-        for (self.commands) |command| command.validate();
-    }
-};
 
 pub const IfBranch = struct {
     condition: StatementList,
     body: StatementList,
 
     pub fn validate(self: IfBranch) void {
+        if (comptime !commandPlanValidationEnabled()) return;
         self.condition.validate();
         self.body.validate();
     }
@@ -92,6 +80,7 @@ pub const IfPlan = struct {
     else_body: StatementList = .{},
 
     pub fn validate(self: IfPlan) void {
+        if (comptime !commandPlanValidationEnabled()) return;
         std.debug.assert(self.branches.len != 0);
         for (self.branches) |branch| branch.validate();
         self.else_body.validate();
@@ -105,9 +94,8 @@ pub const LoopPlan = struct {
     body: StatementList,
 
     pub fn validate(self: LoopPlan) void {
-        if (self.condition_source) |source| std.debug.assert(std.mem.indexOfScalar(u8, source, 0) == null);
+        if (comptime !commandPlanValidationEnabled()) return;
         self.condition.validate();
-        if (self.body_source) |source| std.debug.assert(std.mem.indexOfScalar(u8, source, 0) == null);
         self.body.validate();
     }
 };
@@ -122,6 +110,7 @@ pub const AndOrCommand = struct {
     command: CommandPlan,
 
     pub fn validate(self: AndOrCommand, index: usize) void {
+        if (comptime !commandPlanValidationEnabled()) return;
         if (index == 0) {
             std.debug.assert(self.operator == null);
         } else {
@@ -135,6 +124,7 @@ pub const AndOrPlan = struct {
     commands: []const AndOrCommand,
 
     pub fn validate(self: AndOrPlan) void {
+        if (comptime !commandPlanValidationEnabled()) return;
         std.debug.assert(self.commands.len != 0);
         for (self.commands, 0..) |command, index| command.validate(index);
     }
@@ -144,6 +134,7 @@ pub const NegationPlan = struct {
     body: StatementList,
 
     pub fn validate(self: NegationPlan) void {
+        if (comptime !commandPlanValidationEnabled()) return;
         self.body.validate();
     }
 };
@@ -153,7 +144,8 @@ pub const ForWord = struct {
     line: usize = 0,
 
     pub fn validate(self: ForWord) void {
-        std.debug.assert(std.mem.indexOfScalar(u8, self.raw, 0) == null);
+        if (comptime !commandPlanValidationEnabled()) return;
+        _ = self;
     }
 };
 
@@ -163,11 +155,8 @@ pub const ForWords = union(enum) {
     positional_parameters,
 
     pub fn validate(self: ForWords) void {
-        switch (self) {
-            .explicit => |words| for (words) |word| std.debug.assert(std.mem.indexOfScalar(u8, word, 0) == null),
-            .source => |words| for (words) |word| word.validate(),
-            .positional_parameters => {},
-        }
+        if (comptime !commandPlanValidationEnabled()) return;
+        _ = self;
     }
 };
 
@@ -177,8 +166,8 @@ pub const ExpansionOutput = struct {
     diagnostics: []const []const u8 = &.{},
 
     pub fn validate(self: ExpansionOutput) void {
-        validateExpansionOutput(self.stderr, self.diagnostics);
-        validateExpansionOutput(self.side_stdout, &.{});
+        if (comptime !commandPlanValidationEnabled()) return;
+        _ = self;
     }
 };
 
@@ -192,10 +181,9 @@ pub const ForPlan = struct {
     body: StatementList,
 
     pub fn validate(self: ForPlan) void {
+        if (comptime !commandPlanValidationEnabled()) return;
         state.assertValidVariableName(self.variable_name);
         self.words.validate();
-        self.expansion_output.validate();
-        if (self.body_source) |source| std.debug.assert(std.mem.indexOfScalar(u8, source, 0) == null);
         self.body.validate();
     }
 };
@@ -210,15 +198,14 @@ pub const CaseArm = struct {
     test_next: bool = false,
 
     pub fn validate(self: CaseArm) void {
+        if (comptime !commandPlanValidationEnabled()) return;
         std.debug.assert(self.patterns.len != 0);
         std.debug.assert(self.pattern_lines.len == 0 or self.pattern_lines.len == self.patterns.len);
         if (!self.patterns_expanded) std.debug.assert(self.pattern_expansion_outputs.len == 0);
         std.debug.assert(self.pattern_expansion_outputs.len == 0 or
             self.pattern_expansion_outputs.len == self.patterns.len);
         std.debug.assert(!(self.fallthrough and self.test_next));
-        for (self.patterns) |pattern| std.debug.assert(std.mem.indexOfScalar(u8, pattern, 0) == null);
         for (self.pattern_lines) |line| std.debug.assert(line != 0);
-        for (self.pattern_expansion_outputs) |expansion_output| expansion_output.validate();
         self.body.validate();
     }
 };
@@ -231,9 +218,8 @@ pub const CasePlan = struct {
     arms: []const CaseArm,
 
     pub fn validate(self: CasePlan) void {
-        std.debug.assert(std.mem.indexOfScalar(u8, self.word, 0) == null);
+        if (comptime !commandPlanValidationEnabled()) return;
         if (self.word_line) |line| std.debug.assert(line != 0);
-        self.word_expansion_output.validate();
         for (self.arms) |arm| arm.validate();
     }
 };
@@ -251,6 +237,7 @@ pub const CompoundBody = union(enum) {
     case_clause: CasePlan,
 
     pub fn validate(self: CompoundBody) void {
+        if (comptime !commandPlanValidationEnabled()) return;
         switch (self) {
             .sequence => |list| list.validate(),
             .and_or_list => |and_or| and_or.validate(),
@@ -272,13 +259,13 @@ pub const CompoundCommandPlan = struct {
     body: CompoundBody,
 
     pub fn validate(self: CompoundCommandPlan) void {
+        if (comptime !commandPlanValidationEnabled()) return;
         validateRedirections(self.redirections);
         self.body.validate();
         if (self.body == .subshell) std.debug.assert(self.target == .subshell or self.target == .child_process);
     }
 
     pub fn kindName(self: CompoundCommandPlan) []const u8 {
-        self.validate();
         return switch (self.body) {
             .sequence => "list",
             .and_or_list => "and-or list",
@@ -308,6 +295,7 @@ pub const StatementPlan = union(enum) {
     ir_source: IrStatementPlan,
 
     pub fn validate(self: StatementPlan) void {
+        if (comptime !commandPlanValidationEnabled()) return;
         switch (self) {
             .simple => |plan| plan.validate(),
             .compound => |plan| plan.validate(),
@@ -327,9 +315,9 @@ pub const SourceStatementPlan = struct {
     targets_stderr: bool = false,
 
     pub fn validate(self: SourceStatementPlan) void {
+        if (comptime !commandPlanValidationEnabled()) return;
         std.debug.assert(self.target.allowsShellStateCommit());
         std.debug.assert(self.source.len != 0);
-        std.debug.assert(std.mem.indexOfScalar(u8, self.source, 0) == null);
     }
 };
 
@@ -344,10 +332,10 @@ pub const IrStatementPlan = struct {
     targets_stderr: bool = false,
 
     pub fn validate(self: IrStatementPlan) void {
+        if (comptime !commandPlanValidationEnabled()) return;
         std.debug.assert(self.target.allowsShellStateCommit());
         std.debug.assert(self.statement_index < self.program.statements.len);
         std.debug.assert(self.fallback_source.len != 0);
-        std.debug.assert(std.mem.indexOfScalar(u8, self.fallback_source, 0) == null);
     }
 };
 
@@ -356,6 +344,7 @@ pub const StatementListEntry = struct {
     plan: StatementPlan,
 
     pub fn validate(self: StatementListEntry, index: usize) void {
+        if (comptime !commandPlanValidationEnabled()) return;
         if (index == 0) std.debug.assert(self.op_before == .sequence);
         self.plan.validate();
     }
@@ -363,15 +352,10 @@ pub const StatementListEntry = struct {
 
 pub const StatementList = struct {
     statements: []const StatementListEntry = &.{},
-    /// Compatibility for simple-only semantic lists constructed by older unit
-    /// tests and callers. Parser-backed lowering writes `statements` so
-    /// heterogeneous lists can carry simple, compound, and pipeline plans.
-    commands: []const CommandPlan = &.{},
 
     pub fn validate(self: StatementList) void {
-        std.debug.assert(self.statements.len == 0 or self.commands.len == 0);
+        if (comptime !commandPlanValidationEnabled()) return;
         for (self.statements, 0..) |statement, index| statement.validate(index);
-        for (self.commands) |command| command.validate();
     }
 };
 
@@ -414,6 +398,7 @@ pub const PipelineStagePlan = union(enum) {
     compound: CompoundCommandPlan,
 
     pub fn validate(self: PipelineStagePlan) void {
+        if (comptime !commandPlanValidationEnabled()) return;
         switch (self) {
             .simple => |plan| plan.validate(),
             .compound => |plan| plan.validate(),
@@ -421,7 +406,6 @@ pub const PipelineStagePlan = union(enum) {
     }
 
     pub fn target(self: PipelineStagePlan) context.ExecutionTarget {
-        self.validate();
         return switch (self) {
             .simple => |plan| plan.target,
             .compound => |plan| plan.target,
@@ -429,7 +413,6 @@ pub const PipelineStagePlan = union(enum) {
     }
 
     pub fn isExternalOnlyRealEligible(self: PipelineStagePlan) bool {
-        self.validate();
         return switch (self) {
             .simple => |plan| plan.class() == .external and !hasSimpleRedirections(plan),
             .compound => false,
@@ -437,7 +420,6 @@ pub const PipelineStagePlan = union(enum) {
     }
 
     pub fn isExternal(self: PipelineStagePlan) bool {
-        self.validate();
         return switch (self) {
             .simple => |plan| plan.class() == .external,
             .compound => false,
@@ -454,7 +436,7 @@ pub const PipelinePlan = struct {
 
     pub fn init(stages: []const PipelineStagePlan, options: PipelineOptions) PipelinePlan {
         std.debug.assert(stages.len != 0);
-        for (stages) |stage| stage.validate();
+        if (comptime commandPlanValidationEnabled()) for (stages) |stage| stage.validate();
         const plan: PipelinePlan = .{
             .stages = stages,
             .negated = options.negated,
@@ -467,6 +449,7 @@ pub const PipelinePlan = struct {
     }
 
     pub fn validate(self: PipelinePlan) void {
+        if (comptime !commandPlanValidationEnabled()) return;
         std.debug.assert(self.stages.len != 0);
         for (self.stages, 0..) |stage, index| {
             stage.validate();
@@ -497,7 +480,6 @@ pub const PipelinePlan = struct {
     }
 
     pub fn pipeCount(self: PipelinePlan) usize {
-        self.validateStagesOnly();
         return self.stages.len - 1;
     }
 
@@ -516,13 +498,9 @@ pub const PipelinePlan = struct {
     }
 
     pub fn validateStatusCount(self: PipelinePlan, statuses: []const state.ExitStatus) void {
+        if (comptime !commandPlanValidationEnabled()) return;
         std.debug.assert(self.stages.len != 0);
         std.debug.assert(statuses.len == self.stages.len);
-    }
-
-    fn validateStagesOnly(self: PipelinePlan) void {
-        std.debug.assert(self.stages.len != 0);
-        for (self.stages) |stage| stage.validate();
     }
 };
 
@@ -533,6 +511,7 @@ pub const StatusAggregationInput = struct {
     negated: bool = false,
 
     pub fn validate(self: StatusAggregationInput) void {
+        if (comptime !commandPlanValidationEnabled()) return;
         std.debug.assert(self.stage_count != 0);
         std.debug.assert(self.statuses.len == self.stage_count);
     }
@@ -543,6 +522,7 @@ pub const StatusAggregation = struct {
     final_status: state.ExitStatus,
 
     pub fn validate(self: StatusAggregation) void {
+        if (comptime !commandPlanValidationEnabled()) return;
         if (self.selected_status == 0) {
             std.debug.assert(self.final_status == 0 or self.final_status == 1);
         }
@@ -566,6 +546,7 @@ pub const ExternalResolution = struct {
     path: []const u8,
 
     pub fn validate(self: ExternalResolution) void {
+        if (comptime !commandPlanValidationEnabled()) return;
         std.debug.assert(self.name.len != 0);
         std.debug.assert(self.path.len != 0);
     }
@@ -614,9 +595,7 @@ pub const ExpandedSimpleCommand = struct {
     source_line: ?usize = null,
 
     pub fn validate(self: ExpandedSimpleCommand) void {
-        for (self.assignments) |assignment| assignment.validate();
-        validateRedirections(self.redirections);
-        self.expansion_output.validate();
+        if (comptime !commandPlanValidationEnabled()) return;
         if (self.source_line) |line| std.debug.assert(line != 0);
     }
 };
@@ -631,8 +610,8 @@ pub const LookupSnapshot = struct {
     externals: []const ExternalResolution = &.{},
 
     pub fn validate(self: LookupSnapshot) void {
-        assertUniqueFunctionNames(self.functions);
-        assertUniqueExternalNames(self.externals);
+        if (comptime !commandPlanValidationEnabled()) return;
+        _ = self;
     }
 
     pub fn findSpecialBuiltin(self: LookupSnapshot, name: []const u8) ?builtin.Builtin {
@@ -645,7 +624,6 @@ pub const LookupSnapshot = struct {
 
     pub fn findFunction(self: LookupSnapshot, name: []const u8) ?FunctionDefinition {
         for (self.functions) |definition| {
-            definition.validate();
             if (std.mem.eql(u8, definition.name, name)) return definition;
         }
         return null;
@@ -653,7 +631,6 @@ pub const LookupSnapshot = struct {
 
     pub fn findExternal(self: LookupSnapshot, name: []const u8) ?ExternalResolution {
         for (self.externals) |resolution| {
-            resolution.validate();
             if (std.mem.eql(u8, resolution.name, name)) return resolution;
         }
         return null;
@@ -661,7 +638,6 @@ pub const LookupSnapshot = struct {
 
     fn findBuiltinWithKind(self: LookupSnapshot, name: []const u8, kind: builtin.BuiltinKind) ?builtin.Builtin {
         for (self.builtins) |definition| {
-            definition.validate();
             if (definition.kind == kind and std.mem.eql(u8, definition.name, name)) return definition;
         }
         return null;
@@ -678,8 +654,8 @@ pub const PlanRequest = struct {
     target: context.ExecutionTarget = .current_shell,
 
     pub fn validate(self: PlanRequest) void {
+        if (comptime !commandPlanValidationEnabled()) return;
         self.command.validate();
-        self.lookup.validate();
     }
 };
 
@@ -739,7 +715,6 @@ pub const CommandPlan = struct {
     }
 
     pub fn assignmentEffect(self: CommandPlan) AssignmentEffect {
-        self.validate();
         if (self.assignments.len == 0) return .none;
 
         return switch (self.classification) {
@@ -751,9 +726,7 @@ pub const CommandPlan = struct {
     }
 
     pub fn validate(self: CommandPlan) void {
-        for (self.assignments) |assignment| assignment.validate();
-        validateRedirections(self.redirections);
-        self.expansion_output.validate();
+        if (comptime !commandPlanValidationEnabled()) return;
         if (self.source_line) |line| std.debug.assert(line != 0);
 
         switch (self.classification) {
@@ -766,12 +739,10 @@ pub const CommandPlan = struct {
                 std.debug.assert(self.assignments.len != 0);
             },
             .special_builtin => |definition| {
-                definition.validate();
                 assertResolvedCommand(self.argv, definition.name);
                 std.debug.assert(definition.kind == .special);
             },
             .regular_builtin => |definition| {
-                definition.validate();
                 assertResolvedCommand(self.argv, definition.name);
                 std.debug.assert(definition.kind == .regular);
             },
@@ -782,11 +753,9 @@ pub const CommandPlan = struct {
                 std.debug.assert(self.redirections.steps.len == 0);
             },
             .function => |definition| {
-                definition.validate();
                 assertResolvedCommand(self.argv, definition.name);
             },
             .external => |resolution| {
-                resolution.validate();
                 assertResolvedCommand(self.argv, resolution.name);
                 std.debug.assert(self.target == .child_process);
             },
@@ -876,34 +845,6 @@ fn validateRedirections(redirections: redirection_plan.RedirectionPlan) void {
     redirections.validate();
 }
 
-fn validateExpansionOutput(stderr: []const u8, diagnostics: []const []const u8) void {
-    std.debug.assert(std.mem.indexOfScalar(u8, stderr, 0) == null);
-    for (diagnostics) |message| {
-        std.debug.assert(message.len != 0);
-        std.debug.assert(std.mem.indexOfScalar(u8, message, 0) == null);
-    }
-}
-
-fn assertUniqueFunctionNames(functions: []const FunctionDefinition) void {
-    for (functions, 0..) |left, left_index| {
-        left.validate();
-        for (functions[left_index + 1 ..]) |right| {
-            right.validate();
-            std.debug.assert(!std.mem.eql(u8, left.name, right.name));
-        }
-    }
-}
-
-fn assertUniqueExternalNames(externals: []const ExternalResolution) void {
-    for (externals, 0..) |left, left_index| {
-        left.validate();
-        for (externals[left_index + 1 ..]) |right| {
-            right.validate();
-            std.debug.assert(!std.mem.eql(u8, left.name, right.name));
-        }
-    }
-}
-
 const StatementCloneMode = enum {
     preserve_ir_source,
     persist_ir_source_as_source,
@@ -919,18 +860,6 @@ fn cloneStatementListWithMode(
     mode: StatementCloneMode,
 ) std.mem.Allocator.Error!StatementList {
     list.validate();
-    if (list.commands.len != 0) {
-        const commands = try allocator.alloc(CommandPlan, list.commands.len);
-        errdefer allocator.free(commands);
-        var initialized: usize = 0;
-        errdefer for (commands[0..initialized]) |command| freeCommandPlan(allocator, command);
-        for (list.commands, 0..) |command, index| {
-            commands[index] = try cloneCommandPlanWithMode(allocator, command, mode);
-            initialized += 1;
-        }
-        return .{ .commands = commands };
-    }
-
     const statements = try allocator.alloc(StatementListEntry, list.statements.len);
     errdefer allocator.free(statements);
     var initialized: usize = 0;
@@ -947,8 +876,6 @@ fn cloneStatementListWithMode(
 }
 
 fn freeStatementList(allocator: std.mem.Allocator, list: StatementList) void {
-    for (list.commands) |command| freeCommandPlan(allocator, command);
-    allocator.free(list.commands);
     for (list.statements) |entry| freeStatementPlan(allocator, entry.plan);
     allocator.free(list.statements);
 }

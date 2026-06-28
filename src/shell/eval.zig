@@ -1649,7 +1649,7 @@ const SourceLowerer = struct {
 
     fn singleUnredirectedSubshellBody(list: command_plan.StatementList) ?command_plan.StatementList {
         list.validate();
-        if (list.commands.len != 0 or list.statements.len != 1) return null;
+        if (list.statements.len != 1) return null;
         const entry = list.statements[0];
         if (entry.op_before != .sequence) return null;
         return switch (entry.plan) {
@@ -3432,7 +3432,7 @@ const FunctionStatementListCursor = struct {
     }
 
     fn entryCount(self: FunctionStatementListCursor) usize {
-        return if (self.list.commands.len != 0) self.list.commands.len else self.list.statements.len;
+        return self.list.statements.len;
     }
 };
 
@@ -3644,63 +3644,6 @@ const FunctionBodyCursor = struct {
         list_cursor.validate();
         std.debug.assert(list_cursor.pending_call == null);
         std.debug.assert(list_cursor.pending_compound == null);
-
-        if (list_cursor.list.commands.len != 0) {
-            while (list_cursor.index < list_cursor.list.commands.len) {
-                const child_plan = list_cursor.list.commands[list_cursor.index];
-                child_plan.validate();
-                try flushBuffersForRedirectionTargetsBetweenCommands(
-                    buffers,
-                    list_cursor.eval_context,
-                    child_plan.redirections,
-                    evaluator.external_stdio,
-                );
-                const is_tail_child = list_cursor.tail_position and
-                    list_cursor.index + 1 == list_cursor.list.commands.len;
-                if (is_tail_child) {
-                    if (try ownedTailFunctionCallPlan(
-                        evaluator,
-                        shell_state.*,
-                        list_cursor.eval_context,
-                        child_plan,
-                        self.tail_context,
-                        buffers,
-                    )) |tail_plan| return .{ .tail_call = tail_plan };
-                }
-                if (functionCursorCanSuspendSimpleCall(child_plan)) {
-                    list_cursor.pending_call = .{ .state_disposition = .{ .commit_to_working = child_plan.target } };
-                    return .{ .call_function = .{
-                        .plan = child_plan,
-                        .eval_context = list_cursor.eval_context.withTarget(child_plan.target),
-                    } };
-                }
-
-                var child_outcome = try evaluatePlanWithInput(
-                    evaluator,
-                    shell_state,
-                    list_cursor.eval_context.withTarget(child_plan.target),
-                    child_plan,
-                    buffers.stdin,
-                    buffers.frame,
-                );
-                defer child_outcome.deinit();
-                const completion = try completeStatementChildOutcome(
-                    evaluator,
-                    shell_state,
-                    list_cursor.eval_context,
-                    &child_outcome,
-                    .{ .commit_to_working = child_plan.target },
-                    null,
-                    null,
-                    &list_cursor.result,
-                    buffers,
-                );
-                list_cursor.index += 1;
-                if (completion.stop_list) break;
-            }
-            list_cursor.index = list_cursor.entryCount();
-            return .{ .completed = list_cursor.result };
-        }
 
         while (list_cursor.index < list_cursor.list.statements.len) {
             const entry = list_cursor.list.statements[list_cursor.index];
@@ -7237,7 +7180,6 @@ fn casePlanMayEndWithTopLevelExit(plan: command_plan.CasePlan) bool {
 
 fn statementListEndsWithTopLevelExit(list: command_plan.StatementList) bool {
     list.validate();
-    if (list.commands.len != 0) return simplePlanIsExit(list.commands[list.commands.len - 1]);
     if (list.statements.len == 0) return false;
     return statementPlanIsExit(list.statements[list.statements.len - 1].plan);
 }
@@ -7256,6 +7198,11 @@ fn statementPlanIsExit(plan: command_plan.StatementPlan) bool {
 fn simplePlanIsExit(plan: command_plan.CommandPlan) bool {
     plan.validate();
     return plan.argv.len != 0 and std.mem.eql(u8, plan.argv[0], "exit");
+}
+
+fn simpleStatement(plan: command_plan.CommandPlan) command_plan.StatementListEntry {
+    plan.validate();
+    return .{ .plan = .{ .simple = plan } };
 }
 
 fn sourceTextStartsWithExit(source: []const u8) bool {
@@ -9742,46 +9689,6 @@ fn evaluateStatementList(
     list.validate();
 
     var result = normalEvaluation(0);
-    if (list.commands.len != 0) {
-        for (list.commands) |child_plan| {
-            child_plan.validate();
-            if (noexecSuppressesCommand(shell_state.*, eval_context)) break;
-            try flushSubshellBufferedOutputBeforeNestedChild(buffers, eval_context, evaluator.external_stdio);
-            if (child_plan.target.isIsolatedFromParent()) {
-                try flushChildShellBufferedCommandOutput(buffers, eval_context);
-            }
-            try flushBuffersForRedirectionTargetsBetweenCommands(
-                buffers,
-                eval_context,
-                child_plan.redirections,
-                evaluator.external_stdio,
-            );
-            var child_outcome = try evaluatePlanWithInput(
-                evaluator,
-                shell_state,
-                eval_context.withTarget(child_plan.target),
-                child_plan,
-                buffers.stdin,
-                buffers.frame,
-            );
-            defer child_outcome.deinit();
-
-            const completion = try completeStatementChildOutcome(
-                evaluator,
-                shell_state,
-                eval_context,
-                &child_outcome,
-                .{ .commit_to_working = child_plan.target },
-                null,
-                null,
-                &result,
-                buffers,
-            );
-            if (completion.stop_list) break;
-        }
-        return result;
-    }
-
     var abort_bash_line: ?usize = null;
     for (list.statements, 0..) |entry, index| {
         entry.validate(index);
@@ -9865,55 +9772,6 @@ fn evaluateFunctionStatementList(
     list.validate();
 
     var result = normalEvaluation(0);
-    if (list.commands.len != 0) {
-        for (list.commands, 0..) |child_plan, index| {
-            child_plan.validate();
-            if (noexecSuppressesCommand(shell_state.*, eval_context)) break;
-            try flushBuffersForRedirectionTargetsBetweenCommands(
-                buffers,
-                eval_context,
-                child_plan.redirections,
-                evaluator.external_stdio,
-            );
-            if (index + 1 == list.commands.len) {
-                if (try ownedTailFunctionCallPlan(
-                    evaluator,
-                    shell_state.*,
-                    eval_context,
-                    child_plan,
-                    tail_context,
-                    buffers,
-                )) |tail_plan| {
-                    return .{ .tail_call = tail_plan };
-                }
-            }
-
-            var child_outcome = try evaluatePlanWithInput(
-                evaluator,
-                shell_state,
-                eval_context.withTarget(child_plan.target),
-                child_plan,
-                buffers.stdin,
-                buffers.frame,
-            );
-            defer child_outcome.deinit();
-
-            const completion = try completeStatementChildOutcome(
-                evaluator,
-                shell_state,
-                eval_context,
-                &child_outcome,
-                .{ .commit_to_working = child_plan.target },
-                null,
-                null,
-                &result,
-                buffers,
-            );
-            if (completion.stop_list) break;
-        }
-        return .{ .result = result };
-    }
-
     var abort_bash_line: ?usize = null;
     for (list.statements, 0..) |entry, index| {
         entry.validate(index);
@@ -21451,9 +21309,13 @@ test "semantic command substitution runs subshell EXIT trap before trimming capt
             .target = .subshell,
         }),
     };
+    const statements = [_]command_plan.StatementListEntry{
+        simpleStatement(commands[0]),
+        simpleStatement(commands[1]),
+    };
     const compound: command_plan.CompoundCommandPlan = .{
         .target = .subshell,
-        .body = .{ .sequence = .{ .commands = &commands } },
+        .body = .{ .sequence = .{ .statements = &statements } },
     };
     var parent_frame = rootExecutionFrame(context.EvalContext.forTarget(.current_shell));
     var result = try evaluateCommandSubstitutionInState(
@@ -21493,9 +21355,14 @@ test "semantic command substitution sees parent variables but isolates body muta
             .target = .subshell,
         }),
     };
+    const statements = [_]command_plan.StatementListEntry{
+        simpleStatement(commands[0]),
+        simpleStatement(commands[1]),
+        simpleStatement(commands[2]),
+    };
     const compound: command_plan.CompoundCommandPlan = .{
         .target = .subshell,
-        .body = .{ .sequence = .{ .commands = &commands } },
+        .body = .{ .sequence = .{ .statements = &statements } },
     };
 
     var result = try evaluateCommandSubstitution(
@@ -23094,7 +22961,7 @@ test "semantic background compound command is tracked as one subshell job" {
     } } });
     const compound: command_plan.CompoundCommandPlan = .{
         .target = .current_shell,
-        .body = .{ .brace_group = .{ .commands = &[_]command_plan.CommandPlan{export_plan} } },
+        .body = .{ .brace_group = .{ .statements = &[_]command_plan.StatementListEntry{simpleStatement(export_plan)} } },
     };
     const pipeline = pipeline_plan.PipelinePlan.init(
         &[_]pipeline_plan.PipelineStagePlan{.{ .compound = compound }},
@@ -23514,24 +23381,27 @@ test "semantic evaluator suppresses errexit in POSIX condition and list contexts
     const eval_context = context.EvalContext.forTarget(.current_shell);
 
     const if_assignment = [_]command_plan.Assignment{.{ .name = "IF_ERREXIT", .value = "else" }};
+    const if_condition_statements = [_]command_plan.StatementListEntry{simpleStatement(
+        command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{"false"} } }),
+    )};
+    const if_body_statements = [_]command_plan.StatementListEntry{simpleStatement(
+        command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{
+            "echo",
+            "unreached",
+        } } }),
+    )};
     const if_branches = [_]command_plan.IfBranch{.{
-        .condition = .{ .commands = &[_]command_plan.CommandPlan{command_plan.classifyExpandedSimpleCommand(
-            .{ .command = .{ .argv = &[_][]const u8{"false"} } },
-        )} },
-        .body = .{ .commands = &[_]command_plan.CommandPlan{command_plan.classifyExpandedSimpleCommand(.{
-            .command = .{ .argv = &[_][]const u8{
-                "echo",
-                "unreached",
-            } },
-        })} },
+        .condition = .{ .statements = &if_condition_statements },
+        .body = .{ .statements = &if_body_statements },
     }};
+    const else_body_statements = [_]command_plan.StatementListEntry{simpleStatement(
+        command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .assignments = &if_assignment } }),
+    )};
     const if_plan: command_plan.CompoundCommandPlan = .{
         .target = .current_shell,
         .body = .{ .if_clause = .{
             .branches = &if_branches,
-            .else_body = .{ .commands = &[_]command_plan.CommandPlan{command_plan.classifyExpandedSimpleCommand(
-                .{ .command = .{ .assignments = &if_assignment } },
-            )} },
+            .else_body = .{ .statements = &else_body_statements },
         } },
     };
     var if_result = try evaluateCompoundPlan(&evaluator, &shell_state, eval_context, if_plan);
@@ -23563,12 +23433,12 @@ test "semantic evaluator suppresses errexit in POSIX condition and list contexts
     try and_or_result.commitDelta(&shell_state, .current_shell);
     try std.testing.expectEqual(@as(?state.Variable, null), shell_state.getVariable("AND_ERREXIT_SKIPPED"));
 
-    const negation_commands = [_]command_plan.CommandPlan{command_plan.classifyExpandedSimpleCommand(
-        .{ .command = .{ .argv = &[_][]const u8{"true"} } },
+    const negation_statements = [_]command_plan.StatementListEntry{simpleStatement(
+        command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{"true"} } }),
     )};
     const negation_plan: command_plan.CompoundCommandPlan = .{
         .target = .current_shell,
-        .body = .{ .negation = .{ .body = .{ .commands = &negation_commands } } },
+        .body = .{ .negation = .{ .body = .{ .statements = &negation_statements } } },
     };
     var negation_result = try evaluateCompoundPlan(&evaluator, &shell_state, eval_context, negation_plan);
     defer negation_result.deinit();
@@ -23603,10 +23473,11 @@ test "semantic evaluator keeps shell-error fatality outside errexit suppression"
     shell_state.options.set(.errexit, true);
     var evaluator = Evaluator.init(std.testing.allocator);
 
+    const condition_statements = [_]command_plan.StatementListEntry{simpleStatement(
+        command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{"return"} } }),
+    )};
     const if_branches = [_]command_plan.IfBranch{.{
-        .condition = .{ .commands = &[_]command_plan.CommandPlan{command_plan.classifyExpandedSimpleCommand(
-            .{ .command = .{ .argv = &[_][]const u8{"return"} } },
-        )} },
+        .condition = .{ .statements = &condition_statements },
         .body = .{},
     }};
     const if_plan: command_plan.CompoundCommandPlan = .{
@@ -23756,23 +23627,27 @@ test "semantic evaluator evaluates compound if loop for and case forms" {
     const if_commands = [_]command_plan.CommandPlan{command_plan.classifyExpandedSimpleCommand(
         .{ .command = .{ .assignments = &if_assignment } },
     )};
+    const if_statements = [_]command_plan.StatementListEntry{simpleStatement(if_commands[0])};
+    const false_condition_statements = [_]command_plan.StatementListEntry{simpleStatement(
+        command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{"false"} } }),
+    )};
+    const unreachable_statements = [_]command_plan.StatementListEntry{simpleStatement(
+        command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{
+            "echo",
+            "unreached",
+        } } }),
+    )};
+    const true_condition_statements = [_]command_plan.StatementListEntry{simpleStatement(
+        command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{"true"} } }),
+    )};
     const if_branches = [_]command_plan.IfBranch{
         .{
-            .condition = .{ .commands = &[_]command_plan.CommandPlan{command_plan.classifyExpandedSimpleCommand(
-                .{ .command = .{ .argv = &[_][]const u8{"false"} } },
-            )} },
-            .body = .{ .commands = &[_]command_plan.CommandPlan{command_plan.classifyExpandedSimpleCommand(.{
-                .command = .{ .argv = &[_][]const u8{
-                    "echo",
-                    "unreached",
-                } },
-            })} },
+            .condition = .{ .statements = &false_condition_statements },
+            .body = .{ .statements = &unreachable_statements },
         },
         .{
-            .condition = .{ .commands = &[_]command_plan.CommandPlan{command_plan.classifyExpandedSimpleCommand(
-                .{ .command = .{ .argv = &[_][]const u8{"true"} } },
-            )} },
-            .body = .{ .commands = &if_commands },
+            .condition = .{ .statements = &true_condition_statements },
+            .body = .{ .statements = &if_statements },
         },
     };
     const if_plan: command_plan.CompoundCommandPlan = .{
@@ -23813,12 +23688,12 @@ test "semantic evaluator evaluates compound if loop for and case forms" {
     try std.testing.expectEqual(@as(?state.Variable, null), shell_state.getVariable("AND_SKIPPED"));
     try std.testing.expectEqualStrings("ran", shell_state.getVariable("OR_RESULT").?.value);
 
-    const negation_commands = [_]command_plan.CommandPlan{command_plan.classifyExpandedSimpleCommand(
-        .{ .command = .{ .argv = &[_][]const u8{"false"} } },
+    const negation_statements = [_]command_plan.StatementListEntry{simpleStatement(
+        command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{"false"} } }),
     )};
     const negation_plan: command_plan.CompoundCommandPlan = .{
         .target = .current_shell,
-        .body = .{ .negation = .{ .body = .{ .commands = &negation_commands } } },
+        .body = .{ .negation = .{ .body = .{ .statements = &negation_statements } } },
     };
     var negation_result = try evaluateCompoundPlan(&evaluator, &shell_state, eval_context, negation_plan);
     defer negation_result.deinit();
@@ -23830,13 +23705,18 @@ test "semantic evaluator evaluates compound if loop for and case forms" {
         command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .assignments = &loop_assignment } }),
         command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{"break"} } }),
     };
+    const loop_condition_statements = [_]command_plan.StatementListEntry{simpleStatement(
+        command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{"true"} } }),
+    )};
+    const loop_body_statements = [_]command_plan.StatementListEntry{
+        simpleStatement(loop_body[0]),
+        simpleStatement(loop_body[1]),
+    };
     const loop_plan: command_plan.CompoundCommandPlan = .{
         .target = .current_shell,
         .body = .{ .while_loop = .{
-            .condition = .{ .commands = &[_]command_plan.CommandPlan{command_plan.classifyExpandedSimpleCommand(
-                .{ .command = .{ .argv = &[_][]const u8{"true"} } },
-            )} },
-            .body = .{ .commands = &loop_body },
+            .condition = .{ .statements = &loop_condition_statements },
+            .body = .{ .statements = &loop_body_statements },
         } },
     };
     var loop_result = try evaluateCompoundPlan(&evaluator, &shell_state, eval_context, loop_plan);
@@ -23850,12 +23730,13 @@ test "semantic evaluator evaluates compound if loop for and case forms" {
     const for_body = [_]command_plan.CommandPlan{command_plan.classifyExpandedSimpleCommand(
         .{ .command = .{ .argv = &[_][]const u8{"continue"} } },
     )};
+    const for_body_statements = [_]command_plan.StatementListEntry{simpleStatement(for_body[0])};
     const for_plan: command_plan.CompoundCommandPlan = .{
         .target = .current_shell,
         .body = .{ .for_loop = .{
             .variable_name = "ITEM",
             .words = .{ .explicit = &for_words },
-            .body = .{ .commands = &for_body },
+            .body = .{ .statements = &for_body_statements },
         } },
     };
     var for_result = try evaluateCompoundPlan(&evaluator, &shell_state, eval_context, for_plan);
@@ -23868,9 +23749,10 @@ test "semantic evaluator evaluates compound if loop for and case forms" {
     const case_body = [_]command_plan.CommandPlan{command_plan.classifyExpandedSimpleCommand(
         .{ .command = .{ .assignments = &case_assignment } },
     )};
+    const case_body_statements = [_]command_plan.StatementListEntry{simpleStatement(case_body[0])};
     const case_arms = [_]command_plan.CaseArm{
         .{ .patterns = &[_][]const u8{"one"}, .body = .{} },
-        .{ .patterns = &[_][]const u8{ "t?o", "[ab]" }, .body = .{ .commands = &case_body } },
+        .{ .patterns = &[_][]const u8{ "t?o", "[ab]" }, .body = .{ .statements = &case_body_statements } },
     };
     const case_plan: command_plan.CompoundCommandPlan = .{
         .target = .current_shell,
@@ -23896,9 +23778,15 @@ test "semantic evaluator evaluates compound if loop for and case forms" {
     const fallthrough_second_body = [_]command_plan.CommandPlan{command_plan.classifyExpandedSimpleCommand(
         .{ .command = .{ .assignments = &fallthrough_second_assignment } },
     )};
+    const fallthrough_first_statements = [_]command_plan.StatementListEntry{simpleStatement(fallthrough_first_body[0])};
+    const fallthrough_second_statements = [_]command_plan.StatementListEntry{simpleStatement(fallthrough_second_body[0])};
     const fallthrough_arms = [_]command_plan.CaseArm{
-        .{ .patterns = &[_][]const u8{"fall"}, .body = .{ .commands = &fallthrough_first_body }, .fallthrough = true },
-        .{ .patterns = &[_][]const u8{"no-match"}, .body = .{ .commands = &fallthrough_second_body } },
+        .{
+            .patterns = &[_][]const u8{"fall"},
+            .body = .{ .statements = &fallthrough_first_statements },
+            .fallthrough = true,
+        },
+        .{ .patterns = &[_][]const u8{"no-match"}, .body = .{ .statements = &fallthrough_second_statements } },
     };
     const fallthrough_plan: command_plan.CompoundCommandPlan = .{
         .target = .current_shell,
@@ -23922,9 +23810,15 @@ test "semantic evaluator evaluates compound if loop for and case forms" {
     const test_next_second_body = [_]command_plan.CommandPlan{command_plan.classifyExpandedSimpleCommand(
         .{ .command = .{ .assignments = &test_next_second_assignment } },
     )};
+    const test_next_first_statements = [_]command_plan.StatementListEntry{simpleStatement(test_next_first_body[0])};
+    const test_next_second_statements = [_]command_plan.StatementListEntry{simpleStatement(test_next_second_body[0])};
     const test_next_arms = [_]command_plan.CaseArm{
-        .{ .patterns = &[_][]const u8{"test"}, .body = .{ .commands = &test_next_first_body }, .test_next = true },
-        .{ .patterns = &[_][]const u8{"test"}, .body = .{ .commands = &test_next_second_body } },
+        .{
+            .patterns = &[_][]const u8{"test"},
+            .body = .{ .statements = &test_next_first_statements },
+            .test_next = true,
+        },
+        .{ .patterns = &[_][]const u8{"test"}, .body = .{ .statements = &test_next_second_statements } },
     };
     const test_next_plan: command_plan.CompoundCommandPlan = .{
         .target = .current_shell,
@@ -23948,9 +23842,10 @@ test "semantic evaluator matches case patterns with POSIX character classes" {
     const matched_body = [_]command_plan.CommandPlan{command_plan.classifyExpandedSimpleCommand(
         .{ .command = .{ .assignments = &matched_assignment } },
     )};
+    const matched_statements = [_]command_plan.StatementListEntry{simpleStatement(matched_body[0])};
     const case_arms = [_]command_plan.CaseArm{
         .{ .patterns = &[_][]const u8{"[![:digit:]]"}, .body = .{} },
-        .{ .patterns = &[_][]const u8{"[[:digit:]]"}, .body = .{ .commands = &matched_body } },
+        .{ .patterns = &[_][]const u8{"[[:digit:]]"}, .body = .{ .statements = &matched_statements } },
     };
     const case_plan: command_plan.CompoundCommandPlan = .{
         .target = .current_shell,
@@ -23974,9 +23869,13 @@ test "semantic evaluator applies compound command commit and discard boundaries"
         command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .assignments = &parent_assignment } }),
         command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{"false"} } }),
     };
+    const parent_statements = [_]command_plan.StatementListEntry{
+        simpleStatement(parent_commands[0]),
+        simpleStatement(parent_commands[1]),
+    };
     const brace_plan: command_plan.CompoundCommandPlan = .{
         .target = .current_shell,
-        .body = .{ .brace_group = .{ .commands = &parent_commands } },
+        .body = .{ .brace_group = .{ .statements = &parent_statements } },
     };
     var brace_result = try evaluateCompoundPlan(
         &evaluator,
@@ -24001,9 +23900,13 @@ test "semantic evaluator applies compound command commit and discard boundaries"
             .target = .subshell,
         }),
     };
+    const subshell_statements = [_]command_plan.StatementListEntry{
+        simpleStatement(subshell_commands[0]),
+        simpleStatement(subshell_commands[1]),
+    };
     const subshell_plan: command_plan.CompoundCommandPlan = .{
         .target = .subshell,
-        .body = .{ .subshell = .{ .commands = &subshell_commands } },
+        .body = .{ .subshell = .{ .statements = &subshell_statements } },
     };
     var subshell_result = try evaluateCompoundPlan(
         &evaluator,
@@ -24031,9 +23934,10 @@ test "semantic evaluator propagates current-shell compound control flow" {
             "5",
         } },
     })};
+    const exit_statements = [_]command_plan.StatementListEntry{simpleStatement(exit_commands[0])};
     const brace_plan: command_plan.CompoundCommandPlan = .{
         .target = .current_shell,
-        .body = .{ .brace_group = .{ .commands = &exit_commands } },
+        .body = .{ .brace_group = .{ .statements = &exit_statements } },
     };
     var result = try evaluateCompoundPlan(
         &evaluator,
@@ -24073,10 +23977,11 @@ test "semantic evaluator applies and restores compound command redirections" {
             "4",
         } },
     })};
+    const body_statements = [_]command_plan.StatementListEntry{simpleStatement(body_commands[0])};
     const compound_plan: command_plan.CompoundCommandPlan = .{
         .target = .current_shell,
         .redirections = redirections,
-        .body = .{ .brace_group = .{ .commands = &body_commands } },
+        .body = .{ .brace_group = .{ .statements = &body_statements } },
     };
 
     var result = try evaluateCompoundPlan(
@@ -24128,7 +24033,11 @@ test "semantic evaluator stores and invokes function definitions through explici
     const body_commands = [_]command_plan.CommandPlan{
         command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .assignments = &body_assignments } }),
     };
-    const definition: command_plan.FunctionDefinition = .{ .name = "fn", .body = .{ .commands = &body_commands } };
+    const body_statements = [_]command_plan.StatementListEntry{simpleStatement(body_commands[0])};
+    const definition: command_plan.FunctionDefinition = .{
+        .name = "fn",
+        .body = .{ .statements = &body_statements },
+    };
     const definition_plan: command_plan.CommandPlan = .{
         .target = .current_shell,
         .classification = .{ .function_definition = definition },
@@ -24140,7 +24049,7 @@ test "semantic evaluator stores and invokes function definitions through explici
     try std.testing.expectEqual(@as(usize, 1), defined.state_delta.function_sets.items.len);
     try defined.commitDelta(&shell_state, .current_shell);
     try std.testing.expect(shell_state.getFunction("fn") != null);
-    try std.testing.expectEqual(@as(usize, 1), shell_state.getFunction("fn").?.body.commands.len);
+    try std.testing.expectEqual(@as(usize, 1), shell_state.getFunction("fn").?.body.statements.len);
 
     const stored = shell_state.getFunction("fn").?;
     const lookup_functions = [_]command_plan.FunctionDefinition{stored};
@@ -24176,7 +24085,16 @@ test "semantic evaluator keeps function assignment prefixes locals and positiona
         command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .assignments = &assign_b } }),
         command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{ "shift", "1" } } }),
     };
-    const definition: command_plan.FunctionDefinition = .{ .name = "fn", .body = .{ .commands = &body_commands } };
+    const body_statements = [_]command_plan.StatementListEntry{
+        simpleStatement(body_commands[0]),
+        simpleStatement(body_commands[1]),
+        simpleStatement(body_commands[2]),
+        simpleStatement(body_commands[3]),
+    };
+    const definition: command_plan.FunctionDefinition = .{
+        .name = "fn",
+        .body = .{ .statements = &body_statements },
+    };
     const lookup_functions = [_]command_plan.FunctionDefinition{definition};
     const prefixes = [_]command_plan.Assignment{.{ .name = "A", .value = "temporary" }};
     const call_plan = command_plan.classifyExpandedSimpleCommand(.{
@@ -24205,7 +24123,15 @@ test "semantic evaluator consumes return control flow at function boundary" {
         command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{ "return", "7" } } }),
         command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{ "echo", "after" } } }),
     };
-    const definition: command_plan.FunctionDefinition = .{ .name = "fn", .body = .{ .commands = &body_commands } };
+    const body_statements = [_]command_plan.StatementListEntry{
+        simpleStatement(body_commands[0]),
+        simpleStatement(body_commands[1]),
+        simpleStatement(body_commands[2]),
+    };
+    const definition: command_plan.FunctionDefinition = .{
+        .name = "fn",
+        .body = .{ .statements = &body_statements },
+    };
     const lookup_functions = [_]command_plan.FunctionDefinition{definition};
     const call_plan = command_plan.classifyExpandedSimpleCommand(.{
         .command = .{ .argv = &[_][]const u8{"fn"} },
@@ -24247,7 +24173,14 @@ test "semantic evaluator stops function body after readonly assignment failure" 
         command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .assignments = &assignment } }),
         command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .assignments = &after_assignment } }),
     };
-    const definition: command_plan.FunctionDefinition = .{ .name = "fn", .body = .{ .commands = &body_commands } };
+    const body_statements = [_]command_plan.StatementListEntry{
+        simpleStatement(body_commands[0]),
+        simpleStatement(body_commands[1]),
+    };
+    const definition: command_plan.FunctionDefinition = .{
+        .name = "fn",
+        .body = .{ .statements = &body_statements },
+    };
     const lookup_functions = [_]command_plan.FunctionDefinition{definition};
     const call_plan = command_plan.classifyExpandedSimpleCommand(.{
         .command = .{ .argv = &[_][]const u8{"fn"} },
@@ -24282,7 +24215,14 @@ test "semantic evaluator uses child command status for bare function return" {
         }),
         command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{"return"} } }),
     };
-    const definition: command_plan.FunctionDefinition = .{ .name = "fn", .body = .{ .commands = &body_commands } };
+    const body_statements = [_]command_plan.StatementListEntry{
+        simpleStatement(body_commands[0]),
+        simpleStatement(body_commands[1]),
+    };
+    const definition: command_plan.FunctionDefinition = .{
+        .name = "fn",
+        .body = .{ .statements = &body_statements },
+    };
     const lookup_functions = [_]command_plan.FunctionDefinition{definition};
     const call_plan = command_plan.classifyExpandedSimpleCommand(.{
         .command = .{ .argv = &[_][]const u8{"fn"} },
@@ -24309,7 +24249,11 @@ test "semantic evaluator reports readonly local declarations as shell errors" {
             "LOCKED=inner",
         } } }),
     };
-    const definition: command_plan.FunctionDefinition = .{ .name = "fn", .body = .{ .commands = &body_commands } };
+    const body_statements = [_]command_plan.StatementListEntry{simpleStatement(body_commands[0])};
+    const definition: command_plan.FunctionDefinition = .{
+        .name = "fn",
+        .body = .{ .statements = &body_statements },
+    };
     const lookup_functions = [_]command_plan.FunctionDefinition{definition};
     const call_plan = command_plan.classifyExpandedSimpleCommand(.{
         .command = .{ .argv = &[_][]const u8{"fn"} },
@@ -24335,6 +24279,7 @@ test "semantic evaluator applies and restores function call and definition redir
     const body_commands = [_]command_plan.CommandPlan{
         command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{"true"} } }),
     };
+    const body_statements = [_]command_plan.StatementListEntry{simpleStatement(body_commands[0])};
     const definition_steps = [_]redirection_plan.RedirectionStep{redirection_plan.RedirectionStep.openPath(
         0,
         1,
@@ -24346,7 +24291,7 @@ test "semantic evaluator applies and restores function call and definition redir
     };
     const definition: command_plan.FunctionDefinition = .{
         .name = "fn",
-        .body = .{ .commands = &body_commands },
+        .body = .{ .statements = &body_statements },
         .redirections = definition_redirections,
     };
     const lookup_functions = [_]command_plan.FunctionDefinition{definition};

@@ -2038,9 +2038,6 @@ fn semanticCompoundUnsupportedMessage(plan: shell.CompoundCommandPlan, legacy_fa
 
 fn semanticCommandListUnsupportedMessage(list: shell.StatementList, legacy_fallback_gates: bool) ?[]const u8 {
     list.validate();
-    for (list.commands) |command| {
-        if (semanticCommandUnsupportedMessage(command, legacy_fallback_gates)) |message| return message;
-    }
     for (list.statements) |entry| {
         switch (entry.plan) {
             .simple => |plan| if (semanticCommandUnsupportedMessage(plan, legacy_fallback_gates)) |message|

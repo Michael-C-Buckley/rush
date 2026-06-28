@@ -38,7 +38,6 @@ pub const AndOrPlan = command_plan.AndOrPlan;
 pub const CommandOutcome = outcome.CommandOutcome;
 pub const CaseArm = command_plan.CaseArm;
 pub const CasePlan = command_plan.CasePlan;
-pub const CommandList = command_plan.CommandList;
 pub const CommandPlan = command_plan.CommandPlan;
 pub const CommandSubstitutionBody = eval.CommandSubstitutionBody;
 pub const CommandSubstitutionExpansionContext = eval.CommandSubstitutionExpansionContext;

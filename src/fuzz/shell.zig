@@ -512,6 +512,7 @@ const EvalPlanStorage = struct {
     assignments: [eval_max_commands][1]shell.Assignment = undefined,
     argv: [eval_max_commands][1][]const u8 = undefined,
     commands: [eval_max_commands]shell.CommandPlan = undefined,
+    statements: [eval_max_commands]shell.StatementListEntry = undefined,
     stages: [eval_max_pipeline_stages]shell.PipelineStagePlan = undefined,
     command_count: usize = 0,
 
@@ -586,11 +587,11 @@ const EvalPlanStorage = struct {
         target: shell.ExecutionTarget,
     ) shell.CompoundCommandPlan {
         const command_count = 1 + smith.index(eval_max_stage_commands);
-        const commands = self.commandSlice(smith, target, command_count);
+        const statements = self.statementSlice(smith, target, command_count);
         const plan: shell.CompoundCommandPlan = .{
             .target = target,
             .redirections = self.redirectionPlan(smith),
-            .body = .{ .brace_group = .{ .commands = commands } },
+            .body = .{ .brace_group = .{ .statements = statements } },
         };
         plan.validate();
         return plan;
@@ -598,28 +599,29 @@ const EvalPlanStorage = struct {
 
     fn subshell(self: *EvalPlanStorage, smith: *std.testing.Smith) shell.CompoundCommandPlan {
         const command_count = 1 + smith.index(eval_max_stage_commands);
-        const commands = self.commandSlice(smith, .subshell, command_count);
+        const statements = self.statementSlice(smith, .subshell, command_count);
         const plan: shell.CompoundCommandPlan = .{
             .target = .subshell,
             .redirections = self.redirectionPlan(smith),
-            .body = .{ .subshell = .{ .commands = commands } },
+            .body = .{ .subshell = .{ .statements = statements } },
         };
         plan.validate();
         return plan;
     }
 
-    fn commandSlice(
+    fn statementSlice(
         self: *EvalPlanStorage,
         smith: *std.testing.Smith,
         target: shell.ExecutionTarget,
         count: usize,
-    ) []const shell.CommandPlan {
+    ) []const shell.StatementListEntry {
         std.debug.assert(self.command_count + count <= eval_max_commands);
         const start = self.command_count;
         for (0..count) |index| {
-            self.commands[start + index] = self.simpleCommand(smith, target);
+            self.statements[start + index] = .{ .plan = .{ .simple = self.simpleCommand(smith, target) } };
         }
-        return self.commands[start..self.command_count];
+        self.command_count += count;
+        return self.statements[start..self.command_count];
     }
 };
 
@@ -629,13 +631,11 @@ fn generateEvalSubject(smith: *std.testing.Smith, storage: *EvalPlanStorage) Eva
 
     const target: shell.ExecutionTarget = if (kind == 3) .subshell else .current_shell;
     const command_count = 1 + smith.index(eval_max_commands);
-    for (0..command_count) |index| {
-        storage.commands[index] = storage.simpleCommand(smith, target);
-    }
+    const statements = storage.statementSlice(smith, target, command_count);
     const body: shell.CompoundBody = if (target == .subshell)
-        .{ .subshell = .{ .commands = storage.commands[0..command_count] } }
+        .{ .subshell = .{ .statements = statements } }
     else
-        .{ .brace_group = .{ .commands = storage.commands[0..command_count] } };
+        .{ .brace_group = .{ .statements = statements } };
     const plan: shell.CompoundCommandPlan = .{
         .target = target,
         .redirections = storage.redirectionPlan(smith),
