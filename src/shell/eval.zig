@@ -5143,9 +5143,30 @@ fn execRedirectionsMutateCurrentFrame(
     plan.validate();
     result.control_flow.validate();
     if (result.status != 0 or result.control_flow != .normal) return false;
-    if (plan.argv.len != 1) return false;
-    if (!std.mem.eql(u8, plan.argv[0], "exec")) return false;
+    if (!planInvokesRedirectionOnlyExec(plan)) return false;
     return eval_context.target.allowsShellStateCommit();
+}
+
+fn planInvokesRedirectionOnlyExec(plan: command_plan.CommandPlan) bool {
+    plan.validate();
+    if (plan.argv.len == 1 and std.mem.eql(u8, plan.argv[0], "exec")) return true;
+    if (plan.argv.len < 2 or !std.mem.eql(u8, plan.argv[0], "command")) return false;
+
+    var index: usize = 1;
+    while (index < plan.argv.len) : (index += 1) {
+        const arg = plan.argv[index];
+        if (std.mem.eql(u8, arg, "--")) {
+            index += 1;
+            break;
+        }
+        if (std.mem.eql(u8, arg, "-p")) continue;
+        if (std.mem.eql(u8, arg, "-v") or std.mem.eql(u8, arg, "-V")) return false;
+        if (std.mem.startsWith(u8, arg, "-") and !std.mem.eql(u8, arg, "-")) return false;
+        break;
+    }
+    return index < plan.argv.len and
+        index + 1 == plan.argv.len and
+        std.mem.eql(u8, plan.argv[index], "exec");
 }
 
 fn filterReadonlyAssignments(
@@ -5176,8 +5197,7 @@ const ExecRedirectionCommitMode = enum {
 fn scopedExecRedirectionsMutateRuntime(evaluator: Evaluator, plan: command_plan.CommandPlan) bool {
     plan.validate();
     if (evaluator.scoped_exec_redirections == null) return false;
-    if (plan.argv.len != 1) return false;
-    return std.mem.eql(u8, plan.argv[0], "exec");
+    return planInvokesRedirectionOnlyExec(plan);
 }
 
 fn execRedirectionCommitMode(
@@ -5190,8 +5210,7 @@ fn execRedirectionCommitMode(
     plan.validate();
     result.control_flow.validate();
     if (result.status != 0 or result.control_flow != .normal) return .none;
-    if (plan.argv.len != 1) return .none;
-    if (!std.mem.eql(u8, plan.argv[0], "exec")) return .none;
+    if (!planInvokesRedirectionOnlyExec(plan)) return .none;
     if (evaluator.scoped_exec_redirections != null) {
         return .scoped;
     }
