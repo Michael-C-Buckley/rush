@@ -9361,7 +9361,7 @@ fn workingStateForCompound(
 ) EvalError!state.ShellState {
     shell_state.validate();
     return switch (target) {
-        .current_shell => shell_state.clone(allocator),
+        .current_shell => shell_state.cloneBorrowingFunctions(allocator),
         .subshell => shell_state.snapshotForSubshell(allocator),
         .child_process => shell_state.clone(allocator),
     } catch |err| switch (err) {
@@ -12978,41 +12978,45 @@ fn appendShellStateDiffExcludingVariables(
     if (state_delta.target == .subshell) std.debug.assert(after.scope == .subshell);
     for (excluded_assignments) |assignment| assignment.validate();
 
-    var after_variables = after.variables.iterator();
-    while (after_variables.next()) |entry| {
-        const name = entry.key_ptr.*;
-        if (assignmentListContainsName(excluded_assignments, name)) continue;
-        const next = entry.value_ptr.*;
-        if (before.getVariable(name)) |previous| {
-            std.debug.assert(!previous.readonly or next.readonly);
-            if (!std.mem.eql(u8, previous.value, next.value)) {
-                try state_delta.assignVariable(
-                    name,
-                    next.value,
-                    .{ .exported = next.exported, .readonly = next.readonly },
-                );
-                continue;
+    if (after.variables_mutated) {
+        var after_variables = after.variables.iterator();
+        while (after_variables.next()) |entry| {
+            const name = entry.key_ptr.*;
+            if (assignmentListContainsName(excluded_assignments, name)) continue;
+            const next = entry.value_ptr.*;
+            if (before.getVariable(name)) |previous| {
+                std.debug.assert(!previous.readonly or next.readonly);
+                if (!std.mem.eql(u8, previous.value, next.value)) {
+                    try state_delta.assignVariable(
+                        name,
+                        next.value,
+                        .{ .exported = next.exported, .readonly = next.readonly },
+                    );
+                    continue;
+                }
+                if (previous.exported != next.exported) try state_delta.setVariableExported(name, next.exported);
+                if (!previous.readonly and next.readonly) try state_delta.setVariableReadonly(name);
+            } else {
+                try state_delta.assignVariable(name, next.value, .{ .exported = next.exported, .readonly = next.readonly });
             }
-            if (previous.exported != next.exported) try state_delta.setVariableExported(name, next.exported);
-            if (!previous.readonly and next.readonly) try state_delta.setVariableReadonly(name);
-        } else {
-            try state_delta.assignVariable(name, next.value, .{ .exported = next.exported, .readonly = next.readonly });
+        }
+
+        var before_variables = before.variables.iterator();
+        while (before_variables.next()) |entry| {
+            const name = entry.key_ptr.*;
+            if (assignmentListContainsName(excluded_assignments, name)) continue;
+            if (!after.variables.contains(name)) try state_delta.unsetVariable(name);
         }
     }
 
-    var before_variables = before.variables.iterator();
-    while (before_variables.next()) |entry| {
-        const name = entry.key_ptr.*;
-        if (assignmentListContainsName(excluded_assignments, name)) continue;
-        if (!after.variables.contains(name)) try state_delta.unsetVariable(name);
-    }
+    if (after.functions_mutated) {
+        var after_functions = after.functions.iterator();
+        while (after_functions.next()) |entry| try state_delta.setFunction(entry.value_ptr.*);
 
-    var after_functions = after.functions.iterator();
-    while (after_functions.next()) |entry| try state_delta.setFunction(entry.value_ptr.*);
-
-    var before_functions = before.functions.iterator();
-    while (before_functions.next()) |entry| {
-        if (!after.functions.contains(entry.key_ptr.*)) try state_delta.unsetFunction(entry.key_ptr.*);
+        var before_functions = before.functions.iterator();
+        while (before_functions.next()) |entry| {
+            if (!after.functions.contains(entry.key_ptr.*)) try state_delta.unsetFunction(entry.key_ptr.*);
+        }
     }
 
     try appendOptionDiff(before.options, after.options, state_delta);
