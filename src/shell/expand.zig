@@ -284,16 +284,30 @@ const ExpandedWordFields = struct {
     }
 };
 
+const LeadingTildeExpansion = struct {
+    text: []const u8,
+    quoted_glob: bool = false,
+};
+
+fn expandLeadingTilde(allocator: std.mem.Allocator, raw: []const u8, env: EnvLookup) !LeadingTildeExpansion {
+    if (raw.len == 0 or raw[0] != '~') return .{ .text = try allocator.dupe(u8, raw) };
+
+    const end = tildePrefixEnd(raw, 0, false);
+    const home = try lookupTildeHome(allocator, raw[1..end], env) orelse return .{ .text = try allocator.dupe(u8, raw) };
+    defer allocator.free(home);
+
+    return .{
+        .text = try std.mem.concat(allocator, u8, &.{ home, raw[end..] }),
+        .quoted_glob = hasGlobSyntax(home),
+    };
+}
+
 pub fn expandWord(allocator: std.mem.Allocator, raw: []const u8, options: Options) !ExpansionResult {
     _ = options.features;
-    const tilde_expanded: ?[]const u8 = if (raw.len != 0 and raw[0] == '~')
-        try expandTilde(allocator, raw, options.env)
-    else
-        null;
-    defer if (tilde_expanded) |expanded| allocator.free(expanded);
-    const expansion_input = tilde_expanded orelse raw;
+    const tilde_expanded = try expandLeadingTilde(allocator, raw, options.env);
+    defer allocator.free(tilde_expanded.text);
 
-    var parts = try parseWordParts(allocator, expansion_input);
+    var parts = try parseWordParts(allocator, tilde_expanded.text);
     defer parts.deinit();
     const pathname_expansion_safe = !hasQuotedGlobSyntax(parts, .{ .extglob = options.extglob });
 
@@ -305,7 +319,7 @@ pub fn expandWord(allocator: std.mem.Allocator, raw: []const u8, options: Option
     var current: std.ArrayList(u8) = .empty;
     defer current.deinit(allocator);
     var force_current_field = false;
-    var quoted_expansion_glob = false;
+    var quoted_expansion_glob = tilde_expanded.quoted_glob;
 
     const ifs = options.env.get("IFS") orelse " \t\n";
     try appendWordPartsUnquoted(
@@ -347,10 +361,10 @@ pub fn expandWord(allocator: std.mem.Allocator, raw: []const u8, options: Option
 }
 
 fn expandWordFieldsNoPathname(allocator: std.mem.Allocator, raw: []const u8, options: Options) !ExpandedWordFields {
-    const tilde_expanded = try expandTilde(allocator, raw, options.env);
-    defer allocator.free(tilde_expanded);
+    const tilde_expanded = try expandLeadingTilde(allocator, raw, options.env);
+    defer allocator.free(tilde_expanded.text);
 
-    var parts = try parseWordParts(allocator, tilde_expanded);
+    var parts = try parseWordParts(allocator, tilde_expanded.text);
     defer parts.deinit();
 
     var fields: std.ArrayList([]const u8) = .empty;
@@ -361,7 +375,7 @@ fn expandWordFieldsNoPathname(allocator: std.mem.Allocator, raw: []const u8, opt
     var current: std.ArrayList(u8) = .empty;
     defer current.deinit(allocator);
     var force_current_field = false;
-    var quoted_expansion_glob = false;
+    var quoted_expansion_glob = tilde_expanded.quoted_glob;
 
     const ifs = options.env.get("IFS") orelse " \t\n";
     try appendWordPartsUnquoted(
@@ -1216,7 +1230,7 @@ fn renderParameter(
                 if (options.nounset and !isNounsetExemptParameter(parsed.name)) return error.NounsetParameter;
                 break :blk "";
             };
-            var pattern = try expandPatternWord(allocator, parsed.word, options);
+            var pattern = try expandWordPattern(allocator, parsed.word, options);
             defer pattern.deinit(allocator);
             return removePattern(allocator, base, pattern, parsed.operator, options.extglob);
         },
@@ -10445,6 +10459,40 @@ test "quoted parameter expansion is not subject to pathname expansion" {
     try std.testing.expectEqual(@as(usize, 2), unquoted.fields.len);
     try std.testing.expectEqualStrings(a, unquoted.fields[0]);
     try std.testing.expectEqualStrings(b, unquoted.fields[1]);
+}
+
+test "tilde expansion result is not subject to pathname expansion" {
+    const a = "rush-tilde-glob-a.tmp";
+    const b = "rush-tilde-glob-b.tmp";
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = a, .data = "" });
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = b, .data = "" });
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, a) catch {};
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, b) catch {};
+
+    const env = struct {
+        fn lookup(_: ?*const anyopaque, name: []const u8) ?[]const u8 {
+            if (std.mem.eql(u8, name, "HOME")) return "rush-tilde-glob-?.tmp";
+            return testLookup(null, name);
+        }
+    };
+
+    var expanded = try expandWord(std.testing.allocator, "~", .{ .env = .{ .lookupFn = env.lookup }, .io = std.testing.io });
+    defer expanded.deinit();
+    try std.testing.expectEqual(@as(usize, 1), expanded.fields.len);
+    try std.testing.expectEqualStrings("rush-tilde-glob-?.tmp", expanded.fields[0]);
+}
+
+test "parameter prefix removal expands tilde in pattern words" {
+    const env = struct {
+        fn lookup(_: ?*const anyopaque, name: []const u8) ?[]const u8 {
+            if (std.mem.eql(u8, name, "HOME")) return "/usr";
+            return testLookup(null, name);
+        }
+    };
+
+    const removed = try expandWordScalar(std.testing.allocator, "${PATHLIKE#~}", .{ .env = .{ .lookupFn = env.lookup } });
+    defer std.testing.allocator.free(removed);
+    try std.testing.expectEqualStrings("/local/bin/rush", removed);
 }
 
 test "pathname expansion preserves unmatched patterns" {

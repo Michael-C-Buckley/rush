@@ -400,6 +400,19 @@
             .status = 0,
         },
         .{
+            .name = "parameter prefix removal expands tilde pattern words",
+            .script =
+            \\value=~/src
+            \\printf '<%s>\n' "${value#~}"
+            ,
+            .stdout =
+            \\</src>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "tilde expansion applies at the start of an unquoted word",
             .script =
             \\set -- ~ ~/subdir
@@ -435,6 +448,21 @@
             .stdout =
             \\<x~>
             \\<x~/subdir>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "tilde expansion results are not pathname expanded",
+            .script =
+            \\HOME='a*'
+            \\: >a1
+            \\: >a2
+            \\printf '<%s>\n' ~
+            ,
+            .stdout =
+            \\<a*>
             \\
             ,
             .stderr = "",
