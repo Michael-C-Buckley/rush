@@ -9359,8 +9359,21 @@ fn appendCommandTextFromArgv(allocator: std.mem.Allocator, text: *std.ArrayList(
     std.debug.assert(argv.len != 0);
     for (argv, 0..) |arg, index| {
         if (index != 0) try text.append(allocator, ' ');
-        try appendShellSingleQuoted(allocator, text, arg);
+        if (plainCommandDisplayWord(arg)) {
+            try text.appendSlice(allocator, arg);
+        } else {
+            try appendShellSingleQuoted(allocator, text, arg);
+        }
     }
+}
+
+fn plainCommandDisplayWord(value: []const u8) bool {
+    if (value.len == 0) return false;
+    for (value) |byte| switch (byte) {
+        'a'...'z', 'A'...'Z', '0'...'9', '_', '-', '.', '/', ':', '=', '+', ',' => {},
+        else => return false,
+    };
+    return true;
 }
 
 fn pipeFailureMessage(err: runtime.fd.PipeError) []const u8 {
@@ -22705,7 +22718,7 @@ test "semantic jobs builtin refreshes stopped and done jobs and drains notificat
     );
     defer stopped_jobs.deinit();
     try std.testing.expectEqual(@as(outcome.ExitStatus, 0), stopped_jobs.status);
-    try std.testing.expectEqualStrings("[1] + Stopped (SIGSTOP) 'sleep' '1'\n", stopped_jobs.stdout.items);
+    try std.testing.expectEqualStrings("[1] + Stopped (SIGSTOP) sleep 1\n", stopped_jobs.stdout.items);
     try stopped_jobs.commitDelta(&shell_state, .current_shell);
     try std.testing.expectEqual(state.JobState.stopped, shell_state.background_jobs.items[0].state);
     try std.testing.expectEqual(@as(usize, 1), shell_state.pending_job_notifications.items.len);
@@ -22716,7 +22729,7 @@ test "semantic jobs builtin refreshes stopped and done jobs and drains notificat
         context.EvalContext.forTarget(.current_shell),
     );
     defer stopped_notifications.deinit();
-    try std.testing.expectEqualStrings("[1] Stopped (SIGSTOP) 'sleep' '1'\n", stopped_notifications.stdout.items);
+    try std.testing.expectEqualStrings("[1] Stopped (SIGSTOP) sleep 1\n", stopped_notifications.stdout.items);
     try stopped_notifications.commitDelta(&shell_state, .current_shell);
     try std.testing.expectEqual(@as(usize, 0), shell_state.pending_job_notifications.items.len);
 
@@ -22728,7 +22741,7 @@ test "semantic jobs builtin refreshes stopped and done jobs and drains notificat
         jobs_plan,
     );
     defer done_jobs.deinit();
-    try std.testing.expectEqualStrings("[1] + Done(5) 'sleep' '1'\n", done_jobs.stdout.items);
+    try std.testing.expectEqualStrings("[1] + Done(5) sleep 1\n", done_jobs.stdout.items);
     try done_jobs.commitDelta(&shell_state, .current_shell);
     try std.testing.expectEqual(@as(usize, 0), shell_state.background_jobs.items.len);
     try std.testing.expectEqual(@as(usize, 0), shell_state.pending_job_notifications.items.len);
@@ -22880,7 +22893,7 @@ test "semantic jobs builtin supports pid and long operands with diagnostics" {
         jobs_long_previous,
     );
     defer long_result.deinit();
-    try std.testing.expectEqualStrings("[1] - 9001 Running 'tool' 'alpha'\n", long_result.stdout.items);
+    try std.testing.expectEqualStrings("[1] - 9001 Running tool alpha\n", long_result.stdout.items);
     try long_result.commitDelta(&shell_state, .current_shell);
 
     const jobs_unknown = command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{
@@ -23176,7 +23189,7 @@ test "semantic background external pipeline starts a tracked job without waiting
     try std.testing.expectEqual(@as(usize, 2), job.processes.items.len);
     try std.testing.expectEqual(@as(usize, 0), job.processes.items[0].stage_index);
     try std.testing.expectEqual(@as(usize, 1), job.processes.items[1].stage_index);
-    try std.testing.expectEqualStrings("'cat' | 'wc' '-l'", job.command);
+    try std.testing.expectEqualStrings("cat | wc -l", job.command);
 }
 
 test "semantic background single external applies redirections and records process group" {
@@ -23224,7 +23237,7 @@ test "semantic background single external applies redirections and records proce
     const job = shell_state.background_jobs.items[0];
     try std.testing.expectEqual(@as(runtime.process.ProcessId, 9001), job.pid);
     try std.testing.expectEqual(@as(?runtime.process.ProcessId, 9001), job.process_group);
-    try std.testing.expectEqualStrings("'tool' 'arg'", job.command);
+    try std.testing.expectEqualStrings("tool arg", job.command);
 }
 
 test "semantic background builtin starts tracked subshell without parent mutation leakage" {
@@ -23270,7 +23283,7 @@ test "semantic background builtin starts tracked subshell without parent mutatio
     try std.testing.expectEqual(@as(runtime.process.ProcessId, 9101), job.pid);
     try std.testing.expectEqual(@as(?runtime.process.ProcessId, 9101), job.process_group);
     try std.testing.expectEqual(@as(usize, 1), job.processes.items.len);
-    try std.testing.expectEqualStrings("'export' 'BG_LEAK=child'", job.command);
+    try std.testing.expectEqualStrings("export BG_LEAK=child", job.command);
 }
 
 test "semantic background compound command is tracked as one subshell job" {
@@ -23349,7 +23362,7 @@ test "semantic background mixed pipeline starts one subshell without foreground 
     try std.testing.expectEqualSlices(outcome.ExitStatus, &.{ 0, 0 }, result.state_delta.last_pipeline_statuses.?);
 
     try result.commitDelta(&shell_state, .current_shell);
-    try std.testing.expectEqualStrings("'printf' 'payload' | 'sink'", shell_state.background_jobs.items[0].command);
+    try std.testing.expectEqualStrings("printf payload | sink", shell_state.background_jobs.items[0].command);
 }
 
 test "semantic background builtin redirections are guarded and restored around launch" {
@@ -23412,7 +23425,7 @@ test "semantic background builtin redirections are guarded and restored around l
     );
 
     try result.commitDelta(&shell_state, .current_shell);
-    try std.testing.expectEqualStrings("'printf' 'payload'", shell_state.background_jobs.items[0].command);
+    try std.testing.expectEqualStrings("printf payload", shell_state.background_jobs.items[0].command);
 }
 
 test "semantic pipeline evaluation streams builtin output into read builtin stdin" {
