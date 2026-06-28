@@ -462,6 +462,8 @@ pub const ShellState = struct {
     last_status: ExitStatus = 0,
     last_pipeline_statuses: std.ArrayList(ExitStatus) = .empty,
     pending_traps: std.ArrayList(TrapSignal) = .empty,
+    subshell_entry_traps: std.StringHashMapUnmanaged(Trap) = .empty,
+    traps_mutated_since_subshell_entry: bool = false,
     trap_execution: TrapExecution = .idle,
     pending_exit: ?ExitStatus = null,
     background_jobs: std.ArrayList(BackgroundJob) = .empty,
@@ -533,6 +535,13 @@ pub const ShellState = struct {
         }
         self.traps.deinit(self.allocator);
 
+        var subshell_entry_traps = self.subshell_entry_traps.iterator();
+        while (subshell_entry_traps.next()) |entry| {
+            self.allocator.free(entry.key_ptr.*);
+            self.allocator.free(entry.value_ptr.action);
+        }
+        self.subshell_entry_traps.deinit(self.allocator);
+
         for (self.event_hooks.items) |*hook| hook.deinit(self.allocator);
         self.event_hooks.deinit(self.allocator);
 
@@ -579,6 +588,12 @@ pub const ShellState = struct {
 
         var traps = self.traps.iterator();
         while (traps.next()) |entry| try cloned.setTrap(entry.key_ptr.*, entry.value_ptr.action);
+
+        var subshell_entry_traps = self.subshell_entry_traps.iterator();
+        while (subshell_entry_traps.next()) |entry| {
+            try cloned.setSubshellEntryTrap(entry.key_ptr.*, entry.value_ptr.action);
+        }
+        cloned.traps_mutated_since_subshell_entry = self.traps_mutated_since_subshell_entry;
 
         for (self.event_hooks.items) |hook| try cloned.setEventHook(hook);
 
@@ -634,6 +649,12 @@ pub const ShellState = struct {
         var traps = self.traps.iterator();
         while (traps.next()) |entry| try cloned.setTrap(entry.key_ptr.*, entry.value_ptr.action);
 
+        var subshell_entry_traps = self.subshell_entry_traps.iterator();
+        while (subshell_entry_traps.next()) |entry| {
+            try cloned.setSubshellEntryTrap(entry.key_ptr.*, entry.value_ptr.action);
+        }
+        cloned.traps_mutated_since_subshell_entry = self.traps_mutated_since_subshell_entry;
+
         for (self.event_hooks.items) |hook| try cloned.setEventHook(hook);
 
         try cloned.replacePositionals(self.positionals.items);
@@ -657,7 +678,12 @@ pub const ShellState = struct {
     ) ShellStateCloneError!ShellState {
         var snapshot = try self.clone(allocator);
         errdefer snapshot.deinit();
+        snapshot.clearSubshellEntryTraps();
+        var entry_traps = self.traps.iterator();
+        while (entry_traps.next()) |entry| try snapshot.setSubshellEntryTrap(entry.key_ptr.*, entry.value_ptr.action);
+        snapshot.traps_mutated_since_subshell_entry = false;
         try snapshot.clearCaughtTrapsForSubshell();
+        snapshot.traps_mutated_since_subshell_entry = false;
         snapshot.clearBackgroundJobs();
         snapshot.next_job_id = 1;
         snapshot.current_job_id = null;
@@ -683,6 +709,45 @@ pub const ShellState = struct {
         }
         for (caught.items) |name| self.clearTrap(name);
         self.validate();
+    }
+
+    fn setSubshellEntryTrap(self: *ShellState, name: []const u8, action: []const u8) !void {
+        assertValidTrapName(name);
+        trap_semantics.assertValidAction(action);
+
+        const owned_name = try self.allocator.dupe(u8, name);
+        errdefer self.allocator.free(owned_name);
+        const owned_action = try self.allocator.dupe(u8, action);
+        errdefer self.allocator.free(owned_action);
+
+        const result = try self.subshell_entry_traps.getOrPut(self.allocator, owned_name);
+        if (result.found_existing) {
+            self.allocator.free(owned_name);
+            self.allocator.free(result.value_ptr.action);
+            result.value_ptr.* = .{ .action = owned_action };
+        } else {
+            result.value_ptr.* = .{ .action = owned_action };
+        }
+
+        self.validate();
+    }
+
+    fn clearSubshellEntryTraps(self: *ShellState) void {
+        var traps = self.subshell_entry_traps.iterator();
+        while (traps.next()) |entry| {
+            self.allocator.free(entry.key_ptr.*);
+            self.allocator.free(entry.value_ptr.action);
+        }
+        self.subshell_entry_traps.clearRetainingCapacity();
+        self.validate();
+    }
+
+    pub fn trapListingState(self: ShellState) ShellState {
+        self.validate();
+        if (self.scope != .subshell or self.traps_mutated_since_subshell_entry) return self;
+        var listing = self;
+        listing.traps = self.subshell_entry_traps;
+        return listing;
     }
 
     pub fn acceptsExecutionTarget(self: ShellState, target: context.ExecutionTarget) bool {
@@ -1064,6 +1129,7 @@ pub const ShellState = struct {
             result.value_ptr.* = .{ .action = owned_action };
         }
 
+        if (self.scope == .subshell) self.traps_mutated_since_subshell_entry = true;
         self.validate();
     }
 
@@ -1078,6 +1144,7 @@ pub const ShellState = struct {
             self.allocator.free(entry.key);
             self.allocator.free(entry.value.action);
         }
+        if (self.scope == .subshell) self.traps_mutated_since_subshell_entry = true;
         self.validate();
     }
 
@@ -1460,6 +1527,11 @@ pub const ShellState = struct {
         }
         var traps = self.traps.iterator();
         while (traps.next()) |entry| {
+            assertValidTrapName(entry.key_ptr.*);
+            entry.value_ptr.validate();
+        }
+        var subshell_entry_traps = self.subshell_entry_traps.iterator();
+        while (subshell_entry_traps.next()) |entry| {
             assertValidTrapName(entry.key_ptr.*);
             entry.value_ptr.validate();
         }

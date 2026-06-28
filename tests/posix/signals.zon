@@ -140,6 +140,20 @@
             .status = 0,
         },
         .{
+            .name = "trap action shell error preserves status and continues",
+            .script =
+            \\trap 'set -o bad@option' INT
+            \\kill -s INT $$
+            \\printf 'after:%s\n' "$?"
+            ,
+            .stdout =
+            \\after:0
+            \\
+            ,
+            .stderr_match = .nonempty,
+            .status = 0,
+        },
+        .{
             .name = "self-signal trap is contained inside command substitution",
             .script =
             \\out=$(trap 'printf trap; exit' ALRM; kill -s ALRM $$; printf bad)
@@ -236,6 +250,25 @@
             .status = 0,
         },
         .{
+            .name = "trap listing in subshell reports entry traps until changed",
+            .script =
+            \\trap 'printf "parent\n"' EXIT
+            \\(trap)
+            \\(trap 'printf "child\n"' EXIT; trap)
+            \\(trap)
+            ,
+            .stdout =
+            \\trap -- 'printf "parent\n"' EXIT
+            \\trap -- 'printf "child\n"' EXIT
+            \\child
+            \\trap -- 'printf "parent\n"' EXIT
+            \\parent
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "subshell EXIT trap action mutates only the subshell environment",
             .script =
             \\x=outer
@@ -248,6 +281,28 @@
             \\
             ,
             .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "background subshell trap overrides inherited asynchronous signal ignore",
+            .script =
+            \\( trap 'printf "got INT\n"' INT
+            \\  trap - QUIT
+            \\  child_pid=$(sh -c 'printf "%s\n" "$PPID"')
+            \\  kill -s INT "$child_pid" || exit 4
+            \\  printf 'after INT\n'
+            \\  kill -s QUIT "$child_pid" || exit 2
+            \\  exit 0 ) &
+            \\wait $!
+            \\printf 'status:%s\n' "$?"
+            ,
+            .stdout =
+            \\got INT
+            \\after INT
+            \\status:131
+            \\
+            ,
+            .stderr_match = .any,
             .status = 0,
         },
         .{

@@ -7193,6 +7193,7 @@ fn executePendingTrapsWithFrame(
 
         try appendOutcomeBuffers(&buffers, action_outcome);
         try applyOutcomeToWorkingState(&working_state, &action_outcome, action_outcome.state_delta.target);
+        const effective_control_flow = action_outcome.effectiveControlFlow();
         const action_control_flow = if (interactiveSubshellExitTrapActionEndsWithExit(
             signal,
             eval_context,
@@ -7200,8 +7201,10 @@ fn executePendingTrapsWithFrame(
             body,
         ))
             outcome.ControlFlow{ .exit = action_outcome.status }
-        else
-            action_outcome.effectiveControlFlow();
+        else switch (effective_control_flow) {
+            .fatal => .normal,
+            else => effective_control_flow,
+        };
         result = .{ .status = action_outcome.status, .control_flow = action_control_flow };
         if (action_control_flow != .normal) break;
     }
@@ -7438,7 +7441,7 @@ fn runCurrentShellRuntimeTrapBoundary(
     if (!shell_state.acceptsExecutionTarget(eval_context.target)) return null;
     if (shell_state.trap_execution != .idle) return null;
 
-    if (eval_context.target == .current_shell and evaluator.signal_port != null) {
+    if (evaluator.signal_port != null) {
         if (try observeRuntimeSignal(evaluator, shell_state, eval_context)) |observed| {
             var observation = observed;
             defer observation.deinit();
@@ -19030,12 +19033,13 @@ fn lookupAliasSetValue(state_delta: delta.StateDelta, name: []const u8) ?[]const
 }
 
 fn listTraps(shell_state: state.ShellState, buffers: *EvaluationBuffers) !outcome.ExitStatus {
+    const listing_state = shell_state.trapListingState();
     var names: std.ArrayList([]const u8) = .empty;
     defer names.deinit(buffers.allocator);
-    var traps = shell_state.traps.iterator();
+    var traps = listing_state.traps.iterator();
     while (traps.next()) |entry| try names.append(buffers.allocator, entry.key_ptr.*);
     std.mem.sort([]const u8, names.items, {}, lessThanString);
-    for (names.items) |name| try appendTrapLine(shell_state, buffers, name, false);
+    for (names.items) |name| try appendTrapLine(listing_state, buffers, name, false);
     return 0;
 }
 
