@@ -187,12 +187,7 @@ pub const ShellExpansion = struct {
 
         for (words) |word| {
             var fields = try self.expandWordFields(word);
-            defer fields.deinit();
-            for (fields.fields) |field| {
-                const owned = try self.allocator.dupe(u8, field);
-                errdefer self.allocator.free(owned);
-                try argv.append(self.allocator, owned);
-            }
+            try self.appendOwnedFields(&argv, &fields);
         }
 
         const owned_argv = try argv.toOwnedSlice(self.allocator);
@@ -210,16 +205,11 @@ pub const ShellExpansion = struct {
         }
 
         var first_fields = try self.expandWordFields(words[0]);
-        defer first_fields.deinit();
-        for (first_fields.fields) |field| {
-            const owned = try self.allocator.dupe(u8, field);
-            errdefer self.allocator.free(owned);
-            try argv.append(self.allocator, owned);
-        }
-
+        errdefer first_fields.deinit();
         const declaration_utility = first_fields.fields.len != 0 and
             (isDeclarationUtility(first_fields.fields[0]) or
                 commandInvocationWrapsDeclaration(first_fields.fields, words[1..]));
+        try self.appendOwnedFields(&argv, &first_fields);
         for (words[1..]) |word| {
             if (declaration_utility and isAssignmentOperand(word)) {
                 const expanded = try self.expandAssignmentWordScalar(word);
@@ -229,17 +219,23 @@ pub const ShellExpansion = struct {
             }
 
             var fields = try self.expandWordFields(word);
-            defer fields.deinit();
-            for (fields.fields) |field| {
-                const owned = try self.allocator.dupe(u8, field);
-                errdefer self.allocator.free(owned);
-                try argv.append(self.allocator, owned);
-            }
+            try self.appendOwnedFields(&argv, &fields);
         }
 
         const owned_argv = try argv.toOwnedSlice(self.allocator);
         assertExpandedFields(owned_argv);
         return owned_argv;
+    }
+
+    fn appendOwnedFields(
+        self: *ShellExpansion,
+        argv: *std.ArrayList([]const u8),
+        fields: *expansion.ExpansionResult,
+    ) !void {
+        errdefer fields.deinit();
+        try argv.appendSlice(self.allocator, fields.fields);
+        self.allocator.free(fields.fields);
+        fields.fields = &.{};
     }
 
     pub fn expandAssignmentWord(self: *ShellExpansion, raw: []const u8) !command_plan.Assignment {

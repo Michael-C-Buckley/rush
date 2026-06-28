@@ -113,6 +113,52 @@ const ScopedExecRedirection = struct {
     }
 };
 
+const execution_scratch_retain_limit = 4 * 1024 * 1024;
+
+const ExecutionScratch = struct {
+    child_allocator: std.mem.Allocator,
+    arena: ?std.heap.ArenaAllocator = null,
+    active_borrows: usize = 0,
+    reset_pending: bool = false,
+
+    fn init(child_allocator: std.mem.Allocator) ExecutionScratch {
+        return .{ .child_allocator = child_allocator };
+    }
+
+    fn deinit(self: *ExecutionScratch) void {
+        if (self.arena) |*arena| arena.deinit();
+        self.* = undefined;
+    }
+
+    fn allocator(self: *ExecutionScratch) std.mem.Allocator {
+        if (self.arena == null) self.arena = std.heap.ArenaAllocator.init(self.child_allocator);
+        return self.arena.?.allocator();
+    }
+
+    fn beginBorrow(self: *ExecutionScratch) void {
+        self.active_borrows += 1;
+    }
+
+    fn endBorrow(self: *ExecutionScratch) void {
+        std.debug.assert(self.active_borrows != 0);
+        self.active_borrows -= 1;
+        if (self.active_borrows == 0 and self.reset_pending) {
+            self.reset_pending = false;
+            self.resetAfterStep();
+        }
+    }
+
+    fn resetAfterStep(self: *ExecutionScratch) void {
+        if (self.active_borrows != 0) {
+            self.reset_pending = true;
+            return;
+        }
+        if (self.arena) |*arena| {
+            _ = arena.reset(.{ .retain_with_limit = execution_scratch_retain_limit });
+        }
+    }
+};
+
 pub const Evaluator = struct {
     allocator: std.mem.Allocator,
     fd_port: ?runtime.fd.Port = null,
@@ -1985,9 +2031,20 @@ const SourceLowerer = struct {
         command: ir.SimpleCommand,
         target: context.ExecutionTarget,
     ) !SimpleCommandLowering {
-        const assignment_words = try self.allocator.alloc([]const u8, command.assignments.len);
+        var assignment_words_stack: [8][]const u8 = undefined;
+        const assignment_words = if (command.assignments.len <= assignment_words_stack.len)
+            assignment_words_stack[0..command.assignments.len]
+        else
+            try self.allocator.alloc([]const u8, command.assignments.len);
+        defer if (command.assignments.len > assignment_words_stack.len) self.allocator.free(assignment_words);
         for (command.assignments, 0..) |word, index| assignment_words[index] = word.raw;
-        const argv_words = try self.allocator.alloc([]const u8, command.argv.len);
+
+        var argv_words_stack: [16][]const u8 = undefined;
+        const argv_words = if (command.argv.len <= argv_words_stack.len)
+            argv_words_stack[0..command.argv.len]
+        else
+            try self.allocator.alloc([]const u8, command.argv.len);
+        defer if (command.argv.len > argv_words_stack.len) self.allocator.free(argv_words);
         for (command.argv, 0..) |word, index| argv_words[index] = word.raw;
 
         const expansion_target = self.expansionTarget(target);
@@ -3722,26 +3779,38 @@ const FunctionBodyCursor = struct {
                 .pipeline => {},
             }
 
+            const source_body_borrows_scratch = switch (entry.plan) {
+                .source, .ir_source => true,
+                .simple, .compound, .pipeline => false,
+            };
+            if (source_body_borrows_scratch) buffers.beginScratchBorrow();
+            errdefer if (source_body_borrows_scratch) buffers.endScratchBorrow();
             var source_body: ?TrapActionBody = switch (entry.plan) {
                 .source => |source| try lowerSourceStatementForCursor(
                     evaluator,
+                    buffers.scratchAllocator(),
                     shell_state,
                     child_context,
                     source,
                     buffers.stdin,
                     buffers.frame,
                 ),
-                .ir_source => |source| try lowerIrSourceStatementForCursor(
-                    evaluator,
-                    shell_state,
-                    child_context,
-                    source,
-                    buffers.stdin,
-                    buffers.frame,
-                ),
+                .ir_source => |source| blk: {
+                    break :blk try lowerIrSourceStatementForCursor(
+                        evaluator,
+                        buffers.scratchAllocator(),
+                        shell_state,
+                        child_context,
+                        source,
+                        buffers.stdin,
+                        buffers.frame,
+                    );
+                },
                 .simple, .compound, .pipeline => null,
             };
             if (source_body) |*body| {
+                defer if (source_body_borrows_scratch) buffers.resetScratchAfterStep();
+                defer if (source_body_borrows_scratch) buffers.endScratchBorrow();
                 defer body.deinit();
                 if (try ownedFunctionCallFromTrapActionBodyForCursor(evaluator.allocator, body.*)) |owned_plan| {
                     list_cursor.pending_call = .{
@@ -3785,34 +3854,40 @@ const FunctionBodyCursor = struct {
                 if (completion.stop_list) break;
                 continue;
             }
+            if (source_body_borrows_scratch) {
+                buffers.endScratchBorrow();
+                buffers.resetScratchAfterStep();
+            }
 
-            var child_outcome = try evaluateStatementPlan(
-                evaluator,
-                shell_state,
-                child_context,
-                entry.plan,
-                buffers.stdin,
-                buffers.frame,
-            );
-            defer child_outcome.deinit();
+            {
+                var child_outcome = try evaluateStatementPlan(
+                    evaluator,
+                    shell_state,
+                    child_context,
+                    entry.plan,
+                    buffers,
+                );
+                defer buffers.resetScratchAfterStep();
+                defer child_outcome.deinit();
 
-            const state_disposition: StatementChildStateDisposition = if (statementPlanCommitsStateToParent(entry.plan))
-                .{ .commit_to_working = child_outcome.state_delta.target }
-            else
-                .discard_except_status;
-            const completion = try completeStatementChildOutcome(
-                evaluator,
-                shell_state,
-                list_cursor.eval_context,
-                &child_outcome,
-                state_disposition,
-                entry.plan,
-                &list_cursor.abort_bash_line,
-                &list_cursor.result,
-                buffers,
-            );
-            list_cursor.index += 1;
-            if (completion.stop_list) break;
+                const state_disposition: StatementChildStateDisposition = if (statementPlanCommitsStateToParent(entry.plan))
+                    .{ .commit_to_working = child_outcome.state_delta.target }
+                else
+                    .discard_except_status;
+                const completion = try completeStatementChildOutcome(
+                    evaluator,
+                    shell_state,
+                    list_cursor.eval_context,
+                    &child_outcome,
+                    state_disposition,
+                    entry.plan,
+                    &list_cursor.abort_bash_line,
+                    &list_cursor.result,
+                    buffers,
+                );
+                list_cursor.index += 1;
+                if (completion.stop_list) break;
+            }
         }
         list_cursor.index = list_cursor.entryCount();
         return .{ .completed = list_cursor.result };
@@ -4151,6 +4226,7 @@ fn functionCursorCanSuspendSimpleCall(plan: command_plan.CommandPlan) bool {
 
 fn lowerSourceStatementForCursor(
     evaluator: *Evaluator,
+    allocator: std.mem.Allocator,
     shell_state: *state.ShellState,
     eval_context: context.EvalContext,
     source_plan: command_plan.SourceStatementPlan,
@@ -4170,8 +4246,8 @@ fn lowerSourceStatementForCursor(
     parser_resolver.active_frame = frame;
     parser_resolver.active_input = input;
     parser_resolver.source_line_offset = source_plan.line;
-    var body = (parser_resolver.lowerSource(
-        evaluator.allocator,
+    const body = (parser_resolver.lowerSourceScratch(
+        allocator,
         source_plan.source,
         eval_context,
         shell_state,
@@ -4185,6 +4261,7 @@ fn lowerSourceStatementForCursor(
 
 fn lowerIrSourceStatementForCursor(
     evaluator: *Evaluator,
+    allocator: std.mem.Allocator,
     shell_state: *state.ShellState,
     eval_context: context.EvalContext,
     source_plan: command_plan.IrStatementPlan,
@@ -4207,8 +4284,8 @@ fn lowerIrSourceStatementForCursor(
         source_plan.program.source,
         source_plan.program.statements[source_plan.statement_index].span.start,
     );
-    var body = (parser_resolver.lowerProgramStatement(
-        evaluator.allocator,
+    const body = (parser_resolver.lowerProgramStatementScratch(
+        allocator,
         source_plan.program.*,
         source_plan.statement_index,
         eval_context,
@@ -4491,6 +4568,7 @@ const EvaluationBuffers = struct {
     allocator: std.mem.Allocator,
     stdin: *EvaluationInput,
     frame: *execution_frame.ExecutionFrame,
+    scratch: ExecutionScratch,
     propagated_failure: ?outcome.PropagatedFailure = null,
     stdout: std.ArrayList(u8) = .empty,
     stderr: std.ArrayList(u8) = .empty,
@@ -4513,10 +4591,12 @@ const EvaluationBuffers = struct {
             .allocator = allocator,
             .stdin = stdin,
             .frame = frame,
+            .scratch = ExecutionScratch.init(allocator),
         };
     }
 
     fn deinit(self: *EvaluationBuffers) void {
+        self.scratch.deinit();
         self.stdout.deinit(self.allocator);
         self.stderr.deinit(self.allocator);
         self.side_stdout.deinit(self.allocator);
@@ -4525,6 +4605,22 @@ const EvaluationBuffers = struct {
         for (self.diagnostics.items) |message| self.allocator.free(message);
         self.diagnostics.deinit(self.allocator);
         self.* = undefined;
+    }
+
+    fn scratchAllocator(self: *EvaluationBuffers) std.mem.Allocator {
+        return self.scratch.allocator();
+    }
+
+    fn beginScratchBorrow(self: *EvaluationBuffers) void {
+        self.scratch.beginBorrow();
+    }
+
+    fn endScratchBorrow(self: *EvaluationBuffers) void {
+        self.scratch.endBorrow();
+    }
+
+    fn resetScratchAfterStep(self: *EvaluationBuffers) void {
+        self.scratch.resetAfterStep();
     }
 
     fn outputFrame(self: *EvaluationBuffers) !OutputFrame {
@@ -9718,32 +9814,34 @@ fn evaluateStatementList(
             evaluator.external_stdio,
             evaluator.io != null,
         );
-        var child_outcome = try evaluateStatementPlan(
-            evaluator,
-            shell_state,
-            child_context,
-            entry.plan,
-            buffers.stdin,
-            buffers.frame,
-        );
-        defer child_outcome.deinit();
+        {
+            var child_outcome = try evaluateStatementPlan(
+                evaluator,
+                shell_state,
+                child_context,
+                entry.plan,
+                buffers,
+            );
+            defer buffers.resetScratchAfterStep();
+            defer child_outcome.deinit();
 
-        const state_disposition: StatementChildStateDisposition = if (statementPlanCommitsStateToParent(entry.plan))
-            .{ .commit_to_working = child_outcome.state_delta.target }
-        else
-            .discard_except_status;
-        const completion = try completeStatementChildOutcome(
-            evaluator,
-            shell_state,
-            eval_context,
-            &child_outcome,
-            state_disposition,
-            entry.plan,
-            &abort_bash_line,
-            &result,
-            buffers,
-        );
-        if (completion.stop_list) break;
+            const state_disposition: StatementChildStateDisposition = if (statementPlanCommitsStateToParent(entry.plan))
+                .{ .commit_to_working = child_outcome.state_delta.target }
+            else
+                .discard_except_status;
+            const completion = try completeStatementChildOutcome(
+                evaluator,
+                shell_state,
+                eval_context,
+                &child_outcome,
+                state_disposition,
+                entry.plan,
+                &abort_bash_line,
+                &result,
+                buffers,
+            );
+            if (completion.stop_list) break;
+        }
     }
     return result;
 }
@@ -9885,32 +9983,34 @@ fn evaluateFunctionStatementList(
             }
         }
 
-        var child_outcome = try evaluateStatementPlan(
-            evaluator,
-            shell_state,
-            child_context,
-            entry.plan,
-            buffers.stdin,
-            buffers.frame,
-        );
-        defer child_outcome.deinit();
+        {
+            var child_outcome = try evaluateStatementPlan(
+                evaluator,
+                shell_state,
+                child_context,
+                entry.plan,
+                buffers,
+            );
+            defer buffers.resetScratchAfterStep();
+            defer child_outcome.deinit();
 
-        const state_disposition: StatementChildStateDisposition = if (statementPlanCommitsStateToParent(entry.plan))
-            .{ .commit_to_working = child_outcome.state_delta.target }
-        else
-            .discard_except_status;
-        const completion = try completeStatementChildOutcome(
-            evaluator,
-            shell_state,
-            eval_context,
-            &child_outcome,
-            state_disposition,
-            entry.plan,
-            &abort_bash_line,
-            &result,
-            buffers,
-        );
-        if (completion.stop_list) break;
+            const state_disposition: StatementChildStateDisposition = if (statementPlanCommitsStateToParent(entry.plan))
+                .{ .commit_to_working = child_outcome.state_delta.target }
+            else
+                .discard_except_status;
+            const completion = try completeStatementChildOutcome(
+                evaluator,
+                shell_state,
+                eval_context,
+                &child_outcome,
+                state_disposition,
+                entry.plan,
+                &abort_bash_line,
+                &result,
+                buffers,
+            );
+            if (completion.stop_list) break;
+        }
     }
     return .{ .result = result };
 }
@@ -9980,8 +10080,10 @@ fn evaluateFunctionTailSourceStatementPlan(
     parser_resolver.active_frame = buffers.frame;
     parser_resolver.active_input = buffers.stdin;
     parser_resolver.source_line_offset = source_plan.line;
-    var body = (parser_resolver.lowerSource(
-        evaluator.allocator,
+    buffers.beginScratchBorrow();
+    errdefer buffers.endScratchBorrow();
+    const body = (parser_resolver.lowerSourceScratch(
+        buffers.scratchAllocator(),
         source_plan.source,
         eval_context,
         shell_state,
@@ -9989,7 +10091,8 @@ fn evaluateFunctionTailSourceStatementPlan(
         error.OutOfMemory => return error.OutOfMemory,
         else => return error.Unimplemented,
     }) orelse return error.Unimplemented;
-    defer body.deinit();
+    defer buffers.resetScratchAfterStep();
+    defer buffers.endScratchBorrow();
     if (try evaluateFunctionTailTrapActionBody(
         evaluator,
         shell_state,
@@ -10024,8 +10127,10 @@ fn evaluateFunctionTailIrSourceStatementPlan(
         source_plan.program.source,
         source_plan.program.statements[source_plan.statement_index].span.start,
     );
-    var body = (parser_resolver.lowerProgramStatement(
-        evaluator.allocator,
+    buffers.beginScratchBorrow();
+    errdefer buffers.endScratchBorrow();
+    const body = (parser_resolver.lowerProgramStatementScratch(
+        buffers.scratchAllocator(),
         source_plan.program.*,
         source_plan.statement_index,
         eval_context,
@@ -10034,7 +10139,8 @@ fn evaluateFunctionTailIrSourceStatementPlan(
         error.OutOfMemory => return error.OutOfMemory,
         else => return error.Unimplemented,
     });
-    defer body.deinit();
+    defer buffers.resetScratchAfterStep();
+    defer buffers.endScratchBorrow();
     if (try evaluateFunctionTailTrapActionBody(
         evaluator,
         shell_state,
@@ -10607,33 +10713,32 @@ fn evaluateStatementPlan(
     shell_state: *state.ShellState,
     eval_context: context.EvalContext,
     plan: command_plan.StatementPlan,
-    input: *EvaluationInput,
-    frame: *execution_frame.ExecutionFrame,
+    buffers: *EvaluationBuffers,
 ) EvalError!outcome.CommandOutcome {
     eval_context.validate();
     plan.validate();
-    input.validate();
-    frame.validate();
+    buffers.stdin.validate();
+    buffers.frame.validate();
     return switch (plan) {
         .simple => |simple| evaluatePlanWithInput(
             evaluator,
             shell_state,
             eval_context.withTarget(simple.target),
             simple,
-            input,
-            frame,
+            buffers.stdin,
+            buffers.frame,
         ),
         .compound => |compound| evaluateCompoundPlanWithInput(
             evaluator,
             shell_state,
             eval_context.withTarget(compound.target),
             compound,
-            input,
-            frame,
+            buffers.stdin,
+            buffers.frame,
         ),
-        .pipeline => |pipeline| evaluatePipelinePlanWithFrame(evaluator, shell_state, eval_context, pipeline, frame),
-        .source => |source| evaluateSourceStatement(evaluator, shell_state, eval_context, source, input, frame),
-        .ir_source => |source| evaluateIrSourceStatement(evaluator, shell_state, eval_context, source, input, frame),
+        .pipeline => |pipeline| evaluatePipelinePlanWithFrame(evaluator, shell_state, eval_context, pipeline, buffers.frame),
+        .source => |source| evaluateSourceStatement(evaluator, shell_state, eval_context, source, buffers),
+        .ir_source => |source| evaluateIrSourceStatement(evaluator, shell_state, eval_context, source, buffers),
     };
 }
 
@@ -10642,14 +10747,13 @@ fn evaluateSourceStatement(
     shell_state: *state.ShellState,
     eval_context: context.EvalContext,
     source_plan: command_plan.SourceStatementPlan,
-    input: *EvaluationInput,
-    frame: *execution_frame.ExecutionFrame,
+    buffers: *EvaluationBuffers,
 ) EvalError!outcome.CommandOutcome {
     shell_state.validate();
     eval_context.validate();
     source_plan.validate();
-    input.validate();
-    frame.validate();
+    buffers.stdin.validate();
+    buffers.frame.validate();
     std.debug.assert(source_plan.target == eval_context.target or
         (source_plan.target == .current_shell and eval_context.target == .subshell));
 
@@ -10658,11 +10762,13 @@ fn evaluateSourceStatement(
     parser_resolver.arg_zero = evaluator.arg_zero;
     parser_resolver.expand_aliases = source_plan.expand_aliases and shell_state.shopts.enabled(.expand_aliases);
     parser_resolver.alias_state = evaluator.alias_state;
-    parser_resolver.active_frame = frame;
-    parser_resolver.active_input = input;
+    parser_resolver.active_frame = buffers.frame;
+    parser_resolver.active_input = buffers.stdin;
     parser_resolver.source_line_offset = source_plan.line;
-    var body = (parser_resolver.lowerSource(
-        evaluator.allocator,
+    buffers.beginScratchBorrow();
+    errdefer buffers.endScratchBorrow();
+    const body = (parser_resolver.lowerSourceScratch(
+        buffers.scratchAllocator(),
         source_plan.source,
         eval_context,
         shell_state,
@@ -10670,9 +10776,10 @@ fn evaluateSourceStatement(
         error.OutOfMemory => return error.OutOfMemory,
         else => return error.Unimplemented,
     }) orelse return error.Unimplemented;
-    defer body.deinit();
+    defer buffers.resetScratchAfterStep();
+    defer buffers.endScratchBorrow();
 
-    return evaluateTrapActionBodyWithInputInFrame(evaluator, shell_state, eval_context, body, input, frame);
+    return evaluateTrapActionBodyWithInputInFrame(evaluator, shell_state, eval_context, body, buffers.stdin, buffers.frame);
 }
 
 fn evaluateIrSourceStatement(
@@ -10680,14 +10787,13 @@ fn evaluateIrSourceStatement(
     shell_state: *state.ShellState,
     eval_context: context.EvalContext,
     source_plan: command_plan.IrStatementPlan,
-    input: *EvaluationInput,
-    frame: *execution_frame.ExecutionFrame,
+    buffers: *EvaluationBuffers,
 ) EvalError!outcome.CommandOutcome {
     shell_state.validate();
     eval_context.validate();
     source_plan.validate();
-    input.validate();
-    frame.validate();
+    buffers.stdin.validate();
+    buffers.frame.validate();
     std.debug.assert(source_plan.target == eval_context.target or
         (source_plan.target == .current_shell and eval_context.target == .subshell));
 
@@ -10696,16 +10802,16 @@ fn evaluateIrSourceStatement(
     parser_resolver.arg_zero = evaluator.arg_zero;
     parser_resolver.expand_aliases = source_plan.expand_aliases and shell_state.shopts.enabled(.expand_aliases);
     parser_resolver.alias_state = evaluator.alias_state;
-    parser_resolver.active_frame = frame;
-    parser_resolver.active_input = input;
+    parser_resolver.active_frame = buffers.frame;
+    parser_resolver.active_input = buffers.stdin;
     parser_resolver.source_line_offset = source_plan.line -| sourceLineIndex(
         source_plan.program.source,
         source_plan.program.statements[source_plan.statement_index].span.start,
     );
-    var arena = std.heap.ArenaAllocator.init(evaluator.allocator);
-    defer arena.deinit();
+    buffers.beginScratchBorrow();
+    errdefer buffers.endScratchBorrow();
     const body = (parser_resolver.lowerProgramStatementScratch(
-        arena.allocator(),
+        buffers.scratchAllocator(),
         source_plan.program.*,
         source_plan.statement_index,
         eval_context,
@@ -10714,8 +10820,10 @@ fn evaluateIrSourceStatement(
         error.OutOfMemory => return error.OutOfMemory,
         else => return error.Unimplemented,
     });
+    defer buffers.resetScratchAfterStep();
+    defer buffers.endScratchBorrow();
 
-    return evaluateTrapActionBodyWithInputInFrame(evaluator, shell_state, eval_context, body, input, frame);
+    return evaluateTrapActionBodyWithInputInFrame(evaluator, shell_state, eval_context, body, buffers.stdin, buffers.frame);
 }
 
 fn evaluateAndOrList(
@@ -11224,8 +11332,10 @@ fn evaluateStatementListSourceAtLine(
     parser_resolver.active_frame = buffers.frame;
     parser_resolver.active_input = buffers.stdin;
     parser_resolver.source_line_offset = source_line_offset;
-    var body = (parser_resolver.lowerSource(
-        evaluator.allocator,
+    buffers.beginScratchBorrow();
+    errdefer buffers.endScratchBorrow();
+    const body = (parser_resolver.lowerSourceScratch(
+        buffers.scratchAllocator(),
         source,
         eval_context,
         shell_state,
@@ -11233,7 +11343,8 @@ fn evaluateStatementListSourceAtLine(
         error.OutOfMemory => return error.OutOfMemory,
         else => return error.Unimplemented,
     }) orelse return error.Unimplemented;
-    defer body.deinit();
+    defer buffers.resetScratchAfterStep();
+    defer buffers.endScratchBorrow();
 
     if (trapActionStatementSequence(body)) |list| {
         return evaluateStatementList(evaluator, shell_state, eval_context, list, buffers);
