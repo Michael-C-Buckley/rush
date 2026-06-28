@@ -10610,8 +10610,10 @@ fn evaluateIrSourceStatement(
         source_plan.program.source,
         source_plan.program.statements[source_plan.statement_index].span.start,
     );
-    var body = (parser_resolver.lowerProgramStatement(
-        evaluator.allocator,
+    var arena = std.heap.ArenaAllocator.init(evaluator.allocator);
+    defer arena.deinit();
+    const body = (parser_resolver.lowerProgramStatementScratch(
+        arena.allocator(),
         source_plan.program.*,
         source_plan.statement_index,
         eval_context,
@@ -10620,7 +10622,6 @@ fn evaluateIrSourceStatement(
         error.OutOfMemory => return error.OutOfMemory,
         else => return error.Unimplemented,
     });
-    defer body.deinit();
 
     return evaluateTrapActionBodyWithInputInFrame(evaluator, shell_state, eval_context, body, input, frame);
 }
