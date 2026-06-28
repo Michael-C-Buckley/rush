@@ -1,6 +1,7 @@
 //! Shell-aware completion engine.
 
 const std = @import("std");
+const assets = @import("assets.zig");
 const default_builtins = @import("builtins.zig");
 const extension_api = @import("extensions/api.zig");
 const extension_handlers = @import("extensions/handlers.zig");
@@ -431,6 +432,9 @@ pub const ProviderKind = enum {
     builtin_directories,
     builtin_executables,
     builtin_variables,
+    builtin_aliases,
+    builtin_jobs,
+    builtin_functions,
     static_enum,
 };
 
@@ -1703,8 +1707,124 @@ fn appendProviderCandidates(
                 .replace_end = semantic.replace_end,
             });
         },
+        .builtin_aliases => {
+            var alias_iter = shell_state.aliases.iterator();
+            while (alias_iter.next()) |entry| try builder.appendCandidateIfMissing(allocator, .{
+                .value = entry.key_ptr.*,
+                .kind = .plain,
+                .description = "alias",
+                .replace_start = semantic.replace_start,
+                .replace_end = semantic.replace_end,
+            });
+        },
+        .builtin_jobs => try appendJobCandidates(allocator, shell_state, builder, semantic),
+        .builtin_functions => try appendShellFunctionCandidates(
+            allocator,
+            io,
+            shell_state,
+            builder,
+            semantic.replace_start,
+            semantic.replace_end,
+            "function",
+        ),
         .function => try appendFunctionProviderCandidates(allocator, io, shell_state, builder, rule, semantic),
     }
+}
+
+fn appendShellFunctionCandidates(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    shell_state: shell_state_mod.ShellState,
+    builder: *Builder,
+    replace_start: usize,
+    replace_end: usize,
+    description: ?[]const u8,
+) !void {
+    var function_iter = shell_state.functions.iterator();
+    while (function_iter.next()) |entry| {
+        if (shell_state.isFunctionAutoloadSuppressed(entry.key_ptr.*)) continue;
+        try builder.appendCandidateIfMissing(allocator, .{
+            .value = entry.key_ptr.*,
+            .kind = .function,
+            .description = description,
+            .replace_start = replace_start,
+            .replace_end = replace_end,
+        });
+    }
+
+    var autoload_names = try assets.autoloadFunctionNames(allocator, io, shell_state);
+    defer autoload_names.deinit();
+    for (autoload_names.names) |name| try builder.appendCandidateIfMissing(allocator, .{
+        .value = name,
+        .kind = .function,
+        .description = description,
+        .replace_start = replace_start,
+        .replace_end = replace_end,
+    });
+}
+
+fn appendJobCandidates(
+    allocator: std.mem.Allocator,
+    shell_state: shell_state_mod.ShellState,
+    builder: *Builder,
+    semantic: SemanticContext,
+) !void {
+    if (shell_state.current_job_id) |job_id| {
+        try appendJobCandidate(allocator, builder, semantic, "%+", "current job", 30);
+        try appendJobCandidate(allocator, builder, semantic, "%%", "current job", 25);
+        if (shell_state.findBackgroundJobById(job_id)) |job| try appendNumberedJobCandidate(
+            allocator,
+            builder,
+            semantic,
+            job,
+            20,
+        );
+    }
+    if (shell_state.previous_job_id) |job_id| {
+        try appendJobCandidate(allocator, builder, semantic, "%-", "previous job", 15);
+        if (shell_state.findBackgroundJobById(job_id)) |job| try appendNumberedJobCandidate(
+            allocator,
+            builder,
+            semantic,
+            job,
+            10,
+        );
+    }
+    for (shell_state.background_jobs.items) |job| {
+        if (shell_state.current_job_id != null and shell_state.current_job_id.? == job.id) continue;
+        if (shell_state.previous_job_id != null and shell_state.previous_job_id.? == job.id) continue;
+        try appendNumberedJobCandidate(allocator, builder, semantic, job, 0);
+    }
+}
+
+fn appendNumberedJobCandidate(
+    allocator: std.mem.Allocator,
+    builder: *Builder,
+    semantic: SemanticContext,
+    job: shell_state_mod.BackgroundJob,
+    priority: i8,
+) !void {
+    const value = try std.fmt.allocPrint(allocator, "%{d}", .{job.id});
+    defer allocator.free(value);
+    try appendJobCandidate(allocator, builder, semantic, value, "job", priority);
+}
+
+fn appendJobCandidate(
+    allocator: std.mem.Allocator,
+    builder: *Builder,
+    semantic: SemanticContext,
+    value: []const u8,
+    description: []const u8,
+    priority: i8,
+) !void {
+    try builder.appendCandidateIfMissing(allocator, .{
+        .value = value,
+        .kind = .plain,
+        .description = description,
+        .priority = priority,
+        .replace_start = semantic.replace_start,
+        .replace_end = semantic.replace_end,
+    });
 }
 
 fn appendFunctionProviderCandidates(
@@ -2217,6 +2337,12 @@ fn registerBuiltinProviderId(state: *State, base_rule: Rule, id: []const u8) !vo
         .builtin_executables
     else if (std.mem.eql(u8, id, "variables") or std.mem.eql(u8, id, "builtin.variables"))
         .builtin_variables
+    else if (std.mem.eql(u8, id, "aliases") or std.mem.eql(u8, id, "builtin.aliases"))
+        .builtin_aliases
+    else if (std.mem.eql(u8, id, "jobs") or std.mem.eql(u8, id, "builtin.jobs"))
+        .builtin_jobs
+    else if (std.mem.eql(u8, id, "functions") or std.mem.eql(u8, id, "builtin.functions"))
+        .builtin_functions
     else
         return;
     try state.registerRule(rule);
@@ -2433,13 +2559,7 @@ fn commandCandidates(
         .replace_end = replace_end,
     });
 
-    var function_iter = shell_state.functions.iterator();
-    while (function_iter.next()) |entry| try builder.appendCandidateIfMissing(allocator, .{
-        .value = entry.key_ptr.*,
-        .kind = .function,
-        .replace_start = replace_start,
-        .replace_end = replace_end,
-    });
+    try appendShellFunctionCandidates(allocator, io, shell_state, &builder, replace_start, replace_end, null);
 
     for (default_builtins.default_registry) |builtin| try builder.appendCandidateIfMissing(allocator, .{
         .value = builtin.name,
@@ -2986,11 +3106,14 @@ test "default completion returns commands in command position" {
     var executable = try tmp.dir.createFile(std.testing.io, "rush-tool", .{ .permissions = .executable_file });
     executable.close(std.testing.io);
     try tmp.dir.writeFile(std.testing.io, .{ .sub_path = "rush-note", .data = "" });
+    try tmp.dir.createDirPath(std.testing.io, "rush/functions");
+    try tmp.dir.writeFile(std.testing.io, .{ .sub_path = "rush/functions/rush_lazy.rush", .data = "" });
 
     var tmp_root_buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
     const tmp_root_len = try tmp.dir.realPath(std.testing.io, &tmp_root_buffer);
     const tmp_root = tmp_root_buffer[0..tmp_root_len];
     try shell_state.putVariable("PATH", tmp_root, .{ .exported = true });
+    try shell_state.putVariable("XDG_CONFIG_HOME", tmp_root, .{});
 
     const source = "r";
     const application = try defaultApplication(std.testing.allocator, std.testing.io, shell_state, source, source.len);
@@ -3000,6 +3123,7 @@ test "default completion returns commands in command position" {
     try expectCandidate(candidates, "read", .builtin);
     try expectCandidate(candidates, "rush_alias", .command);
     try expectCandidate(candidates, "rush_fn", .function);
+    try expectCandidate(candidates, "rush_lazy", .function);
     try expectCandidate(candidates, "rush-tool", .command);
     try expectNoCandidate(candidates, "rush-note");
 }
@@ -3912,8 +4036,6 @@ test "builtin manifests complete alias and unalias aliases dynamically" {
 
     var shell_state = shell_state_mod.ShellState.init(std.testing.allocator);
     defer shell_state.deinit();
-    try sourceCompletionScript(&shell_state, "share/rush/completions/alias.rush");
-    try sourceCompletionScript(&shell_state, "share/rush/completions/unalias.rush");
     try shell_state.setAlias("ll", "ls -l");
 
     const alias_source = "alias l";
@@ -3959,6 +4081,17 @@ test "builtin manifests complete export and unset names dynamically" {
     try shell_state.putVariable("ZED", "2", .{});
     try shell_state.putFunctionName("zap");
 
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    try tmp.dir.createDirPath(std.testing.io, "rush/functions");
+    try tmp.dir.writeFile(std.testing.io, .{ .sub_path = "rush/functions/lazy_unset_hook.rush", .data = "" });
+    try tmp.dir.writeFile(std.testing.io, .{ .sub_path = "rush/functions/lazy_suppressed_hook.rush", .data = "" });
+    var tmp_root_buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
+    const tmp_root_len = try tmp.dir.realPath(std.testing.io, &tmp_root_buffer);
+    const tmp_root = tmp_root_buffer[0..tmp_root_len];
+    try shell_state.putVariable("XDG_CONFIG_HOME", tmp_root, .{});
+    try shell_state.unsetFunction("lazy_suppressed_hook");
+
     const export_source = "export AL";
     const export_application = try manifestApplication(
         std.testing.allocator,
@@ -3994,6 +4127,71 @@ test "builtin manifests complete export and unset names dynamically" {
     );
     defer unset_function_application.deinit(std.testing.allocator);
     try std.testing.expectEqualStrings("zap", unset_function_application.edit.replacement);
+
+    const unset_autoload_source = "unset -f lazy_unset";
+    const unset_autoload_application = try manifestApplication(
+        std.testing.allocator,
+        std.testing.io,
+        &completion_state,
+        shell_state,
+        unset_autoload_source,
+        unset_autoload_source.len,
+    );
+    defer unset_autoload_application.deinit(std.testing.allocator);
+    try std.testing.expectEqualStrings("lazy_unset_hook", unset_autoload_application.edit.replacement);
+
+    const unset_suppressed_source = "unset -f lazy_suppressed";
+    const unset_suppressed_application = try manifestApplication(
+        std.testing.allocator,
+        std.testing.io,
+        &completion_state,
+        shell_state,
+        unset_suppressed_source,
+        unset_suppressed_source.len,
+    );
+    defer unset_suppressed_application.deinit(std.testing.allocator);
+    try expectNoCandidate(unset_suppressed_application.ambiguous, "lazy_suppressed_hook");
+
+    const unset_variable_suppressed_source = "unset lazy_suppressed";
+    const unset_variable_suppressed_application = try manifestApplication(
+        std.testing.allocator,
+        std.testing.io,
+        &completion_state,
+        shell_state,
+        unset_variable_suppressed_source,
+        unset_variable_suppressed_source.len,
+    );
+    defer unset_variable_suppressed_application.deinit(std.testing.allocator);
+    try expectNoCandidate(unset_variable_suppressed_application.ambiguous, "lazy_suppressed_hook");
+}
+
+test "builtin manifest completes event hook functions" {
+    var completion_state = State.init(std.testing.allocator);
+    defer completion_state.deinit();
+    try loadManifestFile(std.testing.allocator, std.testing.io, &completion_state, "share/rush/completions/event.json");
+
+    var shell_state = shell_state_mod.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    try tmp.dir.createDirPath(std.testing.io, "rush/functions");
+    try tmp.dir.writeFile(std.testing.io, .{ .sub_path = "rush/functions/rush_direnv_hook.rush", .data = "" });
+    var tmp_root_buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
+    const tmp_root_len = try tmp.dir.realPath(std.testing.io, &tmp_root_buffer);
+    const tmp_root = tmp_root_buffer[0..tmp_root_len];
+    try shell_state.putVariable("XDG_CONFIG_HOME", tmp_root, .{});
+
+    const source = "event add directory.change direnv rush_dir";
+    const application = try manifestApplication(
+        std.testing.allocator,
+        std.testing.io,
+        &completion_state,
+        shell_state,
+        source,
+        source.len,
+    );
+    defer application.deinit(std.testing.allocator);
+    try std.testing.expectEqualStrings("rush_direnv_hook", application.edit.replacement);
 }
 
 test "builtin manifests complete jobs fg and bg job specs dynamically" {
@@ -4005,9 +4203,6 @@ test "builtin manifests complete jobs fg and bg job specs dynamically" {
 
     var shell_state = shell_state_mod.ShellState.init(std.testing.allocator);
     defer shell_state.deinit();
-    try sourceCompletionScript(&shell_state, "share/rush/completions/jobs.rush");
-    try sourceCompletionScript(&shell_state, "share/rush/completions/fg.rush");
-    try sourceCompletionScript(&shell_state, "share/rush/completions/bg.rush");
     try appendCompletionTestJob(&shell_state, 1, 7001, "first job");
     try appendCompletionTestJob(&shell_state, 2, 7002, "second job");
 

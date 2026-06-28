@@ -2373,6 +2373,49 @@ test "non-interactive Rush mode autoloads user functions" {
     try std.testing.expectEqualStrings("", result.stderr);
 }
 
+test "non-interactive unset function suppresses future autoload" {
+    const root = "rush-test-unset-function-autoload";
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, root ++ "/rush/functions");
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{
+        .sub_path = root ++ "/rush/functions/hello.rush",
+        .data =
+        \\hello() {
+        \\  printf 'autoloaded\n'
+        \\}
+        \\
+        ,
+    });
+
+    var env = std.process.Environ.Map.init(std.testing.allocator);
+    defer env.deinit();
+    try env.put("XDG_CONFIG_HOME", root);
+    try env.put("PATH", "");
+
+    var result = try runCommandStringWithEnvironment(
+        std.testing.allocator,
+        std.testing.io,
+        \\
+        \\unset -f hello
+        \\if hello; then
+        \\  printf 'unexpected\n'
+        \\else
+        \\  printf 'suppressed:%s\n' "$?"
+        \\fi
+        \\hello() { printf 'manual\n'; }
+        \\hello
+    ,
+        .{ .io = std.testing.io, .features = .bash(), .arg_zero = "rush" },
+        &env,
+        &.{},
+        .{},
+    );
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("suppressed:127\nmanual\n", result.stdout);
+}
+
 test "non-interactive POSIX mode does not autoload user functions" {
     const root = "rush-test-posix-function-autoload";
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};

@@ -2138,6 +2138,7 @@ const SourceLowerer = struct {
 
     fn autoloadFunction(self: *SourceLowerer, name: []const u8) !void {
         if (self.specialBuiltin(name) != null) return;
+        if (self.shell_state.isFunctionAutoloadSuppressed(name)) return;
         if (self.owner.evaluator.autoloading_function) |loading| {
             if (std.mem.eql(u8, loading, name)) return;
         }

@@ -33,6 +33,17 @@ pub const SearchDirs = struct {
     }
 };
 
+pub const FunctionNames = struct {
+    allocator: std.mem.Allocator,
+    names: []const []const u8,
+
+    pub fn deinit(self: *FunctionNames) void {
+        for (self.names) |name| self.allocator.free(name);
+        self.allocator.free(self.names);
+        self.* = undefined;
+    }
+};
+
 pub fn searchDirs(
     allocator: std.mem.Allocator,
     shell_state: shell.ShellState,
@@ -72,6 +83,52 @@ pub fn functionAutoload() shell.eval.FunctionAutoload {
     return .{ .lookup = functionAutoloadLookup };
 }
 
+pub fn autoloadFunctionNames(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    shell_state: shell.ShellState,
+) !FunctionNames {
+    var dirs = try searchDirs(allocator, shell_state, .functions, .config_first);
+    defer dirs.deinit();
+
+    var seen: std.StringHashMapUnmanaged(void) = .empty;
+    defer seen.deinit(allocator);
+    var names: std.ArrayList([]const u8) = .empty;
+    errdefer freePathList(allocator, &names);
+
+    for (dirs.paths) |path| {
+        var dir = std.Io.Dir.cwd().openDir(io, path, .{ .iterate = true }) catch |err| switch (err) {
+            error.FileNotFound, error.NotDir, error.AccessDenied => continue,
+            else => |open_err| return open_err,
+        };
+        defer dir.close(io);
+
+        var iterator = dir.iterate();
+        while (try iterator.next(io)) |entry| {
+            if (entry.kind == .directory) continue;
+            if (!std.mem.endsWith(u8, entry.name, ".rush")) continue;
+
+            const name = entry.name[0 .. entry.name.len - ".rush".len];
+            if (name.len == 0) continue;
+            if (shell_state.isFunctionAutoloadSuppressed(name)) continue;
+            if (seen.contains(name)) continue;
+
+            const owned_name = try allocator.dupe(u8, name);
+            names.append(allocator, owned_name) catch |err| {
+                allocator.free(owned_name);
+                return err;
+            };
+            seen.put(allocator, owned_name, {}) catch |err| {
+                _ = names.pop();
+                allocator.free(owned_name);
+                return err;
+            };
+        }
+    }
+
+    return .{ .allocator = allocator, .names = try names.toOwnedSlice(allocator) };
+}
+
 fn functionAutoloadLookup(
     opaque_context: ?*anyopaque,
     allocator: std.mem.Allocator,
@@ -80,6 +137,8 @@ fn functionAutoloadLookup(
     name: []const u8,
 ) !?shell.eval.FunctionAutoloadSource {
     _ = opaque_context;
+    if (shell_state.isFunctionAutoloadSuppressed(name)) return null;
+
     var dirs = try searchDirs(allocator, shell_state, .functions, .config_first);
     defer dirs.deinit();
 

@@ -403,7 +403,7 @@
       "additionalProperties": false,
       "properties": {
         "builtin": {
-          "enum": ["files", "directories", "executables", "variables"]
+          "enum": ["files", "directories", "executables", "variables", "aliases", "jobs", "functions"]
         },
         "tag": {
           "$ref": "#/$defs/name"

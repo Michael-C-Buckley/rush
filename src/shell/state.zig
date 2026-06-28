@@ -448,6 +448,7 @@ pub const ShellState = struct {
     functions: std.StringHashMapUnmanaged(command_plan.FunctionDefinition) = .empty,
     borrowed_functions: bool = false,
     functions_mutated: bool = false,
+    suppressed_autoload_functions: std.StringHashMapUnmanaged(void) = .empty,
     aliases: std.StringHashMapUnmanaged(Alias) = .empty,
     traps: std.StringHashMapUnmanaged(Trap) = .empty,
     event_hooks: std.ArrayList(event.Registration) = .empty,
@@ -504,6 +505,10 @@ pub const ShellState = struct {
             self.functions.deinit(self.allocator);
         }
 
+        var suppressed_autoload_functions = self.suppressed_autoload_functions.iterator();
+        while (suppressed_autoload_functions.next()) |entry| self.allocator.free(entry.key_ptr.*);
+        self.suppressed_autoload_functions.deinit(self.allocator);
+
         var aliases = self.aliases.iterator();
         while (aliases.next()) |entry| {
             self.allocator.free(entry.key_ptr.*);
@@ -553,6 +558,9 @@ pub const ShellState = struct {
         var functions = self.functions.iterator();
         while (functions.next()) |entry| try cloned.putFunction(entry.value_ptr.*);
 
+        var suppressed_autoload_functions = self.suppressed_autoload_functions.iterator();
+        while (suppressed_autoload_functions.next()) |entry| try cloned.suppressFunctionAutoload(entry.key_ptr.*);
+
         var aliases = self.aliases.iterator();
         while (aliases.next()) |entry| try cloned.setAlias(entry.key_ptr.*, entry.value_ptr.value);
 
@@ -600,6 +608,9 @@ pub const ShellState = struct {
         cloned.functions = self.functions;
         cloned.borrowed_functions = true;
         cloned.functions_mutated = false;
+
+        var suppressed_autoload_functions = self.suppressed_autoload_functions.iterator();
+        while (suppressed_autoload_functions.next()) |entry| try cloned.suppressFunctionAutoload(entry.key_ptr.*);
 
         var aliases = self.aliases.iterator();
         while (aliases.next()) |entry| try cloned.setAlias(entry.key_ptr.*, entry.value_ptr.value);
@@ -790,6 +801,11 @@ pub const ShellState = struct {
         return self.functions.get(name);
     }
 
+    pub fn isFunctionAutoloadSuppressed(self: ShellState, name: []const u8) bool {
+        assertValidVariableName(name);
+        return self.suppressed_autoload_functions.contains(name);
+    }
+
     pub fn putFunctionName(self: *ShellState, name: []const u8) !void {
         try self.putFunction(.{ .name = name });
     }
@@ -810,12 +826,14 @@ pub const ShellState = struct {
         }
 
         result.value_ptr.* = owned_definition;
+        if (self.suppressed_autoload_functions.fetchRemove(definition.name)) |entry| self.allocator.free(entry.key);
         self.functions_mutated = true;
         self.validate();
     }
 
     pub fn unsetFunction(self: *ShellState, name: []const u8) !void {
         assertValidVariableName(name);
+        try self.suppressFunctionAutoload(name);
         if (!self.functions.contains(name)) {
             self.validate();
             return;
@@ -827,6 +845,15 @@ pub const ShellState = struct {
             self.functions_mutated = true;
         }
         self.validate();
+    }
+
+    fn suppressFunctionAutoload(self: *ShellState, name: []const u8) !void {
+        assertValidVariableName(name);
+        if (self.suppressed_autoload_functions.contains(name)) return;
+
+        const owned_name = try self.allocator.dupe(u8, name);
+        errdefer self.allocator.free(owned_name);
+        try self.suppressed_autoload_functions.put(self.allocator, owned_name, {});
     }
 
     fn ensureOwnedFunctions(self: *ShellState) !void {
@@ -1349,6 +1376,8 @@ pub const ShellState = struct {
             entry.value_ptr.validate();
             std.debug.assert(std.mem.eql(u8, entry.key_ptr.*, entry.value_ptr.name));
         }
+        var suppressed_autoload_functions = self.suppressed_autoload_functions.iterator();
+        while (suppressed_autoload_functions.next()) |entry| assertValidVariableName(entry.key_ptr.*);
         var aliases = self.aliases.iterator();
         while (aliases.next()) |entry| assertValidAliasName(entry.key_ptr.*);
         var traps = self.traps.iterator();

@@ -1,3 +1,0 @@
-__rush_complete_jobs_specs() {
-  rush_complete jobs
-}

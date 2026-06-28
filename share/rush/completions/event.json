@@ -18,8 +18,7 @@
           { "value": "timer.tick", "description": "while the editor is idle" }
         ]
       },
-      "event.registrations": { "function": "__rush_complete_event_registrations" },
-      "event.functions": { "function": "__rush_complete_event_functions" }
+      "event.registrations": { "function": "__rush_complete_event_registrations" }
     },
     "subcommands": [
       {
@@ -33,7 +32,7 @@
           "states": [
             { "name": "event", "index": 0, "provider": "event.names", "description": "event to observe" },
             { "name": "name", "index": 1, "description": "registration name" },
-            { "name": "function", "index": 2, "provider": "event.functions", "description": "function to run" }
+            { "name": "function", "index": 2, "provider": "builtin.functions", "description": "function to run" }
           ]
         }
       },

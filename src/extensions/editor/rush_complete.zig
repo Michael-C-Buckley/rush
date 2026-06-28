@@ -2,6 +2,7 @@
 
 const std = @import("std");
 
+const assets = @import("../../assets.zig");
 const api = @import("../api.zig");
 const editor_completion = @import("../../editor/completion.zig");
 const runtime = @import("../../runtime.zig");
@@ -197,7 +198,17 @@ fn evaluateVariables(state: *State, invocation: *api.Invocation) !api.Evaluation
 fn evaluateFunctions(state: *State, invocation: *api.Invocation) !api.EvaluationResult {
     if (invocation.argv.len != 2) return api.EvaluationResult.normal(try usage(invocation));
     var iterator = invocation.shell_state.functions.iterator();
-    while (iterator.next()) |entry| try appendNamedCandidate(state, entry.key_ptr.*, .function, "function");
+    while (iterator.next()) |entry| {
+        if (invocation.shell_state.isFunctionAutoloadSuppressed(entry.key_ptr.*)) continue;
+        try appendNamedCandidate(state, entry.key_ptr.*, .function, "function");
+    }
+
+    var autoload_names = try assets.autoloadFunctionNames(state.allocator, state.io, invocation.shell_state);
+    defer autoload_names.deinit();
+    for (autoload_names.names) |name| {
+        if (invocation.shell_state.getFunction(name) != null) continue;
+        try appendNamedCandidate(state, name, .function, "function");
+    }
     return api.EvaluationResult.normal(0);
 }
 

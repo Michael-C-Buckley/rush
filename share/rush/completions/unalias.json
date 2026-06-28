@@ -4,9 +4,6 @@
   "command": {
     "name": "unalias",
     "description": "remove aliases",
-    "providers": {
-      "unalias.names": { "function": "__rush_complete_unalias_names" }
-    },
     "options": [
       {
         "short": "a",
@@ -20,7 +17,7 @@
           "name": "alias",
           "index": 0,
           "repeatable": true,
-          "provider": "unalias.names",
+          "provider": "builtin.aliases",
           "description": "alias to remove"
         }
       ]

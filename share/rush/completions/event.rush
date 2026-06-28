@@ -10,7 +10,3 @@ __rush_complete_event_registrations() {
       rush_complete candidate "$name" --kind plain --description "registered hook"
     done
 }
-
-__rush_complete_event_functions() {
-  rush_complete functions
-}

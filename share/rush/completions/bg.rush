@@ -1,3 +1,0 @@
-__rush_complete_bg_jobs() {
-  rush_complete jobs
-}

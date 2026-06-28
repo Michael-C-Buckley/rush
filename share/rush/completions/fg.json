@@ -4,15 +4,12 @@
   "command": {
     "name": "fg",
     "description": "move job to foreground",
-    "providers": {
-      "fg.jobs": { "function": "__rush_complete_fg_jobs" }
-    },
     "arguments": {
       "states": [
         {
           "name": "job",
           "index": 0,
-          "provider": "fg.jobs",
+          "provider": "builtin.jobs",
           "description": "job to foreground"
         }
       ]
