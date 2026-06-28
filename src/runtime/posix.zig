@@ -14,6 +14,11 @@ const runtime_signal = @import("signal.zig");
 
 extern "c" fn tcgetpgrp(fd: std.c.fd_t) std.c.pid_t;
 extern "c" fn tcsetpgrp(fd: std.c.fd_t, pgrp: std.c.pid_t) c_int;
+extern "c" fn execve(
+    path: [*:0]const u8,
+    argv: [*:null]const ?[*:0]const u8,
+    envp: [*:null]const ?[*:0]const u8,
+) c_int;
 extern "c" fn getattrlistbulk(
     dirfd: std.c.fd_t,
     attr_list: *MacosAttrList,
@@ -614,6 +619,8 @@ fn setFileCreationMask(
 fn spawn(context: *anyopaque, request: process.SpawnRequest) process.SpawnError!process.SpawnResult {
     const adapter = adapterFromContext(context);
     request.validate();
+    if (request.executable_path) |executable_path| return spawnResolvedPath(adapter, request, executable_path);
+
     const child = try std.process.spawn(adapter.io, .{
         .argv = request.argv,
         .cwd = request.cwd.toStdCwd(),
@@ -624,6 +631,213 @@ fn spawn(context: *anyopaque, request: process.SpawnRequest) process.SpawnError!
         .pgid = request.process_group,
     });
     return .{ .child = process.ChildProcess.init(child) };
+}
+
+fn spawnResolvedPath(
+    adapter: *Adapter,
+    request: process.SpawnRequest,
+    executable_path: []const u8,
+) process.SpawnError!process.SpawnResult {
+    request.validate();
+    std.debug.assert(request.executable_path != null);
+    std.debug.assert(executable_path.len != 0);
+    const environment = request.environment orelse return error.Unexpected;
+
+    var reserved_stdio = try ReservedStandardDescriptors.init();
+    defer reserved_stdio.deinit();
+
+    const stdin_pipe = if (request.stdin == .pipe) try spawnPipe(adapter) else null;
+    errdefer if (stdin_pipe) |descriptors| closePipe(descriptors);
+    const stdout_pipe = if (request.stdout == .pipe) try spawnPipe(adapter) else null;
+    errdefer if (stdout_pipe) |descriptors| closePipe(descriptors);
+    const stderr_pipe = if (request.stderr == .pipe) try spawnPipe(adapter) else null;
+    errdefer if (stderr_pipe) |descriptors| closePipe(descriptors);
+    const err_pipe = try spawnPipe(adapter);
+    errdefer closePipe(err_pipe);
+
+    const dev_null = if (request.stdin == .ignore or request.stdout == .ignore or request.stderr == .ignore)
+        try openNullDescriptor()
+    else
+        null;
+    defer if (dev_null) |descriptor| closeDescriptor(descriptor) catch {};
+
+    var arena_allocator = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+    defer arena_allocator.deinit();
+    const arena = arena_allocator.allocator();
+
+    const executable_path_z = try arena.dupeZ(u8, executable_path);
+    const argv_z = try arena.allocSentinel(?[*:0]const u8, request.argv.len, null);
+    for (request.argv, 0..) |arg, index| argv_z[index] = (try arena.dupeZ(u8, arg)).ptr;
+    const env_block = try environment.createPosixBlock(arena, .{});
+
+    const pid = std.c.fork();
+    switch (std.c.errno(pid)) {
+        .SUCCESS => {},
+        .AGAIN => return error.SystemResources,
+        .NOMEM => return error.SystemResources,
+        else => return error.Unexpected,
+    }
+
+    if (pid == 0) {
+        configureSpawnedChild(request, stdin_pipe, stdout_pipe, stderr_pipe, dev_null, err_pipe.write);
+        _ = execve(executable_path_z.ptr, argv_z.ptr, env_block.slice.ptr);
+        forkBail(err_pipe.write, execveErrorFromErrno(std.c.errno(-1)));
+    }
+
+    closeDescriptor(err_pipe.write) catch {};
+    defer closeDescriptor(err_pipe.read) catch {};
+    if (stdin_pipe) |descriptors| closeDescriptor(descriptors.read) catch {};
+    if (stdout_pipe) |descriptors| closeDescriptor(descriptors.write) catch {};
+    if (stderr_pipe) |descriptors| closeDescriptor(descriptors.write) catch {};
+
+    if (readForkError(err_pipe.read)) |child_err_int| {
+        return @errorCast(@errorFromInt(child_err_int));
+    } else |read_err| switch (read_err) {
+        error.EndOfStream => {},
+        error.Unexpected => {},
+    }
+
+    const child: std.process.Child = .{
+        .id = @intCast(pid),
+        .thread_handle = {},
+        .stdin = if (stdin_pipe) |descriptors| .{ .handle = descriptors.write, .flags = .{ .nonblocking = false } } else null,
+        .stdout = if (stdout_pipe) |descriptors| .{ .handle = descriptors.read, .flags = .{ .nonblocking = false } } else null,
+        .stderr = if (stderr_pipe) |descriptors| .{ .handle = descriptors.read, .flags = .{ .nonblocking = false } } else null,
+        .request_resource_usage_statistics = false,
+    };
+    return .{ .child = process.ChildProcess.init(child) };
+}
+
+fn spawnPipe(adapter: *Adapter) process.SpawnError!fd.PipeResult {
+    return pipe(@ptrCast(adapter), .{ .close_on_exec = true }) catch |err| switch (err) {
+        error.Unsupported => error.OperationUnsupported,
+        error.ProcessFdQuotaExceeded => error.ProcessFdQuotaExceeded,
+        error.SystemFdQuotaExceeded => error.SystemFdQuotaExceeded,
+        error.Unexpected => error.Unexpected,
+    };
+}
+
+fn closePipe(descriptors: fd.PipeResult) void {
+    closeDescriptor(descriptors.read) catch {};
+    closeDescriptor(descriptors.write) catch {};
+}
+
+fn configureSpawnedChild(
+    request: process.SpawnRequest,
+    stdin_pipe: ?fd.PipeResult,
+    stdout_pipe: ?fd.PipeResult,
+    stderr_pipe: ?fd.PipeResult,
+    dev_null: ?fd.Descriptor,
+    err_fd: fd.Descriptor,
+) void {
+    if (request.process_group) |requested_group| {
+        const group = if (requested_group == 0) std.c.getpid() else requested_group;
+        if (std.c.setpgid(0, group) != 0) forkBail(err_fd, error.InvalidProcessGroupId);
+    }
+    configureSpawnCwd(request.cwd, err_fd);
+    configureSpawnStdio(request.stdin, stdin_pipe, dev_null, 0, err_fd);
+    configureSpawnStdio(request.stdout, stdout_pipe, dev_null, 1, err_fd);
+    configureSpawnStdio(request.stderr, stderr_pipe, dev_null, 2, err_fd);
+
+    if (stdin_pipe) |descriptors| closeDescriptor(descriptors.write) catch {};
+    if (stdout_pipe) |descriptors| closeDescriptor(descriptors.read) catch {};
+    if (stderr_pipe) |descriptors| closeDescriptor(descriptors.read) catch {};
+}
+
+fn configureSpawnCwd(cwd: process.Cwd, err_fd: fd.Descriptor) void {
+    switch (cwd) {
+        .inherit => {},
+        .dir => |dir| if (std.c.fchdir(dir.handle) != 0) forkBail(err_fd, error.Unexpected),
+        .path => |path| {
+            const path_z = std.posix.toPosixPath(path) catch forkBail(err_fd, error.NameTooLong);
+            if (std.c.chdir(&path_z) != 0) forkBail(err_fd, error.Unexpected);
+        },
+    }
+}
+
+fn configureSpawnStdio(
+    stdio: process.StandardIo,
+    pipe_descriptors: ?fd.PipeResult,
+    dev_null: ?fd.Descriptor,
+    target: fd.Descriptor,
+    err_fd: fd.Descriptor,
+) void {
+    const source: ?fd.Descriptor = switch (stdio) {
+        .inherit => null,
+        .fd => |descriptor| descriptor,
+        .ignore => dev_null orelse forkBail(err_fd, error.Unexpected),
+        .pipe => switch (target) {
+            0 => (pipe_descriptors orelse forkBail(err_fd, error.Unexpected)).read,
+            1, 2 => (pipe_descriptors orelse forkBail(err_fd, error.Unexpected)).write,
+            else => unreachable,
+        },
+        .close => {
+            closeDescriptor(target) catch forkBail(err_fd, error.Unexpected);
+            return;
+        },
+    };
+    if (source) |descriptor| {
+        if (descriptor != target) duplicateDescriptorTo(descriptor, target) catch forkBail(err_fd, error.Unexpected);
+    }
+}
+
+const ForkErrorInt = std.meta.Int(.unsigned, @sizeOf(anyerror) * 8);
+
+fn forkBail(descriptor: fd.Descriptor, err: process.SpawnError) noreturn {
+    writeForkError(descriptor, @intFromError(err)) catch {};
+    std.c._exit(1);
+}
+
+fn writeForkError(descriptor: fd.Descriptor, value: ForkErrorInt) !void {
+    var buffer: [@sizeOf(ForkErrorInt)]u8 = undefined;
+    std.mem.writeInt(ForkErrorInt, &buffer, value, .little);
+    var index: usize = 0;
+    while (index < buffer.len) {
+        const written = std.c.write(descriptor, buffer[index..].ptr, buffer.len - index);
+        switch (std.c.errno(written)) {
+            .SUCCESS => index += @intCast(written),
+            .INTR => {},
+            else => return error.Unexpected,
+        }
+    }
+}
+
+fn readForkError(descriptor: fd.Descriptor) error{ EndOfStream, Unexpected }!ForkErrorInt {
+    var buffer: [@sizeOf(ForkErrorInt)]u8 = undefined;
+    var index: usize = 0;
+    while (index < buffer.len) {
+        const read_count = std.c.read(descriptor, buffer[index..].ptr, buffer.len - index);
+        switch (std.c.errno(read_count)) {
+            .SUCCESS => {
+                const count: usize = @intCast(read_count);
+                if (count == 0) break;
+                index += count;
+            },
+            .INTR => {},
+            else => return error.Unexpected,
+        }
+    }
+    if (index != buffer.len) return error.EndOfStream;
+    return std.mem.readInt(ForkErrorInt, &buffer, .little);
+}
+
+fn execveErrorFromErrno(errno: std.c.E) process.SpawnError {
+    return switch (errno) {
+        .@"2BIG" => error.SystemResources,
+        .ACCES => error.AccessDenied,
+        .PERM => error.PermissionDenied,
+        .INVAL, .NOEXEC => error.InvalidExe,
+        .IO, .LOOP => error.FileSystem,
+        .ISDIR => error.IsDir,
+        .NOENT => error.FileNotFound,
+        .NOTDIR => error.NotDir,
+        .TXTBSY => error.FileBusy,
+        .MFILE => error.ProcessFdQuotaExceeded,
+        .NFILE => error.SystemFdQuotaExceeded,
+        .NOMEM => error.SystemResources,
+        .NAMETOOLONG => error.NameTooLong,
+        else => error.Unexpected,
+    };
 }
 
 fn startSubshell(context: *anyopaque, request: process.StartSubshellRequest) process.SpawnError!process.SpawnResult {
@@ -940,14 +1154,25 @@ fn run(context: *anyopaque, request: process.RunRequest) process.RunError!proces
     var reserved_stdio = try ReservedStandardDescriptors.init();
     defer reserved_stdio.deinit();
 
-    var child = try std.process.spawn(adapter.io, .{
-        .argv = request.argv,
-        .cwd = request.cwd.toStdCwd(),
-        .environ_map = request.environment,
-        .stdin = request.stdin_stdio.toStdIo(),
-        .stdout = .pipe,
-        .stderr = .pipe,
-    });
+    var child = if (request.executable_path) |executable_path|
+        (try spawnResolvedPath(adapter, .{
+            .executable_path = executable_path,
+            .argv = request.argv,
+            .cwd = request.cwd,
+            .environment = request.environment,
+            .stdin = request.stdin_stdio,
+            .stdout = .pipe,
+            .stderr = .pipe,
+        }, executable_path)).child.child
+    else
+        try std.process.spawn(adapter.io, .{
+            .argv = request.argv,
+            .cwd = request.cwd.toStdCwd(),
+            .environ_map = request.environment,
+            .stdin = request.stdin_stdio.toStdIo(),
+            .stdout = .pipe,
+            .stderr = .pipe,
+        });
 
     std.debug.assert(child.stdout != null);
     std.debug.assert(child.stderr != null);

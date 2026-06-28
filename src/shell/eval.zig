@@ -13495,6 +13495,7 @@ fn evaluateExternal(
 const ExternalInvocation = struct {
     temporary_environment: assignment_runtime.TemporaryEnvironment,
     environment: std.process.Environ.Map,
+    executable_path: []const u8,
     argv: [][]const u8,
 
     fn init(
@@ -13533,6 +13534,7 @@ const ExternalInvocation = struct {
         return .{
             .temporary_environment = temporary_environment,
             .environment = environment,
+            .executable_path = resolution.path,
             .argv = argv,
         };
     }
@@ -13560,7 +13562,15 @@ const ExternalInvocation = struct {
         stdin: []const u8,
         stdin_stdio: runtime.process.StandardIo,
     ) runtime.process.RunError!runtime.process.RunResult {
-        return runExternalProcessWithStdin(evaluator, process_port, self.argv, &self.environment, stdin, stdin_stdio);
+        return runExternalProcessWithStdin(
+            evaluator,
+            process_port,
+            self.executable_path,
+            self.argv,
+            &self.environment,
+            stdin,
+            stdin_stdio,
+        );
     }
 
     fn spawn(
@@ -13569,7 +13579,7 @@ const ExternalInvocation = struct {
         process_port: runtime.process.Port,
         options: ExternalSpawnOptions,
     ) runtime.process.SpawnError!runtime.process.SpawnResult {
-        return spawnExternalProcess(evaluator, process_port, self.argv, &self.environment, options);
+        return spawnExternalProcess(evaluator, process_port, self.executable_path, self.argv, &self.environment, options);
     }
 };
 
@@ -14197,18 +14207,22 @@ fn externalArgv(
 
     const argv = try allocator.alloc([]const u8, plan.argv.len);
     errdefer allocator.free(argv);
-    argv[0] = resolution.path;
-    @memcpy(argv[1..], plan.argv[1..]);
+    @memcpy(argv, plan.argv);
     assertExternalArgv(argv);
     return argv;
 }
 
-fn shellFallbackArgv(allocator: std.mem.Allocator, argv: []const []const u8) ![][]const u8 {
+fn shellFallbackArgv(
+    allocator: std.mem.Allocator,
+    executable_path: []const u8,
+    argv: []const []const u8,
+) ![][]const u8 {
     std.debug.assert(argv.len != 0);
+    std.debug.assert(executable_path.len != 0);
     const fallback_argv = try allocator.alloc([]const u8, argv.len + 1);
     errdefer allocator.free(fallback_argv);
     fallback_argv[0] = "/bin/sh";
-    fallback_argv[1] = argv[0];
+    fallback_argv[1] = executable_path;
     @memcpy(fallback_argv[2..], argv[1..]);
     assertExternalArgv(fallback_argv);
     return fallback_argv;
@@ -14217,16 +14231,18 @@ fn shellFallbackArgv(allocator: std.mem.Allocator, argv: []const []const u8) ![]
 fn runExternalProcess(
     evaluator: *Evaluator,
     process_port: runtime.process.Port,
+    executable_path: []const u8,
     argv: []const []const u8,
     environment: *const std.process.Environ.Map,
     stdin: []const u8,
 ) runtime.process.RunError!runtime.process.RunResult {
-    return runExternalProcessWithStdin(evaluator, process_port, argv, environment, stdin, .pipe);
+    return runExternalProcessWithStdin(evaluator, process_port, executable_path, argv, environment, stdin, .pipe);
 }
 
 fn runExternalProcessWithStdin(
     evaluator: *Evaluator,
     process_port: runtime.process.Port,
+    executable_path: []const u8,
     argv: []const []const u8,
     environment: *const std.process.Environ.Map,
     stdin: []const u8,
@@ -14234,16 +14250,18 @@ fn runExternalProcessWithStdin(
 ) runtime.process.RunError!runtime.process.RunResult {
     return process_port.run(.{
         .allocator = evaluator.allocator,
+        .executable_path = executable_path,
         .argv = argv,
         .environment = environment,
         .stdin_stdio = stdin_stdio,
         .stdin = stdin,
     }) catch |err| switch (err) {
         error.InvalidExe => {
-            const fallback_argv = try shellFallbackArgv(evaluator.allocator, argv);
+            const fallback_argv = try shellFallbackArgv(evaluator.allocator, executable_path, argv);
             defer evaluator.allocator.free(fallback_argv);
             return process_port.run(.{
                 .allocator = evaluator.allocator,
+                .executable_path = "/bin/sh",
                 .argv = fallback_argv,
                 .environment = environment,
                 .stdin_stdio = stdin_stdio,
@@ -14257,11 +14275,13 @@ fn runExternalProcessWithStdin(
 fn spawnExternalProcess(
     evaluator: *Evaluator,
     process_port: runtime.process.Port,
+    executable_path: []const u8,
     argv: []const []const u8,
     environment: *const std.process.Environ.Map,
     options: ExternalSpawnOptions,
 ) runtime.process.SpawnError!runtime.process.SpawnResult {
     return process_port.spawn(.{
+        .executable_path = executable_path,
         .argv = argv,
         .environment = environment,
         .stdin = options.stdin,
@@ -14270,9 +14290,10 @@ fn spawnExternalProcess(
         .process_group = options.process_group,
     }) catch |err| switch (err) {
         error.InvalidExe => {
-            const fallback_argv = try shellFallbackArgv(evaluator.allocator, argv);
+            const fallback_argv = try shellFallbackArgv(evaluator.allocator, executable_path, argv);
             defer evaluator.allocator.free(fallback_argv);
             return process_port.spawn(.{
+                .executable_path = "/bin/sh",
                 .argv = fallback_argv,
                 .environment = environment,
                 .stdin = options.stdin,
@@ -21945,6 +21966,7 @@ const FakeExternalRuntime = struct {
     fd_operations: [64]FakeFdOperation = undefined,
     fd_operation_count: usize = 0,
     observed_argv: std.ArrayList([]const u8) = .empty,
+    observed_executable_path: ?[]const u8 = null,
     observed_environment: std.process.Environ.Map,
     observed_stdin: runtime.process.StandardIo = .inherit,
     observed_stdout: runtime.process.StandardIo = .inherit,
@@ -21989,6 +22011,7 @@ const FakeExternalRuntime = struct {
 
     fn deinit(self: *FakeExternalRuntime) void {
         self.clearObservedArgv();
+        if (self.observed_executable_path) |path| self.allocator.free(path);
         self.observed_run_stdin.deinit(self.allocator);
         self.observed_argv.deinit(self.allocator);
         self.observed_environment.deinit();
@@ -22074,6 +22097,14 @@ const FakeExternalRuntime = struct {
             errdefer self.allocator.free(owned_arg);
             try self.observed_argv.append(self.allocator, owned_arg);
         }
+    }
+
+    fn copyObservedExecutablePath(self: *FakeExternalRuntime, executable_path: ?[]const u8) !void {
+        if (self.observed_executable_path) |path| self.allocator.free(path);
+        self.observed_executable_path = if (executable_path) |path|
+            try self.allocator.dupe(u8, path)
+        else
+            null;
     }
 
     fn copyObservedEnvironment(self: *FakeExternalRuntime, environment: *const std.process.Environ.Map) !void {
@@ -22185,6 +22216,7 @@ const FakeExternalRuntime = struct {
         std.debug.assert(request.environment != null);
         std.debug.assert(self.spawn_count < self.observed_spawn_stdin.len);
         const spawn_index = self.spawn_count;
+        try self.copyObservedExecutablePath(request.executable_path);
         try self.copyObservedArgv(request.argv);
         try self.copyObservedEnvironment(request.environment.?);
         self.observed_stdin = request.stdin;
@@ -22275,6 +22307,7 @@ const FakeExternalRuntime = struct {
         const self = fromContext(opaque_context);
         request.validate();
         std.debug.assert(request.environment != null);
+        try self.copyObservedExecutablePath(request.executable_path);
         try self.copyObservedArgv(request.argv);
         try self.copyObservedEnvironment(request.environment.?);
         self.observed_run_stdin.clearRetainingCapacity();
@@ -24635,7 +24668,8 @@ test "semantic evaluator executes external commands through runtime process and 
     try std.testing.expectEqual(context.ExecutionTarget.child_process, result.state_delta.target);
     try std.testing.expectEqual(@as(usize, 1), fake.spawn_count);
     try std.testing.expectEqual(@as(usize, 1), fake.wait_count);
-    try std.testing.expectEqualStrings("/mock/bin/tool", fake.observed_argv.items[0]);
+    try std.testing.expectEqualStrings("/mock/bin/tool", fake.observed_executable_path.?);
+    try std.testing.expectEqualStrings("tool", fake.observed_argv.items[0]);
     try std.testing.expectEqualStrings("arg", fake.observed_argv.items[1]);
     try std.testing.expectEqualStrings("child", fake.observed_environment.get("FOO").?);
     try std.testing.expectEqualStrings("value", fake.observed_environment.get("TEMP").?);

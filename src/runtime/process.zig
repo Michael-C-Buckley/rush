@@ -99,6 +99,7 @@ pub const StandardIo = union(enum) {
 };
 
 pub const SpawnRequest = struct {
+    executable_path: ?[]const u8 = null,
     argv: []const []const u8,
     cwd: Cwd = .inherit,
     environment: ?*const std.process.Environ.Map = null,
@@ -117,6 +118,7 @@ pub const SpawnRequest = struct {
     }
 
     pub fn validate(self: SpawnRequest) void {
+        if (self.executable_path) |path| std.debug.assert(path.len != 0);
         std.debug.assert(self.argv.len != 0);
         std.debug.assert(self.argv[0].len != 0);
         self.cwd.validate();
@@ -339,6 +341,7 @@ pub const PollWaitResult = struct {
 
 pub const RunRequest = struct {
     allocator: std.mem.Allocator,
+    executable_path: ?[]const u8 = null,
     argv: []const []const u8,
     cwd: Cwd = .inherit,
     environment: ?*const std.process.Environ.Map = null,
@@ -356,6 +359,7 @@ pub const RunRequest = struct {
 
     pub fn validate(self: RunRequest) void {
         _ = self.allocator;
+        if (self.executable_path) |path| std.debug.assert(path.len != 0);
         std.debug.assert(self.argv.len != 0);
         std.debug.assert(self.argv[0].len != 0);
         self.cwd.validate();

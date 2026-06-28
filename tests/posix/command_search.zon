@@ -89,6 +89,18 @@
             .status = 0,
         },
         .{
+            .name = "PATH utility receives the command name as argv zero",
+            .script =
+            \\PATH=/usr/bin:/bin awk 'BEGIN { print ARGV[0] }'
+            ,
+            .stdout =
+            \\awk
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "unset -f removes functions from later command lookup",
             .script =
             \\foo() { printf 'function\n'; }
