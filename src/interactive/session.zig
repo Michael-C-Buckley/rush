@@ -883,7 +883,6 @@ fn dispatchBackgroundJobLifecycleActivityEvents(
 }
 
 fn interactivePendingExit(interactive_shell: *const Shell) ?shell.ExitStatus {
-    if (!interactive_shell.semantic_enabled) return null;
     interactive_shell.semantic_state.validate();
     std.debug.assert(interactive_shell.semantic_state.scope == .current_shell);
     return interactive_shell.semantic_state.pending_exit;
@@ -895,7 +894,6 @@ pub const Shell = struct {
     allocator: std.mem.Allocator,
     semantic_state: shell.ShellState,
     editor_state: EditorState,
-    semantic_enabled: bool = false,
 
     pub fn init(allocator: std.mem.Allocator) Shell {
         return .{
@@ -921,7 +919,6 @@ pub const Shell = struct {
         self.semantic_state = shell.ShellState.init(self.allocator);
         self.editor_state.deinit();
         self.editor_state = EditorState.init(self.allocator);
-        self.semantic_enabled = false;
 
         var startup_shell_options = options.shell_options;
         startup.setShellOptions(&startup_shell_options, options.monitor_option_explicit, stdinIsTty(io));
@@ -933,7 +930,6 @@ pub const Shell = struct {
             options.positionals,
             startup_shell_options,
         );
-        self.semantic_enabled = true;
     }
 };
 
@@ -980,7 +976,7 @@ pub fn run(
     defer terminal.deinit();
     runtime.signal.setWakeFd(terminal.trapSignalWakeFd());
     defer runtime.signal.clearWakeFd(terminal.trapSignalWakeFd());
-    if (interactive_shell.semantic_enabled) try syncSemanticTerminalSize(&interactive_shell.semantic_state, terminal);
+    try syncSemanticTerminalSize(&interactive_shell.semantic_state, terminal);
     var prompt_async_state: prompt_mod.AsyncState = .{};
     prompt_async_state.init(io, terminal.promptRedrawWakeFd());
     prompt_async_state.task_scheduler = prompt_mod.asyncTaskScheduler();
@@ -993,13 +989,8 @@ pub fn run(
             break;
         }
         terminal.refreshWinsize();
-        if (interactive_shell.semantic_enabled) {
-            try syncSemanticTerminalSize(&interactive_shell.semantic_state, terminal);
-        }
-        const notifications = if (interactive_shell.semantic_enabled)
-            try drainInteractiveSemanticJobNotifications(allocator, io, &interactive_shell.semantic_state)
-        else
-            try allocator.dupe(u8, "");
+        try syncSemanticTerminalSize(&interactive_shell.semantic_state, terminal);
+        const notifications = try drainInteractiveSemanticJobNotifications(allocator, io, &interactive_shell.semantic_state);
         defer allocator.free(notifications);
         try writeAll(io, .stderr, notifications);
         var job_event_context: Context = .{
@@ -1102,9 +1093,7 @@ pub fn run(
             .refresh_color_report = refreshInteractiveColorReport,
         };
         const read_result = try terminal.readLine(read_options);
-        if (interactive_shell.semantic_enabled) {
-            try syncSemanticTerminalSize(&interactive_shell.semantic_state, terminal);
-        }
+        try syncSemanticTerminalSize(&interactive_shell.semantic_state, terminal);
         const line = switch (read_result) {
             .submitted => |line| line,
             .canceled => {
@@ -1164,9 +1153,7 @@ pub fn run(
             continuation_options.diagnostic_context = null;
             continuation_options.diagnose = null;
             const continuation_read_result = try terminal.readLine(continuation_options);
-            if (interactive_shell.semantic_enabled) {
-                try syncSemanticTerminalSize(&interactive_shell.semantic_state, terminal);
-            }
+            try syncSemanticTerminalSize(&interactive_shell.semantic_state, terminal);
             const continuation_line = switch (continuation_read_result) {
                 .submitted => |continuation_line| continuation_line,
                 .canceled => {
@@ -1296,33 +1283,26 @@ fn runInteractiveScript(
     options: runner.Options,
 ) !runner.CommandResult {
     std.debug.assert(options.interactive);
-    if (interactive_shell.semantic_enabled) {
-        var execution = try runSemanticInteractiveCommandString(
-            allocator,
-            io,
-            interactive_shell,
-            script,
-            runner.invocationContext(options),
-            options.external_stdio,
-            options.live_stdio,
-        );
-        switch (execution) {
-            .output => |output| {
-                execution = undefined;
-                return output;
-            },
-            .unsupported => |message| {
-                execution = undefined;
-                defer allocator.free(message);
-                return runner.unsupported(allocator, message);
-            },
-        }
-    }
-
-    return runner.unsupported(
+    var execution = try runSemanticInteractiveCommandString(
         allocator,
-        "semantic interactive executor is disabled while legacy interactive services are active",
+        io,
+        interactive_shell,
+        script,
+        runner.invocationContext(options),
+        options.external_stdio,
+        options.live_stdio,
     );
+    switch (execution) {
+        .output => |output| {
+            execution = undefined;
+            return output;
+        },
+        .unsupported => |message| {
+            execution = undefined;
+            defer allocator.free(message);
+            return runner.unsupported(allocator, message);
+        },
+    }
 }
 
 pub fn runSemanticInteractiveCommandString(
@@ -1334,7 +1314,6 @@ pub fn runSemanticInteractiveCommandString(
     external_stdio: runtime.ExternalStdio,
     live_stdio: bool,
 ) !runner.SemanticInvocationExecution {
-    std.debug.assert(interactive_shell.semantic_enabled);
     var interactive_context: Context = .{
         .semantic_state = &interactive_shell.semantic_state,
         .editor_state = &interactive_shell.editor_state,
@@ -1558,10 +1537,7 @@ pub fn runReplInput(allocator: std.mem.Allocator, io: std.Io, input: []const u8)
             last_status = status;
             break;
         }
-        const notifications = if (interactive_shell.semantic_enabled)
-            try drainInteractiveSemanticJobNotifications(allocator, io, &interactive_shell.semantic_state)
-        else
-            try allocator.dupe(u8, "");
+        const notifications = try drainInteractiveSemanticJobNotifications(allocator, io, &interactive_shell.semantic_state);
         try stderr.appendSlice(allocator, notifications);
         allocator.free(notifications);
         const prompt_text = try prompt_mod.render(allocator, io, &interactive_shell.semantic_state, .{
@@ -1874,7 +1850,7 @@ test "semantic interactive command updates executor status for later commands" {
     try std.testing.expectEqualStrings("1\n", status_result.stdout);
     try std.testing.expectEqualStrings("", status_result.stderr);
 }
-test "semantic interactive shell state persists variable mutations without legacy execution" {
+test "semantic interactive shell state persists variable mutations" {
     var interactive_shell = Shell.init(std.testing.allocator);
     defer interactive_shell.deinit();
     var env = std.process.Environ.Map.init(std.testing.allocator);
@@ -1949,7 +1925,7 @@ test "semantic interactive eval accepts command substitution output" {
     );
 }
 
-test "semantic interactive assignment-bearing commands preserve assignment lifetime without legacy fallback" {
+test "semantic interactive assignment-bearing commands preserve assignment lifetime" {
     var interactive_shell = Shell.init(std.testing.allocator);
     defer interactive_shell.deinit();
     var env = std.process.Environ.Map.init(std.testing.allocator);
@@ -1991,7 +1967,7 @@ test "semantic interactive assignment-bearing commands preserve assignment lifet
         interactive_shell.semantic_state.getVariable("RUSH_INTERACTIVE_SPECIAL").?.value,
     );
 }
-test "semantic interactive external commands run through runtime ports without legacy fallback" {
+test "semantic interactive external commands run through runtime ports" {
     var interactive_shell = Shell.init(std.testing.allocator);
     defer interactive_shell.deinit();
     var env = std.process.Environ.Map.init(std.testing.allocator);
@@ -2030,7 +2006,6 @@ test "semantic interactive startup initializes ShellState without executor shell
         .positionals = &.{ "one", "two" },
         .shell_options = .{ .ignoreeof = true },
     });
-    try std.testing.expect(interactive_shell.semantic_enabled);
     try std.testing.expectEqualStrings(
         "present",
         interactive_shell.semantic_state.getVariable("RUSH_INTERACTIVE_IMPORTED").?.value,
@@ -2043,7 +2018,7 @@ test "semantic interactive startup initializes ShellState without executor shell
     try std.testing.expectEqualStrings("one", interactive_shell.semantic_state.positionals.items[0]);
     try std.testing.expectEqualStrings("two", interactive_shell.semantic_state.positionals.items[1]);
 }
-test "semantic interactive invocation executes simple command redirections without legacy fallback" {
+test "semantic interactive invocation executes simple command redirections" {
     const path = "rush-semantic-interactive-redirection.tmp";
     std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch |err| switch (err) {
         error.FileNotFound => {},

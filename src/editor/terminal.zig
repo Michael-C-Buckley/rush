@@ -6,7 +6,7 @@ const vaxis = @import("vaxis");
 const line_editor = @import("session.zig");
 
 const kitty_keyboard_set = "\x1b[={d}u";
-const legacy_kitty_keyboard_flags: u5 = 0;
+const default_kitty_keyboard_flags: u5 = 0;
 const editor_kitty_keyboard_flags: u5 = @bitCast(vaxis.Key.KittyFlags{});
 
 pub const Event = union(enum) {
@@ -142,7 +142,7 @@ pub const Capabilities = struct {
         output: *std.ArrayList(u8),
     ) !void {
         if (self.kitty_keyboard and !self.kitty_keyboard_handoff) {
-            try appendKittyKeyboardSetSequence(allocator, output, legacy_kitty_keyboard_flags);
+            try appendKittyKeyboardSetSequence(allocator, output, default_kitty_keyboard_flags);
             self.kitty_keyboard_handoff = true;
         }
         if (self.unicode) try output.appendSlice(allocator, vaxis.ctlseqs.unicode_reset);
@@ -172,7 +172,7 @@ pub const Capabilities = struct {
         output: *std.ArrayList(u8),
     ) !void {
         if (self.kitty_keyboard or self.kitty_keyboard_handoff) {
-            try appendKittyKeyboardSetSequence(allocator, output, legacy_kitty_keyboard_flags);
+            try appendKittyKeyboardSetSequence(allocator, output, default_kitty_keyboard_flags);
         }
         if (self.unicode) try output.appendSlice(allocator, vaxis.ctlseqs.unicode_reset);
         if (self.color_scheme_updates) try output.appendSlice(allocator, vaxis.ctlseqs.color_scheme_reset);
@@ -420,7 +420,7 @@ test "terminal capability reset plans active-mode cleanup" {
     try std.testing.expect(std.mem.indexOf(u8, output.items, vaxis.ctlseqs.bp_reset) != null);
 }
 
-test "terminal capability suspend forces legacy keyboard during command handoff" {
+test "terminal capability suspend restores default keyboard during command handoff" {
     var capabilities: Capabilities = .{
         .kitty_keyboard = true,
         .unicode = true,

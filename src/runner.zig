@@ -295,7 +295,7 @@ fn runSemanticCommandStringInternal(
     }
 
     const program = try ir.lowerSimpleCommands(invocation_allocator, parsed);
-    if (try semanticPreflightUnsupported(allocator, program, invocation.features, false, false, false)) |message| {
+    if (try semanticPreflightUnsupported(allocator, program, invocation.features)) |message| {
         return semanticUnsupported(allocator, message);
     }
 
@@ -727,7 +727,7 @@ fn runSemanticShellStateScriptWithoutAliasTiming(
 
     var program = try ir.lowerSimpleCommands(allocator, parsed);
     defer program.deinit();
-    if (try semanticPreflightUnsupported(allocator, program, invocation.features, false, false, false)) |message| {
+    if (try semanticPreflightUnsupported(allocator, program, invocation.features)) |message| {
         return semanticUnsupported(allocator, message);
     }
 
@@ -813,14 +813,7 @@ fn runSemanticAliasTimingShellStateScript(
             if (parsed.diagnostics.len == 0) {
                 var program = try ir.lowerSimpleCommands(allocator, parsed);
                 defer program.deinit();
-                if (try semanticPreflightUnsupported(
-                    allocator,
-                    program,
-                    invocation.features,
-                    false,
-                    false,
-                    false,
-                )) |message|
+                if (try semanticPreflightUnsupported(allocator, program, invocation.features)) |message|
                     return semanticUnsupported(allocator, message);
                 var alias_snapshot = shell_state.clone(allocator) catch |err| switch (err) {
                     error.OutOfMemory => return error.OutOfMemory,
@@ -976,7 +969,7 @@ pub fn runInteractiveCommandStringWithExtensionHandlers(
 
     var program = try ir.lowerSimpleCommands(allocator, parsed);
     defer program.deinit();
-    if (try semanticPreflightUnsupported(allocator, program, invocation.features, false, true, true)) |message|
+    if (try semanticPreflightUnsupported(allocator, program, invocation.features)) |message|
         return semanticUnsupported(allocator, message);
     if (semanticInteractiveProgramUnsupported(shell_state.*, program)) |message|
         return semanticUnsupported(allocator, message);
@@ -1119,7 +1112,7 @@ fn runSemanticLoweredProgram(
         );
         defer body.deinit();
 
-        if (semanticBodyUnsupportedMessage(body, false)) |message| {
+        if (semanticBodyUnsupportedMessage(body)) |message| {
             return semanticUnsupported(allocator, message);
         }
         const body_failed = semanticBodyIsStoppingFailure(body, eval_context.features);
@@ -1134,7 +1127,7 @@ fn runSemanticLoweredProgram(
                 return semanticUnsupported(
                     allocator,
                     // ziglint-ignore: Z024 user-visible diagnostic; wrapping would inject a newline into stderr
-                    "semantic executor production preflight keeps unsupported background statements outside the switched slice",
+                    "semantic executor does not yet support this background statement shape",
                 );
             defer background_plan.deinit(statement_allocator);
             break :blk shell.eval.evaluatePipelinePlan(
@@ -1778,35 +1771,9 @@ fn semanticPreflightUnsupported(
     allocator: std.mem.Allocator,
     program: ir.Program,
     features: compat.Features,
-    legacy_fallback_gates: bool,
-    allow_interactive_declarations: bool,
-    allow_interactive_exit: bool,
 ) !?[]const u8 {
-    if (legacy_fallback_gates and (program.if_commands.len != 0 or
-        program.loop_commands.len != 0 or
-        program.for_commands.len != 0 or
-        program.case_commands.len != 0 or
-        program.brace_groups.len != 0 or
-        program.subshells.len != 0))
-    {
-        return "semantic executor production preflight keeps compound commands unsupported outside the switched slice";
-    }
     for (program.statements, 0..) |statement, index| {
         if (semanticAsyncStatementPreflightUnsupported(program, statement, index)) |message| return message;
-    }
-    if (legacy_fallback_gates) {
-        for (program.commands) |command| {
-            if (commandUsesUnsupportedSemanticBuiltin(
-                command,
-                allow_interactive_declarations,
-                allow_interactive_exit,
-            ))
-                return "semantic executor preflight found an unsupported builtin";
-            if (commandUsesUnsupportedProductionExpansion(command))
-                return "semantic executor production preflight found an expansion shape outside the switched slice";
-            if (command.argv.len == 0 and command.redirections.len != 0)
-                return "semantic executor does not yet support redirection-only commands";
-        }
     }
     for (program.function_definitions) |definition| {
         if (try semanticFunctionDefinitionPreflightUnsupported(allocator, definition, features)) |message|
@@ -1827,7 +1794,7 @@ fn semanticFunctionDefinitionPreflightUnsupported(
     });
     defer parsed.deinit();
     if (parsed.diagnostics.len != 0)
-        return "semantic executor production preflight keeps parser-rejected function bodies on the old executor";
+        return "semantic executor does not yet support parser-rejected function bodies";
 
     var body_program = try ir.lowerSimpleCommands(allocator, parsed);
     defer body_program.deinit();
@@ -1842,8 +1809,7 @@ fn semanticFunctionBodyProgramUnsupported(
     for (program.statements, 0..) |statement, index| {
         if (semanticAsyncStatementPreflightUnsupported(program, statement, index)) |message| return message;
         if (statement.kind == .function_definition and statement.op_before != .sequence)
-            return "semantic executor production preflight keeps dynamically guarded function definitions " ++
-                "on the old executor";
+            return "semantic executor does not yet support dynamically guarded function definitions";
     }
     for (program.function_definitions) |definition| {
         if (try semanticFunctionDefinitionPreflightUnsupported(allocator, definition, features)) |message|
@@ -1853,18 +1819,11 @@ fn semanticFunctionBodyProgramUnsupported(
     return null;
 }
 
-fn wordUsesUnsupportedForWordExpansion(raw: []const u8) bool {
-    return std.mem.indexOf(u8, raw, "$(") != null or
-        std.mem.indexOfScalar(u8, raw, '`') != null or
-        std.mem.indexOf(u8, raw, "${") != null or
-        std.mem.indexOf(u8, raw, "$((") != null;
-}
-
 fn semanticAsyncStatementPreflightUnsupported(program: ir.Program, statement: ir.Statement, index: usize) ?[]const u8 {
     std.debug.assert(index < program.statements.len);
     if (!statement.async_after) return null;
     // ziglint-ignore: Z024 user-visible diagnostic; wrapping would inject a newline into stderr
-    const unsupported_background = "semantic executor production preflight keeps unsupported background statements outside the switched slice";
+    const unsupported_background = "semantic executor does not yet support this background statement shape";
     return switch (statement.kind) {
         .pipeline,
         .if_command,
@@ -1878,50 +1837,16 @@ fn semanticAsyncStatementPreflightUnsupported(program: ir.Program, statement: ir
     };
 }
 
-fn commandUsesUnsupportedSemanticBuiltin(
-    command: ir.SimpleCommand,
-    allow_interactive_declarations: bool,
-    allow_interactive_exit: bool,
-) bool {
-    if (command.argv.len == 0) return false;
-    const name = command.argv[0].text;
-    const definition = default_builtins.lookup(name) orelse return false;
-    return switch (definition.semantic_class) {
-        .unsupported => true,
-        .control_flow => !(allow_interactive_exit and std.mem.eql(u8, name, "exit")),
-        .declaration => !allow_interactive_declarations,
-        .no_op, .status_constant, .output, .predicate, .shell_state, .extension_state, .job_control => false,
-    };
-}
-
-fn commandUsesUnsupportedProductionExpansion(command: ir.SimpleCommand) bool {
-    for (command.argv) |word| {
-        if (wordUsesUnsupportedProductionExpansion(word.raw)) return true;
-    }
-    for (command.assignments) |word| {
-        if (wordUsesUnsupportedProductionExpansion(word.raw)) return true;
-    }
-    return false;
-}
-
-fn wordUsesUnsupportedProductionExpansion(raw: []const u8) bool {
-    return std.mem.indexOfScalar(u8, raw, '`') != null or
-        std.mem.indexOf(u8, raw, "${") != null or
-        std.mem.indexOf(u8, raw, "$((") != null or
-        std.mem.indexOf(u8, raw, "$@") != null or
-        std.mem.indexOf(u8, raw, "$*") != null;
-}
-
-fn semanticBodyUnsupportedMessage(body: shell.TrapActionBody, legacy_fallback_gates: bool) ?[]const u8 {
+fn semanticBodyUnsupportedMessage(body: shell.TrapActionBody) ?[]const u8 {
     body.validate();
     return switch (body) {
-        .simple => |plan| semanticCommandUnsupportedMessage(plan, legacy_fallback_gates),
-        .compound => |plan| semanticCompoundUnsupportedMessage(plan, legacy_fallback_gates),
-        .pipeline => |plan| semanticPipelineUnsupportedMessage(plan, legacy_fallback_gates),
+        .simple => |plan| semanticCommandUnsupportedMessage(plan),
+        .compound => |plan| semanticCompoundUnsupportedMessage(plan),
+        .pipeline => |plan| semanticPipelineUnsupportedMessage(plan),
         .owned => |owned| switch (owned.body) {
-            .simple => |plan| semanticCommandUnsupportedMessage(plan, legacy_fallback_gates),
-            .compound => |plan| semanticCompoundUnsupportedMessage(plan, legacy_fallback_gates),
-            .pipeline => |plan| semanticPipelineUnsupportedMessage(plan, legacy_fallback_gates),
+            .simple => |plan| semanticCommandUnsupportedMessage(plan),
+            .compound => |plan| semanticCompoundUnsupportedMessage(plan),
+            .pipeline => |plan| semanticPipelineUnsupportedMessage(plan),
             .failure => null,
         },
         .failure => null,
@@ -1991,60 +1916,54 @@ fn applyOutputWriteResult(command_outcome: *shell.CommandOutcome, result: Output
     if (command_outcome.state_delta.last_status != null) command_outcome.state_delta.last_status = 1;
 }
 
-fn semanticPipelineUnsupportedMessage(plan: shell.PipelinePlan, legacy_fallback_gates: bool) ?[]const u8 {
+fn semanticPipelineUnsupportedMessage(plan: shell.PipelinePlan) ?[]const u8 {
     plan.validate();
     for (plan.stages) |stage| switch (stage) {
-        .simple => |simple| if (semanticCommandUnsupportedMessage(simple, legacy_fallback_gates)) |message|
+        .simple => |simple| if (semanticCommandUnsupportedMessage(simple)) |message|
             return message,
-        .compound => |compound| if (semanticCompoundUnsupportedMessage(compound, legacy_fallback_gates)) |message|
+        .compound => |compound| if (semanticCompoundUnsupportedMessage(compound)) |message|
             return message,
     };
     return null;
 }
 
-fn semanticCompoundUnsupportedMessage(plan: shell.CompoundCommandPlan, legacy_fallback_gates: bool) ?[]const u8 {
+fn semanticCompoundUnsupportedMessage(plan: shell.CompoundCommandPlan) ?[]const u8 {
     plan.validate();
-    if (legacy_fallback_gates and plan.redirections.steps.len != 0)
-        return "semantic executor production preflight keeps compound redirections " ++
-            "unsupported outside the switched slice";
     switch (plan.body) {
-        .sequence, .brace_group, .subshell => |list| return semanticCommandListUnsupportedMessage(
-            list,
-            legacy_fallback_gates,
-        ),
+        .sequence, .brace_group, .subshell => |list| return semanticCommandListUnsupportedMessage(list),
         .and_or_list => |and_or| for (and_or.commands) |entry| {
-            if (semanticCommandUnsupportedMessage(entry.command, legacy_fallback_gates)) |message| return message;
+            if (semanticCommandUnsupportedMessage(entry.command)) |message| return message;
         },
-        .negation => |negation| return semanticCommandListUnsupportedMessage(negation.body, legacy_fallback_gates),
+        .negation => |negation| return semanticCommandListUnsupportedMessage(negation.body),
         .if_clause => |if_plan| {
             for (if_plan.branches) |branch| {
-                if (semanticCommandListUnsupportedMessage(branch.condition, legacy_fallback_gates)) |message|
+                if (semanticCommandListUnsupportedMessage(branch.condition)) |message|
                     return message;
-                if (semanticCommandListUnsupportedMessage(branch.body, legacy_fallback_gates)) |message| return message;
+                if (semanticCommandListUnsupportedMessage(branch.body)) |message| return message;
             }
-            return semanticCommandListUnsupportedMessage(if_plan.else_body, legacy_fallback_gates);
+            return semanticCommandListUnsupportedMessage(if_plan.else_body);
         },
         .while_loop, .until_loop => |loop| {
-            if (semanticCommandListUnsupportedMessage(loop.condition, legacy_fallback_gates)) |message| return message;
-            return semanticCommandListUnsupportedMessage(loop.body, legacy_fallback_gates);
+            if (semanticCommandListUnsupportedMessage(loop.condition)) |message| return message;
+            return semanticCommandListUnsupportedMessage(loop.body);
         },
-        .for_loop => |for_plan| return semanticCommandListUnsupportedMessage(for_plan.body, legacy_fallback_gates),
+        .for_loop => |for_plan| return semanticCommandListUnsupportedMessage(for_plan.body),
         .case_clause => |case_plan| for (case_plan.arms) |arm| {
-            if (semanticCommandListUnsupportedMessage(arm.body, legacy_fallback_gates)) |message| return message;
+            if (semanticCommandListUnsupportedMessage(arm.body)) |message| return message;
         },
     }
     return null;
 }
 
-fn semanticCommandListUnsupportedMessage(list: shell.StatementList, legacy_fallback_gates: bool) ?[]const u8 {
+fn semanticCommandListUnsupportedMessage(list: shell.StatementList) ?[]const u8 {
     list.validate();
     for (list.statements) |entry| {
         switch (entry.plan) {
-            .simple => |plan| if (semanticCommandUnsupportedMessage(plan, legacy_fallback_gates)) |message|
+            .simple => |plan| if (semanticCommandUnsupportedMessage(plan)) |message|
                 return message,
-            .compound => |plan| if (semanticCompoundUnsupportedMessage(plan, legacy_fallback_gates)) |message|
+            .compound => |plan| if (semanticCompoundUnsupportedMessage(plan)) |message|
                 return message,
-            .pipeline => |plan| if (semanticPipelineUnsupportedMessage(plan, legacy_fallback_gates)) |message|
+            .pipeline => |plan| if (semanticPipelineUnsupportedMessage(plan)) |message|
                 return message,
             .source, .ir_source => {},
         }
@@ -2052,14 +1971,12 @@ fn semanticCommandListUnsupportedMessage(list: shell.StatementList, legacy_fallb
     return null;
 }
 
-fn semanticCommandUnsupportedMessage(plan: shell.CommandPlan, legacy_fallback_gates: bool) ?[]const u8 {
+fn semanticCommandUnsupportedMessage(plan: shell.CommandPlan) ?[]const u8 {
     plan.validate();
     return switch (plan.classification) {
         .regular_builtin, .special_builtin => |definition| blk: {
             if (definition.semantic_class == .unsupported)
                 break :blk "semantic evaluator does not yet implement this builtin";
-            if (legacy_fallback_gates and std.mem.eql(u8, definition.name, "read"))
-                break :blk "semantic evaluator does not yet connect read to non-interactive stdin";
             break :blk null;
         },
         .empty, .assignment_only => null,

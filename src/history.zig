@@ -812,53 +812,7 @@ fn initHistorySchema(db: *sqlite.sqlite3) !void {
         \\end;
         \\create index if not exists history_started_idx on history(started_at);
         \\create index if not exists history_command_started_idx on history(command, started_at);
-        \\create table if not exists history_meta (
-        \\  key text primary key,
-        \\  value text not null
-        \\);
     );
-    try addHistoryColumnIfMissing("exit_signal", "integer", db);
-    try addHistoryColumnIfMissing("duration_ms", "integer", db);
-    try addHistoryColumnIfMissing("hostname", "text not null default ''", db);
-    try addHistoryColumnIfMissing("session_id", "text not null default ''", db);
-    if (try historyFtsNeedsRebuild(db)) {
-        try sqliteExec(db, "insert into history_fts(history_fts) values('rebuild');");
-    }
-}
-
-fn historyFtsNeedsRebuild(db: *sqlite.sqlite3) !bool {
-    const migration_done = try sqliteScalarInt(
-        db,
-        "select count(*) from history_meta where key = 'history_fts_rebuilt'",
-    );
-    if (migration_done != 0) return false;
-    try sqliteExec(db, "insert or replace into history_meta(key, value) values ('history_fts_rebuilt', '1');");
-    return (try sqliteScalarInt(db, "select count(*) from history")) != 0;
-}
-
-fn addHistoryColumn(comptime name: []const u8, comptime column_type: []const u8, db: *sqlite.sqlite3) !void {
-    try sqliteExec(db, "alter table history add column " ++ name ++ " " ++ column_type ++ ";");
-}
-
-fn addHistoryColumnIfMissing(comptime name: []const u8, comptime column_type: []const u8, db: *sqlite.sqlite3) !void {
-    if (try historyColumnExists(db, name)) return;
-    try addHistoryColumn(name, column_type, db);
-}
-
-fn historyColumnExists(db: *sqlite.sqlite3, name: []const u8) !bool {
-    var stmt: ?*sqlite.sqlite3_stmt = null;
-    try sqliteCheck(sqlite.sqlite3_prepare_v2(
-        db,
-        "select count(*) from pragma_table_info('history') where name = ?1",
-        -1,
-        &stmt,
-        null,
-    ), db);
-    defer _ = sqlite.sqlite3_finalize(stmt);
-    try sqliteCheck(sqlite.sqlite3_bind_text(stmt, 1, name.ptr, @intCast(name.len), null), db);
-    const rc = sqlite.sqlite3_step(stmt);
-    if (rc != sqlite.SQLITE_ROW) try sqliteCheck(rc, db);
-    return sqlite.sqlite3_column_int64(stmt, 0) != 0;
 }
 
 fn deleteFileIfExists(io: std.Io, path: []const u8) !void {
@@ -932,15 +886,6 @@ fn sqliteCheck(rc: c_int, db: ?*sqlite.sqlite3) !void {
             return error.SqliteError;
         },
     }
-}
-
-fn sqliteScalarInt(db: *sqlite.sqlite3, sql: [:0]const u8) !i64 {
-    var stmt: ?*sqlite.sqlite3_stmt = null;
-    try sqliteCheck(sqlite.sqlite3_prepare_v2(db, sql.ptr, -1, &stmt, null), db);
-    defer _ = sqlite.sqlite3_finalize(stmt);
-    const rc = sqlite.sqlite3_step(stmt);
-    if (rc != sqlite.SQLITE_ROW) try sqliteCheck(rc, db);
-    return sqlite.sqlite3_column_int64(stmt, 0);
 }
 
 fn historyFtsMatchCount(db: *sqlite.sqlite3, query: []const u8) !c_int {
@@ -1253,46 +1198,6 @@ test "line history navigation is scoped to session and cwd" {
     try session_b.handleKey(.{ .key = .down });
     try applyLineHistoryRequest(&session_b, history_view_b);
     try std.testing.expectEqualStrings("", session_b.editor.buffer.text());
-}
-
-test "history load rebuilds fts for existing history rows" {
-    const path = "rush-history-fts-migration-test.sqlite";
-    try deleteHistoryDbFilesIfExists(std.testing.io, path);
-    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
-    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path ++ "-wal") catch {};
-    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path ++ "-shm") catch {};
-
-    const path_z = try std.testing.allocator.dupeZ(u8, path);
-    defer std.testing.allocator.free(path_z);
-    var db: ?*sqlite.sqlite3 = null;
-    try sqliteCheck(sqlite.sqlite3_open_v2(
-        path_z.ptr,
-        &db,
-        sqlite.SQLITE_OPEN_READWRITE | sqlite.SQLITE_OPEN_CREATE | sqlite.SQLITE_OPEN_NOMUTEX,
-        null,
-    ), db);
-    defer if (db) |handle| {
-        _ = sqlite.sqlite3_close(handle);
-    };
-    try sqliteExec(db.?,
-        \\create table history (
-        \\  id integer primary key,
-        \\  command text not null,
-        \\  cwd text not null,
-        \\  status integer not null,
-        \\  started_at integer not null
-        \\);
-        \\insert into history(command, cwd, status, started_at) values ('git checkout main', '', 0, 1);
-    );
-    _ = sqlite.sqlite3_close(db.?);
-    db = null;
-
-    var history = History.init(std.testing.allocator);
-    defer history.deinit();
-    try history.load(std.testing.io, path);
-    const entry = (try history.searchEntry(std.testing.allocator, "checkout", "", null)).?;
-    defer entry.deinit(std.testing.allocator);
-    try std.testing.expectEqualStrings("git checkout main", entry.text);
 }
 
 test "history path follows XDG state home then HOME fallback" {

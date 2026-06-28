@@ -161,7 +161,7 @@ test "key mapping supports readline meta word keys" {
     try std.testing.expectEqual(Key.word_right, keyFromVaxis(vaxis.Key.right, alt));
 }
 
-test "key mapping supports legacy control bytes" {
+test "key mapping supports raw control bytes" {
     try std.testing.expectEqual(Key.home, keyFromVaxis(0x01, .{}));
     try std.testing.expectEqual(Key.tab, keyFromVaxis(0x09, .{}));
     try std.testing.expectEqual(Key.enter, keyFromVaxis(0x0d, .{}));
