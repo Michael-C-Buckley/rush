@@ -10,6 +10,8 @@ pub const Signal = enum {
     HUP,
     INT,
     QUIT,
+    KILL,
+    PIPE,
     ALRM,
     TERM,
     USR1,
@@ -21,6 +23,8 @@ pub const Signal = enum {
             .HUP => "HUP",
             .INT => "INT",
             .QUIT => "QUIT",
+            .KILL => "KILL",
+            .PIPE => "PIPE",
             .ALRM => "ALRM",
             .TERM => "TERM",
             .USR1 => "USR1",
@@ -41,6 +45,7 @@ pub const Signal = enum {
             1 => .HUP,
             2 => .INT,
             3 => .QUIT,
+            13 => .PIPE,
             14 => .ALRM,
             10 => .USR1,
             12 => .USR2,
@@ -52,9 +57,11 @@ pub const Signal = enum {
     pub fn runtimeNumber(self: Signal) ?u8 {
         return switch (self) {
             .EXIT => null,
+            .KILL => null,
             .HUP => 1,
             .INT => 2,
             .QUIT => 3,
+            .PIPE => 13,
             .ALRM => 14,
             .USR1 => 10,
             .USR2 => 12,
@@ -88,6 +95,8 @@ const signal_names = [_]SignalName{
     .{ .name = "HUP", .signal = .HUP },
     .{ .name = "INT", .signal = .INT },
     .{ .name = "QUIT", .signal = .QUIT },
+    .{ .name = "KILL", .signal = .KILL },
+    .{ .name = "PIPE", .signal = .PIPE },
     .{ .name = "ALRM", .signal = .ALRM },
     .{ .name = "TERM", .signal = .TERM },
     .{ .name = "USR1", .signal = .USR1 },
@@ -129,15 +138,18 @@ pub fn assertValidName(name_value: []const u8) void {
 }
 
 test "trap signal vocabulary maps names and runtime numbers explicitly" {
-    const signals = [_]Signal{ .EXIT, .HUP, .INT, .QUIT, .ALRM, .TERM, .USR1, .USR2 };
+    const signals = [_]Signal{ .EXIT, .HUP, .INT, .QUIT, .KILL, .PIPE, .ALRM, .TERM, .USR1, .USR2 };
     for (signals) |signal| {
         signal.validate();
         try std.testing.expectEqual(signal, Signal.fromName(signal.name()).?);
     }
 
     try std.testing.expectEqual(@as(?Signal, Signal.INT), Signal.fromRuntimeNumber(2));
+    try std.testing.expectEqual(@as(?Signal, Signal.PIPE), Signal.fromRuntimeNumber(13));
     try std.testing.expectEqual(@as(?Signal, null), Signal.fromRuntimeNumber(9));
     try std.testing.expectEqual(@as(?u8, null), Signal.EXIT.runtimeNumber());
+    try std.testing.expectEqual(@as(?u8, null), Signal.KILL.runtimeNumber());
+    try std.testing.expectEqual(@as(?u8, 141), Signal.PIPE.defaultExitStatus());
     try std.testing.expectEqual(@as(?u8, 143), Signal.TERM.defaultExitStatus());
     try std.testing.expectEqual(ActionKind.ignore, actionKind(""));
     try std.testing.expectEqual(ActionKind.command, actionKind("echo trapped"));

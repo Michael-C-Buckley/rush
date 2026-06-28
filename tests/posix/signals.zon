@@ -140,6 +140,42 @@
             .status = 0,
         },
         .{
+            .name = "trap and kill accept standard symbolic signal names",
+            .script =
+            \\trap 'printf bad' KILL
+            \\printf 'trap-kill:%s\n' "$?"
+            \\trap '' PIPE
+            \\printf 'trap-pipe:%s\n' "$?"
+            \\sleep 10 & pid=$!
+            \\kill -TSTP "$pid"
+            \\printf 'kill-tstp:%s\n' "$?"
+            \\kill -CONT "$pid" 2>/dev/null
+            \\kill -TERM "$pid" 2>/dev/null
+            \\wait "$pid" 2>/dev/null
+            \\exit 0
+            ,
+            .stdout =
+            \\trap-kill:0
+            \\trap-pipe:0
+            \\kill-tstp:0
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "subshell EXIT trap registered inside trap action runs once",
+            .script =
+            \\trap '(trap "echo nested" EXIT; :)' EXIT
+            ,
+            .stdout =
+            \\nested
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "trap registered inside loop catches later signal in same body",
             .script =
             \\for word in once

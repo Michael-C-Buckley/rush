@@ -648,6 +648,9 @@ pub const ShellState = struct {
         snapshot.previous_job_id = null;
         snapshot.last_background_pid = null;
         snapshot.clearPendingJobNotifications();
+        snapshot.pending_traps.clearRetainingCapacity();
+        snapshot.pending_exit = null;
+        snapshot.trap_execution = .idle;
         snapshot.scope = .subshell;
         snapshot.validate();
         return snapshot;
@@ -1592,6 +1595,12 @@ test "ShellState models trap dispositions pending queue and execution guard" {
     try std.testing.expectEqual(TrapSignal.TERM, shell_state.nextPendingTrap().?);
 
     shell_state.beginTrapExecution();
+    try std.testing.expectEqual(ShellState.TrapExecution.running, shell_state.trap_execution);
+    var subshell = try shell_state.snapshotForSubshell(std.testing.allocator);
+    defer subshell.deinit();
+    try std.testing.expectEqual(ShellState.TrapExecution.idle, subshell.trap_execution);
+    try std.testing.expectEqual(@as(usize, 0), subshell.pending_traps.items.len);
+    try std.testing.expectEqual(@as(?ExitStatus, null), subshell.pending_exit);
     try std.testing.expectEqual(ShellState.TrapExecution.running, shell_state.trap_execution);
     shell_state.endTrapExecution();
     try std.testing.expectEqual(ShellState.TrapExecution.idle, shell_state.trap_execution);

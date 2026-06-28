@@ -16158,7 +16158,13 @@ fn parseKillSignal(raw: []const u8) ?u8 {
     if (std.ascii.eqlIgnoreCase(name, "INT")) return signalNumber(.INT);
     if (std.ascii.eqlIgnoreCase(name, "QUIT")) return signalNumber(.QUIT);
     if (std.ascii.eqlIgnoreCase(name, "KILL")) return signalNumber(.KILL);
+    if (std.ascii.eqlIgnoreCase(name, "PIPE")) return signalNumber(.PIPE);
+    if (std.ascii.eqlIgnoreCase(name, "ALRM")) return signalNumber(.ALRM);
     if (std.ascii.eqlIgnoreCase(name, "TERM")) return signalNumber(.TERM);
+    if (std.ascii.eqlIgnoreCase(name, "STOP")) return signalNumber(.STOP);
+    if (std.ascii.eqlIgnoreCase(name, "TSTP")) return signalNumber(.TSTP);
+    if (std.ascii.eqlIgnoreCase(name, "TTIN")) return signalNumber(.TTIN);
+    if (std.ascii.eqlIgnoreCase(name, "TTOU")) return signalNumber(.TTOU);
     if (std.ascii.eqlIgnoreCase(name, "USR1")) return signalNumber(.USR1);
     if (std.ascii.eqlIgnoreCase(name, "USR2")) return signalNumber(.USR2);
     return null;
@@ -18632,6 +18638,8 @@ fn parseTrapSignalNumber(raw: []const u8) ?[]const u8 {
         1 => "HUP",
         2 => "INT",
         3 => "QUIT",
+        9 => "KILL",
+        13 => "PIPE",
         14 => "ALRM",
         10 => "USR1",
         12 => "USR2",
