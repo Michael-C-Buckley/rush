@@ -6558,9 +6558,13 @@ fn appendGlobComponentMatches(
     };
     defer entries.deinit(allocator);
 
+    var saw_dot = false;
+    var saw_dotdot = false;
     for (entries.entries) |entry| {
         const entry_name = entry.name;
         if (entry_name.len == 0) continue;
+        if (std.mem.eql(u8, entry_name, ".")) saw_dot = true;
+        if (std.mem.eql(u8, entry_name, "..")) saw_dotdot = true;
         if (entry_name[0] == '.' and
             !options.dotglob and
             (component.text.len == 0 or component.text[0] != '.')) continue;
@@ -6572,6 +6576,39 @@ fn appendGlobComponentMatches(
             try matches.append(allocator, try joinPathComponent(allocator, prefix, entry_name));
         }
     }
+
+    if (componentMatchesSyntheticDotEntries(component)) {
+        if (!saw_dot) try appendSyntheticDotMatch(allocator, lookup, matches, prefix, component, ".", options);
+        if (!saw_dotdot) try appendSyntheticDotMatch(allocator, lookup, matches, prefix, component, "..", options);
+    }
+}
+
+fn componentMatchesSyntheticDotEntries(component: ExpansionPattern) bool {
+    return component.text.len != 0 and component.text[0] == '.' and component.special[0];
+}
+
+fn appendSyntheticDotMatch(
+    allocator: std.mem.Allocator,
+    lookup: PathnameLookup,
+    matches: *std.ArrayList([]const u8),
+    prefix: []const u8,
+    component: ExpansionPattern,
+    entry_name: []const u8,
+    options: PathnameExpansionOptions,
+) !void {
+    if (!globPatternMatchesWithOptions(
+        component,
+        entry_name,
+        .{ .extglob = options.extglob, .backslash_escape = false },
+    )) return;
+
+    const candidate = try joinPathComponent(allocator, prefix, entry_name);
+    errdefer allocator.free(candidate);
+    const exists = lookup.pathExists(candidate) catch |err| switch (err) {
+        error.AccessDenied => false,
+        else => return err,
+    };
+    if (exists) try matches.append(allocator, candidate) else allocator.free(candidate);
 }
 
 fn joinPathComponent(allocator: std.mem.Allocator, prefix: []const u8, component: []const u8) ![]const u8 {
@@ -10374,6 +10411,20 @@ test "pathname expansion handles slash components and dotfiles" {
     defer nested_trailing.deinit();
     try std.testing.expectEqual(@as(usize, 1), nested_trailing.fields.len);
     try std.testing.expectEqualStrings("rush-glob-dir/child-dir/", nested_trailing.fields[0]);
+}
+
+test "pathname expansion explicitly matches dot and dotdot entries" {
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, "rush-dot-glob/inner");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, "rush-dot-glob") catch {};
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = "rush-dot-glob/foo", .data = "" });
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = "rush-dot-glob/inner/foo", .data = "" });
+
+    var result = try expandWord(std.testing.allocator, "rush-dot-glob/inner/.*/foo", .{ .io = std.testing.io });
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(usize, 2), result.fields.len);
+    try std.testing.expectEqualStrings("rush-dot-glob/inner/../foo", result.fields[0]);
+    try std.testing.expectEqualStrings("rush-dot-glob/inner/./foo", result.fields[1]);
 }
 
 test "pathname expansion preserves patterns when traversal is not readable" {

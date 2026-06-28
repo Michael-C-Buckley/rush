@@ -1413,6 +1413,22 @@
             .status = 0,
         },
         .{
+            .name = "pathname expansion explicitly matches dot and dotdot directories",
+            .script =
+            \\mkdir -p dir/inner
+            \\: >dir/foo
+            \\: >dir/inner/foo
+            \\printf '<%s>\n' dir/inner/.*/foo
+            ,
+            .stdout =
+            \\<dir/inner/../foo>
+            \\<dir/inner/./foo>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "pathname expansion leaves quoted pattern characters literal",
             .script =
             \\: >a.txt
