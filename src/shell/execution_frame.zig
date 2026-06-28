@@ -220,12 +220,14 @@ pub const FdBinding = struct {
 pub const FdEndpoint = union(enum) {
     input: InputEndpoint,
     output: OutputEndpoint,
+    bidirectional_fd: fd.Descriptor,
     closed,
 
     pub fn validate(self: FdEndpoint) void {
         switch (self) {
             .input => |endpoint| endpoint.validate(),
             .output => |endpoint| endpoint.validate(),
+            .bidirectional_fd => |descriptor| fd.assertValidDescriptor(descriptor),
             .closed => {},
         }
     }

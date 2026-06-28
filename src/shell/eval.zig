@@ -265,6 +265,23 @@ fn rootExecutionFrame(eval_context: context.EvalContext) execution_frame.Executi
     return execution_frame.ExecutionFrame.init(rootBoundarySpec(eval_context));
 }
 
+const inherited_descriptor_scan_limit = 256;
+
+fn adoptInheritedOpenDescriptors(
+    allocator: std.mem.Allocator,
+    fd_port: runtime.fd.Port,
+    frame: *execution_frame.ExecutionFrame,
+) !void {
+    frame.validate();
+    var descriptor: runtime.fd.Descriptor = 3;
+    while (descriptor < inherited_descriptor_scan_limit) : (descriptor += 1) {
+        const status = fd_port.descriptorStatus(.{ .descriptor = descriptor }) catch continue;
+        if (!status.is_open) continue;
+        try frame.spec.fd_table.bind(allocator, descriptor, .{ .bidirectional_fd = descriptor });
+    }
+    frame.validate();
+}
+
 fn rootBoundarySpec(eval_context: context.EvalContext) execution_frame.BoundarySpec {
     eval_context.validate();
     return switch (eval_context.target) {
@@ -312,6 +329,7 @@ fn commandSubstitutionExecutionFrame(
     try fd_table.bindOutput(allocator, 1, stdout);
     switch (fd_table.endpoint(2)) {
         .output => |output| try fd_table.bindOutput(allocator, 2, commandSubstitutionInheritedErrorEndpoint(output)),
+        .bidirectional_fd => |descriptor| try fd_table.bindOutput(allocator, 2, .{ .fd = descriptor }),
         .closed => try fd_table.close(allocator, 2),
         .input => try fd_table.bindOutput(allocator, 2, parent_frame.spec.stderr),
     }
@@ -347,6 +365,7 @@ fn commandSubstitutionInputEndpoint(
     fd_table.validate();
     return switch (fd_table.endpoint(0)) {
         .input => |input| input,
+        .bidirectional_fd => |descriptor| .{ .fd = descriptor },
         .closed => .closed,
         .output => parent_frame.spec.stdin,
     };
@@ -360,6 +379,7 @@ fn commandSubstitutionStderrEndpoint(
     fd_table.validate();
     return switch (fd_table.endpoint(2)) {
         .output => |output| commandSubstitutionInheritedErrorEndpoint(output),
+        .bidirectional_fd => |descriptor| .{ .fd = descriptor },
         .closed => .discard,
         .input => parent_frame.spec.stderr,
     };
@@ -435,7 +455,7 @@ fn normalizeInheritedPipelineCapturesForPipelineStage(fd_table: *execution_frame
                 },
                 else => {},
             },
-            .input, .closed => {},
+            .input, .bidirectional_fd, .closed => {},
         }
     }
     fd_table.validate();
@@ -449,6 +469,7 @@ fn pipelineStageInheritedInput(
     fd_table.validate();
     return switch (fd_table.endpoint(0)) {
         .input => |input| input,
+        .bidirectional_fd => |descriptor| .{ .fd = descriptor },
         .closed => .closed,
         .output => parent_frame.spec.stdin,
     };
@@ -475,18 +496,21 @@ fn semanticCommandExecutionFrame(
     const stdin: execution_frame.InputEndpoint = switch (fd_table.boundEndpoint(0) orelse
         @as(execution_frame.FdEndpoint, .{ .input = parent_frame.spec.stdin })) {
         .input => |input| input,
+        .bidirectional_fd => |descriptor| .{ .fd = descriptor },
         .closed => .closed,
         .output => parent_frame.spec.stdin,
     };
     const stdout: execution_frame.OutputEndpoint = switch (fd_table.boundEndpoint(1) orelse
         @as(execution_frame.FdEndpoint, .{ .output = parent_frame.spec.stdout })) {
         .output => |output| output,
+        .bidirectional_fd => |descriptor| .{ .fd = descriptor },
         .closed => .discard,
         .input => parent_frame.spec.stdout,
     };
     const stderr: execution_frame.OutputEndpoint = switch (fd_table.boundEndpoint(2) orelse
         @as(execution_frame.FdEndpoint, .{ .output = parent_frame.spec.stderr })) {
         .output => |output| output,
+        .bidirectional_fd => |descriptor| .{ .fd = descriptor },
         .closed => .discard,
         .input => parent_frame.spec.stderr,
     };
@@ -550,7 +574,7 @@ fn frameOutputEndpointHasCapture(endpoint: execution_frame.FdEndpoint) bool {
     endpoint.validate();
     return switch (endpoint) {
         .output => |output| output.captureChannel() != null,
-        .input, .closed => false,
+        .input, .bidirectional_fd, .closed => false,
     };
 }
 
@@ -561,7 +585,7 @@ fn frameOutputEndpointCaptures(
     endpoint.validate();
     return switch (endpoint) {
         .output => |output| output.captureChannel() == channel,
-        .input, .closed => false,
+        .input, .bidirectional_fd, .closed => false,
     };
 }
 
@@ -588,6 +612,7 @@ fn pipelineStageOutputEndpoint(
             .inherit_stdout => .{ .capture = .side_stdout },
             else => output,
         },
+        .bidirectional_fd => |descriptor| .{ .fd = descriptor },
         .closed => .discard,
         .input => parent_frame.spec.stdout,
     };
@@ -604,6 +629,7 @@ fn pipelineStageErrorEndpoint(
             .inherit_stderr => .{ .capture = .side_stderr },
             else => output,
         },
+        .bidirectional_fd => |descriptor| .{ .fd = descriptor },
         .closed => .discard,
         .input => parent_frame.spec.stderr,
     };
@@ -4613,6 +4639,7 @@ const EvaluationBuffers = struct {
                 .closed => self.stdin = frame_input,
             },
             .closed => self.stdin = frame_input,
+            .bidirectional_fd => self.stdin = frame_input,
             .output => self.stdin = inherited_input,
         }
         self.stdin.validate();
@@ -5388,7 +5415,7 @@ fn frameTargetsInheritedStandardDescriptors(frame: execution_frame.ExecutionFram
             .capture => |channel| live_stdio and channel == .side_stdout,
             .inherit_stderr, .path, .discard => false,
         },
-        .closed, .input => false,
+        .closed, .input, .bidirectional_fd => false,
     };
     const stderr_inherited = switch (stderr_endpoint) {
         .output => |output| switch (output) {
@@ -5397,7 +5424,7 @@ fn frameTargetsInheritedStandardDescriptors(frame: execution_frame.ExecutionFram
             .capture => |channel| live_stdio and channel == .side_stderr,
             .inherit_stdout, .path, .discard => false,
         },
-        .closed, .input => false,
+        .closed, .input, .bidirectional_fd => false,
     };
     return stdout_inherited or stderr_inherited;
 }
@@ -5431,6 +5458,7 @@ fn routeDirectPipelineStageBuffer(
         },
         .closed => source.items.len = 0,
         .input => source.items.len = 0,
+        .bidirectional_fd => {},
     }
 }
 
@@ -5466,7 +5494,11 @@ pub const RunnerOutputFrame = struct {
     buffers: *EvaluationBuffers,
     routing: OutputRouting,
 
-    pub fn init(allocator: std.mem.Allocator, mode: RunnerOutputMode) !RunnerOutputFrame {
+    pub fn init(
+        allocator: std.mem.Allocator,
+        mode: RunnerOutputMode,
+        fd_port: ?runtime.fd.Port,
+    ) !RunnerOutputFrame {
         const input = try allocator.create(EvaluationInput);
         errdefer allocator.destroy(input);
         input.* = EvaluationInput.empty();
@@ -5475,6 +5507,7 @@ pub const RunnerOutputFrame = struct {
         errdefer allocator.destroy(execution_frame_value);
         execution_frame_value.* = rootExecutionFrame(context.EvalContext.forTarget(.current_shell));
         errdefer execution_frame_value.spec.fd_table.deinit(allocator);
+        if (fd_port) |port| try adoptInheritedOpenDescriptors(allocator, port, execution_frame_value);
         try configureRunnerExecutionFrameForMode(allocator, execution_frame_value, mode);
 
         const buffers = try allocator.create(EvaluationBuffers);
@@ -6011,7 +6044,7 @@ fn redirectionPlanDuplicatesFromPathSources(
                     .discard,
                     => {},
                 },
-                .input, .closed => {},
+                .input, .bidirectional_fd, .closed => {},
             },
             .open_path, .here_doc, .close => {},
         }
@@ -6373,6 +6406,9 @@ fn bindRuntimeRedirectionTargetToFrame(
         ),
         .duplicate => |duplicate| switch (frame.spec.fd_table.endpoint(duplicate.source)) {
             .input => try frame.spec.fd_table.bindInput(allocator, duplicate.target, .{ .fd = duplicate.target }),
+            .bidirectional_fd => try frame.spec.fd_table.bind(allocator, duplicate.target, .{
+                .bidirectional_fd = duplicate.target,
+            }),
             .output => |output| if (duplicatedOutputStaysInSemanticCapture(output))
                 try frame.spec.fd_table.bindOutput(allocator, duplicate.target, output)
             else
@@ -8310,6 +8346,7 @@ fn applySingleStageBackgroundRedirections(
             break :blk compound.redirections;
         },
     };
+    if (redirectionPlanOpensPath(redirections)) return false;
 
     const apply_result = try applyRedirectionsForScope(
         evaluator.*,
@@ -8330,6 +8367,18 @@ fn applySingleStageBackgroundRedirections(
             return null;
         },
     }
+}
+
+fn redirectionPlanOpensPath(redirections: redirection_plan.RedirectionPlan) bool {
+    redirections.validate();
+    for (redirections.steps) |step| {
+        step.validate();
+        switch (step.effect) {
+            .open_path, .here_doc => return true,
+            .duplicate, .close => {},
+        }
+    }
+    return false;
 }
 
 fn foregroundPlanForBackgroundSubshell(
@@ -8798,6 +8847,7 @@ fn routePipelineStageOutcomeBuffer(
         },
         .closed => source.items.len = 0,
         .input => source.items.len = 0,
+        .bidirectional_fd => {},
     }
 }
 
@@ -20388,6 +20438,7 @@ test "semantic evaluator routes test -t through fd runtime port" {
                 .pipe_fn = pipe,
                 .write_fn = writeAll,
                 .is_tty_fn = isTty,
+                .descriptor_status_fn = descriptorStatus,
             };
         }
 
@@ -20430,6 +20481,13 @@ test "semantic evaluator routes test -t through fd runtime port" {
             request.validate();
             self.requested_descriptor = request.descriptor;
             return .{ .is_tty = request.descriptor == self.tty_descriptor };
+        }
+
+        fn descriptorStatus(
+            _: *anyopaque,
+            _: runtime.fd.DescriptorStatusRequest,
+        ) runtime.fd.DescriptorStatusError!runtime.fd.DescriptorStatusResult {
+            unreachable;
         }
     };
 
@@ -22328,6 +22386,7 @@ const FakeExternalRuntime = struct {
             .pipe_fn = pipe,
             .write_fn = writeAll,
             .is_tty_fn = isTty,
+            .descriptor_status_fn = descriptorStatus,
         };
     }
 
@@ -22424,6 +22483,15 @@ const FakeExternalRuntime = struct {
     fn isOpen(self: FakeExternalRuntime, descriptor: runtime.fd.Descriptor) bool {
         if (descriptor < 0 or descriptor >= self.open_descriptors.len) return false;
         return self.open_descriptors[@intCast(descriptor)];
+    }
+
+    fn descriptorStatus(
+        context_value: *anyopaque,
+        request: runtime.fd.DescriptorStatusRequest,
+    ) runtime.fd.DescriptorStatusError!runtime.fd.DescriptorStatusResult {
+        const self = fromContext(context_value);
+        request.validate();
+        return .{ .is_open = self.isOpen(request.descriptor) };
     }
 
     fn setOpen(self: *FakeExternalRuntime, descriptor: runtime.fd.Descriptor, open_value: bool) void {

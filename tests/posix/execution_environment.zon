@@ -467,6 +467,19 @@
             .status = 0,
         },
         .{
+            .name = "nested shell inherits open non-standard descriptors",
+            .script =
+            \\"$0" -c 'printf inherited >&3' 3>&1
+            \\printf '\n'
+            ,
+            .stdout =
+            \\inherited
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "nested command substitution inherits pipeline stderr as side output",
             .script =
             \\f(){ printf '%s\n' "$(printf '%s' "$(printf side >&2; printf ret)")"; return 3; }

@@ -95,6 +95,10 @@ pub const OutputRouting = struct {
                         preserve_parent_visible_stdout_capture,
                     ),
                 ),
+                .bidirectional_fd => |host_descriptor| try routing.setDestination(
+                    binding.descriptor,
+                    .{ .host_descriptor = host_descriptor },
+                ),
                 .closed => try routing.setDestination(binding.descriptor, .closed),
                 .input => {},
             }
@@ -220,6 +224,7 @@ pub fn outputDestinationForFrameEndpointInContext(
         },
         .closed => .closed,
         .input => .closed,
+        .bidirectional_fd => |host_descriptor| .{ .host_descriptor = host_descriptor },
     };
 }
 

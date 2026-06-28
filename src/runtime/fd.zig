@@ -191,6 +191,26 @@ pub const IsTtyResult = struct {
     pub fn validate(_: IsTtyResult) void {}
 };
 
+pub const DescriptorStatusRequest = struct {
+    descriptor: Descriptor,
+
+    pub fn init(descriptor: Descriptor) DescriptorStatusRequest {
+        const request: DescriptorStatusRequest = .{ .descriptor = descriptor };
+        request.validate();
+        return request;
+    }
+
+    pub fn validate(self: DescriptorStatusRequest) void {
+        assertValidDescriptor(self.descriptor);
+    }
+};
+
+pub const DescriptorStatusResult = struct {
+    is_open: bool,
+
+    pub fn validate(_: DescriptorStatusResult) void {}
+};
+
 pub const OpenError = std.posix.OpenError;
 pub const CloseError = error{
     BadFileDescriptor,
@@ -214,6 +234,7 @@ pub const WriteError = error{
     Unexpected,
 };
 pub const IsTtyError = error{Unexpected};
+pub const DescriptorStatusError = error{Unexpected};
 
 pub const OpenFn = *const fn (*anyopaque, OpenRequest) OpenError!OpenResult;
 pub const CloseFn = *const fn (*anyopaque, CloseRequest) CloseError!void;
@@ -222,6 +243,7 @@ pub const DuplicateToFn = *const fn (*anyopaque, DuplicateToRequest) DuplicateEr
 pub const PipeFn = *const fn (*anyopaque, PipeRequest) PipeError!PipeResult;
 pub const WriteFn = *const fn (*anyopaque, WriteRequest) WriteError!void;
 pub const IsTtyFn = *const fn (*anyopaque, IsTtyRequest) IsTtyError!IsTtyResult;
+pub const DescriptorStatusFn = *const fn (*anyopaque, DescriptorStatusRequest) DescriptorStatusError!DescriptorStatusResult;
 
 pub const Port = struct {
     context: *anyopaque,
@@ -232,6 +254,7 @@ pub const Port = struct {
     pipe_fn: PipeFn,
     write_fn: WriteFn,
     is_tty_fn: IsTtyFn,
+    descriptor_status_fn: DescriptorStatusFn,
 
     pub fn open(self: Port, request: OpenRequest) OpenError!OpenResult {
         request.validate();
@@ -272,6 +295,16 @@ pub const Port = struct {
     pub fn isTty(self: Port, request: IsTtyRequest) IsTtyError!IsTtyResult {
         request.validate();
         const result = try self.is_tty_fn(self.context, request);
+        result.validate();
+        return result;
+    }
+
+    pub fn descriptorStatus(
+        self: Port,
+        request: DescriptorStatusRequest,
+    ) DescriptorStatusError!DescriptorStatusResult {
+        request.validate();
+        const result = try self.descriptor_status_fn(self.context, request);
         result.validate();
         return result;
     }

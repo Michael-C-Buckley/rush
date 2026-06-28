@@ -75,6 +75,7 @@ pub const Adapter = struct {
             .pipe_fn = pipe,
             .write_fn = writeAll,
             .is_tty_fn = isTty,
+            .descriptor_status_fn = descriptorStatus,
         };
     }
 
@@ -281,6 +282,12 @@ fn isTty(context: *anyopaque, request: fd.IsTtyRequest) fd.IsTtyError!fd.IsTtyRe
     _ = context;
     request.validate();
     return .{ .is_tty = try descriptorIsTty(request.descriptor) };
+}
+
+fn descriptorStatus(context: *anyopaque, request: fd.DescriptorStatusRequest) fd.DescriptorStatusError!fd.DescriptorStatusResult {
+    _ = context;
+    request.validate();
+    return .{ .is_open = try descriptorIsOpen(request.descriptor) };
 }
 
 fn getCwd(context: *anyopaque, request: fs.GetCwdRequest) fs.GetCwdError!fs.GetCwdResult {

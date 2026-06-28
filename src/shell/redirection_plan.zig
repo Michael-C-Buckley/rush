@@ -1076,6 +1076,7 @@ const FakeFdRuntime = struct {
             .pipe_fn = pipe,
             .write_fn = writeAll,
             .is_tty_fn = isTty,
+            .descriptor_status_fn = descriptorStatus,
         };
     }
 
@@ -1159,6 +1160,15 @@ const FakeFdRuntime = struct {
         request.validate();
         _ = self;
         return .{ .is_tty = false };
+    }
+
+    fn descriptorStatus(
+        context: *anyopaque,
+        request: fd.DescriptorStatusRequest,
+    ) fd.DescriptorStatusError!fd.DescriptorStatusResult {
+        const self = fromContext(context);
+        request.validate();
+        return .{ .is_open = self.isOpen(request.descriptor) };
     }
 };
 

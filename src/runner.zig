@@ -383,6 +383,7 @@ fn runSemanticAliasTimingCommandString(
     var output_frame = try shell.eval.RunnerOutputFrame.init(
         allocator,
         runnerOutputMode(evaluator.commit_exec_redirections),
+        evaluator.fd_port,
     );
     defer output_frame.deinit();
     var status: shell.ExitStatus = 0;
@@ -793,6 +794,7 @@ fn runSemanticAliasTimingShellStateScript(
     var output_frame = try shell.eval.RunnerOutputFrame.init(
         allocator,
         runnerOutputMode(evaluator.commit_exec_redirections),
+        evaluator.fd_port,
     );
     defer output_frame.deinit();
     var status = shell_state.last_status;
@@ -1034,6 +1036,7 @@ fn runSemanticLoweredProgram(
         local_output_frame = try shell.eval.RunnerOutputFrame.init(
             allocator,
             runnerOutputMode(evaluator.commit_exec_redirections),
+            evaluator.fd_port,
         );
         break :blk &local_output_frame;
     };

@@ -295,6 +295,22 @@
             .status = 0,
         },
         .{
+            .name = "asynchronous subshell opens fifo redirections after fork",
+            .script =
+            \\mkfifo pipe
+            \\( printf 'hello\n' >&8 ) 8>pipe &
+            \\command exec 8<pipe
+            \\read -r line <&8
+            \\printf '<%s>\n' "$line"
+            ,
+            .stdout =
+            \\<hello>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "bang pipeline status participates in AND list",
             .script =
             \\! false && printf '%s\n' ok
