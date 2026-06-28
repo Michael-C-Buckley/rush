@@ -48,6 +48,23 @@
             .status = 0,
         },
         .{
+            .name = "asynchronous mixed pipeline records last command process id",
+            .script =
+            \\printf '%s\n' '#!/bin/sh' 'printf "%s\n" "$$" > pid.out' > showpid
+            \\chmod +x showpid
+            \\true | ./showpid &
+            \\background_pid=$!
+            \\sleep 1
+            \\test "$background_pid" = "$(cat pid.out)" && printf 'last-pid\n'
+            ,
+            .stdout =
+            \\last-pid
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "external pipeline stage preserves argv substitution side output",
             .script =
             \\exec 2>&1

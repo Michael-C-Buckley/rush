@@ -8103,15 +8103,31 @@ fn startBackgroundPipeline(
     }
 
     for (plan.stages) |stage| {
-        if (!stage.isExternalOnlyRealEligible()) return startBackgroundSemanticPipeline(
-            evaluator,
-            shell_state,
-            eval_context,
-            plan,
-            buffers,
-        );
+        if (!stage.isExternalOnlyRealEligible()) {
+            if (backgroundPlanHasExternalOnlyRealLastStage(plan)) return startBackgroundSemanticPrefixExternalLastPipeline(
+                evaluator,
+                shell_state,
+                eval_context,
+                plan,
+                buffers,
+            );
+            return startBackgroundSemanticPipeline(
+                evaluator,
+                shell_state,
+                eval_context,
+                plan,
+                buffers,
+            );
+        }
     }
     return startBackgroundExternalOnlyPipeline(evaluator, shell_state, plan, buffers);
+}
+
+fn backgroundPlanHasExternalOnlyRealLastStage(plan: pipeline_plan.PipelinePlan) bool {
+    plan.validate();
+    std.debug.assert(plan.strategy == .background_deferred);
+    std.debug.assert(plan.stages.len > 1);
+    return plan.stages[plan.stages.len - 1].isExternalOnlyRealEligible();
 }
 
 fn configureBackgroundSignalInheritance(evaluator: *Evaluator, shell_state: state.ShellState) EvalError!bool {
@@ -8404,6 +8420,116 @@ fn startBackgroundSingleExternal(
     };
     errdefer job.deinit(evaluator.allocator);
     try job.appendProcess(evaluator.allocator, .{ .stage_index = 0, .child = child });
+    return .{ .started = job };
+}
+
+fn startBackgroundSemanticPrefixExternalLastPipeline(
+    evaluator: *Evaluator,
+    shell_state: state.ShellState,
+    eval_context: context.EvalContext,
+    plan: pipeline_plan.PipelinePlan,
+    buffers: *EvaluationBuffers,
+) EvalError!BackgroundStartResult {
+    shell_state.validate();
+    eval_context.validate();
+    plan.validate();
+    std.debug.assert(plan.strategy == .background_deferred);
+    std.debug.assert(plan.stages.len > 1);
+    std.debug.assert(backgroundPlanHasExternalOnlyRealLastStage(plan));
+
+    const fd_port = evaluator.fd_port orelse return error.Unimplemented;
+    const process_port = evaluator.process_port orelse return error.Unimplemented;
+
+    var pipe = PipelinePipe.init(fd_port.pipe(.{}) catch |err| {
+        try buffers.addBuiltinDiagnostic("pipeline", pipeFailureMessage(err));
+        return .{ .failure = 1 };
+    });
+    errdefer closeOpenPipelinePipes(fd_port, @as(*[1]PipelinePipe, &pipe), buffers);
+
+    const use_process_group = shell_state.options.enabled(.monitor);
+    const prefix_plan = pipeline_plan.PipelinePlan.init(plan.stages[0 .. plan.stages.len - 1], .{
+        .negated = false,
+        .status_rule = plan.status_rule,
+        .background = .background,
+    });
+    var semantic_context: BackgroundSemanticContext = .{
+        .evaluator = evaluator,
+        .parent_state = &shell_state,
+        .eval_context = eval_context,
+        .plan = prefix_plan,
+    };
+    semantic_context.validate();
+
+    const prefix_child = (process_port.startSubshell(.{
+        .context = &semantic_context,
+        .main_fn = runBackgroundSemanticSubshell,
+        .stdin = .inherit,
+        .stdout = .{ .fd = pipe.write },
+        .stderr = .inherit,
+        .process_group = if (use_process_group) 0 else null,
+    }) catch |err| switch (err) {
+        error.OutOfMemory => return error.OutOfMemory,
+        else => |spawn_err| {
+            const failure = spawnFailure(spawn_err);
+            try buffers.addBuiltinDiagnostic("pipeline", failure.message);
+            return .{ .failure = failure.status };
+        },
+    }).child;
+    if (use_process_group) std.debug.assert(prefix_child.id() > 0);
+    const process_group: ?runtime.process.ProcessId = if (use_process_group) prefix_child.id() else null;
+    closePipelinePipeWrite(fd_port, &pipe, buffers);
+
+    var children: std.ArrayList(runtime.process.ChildProcess) = .empty;
+    defer children.deinit(evaluator.allocator);
+    var child_stage_indexes: std.ArrayList(usize) = .empty;
+    defer child_stage_indexes.deinit(evaluator.allocator);
+    try children.append(evaluator.allocator, prefix_child);
+    try child_stage_indexes.append(evaluator.allocator, 0);
+
+    const last_stage_index = plan.stages.len - 1;
+    const spawn_result = try spawnExternalPipelineStage(
+        evaluator,
+        shell_state,
+        plan.stages[last_stage_index],
+        .{ .fd = pipe.read },
+        .inherit,
+        process_group,
+        buffers,
+    );
+    const last_child = switch (spawn_result) {
+        .spawned => |child| child,
+        .failure => |failure| {
+            closePipelinePipeRead(fd_port, &pipe, buffers);
+            const statuses = try evaluator.allocator.alloc(outcome.ExitStatus, plan.stages.len);
+            defer evaluator.allocator.free(statuses);
+            @memset(statuses, failure.status);
+            try waitSpawnedPipelineChildren(
+                process_port,
+                children.items,
+                child_stage_indexes.items,
+                statuses,
+                buffers,
+            );
+            return .{ .failure = failure.status };
+        },
+    };
+    closePipelinePipeRead(fd_port, &pipe, buffers);
+    try children.append(evaluator.allocator, last_child);
+    try child_stage_indexes.append(evaluator.allocator, last_stage_index);
+
+    const command_text = try pipelineCommandText(evaluator.allocator, plan);
+    errdefer evaluator.allocator.free(command_text);
+    var job: state.BackgroundJob = .{
+        .id = shell_state.next_job_id,
+        .pid = last_child.id(),
+        .process_group = process_group,
+        .command = command_text,
+    };
+    errdefer job.deinit(evaluator.allocator);
+    for (children.items, child_stage_indexes.items) |child, stage_index| try job.appendProcess(
+        evaluator.allocator,
+        .{ .stage_index = stage_index, .child = child },
+    );
     return .{ .started = job };
 }
 
@@ -23423,7 +23549,7 @@ test "semantic background compound command is tracked as one subshell job" {
     try std.testing.expectEqualStrings("brace group", shell_state.background_jobs.items[0].command);
 }
 
-test "semantic background mixed pipeline starts one subshell without foreground streaming" {
+test "semantic background mixed pipeline records external last stage as job pid" {
     var fake = FakeExternalRuntime.init(std.testing.allocator);
     defer fake.deinit();
     var evaluator = Evaluator.initWithExternalPorts(std.testing.allocator, fake.fdPort(), fake.processPort());
@@ -23455,13 +23581,24 @@ test "semantic background mixed pipeline starts one subshell without foreground 
 
     try std.testing.expectEqual(@as(outcome.ExitStatus, 0), result.status);
     try std.testing.expectEqual(@as(usize, 1), fake.start_subshell_count);
-    try std.testing.expectEqual(@as(usize, 0), fake.spawn_count);
+    try std.testing.expectEqual(@as(usize, 1), fake.spawn_count);
     try std.testing.expectEqual(@as(usize, 0), fake.run_count);
     try std.testing.expectEqual(@as(usize, 0), fake.wait_count);
+    try std.testing.expectEqual(
+        runtime.process.StandardIo{ .fd = 10 }, // ziglint-ignore: Z010 (expectEqual peer)
+        fake.observed_spawn_stdin[0],
+    );
+    try std.testing.expectEqual(runtime.process.StandardIo.inherit, fake.observed_spawn_stdout[0]);
     try std.testing.expectEqualSlices(outcome.ExitStatus, &.{ 0, 0 }, result.state_delta.last_pipeline_statuses.?);
 
     try result.commitDelta(&shell_state, .current_shell);
-    try std.testing.expectEqualStrings("printf payload | sink", shell_state.background_jobs.items[0].command);
+    try std.testing.expectEqual(@as(?runtime.process.ProcessId, 9001), shell_state.last_background_pid);
+    const job = shell_state.background_jobs.items[0];
+    try std.testing.expectEqual(@as(runtime.process.ProcessId, 9001), job.pid);
+    try std.testing.expectEqual(@as(usize, 2), job.processes.items.len);
+    try std.testing.expectEqual(@as(usize, 0), job.processes.items[0].stage_index);
+    try std.testing.expectEqual(@as(usize, 1), job.processes.items[1].stage_index);
+    try std.testing.expectEqualStrings("printf payload | sink", job.command);
 }
 
 test "semantic background builtin redirections are guarded and restored around launch" {
