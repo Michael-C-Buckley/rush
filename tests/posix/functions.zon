@@ -424,6 +424,34 @@
             .status = 7,
         },
         .{
+            .name = "return from a negated if condition still returns from the function",
+            .script =
+            \\foo() { if ! return 5; then printf '%s\n' bad-then; else printf '%s\n' bad-else; fi; }
+            \\foo
+            \\printf '<%s>\n' "$?"
+            ,
+            .stdout =
+            \\<5>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "return from a negated while condition still returns from the function",
+            .script =
+            \\foo() { while ! return 6; do printf '%s\n' bad-body; done; }
+            \\foo
+            \\printf '<%s>\n' "$?"
+            ,
+            .stdout =
+            \\<6>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "return accepts numeric arguments above 255",
             .script =
             \\foo() { return 256; printf '%s\n' bad; }

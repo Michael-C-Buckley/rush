@@ -6834,9 +6834,19 @@ fn evaluatePipelinePlanWithFrame(
     defer evaluator.allocator.free(statuses);
 
     var state_delta = delta.StateDelta.init(evaluator.allocator, eval_context.target);
+    var pipeline_control_flow: outcome.ControlFlow = .normal;
 
     if (plan.strategy == .single_stage) {
-        state_delta = try evaluateSingleStagePipeline(evaluator, shell_state, eval_context, plan, statuses, &buffers);
+        const single_stage_result = try evaluateSingleStagePipeline(
+            evaluator,
+            shell_state,
+            eval_context,
+            plan,
+            statuses,
+            &buffers,
+        );
+        state_delta = single_stage_result.state_delta;
+        pipeline_control_flow = single_stage_result.control_flow;
     } else switch (plan.strategy) {
         .external_only_real => if (capturedExternalMode(evaluator.external_stdio) != null or
             pipelineHasExpansionOutput(plan))
@@ -6861,6 +6871,7 @@ fn evaluatePipelinePlanWithFrame(
         plan,
         statuses,
         state_delta,
+        pipeline_control_flow,
         &buffers,
     );
 }
@@ -7933,6 +7944,11 @@ fn commandSubstitutionHasSideOutput(result: CommandSubstitutionResult) bool {
     return result.stderr.items.len != 0 or result.side_stdout.items.len != 0 or result.diagnostics.items.len != 0;
 }
 
+const SingleStagePipelineResult = struct {
+    state_delta: delta.StateDelta,
+    control_flow: outcome.ControlFlow = .normal,
+};
+
 fn evaluateSingleStagePipeline(
     evaluator: *Evaluator,
     shell_state: *state.ShellState,
@@ -7940,7 +7956,7 @@ fn evaluateSingleStagePipeline(
     plan: pipeline_plan.PipelinePlan,
     statuses: []outcome.ExitStatus,
     buffers: *EvaluationBuffers,
-) EvalError!delta.StateDelta {
+) EvalError!SingleStagePipelineResult {
     plan.validate();
     std.debug.assert(plan.strategy == .single_stage);
     std.debug.assert(statuses.len == 1);
@@ -7969,7 +7985,7 @@ fn evaluateSingleStagePipeline(
         errdefer state_delta.deinit();
         stage_outcome.discardDelta(stage_target);
         state_delta.setLastStatus(statuses[0]);
-        return state_delta;
+        return .{ .state_delta = state_delta, .control_flow = stage_control_flow };
     }
 
     if (stage_target == eval_context.target and stage_target.allowsShellStateCommit()) {
@@ -7977,13 +7993,13 @@ fn evaluateSingleStagePipeline(
         errdefer state_delta.deinit();
         stage_outcome.discardDelta(stage_target);
         std.debug.assert(state_delta.target == eval_context.target);
-        return state_delta;
+        return .{ .state_delta = state_delta };
     }
 
     stage_outcome.discardDelta(stage_target);
     var state_delta = delta.StateDelta.init(evaluator.allocator, eval_context.target);
     errdefer state_delta.deinit();
-    return state_delta;
+    return .{ .state_delta = state_delta };
 }
 
 const BackgroundStartResult = union(enum) {
@@ -8910,9 +8926,11 @@ fn finishPipelineOutcome(
     plan: pipeline_plan.PipelinePlan,
     statuses: []const outcome.ExitStatus,
     state_delta: delta.StateDelta,
+    pipeline_control_flow: outcome.ControlFlow,
     buffers: *EvaluationBuffers,
 ) EvalError!outcome.CommandOutcome {
     plan.validateStatusCount(statuses);
+    pipeline_control_flow.validate();
     std.debug.assert(state_delta.state == .pending);
     std.debug.assert(state_delta.target == eval_context.target);
     var mutable_delta = state_delta;
@@ -8926,6 +8944,8 @@ fn finishPipelineOutcome(
     });
     const final_status = if (buffers.propagated_failure) |failure|
         failure.status()
+    else if (pipeline_control_flow != .normal)
+        pipeline_control_flow.status(aggregation.final_status)
     else
         aggregation.final_status;
     if (mutable_delta.last_status != null) mutable_delta.last_status = null;
@@ -8935,6 +8955,8 @@ fn finishPipelineOutcome(
     const decision_context = if (plan.negated) eval_context.ignoreErrexit() else eval_context;
     const control_flow: outcome.ControlFlow = if (buffers.propagated_failure) |failure|
         failure.controlFlow()
+    else if (pipeline_control_flow != .normal)
+        pipeline_control_flow
     else
         consequence.decideForStatus(shell_options, decision_context, aggregation.final_status).control_flow;
     return commandOutcomeFromBuffers(
