@@ -9374,7 +9374,13 @@ fn evaluateSimpleCommand(
             plan.source_line,
             buffers,
         )),
-        .function => |definition| evaluateFunction(
+        .function => |definition| (try evaluateFunctionCallDirectPrepared(
+            evaluator,
+            shell_state,
+            eval_context,
+            plan,
+            buffers,
+        )) orelse try evaluateFunction(
             evaluator,
             shell_state,
             eval_context,
@@ -9721,6 +9727,19 @@ fn evaluateStatementList(
             evaluator.external_stdio,
             evaluator.io != null,
         );
+        if (try evaluateStatementPlanDirect(
+            evaluator,
+            shell_state,
+            child_context,
+            eval_context,
+            entry.plan,
+            &result,
+            buffers,
+        )) |completion| {
+            defer buffers.resetScratchAfterStep();
+            if (completion.stop_list) break;
+            continue;
+        }
         {
             var child_outcome = try evaluateStatementPlan(
                 evaluator,
@@ -9749,6 +9768,222 @@ fn evaluateStatementList(
             );
             if (completion.stop_list) break;
         }
+    }
+    return result;
+}
+
+fn evaluateStatementPlanDirect(
+    evaluator: *Evaluator,
+    shell_state: *state.ShellState,
+    child_context: context.EvalContext,
+    list_context: context.EvalContext,
+    plan: command_plan.StatementPlan,
+    result: *SimpleEvalResult,
+    buffers: *EvaluationBuffers,
+) EvalError!?StatementChildCompletion {
+    shell_state.validate();
+    child_context.validate();
+    list_context.validate();
+    plan.validate();
+    buffers.stdin.validate();
+    buffers.frame.validate();
+
+    const child_result = switch (plan) {
+        .simple => |simple| try evaluateSimpleStatementPlanDirect(
+            evaluator,
+            shell_state,
+            child_context,
+            simple,
+            buffers,
+        ) orelse return null,
+        .compound => |compound| try evaluateCompoundStatementPlanDirect(
+            evaluator,
+            shell_state,
+            child_context,
+            compound,
+            buffers,
+        ) orelse return null,
+        .source, .ir_source, .pipeline => return null,
+    };
+
+    shell_state.last_status = child_result.status;
+    return try completeStatementChildResult(
+        evaluator,
+        shell_state,
+        list_context,
+        child_result,
+        result,
+        buffers,
+    );
+}
+
+fn evaluateSimpleStatementPlanDirect(
+    evaluator: *Evaluator,
+    shell_state: *state.ShellState,
+    eval_context: context.EvalContext,
+    plan: command_plan.CommandPlan,
+    buffers: *EvaluationBuffers,
+) EvalError!?SimpleEvalResult {
+    shell_state.validate();
+    eval_context.validate();
+    plan.validate();
+    if (eval_context.features.isBash()) return null;
+    if (eval_context.target != .current_shell or plan.target != .current_shell) return null;
+    if (plan.class() == .function) {
+        return try evaluateFunctionCallDirectWithPrelude(evaluator, shell_state, eval_context, plan, buffers);
+    }
+    if (plan.class() != .assignment_only) return null;
+    if (plan.redirections.steps.len != 0) return null;
+    if (delta.firstReadonlyAssignment(shell_state.*, plan.assignments) != null) return null;
+
+    try appendPlanExpansionOutput(evaluator.*, eval_context, plan, buffers);
+    try traceCommandPlanForEvaluation(evaluator, shell_state, eval_context, plan, buffers.stdin, buffers.frame, buffers);
+    try flushCurrentShellBufferedCommandOutput(buffers, eval_context, evaluator.external_stdio, evaluator.io != null);
+
+    const exported: ?bool = if (shell_state.options.enabled(.allexport)) true else null;
+    for (plan.assignments) |assignment| {
+        shell_state.putVariable(assignment.name, assignment.value, .{ .exported = exported }) catch |err| switch (err) {
+            error.OutOfMemory => return error.OutOfMemory,
+            error.ReadonlyVariable => unreachable,
+        };
+    }
+    return normalEvaluation(statusForCommandWithoutName(plan));
+}
+
+fn evaluateFunctionCallDirectWithPrelude(
+    evaluator: *Evaluator,
+    shell_state: *state.ShellState,
+    eval_context: context.EvalContext,
+    plan: command_plan.CommandPlan,
+    buffers: *EvaluationBuffers,
+) EvalError!?SimpleEvalResult {
+    if (!directFunctionCallEligible(evaluator.*, shell_state.*, eval_context, plan)) return null;
+    try appendPlanExpansionOutput(evaluator.*, eval_context, plan, buffers);
+    try traceCommandPlanForEvaluation(evaluator, shell_state, eval_context, plan, buffers.stdin, buffers.frame, buffers);
+    try flushCurrentShellBufferedCommandOutput(buffers, eval_context, evaluator.external_stdio, evaluator.io != null);
+    return evaluateFunctionCallDirectPrepared(evaluator, shell_state, eval_context, plan, buffers);
+}
+
+fn evaluateFunctionCallDirectPrepared(
+    evaluator: *Evaluator,
+    shell_state: *state.ShellState,
+    eval_context: context.EvalContext,
+    plan: command_plan.CommandPlan,
+    buffers: *EvaluationBuffers,
+) EvalError!?SimpleEvalResult {
+    shell_state.validate();
+    eval_context.validate();
+    plan.validate();
+    if (!directFunctionCallEligible(evaluator.*, shell_state.*, eval_context, plan)) return null;
+
+    var saved_positionals: std.ArrayList([]const u8) = .empty;
+    defer {
+        for (saved_positionals.items) |arg| evaluator.allocator.free(arg);
+        saved_positionals.deinit(evaluator.allocator);
+    }
+    for (shell_state.positionals.items) |arg| {
+        const owned_arg = try evaluator.allocator.dupe(u8, arg);
+        errdefer evaluator.allocator.free(owned_arg);
+        try saved_positionals.append(evaluator.allocator, owned_arg);
+    }
+
+    var call_frame = try FunctionCallFrame.init(evaluator.allocator, eval_context, plan, false);
+    defer call_frame.deinit();
+    const previous_frame = evaluator.function_frame;
+    try beginFunctionFrameState(shell_state, plan);
+    installFunctionFrame(evaluator, call_frame.function_frame);
+    defer restoreFunctionFrame(evaluator, call_frame.function_frame, previous_frame);
+    defer shell_state.replacePositionals(saved_positionals.items) catch unreachable;
+
+    while (true) {
+        const body_result = try evaluateFunctionBody(evaluator, shell_state, &call_frame, buffers);
+        switch (body_result) {
+            .result => |result| return consumeFunctionBoundaryReturn(call_frame.function_context, result),
+            .call_function => |request| {
+                request.validate();
+                var child_outcome = try evaluatePlanWithInput(
+                    evaluator,
+                    shell_state,
+                    request.eval_context,
+                    request.plan,
+                    buffers.stdin,
+                    buffers.frame,
+                );
+                defer child_outcome.deinit();
+                defer if (request.owns_plan) command_plan.freeCommandPlan(evaluator.allocator, request.plan);
+                try call_frame.body_cursor.?.completeCallOutcome(evaluator, shell_state, &child_outcome, buffers);
+            },
+            .tail_call => |tail_plan| {
+                defer command_plan.freeCommandPlan(evaluator.allocator, tail_plan);
+                var tail_outcome = try evaluatePlanWithInput(
+                    evaluator,
+                    shell_state,
+                    call_frame.function_context.withTarget(tail_plan.target),
+                    tail_plan,
+                    buffers.stdin,
+                    buffers.frame,
+                );
+                defer tail_outcome.deinit();
+                try appendStatementChildOutcomeBuffers(buffers, tail_outcome);
+                try applyOutcomeToWorkingState(shell_state, &tail_outcome, tail_outcome.state_delta.target);
+                return .{ .status = tail_outcome.status, .control_flow = tail_outcome.effectiveControlFlow() };
+            },
+        }
+    }
+}
+
+fn directFunctionCallEligible(
+    evaluator: Evaluator,
+    shell_state: state.ShellState,
+    eval_context: context.EvalContext,
+    plan: command_plan.CommandPlan,
+) bool {
+    shell_state.validate();
+    eval_context.validate();
+    plan.validate();
+    if (eval_context.features.isBash()) return false;
+    if (eval_context.source == .command_string) return false;
+    if (eval_context.target != .current_shell or plan.target != .current_shell) return false;
+    if (eval_context.subshell_depth != 0 or
+        eval_context.pipeline_depth != 0 or
+        eval_context.command_substitution_depth != 0) return false;
+    if (shell_state.scope != .current_shell or !shell_state.acceptsExecutionTarget(.current_shell)) return false;
+    if (shell_state.options.enabled(.errexit)) return false;
+    if (shell_state.traps.count() != 0 or
+        shell_state.pending_traps.items.len != 0 or
+        shell_state.pending_exit != null or
+        shell_state.trap_execution != .idle) return false;
+    if (plan.assignments.len != 0 or plan.redirections.steps.len != 0) return false;
+    const definition = functionDefinitionFromCallPlan(plan);
+    if (definition.redirections.steps.len != 0) return false;
+    _ = evaluator;
+    return true;
+}
+
+fn evaluateCompoundStatementPlanDirect(
+    evaluator: *Evaluator,
+    shell_state: *state.ShellState,
+    eval_context: context.EvalContext,
+    plan: command_plan.CompoundCommandPlan,
+    buffers: *EvaluationBuffers,
+) EvalError!?SimpleEvalResult {
+    shell_state.validate();
+    eval_context.validate();
+    plan.validate();
+    if (eval_context.features.isBash()) return null;
+    if (eval_context.target != .current_shell or plan.target != .current_shell) return null;
+    if (hasCompoundRedirections(plan)) return null;
+    if (plan.body != .case_clause) return null;
+
+    var result = try evaluateCompoundBody(evaluator, shell_state, eval_context, plan.body, buffers);
+    if (!compoundBodySuppressesFinalErrexit(plan.body)) {
+        const decision = consequence.decideForCompoundCommand(
+            shell_state.options,
+            eval_context,
+            result.status,
+            result.control_flow,
+        );
+        result.control_flow = decision.control_flow;
     }
     return result;
 }
