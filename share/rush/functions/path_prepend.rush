@@ -1,0 +1,57 @@
+# Add existing directories to the front of PATH, skipping duplicates.
+path_prepend() {
+  local rush_path_dir rush_path_rest rush_path_entry rush_path_new rush_path_first
+  local rush_path_prefix rush_path_seen
+
+  rush_path_prefix=
+  for rush_path_dir do
+    test -n "$rush_path_dir" || continue
+    test -d "$rush_path_dir" || continue
+
+    rush_path_rest=${PATH-}:
+    rush_path_new=
+    rush_path_first=1
+    while test -n "$rush_path_rest"; do
+      rush_path_entry=${rush_path_rest%%:*}
+      rush_path_rest=${rush_path_rest#*:}
+      if test "$rush_path_entry" != "$rush_path_dir"; then
+        if test "$rush_path_first" = 1; then
+          rush_path_new=$rush_path_entry
+          rush_path_first=0
+        else
+          rush_path_new=$rush_path_new:$rush_path_entry
+        fi
+      fi
+    done
+
+    PATH=$rush_path_new
+
+    rush_path_seen=0
+    rush_path_rest=$rush_path_prefix:
+    while test -n "$rush_path_rest"; do
+      rush_path_entry=${rush_path_rest%%:*}
+      rush_path_rest=${rush_path_rest#*:}
+      if test "$rush_path_entry" = "$rush_path_dir"; then
+        rush_path_seen=1
+      fi
+    done
+
+    if test "$rush_path_seen" = 0; then
+      if test -n "$rush_path_prefix"; then
+        rush_path_prefix=$rush_path_prefix:$rush_path_dir
+      else
+        rush_path_prefix=$rush_path_dir
+      fi
+    fi
+  done
+
+  if test -n "$rush_path_prefix"; then
+    if test -n "${PATH-}"; then
+      PATH=$rush_path_prefix:$PATH
+    else
+      PATH=$rush_path_prefix
+    fi
+  fi
+
+  export PATH
+}

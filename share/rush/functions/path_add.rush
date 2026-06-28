@@ -1,0 +1,4 @@
+# Add existing directories to the front of PATH, skipping duplicates.
+path_add() {
+  path_prepend "$@"
+}

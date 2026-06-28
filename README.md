@@ -88,8 +88,8 @@ If `XDG_CONFIG_HOME` is unset, user files fall back to
 style defaults, and `ll`/`la` abbreviations that later config files can
 override or erase. Rush-mode shells also autoload functions from
 `rush/functions` search directories when a matching function name is used;
-shipped defaults include colorized `ls`/`grep`/`diff` helpers and opt-in
-project-environment hooks there.
+shipped defaults include colorized `ls`/`grep`/`diff` helpers, `path_*` PATH
+helpers, and opt-in project-environment hooks there.
 
 More configuration and prompt examples are in
 [`website/docs/configuration.html`](website/docs/configuration.html) and

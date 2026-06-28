@@ -2373,6 +2373,51 @@ test "non-interactive Rush mode autoloads user functions" {
     try std.testing.expectEqualStrings("", result.stderr);
 }
 
+test "non-interactive Rush mode autoloads shipped path helpers" {
+    const root = "rush-test-path-functions";
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, root ++ "/bin");
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, root ++ "/old");
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, root ++ "/tools");
+
+    var env = std.process.Environ.Map.init(std.testing.allocator);
+    defer env.deinit();
+    try env.put("XDG_DATA_HOME", "share");
+    try env.put("PATH", "");
+
+    var result = try runCommandStringWithEnvironment(
+        std.testing.allocator,
+        std.testing.io,
+        \\
+        \\PATH='rush-test-path-functions/bin:rush-test-path-functions/old'
+        \\path_prepend rush-test-path-functions/tools rush-test-path-functions/missing rush-test-path-functions/bin
+        \\printf 'pre=%s\n' "$PATH"
+        \\path_append rush-test-path-functions/bin rush-test-path-functions/tools
+        \\printf 'app=%s\n' "$PATH"
+        \\path_remove rush-test-path-functions/tools rush-test-path-functions/missing
+        \\printf 'rm=%s\n' "$PATH"
+        \\PATH=
+        \\path_add rush-test-path-functions/bin rush-test-path-functions/tools
+        \\printf 'add=%s\n' "$PATH"
+    ,
+        .{ .io = std.testing.io, .features = .bash(), .arg_zero = "rush" },
+        &env,
+        &.{},
+        .{},
+    );
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings(
+        \\pre=rush-test-path-functions/tools:rush-test-path-functions/bin:rush-test-path-functions/old
+        \\app=rush-test-path-functions/old:rush-test-path-functions/bin:rush-test-path-functions/tools
+        \\rm=rush-test-path-functions/old:rush-test-path-functions/bin
+        \\add=rush-test-path-functions/bin:rush-test-path-functions/tools
+        \\
+    , result.stdout);
+    try std.testing.expectEqualStrings("", result.stderr);
+}
+
 test "non-interactive unset function suppresses future autoload" {
     const root = "rush-test-unset-function-autoload";
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};

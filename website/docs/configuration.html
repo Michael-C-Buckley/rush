@@ -58,7 +58,13 @@
 each <span class="var">$XDG_DATA_DIRS</span> entry + /rush/functions
 <span class="var">$datadir</span>/rush/functions</pre>
 
-  <p>If a name exists in more than one directory, the first matching file wins. Shipped autoload functions in <code>share/rush/functions</code> include colorized <code>ls</code>/<code>grep</code>/<code>diff</code> helpers and opt-in <a href="#project-environments">project environment hooks</a>.</p>
+  <p>If a name exists in more than one directory, the first matching file wins. Shipped autoload functions in <code>share/rush/functions</code> include colorized <code>ls</code>/<code>grep</code>/<code>diff</code> helpers, <code>path_add</code>/<code>path_prepend</code>/<code>path_append</code>/<code>path_remove</code> PATH helpers, and opt-in <a href="#project-environments">project environment hooks</a>.</p>
+
+  <pre><span class="cmd">path_prepend</span> <span class="var">$HOME</span>/.local/bin
+<span class="cmd">path_append</span> ./node_modules/.bin
+<span class="cmd">path_remove</span> /old/toolchain/bin</pre>
+
+  <p><code>path_add</code> is the same as <code>path_prepend</code>. The add/prepend/append helpers skip missing directories and keep only one copy of each added path.</p>
 
   <p>Command and function-name completion include autoloadable functions without sourcing them. <code>unset -f foo</code> removes a loaded <code>foo</code> function and suppresses future autoload of <code>foo</code> in the current shell. Defining <code>foo()</code> again clears that suppression. POSIX mode does not autoload Rush functions.</p>
 

@@ -1,0 +1,33 @@
+# Add existing directories to the end of PATH, skipping duplicates.
+path_append() {
+  local rush_path_dir rush_path_rest rush_path_entry rush_path_new rush_path_first
+
+  for rush_path_dir do
+    test -n "$rush_path_dir" || continue
+    test -d "$rush_path_dir" || continue
+
+    rush_path_rest=${PATH-}:
+    rush_path_new=
+    rush_path_first=1
+    while test -n "$rush_path_rest"; do
+      rush_path_entry=${rush_path_rest%%:*}
+      rush_path_rest=${rush_path_rest#*:}
+      if test "$rush_path_entry" != "$rush_path_dir"; then
+        if test "$rush_path_first" = 1; then
+          rush_path_new=$rush_path_entry
+          rush_path_first=0
+        else
+          rush_path_new=$rush_path_new:$rush_path_entry
+        fi
+      fi
+    done
+
+    if test -n "$rush_path_new"; then
+      PATH=$rush_path_new:$rush_path_dir
+    else
+      PATH=$rush_path_dir
+    fi
+  done
+
+  export PATH
+}
