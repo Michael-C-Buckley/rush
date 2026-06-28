@@ -4987,6 +4987,7 @@ fn evaluatePlanWithInput(
         effective_plan,
         &state_delta,
         &buffers,
+        true,
     );
     switch (execRedirectionCommitMode(evaluator.*, eval_context, effective_plan, result)) {
         .none => if (execRedirectionsMutateCurrentFrame(eval_context, effective_plan, result)) {
@@ -9391,6 +9392,7 @@ fn evaluateSimpleCommand(
     plan: command_plan.CommandPlan,
     state_delta: *delta.StateDelta,
     buffers: *EvaluationBuffers,
+    record_command_hash: bool,
 ) EvalError!SimpleEvalResult {
     return switch (plan.classification) {
         .empty => normalEvaluation(statusForCommandWithoutName(plan)),
@@ -9414,14 +9416,18 @@ fn evaluateSimpleCommand(
             state_delta,
             buffers,
         ),
-        .external => |resolution| normalEvaluation(try evaluateExternal(
-            evaluator,
-            shell_state.*,
-            eval_context,
-            plan,
-            resolution,
-            buffers,
-        )),
+        .external => |resolution| blk: {
+            const status = try evaluateExternal(
+                evaluator,
+                shell_state.*,
+                eval_context,
+                plan,
+                resolution,
+                buffers,
+            );
+            if (record_command_hash) try appendCommandHashEntryToState(shell_state, resolution);
+            break :blk normalEvaluation(status);
+        },
         .not_found => |not_found| normalEvaluation(try evaluateNotFound(
             evaluator,
             not_found,
@@ -14744,6 +14750,7 @@ fn evaluateBuiltin(
         evaluator,
         shell_state,
         plan,
+        state_delta,
         buffers,
     ));
     if (std.mem.eql(u8, definition.name, "getopts")) return normalEvaluation(try evaluateGetopts(
@@ -15935,6 +15942,7 @@ fn evaluateHash(
     evaluator: *Evaluator,
     shell_state: state.ShellState,
     plan: command_plan.CommandPlan,
+    state_delta: *delta.StateDelta,
     buffers: *EvaluationBuffers,
 ) !outcome.ExitStatus {
     std.debug.assert(plan.argv.len != 0);
@@ -15942,8 +15950,13 @@ fn evaluateHash(
     var index: usize = 1;
     const option_terminated = index < plan.argv.len and std.mem.eql(u8, plan.argv[index], "--");
     if (option_terminated) index += 1;
-    if (index >= plan.argv.len) return 0;
+    if (index >= plan.argv.len) {
+        var entries = shell_state.command_hash.iterator();
+        while (entries.next()) |entry| try buffers.stdout.print(buffers.allocator, "{s}\n", .{entry.value_ptr.*});
+        return 0;
+    }
     if (!option_terminated and std.mem.eql(u8, plan.argv[index], "-r")) {
+        state_delta.clearCommandHash();
         index += 1;
         if (index >= plan.argv.len) return 0;
     } else if (!option_terminated and std.mem.startsWith(u8, plan.argv[index], "-") and !std.mem.eql(
@@ -15963,7 +15976,9 @@ fn evaluateHash(
         };
         const external = try resolveExternalForEvaluation(evaluator.allocator, evaluator.fs_port, shell_state, command);
         defer if (external) |resolution| evaluator.allocator.free(resolution.path);
-        if (external == null) {
+        if (external) |resolution| {
+            try appendCommandHashEntry(state_delta, resolution);
+        } else {
             const message = try std.fmt.allocPrint(buffers.allocator, "{s}: not found", .{name});
             defer buffers.allocator.free(message);
             try buffers.addBuiltinDiagnostic("hash", message);
@@ -15971,6 +15986,24 @@ fn evaluateHash(
         }
     }
     return status;
+}
+
+fn appendCommandHashEntry(
+    state_delta: *delta.StateDelta,
+    resolution: command_plan.ExternalResolution,
+) !void {
+    resolution.validate();
+    if (std.mem.findScalar(u8, resolution.name, '/') != null) return;
+    try state_delta.setCommandHash(resolution.name, resolution.path);
+}
+
+fn appendCommandHashEntryToState(
+    shell_state: *state.ShellState,
+    resolution: command_plan.ExternalResolution,
+) !void {
+    resolution.validate();
+    if (std.mem.findScalar(u8, resolution.name, '/') != null) return;
+    try shell_state.putCommandHash(resolution.name, resolution.path);
 }
 
 fn evaluateGetopts(
@@ -16551,7 +16584,7 @@ fn evaluateCommandBuiltin(
         .target = eval_context.target,
     });
     var dispatch_state = shell_state;
-    return evaluateSimpleCommand(evaluator, &dispatch_state, eval_context, target_plan, state_delta, buffers);
+    return evaluateSimpleCommand(evaluator, &dispatch_state, eval_context, target_plan, state_delta, buffers, false);
 }
 
 const default_command_path = "/bin:/usr/bin";
@@ -19644,6 +19677,13 @@ test "semantic evaluator evaluates hash through command search" {
     try std.testing.expectEqual(@as(outcome.ExitStatus, 0), found_result.status);
     try std.testing.expectEqualStrings("", found_result.stdout.items);
     try std.testing.expectEqualStrings("", found_result.stderr.items);
+    try found_result.commitDelta(&shell_state, .current_shell);
+
+    const list_plan = command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{"hash"} } });
+    var list_result = try evaluatePlan(&evaluator, &shell_state, eval_context, list_plan);
+    defer list_result.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 0), list_result.status);
+    try std.testing.expectEqualStrings("/fake/bin/tool\n", list_result.stdout.items);
 
     const reset_plan = command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{
         "hash",
@@ -19652,6 +19692,35 @@ test "semantic evaluator evaluates hash through command search" {
     var reset_result = try evaluatePlan(&evaluator, &shell_state, eval_context, reset_plan);
     defer reset_result.deinit();
     try std.testing.expectEqual(@as(outcome.ExitStatus, 0), reset_result.status);
+    try reset_result.commitDelta(&shell_state, .current_shell);
+
+    var reset_list_result = try evaluatePlan(&evaluator, &shell_state, eval_context, list_plan);
+    defer reset_list_result.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 0), reset_list_result.status);
+    try std.testing.expectEqualStrings("", reset_list_result.stdout.items);
+
+    var fake_external = FakeExternalRuntime.init(std.testing.allocator);
+    defer fake_external.deinit();
+    var external_evaluator = Evaluator.initWithExternalPorts(
+        std.testing.allocator,
+        fake_external.fdPort(),
+        fake_external.processPort(),
+    );
+    const argv = [_][]const u8{"tool"};
+    const externals = [_]command_plan.ExternalResolution{.{ .name = "tool", .path = "/fake/bin/tool" }};
+    const external_plan = command_plan.classifyExpandedSimpleCommand(.{
+        .command = .{ .argv = &argv },
+        .lookup = .{ .externals = &externals },
+    });
+    var external_result = try evaluatePlan(
+        &external_evaluator,
+        &shell_state,
+        context.EvalContext.forTarget(.child_process),
+        external_plan,
+    );
+    defer external_result.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 7), external_result.status);
+    try std.testing.expectEqualStrings("/fake/bin/tool", shell_state.command_hash.get("tool").?);
 
     const missing_plan = command_plan.classifyExpandedSimpleCommand(.{ .command = .{
         .assignments = &assignments,

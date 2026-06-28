@@ -451,6 +451,7 @@ pub const ShellState = struct {
     functions_mutated: bool = false,
     suppressed_autoload_functions: std.StringHashMapUnmanaged(void) = .empty,
     aliases: std.StringHashMapUnmanaged(Alias) = .empty,
+    command_hash: std.StringHashMapUnmanaged([]const u8) = .empty,
     traps: std.StringHashMapUnmanaged(Trap) = .empty,
     event_hooks: std.ArrayList(event.Registration) = .empty,
     positionals: std.ArrayList([]const u8) = .empty,
@@ -517,6 +518,14 @@ pub const ShellState = struct {
         }
         self.aliases.deinit(self.allocator);
 
+        var command_hash = self.command_hash.iterator();
+        while (command_hash.next()) |entry| {
+            self.allocator.free(entry.key_ptr.*);
+            self.allocator.free(entry.value_ptr.*);
+        }
+        self.command_hash.clearRetainingCapacity();
+        self.command_hash.deinit(self.allocator);
+
         var traps = self.traps.iterator();
         while (traps.next()) |entry| {
             self.allocator.free(entry.key_ptr.*);
@@ -564,6 +573,9 @@ pub const ShellState = struct {
 
         var aliases = self.aliases.iterator();
         while (aliases.next()) |entry| try cloned.setAlias(entry.key_ptr.*, entry.value_ptr.value);
+
+        var hashed_commands = self.command_hash.iterator();
+        while (hashed_commands.next()) |entry| try cloned.putCommandHash(entry.key_ptr.*, entry.value_ptr.*);
 
         var traps = self.traps.iterator();
         while (traps.next()) |entry| try cloned.setTrap(entry.key_ptr.*, entry.value_ptr.action);
@@ -615,6 +627,9 @@ pub const ShellState = struct {
 
         var aliases = self.aliases.iterator();
         while (aliases.next()) |entry| try cloned.setAlias(entry.key_ptr.*, entry.value_ptr.value);
+
+        var hashed_commands = self.command_hash.iterator();
+        while (hashed_commands.next()) |entry| try cloned.putCommandHash(entry.key_ptr.*, entry.value_ptr.*);
 
         var traps = self.traps.iterator();
         while (traps.next()) |entry| try cloned.setTrap(entry.key_ptr.*, entry.value_ptr.action);
@@ -722,6 +737,7 @@ pub const ShellState = struct {
         }
 
         self.variables_mutated = true;
+        if (std.mem.eql(u8, name, "PATH")) self.clearCommandHash();
         self.validate();
     }
 
@@ -814,6 +830,8 @@ pub const ShellState = struct {
             self.allocator.free(entry.value.value);
             self.variables_mutated = true;
         }
+
+        if (std.mem.eql(u8, name, "PATH")) self.clearCommandHash();
 
         self.validate();
     }
@@ -970,6 +988,36 @@ pub const ShellState = struct {
         }
         self.validate();
         return false;
+    }
+
+    pub fn putCommandHash(self: *ShellState, name: []const u8, path: []const u8) !void {
+        std.debug.assert(name.len != 0);
+        std.debug.assert(path.len != 0);
+        std.debug.assert(std.mem.findScalar(u8, name, '/') == null);
+
+        if (self.command_hash.getEntry(name)) |entry| {
+            const owned_path = try self.allocator.dupe(u8, path);
+            self.allocator.free(entry.value_ptr.*);
+            entry.value_ptr.* = owned_path;
+        } else {
+            const owned_name = try self.allocator.dupe(u8, name);
+            errdefer self.allocator.free(owned_name);
+            const owned_path = try self.allocator.dupe(u8, path);
+            errdefer self.allocator.free(owned_path);
+            try self.command_hash.put(self.allocator, owned_name, owned_path);
+        }
+
+        self.validate();
+    }
+
+    pub fn clearCommandHash(self: *ShellState) void {
+        var entries = self.command_hash.iterator();
+        while (entries.next()) |entry| {
+            self.allocator.free(entry.key_ptr.*);
+            self.allocator.free(entry.value_ptr.*);
+        }
+        self.command_hash.clearRetainingCapacity();
+        self.validate();
     }
 
     pub fn clearAliases(self: *ShellState) void {
@@ -1404,6 +1452,12 @@ pub const ShellState = struct {
         while (suppressed_autoload_functions.next()) |entry| assertValidVariableName(entry.key_ptr.*);
         var aliases = self.aliases.iterator();
         while (aliases.next()) |entry| assertValidAliasName(entry.key_ptr.*);
+        var command_hash = self.command_hash.iterator();
+        while (command_hash.next()) |entry| {
+            std.debug.assert(entry.key_ptr.*.len != 0);
+            std.debug.assert(entry.value_ptr.*.len != 0);
+            std.debug.assert(std.mem.findScalar(u8, entry.key_ptr.*, '/') == null);
+        }
         var traps = self.traps.iterator();
         while (traps.next()) |entry| {
             assertValidTrapName(entry.key_ptr.*);

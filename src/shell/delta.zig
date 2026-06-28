@@ -80,6 +80,8 @@ pub const StateDelta = struct {
     alias_sets: std.ArrayList(NameValueMutation) = .empty,
     alias_unsets: std.ArrayList([]const u8) = .empty,
     clear_aliases: bool = false,
+    command_hash_sets: std.ArrayList(NameValueMutation) = .empty,
+    clear_command_hash: bool = false,
     event_hook_sets: std.ArrayList(event.Registration) = .empty,
     event_hook_removals: std.ArrayList(event.Removal) = .empty,
     trap_mutations: std.ArrayList(TrapMutation) = .empty,
@@ -131,6 +133,11 @@ pub const StateDelta = struct {
         self.alias_sets.deinit(self.allocator);
         for (self.alias_unsets.items) |name| self.allocator.free(name);
         self.alias_unsets.deinit(self.allocator);
+        for (self.command_hash_sets.items) |mutation| {
+            self.allocator.free(mutation.name);
+            self.allocator.free(mutation.value);
+        }
+        self.command_hash_sets.deinit(self.allocator);
         for (self.event_hook_sets.items) |*registration| registration.deinit(self.allocator);
         self.event_hook_sets.deinit(self.allocator);
         for (self.event_hook_removals.items) |*removal| removal.deinit(self.allocator);
@@ -186,6 +193,8 @@ pub const StateDelta = struct {
         for (self.alias_sets.items) |mutation| try cloned.setAlias(mutation.name, mutation.value);
         for (self.alias_unsets.items) |name| try cloned.unsetAlias(name);
         if (self.clear_aliases) cloned.clearAliases();
+        if (self.clear_command_hash) cloned.clearCommandHash();
+        for (self.command_hash_sets.items) |mutation| try cloned.setCommandHash(mutation.name, mutation.value);
         for (self.event_hook_sets.items) |registration| try cloned.setEventHook(registration);
         for (self.event_hook_removals.items) |removal| try cloned.removeEventHook(removal);
         for (self.trap_mutations.items) |mutation| try cloned.setTrap(mutation.name, mutation.action);
@@ -221,6 +230,8 @@ pub const StateDelta = struct {
             self.alias_sets.items.len == 0 and
             self.alias_unsets.items.len == 0 and
             !self.clear_aliases and
+            self.command_hash_sets.items.len == 0 and
+            !self.clear_command_hash and
             self.event_hook_sets.items.len == 0 and
             self.event_hook_removals.items.len == 0 and
             self.trap_mutations.items.len == 0 and
@@ -406,6 +417,31 @@ pub const StateDelta = struct {
     pub fn clearAliases(self: *StateDelta) void {
         self.assertPending();
         self.clear_aliases = true;
+    }
+
+    pub fn setCommandHash(self: *StateDelta, name: []const u8, path: []const u8) !void {
+        self.assertPending();
+        std.debug.assert(name.len != 0);
+        std.debug.assert(path.len != 0);
+        std.debug.assert(std.mem.findScalar(u8, name, '/') == null);
+
+        if (findNameValueMutation(&self.command_hash_sets, name)) |mutation| {
+            const owned_path = try self.allocator.dupe(u8, path);
+            self.allocator.free(mutation.value);
+            mutation.value = owned_path;
+            return;
+        }
+
+        const owned_name = try self.allocator.dupe(u8, name);
+        errdefer self.allocator.free(owned_name);
+        const owned_path = try self.allocator.dupe(u8, path);
+        errdefer self.allocator.free(owned_path);
+        try self.command_hash_sets.append(self.allocator, .{ .name = owned_name, .value = owned_path });
+    }
+
+    pub fn clearCommandHash(self: *StateDelta) void {
+        self.assertPending();
+        self.clear_command_hash = true;
     }
 
     pub fn setEventHook(self: *StateDelta, registration: event.Registration) !void {
@@ -678,6 +714,8 @@ pub const StateDelta = struct {
         if (self.clear_aliases) shell_state.clearAliases();
         for (self.alias_sets.items) |mutation| try shell_state.setAlias(mutation.name, mutation.value);
         for (self.alias_unsets.items) |name| _ = shell_state.unsetAlias(name);
+        if (self.clear_command_hash) shell_state.clearCommandHash();
+        for (self.command_hash_sets.items) |mutation| try shell_state.putCommandHash(mutation.name, mutation.value);
         for (self.event_hook_sets.items) |registration| try shell_state.setEventHook(registration);
         for (self.event_hook_removals.items) |removal| _ = shell_state.removeEventHook(removal);
         for (self.trap_mutations.items) |mutation| {
