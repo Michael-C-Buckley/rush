@@ -6741,6 +6741,11 @@ fn bracketExpressionEnd(pattern: []const u8, special: ?[]const bool, pattern_ind
     )) index += 1;
     var first_expression = true;
     while (index < pattern.len) : (index += 1) {
+        if (bracketElementEnd(pattern, special, index)) |end| {
+            first_expression = false;
+            index = end;
+            continue;
+        }
         if (pattern[index] == ']' and !first_expression and isGlobSpecial(special, index)) return index;
         first_expression = false;
     }
@@ -6937,16 +6942,17 @@ fn matchBracket(
     var saw_end = false;
     var first_expression = true;
     while (index < pattern.len) : (index += 1) {
+        if (matchBracketElement(pattern, special, index, text[text_index..text_end])) |element| {
+            first_expression = false;
+            if (element.ok) matched = true;
+            index = element.end_index;
+            continue;
+        }
         if (pattern[index] == ']' and !first_expression and isGlobSpecial(special, index)) {
             saw_end = true;
             break;
         }
         first_expression = false;
-        if (matchBracketCharacterClass(pattern, special, index, text[text_index..text_end])) |class| {
-            if (class.ok) matched = true;
-            index = class.end_index;
-            continue;
-        }
         if (index + 2 < pattern.len and pattern[index + 1] == '-' and isGlobSpecial(
             special,
             index + 1,
@@ -6967,22 +6973,59 @@ fn matchBracket(
 
 const BracketCharacterClassMatch = struct { ok: bool, end_index: usize };
 
+fn matchBracketElement(
+    pattern: []const u8,
+    special: ?[]const bool,
+    index: usize,
+    text: []const u8,
+) ?BracketCharacterClassMatch {
+    if (matchBracketCharacterClass(pattern, special, index, text)) |class| return class;
+    if (matchBracketLiteralElement(pattern, special, index, text, '.')) |collating| return collating;
+    if (matchBracketLiteralElement(pattern, special, index, text, '=')) |equivalence| return equivalence;
+    return null;
+}
+
+fn matchBracketLiteralElement(
+    pattern: []const u8,
+    special: ?[]const bool,
+    index: usize,
+    text: []const u8,
+    delimiter: u8,
+) ?BracketCharacterClassMatch {
+    const end_index = bracketElementEndForDelimiter(pattern, special, index, delimiter) orelse return null;
+    const symbol = pattern[index + 2 .. end_index - 1];
+    return .{ .ok = std.mem.eql(u8, symbol, text), .end_index = end_index };
+}
+
 fn matchBracketCharacterClass(
     pattern: []const u8,
     special: ?[]const bool,
     index: usize,
     text: []const u8,
 ) ?BracketCharacterClassMatch {
-    if (index + 3 >= pattern.len or pattern[index] != '[' or pattern[index + 1] != ':') return null;
+    const end_index = bracketElementEndForDelimiter(pattern, special, index, ':') orelse return null;
+    const class_name = pattern[index + 2 .. end_index - 1];
+    const ok = bracketCharacterClassMatches(class_name, text) orelse return null;
+    return .{ .ok = ok, .end_index = end_index };
+}
+
+fn bracketElementEnd(pattern: []const u8, special: ?[]const bool, index: usize) ?usize {
+    if (index + 3 >= pattern.len or pattern[index] != '[') return null;
+    return switch (pattern[index + 1]) {
+        ':', '.', '=' => |delimiter| bracketElementEndForDelimiter(pattern, special, index, delimiter),
+        else => null,
+    };
+}
+
+fn bracketElementEndForDelimiter(pattern: []const u8, special: ?[]const bool, index: usize, delimiter: u8) ?usize {
+    if (index + 3 >= pattern.len or pattern[index] != '[' or pattern[index + 1] != delimiter) return null;
 
     const name_start = index + 2;
     var name_end = name_start;
     while (name_end + 1 < pattern.len) : (name_end += 1) {
-        if (pattern[name_end] == ':' and pattern[name_end + 1] == ']') {
+        if (pattern[name_end] == delimiter and pattern[name_end + 1] == ']') {
             if (!globPatternBytesAreSpecial(special, index, name_end + 2)) return null;
-            const class_name = pattern[name_start..name_end];
-            const ok = bracketCharacterClassMatches(class_name, text) orelse return null;
-            return .{ .ok = ok, .end_index = name_end + 1 };
+            return name_end + 1;
         }
     }
     return null;
@@ -10439,6 +10482,28 @@ test "pathname expansion bracket expressions support POSIX character classes" {
     try std.testing.expectEqual(@as(usize, 2), negated_result.fields.len);
     try std.testing.expectEqualStrings(upper, negated_result.fields[0]);
     try std.testing.expectEqualStrings(lower, negated_result.fields[1]);
+}
+
+test "pathname expansion bracket expressions support POSIX collating and equivalence elements as literals" {
+    const hyphen = "rush-bracket-element-.tmp";
+    const close = "rush-bracket-element].tmp";
+    const other = "rush-bracket-elementa.tmp";
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = hyphen, .data = "" });
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = close, .data = "" });
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = other, .data = "" });
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, hyphen) catch {};
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, close) catch {};
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, other) catch {};
+
+    var hyphen_result = try expandWord(std.testing.allocator, "rush-bracket-element[[.-.]].tmp", .{ .io = std.testing.io });
+    defer hyphen_result.deinit();
+    try std.testing.expectEqual(@as(usize, 1), hyphen_result.fields.len);
+    try std.testing.expectEqualStrings(hyphen, hyphen_result.fields[0]);
+
+    var close_result = try expandWord(std.testing.allocator, "rush-bracket-element[[=]=]].tmp", .{ .io = std.testing.io });
+    defer close_result.deinit();
+    try std.testing.expectEqual(@as(usize, 1), close_result.fields.len);
+    try std.testing.expectEqualStrings(close, close_result.fields[0]);
 }
 
 test "quoted parameter expansion is not subject to pathname expansion" {

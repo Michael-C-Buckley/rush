@@ -178,6 +178,21 @@
             .status = 0,
         },
         .{
+            .name = "bracket expressions support collating and equivalence elements as literals",
+            .script =
+            \\: >file-
+            \\: >'file]'
+            \\printf '<%s>\n' file[[.-.]] file[[=]=]]
+            ,
+            .stdout =
+            \\<file->
+            \\<file]>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "case character classes match multibyte alphabetic characters",
             .script =
             \\case å in
