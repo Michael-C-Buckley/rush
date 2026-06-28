@@ -1091,6 +1091,8 @@ fn lowerListNode(
     var brace_groups: std.ArrayList(BraceGroup) = .empty;
     var subshells: std.ArrayList(Subshell) = .empty;
     var statements: std.ArrayList(Statement) = .empty;
+    var here_doc_ranges = try collectHereDocRanges(allocator, parsed);
+    defer here_doc_ranges.deinit(allocator);
 
     errdefer {
         for (commands.items) |command| freeCommand(allocator, command);
@@ -1125,7 +1127,10 @@ fn lowerListNode(
     defer child_node_ids.deinit(allocator);
     for (parsed.nodeChildren(list_node)) |child| switch (child) {
         .node => |node_id| {
-            if (isStatementNode(parsed.nodes[node_id.index()].kind)) try child_node_ids.append(allocator, node_id);
+            const child_node = parsed.nodes[node_id.index()];
+            if (isStatementNode(child_node.kind) and !spanStartsInRanges(child_node.span, here_doc_ranges.items)) {
+                try child_node_ids.append(allocator, node_id);
+            }
         },
         .token => {},
     };
