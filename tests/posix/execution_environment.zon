@@ -226,6 +226,19 @@
             .status = 0,
         },
         .{
+            .name = "command substitution captures stderr duplicated before stdout redirection",
+            .script =
+            \\err=$(sh -c 'printf err >&2' 2>&1 >/dev/null)
+            \\printf '<%s>\n' "$err"
+            ,
+            .stdout =
+            \\<err>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "exec redirections persist only within the command substitution environment",
             .script =
             \\x=$(exec 2>&-; : >&2; printf bad)

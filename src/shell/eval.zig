@@ -13945,14 +13945,13 @@ fn externalCaptureMode(
 
     var frame = try buffers.outputFrame();
     defer frame.deinit();
-    try applyOutputRoutingRedirections(evaluator, &frame.routing, plan.redirections);
     const stdout_captured = outputDestinationCaptures(frame.routing.destination(1));
     const stderr_captured = outputDestinationCaptures(frame.routing.destination(2));
     if (!stdout_captured and !stderr_captured) return null;
     return switch (evaluator.external_stdio) {
         .capture_stdout => if (stdout_captured) .stdout else null,
-        .capture => if (stdout_captured) .stdout_and_stderr else null,
-        .inherit_output, .inherit => if (stdout_captured) .stdout_and_stderr else null,
+        .capture => if (stdout_captured or stderr_captured) .stdout_and_stderr else null,
+        .inherit_output, .inherit => if (stdout_captured or stderr_captured) .stdout_and_stderr else null,
     };
 }
 
@@ -14105,13 +14104,13 @@ fn appendCapturedExternalOutput(
     stderr: []const u8,
 ) EvalError!void {
     plan.validate();
+    _ = evaluator;
     switch (capture_mode) {
         .stdout => {
             var frame = try buffers.outputFrame();
             defer frame.deinit();
             if (buffers.frame.spec.kind != .pipeline_stage) {
                 try frame.routing.setDestination(2, .closed);
-                try applyOutputRoutingRedirections(evaluator, &frame.routing, plan.redirections);
             }
             try frame.write(1, stdout);
             try frame.write(2, stderr);
@@ -14119,9 +14118,6 @@ fn appendCapturedExternalOutput(
         .stdout_and_stderr => {
             var frame = try buffers.outputFrame();
             defer frame.deinit();
-            if (buffers.frame.spec.kind != .pipeline_stage) {
-                try applyOutputRoutingRedirections(evaluator, &frame.routing, plan.redirections);
-            }
             try frame.write(1, stdout);
             try frame.write(2, stderr);
         },

@@ -210,10 +210,7 @@ pub fn outputDestinationForFrameEndpointInContext(
             .capture => |channel| blk: {
                 if (preserve_parent_visible_stdout and channel == .side_stdout) break :blk .side_stdout_capture;
                 break :blk if (command_substitution_context) switch (channel) {
-                    .command_substitution_stdout => if (descriptor == 1)
-                        .command_substitution_stdout_capture
-                    else
-                        .command_substitution_side_stdout_capture,
+                    .command_substitution_stdout => .command_substitution_stdout_capture,
                     .side_stdout => .side_stdout_capture,
                     .side_stderr => .outcome_stderr_capture,
                     .pipeline_data => .pipeline_data_capture,
@@ -294,6 +291,33 @@ test "output routing applies redirections in order" {
     );
     try std.testing.expectEqual(file_destination, stdout_file_then_stderr_to_stdout.destination(1));
     try std.testing.expectEqual(file_destination, stdout_file_then_stderr_to_stdout.destination(2));
+}
+
+test "output routing keeps duplicated command substitution stdout private" {
+    var table: execution_frame.FdTable = .{};
+    defer table.deinit(std.testing.allocator);
+    try table.bindOutput(std.testing.allocator, 1, .{ .capture = .command_substitution_stdout });
+    const steps = [_]redirection_plan.RedirectionStep{
+        redirection_plan.RedirectionStep.duplicate(0, 2, 1),
+        redirection_plan.RedirectionStep.openPath(1, 1, "out", .{ .access = .write_only, .create = true }),
+    };
+    const plan: redirection_plan.RedirectionPlan = .{ .steps = &steps };
+    try table.applyRedirectionPlan(std.testing.allocator, plan);
+
+    const frame = execution_frame.ExecutionFrame.init(.{
+        .kind = .command_substitution,
+        .eval_target = .subshell,
+        .stdout = .{ .capture = .command_substitution_stdout },
+        .fd_table = table,
+        .captures = execution_frame.Captures.commandSubstitution(),
+        .mutation_policy = .commit_within_subshell,
+        .trap_policy = .command_substitution,
+        .failure_policy = .propagate_fatal_to_parent,
+    });
+    var routing = try OutputRouting.initForFrame(std.testing.allocator, frame, false);
+    defer routing.deinit();
+
+    try std.testing.expectEqual(OutputDestination.command_substitution_stdout_capture, routing.destination(2));
 }
 
 test "output routing duplicate copies current source destination" {
