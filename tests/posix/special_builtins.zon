@@ -266,6 +266,38 @@
             .status = 0,
         },
         .{
+            .name = "export without assignment does not set an unset variable",
+            .script =
+            \\unset X
+            \\export X
+            \\export -p | grep '^export X$'
+            \\sh -c 'printf "<%s:%s>\n" "${X-unset}" "${X+set}"'
+            ,
+            .stdout =
+            \\export X
+            \\<unset:>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "readonly without assignment does not set an unset variable",
+            .script =
+            \\unset X
+            \\readonly X
+            \\readonly -p | grep '^readonly X$'
+            \\printf '<%s:%s>\n' "${X-unset}" "${X+set}"
+            ,
+            .stdout =
+            \\readonly X
+            \\<unset:>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "readonly -p lists readonly variables",
             .script =
             \\readonly X='a b'

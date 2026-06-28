@@ -459,7 +459,10 @@ fn lookupEnv(opaque_context: ?*const anyopaque, name: []const u8) ?[]const u8 {
     }
     if (!isValidVariableName(name)) return null;
     if (self.assignment_overrides.get(name)) |value| return value;
-    return if (self.shell_state.getVariable(name)) |variable| variable.value else null;
+    return if (self.shell_state.getVariable(name)) |variable|
+        if (variable.value_set) variable.value else null
+    else
+        null;
 }
 
 fn setEnv(opaque_context: ?*anyopaque, name: []const u8, value: []const u8) !void {

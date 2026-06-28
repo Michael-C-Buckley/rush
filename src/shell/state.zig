@@ -227,6 +227,7 @@ pub const VariableAttributes = struct {
 
 pub const Variable = struct {
     value: []const u8,
+    value_set: bool = true,
     exported: bool = false,
     readonly: bool = false,
 };
@@ -436,7 +437,7 @@ pub const BackgroundJobNotification = struct {
 fn shellStateLookup(ctx: ?*const anyopaque, name: []const u8) ?[]const u8 {
     const state: *const ShellState = @ptrCast(@alignCast(ctx.?));
     const vr = state.getVariable(name);
-    return if (vr) |v| v.value else null;
+    return if (vr) |v| if (v.value_set) v.value else null else null;
 }
 
 pub const ShellState = struct {
@@ -702,6 +703,7 @@ pub const ShellState = struct {
             self.allocator.free(owned_previous.value);
             owned_entry.value_ptr.* = .{
                 .value = owned_value,
+                .value_set = true,
                 .exported = attributes.exported orelse owned_previous.exported,
                 .readonly = owned_previous.readonly or attributes.readonly,
             };
@@ -735,6 +737,7 @@ pub const ShellState = struct {
             self.allocator.free(owned_previous.value);
             owned_entry.value_ptr.* = .{
                 .value = owned_value,
+                .value_set = true,
                 .exported = owned_previous.exported,
                 .readonly = owned_previous.readonly,
             };
@@ -761,7 +764,7 @@ pub const ShellState = struct {
             self.variables_mutated = true;
         } else {
             std.debug.assert(enabled);
-            try self.putVariable(name, "", .{ .exported = true });
+            try self.putDeclaredVariable(name, .{ .exported = true });
         }
 
         self.validate();
@@ -775,10 +778,26 @@ pub const ShellState = struct {
             self.variables.getEntry(name).?.value_ptr.readonly = true;
             self.variables_mutated = true;
         } else {
-            try self.putVariable(name, "", .{ .readonly = true });
+            try self.putDeclaredVariable(name, .{ .readonly = true });
         }
 
         self.validate();
+    }
+
+    fn putDeclaredVariable(self: *ShellState, name: []const u8, attributes: VariableAttributes) !void {
+        assertValidVariableName(name);
+        try self.ensureOwnedVariables();
+        const owned_name = try self.allocator.dupe(u8, name);
+        errdefer self.allocator.free(owned_name);
+        const owned_value = try self.allocator.dupe(u8, "");
+        errdefer self.allocator.free(owned_value);
+        try self.variables.put(self.allocator, owned_name, .{
+            .value = owned_value,
+            .value_set = false,
+            .exported = attributes.exported orelse false,
+            .readonly = attributes.readonly,
+        });
+        self.variables_mutated = true;
     }
 
     pub fn unsetVariable(self: *ShellState, name: []const u8) !void {
@@ -897,6 +916,7 @@ pub const ShellState = struct {
             errdefer self.allocator.free(owned_value);
             try self.variables.put(self.allocator, owned_name, .{
                 .value = owned_value,
+                .value_set = entry.value_ptr.value_set,
                 .exported = entry.value_ptr.exported,
                 .readonly = entry.value_ptr.readonly,
             });

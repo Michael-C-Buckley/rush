@@ -14320,6 +14320,7 @@ fn buildExternalEnvironmentWithProcessOverlay(
         const name = entry.key_ptr.*;
         const variable = entry.value_ptr.*;
         if (!variable.exported) continue;
+        if (!variable.value_set) continue;
         state.assertValidVariableName(name);
         assertValidEnvironmentEntry(name, variable.value);
         try environment.put(name, variable.value);
@@ -17243,7 +17244,10 @@ fn lookupCommandVariableValue(
 ) ?[]const u8 {
     plan.validate();
     state.assertValidVariableName(name);
-    var value: ?[]const u8 = if (shell_state.getVariable(name)) |variable| variable.value else null;
+    var value: ?[]const u8 = if (shell_state.getVariable(name)) |variable|
+        if (variable.value_set) variable.value else null
+    else
+        null;
     for (plan.assignments) |assignment| {
         if (std.mem.eql(u8, assignment.name, name)) value = assignment.value;
     }
@@ -18433,8 +18437,10 @@ fn listVariableDeclarations(
         };
         if (!include) continue;
         try buffers.stdout.print(buffers.allocator, "{s} {s}", .{ command, name });
-        try buffers.stdout.append(buffers.allocator, '=');
-        try appendShellSingleQuoted(buffers.allocator, &buffers.stdout, variable.value);
+        if (variable.value_set) {
+            try buffers.stdout.append(buffers.allocator, '=');
+            try appendShellSingleQuoted(buffers.allocator, &buffers.stdout, variable.value);
+        }
         try buffers.stdout.append(buffers.allocator, '\n');
     }
     return 0;
@@ -18452,6 +18458,7 @@ fn listShellVariables(
 
     for (names.items) |name| {
         const variable = lookupVariable(shell_state, state_delta, name) orelse continue;
+        if (!variable.value_set) continue;
         try buffers.stdout.print(buffers.allocator, "{s}=", .{name});
         try appendShellSingleQuoted(buffers.allocator, &buffers.stdout, variable.value);
         try buffers.stdout.append(buffers.allocator, '\n');
@@ -18472,10 +18479,11 @@ fn collectVariableNames(
 
 fn lookupVariable(shell_state: state.ShellState, state_delta: delta.StateDelta, name: []const u8) ?state.Variable {
     for (state_delta.variable_unsets.items) |unset_name| if (std.mem.eql(u8, unset_name, name)) return null;
-    var variable = shell_state.getVariable(name) orelse state.Variable{ .value = "" };
+    var variable = shell_state.getVariable(name) orelse state.Variable{ .value = "", .value_set = false };
     for (state_delta.variable_assignments.items) |assignment| {
         if (!std.mem.eql(u8, assignment.name, name)) continue;
         variable.value = assignment.value;
+        variable.value_set = true;
         if (assignment.exported) |exported| variable.exported = exported;
         variable.readonly = variable.readonly or assignment.readonly;
     }
