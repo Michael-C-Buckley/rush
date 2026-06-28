@@ -778,8 +778,17 @@ pub fn expandCasePattern(allocator: std.mem.Allocator, raw: []const u8, options:
 
 fn appendQuotedCasePatternText(allocator: std.mem.Allocator, out: *std.ArrayList(u8), text: []const u8) !void {
     for (text) |byte| {
-        if (casePatternByteNeedsQuoting(byte)) try out.append(allocator, '\\');
-        try out.append(allocator, byte);
+        try appendQuotedCasePatternByte(allocator, out, byte);
+    }
+}
+
+fn appendQuotedCasePatternByte(allocator: std.mem.Allocator, out: *std.ArrayList(u8), byte: u8) !void {
+    switch (byte) {
+        '[', ']', '-', '!', '^' => try out.print(allocator, "[.{c}.]", .{byte}),
+        else => {
+            if (casePatternByteNeedsQuoting(byte)) try out.append(allocator, '\\');
+            try out.append(allocator, byte);
+        },
     }
 }
 
@@ -7590,6 +7599,7 @@ fn testLookup(_: ?*const anyopaque, name: []const u8) ?[]const u8 {
     if (std.mem.eql(u8, name, "BRACED")) return "ab}cd";
     if (std.mem.eql(u8, name, "GLOBBY")) return "rush-quoted-glob-?.tmp";
     if (std.mem.eql(u8, name, "STAR")) return "*";
+    if (std.mem.eql(u8, name, "BRACKET")) return "]-!^cd";
     return null;
 }
 
@@ -7803,6 +7813,12 @@ test "case pattern expansion treats quoted parameter values literally" {
     const unquoted = try expandCasePattern(std.testing.allocator, "$STAR", .{ .env = test_env });
     defer std.testing.allocator.free(unquoted);
     try std.testing.expectEqualStrings("*", unquoted);
+}
+
+test "case pattern expansion keeps quoted bracket delimiters literal" {
+    const quoted = try expandCasePattern(std.testing.allocator, "*[\"$BRACKET\"]*", .{ .env = test_env });
+    defer std.testing.allocator.free(quoted);
+    try std.testing.expectEqualStrings("*[[.].][.-.][.!.][.^.]cd]*", quoted);
 }
 
 test "parameter expansion supports braced names and missing values" {

@@ -288,6 +288,27 @@
             .status = 0,
         },
         .{
+            .name = "case quoted bracket expression members are literal",
+            .script =
+            \\t=']-!^cd'
+            \\case c in
+            \\    (*["${t}"]*) printf '<%s>\n' positive ;;
+            \\    (*) printf '<%s>\n' bad-positive ;;
+            \\esac
+            \\case e in
+            \\    (*[!"${t}"]*) printf '<%s>\n' negative ;;
+            \\    (*) printf '<%s>\n' bad-negative ;;
+            \\esac
+            ,
+            .stdout =
+            \\<positive>
+            \\<negative>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "case open bracket that is not a bracket expression matches itself",
             .script =
             \\case 'a[b' in
