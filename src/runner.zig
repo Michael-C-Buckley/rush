@@ -1099,11 +1099,17 @@ fn runSemanticLoweredProgram(
             const previous_statement_source_line_offset = source_resolver.source_line_offset;
             source_resolver.source_line_offset = source_line_offset + statement_line_index;
             defer source_resolver.source_line_offset = previous_statement_source_line_offset;
+            const background_statement_context = statement_context.withTarget(.subshell);
+            var background_shell_state = shell_state.snapshotForSubshell(statement_allocator) catch |err| switch (err) {
+                error.OutOfMemory => return error.OutOfMemory,
+                error.ReadonlyVariable => unreachable,
+            };
+            defer background_shell_state.deinit();
             break :body (try source_resolver.lowerSourceScratch(
                 statement_allocator,
                 statement_script,
-                statement_context,
-                shell_state,
+                background_statement_context,
+                &background_shell_state,
             )) orelse return semanticUnsupported(allocator, "semantic parser lowering returned no body");
         } else try source_resolver.lowerProgramStatementScratchAtLine(
             statement_allocator,

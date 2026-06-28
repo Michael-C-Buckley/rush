@@ -1076,28 +1076,30 @@ fn runtimeSignalHandler(posix_signal: std.posix.SIG) callconv(.c) void {
 fn posixSignalFromRuntimeNumber(number: runtime_signal.Number) ?std.posix.SIG {
     runtime_signal.assertValidNumber(number);
     return switch (number) {
-        1 => .HUP,
-        2 => .INT,
-        3 => .QUIT,
-        13 => .PIPE,
-        14 => .ALRM,
-        10 => .USR1,
-        12 => .USR2,
-        15 => .TERM,
+        @intFromEnum(std.posix.SIG.HUP) => .HUP,
+        @intFromEnum(std.posix.SIG.INT) => .INT,
+        @intFromEnum(std.posix.SIG.QUIT) => .QUIT,
+        @intFromEnum(std.posix.SIG.PIPE) => .PIPE,
+        @intFromEnum(std.posix.SIG.ALRM) => .ALRM,
+        @intFromEnum(std.posix.SIG.CONT) => .CONT,
+        @intFromEnum(std.posix.SIG.USR1) => .USR1,
+        @intFromEnum(std.posix.SIG.USR2) => .USR2,
+        @intFromEnum(std.posix.SIG.TERM) => .TERM,
         else => null,
     };
 }
 
 fn runtimeNumberFromPosixSignal(posix_signal: std.posix.SIG) ?runtime_signal.Number {
     return switch (posix_signal) {
-        .HUP => 1,
-        .INT => 2,
-        .QUIT => 3,
-        .PIPE => 13,
-        .ALRM => 14,
-        .USR1 => 10,
-        .USR2 => 12,
-        .TERM => 15,
+        .HUP => @intFromEnum(std.posix.SIG.HUP),
+        .INT => @intFromEnum(std.posix.SIG.INT),
+        .QUIT => @intFromEnum(std.posix.SIG.QUIT),
+        .PIPE => @intFromEnum(std.posix.SIG.PIPE),
+        .ALRM => @intFromEnum(std.posix.SIG.ALRM),
+        .CONT => @intFromEnum(std.posix.SIG.CONT),
+        .USR1 => @intFromEnum(std.posix.SIG.USR1),
+        .USR2 => @intFromEnum(std.posix.SIG.USR2),
+        .TERM => @intFromEnum(std.posix.SIG.TERM),
         else => null,
     };
 }
@@ -1398,9 +1400,11 @@ fn pathIdentity(path: []const u8, follow_symlinks: bool) ?fs.PathIdentity {
     var stat_result: std.c.Stat = undefined;
     const flags: u32 = if (follow_symlinks) 0 else std.c.AT.SYMLINK_NOFOLLOW;
     if (std.c.fstatat(std.c.AT.FDCWD, &path_z, &stat_result, flags) != 0) return null;
+    const Device = std.meta.Int(.unsigned, @bitSizeOf(@TypeOf(stat_result.dev)));
+    const Inode = std.meta.Int(.unsigned, @bitSizeOf(@TypeOf(stat_result.ino)));
     return .{
-        .device = @intCast(stat_result.dev),
-        .inode = @intCast(stat_result.ino),
+        .device = @as(u64, @as(Device, @bitCast(stat_result.dev))),
+        .inode = @as(u64, @as(Inode, @bitCast(stat_result.ino))),
     };
 }
 
@@ -1640,7 +1644,7 @@ test "runtime posix adapter exposes signal configure and poll port" {
 
     var adapter = Adapter.init(std.testing.io);
     const signal_port = adapter.signalPort();
-    const term_number: runtime_signal.Number = 15;
+    const term_number: runtime_signal.Number = @intFromEnum(std.posix.SIG.TERM);
     try signal_port.configure(.{ .signal = term_number, .disposition = .caught });
 
     runtimeSignalHandler(.TERM);
@@ -1649,7 +1653,7 @@ test "runtime posix adapter exposes signal configure and poll port" {
     try std.testing.expectEqual(term_number, event.signal);
     try std.testing.expectEqual(@as(?runtime_signal.Event, null), try signal_port.poll());
 
-    const usr1_number: runtime_signal.Number = 10;
+    const usr1_number: runtime_signal.Number = @intFromEnum(std.posix.SIG.USR1);
     try signal_port.configure(.{ .signal = usr1_number, .disposition = .caught });
     runtimeSignalHandler(.USR1);
 

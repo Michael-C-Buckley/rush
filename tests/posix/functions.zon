@@ -47,6 +47,42 @@
             .status = 0,
         },
         .{
+            .name = "function definition permits negated nested brace group in if condition",
+            .script =
+            \\f() {
+            \\    if false; then
+            \\        printf 'bad\n'
+            \\    elif ! { false; } 2>/dev/null; then
+            \\        printf 'ok\n'
+            \\    fi
+            \\}
+            \\f
+            ,
+            .stdout =
+            \\ok
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "function definition permits case pattern alternation",
+            .script =
+            \\f() {
+            \\    case $1 in
+            \\    ( -a | -b | ! ) printf 'pattern\n' ;;
+            \\    esac
+            \\}
+            \\f -b
+            ,
+            .stdout =
+            \\pattern
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "function definition rejects special built-in names",
             .script =
             \\export() { printf 'bad\n'; }

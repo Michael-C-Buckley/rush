@@ -204,11 +204,7 @@ pub fn outputDestinationForFrameEndpointInContext(
                 .outcome_stderr_capture
             else
                 .{ .host_descriptor = descriptor },
-            .fd => |host_descriptor| if (command_substitution_context) switch (host_descriptor) {
-                1 => .{ .host_descriptor = 1 },
-                2 => .outcome_stderr_capture,
-                else => .{ .host_descriptor = host_descriptor },
-            } else .{ .host_descriptor = host_descriptor },
+            .fd => |host_descriptor| .{ .host_descriptor = host_descriptor },
             .pipe_write => |host_descriptor| .{ .host_descriptor = host_descriptor },
             .path => .{ .host_descriptor = descriptor },
             .capture => |channel| blk: {

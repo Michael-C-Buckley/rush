@@ -957,6 +957,28 @@
             .status = 0,
         },
         .{
+            .name = "case command quoted hyphen matches literally",
+            .script =
+            \\case a-b in
+            \\    "a-b") printf 'literal\n' ;;
+            \\    *) printf 'bad\n' ;;
+            \\esac
+            \\
+            \\pat=a-b
+            \\case a-b in
+            \\    "$pat") printf 'variable\n' ;;
+            \\    *) printf 'bad\n' ;;
+            \\esac
+            ,
+            .stdout =
+            \\literal
+            \\variable
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "if command status is selected then body status",
             .script =
             \\if true

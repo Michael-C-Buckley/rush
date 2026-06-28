@@ -745,6 +745,26 @@
             .status = 0,
         },
         .{
+            .name = "eval command-not-found status is not a fatal special builtin error",
+            .script =
+            \\PATH=/dev/null
+            \\if ! eval -- ':' 2>/dev/null
+            \\then
+            \\    printf 'returned\n'
+            \\else
+            \\    printf 'parsed\n'
+            \\fi
+            \\printf 'after\n'
+            ,
+            .stdout =
+            \\returned
+            \\after
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "exec redirection without command persists inside command substitution stdin",
             .script =
             \\printf x >in
@@ -780,6 +800,20 @@
             ,
             .stdout =
             \\<err>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "exec replacement keeps pipeline stage redirections",
+            .script =
+            \\printf data >in
+            \\out=$(exec cat <in | wc -c)
+            \\printf '<%s>\n' "$out"
+            ,
+            .stdout =
+            \\<       4>
             \\
             ,
             .stderr = "",
@@ -854,6 +888,21 @@
             .stdout = "",
             .stderr_match = .nonempty,
             .status = 1,
+        },
+        .{
+            .name = "alias with trailing blank expands command after negation in if condition",
+            .script =
+            \\alias not='! '
+            \\if not { false; }; then
+            \\    printf 'yes\n'
+            \\fi
+            ,
+            .stdout =
+            \\yes
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
         },
         .{
             .name = "echo reports failure when stdout is closed",

@@ -760,15 +760,19 @@ pub fn expandCasePattern(allocator: std.mem.Allocator, raw: []const u8, options:
 
     var output: std.ArrayList(u8) = .empty;
     errdefer output.deinit(allocator);
+    var quote_state: CasePatternQuoteState = .{};
 
     for (parts.parts) |part| {
         const rendered = try renderPart(allocator, parts.raw, part, options);
         defer allocator.free(rendered);
 
         switch (part.kind) {
-            .unquoted, .parameter, .arithmetic, .command_substitution => try output.appendSlice(allocator, rendered),
+            .unquoted, .parameter, .arithmetic, .command_substitution => {
+                try output.appendSlice(allocator, rendered);
+                quote_state.observeUnquotedPatternText(rendered);
+            },
             .escaped, .single_quoted, .dollar_single_quoted, .double_quoted => {
-                try appendQuotedCasePatternText(allocator, &output, rendered);
+                try appendQuotedCasePatternText(allocator, &output, rendered, &quote_state);
             },
         }
     }
@@ -776,15 +780,46 @@ pub fn expandCasePattern(allocator: std.mem.Allocator, raw: []const u8, options:
     return output.toOwnedSlice(allocator);
 }
 
-fn appendQuotedCasePatternText(allocator: std.mem.Allocator, out: *std.ArrayList(u8), text: []const u8) !void {
+const CasePatternQuoteState = struct {
+    in_bracket: bool = false,
+
+    fn observeUnquotedPatternText(self: *CasePatternQuoteState, text: []const u8) void {
+        for (text) |byte| self.observeUnquotedPatternByte(byte);
+    }
+
+    fn observeUnquotedPatternByte(self: *CasePatternQuoteState, byte: u8) void {
+        if (self.in_bracket) {
+            if (byte == ']') self.in_bracket = false;
+        } else if (byte == '[') {
+            self.in_bracket = true;
+        }
+    }
+};
+
+fn appendQuotedCasePatternText(
+    allocator: std.mem.Allocator,
+    out: *std.ArrayList(u8),
+    text: []const u8,
+    quote_state: *CasePatternQuoteState,
+) !void {
     for (text) |byte| {
-        try appendQuotedCasePatternByte(allocator, out, byte);
+        try appendQuotedCasePatternByte(allocator, out, byte, quote_state.in_bracket);
     }
 }
 
-fn appendQuotedCasePatternByte(allocator: std.mem.Allocator, out: *std.ArrayList(u8), byte: u8) !void {
+fn appendQuotedCasePatternByte(
+    allocator: std.mem.Allocator,
+    out: *std.ArrayList(u8),
+    byte: u8,
+    in_bracket: bool,
+) !void {
     switch (byte) {
-        '[', ']', '-', '!', '^' => try out.print(allocator, "[.{c}.]", .{byte}),
+        '[', ']', '-', '!', '^' => if (in_bracket) {
+            try out.print(allocator, "[.{c}.]", .{byte});
+        } else {
+            if (casePatternByteNeedsQuoting(byte)) try out.append(allocator, '\\');
+            try out.append(allocator, byte);
+        },
         else => {
             if (casePatternByteNeedsQuoting(byte)) try out.append(allocator, '\\');
             try out.append(allocator, byte);
@@ -7840,6 +7875,10 @@ test "case pattern expansion preserves quoted pattern characters" {
     const unquoted_glob = try expandCasePattern(std.testing.allocator, "a*", .{});
     defer std.testing.allocator.free(unquoted_glob);
     try std.testing.expectEqualStrings("a*", unquoted_glob);
+
+    const quoted_hyphen = try expandCasePattern(std.testing.allocator, "\"a-b\"", .{});
+    defer std.testing.allocator.free(quoted_hyphen);
+    try std.testing.expectEqualStrings("a-b", quoted_hyphen);
 }
 
 test "case pattern expansion treats quoted parameter values literally" {

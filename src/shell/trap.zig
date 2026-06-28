@@ -14,6 +14,7 @@ pub const Signal = enum {
     PIPE,
     ALRM,
     TERM,
+    CONT,
     USR1,
     USR2,
 
@@ -27,6 +28,7 @@ pub const Signal = enum {
             .PIPE => "PIPE",
             .ALRM => "ALRM",
             .TERM => "TERM",
+            .CONT => "CONT",
             .USR1 => "USR1",
             .USR2 => "USR2",
         };
@@ -42,14 +44,15 @@ pub const Signal = enum {
     pub fn fromRuntimeNumber(number: u8) ?Signal {
         std.debug.assert(number != 0);
         return switch (number) {
-            1 => .HUP,
-            2 => .INT,
-            3 => .QUIT,
-            13 => .PIPE,
-            14 => .ALRM,
-            10 => .USR1,
-            12 => .USR2,
-            15 => .TERM,
+            @intFromEnum(std.posix.SIG.HUP) => .HUP,
+            @intFromEnum(std.posix.SIG.INT) => .INT,
+            @intFromEnum(std.posix.SIG.QUIT) => .QUIT,
+            @intFromEnum(std.posix.SIG.PIPE) => .PIPE,
+            @intFromEnum(std.posix.SIG.ALRM) => .ALRM,
+            @intFromEnum(std.posix.SIG.CONT) => .CONT,
+            @intFromEnum(std.posix.SIG.USR1) => .USR1,
+            @intFromEnum(std.posix.SIG.USR2) => .USR2,
+            @intFromEnum(std.posix.SIG.TERM) => .TERM,
             else => null,
         };
     }
@@ -58,14 +61,15 @@ pub const Signal = enum {
         return switch (self) {
             .EXIT => null,
             .KILL => null,
-            .HUP => 1,
-            .INT => 2,
-            .QUIT => 3,
-            .PIPE => 13,
-            .ALRM => 14,
-            .USR1 => 10,
-            .USR2 => 12,
-            .TERM => 15,
+            .HUP => @intFromEnum(std.posix.SIG.HUP),
+            .INT => @intFromEnum(std.posix.SIG.INT),
+            .QUIT => @intFromEnum(std.posix.SIG.QUIT),
+            .PIPE => @intFromEnum(std.posix.SIG.PIPE),
+            .ALRM => @intFromEnum(std.posix.SIG.ALRM),
+            .CONT => @intFromEnum(std.posix.SIG.CONT),
+            .USR1 => @intFromEnum(std.posix.SIG.USR1),
+            .USR2 => @intFromEnum(std.posix.SIG.USR2),
+            .TERM => @intFromEnum(std.posix.SIG.TERM),
         };
     }
 
@@ -99,6 +103,7 @@ const signal_names = [_]SignalName{
     .{ .name = "PIPE", .signal = .PIPE },
     .{ .name = "ALRM", .signal = .ALRM },
     .{ .name = "TERM", .signal = .TERM },
+    .{ .name = "CONT", .signal = .CONT },
     .{ .name = "USR1", .signal = .USR1 },
     .{ .name = "USR2", .signal = .USR2 },
 };
@@ -138,19 +143,19 @@ pub fn assertValidName(name_value: []const u8) void {
 }
 
 test "trap signal vocabulary maps names and runtime numbers explicitly" {
-    const signals = [_]Signal{ .EXIT, .HUP, .INT, .QUIT, .KILL, .PIPE, .ALRM, .TERM, .USR1, .USR2 };
+    const signals = [_]Signal{ .EXIT, .HUP, .INT, .QUIT, .KILL, .PIPE, .ALRM, .TERM, .CONT, .USR1, .USR2 };
     for (signals) |signal| {
         signal.validate();
         try std.testing.expectEqual(signal, Signal.fromName(signal.name()).?);
     }
 
-    try std.testing.expectEqual(@as(?Signal, Signal.INT), Signal.fromRuntimeNumber(2));
-    try std.testing.expectEqual(@as(?Signal, Signal.PIPE), Signal.fromRuntimeNumber(13));
-    try std.testing.expectEqual(@as(?Signal, null), Signal.fromRuntimeNumber(9));
+    try std.testing.expectEqual(@as(?Signal, Signal.INT), Signal.fromRuntimeNumber(@intFromEnum(std.posix.SIG.INT)));
+    try std.testing.expectEqual(@as(?Signal, Signal.PIPE), Signal.fromRuntimeNumber(@intFromEnum(std.posix.SIG.PIPE)));
+    try std.testing.expectEqual(@as(?Signal, null), Signal.fromRuntimeNumber(@intFromEnum(std.posix.SIG.KILL)));
     try std.testing.expectEqual(@as(?u8, null), Signal.EXIT.runtimeNumber());
     try std.testing.expectEqual(@as(?u8, null), Signal.KILL.runtimeNumber());
-    try std.testing.expectEqual(@as(?u8, 141), Signal.PIPE.defaultExitStatus());
-    try std.testing.expectEqual(@as(?u8, 143), Signal.TERM.defaultExitStatus());
+    try std.testing.expectEqual(@as(?u8, 128 + @intFromEnum(std.posix.SIG.PIPE)), Signal.PIPE.defaultExitStatus());
+    try std.testing.expectEqual(@as(?u8, 128 + @intFromEnum(std.posix.SIG.TERM)), Signal.TERM.defaultExitStatus());
     try std.testing.expectEqual(ActionKind.ignore, actionKind(""));
     try std.testing.expectEqual(ActionKind.command, actionKind("echo trapped"));
 }

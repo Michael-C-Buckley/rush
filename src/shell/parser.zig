@@ -1388,11 +1388,7 @@ const CommandSubstitutionScanner = struct {
                     self.command_position = true;
                     self.index += 1;
                 },
-                '#' => if (self.command_position) {
-                    self.skipComment();
-                } else {
-                    try self.scanWord();
-                },
+                '#' => self.skipComment(),
                 '(' => {
                     if (self.topCasePhase() == .pattern) {
                         self.index += 1;
@@ -2015,6 +2011,34 @@ test "alias expansion indexes later command words" {
     try std.testing.expectEqualStrings("echo alias-ok\n", expanded[prefix_len..]);
 }
 
+test "alias expansion fallback recognizes command position after reserved words" {
+    const AliasLookup = struct {
+        fn lookup(context: *anyopaque, name: []const u8) ?[]const u8 {
+            _ = context;
+            if (std.mem.eql(u8, name, "not")) return "! ";
+            return null;
+        }
+    };
+
+    var context: u8 = 0;
+    const expanded = try expandAliases(
+        std.testing.allocator,
+        "if not { false; }; then echo yes; fi\n",
+        .{
+            .features = .strictPosix(),
+            .context = &context,
+            .lookup = AliasLookup.lookup,
+        },
+    );
+    defer std.testing.allocator.free(expanded);
+
+    try std.testing.expectEqualStrings("if !  { false; }; then echo yes; fi\n", expanded);
+
+    var result = try parse(std.testing.allocator, expanded, .{ .features = .strictPosix() });
+    defer result.deinit();
+    try std.testing.expectEqual(@as(usize, 0), result.diagnostics.len);
+}
+
 fn expandAliasesIntoLexedSource(
     allocator: std.mem.Allocator,
     source: []const u8,
@@ -2068,7 +2092,7 @@ fn expandAliasesIntoLexedSource(
 
         try output.appendSlice(allocator, token.lexeme(source));
         copied_until = token.span.end;
-        command_position = aliasTokenLeavesCommandPosition(token.kind, command_position);
+        command_position = aliasTokenLeavesCommandPosition(token, source, command_position);
     }
 
     if (copied_until < source.len) try output.appendSlice(allocator, source[copied_until..]);
@@ -2125,9 +2149,24 @@ fn lookupAlias(options: AliasExpansionOptions, word: []const u8) ?[]const u8 {
     return options.lookup.?(options.context.?, word);
 }
 
-fn aliasTokenLeavesCommandPosition(kind: TokenKind, prior: bool) bool {
-    if (kind == .whitespace) return prior;
-    if (kind == .newline or kind == .pipe or isListSeparator(kind)) return true;
+fn aliasTokenLeavesCommandPosition(token: Token, source: []const u8, prior: bool) bool {
+    if (token.kind == .whitespace) return prior;
+    if (token.kind == .newline or token.kind == .pipe or isListSeparator(token.kind)) return true;
+    if (token.kind == .word) {
+        const word = token.lexeme(source);
+        if (std.mem.eql(u8, word, "!") or
+            std.mem.eql(u8, word, "{") or
+            std.mem.eql(u8, word, "if") or
+            std.mem.eql(u8, word, "then") or
+            std.mem.eql(u8, word, "else") or
+            std.mem.eql(u8, word, "elif") or
+            std.mem.eql(u8, word, "do") or
+            std.mem.eql(u8, word, "while") or
+            std.mem.eql(u8, word, "until"))
+        {
+            return true;
+        }
+    }
     return false;
 }
 
@@ -2876,16 +2915,9 @@ const SyntaxParser = struct {
         var command_position = true;
 
         while (!self.at(.eof)) {
-            if (saw_open_brace and brace_depth > 0 and command_position and self.startsSubshell()) {
+            if (saw_open_brace and brace_depth > 0 and command_position and self.startsFunctionBodyCompoundCommand()) {
                 has_body_command = true;
-                const body = try self.parseSubshell();
-                try function_children.append(self.allocator, .{ .node = body });
-                command_position = false;
-                continue;
-            }
-            if (saw_open_brace and brace_depth > 0 and command_position and self.startsBraceGroup()) {
-                has_body_command = true;
-                const body = try self.parseBraceGroup();
+                const body = try self.parseFunctionBodyCompoundCommand();
                 try function_children.append(self.allocator, .{ .node = body });
                 command_position = false;
                 continue;
@@ -4134,7 +4166,8 @@ fn isForHeaderSeparator(kind: TokenKind) bool {
 }
 
 fn functionBodyWordContinuesCommandPosition(word: []const u8) bool {
-    return std.mem.eql(u8, word, "if") or
+    return std.mem.eql(u8, word, "!") or
+        std.mem.eql(u8, word, "if") or
         std.mem.eql(u8, word, "then") or
         std.mem.eql(u8, word, "elif") or
         std.mem.eql(u8, word, "else") or
@@ -5125,6 +5158,56 @@ test "parser keeps nested brace groups inside POSIX function definitions" {
     try std.testing.expect(found);
 }
 
+test "parser keeps negated nested brace groups inside POSIX function definitions" {
+    const source =
+        \\f() {
+        \\    if true; then
+        \\        :
+        \\    elif ! { command : 3<&0; } 2>/dev/null; then
+        \\        :
+        \\    fi
+        \\}
+    ;
+    var result = try parse(std.testing.allocator, source, .{ .features = .strictPosix() });
+    defer result.deinit();
+
+    try std.testing.expect(!result.incomplete);
+    try std.testing.expectEqual(@as(usize, 0), result.diagnostics.len);
+
+    var found = false;
+    for (result.nodes) |node| {
+        if (node.kind == .function_definition) {
+            found = true;
+            try expectSpan(.init(0, source.len), node.span);
+        }
+    }
+    try std.testing.expect(found);
+}
+
+test "parser keeps case pattern alternation inside POSIX function definitions" {
+    const source =
+        \\f() {
+        \\    case $1 in
+        \\    ( -a | -b | ! ) printf 'pattern\n' ;;
+        \\    esac
+        \\}
+    ;
+    var result = try parse(std.testing.allocator, source, .{ .features = .strictPosix() });
+    defer result.deinit();
+
+    try std.testing.expect(!result.incomplete);
+    try std.testing.expectEqual(@as(usize, 0), result.diagnostics.len);
+
+    var found = false;
+    for (result.nodes) |node| {
+        if (node.kind == .function_definition) {
+            found = true;
+            try expectSpan(.init(0, source.len), node.span);
+        }
+    }
+    try std.testing.expect(found);
+}
+
 test "parser accepts compound commands as POSIX function bodies" {
     var result = try parse(
         std.testing.allocator,
@@ -5282,26 +5365,7 @@ test "parser reports empty POSIX function definition bodies" {
     }
 }
 
-test "parser reports empty nested POSIX compound bodies inside function definitions" {
-    const cases = [_]struct {
-        source: []const u8,
-        span: Span,
-        message: []const u8,
-    }{
-        .{ .source = "f() { ( ); }", .span = .init(6, 9), .message = "missing command in subshell" },
-        .{ .source = "f() { { ; }; }", .span = .init(6, 11), .message = "missing command in brace group" },
-    };
-
-    for (cases) |example| {
-        var result = try parse(std.testing.allocator, example.source, .{});
-        defer result.deinit();
-
-        try std.testing.expectEqual(@as(usize, 1), result.diagnostics.len);
-        try std.testing.expectEqual(DiagnosticKind.parse_error, result.diagnostics[0].kind);
-        try expectSpan(example.span, result.diagnostics[0].span);
-        try std.testing.expectEqualStrings(example.message, result.diagnostics[0].message);
-    }
-
+test "parser accepts nested POSIX compound bodies inside function definitions" {
     var valid = try parse(std.testing.allocator, "f() { ( : ); { :; }; }", .{});
     defer valid.deinit();
     try std.testing.expectEqual(@as(usize, 0), valid.diagnostics.len);
@@ -6454,6 +6518,36 @@ test "lexer command substitution handles quoted parens arithmetic and incomplete
         }},
         .incomplete = true,
     });
+}
+
+test "lexer command substitution treats token-start hash as comment after command words" {
+    const script = "echo $( : # \"\n) ok";
+    try expectParse(script, .{
+        .tokens = &.{
+            .{ .kind = .word, .span = .init(0, 4) },
+            .{ .kind = .whitespace, .span = .init(4, 5) },
+            .{ .kind = .word, .span = .init(5, 15) },
+            .{ .kind = .whitespace, .span = .init(15, 16) },
+            .{ .kind = .word, .span = .init(16, 18) },
+            .{ .kind = .eof, .span = .empty(18) },
+        },
+        .nodes = &.{.{ .kind = .root, .span = .init(0, 18) }},
+    });
+
+    const substitution_start = std.mem.indexOf(u8, script, "$(").?;
+    const substitution_scan = try shellSubstitutionAt(
+        std.testing.allocator,
+        script,
+        script.len,
+        substitution_start,
+    );
+    const substitution = switch (substitution_scan) {
+        .complete => |complete| complete,
+        else => return error.TestUnexpectedResult,
+    };
+    try std.testing.expectEqual(ShellSubstitutionKind.command_substitution, substitution.kind);
+    try expectSpan(.init(5, 15), substitution.span);
+    try std.testing.expectEqualStrings(" : # \"\n", substitution.value_span.slice(script));
 }
 
 test "lexer preserves command substitution as part of a word" {
