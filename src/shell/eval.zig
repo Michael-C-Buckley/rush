@@ -313,6 +313,7 @@ fn commandSubstitutionExecutionFrame(
     allocator: std.mem.Allocator,
     scoped_exec_redirections: ?*std.ArrayList(ScopedExecRedirection),
     parent_frame: *execution_frame.ExecutionFrame,
+    stream_stdout_to_inherited: bool,
 ) EvalError!execution_frame.ExecutionFrame {
     parent_frame.validate();
     var fd_table = try parent_frame.spec.fd_table.clone(allocator);
@@ -322,7 +323,10 @@ fn commandSubstitutionExecutionFrame(
     };
 
     const stdin = commandSubstitutionInputEndpoint(parent_frame.*, fd_table);
-    const stdout: execution_frame.OutputEndpoint = .{ .capture = .command_substitution_stdout };
+    const stdout: execution_frame.OutputEndpoint = if (stream_stdout_to_inherited)
+        .inherit_stdout
+    else
+        .{ .capture = .command_substitution_stdout };
     const stderr = commandSubstitutionStderrEndpoint(parent_frame.*, fd_table);
 
     try fd_table.bindInput(allocator, 0, stdin);
@@ -4868,6 +4872,39 @@ pub fn evaluatePlanInFrame(
     return evaluatePlanWithInput(evaluator, shell_state, eval_context, plan, input, frame);
 }
 
+fn invalidateSubshellTrapListingForSimpleCommand(
+    shell_state: *state.ShellState,
+    eval_context: context.EvalContext,
+    plan: command_plan.CommandPlan,
+) void {
+    shell_state.validate();
+    eval_context.validate();
+    plan.validate();
+    if (eval_context.command_substitution_depth == 0) return;
+    if (shell_state.scope != .subshell) return;
+    if (planInvokesTrapBuiltin(plan)) return;
+    shell_state.invalidateSubshellEntryTrapListing();
+}
+
+fn planInvokesTrapBuiltin(plan: command_plan.CommandPlan) bool {
+    plan.validate();
+    if (plan.argv.len == 0) return false;
+    if (std.mem.eql(u8, plan.argv[0], "trap")) return true;
+    if (!std.mem.eql(u8, plan.argv[0], "command")) return false;
+    var index: usize = 1;
+    while (index < plan.argv.len) : (index += 1) {
+        const arg = plan.argv[index];
+        if (std.mem.eql(u8, arg, "--")) {
+            index += 1;
+            break;
+        }
+        if (std.mem.eql(u8, arg, "-p")) continue;
+        if (std.mem.startsWith(u8, arg, "-") and !std.mem.eql(u8, arg, "-")) return false;
+        break;
+    }
+    return index < plan.argv.len and std.mem.eql(u8, plan.argv[index], "trap");
+}
+
 fn evaluatePlanWithInput(
     evaluator: *Evaluator,
     shell_state: *state.ShellState,
@@ -4882,6 +4919,7 @@ fn evaluatePlanWithInput(
     frame.validate();
     std.debug.assert(plan.target == eval_context.target);
     if (plan.target.allowsShellStateCommit()) std.debug.assert(shell_state.acceptsExecutionTarget(plan.target));
+    invalidateSubshellTrapListingForSimpleCommand(shell_state, eval_context, plan);
 
     if (canEvaluateNoOpBuiltinDirectly(shell_state.*, plan)) {
         var state_delta = delta.StateDelta.init(evaluator.allocator, plan.target);
@@ -6690,6 +6728,146 @@ pub fn evaluateCompoundPlan(
     return evaluateCompoundPlanWithInput(evaluator, shell_state, eval_context, plan, &input, &frame);
 }
 
+const ForkedSemanticSubshellContext = struct {
+    evaluator: *Evaluator,
+    shell_state: *state.ShellState,
+    eval_context: context.EvalContext,
+    plan: command_plan.CompoundCommandPlan,
+    input: *EvaluationInput,
+    parent_frame: *execution_frame.ExecutionFrame,
+
+    fn validate(self: ForkedSemanticSubshellContext) void {
+        self.shell_state.validate();
+        self.eval_context.validate();
+        self.plan.validate();
+        std.debug.assert(self.plan.body == .subshell);
+        self.input.validate();
+        self.parent_frame.validate();
+    }
+};
+
+fn evaluateForkedCommandSubstitutionSubshell(
+    evaluator: *Evaluator,
+    shell_state: *state.ShellState,
+    eval_context: context.EvalContext,
+    plan: command_plan.CompoundCommandPlan,
+    input: *EvaluationInput,
+    frame: *execution_frame.ExecutionFrame,
+) EvalError!?outcome.CommandOutcome {
+    shell_state.validate();
+    eval_context.validate();
+    plan.validate();
+    input.validate();
+    frame.validate();
+    if (!shouldForkSemanticSubshell(evaluator, eval_context, plan, frame)) return null;
+    const process_port = evaluator.process_port orelse return null;
+
+    var fork_context: ForkedSemanticSubshellContext = .{
+        .evaluator = evaluator,
+        .shell_state = shell_state,
+        .eval_context = eval_context,
+        .plan = plan,
+        .input = input,
+        .parent_frame = frame,
+    };
+    fork_context.validate();
+
+    var child = (process_port.startSubshell(.{
+        .context = &fork_context,
+        .main_fn = runForkedSemanticSubshell,
+        .stdin = .inherit,
+        .stdout = .inherit,
+        .stderr = .inherit,
+    }) catch return error.Unimplemented).child;
+    const wait_result = process_port.wait(.{ .child = &child }) catch return error.Unimplemented;
+    const status = normalizeWaitStatus(wait_result.status);
+    var state_delta = delta.StateDelta.init(evaluator.allocator, plan.target);
+    errdefer state_delta.deinit();
+    state_delta.setLastStatus(status);
+    var empty_input = EvaluationInput.empty();
+    var empty_buffers = EvaluationBuffers.init(evaluator.allocator, &empty_input, frame);
+    defer empty_buffers.deinit();
+    return try commandOutcomeFromBuffers(evaluator.allocator, eval_context, status, state_delta, .normal, &empty_buffers);
+}
+
+fn shouldForkSemanticSubshell(
+    evaluator: *Evaluator,
+    eval_context: context.EvalContext,
+    plan: command_plan.CompoundCommandPlan,
+    frame: *execution_frame.ExecutionFrame,
+) bool {
+    eval_context.validate();
+    plan.validate();
+    frame.validate();
+    if (plan.body != .subshell) return false;
+    if (hasCompoundRedirections(plan) and eval_context.command_substitution_depth == 0) return false;
+    if (evaluator.process_port == null or evaluator.fd_port == null) return false;
+
+    if (eval_context.command_substitution_depth != 0) return true;
+
+    if (eval_context.pipeline_depth != 0) return false;
+    if (frame.spec.kind == .pipeline_stage) return false;
+    if (frameRoutesPipelineData(frame.*)) return false;
+
+    return switch (evaluator.external_stdio) {
+        .inherit, .inherit_output => true,
+        .capture, .capture_stdout => false,
+    };
+}
+
+fn runForkedSemanticSubshell(opaque_context: *anyopaque) u8 {
+    const fork_context: *ForkedSemanticSubshellContext = @ptrCast(@alignCast(opaque_context));
+    fork_context.validate();
+
+    var command_frame = semanticCommandExecutionFrame(
+        fork_context.evaluator.allocator,
+        fork_context.evaluator.scoped_exec_redirections,
+        fork_context.parent_frame,
+        fork_context.plan.target,
+        fork_context.plan.redirections,
+    ) catch return 125;
+    defer command_frame.spec.fd_table.deinit(fork_context.evaluator.allocator);
+
+    var frame_input = EvaluationInput.empty();
+    var buffers = EvaluationBuffers.init(fork_context.evaluator.allocator, fork_context.input, &command_frame);
+    defer buffers.deinit();
+    buffers.useFrameFdTableInput(&frame_input, fork_context.input);
+
+    var working_state = workingStateForCompound(
+        fork_context.evaluator.allocator,
+        fork_context.shell_state.*,
+        fork_context.plan.target,
+        true,
+    ) catch return 125;
+    defer working_state.deinit();
+
+    var result = evaluateCompoundBody(
+        fork_context.evaluator,
+        &working_state,
+        fork_context.eval_context,
+        fork_context.plan.body,
+        &buffers,
+    ) catch return 125;
+    if (fork_context.plan.body == .subshell) appendSubshellExitTrap(
+        fork_context.evaluator,
+        &working_state,
+        fork_context.eval_context,
+        &result,
+        &buffers,
+    ) catch return 125;
+    const status = result.control_flow.status(result.status);
+    writeForkedSemanticSubshellOutput(fork_context.evaluator.fd_port orelse return 125, &buffers) catch return 125;
+    return status;
+}
+
+fn writeForkedSemanticSubshellOutput(fd_port: runtime.fd.Port, buffers: *EvaluationBuffers) !void {
+    try fd_port.writeAll(.{ .descriptor = 1, .bytes = buffers.stdout.items });
+    try fd_port.writeAll(.{ .descriptor = 1, .bytes = buffers.pipeline_stdout.items });
+    try fd_port.writeAll(.{ .descriptor = 1, .bytes = buffers.side_stdout.items });
+    try fd_port.writeAll(.{ .descriptor = 1, .bytes = buffers.command_substitution_side_stdout.items });
+    try fd_port.writeAll(.{ .descriptor = 2, .bytes = buffers.stderr.items });
+}
+
 fn evaluateCompoundPlanWithInput(
     evaluator: *Evaluator,
     shell_state: *state.ShellState,
@@ -6705,6 +6883,14 @@ fn evaluateCompoundPlanWithInput(
     frame.validate();
     std.debug.assert(plan.target == eval_context.target);
     if (plan.target == .current_shell) std.debug.assert(shell_state.acceptsExecutionTarget(.current_shell));
+    if (try evaluateForkedCommandSubstitutionSubshell(
+        evaluator,
+        shell_state,
+        eval_context,
+        plan,
+        input,
+        frame,
+    )) |forked_outcome| return forked_outcome;
     const creates_isolated_boundary = plan.body == .subshell or
         (plan.target.isIsolatedFromParent() and !shell_state.acceptsExecutionTarget(plan.target));
 
@@ -7494,6 +7680,540 @@ pub fn evaluateCommandSubstitution(
     return evaluateCommandSubstitutionSnapshot(evaluator, parent_state, substitution_context, body);
 }
 
+const command_substitution_protocol_magic = "RCS1";
+
+const ForkedCommandSubstitutionContext = struct {
+    evaluator: *Evaluator,
+    parent_state: *state.ShellState,
+    previous_eval_context: context.EvalContext,
+    substitution_context: context.EvalContext,
+    body: CommandSubstitutionBody,
+    exit_trap_resolver: ?TrapActionResolver,
+    parent_frame: *execution_frame.ExecutionFrame,
+    parent_input: ?*EvaluationInput,
+    result_pipe_write: runtime.fd.Descriptor,
+    suppress_inherited_xtrace: bool = false,
+
+    fn validate(self: ForkedCommandSubstitutionContext) void {
+        self.parent_state.validate();
+        self.previous_eval_context.validate();
+        self.substitution_context.validate();
+        assertCommandSubstitutionContext(self.substitution_context);
+        self.body.validate();
+        if (self.exit_trap_resolver) |resolver| resolver.validate();
+        self.parent_frame.validate();
+        if (self.parent_input) |input| input.validate();
+        runtime.fd.assertValidDescriptor(self.result_pipe_write);
+    }
+};
+
+fn evaluateCommandSubstitutionForked(
+    evaluator: *Evaluator,
+    parent_state: *state.ShellState,
+    previous_eval_context: context.EvalContext,
+    substitution_context: context.EvalContext,
+    body: CommandSubstitutionBody,
+    exit_trap_resolver: ?TrapActionResolver,
+    parent_frame: *execution_frame.ExecutionFrame,
+    parent_input: ?*EvaluationInput,
+    suppress_inherited_xtrace: bool,
+) EvalError!CommandSubstitutionResult {
+    parent_state.validate();
+    previous_eval_context.validate();
+    substitution_context.validate();
+    assertCommandSubstitutionContext(substitution_context);
+    body.validate();
+    if (exit_trap_resolver) |resolver| resolver.validate();
+    parent_frame.validate();
+    if (parent_input) |input| input.validate();
+
+    const fd_port = evaluator.fd_port orelse return error.Unimplemented;
+    const process_port = evaluator.process_port orelse return error.Unimplemented;
+    const stdout_pipe = fd_port.pipe(.{ .close_on_exec = false }) catch return error.Unimplemented;
+    var stdout_read_open = true;
+    var stdout_write_open = true;
+    defer if (stdout_read_open) fd_port.close(.{ .descriptor = stdout_pipe.read }) catch {};
+    errdefer if (stdout_write_open) fd_port.close(.{ .descriptor = stdout_pipe.write }) catch {};
+
+    const protocol_pipe = fd_port.pipe(.{ .close_on_exec = false }) catch return error.Unimplemented;
+    var protocol_read_open = true;
+    var protocol_write_open = true;
+    defer if (protocol_read_open) fd_port.close(.{ .descriptor = protocol_pipe.read }) catch {};
+    errdefer if (protocol_write_open) fd_port.close(.{ .descriptor = protocol_pipe.write }) catch {};
+
+    var fork_context: ForkedCommandSubstitutionContext = .{
+        .evaluator = evaluator,
+        .parent_state = parent_state,
+        .previous_eval_context = previous_eval_context,
+        .substitution_context = substitution_context,
+        .body = body,
+        .exit_trap_resolver = exit_trap_resolver,
+        .parent_frame = parent_frame,
+        .parent_input = parent_input,
+        .result_pipe_write = protocol_pipe.write,
+        .suppress_inherited_xtrace = suppress_inherited_xtrace,
+    };
+    fork_context.validate();
+
+    var child = (process_port.startSubshell(.{
+        .context = &fork_context,
+        .main_fn = runForkedCommandSubstitution,
+        .stdin = .inherit,
+        .stdout = .{ .fd = stdout_pipe.write },
+        .stderr = .inherit,
+    }) catch return error.Unimplemented).child;
+    fd_port.close(.{ .descriptor = stdout_pipe.write }) catch return error.Unimplemented;
+    stdout_write_open = false;
+    fd_port.close(.{ .descriptor = protocol_pipe.write }) catch return error.Unimplemented;
+    protocol_write_open = false;
+
+    var stdout_bytes: std.ArrayList(u8) = .empty;
+    defer stdout_bytes.deinit(evaluator.allocator);
+    try readCommandSubstitutionProtocolBytes(evaluator.allocator, fd_port, stdout_pipe.read, &stdout_bytes);
+    fd_port.close(.{ .descriptor = stdout_pipe.read }) catch return error.Unimplemented;
+    stdout_read_open = false;
+
+    var protocol_bytes: std.ArrayList(u8) = .empty;
+    defer protocol_bytes.deinit(evaluator.allocator);
+    try readCommandSubstitutionProtocolBytes(evaluator.allocator, fd_port, protocol_pipe.read, &protocol_bytes);
+    fd_port.close(.{ .descriptor = protocol_pipe.read }) catch return error.Unimplemented;
+    protocol_read_open = false;
+
+    const wait_result = process_port.wait(.{ .child = &child }) catch return error.Unimplemented;
+    if (protocol_bytes.items.len == 0) {
+        var result = CommandSubstitutionResult.init(evaluator.allocator, normalizeWaitStatus(wait_result.status));
+        errdefer result.deinit();
+        const trimmed = trimCommandSubstitutionOutput(stdout_bytes.items);
+        try appendCommandSubstitutionOutput(evaluator.allocator, &result.output, trimmed);
+        trimCommandSubstitutionResultOutput(&result.output);
+        result.validate();
+        return result;
+    }
+
+    var result = try deserializeCommandSubstitutionResult(evaluator.allocator, protocol_bytes.items);
+    errdefer result.deinit();
+    result.output.clearRetainingCapacity();
+    const trimmed = trimCommandSubstitutionOutput(stdout_bytes.items);
+    try appendCommandSubstitutionOutput(evaluator.allocator, &result.output, trimmed);
+    trimCommandSubstitutionResultOutput(&result.output);
+    const child_status = normalizeWaitStatus(wait_result.status);
+    if (child_status != result.status) result.status = child_status;
+    result.validate();
+    return result;
+}
+
+fn runForkedCommandSubstitution(opaque_context: *anyopaque) u8 {
+    const fork_context: *ForkedCommandSubstitutionContext = @ptrCast(@alignCast(opaque_context));
+    fork_context.validate();
+
+    var substitution_state = fork_context.parent_state.snapshotForSubshell(
+        fork_context.evaluator.allocator,
+    ) catch return 125;
+    defer substitution_state.deinit();
+    if (fork_context.suppress_inherited_xtrace) substitution_state.options.set(.xtrace, false);
+    if (fork_context.evaluator.features.isBash()) substitution_state.options.set(.errexit, false);
+
+    tailExecSimpleExternalCommandSubstitution(fork_context, &substitution_state) catch return 125;
+
+    var result = evaluateCommandSubstitutionInState(
+        fork_context.evaluator,
+        &substitution_state,
+        fork_context.substitution_context,
+        fork_context.body,
+        fork_context.exit_trap_resolver,
+        fork_context.parent_frame,
+        fork_context.parent_input,
+        true,
+    ) catch return 125;
+    defer result.deinit();
+
+    const fd_port = fork_context.evaluator.fd_port orelse return 125;
+    fd_port.writeAll(.{ .descriptor = 1, .bytes = result.output.items }) catch return 125;
+    result.output.clearRetainingCapacity();
+    writeCommandSubstitutionResult(
+        fd_port,
+        fork_context.result_pipe_write,
+        result,
+    ) catch return 125;
+    return result.status;
+}
+
+fn tailExecSimpleExternalCommandSubstitution(
+    fork_context: *ForkedCommandSubstitutionContext,
+    substitution_state: *state.ShellState,
+) !void {
+    var lowered_body: ?TrapActionBody = null;
+    defer if (lowered_body) |*body| body.deinit();
+    const plan = simpleTailExecCommandSubstitutionPlan(fork_context.body) orelse blk: {
+        lowered_body = try lowerTailExecCommandSubstitutionIrSource(fork_context, substitution_state);
+        break :blk if (lowered_body) |body|
+            simpleTailExecTrapActionBodyPlan(body) orelse return
+        else
+            return;
+    };
+    plan.validate();
+    if (hasRedirections(plan)) return;
+    if (plan.argv.len == 0) return;
+    const process_port = fork_context.evaluator.process_port orelse return;
+
+    const tail_command = tailExecExternalCommand(plan) orelse return;
+    const command: command_plan.ExpandedSimpleCommand = .{
+        .assignments = tail_command.assignments,
+        .argv = tail_command.argv,
+        .redirections = plan.redirections,
+        .last_command_substitution_status = plan.last_command_substitution_status,
+        .source_line = plan.source_line,
+    };
+    const external = try resolveExternalForEvaluation(
+        fork_context.evaluator.allocator,
+        fork_context.evaluator.fs_port,
+        substitution_state.*,
+        command,
+    );
+    defer if (external) |resolution| fork_context.evaluator.allocator.free(resolution.path);
+    const resolution = external orelse return;
+    const target_plan = command_plan.classifyExpandedSimpleCommand(.{
+        .command = command,
+        .lookup = .{ .externals = &.{resolution} },
+        .target = .child_process,
+    });
+    var invocation = try ExternalInvocation.init(
+        fork_context.evaluator.allocator,
+        substitution_state.*,
+        target_plan,
+        resolution,
+        &.{},
+    );
+    defer invocation.deinit(fork_context.evaluator.allocator);
+    invocation.exec(process_port, .{}) catch return;
+}
+
+const TailExecExternalCommand = struct {
+    assignments: []const command_plan.Assignment,
+    argv: []const []const u8,
+};
+
+fn tailExecExternalCommand(plan: command_plan.CommandPlan) ?TailExecExternalCommand {
+    plan.validate();
+    if (plan.argv.len == 0) return null;
+    if (!std.mem.eql(u8, plan.argv[0], "exec")) return .{
+        .assignments = plan.assignments,
+        .argv = plan.argv,
+    };
+
+    var index: usize = 1;
+    if (index < plan.argv.len and std.mem.eql(u8, plan.argv[index], "--")) index += 1;
+    if (index >= plan.argv.len) return null;
+    if (std.mem.startsWith(u8, plan.argv[index], "-")) return null;
+    return .{
+        .assignments = plan.assignments,
+        .argv = plan.argv[index..],
+    };
+}
+
+fn lowerTailExecCommandSubstitutionIrSource(
+    fork_context: *ForkedCommandSubstitutionContext,
+    substitution_state: *state.ShellState,
+) !?TrapActionBody {
+    const source = tailExecCommandSubstitutionIrSource(fork_context.body) orelse return null;
+    var parser_resolver = ParserBackedSourceResolver.init(fork_context.evaluator);
+    parser_resolver.features = fork_context.evaluator.features;
+    parser_resolver.arg_zero = fork_context.evaluator.arg_zero;
+    parser_resolver.expand_aliases = source.expand_aliases and substitution_state.shopts.enabled(.expand_aliases);
+    parser_resolver.alias_state = fork_context.evaluator.alias_state;
+    parser_resolver.source_line_offset = source.line -| sourceLineIndex(
+        source.program.source,
+        source.program.statements[source.statement_index].span.start,
+    );
+    return try parser_resolver.lowerProgramStatement(
+        fork_context.evaluator.allocator,
+        source.program.*,
+        source.statement_index,
+        fork_context.substitution_context,
+        substitution_state,
+    );
+}
+
+fn tailExecCommandSubstitutionIrSource(body: CommandSubstitutionBody) ?command_plan.IrStatementPlan {
+    body.validate();
+    return switch (body) {
+        .compound => |compound| tailExecCompoundIrSource(compound),
+        .owned => |owned| switch (owned.body) {
+            .compound => |compound| tailExecCompoundIrSource(compound),
+            .simple, .pipeline, .failure => null,
+        },
+        .simple, .pipeline, .failure => null,
+    };
+}
+
+fn tailExecCompoundIrSource(plan: command_plan.CompoundCommandPlan) ?command_plan.IrStatementPlan {
+    plan.validate();
+    if (hasCompoundRedirections(plan)) return null;
+    return switch (plan.body) {
+        .sequence => |list| tailExecStatementListIrSource(list),
+        else => null,
+    };
+}
+
+fn tailExecStatementListIrSource(list: command_plan.StatementList) ?command_plan.IrStatementPlan {
+    list.validate();
+    if (list.statements.len != 1) return null;
+    const entry = list.statements[0];
+    if (entry.op_before != .sequence) return null;
+    return switch (entry.plan) {
+        .ir_source => |source| if (irSourceSingleUnredirectedPipeline(source)) source else null,
+        else => null,
+    };
+}
+
+fn simpleTailExecTrapActionBodyPlan(body: TrapActionBody) ?command_plan.CommandPlan {
+    body.validate();
+    return switch (body) {
+        .simple => |simple| simple,
+        .pipeline => |pipeline| simpleTailExecPipelinePlan(pipeline),
+        .owned => |owned| simpleTailExecTrapActionBodyPayloadPlan(owned.body),
+        .compound, .failure => null,
+    };
+}
+
+fn simpleTailExecTrapActionBodyPayloadPlan(body: TrapActionBodyPayload) ?command_plan.CommandPlan {
+    body.validate();
+    return switch (body) {
+        .simple => |simple| simple,
+        .pipeline => |pipeline| simpleTailExecPipelinePlan(pipeline),
+        .compound, .failure => null,
+    };
+}
+
+fn simpleTailExecCommandSubstitutionPlan(body: CommandSubstitutionBody) ?command_plan.CommandPlan {
+    body.validate();
+    return switch (body) {
+        .simple => |simple| simple,
+        .pipeline => |pipeline| simpleTailExecPipelinePlan(pipeline),
+        .compound => |compound| simpleTailExecCompoundPlan(compound),
+        .owned => |owned| simpleTailExecCommandSubstitutionPayloadPlan(owned.body),
+        .failure => null,
+    };
+}
+
+fn simpleTailExecCommandSubstitutionPayloadPlan(body: CommandSubstitutionBodyPayload) ?command_plan.CommandPlan {
+    body.validate();
+    return switch (body) {
+        .simple => |simple| simple,
+        .pipeline => |pipeline| simpleTailExecPipelinePlan(pipeline),
+        .compound => |compound| simpleTailExecCompoundPlan(compound),
+        .failure => null,
+    };
+}
+
+fn simpleTailExecCompoundPlan(plan: command_plan.CompoundCommandPlan) ?command_plan.CommandPlan {
+    plan.validate();
+    if (hasCompoundRedirections(plan)) return null;
+    return switch (plan.body) {
+        .sequence => |list| simpleTailExecStatementListPlan(list),
+        else => null,
+    };
+}
+
+fn simpleTailExecStatementListPlan(list: command_plan.StatementList) ?command_plan.CommandPlan {
+    list.validate();
+    if (list.statements.len != 1) return null;
+    const entry = list.statements[0];
+    if (entry.op_before != .sequence) return null;
+    return switch (entry.plan) {
+        .simple => |simple| simple,
+        .pipeline => |pipeline| simpleTailExecPipelinePlan(pipeline),
+        else => null,
+    };
+}
+
+fn simpleTailExecPipelinePlan(plan: pipeline_plan.PipelinePlan) ?command_plan.CommandPlan {
+    plan.validate();
+    if (plan.stages.len != 1 or plan.negated or plan.background != .foreground) return null;
+    return switch (plan.stages[0]) {
+        .simple => |simple| simple,
+        .compound => null,
+    };
+}
+
+fn readCommandSubstitutionProtocolBytes(
+    allocator: std.mem.Allocator,
+    fd_port: runtime.fd.Port,
+    descriptor: runtime.fd.Descriptor,
+    bytes: *std.ArrayList(u8),
+) EvalError!void {
+    var buffer: [4096]u8 = undefined;
+    while (true) {
+        const read_result = fd_port.read(.{ .descriptor = descriptor, .buffer = &buffer }) catch |err| switch (err) {
+            error.Interrupted => continue,
+            else => return error.Unimplemented,
+        };
+        if (read_result.bytes_read == 0) break;
+        try bytes.appendSlice(allocator, buffer[0..read_result.bytes_read]);
+    }
+}
+
+fn writeCommandSubstitutionResult(
+    fd_port: runtime.fd.Port,
+    descriptor: runtime.fd.Descriptor,
+    result: CommandSubstitutionResult,
+) !void {
+    result.validate();
+    var bytes: std.ArrayList(u8) = .empty;
+    defer bytes.deinit(result.allocator);
+    try appendCommandSubstitutionProtocolBytes(result.allocator, &bytes, result);
+    try fd_port.writeAll(.{ .descriptor = descriptor, .bytes = bytes.items });
+}
+
+fn appendCommandSubstitutionProtocolBytes(
+    allocator: std.mem.Allocator,
+    bytes: *std.ArrayList(u8),
+    result: CommandSubstitutionResult,
+) !void {
+    try bytes.appendSlice(allocator, command_substitution_protocol_magic);
+    try bytes.append(allocator, result.status);
+    try appendFailureBytes(allocator, bytes, result.fatal_failure);
+    try appendLengthPrefixedBytes(allocator, bytes, result.output.items);
+    try appendLengthPrefixedBytes(allocator, bytes, result.stderr.items);
+    try appendLengthPrefixedBytes(allocator, bytes, result.side_stdout.items);
+    try appendU32(allocator, bytes, @intCast(result.diagnostics.items.len));
+    for (result.diagnostics.items) |diagnostic| try appendLengthPrefixedBytes(allocator, bytes, diagnostic.message);
+}
+
+fn appendFailureBytes(
+    allocator: std.mem.Allocator,
+    bytes: *std.ArrayList(u8),
+    failure: ?TrapActionFailure,
+) !void {
+    if (failure == null) {
+        try bytes.append(allocator, 0);
+        return;
+    }
+    const failure_value = failure.?;
+    failure_value.validate();
+    try bytes.append(allocator, 1);
+    try bytes.append(allocator, @intFromEnum(failure_value.kind));
+    try bytes.append(allocator, failure_value.status);
+    try bytes.append(allocator, failureFlags(failure_value));
+    try appendLengthPrefixedBytes(allocator, bytes, failure_value.message);
+}
+
+fn failureFlags(failure: TrapActionFailure) u8 {
+    var flags: u8 = 0;
+    if (failure.fatal_noninteractive) flags |= 1 << 0;
+    if (failure.bash_arithmetic_expansion) flags |= 1 << 1;
+    if (failure.bash_arithmetic_readonly_assignment) flags |= 1 << 2;
+    if (failure.bash_arithmetic_assignment_only_expansion) flags |= 1 << 3;
+    if (failure.bash_parameter_assignment_expansion) flags |= 1 << 4;
+    return flags;
+}
+
+fn appendLengthPrefixedBytes(
+    allocator: std.mem.Allocator,
+    bytes: *std.ArrayList(u8),
+    value: []const u8,
+) !void {
+    try appendU32(allocator, bytes, @intCast(value.len));
+    try bytes.appendSlice(allocator, value);
+}
+
+fn appendU32(allocator: std.mem.Allocator, bytes: *std.ArrayList(u8), value: u32) !void {
+    try bytes.append(allocator, @truncate(value));
+    try bytes.append(allocator, @truncate(value >> 8));
+    try bytes.append(allocator, @truncate(value >> 16));
+    try bytes.append(allocator, @truncate(value >> 24));
+}
+
+fn deserializeCommandSubstitutionResult(
+    allocator: std.mem.Allocator,
+    bytes: []const u8,
+) EvalError!CommandSubstitutionResult {
+    var cursor: usize = 0;
+    if (!try consumeProtocolBytes(bytes, &cursor, command_substitution_protocol_magic)) return error.Unimplemented;
+    const status = try readProtocolU8(bytes, &cursor);
+    var result = CommandSubstitutionResult.init(allocator, status);
+    errdefer result.deinit();
+    result.fatal_failure = try readProtocolFailure(allocator, bytes, &cursor);
+    try result.output.appendSlice(allocator, try readProtocolBytes(bytes, &cursor));
+    try result.stderr.appendSlice(allocator, try readProtocolBytes(bytes, &cursor));
+    try result.side_stdout.appendSlice(allocator, try readProtocolBytes(bytes, &cursor));
+    const diagnostics_len = try readProtocolU32(bytes, &cursor);
+    for (0..diagnostics_len) |_| {
+        const message = try allocator.dupe(u8, try readProtocolBytes(bytes, &cursor));
+        errdefer allocator.free(message);
+        try result.diagnostics.append(allocator, .{ .message = message });
+    }
+    if (cursor != bytes.len) return error.Unimplemented;
+    result.validate();
+    return result;
+}
+
+fn readProtocolFailure(
+    allocator: std.mem.Allocator,
+    bytes: []const u8,
+    cursor: *usize,
+) EvalError!?TrapActionFailure {
+    const present = try readProtocolU8(bytes, cursor);
+    if (present == 0) return null;
+    if (present != 1) return error.Unimplemented;
+    const kind_byte = try readProtocolU8(bytes, cursor);
+    const kind: TrapActionFailureKind = switch (kind_byte) {
+        0 => .parse_error,
+        1 => .lowering_error,
+        2 => .expansion_error,
+        3 => .unsupported_shape,
+        else => return error.Unimplemented,
+    };
+    const status = try readProtocolU8(bytes, cursor);
+    const flags = try readProtocolU8(bytes, cursor);
+    const message = try allocator.dupe(u8, try readProtocolBytes(bytes, cursor));
+    errdefer allocator.free(message);
+    const failure: TrapActionFailure = .{
+        .kind = kind,
+        .status = status,
+        .message = message,
+        .fatal_noninteractive = flags & (1 << 0) != 0,
+        .bash_arithmetic_expansion = flags & (1 << 1) != 0,
+        .bash_arithmetic_readonly_assignment = flags & (1 << 2) != 0,
+        .bash_arithmetic_assignment_only_expansion = flags & (1 << 3) != 0,
+        .bash_parameter_assignment_expansion = flags & (1 << 4) != 0,
+    };
+    failure.validate();
+    return failure;
+}
+
+fn consumeProtocolBytes(bytes: []const u8, cursor: *usize, expected: []const u8) EvalError!bool {
+    if (bytes.len - cursor.* < expected.len) return error.Unimplemented;
+    if (!std.mem.eql(u8, bytes[cursor.*..][0..expected.len], expected)) return false;
+    cursor.* += expected.len;
+    return true;
+}
+
+fn readProtocolBytes(bytes: []const u8, cursor: *usize) EvalError![]const u8 {
+    const len = try readProtocolU32(bytes, cursor);
+    if (bytes.len - cursor.* < len) return error.Unimplemented;
+    const value = bytes[cursor.*..][0..len];
+    cursor.* += len;
+    return value;
+}
+
+fn readProtocolU8(bytes: []const u8, cursor: *usize) EvalError!u8 {
+    if (bytes.len - cursor.* < 1) return error.Unimplemented;
+    const value = bytes[cursor.*];
+    cursor.* += 1;
+    return value;
+}
+
+fn readProtocolU32(bytes: []const u8, cursor: *usize) EvalError!u32 {
+    if (bytes.len - cursor.* < 4) return error.Unimplemented;
+    const value = @as(u32, bytes[cursor.*]) |
+        (@as(u32, bytes[cursor.* + 1]) << 8) |
+        (@as(u32, bytes[cursor.* + 2]) << 16) |
+        (@as(u32, bytes[cursor.* + 3]) << 24);
+    cursor.* += 4;
+    return value;
+}
+
 fn evaluateCommandSubstitutionSnapshot(
     evaluator: *Evaluator,
     parent_state: *state.ShellState,
@@ -7509,22 +8229,18 @@ fn evaluateCommandSubstitutionSnapshot(
         defer std.debug.assert(shellStateMutationFingerprint(parent_state.*) == parent_fingerprint);
     }
 
-    var substitution_state = parent_state.snapshotForSubshell(evaluator.allocator) catch |err| switch (err) {
-        error.OutOfMemory => return error.OutOfMemory,
-        error.ReadonlyVariable => unreachable,
-    };
-    defer substitution_state.deinit();
-    if (evaluator.features.isBash()) substitution_state.options.set(.errexit, false);
-
     var parent_frame = rootExecutionFrame(context.EvalContext.forTarget(.current_shell));
-    return evaluateCommandSubstitutionInState(
+    defer parent_frame.spec.fd_table.deinit(evaluator.allocator);
+    return evaluateCommandSubstitutionForked(
         evaluator,
-        &substitution_state,
+        parent_state,
+        context.EvalContext.forTarget(.current_shell),
         substitution_context,
         body,
         null,
         &parent_frame,
         null,
+        false,
     );
 }
 
@@ -7536,6 +8252,7 @@ fn evaluateCommandSubstitutionInState(
     exit_trap_resolver: ?TrapActionResolver,
     parent_frame: *execution_frame.ExecutionFrame,
     parent_input: ?*EvaluationInput,
+    stream_stdout_to_inherited: bool,
 ) EvalError!CommandSubstitutionResult {
     substitution_state.validate();
     substitution_context.validate();
@@ -7567,6 +8284,7 @@ fn evaluateCommandSubstitutionInState(
         evaluator.allocator,
         evaluator.scoped_exec_redirections,
         parent_frame,
+        stream_stdout_to_inherited,
     );
     defer substitution_frame.spec.fd_table.deinit(evaluator.allocator);
     var body_outcome = try evaluateCommandSubstitutionBody(
@@ -7972,25 +8690,11 @@ fn runSemanticCommandSubstitution(
     const substitution_context = previous_eval_context.enterCommandSubstitution();
     assertCommandSubstitutionContext(substitution_context);
 
-    var substitution_state = parent_state.snapshotForSubshell(
-        expansion_context.evaluator.allocator,
-    ) catch |err| switch (err) {
-        error.OutOfMemory => return error.OutOfMemory,
-        error.ReadonlyVariable => unreachable,
-    };
-    defer substitution_state.deinit();
-    if (expansion_context.suppress_inherited_xtrace) substitution_state.options.set(.xtrace, false);
-    if (expansion_context.evaluator.features.isBash()) substitution_state.options.set(.errexit, false);
-
-    expansion_context.eval_context = substitution_context;
-    expansion_context.shell_state = &substitution_state;
     expansion_context.max_depth_observed = @max(
         expansion_context.max_depth_observed,
         substitution_context.command_substitution_depth,
     );
     defer {
-        expansion_context.shell_state = parent_state;
-        expansion_context.eval_context = previous_eval_context;
         expansion_context.validate();
         if (comptime shellStateMutationFingerprintEnabled()) {
             std.debug.assert(shellStateMutationFingerprint(parent_state.*) == parent_fingerprint);
@@ -8006,14 +8710,16 @@ fn runSemanticCommandSubstitution(
     var root_parent_frame = rootExecutionFrame(previous_eval_context);
     defer root_parent_frame.spec.fd_table.deinit(expansion_context.evaluator.allocator);
     const parent_frame = expansion_context.parent_frame orelse &root_parent_frame;
-    var result = try evaluateCommandSubstitutionInState(
+    var result = try evaluateCommandSubstitutionForked(
         expansion_context.evaluator,
-        &substitution_state,
+        parent_state,
+        previous_eval_context,
         substitution_context,
         body,
         expansion_context.trap_resolver,
         parent_frame,
         expansion_context.parent_input,
+        expansion_context.suppress_inherited_xtrace,
     );
     defer result.deinit();
 
@@ -13871,6 +14577,21 @@ const ExternalInvocation = struct {
     ) runtime.process.SpawnError!runtime.process.SpawnResult {
         return spawnExternalProcess(evaluator, process_port, self.executable_path, self.argv, &self.environment, options);
     }
+
+    fn exec(
+        self: ExternalInvocation,
+        process_port: runtime.process.Port,
+        options: ExternalSpawnOptions,
+    ) runtime.process.SpawnError!noreturn {
+        return try process_port.exec(.{
+            .executable_path = self.executable_path,
+            .argv = self.argv,
+            .environment = &self.environment,
+            .stdin = options.stdin,
+            .stdout = options.stdout,
+            .stderr = options.stderr,
+        });
+    }
 };
 
 const ExternalSpawnOptions = struct {
@@ -14121,7 +14842,7 @@ test "inherited foreground external stdio streams outside capture contexts" {
     const substitution_context = context.EvalContext.forTarget(.current_shell)
         .enterCommandSubstitution()
         .withTarget(.child_process);
-    var substitution_frame = try commandSubstitutionExecutionFrame(std.testing.allocator, null, &frame);
+    var substitution_frame = try commandSubstitutionExecutionFrame(std.testing.allocator, null, &frame, false);
     defer substitution_frame.spec.fd_table.deinit(std.testing.allocator);
     var substitution_buffers = EvaluationBuffers.init(std.testing.allocator, &input, &substitution_frame);
     defer substitution_buffers.deinit();
@@ -15241,7 +15962,7 @@ fn evaluateEval(
     try applyEvalAssignmentOverlay(&working_state, shell_state, plan);
 
     const result = try evaluateSourcedTextChunks(evaluator, &working_state, eval_context, source.items, buffers);
-    if (bashEvalUsesTemporaryAssignments(eval_context, plan)) {
+    if (evaluatedAssignmentEffect(eval_context, plan) == .temporary) {
         try appendShellStateDiffExcludingVariables(shell_state, working_state, state_delta, plan.assignments);
     } else {
         try appendShellStateDiff(shell_state, working_state, state_delta);
@@ -16599,6 +17320,7 @@ fn parseKillSignal(raw: []const u8) ?u8 {
     if (std.ascii.eqlIgnoreCase(name, "KILL")) return signalNumber(.KILL);
     if (std.ascii.eqlIgnoreCase(name, "PIPE")) return signalNumber(.PIPE);
     if (std.ascii.eqlIgnoreCase(name, "ALRM")) return signalNumber(.ALRM);
+    if (std.ascii.eqlIgnoreCase(name, "VTALRM")) return signalNumber(.VTALRM);
     if (std.ascii.eqlIgnoreCase(name, "TERM")) return signalNumber(.TERM);
     if (std.ascii.eqlIgnoreCase(name, "CONT")) return signalNumber(.CONT);
     if (std.ascii.eqlIgnoreCase(name, "STOP")) return signalNumber(.STOP);
@@ -16901,8 +17623,21 @@ fn evaluateCommandBuiltin(
         .lookup = .{ .functions = &.{}, .externals = externals },
         .target = eval_context.target,
     });
+    var command_plan_without_special_assignment_persistence = target_plan;
+    if (target_plan.class() == .special_builtin and target_plan.assignments.len != 0) {
+        command_plan_without_special_assignment_persistence.assignment_effect_override = .temporary;
+        command_plan_without_special_assignment_persistence.validate();
+    }
     var dispatch_state = shell_state;
-    return evaluateSimpleCommand(evaluator, &dispatch_state, eval_context, target_plan, state_delta, buffers, false);
+    return evaluateSimpleCommand(
+        evaluator,
+        &dispatch_state,
+        eval_context,
+        command_plan_without_special_assignment_persistence,
+        state_delta,
+        buffers,
+        false,
+    );
 }
 
 const default_command_path = "/bin:/usr/bin";
@@ -17258,6 +17993,42 @@ fn evaluateExec(
         .lookup = .{ .externals = &.{resolution} },
         .target = .child_process,
     });
+    if (eval_context.command_substitution_depth != 0 and
+        eval_context.pipeline_depth == 0 and
+        !externalNeedsBufferedStdin(target_plan, buffers))
+    {
+        const process_port = evaluator.process_port orelse return error.Unimplemented;
+        var invocation = try ExternalInvocation.init(evaluator.allocator, shell_state, target_plan, resolution, &.{});
+        defer invocation.deinit(evaluator.allocator);
+        var redirection_guard = RedirectionGuard.empty(.child_only);
+        defer redirection_guard.restore();
+        if (hasRedirections(target_plan)) {
+            const apply_result = try applyRedirectionsForScope(
+                evaluator.*,
+                buffers,
+                .child_only,
+                .{},
+                target_plan.redirections,
+                redirectionExpansionModeForExternal(evaluator.external_stdio),
+                target_plan.argv[0],
+            );
+            switch (apply_result) {
+                .applied => |applied| redirection_guard = applied,
+                .failure => |failure| {
+                    try addRedirectionFailureDiagnostic(buffers, target_plan.argv[0], failure);
+                    return .{ .status = 1, .control_flow = .{ .exit = 1 } };
+                },
+            }
+        }
+        invocation.exec(process_port, .{}) catch |err| switch (err) {
+            error.OutOfMemory => return error.OutOfMemory,
+            else => |exec_err| {
+                const failure = spawnFailure(exec_err);
+                try buffers.addBuiltinDiagnostic("exec", failure.message);
+                return .{ .status = failure.status, .control_flow = .{ .exit = failure.status } };
+            },
+        };
+    }
     const status = if (externalNeedsBufferedStdin(target_plan, buffers))
         try runExternalWithPipelineInput(
             evaluator,
@@ -18605,6 +19376,7 @@ fn signalName(signal: u8) ?[]const u8 {
     if (signal == signalNumber(.SEGV)) return "SIGSEGV";
     if (signal == signalNumber(.PIPE)) return "SIGPIPE";
     if (signal == signalNumber(.ALRM)) return "SIGALRM";
+    if (signal == signalNumber(.VTALRM)) return "SIGVTALRM";
     if (signal == signalNumber(.TERM)) return "SIGTERM";
     if (signal == signalNumber(.CONT)) return "SIGCONT";
     if (signal == signalNumber(.STOP)) return "SIGSTOP";
@@ -19101,6 +19873,7 @@ fn parseTrapSignalNumber(raw: []const u8) ?[]const u8 {
         @intFromEnum(std.posix.SIG.KILL) => "KILL",
         @intFromEnum(std.posix.SIG.PIPE) => "PIPE",
         @intFromEnum(std.posix.SIG.ALRM) => "ALRM",
+        @intFromEnum(std.posix.SIG.VTALRM) => "VTALRM",
         @intFromEnum(std.posix.SIG.USR1) => "USR1",
         @intFromEnum(std.posix.SIG.USR2) => "USR2",
         @intFromEnum(std.posix.SIG.TERM) => "TERM",
@@ -20430,6 +21203,25 @@ test "command builtin preserves state effects from the selected utility" {
     try std.testing.expect(shell_state.getVariable("VALUE").?.exported);
 }
 
+test "command builtin makes prefixes temporary for selected special builtins" {
+    var shell_state = state.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    try shell_state.putVariable("VALUE", "before", .{});
+    var evaluator = Evaluator.init(std.testing.allocator);
+    const eval_context = context.EvalContext.forTarget(.current_shell);
+    const assignments = [_]command_plan.Assignment{.{ .name = "VALUE", .value = "during" }};
+    const plan = command_plan.classifyExpandedSimpleCommand(.{ .command = .{
+        .assignments = &assignments,
+        .argv = &[_][]const u8{ "command", "eval", ":" },
+    } });
+
+    var result = try evaluatePlan(&evaluator, &shell_state, eval_context, plan);
+    defer result.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 0), result.status);
+    try result.commitDelta(&shell_state, .current_shell);
+    try std.testing.expectEqualStrings("before", shell_state.getVariable("VALUE").?.value);
+}
+
 test "semantic evaluator treats empty command names as not found" {
     var shell_state = state.ShellState.init(std.testing.allocator);
     defer shell_state.deinit();
@@ -20589,6 +21381,7 @@ test "semantic evaluator routes test -t through fd runtime port" {
                 .duplicate_fn = duplicate,
                 .duplicate_to_fn = duplicateTo,
                 .pipe_fn = pipe,
+                .read_fn = read,
                 .write_fn = writeAll,
                 .is_tty_fn = isTty,
                 .descriptor_status_fn = descriptorStatus,
@@ -20619,6 +21412,10 @@ test "semantic evaluator routes test -t through fd runtime port" {
         }
 
         fn pipe(_: *anyopaque, _: runtime.fd.PipeRequest) runtime.fd.PipeError!runtime.fd.PipeResult {
+            unreachable;
+        }
+
+        fn read(_: *anyopaque, _: runtime.fd.ReadRequest) runtime.fd.ReadError!runtime.fd.ReadResult {
             unreachable;
         }
 
@@ -22068,7 +22865,7 @@ test "semantic command substitution frame inherits parent stdin and stderr endpo
     try parent_frame.spec.fd_table.bindOutput(std.testing.allocator, 2, .{ .capture = .side_stderr });
     defer parent_frame.spec.fd_table.deinit(std.testing.allocator);
 
-    var substitution_frame = try commandSubstitutionExecutionFrame(std.testing.allocator, null, &parent_frame);
+    var substitution_frame = try commandSubstitutionExecutionFrame(std.testing.allocator, null, &parent_frame, false);
     defer substitution_frame.spec.fd_table.deinit(std.testing.allocator);
     switch (substitution_frame.spec.stdin) {
         .bytes => |bytes| try std.testing.expectEqualStrings("stdin", bytes),
@@ -22203,6 +23000,7 @@ test "semantic command substitution runs subshell EXIT trap before trimming capt
         simpleTrapResolver(),
         &parent_frame,
         null,
+        false,
     );
     defer result.deinit();
 
@@ -22553,6 +23351,18 @@ fn resolveSimpleTrapAction(
     return null;
 }
 
+const FakePipe = struct {
+    read: runtime.fd.Descriptor,
+    write: runtime.fd.Descriptor,
+    bytes: std.ArrayList(u8) = .empty,
+    read_offset: usize = 0,
+
+    fn deinit(self: *FakePipe, allocator: std.mem.Allocator) void {
+        self.bytes.deinit(allocator);
+        self.* = undefined;
+    }
+};
+
 const FakeExternalRuntime = struct {
     allocator: std.mem.Allocator,
     open_descriptors: [64]bool = initFakeOpenDescriptors(),
@@ -22589,6 +23399,9 @@ const FakeExternalRuntime = struct {
     run_status: runtime.process.WaitStatus = .{ .exited = 0 },
     run_stdout: []const u8 = &.{},
     run_stderr: []const u8 = &.{},
+    fake_pipes: [8]FakePipe = undefined,
+    fake_pipe_count: usize = 0,
+    active_subshell_stdout: ?runtime.fd.Descriptor = null,
     process_times: runtime.process.ProcessTimes = .{},
     resource_limits: runtime.process.ResourceLimits = .{
         .soft = .unlimited,
@@ -22608,6 +23421,7 @@ const FakeExternalRuntime = struct {
         if (self.observed_executable_path) |path| self.allocator.free(path);
         self.observed_run_stdin.deinit(self.allocator);
         self.observed_argv.deinit(self.allocator);
+        for (self.fake_pipes[0..self.fake_pipe_count]) |*pipe_value| pipe_value.deinit(self.allocator);
         self.observed_environment.deinit();
         self.* = undefined;
     }
@@ -22620,6 +23434,7 @@ const FakeExternalRuntime = struct {
             .duplicate_fn = duplicate,
             .duplicate_to_fn = duplicateTo,
             .pipe_fn = pipe,
+            .read_fn = read,
             .write_fn = writeAll,
             .is_tty_fn = isTty,
             .descriptor_status_fn = descriptorStatus,
@@ -22789,17 +23604,45 @@ const FakeExternalRuntime = struct {
     fn pipe(opaque_context: *anyopaque, request: runtime.fd.PipeRequest) runtime.fd.PipeError!runtime.fd.PipeResult {
         const self = fromContext(opaque_context);
         request.validate();
-        const read = self.allocateDescriptor(0);
-        errdefer self.setOpen(read, false);
-        const write = self.allocateDescriptor(0);
-        self.recordFdOperation(.{ .pipe = .{ .read = read, .write = write } });
-        return .{ .read = read, .write = write };
+        std.debug.assert(self.fake_pipe_count < self.fake_pipes.len);
+        const read_descriptor = self.allocateDescriptor(0);
+        errdefer self.setOpen(read_descriptor, false);
+        const write_descriptor = self.allocateDescriptor(0);
+        errdefer self.setOpen(write_descriptor, false);
+        self.fake_pipes[self.fake_pipe_count] = .{ .read = read_descriptor, .write = write_descriptor };
+        self.fake_pipe_count += 1;
+        self.recordFdOperation(.{ .pipe = .{ .read = read_descriptor, .write = write_descriptor } });
+        return .{ .read = read_descriptor, .write = write_descriptor };
+    }
+
+    fn read(opaque_context: *anyopaque, request: runtime.fd.ReadRequest) runtime.fd.ReadError!runtime.fd.ReadResult {
+        const self = fromContext(opaque_context);
+        request.validate();
+        if (!self.isOpen(request.descriptor)) return error.BadFileDescriptor;
+        for (self.fake_pipes[0..self.fake_pipe_count]) |*pipe_value| {
+            if (pipe_value.read != request.descriptor) continue;
+            const available = pipe_value.bytes.items[pipe_value.read_offset..];
+            const count = @min(request.buffer.len, available.len);
+            @memcpy(request.buffer[0..count], available[0..count]);
+            pipe_value.read_offset += count;
+            return .{ .bytes_read = count };
+        }
+        return .{ .bytes_read = 0 };
     }
 
     fn writeAll(opaque_context: *anyopaque, request: runtime.fd.WriteRequest) runtime.fd.WriteError!void {
         const self = fromContext(opaque_context);
         request.validate();
         if (!self.isOpen(request.descriptor)) return error.BadFileDescriptor;
+        const descriptor = if (request.descriptor == 1)
+            self.active_subshell_stdout orelse request.descriptor
+        else
+            request.descriptor;
+        for (self.fake_pipes[0..self.fake_pipe_count]) |*pipe_value| {
+            if (pipe_value.write != descriptor) continue;
+            pipe_value.bytes.appendSlice(self.allocator, request.bytes) catch return error.Unexpected;
+            return;
+        }
     }
 
     fn isTty(
@@ -22844,6 +23687,16 @@ const FakeExternalRuntime = struct {
         std.debug.assert(self.start_subshell_count < self.observed_spawn_process_group.len);
         self.observed_subshell_process_group = request.process_group;
         self.start_subshell_count += 1;
+        if (request.main_fn == runForkedCommandSubstitution) {
+            const previous_stdout = self.active_subshell_stdout;
+            self.active_subshell_stdout = switch (request.stdout) {
+                .fd => |descriptor| descriptor,
+                else => null,
+            };
+            defer self.active_subshell_stdout = previous_stdout;
+            const status = request.main_fn(request.context);
+            if (self.wait_status_count == 0) self.wait_status = .{ .exited = status };
+        }
         return .{ .child = fakeChild(9100 + @as(runtime.process.ProcessId, @intCast(self.start_subshell_count))) };
     }
 

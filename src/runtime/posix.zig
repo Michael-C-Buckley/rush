@@ -73,6 +73,7 @@ pub const Adapter = struct {
             .duplicate_fn = duplicate,
             .duplicate_to_fn = duplicateTo,
             .pipe_fn = pipe,
+            .read_fn = read,
             .write_fn = writeAll,
             .is_tty_fn = isTty,
             .descriptor_status_fn = descriptorStatus,
@@ -99,6 +100,7 @@ pub const Adapter = struct {
             .wait_fn = wait,
             .poll_wait_fn = pollWait,
             .run_fn = run,
+            .exec_fn = execCurrentProcess,
             .get_times_fn = getTimes,
             .get_resource_limit_fn = getResourceLimit,
             .set_resource_limit_fn = setResourceLimit,
@@ -139,7 +141,7 @@ fn openDescriptor(request: fd.OpenRequest) fd.OpenError!fd.Descriptor {
             request.directory,
             &path_z,
             request.options.toPosixFlags(),
-            request.options.mode,
+            @as(c_int, @intCast(request.options.mode)),
         );
         switch (std.c.errno(rc)) {
             .SUCCESS => return @intCast(rc),
@@ -258,6 +260,20 @@ fn pipe(context: *anyopaque, request: fd.PipeRequest) fd.PipeError!fd.PipeResult
     };
 
     return .{ .read = descriptors[0], .write = descriptors[1] };
+}
+
+fn read(context: *anyopaque, request: fd.ReadRequest) fd.ReadError!fd.ReadResult {
+    _ = context;
+    request.validate();
+    const count = std.c.read(request.descriptor, request.buffer.ptr, request.buffer.len);
+    if (count < 0) {
+        return switch (std.posix.errno(count)) {
+            .BADF => error.BadFileDescriptor,
+            .INTR => error.Interrupted,
+            else => error.Unexpected,
+        };
+    }
+    return .{ .bytes_read = @intCast(count) };
 }
 
 fn writeAll(context: *anyopaque, request: fd.WriteRequest) fd.WriteError!void {
@@ -876,6 +892,25 @@ fn startSubshell(context: *anyopaque, request: process.StartSubshellRequest) pro
     return .{ .child = process.ChildProcess.init(child) };
 }
 
+fn execCurrentProcess(context: *anyopaque, request: process.ExecRequest) process.SpawnError!noreturn {
+    _ = adapterFromContext(context);
+    request.validate();
+    var arena_allocator = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+    defer arena_allocator.deinit();
+    const arena = arena_allocator.allocator();
+
+    const executable_path_z = try arena.dupeZ(u8, request.executable_path);
+    const argv_z = try arena.allocSentinel(?[*:0]const u8, request.argv.len, null);
+    for (request.argv, 0..) |arg, index| argv_z[index] = (try arena.dupeZ(u8, arg)).ptr;
+    const env_block = try request.environment.createPosixBlock(arena, .{});
+
+    configureForkedStdio(request.stdin, 0);
+    configureForkedStdio(request.stdout, 1);
+    configureForkedStdio(request.stderr, 2);
+    _ = execve(executable_path_z.ptr, argv_z.ptr, env_block.slice.ptr);
+    return execveErrorFromErrno(std.c.errno(-1));
+}
+
 fn wait(context: *anyopaque, request: process.WaitRequest) process.WaitError!process.WaitResult {
     const adapter = adapterFromContext(context);
     request.validate();
@@ -1081,6 +1116,7 @@ fn posixSignalFromRuntimeNumber(number: runtime_signal.Number) ?std.posix.SIG {
         @intFromEnum(std.posix.SIG.QUIT) => .QUIT,
         @intFromEnum(std.posix.SIG.PIPE) => .PIPE,
         @intFromEnum(std.posix.SIG.ALRM) => .ALRM,
+        @intFromEnum(std.posix.SIG.VTALRM) => .VTALRM,
         @intFromEnum(std.posix.SIG.CONT) => .CONT,
         @intFromEnum(std.posix.SIG.USR1) => .USR1,
         @intFromEnum(std.posix.SIG.USR2) => .USR2,
@@ -1096,6 +1132,7 @@ fn runtimeNumberFromPosixSignal(posix_signal: std.posix.SIG) ?runtime_signal.Num
         .QUIT => @intFromEnum(std.posix.SIG.QUIT),
         .PIPE => @intFromEnum(std.posix.SIG.PIPE),
         .ALRM => @intFromEnum(std.posix.SIG.ALRM),
+        .VTALRM => @intFromEnum(std.posix.SIG.VTALRM),
         .CONT => @intFromEnum(std.posix.SIG.CONT),
         .USR1 => @intFromEnum(std.posix.SIG.USR1),
         .USR2 => @intFromEnum(std.posix.SIG.USR2),

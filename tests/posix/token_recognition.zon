@@ -56,6 +56,24 @@
             .status = 0,
         },
         .{
+            .name = "subshell exec in command substitution and-or list is isolated",
+            .script =
+            \\fifo=${TMPDIR:-/tmp}/rush-cs-fifo-$$
+            \\rm -f "$fifo"
+            \\value=$( ( PATH=/usr/bin:/bin; exec mkfifo "$fifo" ) 2>/dev/null && printf 'made\n'; printf 'after\n' )
+            \\status=$?
+            \\rm -f "$fifo"
+            \\printf 's=%s v=<%s>\n' "$status" "$value"
+            ,
+            .stdout =
+            \\s=0 v=<made
+            \\after>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "pipe operator is recognized without surrounding blanks",
             .script =
             \\printf '%s\n' one|cat
@@ -121,6 +139,23 @@
             ,
             .stdout =
             \\alias
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "function body alias substitution applies inside command substitutions",
+            .script =
+            \\alias hi='printf "%s\n" alias'
+            \\f() {
+            \\    value=$(hi)
+            \\    printf '<%s>\n' "$value"
+            \\}
+            \\f
+            ,
+            .stdout =
+            \\<alias>
             \\
             ,
             .stderr = "",

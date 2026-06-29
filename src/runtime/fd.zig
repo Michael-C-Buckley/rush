@@ -15,6 +15,7 @@ pub const Operation = enum {
     duplicate,
     duplicate_to,
     pipe,
+    read,
     write,
     is_tty,
 };
@@ -171,6 +172,23 @@ pub const WriteRequest = struct {
     }
 };
 
+pub const ReadRequest = struct {
+    descriptor: Descriptor,
+    buffer: []u8,
+
+    pub fn validate(self: ReadRequest) void {
+        assertValidDescriptor(self.descriptor);
+    }
+};
+
+pub const ReadResult = struct {
+    bytes_read: usize,
+
+    pub fn validate(self: ReadResult, request: ReadRequest) void {
+        std.debug.assert(self.bytes_read <= request.buffer.len);
+    }
+};
+
 pub const IsTtyRequest = struct {
     descriptor: Descriptor,
 
@@ -228,6 +246,11 @@ pub const PipeError = error{
     Unsupported,
     Unexpected,
 };
+pub const ReadError = error{
+    BadFileDescriptor,
+    Interrupted,
+    Unexpected,
+};
 pub const WriteError = error{
     BadFileDescriptor,
     BrokenPipe,
@@ -241,6 +264,7 @@ pub const CloseFn = *const fn (*anyopaque, CloseRequest) CloseError!void;
 pub const DuplicateFn = *const fn (*anyopaque, DuplicateRequest) DuplicateError!DuplicateResult;
 pub const DuplicateToFn = *const fn (*anyopaque, DuplicateToRequest) DuplicateError!void;
 pub const PipeFn = *const fn (*anyopaque, PipeRequest) PipeError!PipeResult;
+pub const ReadFn = *const fn (*anyopaque, ReadRequest) ReadError!ReadResult;
 pub const WriteFn = *const fn (*anyopaque, WriteRequest) WriteError!void;
 pub const IsTtyFn = *const fn (*anyopaque, IsTtyRequest) IsTtyError!IsTtyResult;
 pub const DescriptorStatusFn = *const fn (*anyopaque, DescriptorStatusRequest) DescriptorStatusError!DescriptorStatusResult;
@@ -252,6 +276,7 @@ pub const Port = struct {
     duplicate_fn: DuplicateFn,
     duplicate_to_fn: DuplicateToFn,
     pipe_fn: PipeFn,
+    read_fn: ReadFn,
     write_fn: WriteFn,
     is_tty_fn: IsTtyFn,
     descriptor_status_fn: DescriptorStatusFn,
@@ -284,6 +309,13 @@ pub const Port = struct {
         request.validate();
         const result = try self.pipe_fn(self.context, request);
         result.validate();
+        return result;
+    }
+
+    pub fn read(self: Port, request: ReadRequest) ReadError!ReadResult {
+        request.validate();
+        const result = try self.read_fn(self.context, request);
+        result.validate(request);
         return result;
     }
 

@@ -418,8 +418,10 @@ pub const Captures = struct {
     pub fn validateFor(self: Captures, spec: BoundarySpec) void {
         self.validate();
         if (spec.kind == .command_substitution) {
-            std.debug.assert(self.contains(.command_substitution_stdout));
-            std.debug.assert(spec.stdout.captureChannel() == .command_substitution_stdout);
+            if (!spec.stdout.isInheritStdout()) {
+                std.debug.assert(self.contains(.command_substitution_stdout));
+                std.debug.assert(spec.stdout.captureChannel() == .command_substitution_stdout);
+            }
             std.debug.assert(!self.contains(.pipeline_data));
         }
         if (self.contains(.pipeline_data)) {

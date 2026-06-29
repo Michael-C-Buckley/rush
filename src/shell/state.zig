@@ -742,6 +742,10 @@ pub const ShellState = struct {
         self.validate();
     }
 
+    pub fn invalidateSubshellEntryTrapListing(self: *ShellState) void {
+        self.clearSubshellEntryTraps();
+    }
+
     pub fn trapListingState(self: ShellState) ShellState {
         self.validate();
         if (self.scope != .subshell or self.traps_mutated_since_subshell_entry) return self;

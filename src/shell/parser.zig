@@ -1867,7 +1867,7 @@ fn maskSourceRanges(allocator: std.mem.Allocator, source: []const u8, ranges: []
     return masked;
 }
 
-pub fn expandAliases(allocator: std.mem.Allocator, source: []const u8, options: AliasExpansionOptions) ![]const u8 {
+pub fn expandAliases(allocator: std.mem.Allocator, source: []const u8, options: AliasExpansionOptions) anyerror![]const u8 {
     if (options.context == null or options.lookup == null) return allocator.dupe(u8, source);
 
     var output: std.ArrayList(u8) = .empty;
@@ -1875,7 +1875,61 @@ pub fn expandAliases(allocator: std.mem.Allocator, source: []const u8, options: 
     var active_aliases: std.ArrayList([]const u8) = .empty;
     defer active_aliases.deinit(allocator);
     _ = try expandAliasesIntoParsedSource(allocator, source, options, &output, &active_aliases);
+    const expanded = try output.toOwnedSlice(allocator);
+    defer allocator.free(expanded);
+
+    return expandAliasesInCommandSubstitutions(allocator, expanded, options);
+}
+
+fn expandAliasesInCommandSubstitutions(
+    allocator: std.mem.Allocator,
+    source: []const u8,
+    options: AliasExpansionOptions,
+) ![]const u8 {
+    var parsed = try parse(allocator, source, .{
+        .features = options.features,
+        .collect_command_substitution_nodes = true,
+    });
+    defer parsed.deinit();
+    if (parsed.diagnostics.len != 0 or parsed.incomplete) return allocator.dupe(u8, source);
+
+    var output: std.ArrayList(u8) = .empty;
+    errdefer output.deinit(allocator);
+
+    var copied_until: usize = 0;
+    for (parsed.nodes, 0..) |node, index| {
+        if (node.kind != .command_substitution) continue;
+        if (commandSubstitutionNodeHasAncestor(parsed, index)) continue;
+
+        if (node.span.start < copied_until) continue;
+        if (copied_until < node.span.start) try output.appendSlice(allocator, source[copied_until..node.span.start]);
+
+        try output.appendSlice(allocator, "$(");
+        const inner = if (node.span.end >= node.span.start + 3)
+            source[node.span.start + 2 .. node.span.end - 1]
+        else
+            "";
+        const expanded_inner = try expandAliases(allocator, inner, options);
+        defer allocator.free(expanded_inner);
+        try output.appendSlice(allocator, expanded_inner);
+        try output.append(allocator, ')');
+
+        copied_until = node.span.end;
+    }
+
+    if (copied_until == 0) return allocator.dupe(u8, source);
+    if (copied_until < source.len) try output.appendSlice(allocator, source[copied_until..]);
     return output.toOwnedSlice(allocator);
+}
+
+fn commandSubstitutionNodeHasAncestor(parsed: ParseResult, node_index: usize) bool {
+    const node = parsed.nodes[node_index];
+    std.debug.assert(node.kind == .command_substitution);
+    for (parsed.nodes[0..node_index]) |candidate| {
+        if (candidate.kind != .command_substitution) continue;
+        if (candidate.span.start <= node.span.start and node.span.end <= candidate.span.end) return true;
+    }
+    return false;
 }
 
 fn expandAliasesIntoParsedSource(
@@ -2033,6 +2087,34 @@ test "alias expansion fallback recognizes command position after reserved words"
     defer std.testing.allocator.free(expanded);
 
     try std.testing.expectEqualStrings("if !  { false; }; then echo yes; fi\n", expanded);
+
+    var result = try parse(std.testing.allocator, expanded, .{ .features = .strictPosix() });
+    defer result.deinit();
+    try std.testing.expectEqual(@as(usize, 0), result.diagnostics.len);
+}
+
+test "alias expansion parses modernish loop aliases inside command substitutions" {
+    const AliasLookup = struct {
+        fn lookup(context: *anyopaque, name: []const u8) ?[]const u8 {
+            _ = context;
+            if (std.mem.eql(u8, name, "LOOP")) return "{ { { _Msh_loop";
+            if (std.mem.eql(u8, name, "DO")) return "}; _Msh_loop_c && while _loop_E=0 _loop_Ln=${LINENO-}; IFS= read -r _loop_i <&8 && eval \" ${_loop_i}\"; do { ";
+            if (std.mem.eql(u8, name, "DONE")) return "} 8<&-; done; } 8<&-; _Msh_loop_setE; }";
+            return null;
+        }
+    };
+
+    var context: u8 = 0;
+    const expanded = try expandAliases(
+        std.testing.allocator,
+        "v=$(echo before; LOOP repeat 1; DO putln x; DONE; echo after)\n",
+        .{
+            .features = .strictPosix(),
+            .context = &context,
+            .lookup = AliasLookup.lookup,
+        },
+    );
+    defer std.testing.allocator.free(expanded);
 
     var result = try parse(std.testing.allocator, expanded, .{ .features = .strictPosix() });
     defer result.deinit();
@@ -2429,7 +2511,10 @@ const SyntaxParser = struct {
                     try self.appendParseError(self.current().span, "missing command separator before compound command");
                 }
                 const command = try self.parsePosixCompoundCommand();
-                if (compound_starts_command and self.startsSimpleCommand()) {
+                if (compound_starts_command and
+                    !self.atListTerminator(word_terminators, token_terminators) and
+                    self.startsSimpleCommand())
+                {
                     try self.appendParseError(self.current().span, "missing command separator before command");
                 }
                 if (self.nextNonWhitespaceIsPipe()) {
@@ -5036,6 +5121,13 @@ test "parser builds POSIX brace group nodes" {
         }
     }
     try std.testing.expect(found);
+}
+
+test "parser accepts brace group before enclosing reserved-word terminator" {
+    var result = try parse(std.testing.allocator, "while false; do { echo body; } done; echo ok", .{});
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(usize, 0), result.diagnostics.len);
 }
 
 test "parser reports empty POSIX brace group bodies" {

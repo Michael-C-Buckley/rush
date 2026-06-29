@@ -668,6 +668,7 @@ pub const CommandPlan = struct {
     expansion_output: ExpansionOutput = .{},
     source_line: ?usize = null,
     classification: Classification,
+    assignment_effect_override: ?AssignmentEffect = null,
 
     pub fn classify(request: PlanRequest) CommandPlan {
         request.validate();
@@ -696,6 +697,7 @@ pub const CommandPlan = struct {
             .expansion_output = command.expansion_output,
             .source_line = command.source_line,
             .classification = classification,
+            .assignment_effect_override = null,
         };
         plan.validate();
         return plan;
@@ -716,6 +718,7 @@ pub const CommandPlan = struct {
 
     pub fn assignmentEffect(self: CommandPlan) AssignmentEffect {
         if (self.assignments.len == 0) return .none;
+        if (self.assignment_effect_override) |assignment_effect| return assignment_effect;
 
         return switch (self.classification) {
             .empty => .none,
@@ -763,6 +766,11 @@ pub const CommandPlan = struct {
                 std.debug.assert(self.argv.len != 0);
                 std.debug.assert(std.mem.eql(u8, self.argv[0], not_found.name));
             },
+        }
+        if (self.assignments.len == 0) {
+            std.debug.assert(self.assignment_effect_override == null);
+        } else if (self.assignment_effect_override) |assignment_effect| {
+            std.debug.assert(assignment_effect != .none);
         }
     }
 };
@@ -977,6 +985,7 @@ fn cloneCommandPlanWithMode(
         .expansion_output = expansion_output,
         .source_line = plan.source_line,
         .classification = classification,
+        .assignment_effect_override = plan.assignment_effect_override,
     };
     owned.validate();
     return owned;

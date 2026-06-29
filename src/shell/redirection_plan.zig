@@ -1074,6 +1074,7 @@ const FakeFdRuntime = struct {
             .duplicate_fn = duplicate,
             .duplicate_to_fn = duplicateTo,
             .pipe_fn = pipe,
+            .read_fn = read,
             .write_fn = writeAll,
             .is_tty_fn = isTty,
             .descriptor_status_fn = descriptorStatus,
@@ -1144,9 +1145,16 @@ const FakeFdRuntime = struct {
     fn pipe(context: *anyopaque, request: fd.PipeRequest) fd.PipeError!fd.PipeResult {
         const self = fromContext(context);
         request.validate();
-        const read = self.next(0);
-        const write = self.next(0);
-        return .{ .read = read, .write = write };
+        const read_descriptor = self.next(0);
+        const write_descriptor = self.next(0);
+        return .{ .read = read_descriptor, .write = write_descriptor };
+    }
+
+    fn read(context: *anyopaque, request: fd.ReadRequest) fd.ReadError!fd.ReadResult {
+        const self = fromContext(context);
+        request.validate();
+        if (!self.isOpen(request.descriptor)) return error.BadFileDescriptor;
+        return .{ .bytes_read = 0 };
     }
 
     fn writeAll(context: *anyopaque, request: fd.WriteRequest) fd.WriteError!void {

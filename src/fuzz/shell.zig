@@ -701,6 +701,7 @@ const FuzzFdRuntime = struct {
             .duplicate_fn = duplicate,
             .duplicate_to_fn = duplicateTo,
             .pipe_fn = pipe,
+            .read_fn = read,
             .write_fn = writeAll,
             .is_tty_fn = isTty,
             .descriptor_status_fn = descriptorStatus,
@@ -770,6 +771,13 @@ const FuzzFdRuntime = struct {
             .read = self.allocateDescriptor(self.allocateIdentity()),
             .write = self.allocateDescriptor(self.allocateIdentity()),
         };
+    }
+
+    fn read(context: *anyopaque, request: fd.ReadRequest) fd.ReadError!fd.ReadResult {
+        const self = fromContext(context);
+        request.validate();
+        if (self.identity(request.descriptor) == null) return error.BadFileDescriptor;
+        return .{ .bytes_read = 0 };
     }
 
     fn writeAll(context: *anyopaque, request: fd.WriteRequest) fd.WriteError!void {

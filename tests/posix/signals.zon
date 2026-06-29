@@ -535,5 +535,44 @@
             .stderr = "",
             .status = 0,
         },
+        .{
+            .name = "assignment-prefixed exec in background command substitution sees live subshell parent",
+            .script =
+            \\(
+            \\    parent=$(PATH=/usr/bin:/bin exec sh -c 'echo $PPID')
+            \\    if kill -0 "$parent" 2>/dev/null; then
+            \\        printf '<live>\n'
+            \\    else
+            \\        printf '<dead>:%s\n' "$parent"
+            \\    fi
+            \\) &
+            \\wait
+            ,
+            .stdout =
+            \\<live>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "foreground subshell can be terminated by a descendant-reported parent pid",
+            .script =
+            \\{
+            \\    (
+            \\        parent=$(PATH=/usr/bin:/bin exec sh -c 'echo $PPID')
+            \\        kill -KILL "$parent"
+            \\    ) && :
+            \\} 2>/dev/null
+            \\status=$?
+            \\printf '<%s>\n' "$(( ($status >= 128) ? ($status % 128 + 128) : $status ))"
+            ,
+            .stdout =
+            \\<137>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
     },
 }

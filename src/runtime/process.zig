@@ -371,6 +371,27 @@ pub const RunRequest = struct {
     }
 };
 
+pub const ExecRequest = struct {
+    executable_path: []const u8,
+    argv: []const []const u8,
+    environment: *const std.process.Environ.Map,
+    stdin: StandardIo = .inherit,
+    stdout: StandardIo = .inherit,
+    stderr: StandardIo = .inherit,
+
+    /// Replaces the current process image. A successful adapter call does not
+    /// return; any return value is an exec setup or `execve` failure.
+    pub fn validate(self: ExecRequest) void {
+        std.debug.assert(self.executable_path.len != 0);
+        std.debug.assert(self.argv.len != 0);
+        std.debug.assert(self.argv[0].len != 0);
+        _ = self.environment;
+        self.stdin.validate();
+        self.stdout.validate();
+        self.stderr.validate();
+    }
+};
+
 pub const RunResult = struct {
     allocator: std.mem.Allocator,
     status: WaitStatus,
@@ -450,6 +471,7 @@ pub const StartSubshellFn = *const fn (*anyopaque, StartSubshellRequest) SpawnEr
 pub const WaitFn = *const fn (*anyopaque, WaitRequest) WaitError!WaitResult;
 pub const PollWaitFn = *const fn (*anyopaque, PollWaitRequest) WaitError!PollWaitResult;
 pub const RunFn = *const fn (*anyopaque, RunRequest) RunError!RunResult;
+pub const ExecFn = *const fn (*anyopaque, ExecRequest) SpawnError!noreturn;
 pub const GetTimesFn = *const fn (*anyopaque) TimesError!ProcessTimes;
 pub const GetResourceLimitFn = *const fn (
     *anyopaque,
@@ -469,6 +491,7 @@ pub const Port = struct {
     wait_fn: WaitFn,
     poll_wait_fn: ?PollWaitFn = null,
     run_fn: RunFn,
+    exec_fn: ?ExecFn = null,
     get_times_fn: ?GetTimesFn = null,
     get_resource_limit_fn: ?GetResourceLimitFn = null,
     set_resource_limit_fn: ?SetResourceLimitFn = null,
@@ -515,6 +538,12 @@ pub const Port = struct {
         const result = try self.run_fn(self.context, request);
         result.validate();
         return result;
+    }
+
+    pub fn exec(self: Port, request: ExecRequest) SpawnError!noreturn {
+        request.validate();
+        const exec_fn = self.exec_fn orelse return error.OperationUnsupported;
+        return try exec_fn(self.context, request);
     }
 
     pub fn getTimes(self: Port) TimesError!ProcessTimes {
