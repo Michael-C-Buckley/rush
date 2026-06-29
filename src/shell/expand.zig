@@ -4521,7 +4521,6 @@ fn appendDoubleQuotedText(
     options: Options,
     ifs: []const u8,
 ) !void {
-    force_current_field.* = true;
     var index: usize = 0;
     var segment_start: usize = 0;
     while (index < text.len) {
@@ -4542,19 +4541,19 @@ fn appendDoubleQuotedText(
             }
         }
         if (try quotedPositionalSliceAt(allocator, text, index, options)) |special| {
-            try appendQuotedSegment(allocator, current, quoted_glob, text[segment_start..index], options);
+            try appendQuotedSegment(allocator, current, force_current_field, quoted_glob, text[segment_start..index], options);
             const values = try positionalSliceValues(allocator, special.expansion.operation, options);
             defer allocator.free(values);
             switch (special.expansion.kind) {
                 .at => try appendQuotedAt(allocator, fields, current, force_current_field, quoted_glob, values, false),
-                .star => try appendQuotedStar(allocator, current, quoted_glob, values, ifs),
+                .star => try appendQuotedStar(allocator, current, force_current_field, quoted_glob, values, ifs),
             }
             index = special.end;
             segment_start = index;
             continue;
         }
         if (quotedPositionalAt(text, index)) |special| {
-            try appendQuotedSegment(allocator, current, quoted_glob, text[segment_start..index], options);
+            try appendQuotedSegment(allocator, current, force_current_field, quoted_glob, text[segment_start..index], options);
             switch (special.kind) {
                 .at => try appendQuotedAt(
                     allocator,
@@ -4565,14 +4564,14 @@ fn appendDoubleQuotedText(
                     options.positionals,
                     true,
                 ),
-                .star => try appendQuotedStar(allocator, current, quoted_glob, options.positionals, ifs),
+                .star => try appendQuotedStar(allocator, current, force_current_field, quoted_glob, options.positionals, ifs),
             }
             index = special.end;
             segment_start = index;
             continue;
         }
         if (quotedWholeArrayExpansionAt(text, index, options.features)) |special| {
-            try appendQuotedSegment(allocator, current, quoted_glob, text[segment_start..index], options);
+            try appendQuotedSegment(allocator, current, force_current_field, quoted_glob, text[segment_start..index], options);
             switch (special.expansion.kind) {
                 .values => switch (special.expansion.whole) {
                     .at => try appendQuotedArrayValues(
@@ -4610,7 +4609,7 @@ fn appendDoubleQuotedText(
             continue;
         }
         if (try quotedIndirectWholeArrayExpansionAt(allocator, text, index, options)) |special| {
-            try appendQuotedSegment(allocator, current, quoted_glob, text[segment_start..index], options);
+            try appendQuotedSegment(allocator, current, force_current_field, quoted_glob, text[segment_start..index], options);
             switch (special.expansion.whole) {
                 .at => try appendQuotedArrayValues(
                     allocator,
@@ -4635,7 +4634,7 @@ fn appendDoubleQuotedText(
             continue;
         }
         if (quotedNamePrefixExpansionAt(text, index, options.features)) |special| {
-            try appendQuotedSegment(allocator, current, quoted_glob, text[segment_start..index], options);
+            try appendQuotedSegment(allocator, current, force_current_field, quoted_glob, text[segment_start..index], options);
             switch (special.expansion.kind) {
                 .at => try appendQuotedNamePrefixAt(
                     allocator,
@@ -4652,7 +4651,7 @@ fn appendDoubleQuotedText(
             continue;
         }
         if (try quotedParameterExpansionAt(allocator, text, index)) |special| {
-            try appendQuotedSegment(allocator, current, quoted_glob, text[segment_start..index], options);
+            try appendQuotedSegment(allocator, current, force_current_field, quoted_glob, text[segment_start..index], options);
             try appendParameterExpansionQuoted(
                 allocator,
                 fields,
@@ -4670,7 +4669,8 @@ fn appendDoubleQuotedText(
         }
         index += 1;
     }
-    try appendQuotedSegment(allocator, current, quoted_glob, text[segment_start..], options);
+    try appendQuotedSegment(allocator, current, force_current_field, quoted_glob, text[segment_start..], options);
+    if (text.len == 0) force_current_field.* = true;
 }
 
 const QuotedPositionalKind = enum { at, star };
@@ -4781,7 +4781,7 @@ fn appendParameterExpansionQuoted(
         return;
     }
     if (std.mem.eql(u8, parameter, "*")) {
-        try appendQuotedStar(allocator, current, quoted_glob, options.positionals, ifs);
+        try appendQuotedStar(allocator, current, force_current_field, quoted_glob, options.positionals, ifs);
         return;
     }
     if (bashPositionalSliceExpansion(parameter, options.features)) |slice| {
@@ -4797,7 +4797,7 @@ fn appendParameterExpansionQuoted(
                 values,
                 false,
             ),
-            .star => try appendQuotedStar(allocator, current, quoted_glob, values, ifs),
+            .star => try appendQuotedStar(allocator, current, force_current_field, quoted_glob, values, ifs),
         }
         return;
     }
@@ -4815,7 +4815,7 @@ fn appendParameterExpansionQuoted(
                 values.fields,
                 true,
             ),
-            .star => try appendQuotedStar(allocator, current, quoted_glob, values.fields, ifs),
+            .star => try appendQuotedStar(allocator, current, force_current_field, quoted_glob, values.fields, ifs),
         }
         return;
     }
@@ -5007,7 +5007,10 @@ fn appendParameterWordOperatorQuoted(
             force_current_field.* = true;
         },
         .alternate_value => {
-            if (!parameterHasUsableValue(is_set, is_null, parsed.colon)) return;
+            if (!parameterHasUsableValue(is_set, is_null, parsed.colon)) {
+                force_current_field.* = true;
+                return;
+            }
             var expanded = try expandParameterWordQuotedFields(allocator, parsed.word, options, ifs);
             defer expanded.deinit(allocator);
             if (expanded.quoted_glob) quoted_glob.* = true;
@@ -5324,6 +5327,7 @@ fn positionalSliceAvailableCount(positional_count: i64, start_value: i64) i64 {
 fn appendQuotedSegment(
     allocator: std.mem.Allocator,
     current: *std.ArrayList(u8),
+    force_current_field: *bool,
     quoted_glob: *bool,
     text: []const u8,
     options: Options,
@@ -5334,6 +5338,7 @@ fn appendQuotedSegment(
     // pathname expansion (POSIX XCU 2.13.3).
     if (hasGlobSyntax(rendered)) quoted_glob.* = true;
     try current.appendSlice(allocator, rendered);
+    if (text.len != 0) force_current_field.* = true;
 }
 
 fn appendUnquotedAt(
@@ -5665,7 +5670,7 @@ fn appendQuotedAt(
     empty_removes_field: bool,
 ) !void {
     if (positionals.len == 0) {
-        if (empty_removes_field) force_current_field.* = false;
+        if (!empty_removes_field) force_current_field.* = true;
         return;
     }
     for (positionals, 0..) |param, index| {
@@ -5682,10 +5687,15 @@ fn appendQuotedAt(
 fn appendQuotedStar(
     allocator: std.mem.Allocator,
     current: *std.ArrayList(u8),
+    force_current_field: ?*bool,
     quoted_glob: *bool,
     positionals: []const []const u8,
     ifs: []const u8,
 ) !void {
+    if (positionals.len == 0) {
+        if (force_current_field) |forced| forced.* = true;
+        return;
+    }
     const separator = arrayJoinSeparatorFromIfs(ifs);
     for (positionals, 0..) |param, index| {
         if (hasGlobSyntax(param)) quoted_glob.* = true;
@@ -5910,7 +5920,7 @@ fn appendQuotedWholeArrayValues(
                 options.positionals,
                 true,
             ),
-            .star => try appendQuotedStar(allocator, current, quoted_glob, options.positionals, ifs),
+            .star => try appendQuotedStar(allocator, current, force_current_field, quoted_glob, options.positionals, ifs),
         };
     }
     switch (whole) {
@@ -7419,7 +7429,7 @@ pub fn expandHereDocBody(allocator: std.mem.Allocator, text: []const u8, options
             const ifs = options.env.get("IFS") orelse " \t\n";
             // Here-doc bodies never undergo pathname expansion.
             var quoted_glob = false;
-            try appendQuotedStar(allocator, &output, &quoted_glob, options.positionals, ifs);
+            try appendQuotedStar(allocator, &output, null, &quoted_glob, options.positionals, ifs);
             index = part.span.end;
             continue;
         }
@@ -9877,6 +9887,34 @@ test "quoted positional parameters preserve fields" {
     defer star.deinit();
     try std.testing.expectEqual(@as(usize, 1), star.fields.len);
     try std.testing.expectEqualStrings("a b c ", star.fields[0]);
+}
+
+test "quoted empty command substitution preserves field around empty positional at" {
+    const empty_params = [_][]const u8{};
+
+    var bare_at = try expandWord(std.testing.allocator, "\"$@\"", .{ .positionals = &empty_params });
+    defer bare_at.deinit();
+    try std.testing.expectEqual(@as(usize, 0), bare_at.fields.len);
+
+    var bare_star = try expandWord(std.testing.allocator, "\"$*\"", .{ .positionals = &empty_params });
+    defer bare_star.deinit();
+    try std.testing.expectEqual(@as(usize, 1), bare_star.fields.len);
+    try std.testing.expectEqualStrings("", bare_star.fields[0]);
+
+    var separate_empty = try expandWord(std.testing.allocator, "''\"$@\"", .{ .positionals = &empty_params });
+    defer separate_empty.deinit();
+    try std.testing.expectEqual(@as(usize, 1), separate_empty.fields.len);
+    try std.testing.expectEqualStrings("", separate_empty.fields[0]);
+
+    var result = try expandWord(
+        std.testing.allocator,
+        "\"${missing-}$@$(empty)\"",
+        .{ .positionals = &empty_params, .command_substitution = test_command_substitution },
+    );
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(usize, 1), result.fields.len);
+    try std.testing.expectEqualStrings("", result.fields[0]);
 }
 
 test "field splitting preserves quoted expansion results" {

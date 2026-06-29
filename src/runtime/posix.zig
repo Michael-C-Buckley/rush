@@ -217,7 +217,11 @@ fn duplicateTo(context: *anyopaque, request: fd.DuplicateToRequest) fd.Duplicate
     _ = context;
     request.validate();
     try duplicateDescriptorTo(request.source, request.target);
-    if (request.close_on_exec) try setCloseOnExec(request.target);
+    if (request.close_on_exec) {
+        try setCloseOnExec(request.target);
+    } else {
+        try clearCloseOnExec(request.target);
+    }
 }
 
 fn pipe(context: *anyopaque, request: fd.PipeRequest) fd.PipeError!fd.PipeResult {
@@ -758,6 +762,7 @@ fn configureSpawnedChild(
         if (std.c.setpgid(0, group) != 0) forkBail(err_fd, error.InvalidProcessGroupId);
     }
     configureSpawnCwd(request.cwd, err_fd);
+    configureForkedDescriptorMappings(request.descriptor_mappings);
     configureSpawnStdio(request.stdin, stdin_pipe, dev_null, 0, err_fd);
     configureSpawnStdio(request.stdout, stdout_pipe, dev_null, 1, err_fd);
     configureSpawnStdio(request.stderr, stderr_pipe, dev_null, 2, err_fd);
@@ -1183,15 +1188,24 @@ const StdinWriter = struct {
         var buffer: [4096]u8 = undefined;
         var writer = self.file.writerStreaming(self.io, &buffer);
         writer.interface.writeAll(self.bytes) catch |err| {
-            self.err = writer.err orelse err;
+            const write_err = writer.err orelse err;
+            if (!stdinWriterErrorIgnored(write_err)) self.err = write_err;
             return;
         };
         writer.interface.flush() catch |err| {
-            self.err = writer.err orelse err;
+            const flush_err = writer.err orelse err;
+            if (!stdinWriterErrorIgnored(flush_err)) self.err = flush_err;
             return;
         };
     }
 };
+
+fn stdinWriterErrorIgnored(err: anyerror) bool {
+    return switch (err) {
+        error.BrokenPipe => true,
+        else => false,
+    };
+}
 
 fn run(context: *anyopaque, request: process.RunRequest) process.RunError!process.RunResult {
     const adapter = adapterFromContext(context);
@@ -1396,9 +1410,23 @@ fn configureForkedChild(request: process.StartSubshellRequest) void {
         const group = if (requested_group == 0) std.c.getpid() else requested_group;
         if (std.c.setpgid(0, group) != 0) std.c._exit(126);
     }
+    configureForkedDescriptorMappings(request.descriptor_mappings);
     configureForkedStdio(request.stdin, 0);
     configureForkedStdio(request.stdout, 1);
     configureForkedStdio(request.stderr, 2);
+    closeForkedStdioSources(request.stdin, request.stdout, request.stderr);
+    closeForkedCloseOnExecDescriptors(request.preserve_close_on_exec);
+}
+
+fn configureForkedDescriptorMappings(mappings: []const process.DescriptorMapping) void {
+    for (mappings) |mapping| {
+        mapping.validate();
+        if (mapping.source != mapping.target) {
+            duplicateDescriptorTo(mapping.source, mapping.target) catch std.c._exit(126);
+        } else {
+            clearCloseOnExec(mapping.target) catch std.c._exit(126);
+        }
+    }
 }
 
 fn configureForkedStdio(stdio: process.StandardIo, target: fd.Descriptor) void {
@@ -1412,6 +1440,41 @@ fn configureForkedStdio(stdio: process.StandardIo, target: fd.Descriptor) void {
         .close => closeDescriptor(target) catch std.c._exit(126),
         .ignore, .pipe => std.c._exit(126),
     }
+}
+
+fn closeForkedStdioSources(stdin: process.StandardIo, stdout: process.StandardIo, stderr: process.StandardIo) void {
+    const streams = [_]process.StandardIo{ stdin, stdout, stderr };
+    for (streams, 0..) |stdio, index| {
+        stdio.validate();
+        const source = switch (stdio) {
+            .fd => |descriptor| descriptor,
+            .inherit, .close, .ignore, .pipe => continue,
+        };
+        if (source <= 2) continue;
+        for (streams[0..index]) |previous| {
+            if (previous == .fd and previous.fd == source) break;
+        } else {
+            closeDescriptor(source) catch std.c._exit(126);
+        }
+    }
+}
+
+fn closeForkedCloseOnExecDescriptors(preserved: []const fd.Descriptor) void {
+    const limit = std.posix.getrlimit(.NOFILE) catch return;
+    const max_descriptor = @min(limit.cur, 4096);
+    var descriptor: fd.Descriptor = 3;
+    while (descriptor < max_descriptor) : (descriptor += 1) {
+        const flags = std.c.fcntl(descriptor, @as(c_int, std.c.F.GETFD));
+        if (flags < 0) continue;
+        if (descriptorPreserved(descriptor, preserved)) continue;
+        if (flags & std.c.FD_CLOEXEC != 0) closeDescriptor(descriptor) catch std.c._exit(126);
+    }
+}
+
+fn descriptorPreserved(descriptor: fd.Descriptor, preserved: []const fd.Descriptor) bool {
+    fd.assertValidDescriptor(descriptor);
+    for (preserved) |preserve| if (descriptor == preserve) return true;
+    return false;
 }
 
 fn pathIdentity(path: []const u8, follow_symlinks: bool) ?fs.PathIdentity {
@@ -1575,11 +1638,33 @@ fn duplicateDescriptorTo(source: fd.Descriptor, target: fd.Descriptor) fd.Duplic
 
 fn setCloseOnExec(descriptor: fd.Descriptor) fd.DuplicateError!void {
     fd.assertValidDescriptor(descriptor);
+    try updateCloseOnExec(descriptor, true);
+}
+
+fn clearCloseOnExec(descriptor: fd.Descriptor) fd.DuplicateError!void {
+    fd.assertValidDescriptor(descriptor);
+    try updateCloseOnExec(descriptor, false);
+}
+
+fn updateCloseOnExec(descriptor: fd.Descriptor, enabled: bool) fd.DuplicateError!void {
+    fd.assertValidDescriptor(descriptor);
     if (builtin.os.tag == .linux and !builtin.link_libc) {
         while (true) {
-            const rc = std.os.linux.fcntl(descriptor, std.os.linux.F.SETFD, std.os.linux.FD_CLOEXEC);
-            switch (std.os.linux.errno(rc)) {
-                .SUCCESS => return,
+            const flags_rc = std.os.linux.fcntl(descriptor, std.os.linux.F.GETFD, 0);
+            switch (std.os.linux.errno(flags_rc)) {
+                .SUCCESS => {
+                    const flags = if (enabled)
+                        flags_rc | std.os.linux.FD_CLOEXEC
+                    else
+                        flags_rc & ~@as(@TypeOf(flags_rc), std.os.linux.FD_CLOEXEC);
+                    const rc = std.os.linux.fcntl(descriptor, std.os.linux.F.SETFD, flags);
+                    switch (std.os.linux.errno(rc)) {
+                        .SUCCESS => return,
+                        .BADF => return error.BadFileDescriptor,
+                        .INTR => continue,
+                        else => return error.Unexpected,
+                    }
+                },
                 .BADF => return error.BadFileDescriptor,
                 .INTR => continue,
                 else => return error.Unexpected,
@@ -1587,9 +1672,21 @@ fn setCloseOnExec(descriptor: fd.Descriptor) fd.DuplicateError!void {
         }
     }
     while (true) {
-        const rc = std.c.fcntl(descriptor, @as(c_int, std.c.F.SETFD), @as(c_int, std.c.FD_CLOEXEC));
-        switch (std.c.errno(rc)) {
-            .SUCCESS => return,
+        const flags_rc = std.c.fcntl(descriptor, @as(c_int, std.c.F.GETFD));
+        switch (std.c.errno(flags_rc)) {
+            .SUCCESS => {
+                const flags = if (enabled)
+                    flags_rc | std.c.FD_CLOEXEC
+                else
+                    flags_rc & ~@as(@TypeOf(flags_rc), std.c.FD_CLOEXEC);
+                const rc = std.c.fcntl(descriptor, @as(c_int, std.c.F.SETFD), flags);
+                switch (std.c.errno(rc)) {
+                    .SUCCESS => return,
+                    .BADF => return error.BadFileDescriptor,
+                    .INTR => continue,
+                    else => return error.Unexpected,
+                }
+            },
             .BADF => return error.BadFileDescriptor,
             .INTR => continue,
             else => return error.Unexpected,

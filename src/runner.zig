@@ -4040,6 +4040,34 @@ test "production shell execution handles pipeline function call" {
     try std.testing.expectEqualStrings("", result.stderr);
 }
 
+test "production shell execution keeps negated single commands in the current shell" {
+    var result = try runScript(std.testing.allocator, std.testing.io,
+        \\fn() {
+        \\    parent=$(exec /usr/bin/env sh -c 'echo $PPID')
+        \\    case $parent in ($$) return 1;; (*) return 0;; esac
+        \\}
+        \\! fn
+        \\printf 'status:%s\n' "$?"
+    );
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("status:0\n", result.stdout);
+    try std.testing.expectEqualStrings("", result.stderr);
+}
+
+test "production shell execution keeps nested exec command substitutions scoped" {
+    var result = try runScript(std.testing.allocator, std.testing.io,
+        \\outer=$(inner=$(exec /usr/bin/env printf inner); printf 'captured:%s' "$inner")
+        \\printf 'outer:%s\n' "$outer"
+    );
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("outer:captured:inner\n", result.stdout);
+    try std.testing.expectEqualStrings("", result.stderr);
+}
+
 test "production shell execution applies pipeline redirections after pipe setup" {
     const left_path = "rush-pipeline-left-redirection.tmp";
     const right_path = "rush-pipeline-right-redirection.tmp";
@@ -4325,6 +4353,50 @@ test "alias timing chunks keep multi-line here-doc bodies intact" {
     try std.testing.expectEqualStrings("alias-ok\nhello\n", result.stdout);
     try std.testing.expectEqualStrings("", result.stderr);
 }
+
+test "command substitution survives read closing a large here-doc early" {
+    var script_writer: std.Io.Writer.Allocating = .init(std.testing.allocator);
+    defer script_writer.deinit();
+
+    try script_writer.writer.writeAll("value=$(IFS=' ' read first <<'EOF'\n  first line  \n");
+    for (0..8192) |index| {
+        try script_writer.writer.print("unused line {d}\n", .{index});
+    }
+    try script_writer.writer.writeAll(
+        \\EOF
+        \\printf '<%s>\n' "$first")
+        \\printf 'value=%s status=%s\n' "$value" "$?"
+        \\
+    );
+
+    const script = try script_writer.toOwnedSlice();
+    defer std.testing.allocator.free(script);
+    var result = try runScript(std.testing.allocator, std.testing.io, script);
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("value=<first line> status=0\n", result.stdout);
+    try std.testing.expectEqualStrings("", result.stderr);
+}
+
+test "command substitution background jobs do not hold capture pipe open" {
+    var result = try runScript(std.testing.allocator, std.testing.io,
+        \\fifo="rush-procsubst-fifo-$$"
+        \\/bin/rm -f "$fifo"
+        \\/usr/bin/mkfifo "$fifo" || exit 1
+        \\path=$(printf '%s\n' "$fifo"; exec >&2; (exec >"$fifo"; printf 'fifo-ok\n') &)
+        \\IFS= read -r line < "$path"
+        \\status=$?
+        \\/bin/rm -f "$fifo"
+        \\printf 'line=%s status=%s\n' "$line" "$status"
+    );
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("line=fifo-ok status=0\n", result.stdout);
+    try std.testing.expectEqualStrings("", result.stderr);
+}
+
 test "aliases expand at parser-recognized command word positions" {
     var shell_state = shell.ShellState.init(std.testing.allocator);
     defer shell_state.deinit();

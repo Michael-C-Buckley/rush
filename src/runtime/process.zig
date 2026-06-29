@@ -106,6 +106,7 @@ pub const SpawnRequest = struct {
     stdin: StandardIo = .inherit,
     stdout: StandardIo = .inherit,
     stderr: StandardIo = .inherit,
+    descriptor_mappings: []const DescriptorMapping = &.{},
     process_group: ?ProcessId = null,
 
     /// `argv`, `environment`, and any path slices are borrowed only until the
@@ -125,6 +126,7 @@ pub const SpawnRequest = struct {
         self.stdin.validate();
         self.stdout.validate();
         self.stderr.validate();
+        for (self.descriptor_mappings) |mapping| mapping.validate();
     }
 };
 
@@ -175,13 +177,25 @@ pub const SpawnResult = struct {
 
 pub const SubshellMainFn = *const fn (*anyopaque) u8;
 
+pub const DescriptorMapping = struct {
+    source: fd.Descriptor,
+    target: fd.Descriptor,
+
+    pub fn validate(self: DescriptorMapping) void {
+        fd.assertValidDescriptor(self.source);
+        fd.assertValidDescriptor(self.target);
+    }
+};
+
 pub const StartSubshellRequest = struct {
     context: *anyopaque,
     main_fn: SubshellMainFn,
     stdin: StandardIo = .inherit,
     stdout: StandardIo = .inherit,
     stderr: StandardIo = .inherit,
+    descriptor_mappings: []const DescriptorMapping = &.{},
     process_group: ?ProcessId = null,
+    preserve_close_on_exec: []const fd.Descriptor = &.{},
 
     /// Forks a child process and invokes `main_fn` in that child. Runtime owns
     /// only the low-level fork/stdio/process-group mechanics; the callback is
@@ -198,7 +212,9 @@ pub const StartSubshellRequest = struct {
         self.stdin.validate();
         self.stdout.validate();
         self.stderr.validate();
+        for (self.descriptor_mappings) |mapping| mapping.validate();
         if (self.process_group) |process_group| std.debug.assert(process_group >= 0);
+        for (self.preserve_close_on_exec) |descriptor| fd.assertValidDescriptor(descriptor);
     }
 };
 

@@ -523,6 +523,8 @@ const HereDocWriter = struct {
     thread: ?std.Thread = null,
 
     fn run(self: *HereDocWriter) void {
+        blockSigpipeForHereDocWriter();
+
         // Broken pipes are expected when a command exits early or only consumes
         // part of a here-doc. The transaction joins this writer to bound the
         // lifetime, but writer errors are currently not part of Rush's user
@@ -540,6 +542,12 @@ const HereDocWriter = struct {
         }
     }
 };
+
+fn blockSigpipeForHereDocWriter() void {
+    var set = std.posix.sigemptyset();
+    std.posix.sigaddset(&set, .PIPE);
+    std.posix.sigprocmask(std.posix.SIG.BLOCK, &set, null);
+}
 
 pub const FdTransaction = struct {
     allocator: std.mem.Allocator,

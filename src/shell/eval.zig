@@ -6759,7 +6759,7 @@ fn evaluateForkedCommandSubstitutionSubshell(
     const process_port = evaluator.process_port orelse return null;
     const fd_port = evaluator.fd_port orelse return null;
 
-    const protocol_pipe = fd_port.pipe(.{ .close_on_exec = false }) catch return error.Unimplemented;
+    const protocol_pipe = fd_port.pipe(.{ .close_on_exec = true }) catch return error.Unimplemented;
     var protocol_read_open = true;
     var protocol_write_open = true;
     defer if (protocol_read_open) fd_port.close(.{ .descriptor = protocol_pipe.read }) catch {};
@@ -6782,6 +6782,7 @@ fn evaluateForkedCommandSubstitutionSubshell(
         .stdin = .inherit,
         .stdout = .inherit,
         .stderr = .inherit,
+        .preserve_close_on_exec = &.{protocol_pipe.write},
     }) catch return error.Unimplemented).child;
     fd_port.close(.{ .descriptor = protocol_pipe.write }) catch return error.Unimplemented;
     protocol_write_open = false;
@@ -7183,6 +7184,7 @@ fn evaluatePipelinePlanWithFrame(
         shell_state,
         eval_context,
         plan,
+        frame,
     );
 
     var input = EvaluationInput.empty();
@@ -7808,13 +7810,13 @@ fn evaluateCommandSubstitutionForked(
 
     const fd_port = evaluator.fd_port orelse return error.Unimplemented;
     const process_port = evaluator.process_port orelse return error.Unimplemented;
-    const stdout_pipe = fd_port.pipe(.{ .close_on_exec = false }) catch return error.Unimplemented;
+    const stdout_pipe = fd_port.pipe(.{ .close_on_exec = true }) catch return error.Unimplemented;
     var stdout_read_open = true;
     var stdout_write_open = true;
     defer if (stdout_read_open) fd_port.close(.{ .descriptor = stdout_pipe.read }) catch {};
     errdefer if (stdout_write_open) fd_port.close(.{ .descriptor = stdout_pipe.write }) catch {};
 
-    const protocol_pipe = fd_port.pipe(.{ .close_on_exec = false }) catch return error.Unimplemented;
+    const protocol_pipe = fd_port.pipe(.{ .close_on_exec = true }) catch return error.Unimplemented;
     var protocol_read_open = true;
     var protocol_write_open = true;
     defer if (protocol_read_open) fd_port.close(.{ .descriptor = protocol_pipe.read }) catch {};
@@ -7840,6 +7842,7 @@ fn evaluateCommandSubstitutionForked(
         .stdin = .inherit,
         .stdout = .{ .fd = stdout_pipe.write },
         .stderr = .inherit,
+        .preserve_close_on_exec = &.{protocol_pipe.write},
     }) catch return error.Unimplemented).child;
     fd_port.close(.{ .descriptor = stdout_pipe.write }) catch return error.Unimplemented;
     stdout_write_open = false;
@@ -8920,7 +8923,8 @@ fn evaluateSingleStagePipeline(
     std.debug.assert(statuses.len == 1);
     const stage_target = plan.stageTarget(0);
     const stage = stageWithTarget(plan.stages[0], stage_target);
-    const stage_context = pipelineStageContext(eval_context, stage_target, plan.negated);
+    var stage_context = eval_context.withTarget(stage_target);
+    if (plan.negated) stage_context = stage_context.ignoreErrexit();
 
     var stage_outcome = try evaluatePipelineStageWithInput(
         evaluator,
@@ -8984,22 +8988,39 @@ const BackgroundSemanticContext = struct {
     }
 };
 
+const StreamingSemanticProducerContext = struct {
+    evaluator: *Evaluator,
+    parent_state: *const state.ShellState,
+    eval_context: context.EvalContext,
+    stage: pipeline_plan.PipelineStagePlan,
+
+    fn validate(self: StreamingSemanticProducerContext) void {
+        _ = self.evaluator.allocator;
+        self.parent_state.validate();
+        self.eval_context.validate();
+        self.stage.validate();
+        std.debug.assert(!self.stage.isExternal());
+        std.debug.assert(self.eval_context.target.allowsShellStateCommit());
+    }
+};
+
 fn evaluateBackgroundPipelinePlan(
     evaluator: *Evaluator,
     shell_state: *state.ShellState,
     eval_context: context.EvalContext,
     plan: pipeline_plan.PipelinePlan,
+    frame: *execution_frame.ExecutionFrame,
 ) EvalError!outcome.CommandOutcome {
     shell_state.validate();
     eval_context.validate();
     plan.validate();
+    frame.validate();
     std.debug.assert(plan.strategy == .background_deferred);
     std.debug.assert(eval_context.target.allowsShellStateCommit());
     std.debug.assert(shell_state.acceptsExecutionTarget(eval_context.target));
 
     var input = EvaluationInput.empty();
-    var frame = rootExecutionFrame(eval_context);
-    var buffers = EvaluationBuffers.init(evaluator.allocator, &input, &frame);
+    var buffers = EvaluationBuffers.init(evaluator.allocator, &input, frame);
     defer buffers.deinit();
 
     var state_delta = delta.StateDelta.init(evaluator.allocator, eval_context.target);
@@ -9151,12 +9172,23 @@ fn startBackgroundSemanticPipeline(
     };
     semantic_context.validate();
 
+    const fd_port = evaluator.fd_port orelse return error.Unimplemented;
+    var descriptor_frame = try backgroundFrameWithScopedRedirections(
+        evaluator.allocator,
+        evaluator.scoped_exec_redirections,
+        buffers.frame.*,
+    );
+    defer descriptor_frame.spec.fd_table.deinit(evaluator.allocator);
+    var descriptor_setup = try BackgroundDescriptorSetup.init(evaluator.allocator, fd_port, descriptor_frame);
+    defer descriptor_setup.deinit();
+
     const child = (process_port.startSubshell(.{
         .context = &semantic_context,
         .main_fn = runBackgroundSemanticSubshell,
-        .stdin = .inherit,
-        .stdout = .inherit,
-        .stderr = .inherit,
+        .stdin = backgroundInputStdio(descriptor_frame),
+        .stdout = backgroundOutputStdio(descriptor_frame, 1),
+        .stderr = backgroundOutputStdio(descriptor_frame, 2),
+        .descriptor_mappings = descriptor_setup.mappings.items,
         .process_group = if (use_process_group) 0 else null,
     }) catch |err| switch (err) {
         error.OutOfMemory => return error.OutOfMemory,
@@ -9166,6 +9198,8 @@ fn startBackgroundSemanticPipeline(
             return .{ .failure = failure.status };
         },
     }).child;
+    descriptor_setup.startByteWriters();
+    descriptor_setup.closeChildOnlyReadEnds();
 
     redirection_guard.restore();
 
@@ -9366,7 +9400,17 @@ fn startBackgroundSingleExternal(
     }
 
     const use_process_group = shell_state.options.enabled(.monitor);
+    const fd_port = evaluator.fd_port orelse return error.Unimplemented;
+    var descriptor_frame = try backgroundFrameWithScopedRedirections(
+        evaluator.allocator,
+        evaluator.scoped_exec_redirections,
+        buffers.frame.*,
+    );
+    defer descriptor_frame.spec.fd_table.deinit(evaluator.allocator);
+    var descriptor_setup = try BackgroundDescriptorSetup.init(evaluator.allocator, fd_port, descriptor_frame);
+    defer descriptor_setup.deinit();
     const child = (invocation.spawn(evaluator, process_port, .{
+        .descriptor_mappings = descriptor_setup.mappings.items,
         .process_group = if (use_process_group) 0 else null,
     }) catch |err| switch (err) {
         error.OutOfMemory => return error.OutOfMemory,
@@ -9376,6 +9420,8 @@ fn startBackgroundSingleExternal(
             return .{ .failure = failure.status };
         },
     }).child;
+    descriptor_setup.startByteWriters();
+    descriptor_setup.closeChildOnlyReadEnds();
 
     redirection_guard.restore();
 
@@ -9392,6 +9438,198 @@ fn startBackgroundSingleExternal(
     try job.appendProcess(evaluator.allocator, .{ .stage_index = 0, .child = child });
     return .{ .started = job };
 }
+
+fn backgroundFrameWithScopedRedirections(
+    allocator: std.mem.Allocator,
+    scoped_exec_redirections: ?*std.ArrayList(ScopedExecRedirection),
+    frame: execution_frame.ExecutionFrame,
+) EvalError!execution_frame.ExecutionFrame {
+    frame.validate();
+    var descriptor_frame = frame;
+    descriptor_frame.spec.fd_table = try frame.spec.fd_table.clone(allocator);
+    errdefer descriptor_frame.spec.fd_table.deinit(allocator);
+    if (scoped_exec_redirections) |scoped_list| {
+        for (scoped_list.items) |scoped| try descriptor_frame.spec.fd_table.applyRedirectionPlan(
+            allocator,
+            scoped.redirections,
+        );
+    }
+    descriptor_frame.validate();
+    return descriptor_frame;
+}
+
+fn backgroundInputStdio(frame: execution_frame.ExecutionFrame) runtime.process.StandardIo {
+    frame.validate();
+    return switch (frame.spec.fd_table.endpoint(0)) {
+        .input => |input| switch (input) {
+            .fd, .pipe_read => |descriptor| .{ .fd = descriptor },
+            .closed => .close,
+            .inherit_stdin,
+            .bytes,
+            .path,
+            => .inherit,
+        },
+        .bidirectional_fd => |descriptor| .{ .fd = descriptor },
+        .closed => .close,
+        .output => .inherit,
+    };
+}
+
+fn backgroundOutputStdio(
+    frame: execution_frame.ExecutionFrame,
+    descriptor: runtime.fd.Descriptor,
+) runtime.process.StandardIo {
+    frame.validate();
+    runtime.fd.assertValidDescriptor(descriptor);
+    return switch (frame.spec.fd_table.endpoint(descriptor)) {
+        .output => |output| switch (output) {
+            .fd, .pipe_write => |source| .{ .fd = source },
+            .inherit_stdout => if (descriptor == 1) .inherit else .{ .fd = 1 },
+            .inherit_stderr => if (descriptor == 2) .inherit else .{ .fd = 2 },
+            .discard => .ignore,
+            .capture,
+            .path,
+            => .inherit,
+        },
+        .bidirectional_fd => |source| .{ .fd = source },
+        .closed => .close,
+        .input => .inherit,
+    };
+}
+
+fn descriptorMappingSource(endpoint: execution_frame.FdEndpoint) ?runtime.fd.Descriptor {
+    endpoint.validate();
+    return switch (endpoint) {
+        .input => |input| switch (input) {
+            .fd, .pipe_read => |descriptor| descriptor,
+            .inherit_stdin => 0,
+            .closed,
+            .bytes,
+            .path,
+            => null,
+        },
+        .output => |output| switch (output) {
+            .fd, .pipe_write => |descriptor| descriptor,
+            .inherit_stdout => 1,
+            .inherit_stderr => 2,
+            .discard,
+            .capture,
+            .path,
+            => null,
+        },
+        .bidirectional_fd => |descriptor| descriptor,
+        .closed => null,
+    };
+}
+
+const BackgroundDescriptorSetup = struct {
+    allocator: std.mem.Allocator,
+    fd_port: runtime.fd.Port,
+    mappings: std.ArrayList(runtime.process.DescriptorMapping) = .empty,
+    read_ends: std.ArrayList(runtime.fd.Descriptor) = .empty,
+    pending_writers: std.ArrayList(*BackgroundBytesWriter) = .empty,
+
+    fn init(
+        allocator: std.mem.Allocator,
+        fd_port: runtime.fd.Port,
+        frame: execution_frame.ExecutionFrame,
+    ) !BackgroundDescriptorSetup {
+        frame.validate();
+        var setup: BackgroundDescriptorSetup = .{ .allocator = allocator, .fd_port = fd_port };
+        errdefer setup.deinit();
+        for (frame.spec.fd_table.bindings.items) |binding| {
+            if (binding.descriptor <= 2) continue;
+            if (descriptorMappingSource(binding.endpoint)) |source| {
+                try setup.mappings.append(allocator, .{ .source = source, .target = binding.descriptor });
+                continue;
+            }
+            switch (binding.endpoint) {
+                .input => |input| switch (input) {
+                    .bytes => |bytes| try setup.addBytesMapping(binding.descriptor, bytes),
+                    else => {},
+                },
+                else => {},
+            }
+        }
+        return setup;
+    }
+
+    fn addBytesMapping(
+        self: *BackgroundDescriptorSetup,
+        target: runtime.fd.Descriptor,
+        bytes: []const u8,
+    ) !void {
+        runtime.fd.assertValidDescriptor(target);
+        const pipe = self.fd_port.pipe(.{ .close_on_exec = true }) catch return error.Unimplemented;
+        errdefer self.fd_port.close(.{ .descriptor = pipe.read }) catch {};
+        errdefer self.fd_port.close(.{ .descriptor = pipe.write }) catch {};
+
+        const owned_bytes = try self.allocator.dupe(u8, bytes);
+        errdefer self.allocator.free(owned_bytes);
+        const writer = try self.allocator.create(BackgroundBytesWriter);
+        errdefer self.allocator.destroy(writer);
+        writer.* = .{
+            .allocator = self.allocator,
+            .port = self.fd_port,
+            .descriptor = pipe.write,
+            .bytes = owned_bytes,
+        };
+
+        try self.mappings.append(self.allocator, .{ .source = pipe.read, .target = target });
+        errdefer _ = self.mappings.pop();
+        try self.read_ends.append(self.allocator, pipe.read);
+        errdefer _ = self.read_ends.pop();
+        try self.pending_writers.append(self.allocator, writer);
+        errdefer _ = self.pending_writers.pop();
+        errdefer writer.deinitPending();
+    }
+
+    fn startByteWriters(self: *BackgroundDescriptorSetup) void {
+        for (self.pending_writers.items) |writer| {
+            const thread = std.Thread.spawn(.{}, BackgroundBytesWriter.run, .{writer}) catch {
+                writer.deinitPending();
+                continue;
+            };
+            thread.detach();
+        }
+        self.pending_writers.clearRetainingCapacity();
+    }
+
+    fn closeChildOnlyReadEnds(self: *BackgroundDescriptorSetup) void {
+        for (self.read_ends.items) |descriptor| self.fd_port.close(.{ .descriptor = descriptor }) catch {};
+        self.read_ends.clearRetainingCapacity();
+    }
+
+    fn deinit(self: *BackgroundDescriptorSetup) void {
+        for (self.pending_writers.items) |writer| writer.deinitPending();
+        self.pending_writers.clearRetainingCapacity();
+        self.closeChildOnlyReadEnds();
+        self.mappings.deinit(self.allocator);
+        self.read_ends.deinit(self.allocator);
+        self.pending_writers.deinit(self.allocator);
+        self.* = undefined;
+    }
+};
+
+const BackgroundBytesWriter = struct {
+    allocator: std.mem.Allocator,
+    port: runtime.fd.Port,
+    descriptor: runtime.fd.Descriptor,
+    bytes: []u8,
+
+    fn deinitPending(self: *BackgroundBytesWriter) void {
+        self.port.close(.{ .descriptor = self.descriptor }) catch {};
+        self.allocator.free(self.bytes);
+        self.allocator.destroy(self);
+    }
+
+    fn run(self: *BackgroundBytesWriter) void {
+        defer self.allocator.destroy(self);
+        defer self.allocator.free(self.bytes);
+        defer self.port.close(.{ .descriptor = self.descriptor }) catch {};
+        self.port.writeAll(.{ .descriptor = self.descriptor, .bytes = self.bytes }) catch {};
+    }
+};
 
 fn startBackgroundSemanticPrefixExternalLastPipeline(
     evaluator: *Evaluator,
@@ -9620,6 +9858,15 @@ fn evaluateFallbackPipeline(
     );
     std.debug.assert(plan.stages.len > 1);
 
+    if (try evaluateStreamingExternalToSemanticPipeline(
+        evaluator,
+        parent_state,
+        eval_context,
+        plan,
+        statuses,
+        buffers,
+    )) return;
+
     var next_stdin: std.ArrayList(u8) = .empty;
     defer next_stdin.deinit(evaluator.allocator);
 
@@ -9696,6 +9943,286 @@ fn evaluateFallbackPipeline(
         if (!is_last_stage) {
             try transferPipelineStdoutToNextStdin(evaluator.allocator, &next_stdin, stage_outcome);
         }
+    }
+}
+
+fn evaluateStreamingExternalToSemanticPipeline(
+    evaluator: *Evaluator,
+    parent_state: state.ShellState,
+    eval_context: context.EvalContext,
+    plan: pipeline_plan.PipelinePlan,
+    statuses: []outcome.ExitStatus,
+    buffers: *EvaluationBuffers,
+) EvalError!bool {
+    parent_state.validate();
+    eval_context.validate();
+    plan.validate();
+    plan.validateStatusCount(statuses);
+    buffers.frame.validate();
+    if (plan.strategy != .mixed_in_memory) return false;
+    if (plan.stages.len != 2) return false;
+    if (plan.stages[1].isExternal()) return false;
+    if (plan.stages[0].isExternal() and hasStageRedirections(plan.stages[0])) return false;
+
+    const fd_port = evaluator.fd_port orelse return false;
+    const process_port = evaluator.process_port orelse return false;
+
+    const pipe_result = fd_port.pipe(.{}) catch |err| {
+        try buffers.addBuiltinDiagnostic("pipeline", pipeFailureMessage(err));
+        @memset(statuses, 1);
+        return true;
+    };
+    var pipe = PipelinePipe.init(pipe_result);
+    errdefer closeOpenPipelinePipes(fd_port, (&pipe)[0..1], buffers);
+
+    const spawn_result = try spawnStreamingPipelineProducer(
+        evaluator,
+        parent_state,
+        eval_context,
+        plan.stages[0],
+        pipe.write,
+        buffers,
+    );
+    var producer = switch (spawn_result) {
+        .spawned => |child| child,
+        .failure => |failure| {
+            statuses[0] = failure.status;
+            statuses[1] = failure.status;
+            closeOpenPipelinePipes(fd_port, (&pipe)[0..1], buffers);
+            return true;
+        },
+    };
+    closePipelinePipeWrite(fd_port, &pipe, buffers);
+
+    const saved_stdin = saveAndReplaceStdinForPipeline(fd_port, pipe.read) catch |err| {
+        try buffers.addBuiltinDiagnostic("pipeline", redirectionDuplicateFailureMessage(err));
+        closeOpenPipelinePipes(fd_port, (&pipe)[0..1], buffers);
+        statuses[0] = 1;
+        statuses[1] = 1;
+        return true;
+    };
+    pipe.read_open = false;
+    var stdin_restored = false;
+    defer if (!stdin_restored) restoreSavedPipelineStdin(fd_port, saved_stdin);
+
+    const consumer_target = plan.stageTarget(1);
+    std.debug.assert(consumer_target != .current_shell);
+    var consumer_state = try workingStateForPipelineStage(evaluator.allocator, parent_state, consumer_target);
+    defer consumer_state.deinit();
+    var cwd_guard: CwdGuard = .{};
+    cwd_guard.capture(evaluator);
+    defer cwd_guard.restore();
+
+    const consumer_context = pipelineStageContext(eval_context, consumer_target, true);
+    var consumer_input = EvaluationInput.fdRedirected();
+    var consumer_frame = try pipelineStageExecutionFrame(
+        evaluator.allocator,
+        evaluator.scoped_exec_redirections,
+        buffers.frame,
+        consumer_target,
+        true,
+        &.{},
+        pipelineStageRedirections(plan.stages[1]),
+    );
+    defer consumer_frame.spec.fd_table.deinit(evaluator.allocator);
+    try consumer_frame.spec.fd_table.bindInput(evaluator.allocator, 0, .{ .fd = 0 });
+    consumer_frame.spec.stdin = .{ .fd = 0 };
+    consumer_frame.validate();
+
+    var redirected_consumer = stageWithTarget(plan.stages[1], consumer_target);
+    if (!redirectionPlanNeedsRuntimeFdEffects(pipelineStageRedirections(plan.stages[1])) and
+        semanticHereDocStdinSource(pipelineStageRedirections(plan.stages[1])) == null)
+    {
+        clearStageRedirections(&redirected_consumer);
+    }
+    var consumer_outcome = try evaluatePipelineStageWithInput(
+        evaluator,
+        &consumer_state,
+        consumer_context,
+        redirected_consumer,
+        &consumer_input,
+        &consumer_frame,
+    );
+    defer consumer_outcome.deinit();
+
+    restoreSavedPipelineStdin(fd_port, saved_stdin);
+    stdin_restored = true;
+
+    if (consumer_outcome.control_flow == .normal) flushInheritedPipelineStdout(evaluator.*, &consumer_outcome);
+    const consumer_control_flow = consumer_outcome.effectiveControlFlow();
+    statuses[1] = consumer_control_flow.status(consumer_outcome.status);
+    try appendPipelineStageBuffers(buffers, consumer_outcome, PipelineStageOutputRoute.forStage(true));
+    try flushCurrentShellBufferedCommandOutput(
+        buffers,
+        eval_context,
+        evaluator.external_stdio,
+        evaluator.io != null,
+    );
+    consumer_outcome.applyToShellState(&consumer_state, .{}) catch |err| switch (err) {
+        error.OutOfMemory => return error.OutOfMemory,
+        error.ReadonlyVariable => unreachable,
+    };
+
+    const wait_result = process_port.wait(.{ .child = &producer }) catch |err| {
+        const failure = waitFailure(err);
+        try buffers.addBuiltinDiagnostic("pipeline", failure.message);
+        statuses[0] = failure.status;
+        return true;
+    };
+    statuses[0] = normalizeWaitStatus(wait_result.status);
+    return true;
+}
+
+fn spawnStreamingPipelineProducer(
+    evaluator: *Evaluator,
+    parent_state: state.ShellState,
+    eval_context: context.EvalContext,
+    stage: pipeline_plan.PipelineStagePlan,
+    stdout: runtime.fd.Descriptor,
+    buffers: *EvaluationBuffers,
+) EvalError!PipelineSpawnResult {
+    parent_state.validate();
+    eval_context.validate();
+    stage.validate();
+    runtime.fd.assertValidDescriptor(stdout);
+    if (stage.isExternal()) {
+        std.debug.assert(!hasStageRedirections(stage));
+        return spawnExternalPipelineStage(
+            evaluator,
+            parent_state,
+            stageWithTarget(stage, .child_process),
+            .inherit,
+            .{ .fd = stdout },
+            null,
+            buffers,
+        );
+    }
+
+    const process_port = evaluator.process_port orelse return error.Unimplemented;
+    var producer_context: StreamingSemanticProducerContext = .{
+        .evaluator = evaluator,
+        .parent_state = &parent_state,
+        .eval_context = eval_context,
+        .stage = stage,
+    };
+    producer_context.validate();
+    const child = (process_port.startSubshell(.{
+        .context = &producer_context,
+        .main_fn = runStreamingSemanticPipelineProducer,
+        .stdin = .inherit,
+        .stdout = .{ .fd = stdout },
+        .stderr = .inherit,
+    }) catch |err| switch (err) {
+        error.OutOfMemory => return error.OutOfMemory,
+        else => |spawn_err| {
+            const failure = spawnFailure(spawn_err);
+            try buffers.addBuiltinDiagnostic("pipeline", failure.message);
+            return .{ .failure = failure };
+        },
+    }).child;
+    return .{ .spawned = child };
+}
+
+fn runStreamingSemanticPipelineProducer(opaque_context: *anyopaque) u8 {
+    const producer_context: *StreamingSemanticProducerContext = @ptrCast(@alignCast(opaque_context));
+    producer_context.validate();
+
+    var child_state = producer_context.parent_state.snapshotForSubshell(
+        producer_context.evaluator.allocator,
+    ) catch return 126;
+    defer child_state.deinit();
+    const stage_target: context.ExecutionTarget = .subshell;
+    const stage_context = pipelineStageContext(producer_context.eval_context, stage_target, true);
+    var input = EvaluationInput.empty();
+    var parent_frame = rootExecutionFrame(producer_context.eval_context);
+    defer parent_frame.spec.fd_table.deinit(producer_context.evaluator.allocator);
+    var stage_frame = pipelineStageExecutionFrame(
+        producer_context.evaluator.allocator,
+        producer_context.evaluator.scoped_exec_redirections,
+        &parent_frame,
+        stage_target,
+        false,
+        &.{},
+        pipelineStageRedirections(producer_context.stage),
+    ) catch return 126;
+    defer stage_frame.spec.fd_table.deinit(producer_context.evaluator.allocator);
+    var redirected_stage = stageWithTarget(producer_context.stage, stage_target);
+    if (!redirectionPlanNeedsRuntimeFdEffects(pipelineStageRedirections(producer_context.stage)) and
+        semanticHereDocStdinSource(pipelineStageRedirections(producer_context.stage)) == null)
+    {
+        clearStageRedirections(&redirected_stage);
+    }
+    var result = evaluatePipelineStageWithInput(
+        producer_context.evaluator,
+        &child_state,
+        stage_context,
+        redirected_stage,
+        &input,
+        &stage_frame,
+    ) catch return 126;
+    defer result.deinit();
+
+    routePipelineStageOutcome(producer_context.evaluator.allocator, &result, stage_frame) catch return 126;
+    const status = result.control_flow.status(result.status);
+    writeOutcomeToInheritedDescriptors(
+        producer_context.evaluator.allocator,
+        result.stdout.items,
+        result.stderr.items,
+    ) catch return 126;
+    writeOutcomeToInheritedDescriptors(
+        producer_context.evaluator.allocator,
+        result.pipeline_stdout.items,
+        &.{},
+    ) catch return 126;
+    result.applyToShellState(&child_state, .{}) catch return 126;
+    return status;
+}
+
+fn hasStageRedirections(stage: pipeline_plan.PipelineStagePlan) bool {
+    stage.validate();
+    return switch (stage) {
+        .simple => |simple| hasRedirections(simple),
+        .compound => |compound| hasCompoundRedirections(compound),
+    };
+}
+
+fn redirectionDuplicateFailureMessage(err: runtime.fd.DuplicateError) []const u8 {
+    return switch (err) {
+        error.BadFileDescriptor => "bad file descriptor",
+        else => "redirection duplicate failed",
+    };
+}
+
+const SavedPipelineStdin = union(enum) {
+    saved: runtime.fd.Descriptor,
+    originally_closed,
+};
+
+fn saveAndReplaceStdinForPipeline(
+    fd_port: runtime.fd.Port,
+    pipe_read: runtime.fd.Descriptor,
+) runtime.fd.DuplicateError!SavedPipelineStdin {
+    runtime.fd.assertValidDescriptor(pipe_read);
+    const status = fd_port.descriptorStatus(.{ .descriptor = 0 }) catch runtime.fd.DescriptorStatusResult{
+        .is_open = true,
+    };
+    const saved: SavedPipelineStdin = if (status.is_open)
+        .{ .saved = (try fd_port.duplicate(.{ .descriptor = 0, .close_on_exec = true })).descriptor }
+    else
+        .originally_closed;
+    errdefer restoreSavedPipelineStdin(fd_port, saved);
+    try fd_port.duplicateTo(.{ .source = pipe_read, .target = 0 });
+    fd_port.close(.{ .descriptor = pipe_read }) catch {};
+    return saved;
+}
+
+fn restoreSavedPipelineStdin(fd_port: runtime.fd.Port, saved: SavedPipelineStdin) void {
+    switch (saved) {
+        .saved => |descriptor| {
+            fd_port.duplicateTo(.{ .source = descriptor, .target = 0 }) catch {};
+            fd_port.close(.{ .descriptor = descriptor }) catch {};
+        },
+        .originally_closed => fd_port.close(.{ .descriptor = 0 }) catch {},
     }
 }
 
@@ -13379,6 +13906,7 @@ fn beginFunctionCallRedirections(
         frameRoutesCapturedOutput(buffers.frame.*) and !redirectionPlanNeedsRuntimeFdEffects(plan.redirections))
     {
         try emitSemanticRedirectionTransforms(evaluator.*, buffers, plan.redirections);
+        try buffers.frame.spec.fd_table.applyRedirectionPlan(evaluator.allocator, plan.redirections);
         return null;
     }
 
@@ -14334,25 +14862,7 @@ fn appendFunctionFrameDelta(
             const name = entry.key_ptr.*;
             if (frame.excludesVariable(name)) continue;
             const next = entry.value_ptr.*;
-            if (before.getVariable(name)) |previous| {
-                std.debug.assert(!previous.readonly or next.readonly);
-                if (!std.mem.eql(u8, previous.value, next.value)) {
-                    try state_delta.assignVariable(
-                        name,
-                        next.value,
-                        .{ .exported = next.exported, .readonly = next.readonly },
-                    );
-                    continue;
-                }
-                if (previous.exported != next.exported) try state_delta.setVariableExported(name, next.exported);
-                if (!previous.readonly and next.readonly) try state_delta.setVariableReadonly(name);
-            } else {
-                try state_delta.assignVariable(
-                    name,
-                    next.value,
-                    .{ .exported = next.exported, .readonly = next.readonly },
-                );
-            }
+            try appendVariableDiff(before.getVariable(name), name, next, state_delta);
         }
 
         var before_variables = before.variables.iterator();
@@ -14444,21 +14954,7 @@ fn appendShellStateDiffExcludingVariables(
             const name = entry.key_ptr.*;
             if (assignmentListContainsName(excluded_assignments, name)) continue;
             const next = entry.value_ptr.*;
-            if (before.getVariable(name)) |previous| {
-                std.debug.assert(!previous.readonly or next.readonly);
-                if (!std.mem.eql(u8, previous.value, next.value)) {
-                    try state_delta.assignVariable(
-                        name,
-                        next.value,
-                        .{ .exported = next.exported, .readonly = next.readonly },
-                    );
-                    continue;
-                }
-                if (previous.exported != next.exported) try state_delta.setVariableExported(name, next.exported);
-                if (!previous.readonly and next.readonly) try state_delta.setVariableReadonly(name);
-            } else {
-                try state_delta.assignVariable(name, next.value, .{ .exported = next.exported, .readonly = next.readonly });
-            }
+            try appendVariableDiff(before.getVariable(name), name, next, state_delta);
         }
 
         var before_variables = before.variables.iterator();
@@ -14495,6 +14991,36 @@ fn appendShellStateDiffExcludingVariables(
     ) and after.logical_cwd.len != 0) try state_delta.setLogicalCwd(after.logical_cwd);
     for (after.background_jobs.items) |job| {
         if (before.findBackgroundJobById(job.id) == null) try state_delta.appendBackgroundJob(job);
+    }
+}
+
+fn appendVariableDiff(
+    previous: ?state.Variable,
+    name: []const u8,
+    next: state.Variable,
+    state_delta: *delta.StateDelta,
+) EvalError!void {
+    if (previous) |before| {
+        std.debug.assert(!before.readonly or next.readonly);
+        if (next.value_set) {
+            if (!before.value_set or !std.mem.eql(u8, before.value, next.value)) {
+                try state_delta.assignVariable(
+                    name,
+                    next.value,
+                    .{ .exported = next.exported, .readonly = next.readonly },
+                );
+                return;
+            }
+        } else {
+            std.debug.assert(!before.value_set);
+        }
+        if (before.exported != next.exported) try state_delta.setVariableExported(name, next.exported);
+        if (!before.readonly and next.readonly) try state_delta.setVariableReadonly(name);
+    } else if (next.value_set) {
+        try state_delta.assignVariable(name, next.value, .{ .exported = next.exported, .readonly = next.readonly });
+    } else {
+        if (next.exported) try state_delta.setVariableExported(name, true);
+        if (next.readonly) try state_delta.setVariableReadonly(name);
     }
 }
 
@@ -14746,6 +15272,7 @@ const ExternalSpawnOptions = struct {
     stdin: runtime.process.StandardIo = .inherit,
     stdout: runtime.process.StandardIo = .inherit,
     stderr: runtime.process.StandardIo = .inherit,
+    descriptor_mappings: []const runtime.process.DescriptorMapping = &.{},
     process_group: ?runtime.process.ProcessId = null,
 };
 
@@ -15442,6 +15969,7 @@ fn spawnExternalProcess(
         .stdin = options.stdin,
         .stdout = options.stdout,
         .stderr = options.stderr,
+        .descriptor_mappings = options.descriptor_mappings,
         .process_group = options.process_group,
     }) catch |err| switch (err) {
         error.InvalidExe => {
@@ -15454,6 +15982,7 @@ fn spawnExternalProcess(
                 .stdin = options.stdin,
                 .stdout = options.stdout,
                 .stderr = options.stderr,
+                .descriptor_mappings = options.descriptor_mappings,
                 .process_group = options.process_group,
             });
         },
@@ -18141,8 +18670,10 @@ fn evaluateExec(
         .lookup = .{ .externals = &.{resolution} },
         .target = .child_process,
     });
-    if (eval_context.command_substitution_depth != 0 and
-        eval_context.pipeline_depth == 0 and
+    if (((eval_context.command_substitution_depth != 0 and
+        (evaluator.command_substitution_execution == .forked_subshell or eval_context.command_substitution_depth == 1) and
+        eval_context.pipeline_depth == 0) or
+        (eval_context.target.isIsolatedFromParent() and eval_context.function_depth != 0)) and
         !externalNeedsBufferedStdin(target_plan, buffers))
     {
         const process_port = evaluator.process_port orelse return error.Unimplemented;
@@ -23752,6 +24283,10 @@ const FakeExternalRuntime = struct {
         request.validate();
         self.recordFdOperation(.{ .duplicate_to = .{ .source = request.source, .target = request.target } });
         if (!self.isOpen(request.source)) return error.BadFileDescriptor;
+        for (self.fake_pipes[0..self.fake_pipe_count]) |*pipe_value| {
+            if (pipe_value.read == request.source) pipe_value.read = request.target;
+            if (pipe_value.write == request.source) pipe_value.write = request.target;
+        }
         self.setOpen(request.target, true);
     }
 
@@ -23828,8 +24363,30 @@ const FakeExternalRuntime = struct {
         self.observed_spawn_stdout[spawn_index] = request.stdout;
         self.observed_spawn_stderr[spawn_index] = request.stderr;
         self.observed_spawn_process_group[spawn_index] = request.process_group;
+        const wrote_stdout = try self.writeSpawnOutput(request.stdout, self.run_stdout);
+        const wrote_stderr = try self.writeSpawnOutput(request.stderr, self.run_stderr);
+        if (self.wait_status_count == 0 and (wrote_stdout or wrote_stderr)) self.wait_status = self.run_status;
         self.spawn_count += 1;
         return .{ .child = fakeChild(9001 + @as(runtime.process.ProcessId, @intCast(spawn_index))) };
+    }
+
+    fn writeSpawnOutput(
+        self: *FakeExternalRuntime,
+        stdio: runtime.process.StandardIo,
+        bytes: []const u8,
+    ) runtime.process.SpawnError!bool {
+        if (bytes.len == 0) return false;
+        const descriptor = switch (stdio) {
+            .fd => |fd_value| fd_value,
+            .inherit => 1,
+            .ignore, .pipe, .close => return false,
+        };
+        for (self.fake_pipes[0..self.fake_pipe_count]) |*pipe_value| {
+            if (pipe_value.write != descriptor) continue;
+            try pipe_value.bytes.appendSlice(self.allocator, bytes);
+            return true;
+        }
+        return false;
     }
 
     fn startSubshell(
@@ -25133,17 +25690,15 @@ test "semantic pipeline evaluation streams semantic output into external stdin" 
 }
 
 test "semantic pipeline evaluation streams external output into semantic stdin" {
-    var fake = FakeExternalRuntime.init(std.testing.allocator);
-    defer fake.deinit();
-    fake.setRunResult("from-external\n", "", .{ .exited = 0 });
-    var evaluator = Evaluator.initWithExternalPorts(std.testing.allocator, fake.fdPort(), fake.processPort());
+    var adapter = runtime.posix.Adapter.init(std.testing.io);
+    var evaluator = Evaluator.initWithRuntimePorts(std.testing.allocator, runtime.posixPorts(&adapter));
     var shell_state = state.ShellState.init(std.testing.allocator);
     defer shell_state.deinit();
 
-    const externals = [_]command_plan.ExternalResolution{.{ .name = "extsource", .path = "/bin/extsource" }};
+    const externals = [_]command_plan.ExternalResolution{.{ .name = "/usr/bin/printf", .path = "/usr/bin/printf" }};
     const lookup: command_plan.LookupSnapshot = .{ .externals = &externals };
     const source = command_plan.classifyExpandedSimpleCommand(.{
-        .command = .{ .argv = &[_][]const u8{"extsource"} },
+        .command = .{ .argv = &[_][]const u8{ "/usr/bin/printf", "from-external\n" } },
         .lookup = lookup,
     });
     const consumer = command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{
@@ -25163,8 +25718,6 @@ test "semantic pipeline evaluation streams external output into semantic stdin" 
     );
     defer result.deinit();
     try std.testing.expectEqual(@as(outcome.ExitStatus, 0), result.status);
-    try std.testing.expectEqual(@as(usize, 1), fake.run_count);
-    try std.testing.expectEqualStrings("", fake.observed_run_stdin.items);
     try std.testing.expectEqualStrings("", result.stdout.items);
     try std.testing.expectEqualSlices(outcome.ExitStatus, &.{ 0, 0 }, result.state_delta.last_pipeline_statuses.?);
     try result.commitDelta(&shell_state, .current_shell);
@@ -26039,6 +26592,38 @@ test "semantic evaluator keeps function assignment prefixes locals and positiona
     try std.testing.expectEqualStrings("body", shell_state.getVariable("B").?.value);
     try std.testing.expectEqual(@as(?state.Variable, null), shell_state.getVariable("LOCAL"));
     try std.testing.expectEqual(@as(usize, 0), shell_state.positionals.items.len);
+}
+
+test "semantic evaluator preserves unset readonly declarations from functions" {
+    var shell_state = state.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    var evaluator = Evaluator.init(std.testing.allocator);
+    const eval_context = context.EvalContext.forTarget(.current_shell);
+
+    const body_commands = [_]command_plan.CommandPlan{
+        command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{
+            "readonly",
+            "DECLARED_ONLY",
+        } } }),
+    };
+    const body_statements = [_]command_plan.StatementListEntry{simpleStatement(body_commands[0])};
+    const definition: command_plan.FunctionDefinition = .{
+        .name = "fn",
+        .body = .{ .statements = &body_statements },
+    };
+    const lookup_functions = [_]command_plan.FunctionDefinition{definition};
+    const call_plan = command_plan.classifyExpandedSimpleCommand(.{
+        .command = .{ .argv = &[_][]const u8{"fn"} },
+        .lookup = .{ .functions = &lookup_functions },
+    });
+
+    var call = try evaluatePlan(&evaluator, &shell_state, eval_context, call_plan);
+    defer call.deinit();
+    try call.commitDelta(&shell_state, .current_shell);
+
+    const declared = shell_state.getVariable("DECLARED_ONLY").?;
+    try std.testing.expect(declared.readonly);
+    try std.testing.expect(!declared.value_set);
 }
 
 test "semantic evaluator consumes return control flow at function boundary" {
