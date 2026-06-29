@@ -8001,7 +8001,7 @@ fn tailExecCommandPreservesLiveShellParent(command_name: []const u8) bool {
         command_name[index + 1 ..]
     else
         command_name;
-    return std.mem.eql(u8, basename, "sh");
+    return std.mem.eql(u8, basename, "sh") or std.mem.eql(u8, basename, "rush");
 }
 
 const TailExecExternalCommand = struct {
@@ -9338,6 +9338,13 @@ fn foregroundPlanForBackgroundSubshell(
     const stages = try allocator.alloc(pipeline_plan.PipelineStagePlan, plan.stages.len);
     errdefer allocator.free(stages);
     for (plan.stages, 0..) |stage, index| {
+        if (plan.stages.len == 1) {
+            if (backgroundSubshellStageInForkedProcess(stage)) |forked_stage| {
+                stages[index] = forked_stage;
+                if (redirections_already_applied and index == 0) clearStageRedirections(&stages[index]);
+                continue;
+            }
+        }
         const target: context.ExecutionTarget = if (stage.isExternal()) .child_process else .subshell;
         stages[index] = stageWithTarget(stage, target);
         if (redirections_already_applied and index == 0) clearStageRedirections(&stages[index]);
@@ -9348,6 +9355,21 @@ fn foregroundPlanForBackgroundSubshell(
         .status_rule = plan.status_rule,
         .background = .foreground,
     });
+}
+
+fn backgroundSubshellStageInForkedProcess(stage: pipeline_plan.PipelineStagePlan) ?pipeline_plan.PipelineStagePlan {
+    stage.validate();
+    return switch (stage) {
+        .simple => null,
+        .compound => |compound| switch (compound.body) {
+            .subshell => |list| .{ .compound = .{
+                .target = .subshell,
+                .redirections = compound.redirections,
+                .body = .{ .sequence = list },
+            } },
+            else => null,
+        },
+    };
 }
 
 fn clearStageRedirections(stage: *pipeline_plan.PipelineStagePlan) void {
@@ -23715,6 +23737,14 @@ test "semantic command substitution captures external command stdout" {
     try std.testing.expectEqual(@as(outcome.ExitStatus, 0), result.status);
     try std.testing.expectEqualStrings("external", result.output.items);
     try std.testing.expectEqualStrings("", result.stderr.items);
+}
+
+test "semantic command substitution tail exec recognizes rush shell names" {
+    try std.testing.expect(tailExecCommandPreservesLiveShellParent("sh"));
+    try std.testing.expect(tailExecCommandPreservesLiveShellParent("/bin/sh"));
+    try std.testing.expect(tailExecCommandPreservesLiveShellParent("rush"));
+    try std.testing.expect(tailExecCommandPreservesLiveShellParent("/tmp/rush"));
+    try std.testing.expect(!tailExecCommandPreservesLiveShellParent("printf"));
 }
 
 test "semantic command substitution runs subshell EXIT trap before trimming captured output" {

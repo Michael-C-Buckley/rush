@@ -306,6 +306,47 @@
             .status = 0,
         },
         .{
+            .name = "background subshell dollar bang names the executing subshell process",
+            .script =
+            \\(
+            \\    child_pid=$(PATH=/usr/bin:/bin exec sh -c 'echo $PPID')
+            \\    printf '%s\n' "$child_pid" >child-pid
+            \\) &
+            \\background_pid=$!
+            \\wait
+            \\if [ "$background_pid" = "$(cat child-pid)" ]; then
+            \\    printf '<same>\n'
+            \\else
+            \\    printf '<diff>\n'
+            \\fi
+            ,
+            .stdout =
+            \\<same>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "background subshell can reset QUIT and be signaled by dollar bang while waiting",
+            .script =
+            \\( trap - QUIT; printf '<sleep>\n'; sleep 10; printf '<awake>\n' ) &
+            \\pid=$!
+            \\sleep 1
+            \\kill -QUIT "$pid"
+            \\wait "$pid"
+            \\status=$?
+            \\if [ "$status" -ge 128 ]; then printf '<signal>\n'; else printf '<%s>\n' "$status"; fi
+            ,
+            .stdout =
+            \\<sleep>
+            \\<signal>
+            \\
+            ,
+            .stderr_match = .any,
+            .status = 0,
+        },
+        .{
             .name = "command substitution EXIT trap honors scoped exec stderr merge",
             .script =
             \\v=$(exec 2>&1; trap 'printf trap >&2' EXIT; :)
