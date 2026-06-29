@@ -140,18 +140,15 @@
             .status = 0,
         },
         .{
-            .name = "trap action shell error preserves status and continues",
+            .name = "trap action special builtin error exits before following commands",
             .script =
             \\trap 'set -o bad@option' INT
             \\kill -s INT $$
             \\printf 'after:%s\n' "$?"
             ,
-            .stdout =
-            \\after:0
-            \\
-            ,
+            .stdout = "",
             .stderr_match = .nonempty,
-            .status = 0,
+            .status_match = .nonzero,
         },
         .{
             .name = "self-signal trap is contained inside command substitution",

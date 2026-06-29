@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>rush Smoosh suite notes</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header class="site-header">
+    <div><a href="../index.html">rush</a></div>
+    <nav class="site-nav" aria-label="Primary">
+      <a href="index.html">docs</a>
+      <a href="https://github.com/rockorager/rush">source</a>
+    </nav>
+  </header>
+
+  <h1 id="smoosh-suite-notes"><a href="#smoosh-suite-notes">Smoosh suite notes</a></h1>
+
+  <p>Rush uses the Smoosh shell test suite as third-party compatibility evidence, not as the final POSIX authority.</p>
+
+  <p>When a Smoosh expectation disagrees with POSIX.1-2024 / Issue 8, <code>rush --posix</code> follows POSIX. The case below is Rush's documented expected Smoosh failure.</p>
+
+  <h2 id="expected-failure"><a href="#expected-failure">Expected failure</a></h2>
+
+  <h3 id="trap-exit-status-after-special-builtin-error"><a href="#trap-exit-status-after-special-builtin-error">Trap exit status after a special builtin error</a></h3>
+
+  <p>Smoosh test: <code>shell/builtin.trap.exitcode</code></p>
+
+  <pre><span class="cmd">trap</span> <span class="str">'set -o bad@option'</span> INT
+<span class="cmd">kill</span> <span class="opt">-s</span> INT <span class="var">$$</span></pre>
+
+  <p>The Smoosh suite expects this script to exit with status <code>0</code>. Rush should not preserve that result in POSIX mode.</p>
+
+  <p>POSIX says a trap action is executed as if by <code>eval action</code>. The action above executes <code>set</code>, which is a special builtin, with an invalid option. POSIX 2.8.1 says a special builtin utility error in a non-interactive shell shall cause the shell to exit.</p>
+
+  <p>The <code>trap</code> rule that preserves <code>$?</code> applies after the trap action completes. It does not require restoring the pre-trap status when the action aborts the non-interactive shell.</p>
+
+  <p>Expected Rush behavior: write a diagnostic and exit non-zero. If Rush exits <code>0</code>, treat that as a Rush conformance bug even though it passes this Smoosh test.</p>
+</body>
+</html>

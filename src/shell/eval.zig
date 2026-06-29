@@ -7473,10 +7473,8 @@ fn executePendingTrapsWithFrame(
             body,
         ))
             outcome.ControlFlow{ .exit = action_outcome.status }
-        else switch (effective_control_flow) {
-            .fatal => .normal,
-            else => effective_control_flow,
-        };
+        else
+            effective_control_flow;
         result = .{ .status = action_outcome.status, .control_flow = action_control_flow };
         if (action_control_flow != .normal) break;
     }
@@ -22727,6 +22725,32 @@ test "semantic evaluator executes pending traps and preserves pre-trap status" {
     try std.testing.expectEqual(@as(usize, 0), shell_state.pending_traps.items.len);
     try std.testing.expectEqual(@as(state.ExitStatus, 7), shell_state.last_status);
     try std.testing.expectEqual(state.ShellState.TrapExecution.idle, shell_state.trap_execution);
+}
+
+test "semantic evaluator lets fatal trap action shell errors override pre-trap status" {
+    var shell_state = state.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    shell_state.last_status = 0;
+    try shell_state.setTrapForSignal(.INT, "set -o bad@option");
+    try shell_state.appendPendingTrap(.INT);
+
+    var evaluator = Evaluator.init(std.testing.allocator);
+    var parser_resolver = ParserBackedSourceResolver.init(&evaluator);
+    var trap_outcome = (try executePendingTraps(
+        &evaluator,
+        &shell_state,
+        context.EvalContext.forTarget(.current_shell),
+        parser_resolver.resolver(),
+    )).?;
+    defer trap_outcome.deinit();
+
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 2), trap_outcome.status);
+    try std.testing.expectEqual(
+        outcome.ControlFlow{ .fatal = 2 }, // ziglint-ignore: Z010 (expectEqual peer)
+        trap_outcome.control_flow,
+    );
+    try std.testing.expectEqual(@as(usize, 1), trap_outcome.state_delta.pending_trap_consume_count);
+    try std.testing.expect(std.mem.indexOf(u8, trap_outcome.stderr.items, "set: unknown option name") != null);
 }
 
 test "semantic parser trap resolver lowers arbitrary simple actions at delivery time" {
