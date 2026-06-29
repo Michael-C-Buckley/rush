@@ -54,6 +54,7 @@ pub fn render(
     evaluator.io = io;
     evaluator.features = options.features;
     evaluator.arg_zero = options.arg_zero;
+    evaluator.command_substitution_execution = .in_process_snapshot;
     evaluator.setExtensionHandlerLookup(&lookup_context, promptExtensionLookup);
 
     var working_state = shell_state.clone(allocator) catch |err| switch (err) {

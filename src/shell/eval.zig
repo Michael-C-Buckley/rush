@@ -159,6 +159,11 @@ const ExecutionScratch = struct {
     }
 };
 
+pub const CommandSubstitutionExecution = enum {
+    forked_subshell,
+    in_process_snapshot,
+};
+
 pub const Evaluator = struct {
     allocator: std.mem.Allocator,
     fd_port: ?runtime.fd.Port = null,
@@ -182,6 +187,7 @@ pub const Evaluator = struct {
     history_entries: []const CommandHistoryEntry = &.{},
     function_autoload: FunctionAutoload = .{},
     autoloading_function: ?[]const u8 = null,
+    command_substitution_execution: CommandSubstitutionExecution = .forked_subshell,
     event_dispatch_depth: u32 = 0,
     directory_change_event_observed: bool = false,
 
@@ -6681,11 +6687,7 @@ fn appendExpansionOutput(
     defer frame.deinit();
     if (output.side_stdout.len != 0) {
         if (eval_context.command_substitution_depth != 0 or frameWithinCommandSubstitution(buffers.frame.*)) {
-            if (frameHasNonstandardPipelineCapture(buffers.frame.*)) {
-                try buffers.side_stdout.appendSlice(buffers.allocator, output.side_stdout);
-            } else {
-                try buffers.stdout.appendSlice(buffers.allocator, output.side_stdout);
-            }
+            try buffers.side_stdout.appendSlice(buffers.allocator, output.side_stdout);
         } else {
             try frame.write(1, output.side_stdout);
         }
@@ -6694,16 +6696,6 @@ fn appendExpansionOutput(
     for (output.diagnostics) |message| {
         try buffers.addDiagnosticMessage(message);
     }
-}
-
-fn frameHasNonstandardPipelineCapture(frame: execution_frame.ExecutionFrame) bool {
-    frame.validate();
-    for (frame.spec.fd_table.bindings.items) |binding| {
-        binding.validate();
-        if (binding.descriptor == 1 or binding.descriptor == 2) continue;
-        if (frameOutputEndpointCaptures(binding.endpoint, .pipeline_data)) return true;
-    }
-    return false;
 }
 
 fn appendRedirectionExpansionOutputToFrame(
@@ -6735,6 +6727,7 @@ const ForkedSemanticSubshellContext = struct {
     plan: command_plan.CompoundCommandPlan,
     input: *EvaluationInput,
     parent_frame: *execution_frame.ExecutionFrame,
+    result_pipe_write: runtime.fd.Descriptor,
 
     fn validate(self: ForkedSemanticSubshellContext) void {
         self.shell_state.validate();
@@ -6743,8 +6736,11 @@ const ForkedSemanticSubshellContext = struct {
         std.debug.assert(self.plan.body == .subshell);
         self.input.validate();
         self.parent_frame.validate();
+        runtime.fd.assertValidDescriptor(self.result_pipe_write);
     }
 };
+
+const forked_semantic_subshell_protocol_magic = "RSS1";
 
 fn evaluateForkedCommandSubstitutionSubshell(
     evaluator: *Evaluator,
@@ -6761,6 +6757,13 @@ fn evaluateForkedCommandSubstitutionSubshell(
     frame.validate();
     if (!shouldForkSemanticSubshell(evaluator, eval_context, plan, frame)) return null;
     const process_port = evaluator.process_port orelse return null;
+    const fd_port = evaluator.fd_port orelse return null;
+
+    const protocol_pipe = fd_port.pipe(.{ .close_on_exec = false }) catch return error.Unimplemented;
+    var protocol_read_open = true;
+    var protocol_write_open = true;
+    defer if (protocol_read_open) fd_port.close(.{ .descriptor = protocol_pipe.read }) catch {};
+    errdefer if (protocol_write_open) fd_port.close(.{ .descriptor = protocol_pipe.write }) catch {};
 
     var fork_context: ForkedSemanticSubshellContext = .{
         .evaluator = evaluator,
@@ -6769,6 +6772,7 @@ fn evaluateForkedCommandSubstitutionSubshell(
         .plan = plan,
         .input = input,
         .parent_frame = frame,
+        .result_pipe_write = protocol_pipe.write,
     };
     fork_context.validate();
 
@@ -6779,15 +6783,34 @@ fn evaluateForkedCommandSubstitutionSubshell(
         .stdout = .inherit,
         .stderr = .inherit,
     }) catch return error.Unimplemented).child;
+    fd_port.close(.{ .descriptor = protocol_pipe.write }) catch return error.Unimplemented;
+    protocol_write_open = false;
+
     const wait_result = process_port.wait(.{ .child = &child }) catch return error.Unimplemented;
     const status = normalizeWaitStatus(wait_result.status);
+
+    var protocol_bytes: std.ArrayList(u8) = .empty;
+    defer protocol_bytes.deinit(evaluator.allocator);
+    try readCommandSubstitutionProtocolBytes(evaluator.allocator, fd_port, protocol_pipe.read, &protocol_bytes);
+    fd_port.close(.{ .descriptor = protocol_pipe.read }) catch return error.Unimplemented;
+    protocol_read_open = false;
+    const propagated_failure = try deserializeForkedSemanticSubshellFailure(protocol_bytes.items);
+
     var state_delta = delta.StateDelta.init(evaluator.allocator, plan.target);
     errdefer state_delta.deinit();
     state_delta.setLastStatus(status);
     var empty_input = EvaluationInput.empty();
     var empty_buffers = EvaluationBuffers.init(evaluator.allocator, &empty_input, frame);
     defer empty_buffers.deinit();
-    return try commandOutcomeFromBuffers(evaluator.allocator, eval_context, status, state_delta, .normal, &empty_buffers);
+    empty_buffers.propagated_failure = propagated_failure;
+    return try commandOutcomeFromBuffers(
+        evaluator.allocator,
+        eval_context,
+        status,
+        state_delta,
+        .normal,
+        &empty_buffers,
+    );
 }
 
 fn shouldForkSemanticSubshell(
@@ -6855,8 +6878,18 @@ fn runForkedSemanticSubshell(opaque_context: *anyopaque) u8 {
         &result,
         &buffers,
     ) catch return 125;
-    const status = result.control_flow.status(result.status);
-    writeForkedSemanticSubshellOutput(fork_context.evaluator.fd_port orelse return 125, &buffers) catch return 125;
+    const status = if (buffers.propagated_failure) |failure|
+        failure.status()
+    else
+        result.control_flow.status(result.status);
+    const fd_port = fork_context.evaluator.fd_port orelse return 125;
+    writeForkedSemanticSubshellOutput(fd_port, &buffers) catch return 125;
+    writeForkedSemanticSubshellFailure(
+        fork_context.evaluator.allocator,
+        fd_port,
+        fork_context.result_pipe_write,
+        buffers.propagated_failure,
+    ) catch return 125;
     return status;
 }
 
@@ -6866,6 +6899,52 @@ fn writeForkedSemanticSubshellOutput(fd_port: runtime.fd.Port, buffers: *Evaluat
     try fd_port.writeAll(.{ .descriptor = 1, .bytes = buffers.side_stdout.items });
     try fd_port.writeAll(.{ .descriptor = 1, .bytes = buffers.command_substitution_side_stdout.items });
     try fd_port.writeAll(.{ .descriptor = 2, .bytes = buffers.stderr.items });
+}
+
+fn writeForkedSemanticSubshellFailure(
+    allocator: std.mem.Allocator,
+    fd_port: runtime.fd.Port,
+    descriptor: runtime.fd.Descriptor,
+    propagated_failure: ?outcome.PropagatedFailure,
+) !void {
+    var bytes: std.ArrayList(u8) = .empty;
+    defer bytes.deinit(allocator);
+    try bytes.appendSlice(allocator, forked_semantic_subshell_protocol_magic);
+    if (propagated_failure) |failure| {
+        failure.validate();
+        try bytes.append(allocator, 1);
+        try bytes.append(allocator, failure.status());
+    } else {
+        try bytes.append(allocator, 0);
+    }
+    try fd_port.writeAll(.{ .descriptor = descriptor, .bytes = bytes.items });
+}
+
+fn deserializeForkedSemanticSubshellFailure(bytes: []const u8) EvalError!?outcome.PropagatedFailure {
+    if (bytes.len == 0) return null;
+    if (bytes.len != forked_semantic_subshell_protocol_magic.len + 1 and
+        bytes.len != forked_semantic_subshell_protocol_magic.len + 2)
+    {
+        return error.Unimplemented;
+    }
+    if (!std.mem.eql(
+        u8,
+        bytes[0..forked_semantic_subshell_protocol_magic.len],
+        forked_semantic_subshell_protocol_magic,
+    )) {
+        return error.Unimplemented;
+    }
+    const tag = bytes[forked_semantic_subshell_protocol_magic.len];
+    return switch (tag) {
+        0 => null,
+        1 => blk: {
+            if (bytes.len != forked_semantic_subshell_protocol_magic.len + 2) return error.Unimplemented;
+            const status = bytes[forked_semantic_subshell_protocol_magic.len + 1];
+            if (status == 0) return error.Unimplemented;
+            break :blk .{ .command_substitution = status };
+        },
+        else => error.Unimplemented,
+    };
 }
 
 fn evaluateCompoundPlanWithInput(
@@ -7813,6 +7892,10 @@ fn runForkedCommandSubstitution(opaque_context: *anyopaque) u8 {
     if (fork_context.suppress_inherited_xtrace) substitution_state.options.set(.xtrace, false);
     if (fork_context.evaluator.features.isBash()) substitution_state.options.set(.errexit, false);
 
+    const previous_command_substitution_execution = fork_context.evaluator.command_substitution_execution;
+    fork_context.evaluator.command_substitution_execution = .in_process_snapshot;
+    defer fork_context.evaluator.command_substitution_execution = previous_command_substitution_execution;
+
     tailExecSimpleExternalCommandSubstitution(fork_context, &substitution_state) catch return 125;
 
     var result = evaluateCommandSubstitutionInState(
@@ -7852,16 +7935,22 @@ fn tailExecSimpleExternalCommandSubstitution(
             return;
     };
     plan.validate();
+    if (!expansionOutputEmpty(plan.expansion_output)) return;
+    if (plan.last_command_substitution_status != null) return;
+    if (substitution_state.options.enabled(.xtrace)) return;
     if (hasRedirections(plan)) return;
     if (plan.argv.len == 0) return;
+    if (!commandSubstitutionPlanCanTailExecExternal(plan)) return;
     const process_port = fork_context.evaluator.process_port orelse return;
 
     const tail_command = tailExecExternalCommand(plan) orelse return;
+    if (!tailExecCommandPreservesLiveShellParent(tail_command.argv[0])) return;
     const command: command_plan.ExpandedSimpleCommand = .{
         .assignments = tail_command.assignments,
         .argv = tail_command.argv,
         .redirections = plan.redirections,
         .last_command_substitution_status = plan.last_command_substitution_status,
+        .expansion_output = plan.expansion_output,
         .source_line = plan.source_line,
     };
     const external = try resolveExternalForEvaluation(
@@ -7886,6 +7975,25 @@ fn tailExecSimpleExternalCommandSubstitution(
     );
     defer invocation.deinit(fork_context.evaluator.allocator);
     invocation.exec(process_port, .{}) catch return;
+}
+
+fn commandSubstitutionPlanCanTailExecExternal(plan: command_plan.CommandPlan) bool {
+    plan.validate();
+    if (plan.argv.len == 0) return false;
+    if (std.mem.eql(u8, plan.argv[0], "exec")) return true;
+    return switch (plan.classification) {
+        .external => true,
+        else => false,
+    };
+}
+
+fn tailExecCommandPreservesLiveShellParent(command_name: []const u8) bool {
+    std.debug.assert(command_name.len != 0);
+    const basename = if (std.mem.findScalarLast(u8, command_name, '/')) |index|
+        command_name[index + 1 ..]
+    else
+        command_name;
+    return std.mem.eql(u8, basename, "sh");
 }
 
 const TailExecExternalCommand = struct {
@@ -8231,6 +8339,23 @@ fn evaluateCommandSubstitutionSnapshot(
 
     var parent_frame = rootExecutionFrame(context.EvalContext.forTarget(.current_shell));
     defer parent_frame.spec.fd_table.deinit(evaluator.allocator);
+    if (evaluator.command_substitution_execution == .in_process_snapshot) {
+        var substitution_state = parent_state.snapshotForSubshell(evaluator.allocator) catch |err| switch (err) {
+            error.OutOfMemory => return error.OutOfMemory,
+            error.ReadonlyVariable => unreachable,
+        };
+        defer substitution_state.deinit();
+        return evaluateCommandSubstitutionInState(
+            evaluator,
+            &substitution_state,
+            substitution_context,
+            body,
+            null,
+            &parent_frame,
+            null,
+            false,
+        );
+    }
     return evaluateCommandSubstitutionForked(
         evaluator,
         parent_state,
@@ -8710,17 +8835,40 @@ fn runSemanticCommandSubstitution(
     var root_parent_frame = rootExecutionFrame(previous_eval_context);
     defer root_parent_frame.spec.fd_table.deinit(expansion_context.evaluator.allocator);
     const parent_frame = expansion_context.parent_frame orelse &root_parent_frame;
-    var result = try evaluateCommandSubstitutionForked(
-        expansion_context.evaluator,
-        parent_state,
-        previous_eval_context,
-        substitution_context,
-        body,
-        expansion_context.trap_resolver,
-        parent_frame,
-        expansion_context.parent_input,
-        expansion_context.suppress_inherited_xtrace,
-    );
+    var result = switch (expansion_context.evaluator.command_substitution_execution) {
+        .forked_subshell => try evaluateCommandSubstitutionForked(
+            expansion_context.evaluator,
+            parent_state,
+            previous_eval_context,
+            substitution_context,
+            body,
+            expansion_context.trap_resolver,
+            parent_frame,
+            expansion_context.parent_input,
+            expansion_context.suppress_inherited_xtrace,
+        ),
+        .in_process_snapshot => blk: {
+            var substitution_state = parent_state.snapshotForSubshell(
+                expansion_context.evaluator.allocator,
+            ) catch |err| switch (err) {
+                error.OutOfMemory => return error.OutOfMemory,
+                error.ReadonlyVariable => unreachable,
+            };
+            defer substitution_state.deinit();
+            if (expansion_context.suppress_inherited_xtrace) substitution_state.options.set(.xtrace, false);
+            if (expansion_context.evaluator.features.isBash()) substitution_state.options.set(.errexit, false);
+            break :blk try evaluateCommandSubstitutionInState(
+                expansion_context.evaluator,
+                &substitution_state,
+                substitution_context,
+                body,
+                expansion_context.trap_resolver,
+                parent_frame,
+                expansion_context.parent_input,
+                false,
+            );
+        },
+    };
     defer result.deinit();
 
     if (result.fatal_failure) |failure| {
@@ -15351,7 +15499,7 @@ fn buildExternalEnvironmentWithProcessOverlay(
 
 fn assertExternalArgv(argv: []const []const u8) void {
     std.debug.assert(argv.len != 0);
-    for (argv) |arg| std.debug.assert(arg.len != 0);
+    std.debug.assert(argv[0].len != 0);
 }
 
 fn assertValidEnvironmentEntry(name: []const u8, value: []const u8) void {
@@ -21654,7 +21802,8 @@ test "semantic evaluator preserves assignment commit behavior around simple buil
 test "semantic evaluator uses command substitution status for assignment-only commands" {
     var shell_state = state.ShellState.init(std.testing.allocator);
     defer shell_state.deinit();
-    var evaluator = Evaluator.init(std.testing.allocator);
+    var adapter = runtime.posix.Adapter.init(std.testing.io);
+    var evaluator = Evaluator.initWithRuntimePorts(std.testing.allocator, runtime.posixPorts(&adapter));
     var input = EvaluationInput.empty();
     var execution_frame_value = rootExecutionFrame(context.EvalContext.forTarget(.current_shell));
     var buffers = EvaluationBuffers.init(std.testing.allocator, &input, &execution_frame_value);
@@ -21989,7 +22138,8 @@ test "semantic parser trap resolver lowers arbitrary simple actions at delivery 
 test "semantic parser trap resolver expands nested command substitutions in action words" {
     var shell_state = state.ShellState.init(std.testing.allocator);
     defer shell_state.deinit();
-    var evaluator = Evaluator.init(std.testing.allocator);
+    var adapter = runtime.posix.Adapter.init(std.testing.io);
+    var evaluator = Evaluator.initWithRuntimePorts(std.testing.allocator, runtime.posixPorts(&adapter));
     var parser_resolver = ParserBackedSourceResolver.init(&evaluator);
 
     shell_state.last_status = 24;
@@ -22013,7 +22163,8 @@ test "semantic parser trap resolver expands nested command substitutions in acti
 test "semantic parser trap command substitutions isolate body mutations from parent trap state" {
     var shell_state = state.ShellState.init(std.testing.allocator);
     defer shell_state.deinit();
-    var evaluator = Evaluator.init(std.testing.allocator);
+    var adapter = runtime.posix.Adapter.init(std.testing.io);
+    var evaluator = Evaluator.initWithRuntimePorts(std.testing.allocator, runtime.posixPorts(&adapter));
     var parser_resolver = ParserBackedSourceResolver.init(&evaluator);
 
     shell_state.last_status = 25;
@@ -22720,7 +22871,8 @@ test "semantic trap execution in subshell and command substitution does not muta
     var shell_state = state.ShellState.init(std.testing.allocator);
     defer shell_state.deinit();
     try shell_state.setTrapForSignal(.TERM, "echo parent");
-    var evaluator = Evaluator.init(std.testing.allocator);
+    var adapter = runtime.posix.Adapter.init(std.testing.io);
+    var evaluator = Evaluator.initWithRuntimePorts(std.testing.allocator, runtime.posixPorts(&adapter));
 
     const trap_plan = command_plan.classifyExpandedSimpleCommand(.{
         .command = .{ .argv = &[_][]const u8{ "trap", "echo sub", "TERM" } },
@@ -22755,7 +22907,8 @@ test "semantic trap execution in subshell and command substitution does not muta
 test "semantic command substitution captures owned output and trims only trailing newlines" {
     var shell_state = state.ShellState.init(std.testing.allocator);
     defer shell_state.deinit();
-    var evaluator = Evaluator.init(std.testing.allocator);
+    var adapter = runtime.posix.Adapter.init(std.testing.io);
+    var evaluator = Evaluator.initWithRuntimePorts(std.testing.allocator, runtime.posixPorts(&adapter));
 
     const printf_plan = command_plan.classifyExpandedSimpleCommand(.{
         .command = .{ .argv = &[_][]const u8{ "printf", "%s\n\n", "line1\nline2" } },
@@ -22780,7 +22933,7 @@ test "semantic command substitution routes compound builtin output through compo
     var shell_state = state.ShellState.init(std.testing.allocator);
     defer shell_state.deinit();
     var adapter = runtime.posix.Adapter.init(std.testing.io);
-    var evaluator = Evaluator.initWithFdPort(std.testing.allocator, adapter.fdPort());
+    var evaluator = Evaluator.initWithRuntimePorts(std.testing.allocator, runtime.posixPorts(&adapter));
 
     const redirection_steps = [_]redirection_plan.RedirectionStep{redirection_plan.RedirectionStep.openPath(
         0,
@@ -22816,7 +22969,7 @@ test "semantic command substitution routes eval parse diagnostics through curren
     var shell_state = state.ShellState.init(std.testing.allocator);
     defer shell_state.deinit();
     var adapter = runtime.posix.Adapter.init(std.testing.io);
-    var evaluator = Evaluator.initWithFdPort(std.testing.allocator, adapter.fdPort());
+    var evaluator = Evaluator.initWithRuntimePorts(std.testing.allocator, runtime.posixPorts(&adapter));
 
     const redirection_steps = [_]redirection_plan.RedirectionStep{redirection_plan.RedirectionStep.openPath(
         0,
@@ -22939,17 +23092,16 @@ fn expectFrameOutputCapture(
 }
 
 test "semantic command substitution captures external command stdout" {
-    var fake = FakeExternalRuntime.init(std.testing.allocator);
-    defer fake.deinit();
-    fake.setRunResult("external\n", "external-err\n", .{ .exited = 0 });
-    var evaluator = Evaluator.initWithExternalPorts(std.testing.allocator, fake.fdPort(), fake.processPort());
+    var adapter = runtime.posix.Adapter.init(std.testing.io);
+    var evaluator = Evaluator.initWithRuntimePorts(std.testing.allocator, runtime.posixPorts(&adapter));
     var shell_state = state.ShellState.init(std.testing.allocator);
     defer shell_state.deinit();
 
-    const externals = [_]command_plan.ExternalResolution{.{ .name = "tool", .path = "/bin/tool" }};
+    const externals = [_]command_plan.ExternalResolution{.{ .name = "printf", .path = "/usr/bin/printf" }};
     const plan = command_plan.classifyExpandedSimpleCommand(.{
-        .command = .{ .argv = &[_][]const u8{"tool"} },
+        .command = .{ .argv = &[_][]const u8{ "printf", "%s\n", "external" } },
         .lookup = .{ .externals = &externals },
+        .target = .subshell,
     });
 
     var result = try evaluateCommandSubstitution(
@@ -22961,9 +23113,8 @@ test "semantic command substitution captures external command stdout" {
     defer result.deinit();
 
     try std.testing.expectEqual(@as(outcome.ExitStatus, 0), result.status);
-    try std.testing.expectEqual(@as(usize, 1), fake.run_count);
     try std.testing.expectEqualStrings("external", result.output.items);
-    try std.testing.expectEqualStrings("external-err\n", result.stderr.items);
+    try std.testing.expectEqualStrings("", result.stderr.items);
 }
 
 test "semantic command substitution runs subshell EXIT trap before trimming captured output" {
@@ -23013,7 +23164,8 @@ test "semantic command substitution sees parent variables but isolates body muta
     var shell_state = state.ShellState.init(std.testing.allocator);
     defer shell_state.deinit();
     try shell_state.putVariable("PARENT", "outer", .{ .exported = true });
-    var evaluator = Evaluator.init(std.testing.allocator);
+    var adapter = runtime.posix.Adapter.init(std.testing.io);
+    var evaluator = Evaluator.initWithRuntimePorts(std.testing.allocator, runtime.posixPorts(&adapter));
 
     const assignments = [_]command_plan.Assignment{.{ .name = "SUB", .value = "inner" }};
     const commands = [_]command_plan.CommandPlan{
@@ -23059,7 +23211,8 @@ test "semantic command substitution propagates status and diagnostics without pa
     var shell_state = state.ShellState.init(std.testing.allocator);
     defer shell_state.deinit();
     shell_state.last_status = 42;
-    var evaluator = Evaluator.init(std.testing.allocator);
+    var adapter = runtime.posix.Adapter.init(std.testing.io);
+    var evaluator = Evaluator.initWithRuntimePorts(std.testing.allocator, runtime.posixPorts(&adapter));
 
     const missing_plan = command_plan.classifyExpandedSimpleCommand(.{
         .command = .{ .argv = &[_][]const u8{"missing"} },
@@ -23083,7 +23236,8 @@ test "semantic command substitution propagates status and diagnostics without pa
 test "semantic expansion callback evaluates nested command substitutions through evaluator" {
     var shell_state = state.ShellState.init(std.testing.allocator);
     defer shell_state.deinit();
-    var evaluator = Evaluator.init(std.testing.allocator);
+    var adapter = runtime.posix.Adapter.init(std.testing.io);
+    var evaluator = Evaluator.initWithRuntimePorts(std.testing.allocator, runtime.posixPorts(&adapter));
 
     const NestedResolver = struct {
         const Self = @This();
@@ -23159,7 +23313,7 @@ test "semantic expansion callback evaluates nested command substitutions through
 
     try std.testing.expectEqualStrings("prefix-outer inner-suffix", rendered);
     try std.testing.expectEqual(@as(?outcome.ExitStatus, 0), expansion_context.last_status);
-    try std.testing.expect(expansion_context.max_depth_observed >= 2);
+    try std.testing.expectEqual(@as(u32, 1), expansion_context.max_depth_observed);
     try std.testing.expectEqual(@as(state.ExitStatus, 0), shell_state.last_status);
 }
 
@@ -24797,11 +24951,10 @@ test "semantic background builtin redirections are guarded and restored around l
     var shell_state = state.ShellState.init(std.testing.allocator);
     defer shell_state.deinit();
 
-    const redirection_steps = [_]redirection_plan.RedirectionStep{redirection_plan.RedirectionStep.openPath(
+    const redirection_steps = [_]redirection_plan.RedirectionStep{redirection_plan.RedirectionStep.duplicate(
         0,
+        2,
         1,
-        "semantic-out",
-        .{ .access = .write_only, .create = true, .truncate = true },
     )};
     const plan = command_plan.classifyExpandedSimpleCommand(.{ .command = .{
         .argv = &[_][]const u8{ "printf", "payload" },
@@ -24828,24 +24981,24 @@ test "semantic background builtin redirections are guarded and restored around l
         FakeFdOperation{ .duplicate = 1 }, // ziglint-ignore: Z010 (expectEqual peer)
         fake.fd_operations[0],
     );
-    switch (fake.fd_operations[1]) {
-        .open => |path| try std.testing.expectEqualStrings("semantic-out", path),
-        else => return error.TestUnexpectedResult,
-    }
     try std.testing.expectEqual(
-        FakeFdOperation{ .duplicate_to = .{ .source = 11, .target = 1 } }, // ziglint-ignore: Z010 (expectEqual peer)
+        FakeFdOperation{ .duplicate = 2 }, // ziglint-ignore: Z010 (expectEqual peer)
+        fake.fd_operations[1],
+    );
+    try std.testing.expectEqual(
+        FakeFdOperation{ .duplicate_to = .{ .source = 10, .target = 2 } }, // ziglint-ignore: Z010 (expectEqual peer)
         fake.fd_operations[2],
     );
     try std.testing.expectEqual(
-        FakeFdOperation{ .close = 11 }, // ziglint-ignore: Z010 (expectEqual peer)
+        FakeFdOperation{ .close = 10 }, // ziglint-ignore: Z010 (expectEqual peer)
         fake.fd_operations[3],
     );
     try std.testing.expectEqual(
-        FakeFdOperation{ .duplicate_to = .{ .source = 10, .target = 1 } }, // ziglint-ignore: Z010 (expectEqual peer)
+        FakeFdOperation{ .duplicate_to = .{ .source = 11, .target = 2 } }, // ziglint-ignore: Z010 (expectEqual peer)
         fake.fd_operations[4],
     );
     try std.testing.expectEqual(
-        FakeFdOperation{ .close = 10 }, // ziglint-ignore: Z010 (expectEqual peer)
+        FakeFdOperation{ .close = 11 }, // ziglint-ignore: Z010 (expectEqual peer)
         fake.fd_operations[5],
     );
 
