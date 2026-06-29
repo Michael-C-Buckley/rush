@@ -1092,9 +1092,10 @@ const AliasProbe = enum {
     group_redefine,
     subshell_unalias,
     group_unalias,
+    trailing_blank_after_negation,
 
     fn random(random_source: std.Random) AliasProbe {
-        return @enumFromInt(random_source.uintLessThan(u3, 7));
+        return @enumFromInt(random_source.uintLessThan(u4, 8));
     }
 
     fn render(self: AliasProbe, writer: *std.Io.Writer) !void {
@@ -1125,6 +1126,9 @@ const AliasProbe = enum {
                 "alias a='printf \"%s\\n\" outer'\n" ++
                     "{\nunalias a\nalias a >/dev/null 2>&1 || printf '%s\n' group-missing\n}\n" ++
                     "alias a >/dev/null 2>&1 || printf '%s\n' outer-missing",
+            ),
+            .trailing_blank_after_negation => try writer.writeAll(
+                "alias not='! '\nif not { false; }; then printf '%s\n' yes; fi",
             ),
         }
     }
@@ -1252,9 +1256,10 @@ const PipelineProbe = enum {
     last_status_failure,
     left_assignment_isolated,
     redirected_input,
+    asynchronous_last_pid,
 
     fn random(random_source: std.Random) PipelineProbe {
-        return @enumFromInt(random_source.uintLessThan(u3, 5));
+        return @enumFromInt(random_source.uintLessThan(u3, 6));
     }
 
     fn render(self: PipelineProbe, writer: *std.Io.Writer) !void {
@@ -1273,6 +1278,15 @@ const PipelineProbe = enum {
             ),
             .redirected_input => try writer.writeAll(
                 "printf '%s\n' redirected > a; cat < a | cat",
+            ),
+            .asynchronous_last_pid => try writer.writeAll(
+                "printf '%s\n' '#!/bin/sh' 'printf \"%s\\n\" \"$$\" > pid.out' > showpid\n" ++
+                    "chmod +x showpid\n" ++
+                    "true | ./showpid &\n" ++
+                    "background_pid=$!\n" ++
+                    "wait $!\n" ++
+                    "test \"$background_pid\" = \"$(cat pid.out)\" && printf '%s\n' last-pid\n" ++
+                    "rm -f pid.out showpid",
             ),
         }
     }
@@ -1384,9 +1398,10 @@ const WordExpansionProbe = enum {
     pathname_unmatched_literal,
     noglob_literal,
     assignment_no_field_splitting,
+    tilde_pattern_removal,
 
     fn random(random_source: std.Random) WordExpansionProbe {
-        return @enumFromInt(random_source.uintLessThan(u3, 7));
+        return @enumFromInt(random_source.uintLessThan(u4, 8));
     }
 
     fn render(self: WordExpansionProbe, writer: *std.Io.Writer) !void {
@@ -1411,6 +1426,9 @@ const WordExpansionProbe = enum {
             ),
             .assignment_no_field_splitting => try writer.writeAll(
                 "A='one two'; B=$A; printf '[%s]\n' \"$B\"",
+            ),
+            .tilde_pattern_removal => try writer.writeAll(
+                "value=~/src; printf '<%s>\n' \"${value#~}\"",
             ),
         }
     }
@@ -1494,9 +1512,10 @@ const FdRoutingProbe = enum {
     dup_then_file_order,
     dup_chain_to_file,
     closed_fd_fails_locally,
+    command_exec_keeps_redirection,
 
     fn random(random_source: std.Random) FdRoutingProbe {
-        return @enumFromInt(random_source.uintLessThan(u3, 5));
+        return @enumFromInt(random_source.uintLessThan(u3, 6));
     }
 
     fn render(self: FdRoutingProbe, writer: *std.Io.Writer) !void {
@@ -1517,6 +1536,10 @@ const FdRoutingProbe = enum {
                 "exec 3>out; exec 3>&-; " ++
                     "if ( printf '%s\n' closed >&3 ) 2>/dev/null; then printf '%s\n' bad; else printf '%s\n' ok; fi",
             ),
+            .command_exec_keeps_redirection => try writer.writeAll(
+                "printf '%s\n' ok >in; command exec 8<in; " ++
+                    "read line <&8; printf '<%s>\n' \"$line\"; exec 8<&-",
+            ),
         }
     }
 };
@@ -1527,9 +1550,10 @@ const CommandSubstitutionStressProbe = enum {
     fd_dup_inside_substitution,
     pipeline_inside_substitution,
     function_redirect_inside_substitution,
+    duplicated_stderr_before_stdout_redirect,
 
     fn random(random_source: std.Random) CommandSubstitutionStressProbe {
-        return @enumFromInt(random_source.uintLessThan(u3, 5));
+        return @enumFromInt(random_source.uintLessThan(u3, 6));
     }
 
     fn render(self: CommandSubstitutionStressProbe, writer: *std.Io.Writer) !void {
@@ -1548,6 +1572,9 @@ const CommandSubstitutionStressProbe = enum {
             ),
             .function_redirect_inside_substitution => try writer.writeAll(
                 "A=\"$(f() { printf '%s\\n' func; }; f 2>err)\"; printf '[%s]\n' \"$A\"; cat err",
+            ),
+            .duplicated_stderr_before_stdout_redirect => try writer.writeAll(
+                "err=$(sh -c 'printf err >&2' 2>&1 >/dev/null); printf '<%s>\n' \"$err\"",
             ),
         }
     }
@@ -1721,9 +1748,13 @@ const CorpusProbe = enum {
     alias_reserved_word_compound,
     assignment_before_function_scope,
     nested_command_substitution_heredoc,
+    nested_shell_inherits_fd,
+    exec_replacement_keeps_pipeline_redirection,
+    exported_unset_declaration,
+    async_subshell_fifo_redirection,
 
     fn random(random_source: std.Random) CorpusProbe {
-        return @enumFromInt(random_source.uintLessThan(u4, 10));
+        return @enumFromInt(random_source.uintLessThan(u4, 14));
     }
 
     fn render(self: CorpusProbe, writer: *std.Io.Writer) !void {
@@ -1757,6 +1788,22 @@ const CorpusProbe = enum {
             ),
             .nested_command_substitution_heredoc => try writer.writeAll(
                 "A=\"$(cat <<EOF\n$(printf inner)\nEOF\n)\"; printf '[%s]\n' \"$A\"",
+            ),
+            .nested_shell_inherits_fd => try writer.writeAll(
+                "\"$0\" -c 'printf inherited >&3' 3>&1; printf '\n'",
+            ),
+            .exec_replacement_keeps_pipeline_redirection => try writer.writeAll(
+                "printf data >in; out=$(exec cat <in | wc -c); printf '<%s>\n' \"$out\"",
+            ),
+            .exported_unset_declaration => try writer.writeAll(
+                "unset X; export X; sh -c 'printf \"<%s:%s>\\n\" \"${X-unset}\" \"${X+set}\"'",
+            ),
+            .async_subshell_fifo_redirection => try writer.writeAll(
+                "mkfifo pipe\n" ++
+                    "( printf 'hello\n' >&8 ) 8>pipe &\n" ++
+                    "command exec 8<pipe\n" ++
+                    "read -r line <&8\n" ++
+                    "printf '<%s>\n' \"$line\"",
             ),
         }
     }
@@ -2463,13 +2510,13 @@ fn snapshotFiles(allocator: std.mem.Allocator, io: std.Io, dir: std.Io.Dir) ![]F
     defer walker.deinit();
     while (try walker.next(io)) |entry| {
         if (std.mem.eql(u8, entry.path, ".")) continue;
-        const path = try allocator.dupe(u8, entry.path);
-        errdefer allocator.free(path);
         const kind: FileSnapshot.Kind = switch (entry.kind) {
             .file => .file,
             .directory => .directory,
             else => continue,
         };
+        const path = try allocator.dupe(u8, entry.path);
+        errdefer allocator.free(path);
         const contents = if (kind == .file)
             entry.dir.readFileAlloc(io, entry.basename, allocator, .limited(4096)) catch |err| switch (err) {
                 error.StreamTooLong => null,
