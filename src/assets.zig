@@ -130,9 +130,9 @@ pub fn autoloadFunctionNames(
 }
 
 fn functionAutoloadLookup(
-    opaque_context: ?*anyopaque,
     allocator: std.mem.Allocator,
     io: std.Io,
+    opaque_context: ?*anyopaque,
     shell_state: shell.ShellState,
     name: []const u8,
 ) !?shell.eval.FunctionAutoloadSource {
@@ -221,7 +221,11 @@ fn appendPath(allocator: std.mem.Allocator, paths: *std.ArrayList([]const u8), p
     try paths.append(allocator, try std.fs.path.join(allocator, parts));
 }
 
-fn appendUniquePaths(allocator: std.mem.Allocator, paths: *std.ArrayList([]const u8), candidates: []const []const u8) !void {
+fn appendUniquePaths(
+    allocator: std.mem.Allocator,
+    paths: *std.ArrayList([]const u8),
+    candidates: []const []const u8,
+) !void {
     for (candidates) |candidate| {
         if (pathListContains(paths.items, candidate)) continue;
         try paths.append(allocator, try allocator.dupe(u8, candidate));

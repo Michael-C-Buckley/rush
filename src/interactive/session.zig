@@ -990,7 +990,11 @@ pub fn run(
         }
         terminal.refreshWinsize();
         try syncSemanticTerminalSize(&interactive_shell.semantic_state, terminal);
-        const notifications = try drainInteractiveSemanticJobNotifications(allocator, io, &interactive_shell.semantic_state);
+        const notifications = try drainInteractiveSemanticJobNotifications(
+            allocator,
+            io,
+            &interactive_shell.semantic_state,
+        );
         defer allocator.free(notifications);
         try writeAll(io, .stderr, notifications);
         var job_event_context: Context = .{
@@ -1537,7 +1541,11 @@ pub fn runReplInput(allocator: std.mem.Allocator, io: std.Io, input: []const u8)
             last_status = status;
             break;
         }
-        const notifications = try drainInteractiveSemanticJobNotifications(allocator, io, &interactive_shell.semantic_state);
+        const notifications = try drainInteractiveSemanticJobNotifications(
+            allocator,
+            io,
+            &interactive_shell.semantic_state,
+        );
         try stderr.appendSlice(allocator, notifications);
         allocator.free(notifications);
         const prompt_text = try prompt_mod.render(allocator, io, &interactive_shell.semantic_state, .{

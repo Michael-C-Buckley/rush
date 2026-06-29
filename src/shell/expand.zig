@@ -294,7 +294,8 @@ fn expandLeadingTilde(allocator: std.mem.Allocator, raw: []const u8, env: EnvLoo
     if (raw.len == 0 or raw[0] != '~') return .{ .text = try allocator.dupe(u8, raw) };
 
     const end = tildePrefixEnd(raw, 0, false);
-    const home = try lookupTildeHome(allocator, raw[1..end], env) orelse return .{ .text = try allocator.dupe(u8, raw) };
+    const home = try lookupTildeHome(allocator, raw[1..end], env) orelse
+        return .{ .text = try allocator.dupe(u8, raw) };
     defer allocator.free(home);
 
     return .{
@@ -357,13 +358,28 @@ pub fn expandWord(allocator: std.mem.Allocator, raw: []const u8, options: Option
             }
             if (patternHasGlobSyntaxWithOptions(pattern, .{ .extglob = pathname_options.extglob })) {
                 if (options.pathname_lookup.enabled()) {
-                    try applySinglePathnameExpansionPattern(allocator, options.pathname_lookup, &fields, pattern, pathname_options);
+                    try applySinglePathnameExpansionPattern(
+                        allocator,
+                        options.pathname_lookup,
+                        &fields,
+                        pattern,
+                        pathname_options,
+                    );
                 } else if (options.io) |io| {
                     var io_context = IoPathnameLookupContext.init(io);
-                    try applySinglePathnameExpansionPattern(allocator, ioPathnameLookup(&io_context), &fields, pattern, pathname_options);
+                    try applySinglePathnameExpansionPattern(
+                        allocator,
+                        ioPathnameLookup(&io_context),
+                        &fields,
+                        pattern,
+                        pathname_options,
+                    );
                 }
             }
-        } else if (pathname_expansion_safe and !quoted_expansion_glob and fieldsHaveGlobSyntax(fields.items, pathname_options)) {
+        } else if (pathname_expansion_safe and
+            !quoted_expansion_glob and
+            fieldsHaveGlobSyntax(fields.items, pathname_options))
+        {
             if (options.pathname_lookup.enabled()) {
                 try applyPathnameExpansion(allocator, options.pathname_lookup, &fields, pathname_options);
             } else if (options.io) |io| {
@@ -4541,7 +4557,14 @@ fn appendDoubleQuotedText(
             }
         }
         if (try quotedPositionalSliceAt(allocator, text, index, options)) |special| {
-            try appendQuotedSegment(allocator, current, force_current_field, quoted_glob, text[segment_start..index], options);
+            try appendQuotedSegment(
+                allocator,
+                current,
+                force_current_field,
+                quoted_glob,
+                text[segment_start..index],
+                options,
+            );
             const values = try positionalSliceValues(allocator, special.expansion.operation, options);
             defer allocator.free(values);
             switch (special.expansion.kind) {
@@ -4553,7 +4576,14 @@ fn appendDoubleQuotedText(
             continue;
         }
         if (quotedPositionalAt(text, index)) |special| {
-            try appendQuotedSegment(allocator, current, force_current_field, quoted_glob, text[segment_start..index], options);
+            try appendQuotedSegment(
+                allocator,
+                current,
+                force_current_field,
+                quoted_glob,
+                text[segment_start..index],
+                options,
+            );
             switch (special.kind) {
                 .at => try appendQuotedAt(
                     allocator,
@@ -4564,14 +4594,28 @@ fn appendDoubleQuotedText(
                     options.positionals,
                     true,
                 ),
-                .star => try appendQuotedStar(allocator, current, force_current_field, quoted_glob, options.positionals, ifs),
+                .star => try appendQuotedStar(
+                    allocator,
+                    current,
+                    force_current_field,
+                    quoted_glob,
+                    options.positionals,
+                    ifs,
+                ),
             }
             index = special.end;
             segment_start = index;
             continue;
         }
         if (quotedWholeArrayExpansionAt(text, index, options.features)) |special| {
-            try appendQuotedSegment(allocator, current, force_current_field, quoted_glob, text[segment_start..index], options);
+            try appendQuotedSegment(
+                allocator,
+                current,
+                force_current_field,
+                quoted_glob,
+                text[segment_start..index],
+                options,
+            );
             switch (special.expansion.kind) {
                 .values => switch (special.expansion.whole) {
                     .at => try appendQuotedArrayValues(
@@ -4609,7 +4653,14 @@ fn appendDoubleQuotedText(
             continue;
         }
         if (try quotedIndirectWholeArrayExpansionAt(allocator, text, index, options)) |special| {
-            try appendQuotedSegment(allocator, current, force_current_field, quoted_glob, text[segment_start..index], options);
+            try appendQuotedSegment(
+                allocator,
+                current,
+                force_current_field,
+                quoted_glob,
+                text[segment_start..index],
+                options,
+            );
             switch (special.expansion.whole) {
                 .at => try appendQuotedArrayValues(
                     allocator,
@@ -4634,7 +4685,14 @@ fn appendDoubleQuotedText(
             continue;
         }
         if (quotedNamePrefixExpansionAt(text, index, options.features)) |special| {
-            try appendQuotedSegment(allocator, current, force_current_field, quoted_glob, text[segment_start..index], options);
+            try appendQuotedSegment(
+                allocator,
+                current,
+                force_current_field,
+                quoted_glob,
+                text[segment_start..index],
+                options,
+            );
             switch (special.expansion.kind) {
                 .at => try appendQuotedNamePrefixAt(
                     allocator,
@@ -4651,7 +4709,14 @@ fn appendDoubleQuotedText(
             continue;
         }
         if (try quotedParameterExpansionAt(allocator, text, index)) |special| {
-            try appendQuotedSegment(allocator, current, force_current_field, quoted_glob, text[segment_start..index], options);
+            try appendQuotedSegment(
+                allocator,
+                current,
+                force_current_field,
+                quoted_glob,
+                text[segment_start..index],
+                options,
+            );
             try appendParameterExpansionQuoted(
                 allocator,
                 fields,
@@ -5920,7 +5985,14 @@ fn appendQuotedWholeArrayValues(
                 options.positionals,
                 true,
             ),
-            .star => try appendQuotedStar(allocator, current, force_current_field, quoted_glob, options.positionals, ifs),
+            .star => try appendQuotedStar(
+                allocator,
+                current,
+                force_current_field,
+                quoted_glob,
+                options.positionals,
+                ifs,
+            ),
         };
     }
     switch (whole) {
@@ -9890,7 +9962,7 @@ test "quoted positional parameters preserve fields" {
 }
 
 test "quoted empty command substitution preserves field around empty positional at" {
-    const empty_params = [_][]const u8{};
+    const empty_params: [0][]const u8 = .{};
 
     var bare_at = try expandWord(std.testing.allocator, "\"$@\"", .{ .positionals = &empty_params });
     defer bare_at.deinit();
@@ -10706,12 +10778,20 @@ test "pathname expansion bracket expressions support POSIX collating and equival
     defer std.Io.Dir.cwd().deleteFile(std.testing.io, close) catch {};
     defer std.Io.Dir.cwd().deleteFile(std.testing.io, other) catch {};
 
-    var hyphen_result = try expandWord(std.testing.allocator, "rush-bracket-element[[.-.]].tmp", .{ .io = std.testing.io });
+    var hyphen_result = try expandWord(
+        std.testing.allocator,
+        "rush-bracket-element[[.-.]].tmp",
+        .{ .io = std.testing.io },
+    );
     defer hyphen_result.deinit();
     try std.testing.expectEqual(@as(usize, 1), hyphen_result.fields.len);
     try std.testing.expectEqualStrings(hyphen, hyphen_result.fields[0]);
 
-    var close_result = try expandWord(std.testing.allocator, "rush-bracket-element[[=]=]].tmp", .{ .io = std.testing.io });
+    var close_result = try expandWord(
+        std.testing.allocator,
+        "rush-bracket-element[[=]=]].tmp",
+        .{ .io = std.testing.io },
+    );
     defer close_result.deinit();
     try std.testing.expectEqual(@as(usize, 1), close_result.fields.len);
     try std.testing.expectEqualStrings(close, close_result.fields[0]);
@@ -10765,7 +10845,11 @@ test "tilde expansion result is not subject to pathname expansion" {
         }
     };
 
-    var expanded = try expandWord(std.testing.allocator, "~", .{ .env = .{ .lookupFn = env.lookup }, .io = std.testing.io });
+    var expanded = try expandWord(
+        std.testing.allocator,
+        "~",
+        .{ .env = .{ .lookupFn = env.lookup }, .io = std.testing.io },
+    );
     defer expanded.deinit();
     try std.testing.expectEqual(@as(usize, 1), expanded.fields.len);
     try std.testing.expectEqualStrings("rush-tilde-glob-?.tmp", expanded.fields[0]);
@@ -10779,7 +10863,11 @@ test "parameter prefix removal expands tilde in pattern words" {
         }
     };
 
-    const removed = try expandWordScalar(std.testing.allocator, "${PATHLIKE#~}", .{ .env = .{ .lookupFn = env.lookup } });
+    const removed = try expandWordScalar(
+        std.testing.allocator,
+        "${PATHLIKE#~}",
+        .{ .env = .{ .lookupFn = env.lookup } },
+    );
     defer std.testing.allocator.free(removed);
     try std.testing.expectEqualStrings("/local/bin/rush", removed);
 }

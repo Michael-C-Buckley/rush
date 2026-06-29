@@ -78,9 +78,9 @@ pub const FunctionAutoloadSource = struct {
 pub const FunctionAutoload = struct {
     context: ?*anyopaque = null,
     lookup: ?*const fn (
-        ?*anyopaque,
         std.mem.Allocator,
         std.Io,
+        ?*anyopaque,
         state.ShellState,
         []const u8,
     ) anyerror!?FunctionAutoloadSource = null,
@@ -93,7 +93,7 @@ pub const FunctionAutoload = struct {
         name: []const u8,
     ) !?FunctionAutoloadSource {
         const lookup_fn = self.lookup orelse return null;
-        const source = try lookup_fn(self.context, allocator, io, shell_state, name);
+        const source = try lookup_fn(allocator, io, self.context, shell_state, name);
         if (source) |autoload_source| autoload_source.validate();
         return source;
     }
@@ -1568,7 +1568,11 @@ const SourceLowerer = struct {
         pipeline: ir.Pipeline,
         target: context.ExecutionTarget,
     ) !TrapActionBodyPayload {
-        if (pipeline.command_indexes.len == 1 and pipeline.stage_spans.len == 1 and !pipeline.negated and !pipeline.async_after) {
+        if (pipeline.command_indexes.len == 1 and
+            pipeline.stage_spans.len == 1 and
+            !pipeline.negated and
+            !pipeline.async_after)
+        {
             const lowered = try self.lowerIrSimpleCommand(program.commands[pipeline.command_indexes[0]], target);
             return switch (lowered) {
                 .plan => |plan| .{ .simple = plan },
@@ -3883,7 +3887,8 @@ const FunctionBodyCursor = struct {
                 defer buffers.resetScratchAfterStep();
                 defer child_outcome.deinit();
 
-                const state_disposition: StatementChildStateDisposition = if (statementPlanCommitsStateToParent(entry.plan))
+                const child_commits_state = statementPlanCommitsStateToParent(entry.plan);
+                const state_disposition: StatementChildStateDisposition = if (child_commits_state)
                     .{ .commit_to_working = child_outcome.state_delta.target }
                 else
                     .discard_except_status;
@@ -9082,13 +9087,15 @@ fn startBackgroundPipeline(
 
     for (plan.stages) |stage| {
         if (!stage.isExternalOnlyRealEligible()) {
-            if (backgroundPlanHasExternalOnlyRealLastStage(plan)) return startBackgroundSemanticPrefixExternalLastPipeline(
-                evaluator,
-                shell_state,
-                eval_context,
-                plan,
-                buffers,
-            );
+            if (backgroundPlanHasExternalOnlyRealLastStage(plan)) {
+                return startBackgroundSemanticPrefixExternalLastPipeline(
+                    evaluator,
+                    shell_state,
+                    eval_context,
+                    plan,
+                    buffers,
+                );
+            }
             return startBackgroundSemanticPipeline(
                 evaluator,
                 shell_state,
@@ -9596,7 +9603,11 @@ const BackgroundDescriptorSetup = struct {
     }
 
     fn closeChildOnlyReadEnds(self: *BackgroundDescriptorSetup) void {
-        for (self.read_ends.items) |descriptor| self.fd_port.close(.{ .descriptor = descriptor }) catch {};
+        for (self.read_ends.items) |descriptor| {
+            self.fd_port.close(.{ .descriptor = descriptor }) catch |err| switch (err) {
+                else => {},
+            };
+        }
         self.read_ends.clearRetainingCapacity();
     }
 
@@ -9618,7 +9629,9 @@ const BackgroundBytesWriter = struct {
     bytes: []u8,
 
     fn deinitPending(self: *BackgroundBytesWriter) void {
-        self.port.close(.{ .descriptor = self.descriptor }) catch {};
+        self.port.close(.{ .descriptor = self.descriptor }) catch |err| switch (err) {
+            else => {},
+        };
         self.allocator.free(self.bytes);
         self.allocator.destroy(self);
     }
@@ -9626,8 +9639,12 @@ const BackgroundBytesWriter = struct {
     fn run(self: *BackgroundBytesWriter) void {
         defer self.allocator.destroy(self);
         defer self.allocator.free(self.bytes);
-        defer self.port.close(.{ .descriptor = self.descriptor }) catch {};
-        self.port.writeAll(.{ .descriptor = self.descriptor, .bytes = self.bytes }) catch {};
+        defer self.port.close(.{ .descriptor = self.descriptor }) catch |err| switch (err) {
+            else => {},
+        };
+        self.port.writeAll(.{ .descriptor = self.descriptor, .bytes = self.bytes }) catch |err| switch (err) {
+            else => {},
+        };
     }
 };
 
@@ -10212,17 +10229,25 @@ fn saveAndReplaceStdinForPipeline(
         .originally_closed;
     errdefer restoreSavedPipelineStdin(fd_port, saved);
     try fd_port.duplicateTo(.{ .source = pipe_read, .target = 0 });
-    fd_port.close(.{ .descriptor = pipe_read }) catch {};
+    fd_port.close(.{ .descriptor = pipe_read }) catch |err| switch (err) {
+        else => {},
+    };
     return saved;
 }
 
 fn restoreSavedPipelineStdin(fd_port: runtime.fd.Port, saved: SavedPipelineStdin) void {
     switch (saved) {
         .saved => |descriptor| {
-            fd_port.duplicateTo(.{ .source = descriptor, .target = 0 }) catch {};
-            fd_port.close(.{ .descriptor = descriptor }) catch {};
+            fd_port.duplicateTo(.{ .source = descriptor, .target = 0 }) catch |err| switch (err) {
+                else => {},
+            };
+            fd_port.close(.{ .descriptor = descriptor }) catch |err| switch (err) {
+                else => {},
+            };
         },
-        .originally_closed => fd_port.close(.{ .descriptor = 0 }) catch {},
+        .originally_closed => fd_port.close(.{ .descriptor = 0 }) catch |err| switch (err) {
+            else => {},
+        },
     }
 }
 
@@ -11525,7 +11550,15 @@ fn evaluateSimpleStatementPlanDirect(
     if (delta.firstReadonlyAssignment(shell_state.*, plan.assignments) != null) return null;
 
     try appendPlanExpansionOutput(evaluator.*, eval_context, plan, buffers);
-    try traceCommandPlanForEvaluation(evaluator, shell_state, eval_context, plan, buffers.stdin, buffers.frame, buffers);
+    try traceCommandPlanForEvaluation(
+        evaluator,
+        shell_state,
+        eval_context,
+        plan,
+        buffers.stdin,
+        buffers.frame,
+        buffers,
+    );
     try flushCurrentShellBufferedCommandOutput(buffers, eval_context, evaluator.external_stdio, evaluator.io != null);
 
     const exported: ?bool = if (shell_state.options.enabled(.allexport)) true else null;
@@ -11547,7 +11580,15 @@ fn evaluateFunctionCallDirectWithPrelude(
 ) EvalError!?SimpleEvalResult {
     if (!directFunctionCallEligible(evaluator.*, shell_state.*, eval_context, plan)) return null;
     try appendPlanExpansionOutput(evaluator.*, eval_context, plan, buffers);
-    try traceCommandPlanForEvaluation(evaluator, shell_state, eval_context, plan, buffers.stdin, buffers.frame, buffers);
+    try traceCommandPlanForEvaluation(
+        evaluator,
+        shell_state,
+        eval_context,
+        plan,
+        buffers.stdin,
+        buffers.frame,
+        buffers,
+    );
     try flushCurrentShellBufferedCommandOutput(buffers, eval_context, evaluator.external_stdio, evaluator.io != null);
     return evaluateFunctionCallDirectPrepared(evaluator, shell_state, eval_context, plan, buffers);
 }
@@ -12517,7 +12558,13 @@ fn evaluateStatementPlan(
             buffers.stdin,
             buffers.frame,
         ),
-        .pipeline => |pipeline| evaluatePipelinePlanWithFrame(evaluator, shell_state, eval_context, pipeline, buffers.frame),
+        .pipeline => |pipeline| evaluatePipelinePlanWithFrame(
+            evaluator,
+            shell_state,
+            eval_context,
+            pipeline,
+            buffers.frame,
+        ),
         .source => |source| evaluateSourceStatement(evaluator, shell_state, eval_context, source, buffers),
         .ir_source => |source| evaluateIrSourceStatement(evaluator, shell_state, eval_context, source, buffers),
     };
@@ -12560,7 +12607,14 @@ fn evaluateSourceStatement(
     defer buffers.resetScratchAfterStep();
     defer buffers.endScratchBorrow();
 
-    return evaluateTrapActionBodyWithInputInFrame(evaluator, shell_state, eval_context, body, buffers.stdin, buffers.frame);
+    return evaluateTrapActionBodyWithInputInFrame(
+        evaluator,
+        shell_state,
+        eval_context,
+        body,
+        buffers.stdin,
+        buffers.frame,
+    );
 }
 
 fn evaluateIrSourceStatement(
@@ -12604,7 +12658,14 @@ fn evaluateIrSourceStatement(
     defer buffers.resetScratchAfterStep();
     defer buffers.endScratchBorrow();
 
-    return evaluateTrapActionBodyWithInputInFrame(evaluator, shell_state, eval_context, body, buffers.stdin, buffers.frame);
+    return evaluateTrapActionBodyWithInputInFrame(
+        evaluator,
+        shell_state,
+        eval_context,
+        body,
+        buffers.stdin,
+        buffers.frame,
+    );
 }
 
 fn evaluateAndOrList(
@@ -15249,7 +15310,14 @@ const ExternalInvocation = struct {
         process_port: runtime.process.Port,
         options: ExternalSpawnOptions,
     ) runtime.process.SpawnError!runtime.process.SpawnResult {
-        return spawnExternalProcess(evaluator, process_port, self.executable_path, self.argv, &self.environment, options);
+        return spawnExternalProcess(
+            evaluator,
+            process_port,
+            self.executable_path,
+            self.argv,
+            &self.environment,
+            options,
+        );
     }
 
     fn exec(
@@ -15257,7 +15325,7 @@ const ExternalInvocation = struct {
         process_port: runtime.process.Port,
         options: ExternalSpawnOptions,
     ) runtime.process.SpawnError!noreturn {
-        return try process_port.exec(.{
+        return process_port.exec(.{
             .executable_path = self.executable_path,
             .argv = self.argv,
             .environment = &self.environment,
@@ -18671,7 +18739,8 @@ fn evaluateExec(
         .target = .child_process,
     });
     if (((eval_context.command_substitution_depth != 0 and
-        (evaluator.command_substitution_execution == .forked_subshell or eval_context.command_substitution_depth == 1) and
+        (evaluator.command_substitution_execution == .forked_subshell or
+            eval_context.command_substitution_depth == 1) and
         eval_context.pipeline_depth == 0) or
         (eval_context.target.isIsolatedFromParent() and eval_context.function_depth != 0)) and
         !externalNeedsBufferedStdin(target_plan, buffers))
@@ -25424,7 +25493,9 @@ test "semantic background compound command is tracked as one subshell job" {
     } } });
     const compound: command_plan.CompoundCommandPlan = .{
         .target = .current_shell,
-        .body = .{ .brace_group = .{ .statements = &[_]command_plan.StatementListEntry{simpleStatement(export_plan)} } },
+        .body = .{ .brace_group = .{ .statements = &[_]command_plan.StatementListEntry{
+            simpleStatement(export_plan),
+        } } },
     };
     const pipeline = pipeline_plan.PipelinePlan.init(
         &[_]pipeline_plan.PipelineStagePlan{.{ .compound = compound }},
@@ -26261,7 +26332,9 @@ test "semantic evaluator evaluates compound if loop for and case forms" {
         .{ .command = .{ .assignments = &fallthrough_second_assignment } },
     )};
     const fallthrough_first_statements = [_]command_plan.StatementListEntry{simpleStatement(fallthrough_first_body[0])};
-    const fallthrough_second_statements = [_]command_plan.StatementListEntry{simpleStatement(fallthrough_second_body[0])};
+    const fallthrough_second_statements = [_]command_plan.StatementListEntry{
+        simpleStatement(fallthrough_second_body[0]),
+    };
     const fallthrough_arms = [_]command_plan.CaseArm{
         .{
             .patterns = &[_][]const u8{"fall"},

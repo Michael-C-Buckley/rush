@@ -304,7 +304,10 @@ fn isTty(context: *anyopaque, request: fd.IsTtyRequest) fd.IsTtyError!fd.IsTtyRe
     return .{ .is_tty = try descriptorIsTty(request.descriptor) };
 }
 
-fn descriptorStatus(context: *anyopaque, request: fd.DescriptorStatusRequest) fd.DescriptorStatusError!fd.DescriptorStatusResult {
+fn descriptorStatus(
+    context: *anyopaque,
+    request: fd.DescriptorStatusRequest,
+) fd.DescriptorStatusError!fd.DescriptorStatusResult {
     _ = context;
     request.validate();
     return .{ .is_open = try descriptorIsOpen(request.descriptor) };
@@ -711,11 +714,21 @@ fn spawnResolvedPath(
         forkBail(err_pipe.write, execveErrorFromErrno(std.c.errno(-1)));
     }
 
-    closeDescriptor(err_pipe.write) catch {};
-    defer closeDescriptor(err_pipe.read) catch {};
-    if (stdin_pipe) |descriptors| closeDescriptor(descriptors.read) catch {};
-    if (stdout_pipe) |descriptors| closeDescriptor(descriptors.write) catch {};
-    if (stderr_pipe) |descriptors| closeDescriptor(descriptors.write) catch {};
+    closeDescriptor(err_pipe.write) catch |close_err| switch (close_err) {
+        else => {},
+    };
+    defer closeDescriptor(err_pipe.read) catch |close_err| switch (close_err) {
+        else => {},
+    };
+    if (stdin_pipe) |descriptors| closeDescriptor(descriptors.read) catch |close_err| switch (close_err) {
+        else => {},
+    };
+    if (stdout_pipe) |descriptors| closeDescriptor(descriptors.write) catch |close_err| switch (close_err) {
+        else => {},
+    };
+    if (stderr_pipe) |descriptors| closeDescriptor(descriptors.write) catch |close_err| switch (close_err) {
+        else => {},
+    };
 
     if (readForkError(err_pipe.read)) |child_err_int| {
         return @errorCast(@errorFromInt(child_err_int));
@@ -727,9 +740,18 @@ fn spawnResolvedPath(
     const child: std.process.Child = .{
         .id = @intCast(pid),
         .thread_handle = {},
-        .stdin = if (stdin_pipe) |descriptors| .{ .handle = descriptors.write, .flags = .{ .nonblocking = false } } else null,
-        .stdout = if (stdout_pipe) |descriptors| .{ .handle = descriptors.read, .flags = .{ .nonblocking = false } } else null,
-        .stderr = if (stderr_pipe) |descriptors| .{ .handle = descriptors.read, .flags = .{ .nonblocking = false } } else null,
+        .stdin = if (stdin_pipe) |descriptors| .{
+            .handle = descriptors.write,
+            .flags = .{ .nonblocking = false },
+        } else null,
+        .stdout = if (stdout_pipe) |descriptors| .{
+            .handle = descriptors.read,
+            .flags = .{ .nonblocking = false },
+        } else null,
+        .stderr = if (stderr_pipe) |descriptors| .{
+            .handle = descriptors.read,
+            .flags = .{ .nonblocking = false },
+        } else null,
         .request_resource_usage_statistics = false,
     };
     return .{ .child = process.ChildProcess.init(child) };
@@ -745,8 +767,12 @@ fn spawnPipe(adapter: *Adapter) process.SpawnError!fd.PipeResult {
 }
 
 fn closePipe(descriptors: fd.PipeResult) void {
-    closeDescriptor(descriptors.read) catch {};
-    closeDescriptor(descriptors.write) catch {};
+    closeDescriptor(descriptors.read) catch |close_err| switch (close_err) {
+        else => {},
+    };
+    closeDescriptor(descriptors.write) catch |close_err| switch (close_err) {
+        else => {},
+    };
 }
 
 fn configureSpawnedChild(
@@ -767,9 +793,15 @@ fn configureSpawnedChild(
     configureSpawnStdio(request.stdout, stdout_pipe, dev_null, 1, err_fd);
     configureSpawnStdio(request.stderr, stderr_pipe, dev_null, 2, err_fd);
 
-    if (stdin_pipe) |descriptors| closeDescriptor(descriptors.write) catch {};
-    if (stdout_pipe) |descriptors| closeDescriptor(descriptors.read) catch {};
-    if (stderr_pipe) |descriptors| closeDescriptor(descriptors.read) catch {};
+    if (stdin_pipe) |descriptors| closeDescriptor(descriptors.write) catch |close_err| switch (close_err) {
+        else => {},
+    };
+    if (stdout_pipe) |descriptors| closeDescriptor(descriptors.read) catch |close_err| switch (close_err) {
+        else => {},
+    };
+    if (stderr_pipe) |descriptors| closeDescriptor(descriptors.read) catch |close_err| switch (close_err) {
+        else => {},
+    };
 }
 
 fn configureSpawnCwd(cwd: process.Cwd, err_fd: fd.Descriptor) void {
@@ -809,16 +841,18 @@ fn configureSpawnStdio(
     }
 }
 
-const ForkErrorInt = std.meta.Int(.unsigned, @sizeOf(anyerror) * 8);
+const fork_error_int = @Int(.unsigned, @sizeOf(anyerror) * 8);
 
 fn forkBail(descriptor: fd.Descriptor, err: process.SpawnError) noreturn {
-    writeForkError(descriptor, @intFromError(err)) catch {};
+    writeForkError(descriptor, @intFromError(err)) catch |close_err| switch (close_err) {
+        else => {},
+    };
     std.c._exit(1);
 }
 
-fn writeForkError(descriptor: fd.Descriptor, value: ForkErrorInt) !void {
-    var buffer: [@sizeOf(ForkErrorInt)]u8 = undefined;
-    std.mem.writeInt(ForkErrorInt, &buffer, value, .little);
+fn writeForkError(descriptor: fd.Descriptor, value: fork_error_int) !void {
+    var buffer: [@sizeOf(fork_error_int)]u8 = undefined;
+    std.mem.writeInt(fork_error_int, &buffer, value, .little);
     var index: usize = 0;
     while (index < buffer.len) {
         const written = std.c.write(descriptor, buffer[index..].ptr, buffer.len - index);
@@ -830,8 +864,8 @@ fn writeForkError(descriptor: fd.Descriptor, value: ForkErrorInt) !void {
     }
 }
 
-fn readForkError(descriptor: fd.Descriptor) error{ EndOfStream, Unexpected }!ForkErrorInt {
-    var buffer: [@sizeOf(ForkErrorInt)]u8 = undefined;
+fn readForkError(descriptor: fd.Descriptor) error{ EndOfStream, Unexpected }!fork_error_int {
+    var buffer: [@sizeOf(fork_error_int)]u8 = undefined;
     var index: usize = 0;
     while (index < buffer.len) {
         const read_count = std.c.read(descriptor, buffer[index..].ptr, buffer.len - index);
@@ -846,7 +880,7 @@ fn readForkError(descriptor: fd.Descriptor) error{ EndOfStream, Unexpected }!For
         }
     }
     if (index != buffer.len) return error.EndOfStream;
-    return std.mem.readInt(ForkErrorInt, &buffer, .little);
+    return std.mem.readInt(fork_error_int, &buffer, .little);
 }
 
 fn execveErrorFromErrno(errno: std.c.E) process.SpawnError {
@@ -1500,11 +1534,11 @@ fn pathIdentity(path: []const u8, follow_symlinks: bool) ?fs.PathIdentity {
     var stat_result: std.c.Stat = undefined;
     const flags: u32 = if (follow_symlinks) 0 else std.c.AT.SYMLINK_NOFOLLOW;
     if (std.c.fstatat(std.c.AT.FDCWD, &path_z, &stat_result, flags) != 0) return null;
-    const Device = std.meta.Int(.unsigned, @bitSizeOf(@TypeOf(stat_result.dev)));
-    const Inode = std.meta.Int(.unsigned, @bitSizeOf(@TypeOf(stat_result.ino)));
+    const device_int = @Int(.unsigned, @bitSizeOf(@TypeOf(stat_result.dev)));
+    const inode_int = @Int(.unsigned, @bitSizeOf(@TypeOf(stat_result.ino)));
     return .{
-        .device = @as(u64, @as(Device, @bitCast(stat_result.dev))),
-        .inode = @as(u64, @as(Inode, @bitCast(stat_result.ino))),
+        .device = @as(u64, @as(device_int, @bitCast(stat_result.dev))),
+        .inode = @as(u64, @as(inode_int, @bitCast(stat_result.ino))),
     };
 }
 

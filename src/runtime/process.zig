@@ -559,7 +559,7 @@ pub const Port = struct {
     pub fn exec(self: Port, request: ExecRequest) SpawnError!noreturn {
         request.validate();
         const exec_fn = self.exec_fn orelse return error.OperationUnsupported;
-        return try exec_fn(self.context, request);
+        return exec_fn(self.context, request);
     }
 
     pub fn getTimes(self: Port) TimesError!ProcessTimes {

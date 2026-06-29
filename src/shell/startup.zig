@@ -128,11 +128,11 @@ fn fileIdentity(allocator: std.mem.Allocator, path: []const u8) ?FileIdentity {
 
     var stat_result: std.c.Stat = undefined;
     if (std.c.fstatat(std.c.AT.FDCWD, path_z.ptr, &stat_result, 0) != 0) return null;
-    const Device = std.meta.Int(.unsigned, @bitSizeOf(@TypeOf(stat_result.dev)));
-    const Inode = std.meta.Int(.unsigned, @bitSizeOf(@TypeOf(stat_result.ino)));
+    const device_int = @Int(.unsigned, @bitSizeOf(@TypeOf(stat_result.dev)));
+    const inode_int = @Int(.unsigned, @bitSizeOf(@TypeOf(stat_result.ino)));
     return .{
-        .device = @as(u64, @as(Device, @bitCast(stat_result.dev))),
-        .inode = @as(u64, @as(Inode, @bitCast(stat_result.ino))),
+        .device = @as(u64, @as(device_int, @bitCast(stat_result.dev))),
+        .inode = @as(u64, @as(inode_int, @bitCast(stat_result.ino))),
     };
 }
 

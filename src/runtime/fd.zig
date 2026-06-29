@@ -267,7 +267,10 @@ pub const PipeFn = *const fn (*anyopaque, PipeRequest) PipeError!PipeResult;
 pub const ReadFn = *const fn (*anyopaque, ReadRequest) ReadError!ReadResult;
 pub const WriteFn = *const fn (*anyopaque, WriteRequest) WriteError!void;
 pub const IsTtyFn = *const fn (*anyopaque, IsTtyRequest) IsTtyError!IsTtyResult;
-pub const DescriptorStatusFn = *const fn (*anyopaque, DescriptorStatusRequest) DescriptorStatusError!DescriptorStatusResult;
+pub const DescriptorStatusFn = *const fn (
+    *anyopaque,
+    DescriptorStatusRequest,
+) DescriptorStatusError!DescriptorStatusResult;
 
 pub const Port = struct {
     context: *anyopaque,

@@ -1867,7 +1867,11 @@ fn maskSourceRanges(allocator: std.mem.Allocator, source: []const u8, ranges: []
     return masked;
 }
 
-pub fn expandAliases(allocator: std.mem.Allocator, source: []const u8, options: AliasExpansionOptions) anyerror![]const u8 {
+pub fn expandAliases(
+    allocator: std.mem.Allocator,
+    source: []const u8,
+    options: AliasExpansionOptions,
+) anyerror![]const u8 {
     if (options.context == null or options.lookup == null) return allocator.dupe(u8, source);
 
     var output: std.ArrayList(u8) = .empty;
@@ -2098,7 +2102,8 @@ test "alias expansion parses modernish loop aliases inside command substitutions
         fn lookup(context: *anyopaque, name: []const u8) ?[]const u8 {
             _ = context;
             if (std.mem.eql(u8, name, "LOOP")) return "{ { { _Msh_loop";
-            if (std.mem.eql(u8, name, "DO")) return "}; _Msh_loop_c && while _loop_E=0 _loop_Ln=${LINENO-}; IFS= read -r _loop_i <&8 && eval \" ${_loop_i}\"; do { ";
+            if (std.mem.eql(u8, name, "DO")) return "}; _Msh_loop_c && while _loop_E=0 _loop_Ln=${LINENO-}; " ++
+                "IFS= read -r _loop_i <&8 && eval \" ${_loop_i}\"; do { ";
             if (std.mem.eql(u8, name, "DONE")) return "} 8<&-; done; } 8<&-; _Msh_loop_setE; }";
             return null;
         }
