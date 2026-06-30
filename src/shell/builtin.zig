@@ -28,6 +28,7 @@ pub const Id = enum {
     exit,
     false_,
     getopts,
+    kill,
     printf,
     pwd,
     read,
@@ -72,6 +73,7 @@ pub const definitions: DefinitionMap = .initComptime(.{
     .{ "exit", Definition{ .name = "exit", .id = .exit, .kind = .special } },
     .{ "false", Definition{ .name = "false", .id = .false_, .kind = .regular } },
     .{ "getopts", Definition{ .name = "getopts", .id = .getopts, .kind = .regular } },
+    .{ "kill", Definition{ .name = "kill", .id = .kill, .kind = .regular } },
     .{ "printf", Definition{ .name = "printf", .id = .printf, .kind = .regular } },
     .{ "pwd", Definition{ .name = "pwd", .id = .pwd, .kind = .regular } },
     .{ "read", Definition{ .name = "read", .id = .read, .kind = .regular } },
@@ -107,6 +109,7 @@ pub fn eval(shell: anytype, definition: Definition, args: []const []const u8) !r
         .exit => evalExit(shell, args),
         .false_ => .{ .status = 1 },
         .getopts => evalGetopts(shell, args),
+        .kill => evalKill(shell, args),
         .printf => evalPrintf(shell, args),
         .readonly => evalReadonly(shell, args),
         .return_ => evalReturn(shell, args),
@@ -277,6 +280,40 @@ fn advanceGetopts(shell: anytype, optind: usize, operand: []const u8) !void {
 
 fn isGetoptsOptionOperand(operand: []const u8) bool {
     return operand.len >= 2 and operand[0] == '-' and !std.mem.eql(u8, operand, "-");
+}
+
+fn evalKill(shell: anytype, args: []const []const u8) !result.EvalResult {
+    var kill_signal: KillSignal = .{ .name = "TERM", .number = signalNumber("TERM").? };
+    var index: usize = 1;
+    if (index < args.len and std.mem.eql(u8, args[index], "-s")) {
+        index += 1;
+        if (index >= args.len) return .{ .status = 2 };
+        kill_signal = parseKillSignal(args[index]) orelse return .{ .status = 2 };
+        index += 1;
+    } else if (index < args.len and args[index].len > 1 and args[index][0] == '-') {
+        kill_signal = parseKillSignal(args[index][1..]) orelse return .{ .status = 2 };
+        index += 1;
+    }
+    if (index >= args.len) return .{ .status = 2 };
+
+    var status: result.ExitStatus = 0;
+    while (index < args.len) : (index += 1) {
+        const pid = std.fmt.parseInt(host.Pid, args[index], 10) catch {
+            status = 1;
+            continue;
+        };
+        if (kill_signal.name) |signal_name| {
+            if (pid == shell.host.currentProcessId() and shell.state.getSignalTrap(signal_name) != null) {
+                try shell.state.queueTrap(signal_name);
+                continue;
+            }
+        }
+        shell.host.sendSignal(pid, kill_signal.number) catch {
+            status = 1;
+            continue;
+        };
+    }
+    return .{ .status = status };
 }
 
 fn evalUmask(shell: anytype, args: []const []const u8) !result.EvalResult {
@@ -560,22 +597,50 @@ fn evalTrap(shell: anytype, args: []const []const u8) !result.EvalResult {
 
 const TrapSignal = union(enum) { exit, other: []const u8 };
 
-const trap_signal_names = [_][]const u8{ "INT", "QUIT", "PIPE", "ALRM", "TERM", "USR1", "KILL" };
+const KillSignal = struct {
+    name: ?[]const u8,
+    number: u8,
+};
+
+const trap_signal_names = [_][]const u8{
+    "HUP",  "INT",  "QUIT", "ILL",  "TRAP", "ABRT", "FPE",  "KILL", "BUS",  "SEGV",
+    "PIPE", "ALRM", "TERM", "USR1", "USR2", "CHLD", "CONT", "STOP", "TSTP", "TTIN",
+    "TTOU",
+};
 
 fn parseTrapSignal(signal: []const u8) ?TrapSignal {
     if (std.mem.eql(u8, signal, "0") or std.mem.eql(u8, signal, "EXIT")) return .exit;
-    for (trap_signal_names) |name| if (std.mem.eql(u8, signal, name)) return .{ .other = name };
+    if (signalName(signal)) |name| return .{ .other = name };
     const number = std.fmt.parseInt(u8, signal, 10) catch return null;
-    return switch (number) {
-        2 => .{ .other = "INT" },
-        3 => .{ .other = "QUIT" },
-        9 => .{ .other = "KILL" },
-        10 => .{ .other = "USR1" },
-        13 => .{ .other = "PIPE" },
-        14 => .{ .other = "ALRM" },
-        15 => .{ .other = "TERM" },
-        else => .{ .other = signal },
-    };
+    return if (signalNameFromNumber(number)) |name| .{ .other = name } else null;
+}
+
+fn parseKillSignal(signal: []const u8) ?KillSignal {
+    if (std.mem.eql(u8, signal, "0")) return .{ .name = null, .number = 0 };
+    if (signalName(signal)) |name| return .{ .name = name, .number = signalNumber(name) orelse return null };
+    const number = std.fmt.parseInt(u8, signal, 10) catch return null;
+    if (number == 0) return .{ .name = null, .number = 0 };
+    return .{ .name = signalNameFromNumber(number), .number = number };
+}
+
+fn signalName(signal: []const u8) ?[]const u8 {
+    const name_without_prefix = if (std.mem.startsWith(u8, signal, "SIG")) signal[3..] else signal;
+    for (trap_signal_names) |name| if (std.mem.eql(u8, name_without_prefix, name)) return name;
+    return null;
+}
+
+fn signalNumber(signal: []const u8) ?u8 {
+    inline for (trap_signal_names) |name| {
+        if (std.mem.eql(u8, signal, name) and @hasField(std.c.SIG, name)) {
+            return @intCast(@intFromEnum(@field(std.c.SIG, name)));
+        }
+    }
+    return null;
+}
+
+fn signalNameFromNumber(number: u8) ?[]const u8 {
+    for (trap_signal_names) |name| if (signalNumber(name) == number) return name;
+    return null;
 }
 
 fn isAssignmentName(name: []const u8) bool {
@@ -601,6 +666,7 @@ test "builtin lookup identifies null true and false utilities" {
     try std.testing.expectEqual(Id.export_, lookup("export").?.id);
     try std.testing.expectEqual(Id.exit, lookup("exit").?.id);
     try std.testing.expectEqual(Id.getopts, lookup("getopts").?.id);
+    try std.testing.expectEqual(Id.kill, lookup("kill").?.id);
     try std.testing.expectEqual(Id.true_, lookup("true").?.id);
     try std.testing.expectEqual(Id.false_, lookup("false").?.id);
     try std.testing.expectEqual(Id.printf, lookup("printf").?.id);
@@ -624,6 +690,12 @@ test "builtin eval returns utility status" {
         pub fn setFileCreationMask(_: *@This(), mask: u32) u32 {
             return mask;
         }
+
+        pub fn currentProcessId(_: *@This()) host.Pid {
+            return 1;
+        }
+
+        pub fn sendSignal(_: *@This(), _: host.Pid, _: u8) !void {}
     };
     const TestShell = struct {
         host: TestHost = .{},
@@ -650,6 +722,12 @@ test "exit builtin returns requested exit flow" {
         pub fn setFileCreationMask(_: *@This(), mask: u32) u32 {
             return mask;
         }
+
+        pub fn currentProcessId(_: *@This()) host.Pid {
+            return 1;
+        }
+
+        pub fn sendSignal(_: *@This(), _: host.Pid, _: u8) !void {}
     };
     const TestShell = struct {
         host: TestHost = .{},
@@ -689,6 +767,12 @@ test "printf writes formatted output once" {
         pub fn setFileCreationMask(_: *@This(), mask: u32) u32 {
             return mask;
         }
+
+        pub fn currentProcessId(_: *@This()) host.Pid {
+            return 1;
+        }
+
+        pub fn sendSignal(_: *@This(), _: host.Pid, _: u8) !void {}
     };
     const TestShell = struct {
         host: TestHost = .{},

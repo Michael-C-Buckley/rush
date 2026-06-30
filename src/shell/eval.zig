@@ -35,9 +35,27 @@ pub fn runExitTrap(shell: anytype, status: result.ExitStatus) EvalError!result.E
     return if (evaluated.flow == .exit) evaluated.status else status;
 }
 
+fn runPendingTrapCheckpoint(shell: anytype) EvalError!result.EvalResult {
+    if (shell.state.running_signal_trap) return .{};
+    const name = shell.state.popPendingTrap() orelse return .{};
+    const action = shell.state.getSignalTrap(name) orelse return .{};
+
+    shell.state.running_signal_trap = true;
+    defer shell.state.running_signal_trap = false;
+
+    const saved_status = shell.state.last_status;
+    const src: source_mod.Source = .{ .id = 0, .kind = .command_string, .name = "trap", .text = action };
+    const evaluated = try shell.evalSourceNested(src);
+    shell.state.last_status = saved_status;
+    if (evaluated.flow != .normal) return evaluated;
+    return .{ .status = saved_status };
+}
+
 fn evalList(shell: anytype, list: ast.List) EvalError!result.EvalResult {
     var status: result.ExitStatus = 0;
     for (list.entries) |entry| {
+        const trap_result = try runPendingTrapCheckpoint(shell);
+        if (trap_result.flow != .normal) return trap_result;
         const evaluated = switch (entry.terminator orelse .sequence) {
             .sequence => try evalAndOr(shell, entry.and_or),
             .background => try evalBackgroundAndOr(shell, entry.and_or),
@@ -643,7 +661,7 @@ fn evalSimpleScoped(shell: anytype, command: ast.SimpleCommand) EvalError!result
         if (definition.id == .type) return evalTypeBuiltin(shell, fields);
         if (definition.id == .wait) return evalWaitBuiltin(shell, fields);
         const args = switch (definition.id) {
-            .alias, .cd, .command, .getopts, .printf, .pwd, .read, .type, .umask, .unalias, .wait => fields,
+            .alias, .cd, .command, .getopts, .kill, .printf, .pwd, .read, .type, .umask, .unalias, .wait => fields,
             .false_, .true_ => &[_][]const u8{name},
             else => unreachable,
         };
@@ -897,7 +915,7 @@ fn evalCommandBuiltin(
                 restored_assignments = true;
                 return evaluated;
             },
-            .alias, .break_, .continue_, .exit, .getopts, .printf, .return_, .set, .shift, .trap, .umask, .unalias, .unset => {
+            .alias, .break_, .continue_, .exit, .getopts, .kill, .printf, .return_, .set, .shift, .trap, .umask, .unalias, .unset => {
                 const evaluated = try builtin.eval(shell, definition, args[index..]);
                 restoreVariables(shell, saved);
                 restored_assignments = true;
@@ -3356,7 +3374,7 @@ fn expandParameter(shell: anytype, parameter: ast.ParameterExpansion) EvalError!
             .hash => try std.fmt.allocPrint(shell.scratchAllocator(), "{}", .{shell.state.positionals.len}),
             .question => try formatExitStatus(shell, shell.state.last_status),
             .hyphen => try optionFlags(shell),
-            .dollar => try std.fmt.allocPrint(shell.scratchAllocator(), "{}", .{std.c.getpid()}),
+            .dollar => try std.fmt.allocPrint(shell.scratchAllocator(), "{}", .{shell.host.currentProcessId()}),
             .bang => if (shell.state.last_background_pid) |pid|
                 try std.fmt.allocPrint(shell.scratchAllocator(), "{}", .{pid})
             else
@@ -3474,7 +3492,7 @@ fn parameterCurrentValue(shell: anytype, parameter: ast.Parameter) !?[]const u8 
             .hash => try std.fmt.allocPrint(shell.scratchAllocator(), "{}", .{shell.state.positionals.len}),
             .question => try formatExitStatus(shell, shell.state.last_status),
             .hyphen => try optionFlags(shell),
-            .dollar => try std.fmt.allocPrint(shell.scratchAllocator(), "{}", .{std.c.getpid()}),
+            .dollar => try std.fmt.allocPrint(shell.scratchAllocator(), "{}", .{shell.host.currentProcessId()}),
             .bang => if (shell.state.last_background_pid) |pid|
                 try std.fmt.allocPrint(shell.scratchAllocator(), "{}", .{pid})
             else

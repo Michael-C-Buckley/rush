@@ -56,6 +56,8 @@ pub const WaitError = error{
     Unexpected,
 };
 
+pub const KillError = host.KillError;
+
 pub fn read(fd: host.Fd, buffer: []u8) ReadError!usize {
     if (buffer.len == 0) return 0;
     return switch (builtin.os.tag) {
@@ -152,6 +154,22 @@ pub fn exit(status: u8) noreturn {
         .macos, .freebsd, .openbsd, .netbsd => std.c._exit(status),
         else => @compileError("unsupported host OS"),
     }
+}
+
+pub fn currentProcessId() host.Pid {
+    return switch (builtin.os.tag) {
+        .linux => @intCast(std.os.linux.getpid()),
+        .macos, .freebsd, .openbsd, .netbsd => @intCast(std.c.getpid()),
+        else => @compileError("unsupported host OS"),
+    };
+}
+
+pub fn sendSignal(pid: host.Pid, signal: u8) KillError!void {
+    return switch (builtin.os.tag) {
+        .linux => linuxSendSignal(pid, signal),
+        .macos, .freebsd, .openbsd, .netbsd => libcSendSignal(pid, signal),
+        else => @compileError("unsupported host OS"),
+    };
 }
 
 pub fn isExecutableZ(path: [:0]const u8) bool {
@@ -573,6 +591,17 @@ fn linuxExistsZ(path: [:0]const u8) bool {
     return std.os.linux.errno(rc) == .SUCCESS;
 }
 
+fn linuxSendSignal(pid: host.Pid, signal: u8) KillError!void {
+    const rc = std.os.linux.kill(pid, @enumFromInt(signal));
+    switch (std.os.linux.errno(rc)) {
+        .SUCCESS => return,
+        .PERM => return error.AccessDenied,
+        .SRCH => return error.NoSuchProcess,
+        .INVAL => return error.InvalidSignal,
+        else => return error.Unexpected,
+    }
+}
+
 fn libcIsExecutableZ(path: [:0]const u8) bool {
     const rc = std.c.access(path.ptr, std.c.X_OK);
     return std.c.errno(rc) == .SUCCESS;
@@ -581,6 +610,17 @@ fn libcIsExecutableZ(path: [:0]const u8) bool {
 fn libcExistsZ(path: [:0]const u8) bool {
     const rc = std.c.access(path.ptr, std.c.F_OK);
     return std.c.errno(rc) == .SUCCESS;
+}
+
+fn libcSendSignal(pid: host.Pid, signal: u8) KillError!void {
+    const rc = std.c.kill(@intCast(pid), @enumFromInt(signal));
+    switch (std.c.errno(rc)) {
+        .SUCCESS => return,
+        .PERM => return error.AccessDenied,
+        .SRCH => return error.NoSuchProcess,
+        .INVAL => return error.InvalidSignal,
+        else => return error.Unexpected,
+    }
 }
 
 fn linuxFileStatusZ(path: [:0]const u8) FileStatusError!host.FileStatus {

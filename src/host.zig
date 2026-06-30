@@ -139,6 +139,13 @@ pub const FdFlagError = error{
     Unexpected,
 };
 
+pub const KillError = error{
+    AccessDenied,
+    NoSuchProcess,
+    InvalidSignal,
+    Unexpected,
+};
+
 pub const SpawnFdAction = union(enum) {
     close: Fd,
     duplicate: struct {
@@ -300,6 +307,14 @@ pub const RealHost = struct {
 
     pub fn setFileCreationMask(_: *RealHost, mask: u32) u32 {
         return platform.setFileCreationMask(mask);
+    }
+
+    pub fn currentProcessId(_: *RealHost) Pid {
+        return platform.currentProcessId();
+    }
+
+    pub fn sendSignal(_: *RealHost, pid: Pid, signal: u8) platform.KillError!void {
+        try platform.sendSignal(pid, signal);
     }
 
     pub fn spawn(_: *RealHost, request: SpawnRequest) platform.SpawnError!SpawnResult {

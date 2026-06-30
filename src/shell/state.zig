@@ -66,6 +66,7 @@ pub const State = struct {
     functions: std.StringHashMapUnmanaged(Function) = .empty,
     aliases: std.StringHashMapUnmanaged(Alias) = .empty,
     signal_traps: std.StringHashMapUnmanaged([]const u8) = .empty,
+    pending_traps: std.ArrayListUnmanaged([]const u8) = .empty,
     background_pids: std.ArrayListUnmanaged(host.Pid) = .empty,
     last_status: result.ExitStatus = 0,
     last_background_pid: ?host.Pid = null,
@@ -76,6 +77,7 @@ pub const State = struct {
     exit_trap: ?[]const u8 = null,
     exit_trap_listing: ?[]const u8 = null,
     running_exit_trap: bool = false,
+    running_signal_trap: bool = false,
     arg_zero: []const u8 = "rush",
     positionals: []const []const u8 = &.{},
     owned_positionals: []const []const u8 = &.{},
@@ -105,6 +107,7 @@ pub const State = struct {
         var signal_trap_iterator = self.signal_traps.iterator();
         while (signal_trap_iterator.next()) |entry| self.allocator.free(entry.value_ptr.*);
         self.signal_traps.deinit(self.allocator);
+        self.pending_traps.deinit(self.allocator);
         self.background_pids.deinit(self.allocator);
         self.freeOwnedPositionals();
         self.clearExitTrap();
@@ -276,6 +279,18 @@ pub const State = struct {
 
     pub fn clearSignalTrap(self: *State, name: []const u8) void {
         if (self.signal_traps.fetchRemove(name)) |entry| self.allocator.free(entry.value);
+    }
+
+    pub fn queueTrap(self: *State, name: []const u8) !void {
+        try self.pending_traps.append(self.allocator, name);
+    }
+
+    pub fn popPendingTrap(self: *State) ?[]const u8 {
+        if (self.pending_traps.items.len == 0) return null;
+        const name = self.pending_traps.items[0];
+        std.mem.copyForwards([]const u8, self.pending_traps.items[0 .. self.pending_traps.items.len - 1], self.pending_traps.items[1..]);
+        self.pending_traps.items.len -= 1;
+        return name;
     }
 
     pub fn addBackgroundPid(self: *State, pid: host.Pid) !void {
