@@ -74,16 +74,24 @@ pub fn Shell(comptime Host: type) type {
         }
 
         pub fn evalSource(self: *Self, src: source.Source) !result.EvalResult {
+            return self.evalSourceWithReset(src, true);
+        }
+
+        pub fn evalSourceNested(self: *Self, src: source.Source) !result.EvalResult {
+            return self.evalSourceWithReset(src, false);
+        }
+
+        fn evalSourceWithReset(self: *Self, src: source.Source, reset_chunks: bool) !result.EvalResult {
             src.validate();
-            if (!self.sourceNeedsAliasAwareEvaluation(src)) return self.evalSourceChunk(src, src.text);
-            if (src.text.len == 0) return self.evalSourceChunk(src, src.text);
+            if (!self.sourceNeedsAliasAwareEvaluation(src)) return self.evalSourceChunk(src, src.text, reset_chunks);
+            if (src.text.len == 0) return self.evalSourceChunk(src, src.text, reset_chunks);
 
             var start: usize = 0;
             var end: usize = 0;
             var last: result.EvalResult = .{};
             while (start < src.text.len) {
                 end = nextLineEnd(src.text, end);
-                const evaluated = self.evalSourceChunk(src, src.text[start..end]) catch |err| switch (err) {
+                const evaluated = self.evalSourceChunk(src, src.text[start..end], reset_chunks) catch |err| switch (err) {
                     error.ExpectedCommand,
                     error.ExpectedRedirectionTarget,
                     error.UnclosedCommandSubstitution,
@@ -103,8 +111,8 @@ pub fn Shell(comptime Host: type) type {
             return last;
         }
 
-        fn evalSourceChunk(self: *Self, src: source.Source, text: []const u8) !result.EvalResult {
-            self.resetForTopLevelCommand();
+        fn evalSourceChunk(self: *Self, src: source.Source, text: []const u8, reset: bool) !result.EvalResult {
+            if (reset) self.resetForTopLevelCommand();
 
             const chunk_src: source.Source = .{ .id = src.id, .kind = src.kind, .name = src.name, .text = text };
 

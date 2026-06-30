@@ -606,11 +606,7 @@ fn evalDotBuiltin(shell: anytype, args: []const []const u8) EvalError!result.Eva
         .name = path,
         .text = script,
     };
-    const ast_allocator = shell.astAllocator();
-    const tokens = try lexer.lexWithAliases(ast_allocator, src, shell.state);
-    const program = try parser.parse(ast_allocator, src, tokens);
-    program.validate();
-    const evaluated = try evalProgram(@TypeOf(shell.host), shell, program);
+    const evaluated = try shell.evalSourceNested(src);
     try restorePositionals(shell, saved_positionals);
     restored_positionals = true;
     return evaluated;
@@ -1292,10 +1288,7 @@ fn evalEvalBuiltin(shell: anytype, args: []const []const u8) EvalError!result.Ev
     }
 
     const src: source_mod.Source = .{ .id = 0, .kind = .command_string, .name = "eval", .text = script };
-    const ast_allocator = shell.astAllocator();
-    const tokens = try lexer.lex(ast_allocator, src);
-    const program = try parser.parse(ast_allocator, src, tokens);
-    return evalProgram(@TypeOf(shell.host), shell, program);
+    return shell.evalSourceNested(src);
 }
 
 fn evalExecBuiltin(shell: anytype, args: []const []const u8) EvalError!result.EvalResult {
