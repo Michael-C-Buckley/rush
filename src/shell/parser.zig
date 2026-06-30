@@ -3,6 +3,7 @@
 const std = @import("std");
 
 const ast = @import("ast.zig");
+const builtin = @import("builtin.zig");
 const lexer = @import("lexer.zig");
 const source_mod = @import("source.zig");
 const state_mod = @import("state.zig");
@@ -148,6 +149,10 @@ const Parser = struct {
         if (name_token.quoted or !isAssignmentName(name_token.text)) return null;
         if (self.index + 2 >= self.tokens.len) return null;
         if (self.tokens[self.index + 1].kind != .left_paren or self.tokens[self.index + 2].kind != .right_paren) return null;
+        if (name_token.reserved != null) return error.UnexpectedToken;
+        if (builtin.lookup(name_token.text)) |definition| {
+            if (definition.kind == .special) return error.UnexpectedToken;
+        }
 
         self.index += 3;
         self.skipSeparators();
@@ -285,7 +290,7 @@ const Parser = struct {
         var patterns: std.ArrayList(ast.Word) = .empty;
         errdefer patterns.deinit(self.allocator);
         while (true) {
-            try patterns.append(self.allocator, try self.parseWordToken(self.eat(.word) orelse return error.UnexpectedToken));
+            try patterns.append(self.allocator, try self.parseWordToken(self.eatCasePatternWord() orelse return error.UnexpectedToken));
             if (self.eat(.pipe) == null) break;
         }
         try self.expect(.right_paren);
@@ -832,15 +837,25 @@ const Parser = struct {
         if (!after_command_name) return null;
         return switch (self.tokens[self.index].kind) {
             .bang, .left_brace, .right_brace => token_word: {
-                const tok = self.tokens[self.index];
-                self.index += 1;
-                break :token_word .{
-                    .kind = .word,
-                    .span = tok.span,
-                    .text = self.source.text[tok.span.start..tok.span.end],
-                };
+                break :token_word self.eatOperatorAsWord();
             },
             else => null,
+        };
+    }
+
+    fn eatCasePatternWord(self: *Parser) ?token.Token {
+        if (self.eat(.word)) |word| return word;
+        if (!self.at(.bang)) return null;
+        return self.eatOperatorAsWord();
+    }
+
+    fn eatOperatorAsWord(self: *Parser) token.Token {
+        const tok = self.tokens[self.index];
+        self.index += 1;
+        return .{
+            .kind = .word,
+            .span = tok.span,
+            .text = self.source.text[tok.span.start..tok.span.end],
         };
     }
 

@@ -518,7 +518,7 @@ fn evalSimpleScoped(shell: anytype, command: ast.SimpleCommand) EvalError!result
         }
     }
     if (name.len == 0) return .{ .status = 127 };
-    if (shell.state.getFunction(name)) |function| return evalFunction(shell, function, command.assignments);
+    if (shell.state.getFunction(name)) |function| return evalFunction(shell, function, command.assignments, fields[1..]);
     if (builtin.lookup(name)) |definition| {
         if (definition.id == .cd) return evalCdBuiltin(shell, fields);
         if (definition.id == .command) {
@@ -1303,16 +1303,30 @@ const SavedVariable = struct {
     variable: ?state_mod.Variable,
 };
 
-fn evalFunction(shell: anytype, function: state_mod.Function, assignments: []const ast.Assignment) EvalError!result.EvalResult {
+fn evalFunction(
+    shell: anytype,
+    function: state_mod.Function,
+    assignments: []const ast.Assignment,
+    args: []const []const u8,
+) EvalError!result.EvalResult {
     function.validate();
     const saved = try saveAssignmentVariables(shell, assignments);
     defer restoreVariables(shell, saved);
 
+    const saved_positionals = try savePositionals(shell);
+    defer freeSavedPositionals(shell, saved_positionals);
+    var restored_positionals = false;
+    errdefer if (!restored_positionals) restorePositionals(shell, saved_positionals) catch {};
+
     try applyExportedAssignments(shell, assignments);
-    return evalCommand(shell, .{ .compound = .{
+    try shell.state.setPositionals(args);
+    const evaluated = try evalCommand(shell, .{ .compound = .{
         .body = function.definition.body,
         .redirections = function.definition.redirections,
     } });
+    try restorePositionals(shell, saved_positionals);
+    restored_positionals = true;
+    return evaluated;
 }
 
 fn saveAssignmentVariables(shell: anytype, assignments: []const ast.Assignment) ![]const SavedVariable {
