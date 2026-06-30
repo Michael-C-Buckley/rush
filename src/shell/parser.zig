@@ -381,6 +381,16 @@ const Parser = struct {
         content: []const u8,
         span: source_mod.Span,
     ) ParserError!?ast.ParameterExpansion {
+        if (content.len >= 2 and content[0] == '#') {
+            const name_end = scanParameterName(content, 1, content.len);
+            if (name_end == 1 or name_end != content.len) return null;
+            return .{
+                .parameter = .{ .variable = content[1..name_end] },
+                .length = true,
+                .span = span,
+            };
+        }
+
         const name_end = scanParameterName(content, 0, content.len);
         if (name_end == 0) return null;
         const name = content[0..name_end];

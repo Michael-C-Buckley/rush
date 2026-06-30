@@ -919,6 +919,8 @@ fn readCommandSubstitutionOutput(shell: anytype, fd: host_mod.Fd) ![]const u8 {
 
 fn expandParameter(shell: anytype, parameter: ast.ParameterExpansion) EvalError![]const u8 {
     parameter.validate();
+    if (parameter.length) return expandParameterLength(shell, parameter);
+
     if (parameter.op) |operator| {
         return switch (operator) {
             .default_value => expandParameterDefault(shell, parameter),
@@ -937,6 +939,15 @@ fn expandParameter(shell: anytype, parameter: ast.ParameterExpansion) EvalError!
         },
         .positional => "",
     };
+}
+
+fn expandParameterLength(shell: anytype, parameter: ast.ParameterExpansion) EvalError![]const u8 {
+    const value = switch (parameter.parameter) {
+        .variable => |name| parameterValue(shell, name) orelse "",
+        else => "",
+    };
+    const length = std.unicode.utf8CountCodepoints(value) catch value.len;
+    return std.fmt.allocPrint(shell.scratchAllocator(), "{}", .{length});
 }
 
 fn expandParameterDefault(shell: anytype, parameter: ast.ParameterExpansion) EvalError![]const u8 {
