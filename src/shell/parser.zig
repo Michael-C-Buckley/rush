@@ -499,6 +499,17 @@ const Parser = struct {
                 },
                 '$' => {
                     const name_start = index + 1;
+                    if (quote == null and name_start < end and text[name_start] == '\'') {
+                        if (literal_start < index) try parts.append(self.allocator, .{ .literal = text[literal_start..index] });
+                        const quote_start = name_start + 1;
+                        const quote_end = try scanDollarSingleQuoteEnd(text, quote_start, end);
+                        try parts.append(self.allocator, .{
+                            .single_quoted = try self.dollarSingleQuotedText(text[quote_start..quote_end]),
+                        });
+                        index = quote_end + 1;
+                        literal_start = index;
+                        continue;
+                    }
                     if (name_start + 1 < end and text[name_start] == '(' and text[name_start + 1] == '(') {
                         if (literal_start < index) try parts.append(self.allocator, .{ .literal = text[literal_start..index] });
                         const arithmetic_end = try scanArithmeticExpansion(text, index, end);
@@ -581,6 +592,46 @@ const Parser = struct {
         }
 
         if (literal_start < end) try parts.append(self.allocator, .{ .literal = text[literal_start..end] });
+    }
+
+    fn dollarSingleQuotedText(self: *Parser, text: []const u8) ![]const u8 {
+        var output: std.ArrayList(u8) = .empty;
+        var index: usize = 0;
+        while (index < text.len) {
+            if (text[index] != '\\') {
+                try output.append(self.allocator, text[index]);
+                index += 1;
+                continue;
+            }
+            index += 1;
+            if (index >= text.len) {
+                try output.append(self.allocator, '\\');
+                break;
+            }
+            switch (text[index]) {
+                'a' => try output.append(self.allocator, 0x07),
+                'b' => try output.append(self.allocator, 0x08),
+                'e', 'E' => try output.append(self.allocator, 0x1b),
+                'f' => try output.append(self.allocator, 0x0c),
+                'n' => try output.append(self.allocator, '\n'),
+                'r' => try output.append(self.allocator, '\r'),
+                't' => try output.append(self.allocator, '\t'),
+                'v' => try output.append(self.allocator, 0x0b),
+                '\\', '\'', '"', '?' => try output.append(self.allocator, text[index]),
+                'x' => {
+                    const consumed = try appendHexEscape(self.allocator, &output, text[index + 1 ..]);
+                    index += consumed;
+                },
+                '0'...'7' => {
+                    const consumed = try appendOctalEscape(self.allocator, &output, text[index..]);
+                    index += consumed - 1;
+                },
+                '\n' => {},
+                else => try output.append(self.allocator, text[index]),
+            }
+            index += 1;
+        }
+        return output.toOwnedSlice(self.allocator);
     }
 
     fn parseBracedParameter(
@@ -1034,6 +1085,47 @@ fn scanDoubleQuoteEnd(text: []const u8, start: usize, end: usize) ParseError!usi
     return error.UnclosedQuote;
 }
 
+fn scanSingleQuoteEnd(text: []const u8, start: usize, end: usize) ParseError!usize {
+    var index = start;
+    while (index < end) : (index += 1) {
+        if (text[index] == '\'') return index;
+    }
+    return error.UnclosedQuote;
+}
+
+fn scanDollarSingleQuoteEnd(text: []const u8, start: usize, end: usize) ParseError!usize {
+    var index = start;
+    while (index < end) : (index += 1) {
+        if (text[index] == '\'') return index;
+        if (text[index] == '\\' and index + 1 < end) index += 1;
+    }
+    return error.UnclosedQuote;
+}
+
+fn appendHexEscape(allocator: std.mem.Allocator, output: *std.ArrayList(u8), text: []const u8) !usize {
+    var value: u16 = 0;
+    var consumed: usize = 0;
+    while (consumed < text.len and consumed < 2) : (consumed += 1) {
+        const digit = std.fmt.charToDigit(text[consumed], 16) catch break;
+        value = value * 16 + digit;
+    }
+    if (consumed == 0) return 0;
+    try output.append(allocator, @truncate(value));
+    return consumed;
+}
+
+fn appendOctalEscape(allocator: std.mem.Allocator, output: *std.ArrayList(u8), text: []const u8) !usize {
+    var value: u16 = 0;
+    var consumed: usize = 0;
+    while (consumed < text.len and consumed < 3) : (consumed += 1) {
+        const digit = std.fmt.charToDigit(text[consumed], 8) catch break;
+        value = value * 8 + digit;
+    }
+    std.debug.assert(consumed != 0);
+    try output.append(allocator, @truncate(value));
+    return consumed;
+}
+
 fn doubleQuoteEscapes(byte: u8) bool {
     return switch (byte) {
         '$', '`', '"', '\\', '\n' => true,
@@ -1307,6 +1399,21 @@ test "parser preserves non-escaper backslashes inside double quotes" {
 
     try std.testing.expectEqualStrings("a\\ b", words[1].data.parts[0].double_quoted[0].literal);
     try std.testing.expectEqualStrings("ok\\n", words[2].data.parts[0].double_quoted[0].literal);
+}
+
+test "parser decodes dollar single quoted words as quoted literals" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const src: source_mod.Source = .{ .id = 1, .kind = .command_string, .name = "-c", .text = "printf $'a\\nb' $'\\101' $'$x'" };
+    const tokens = try @import("lexer.zig").lex(allocator, src);
+    const program = try parse(allocator, src, tokens);
+    const words = program.body.entries[0].and_or.pipelines[0].pipeline.stages[0].simple.words;
+
+    try std.testing.expectEqualStrings("a\nb", words[1].data.parts[0].single_quoted);
+    try std.testing.expectEqualStrings("A", words[2].data.parts[0].single_quoted);
+    try std.testing.expectEqualStrings("$x", words[3].data.parts[0].single_quoted);
 }
 
 test "parser recognizes leading assignment words" {

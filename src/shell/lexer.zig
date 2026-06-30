@@ -242,6 +242,13 @@ const Lexer = struct {
                 self.skipArithmeticExpansion();
                 continue;
             }
+            if (byte == '$' and self.peekNextIs('\'')) {
+                quoted = true;
+                self.advanceOne();
+                self.advanceOne();
+                self.skipDollarSingleQuote();
+                continue;
+            }
             if (byte == '$' and self.peekNextIs('(')) {
                 self.advanceOne();
                 self.advanceOne();
@@ -439,6 +446,18 @@ const Lexer = struct {
             if (byte == '`') break;
         }
     }
+
+    fn skipDollarSingleQuote(self: *Lexer) void {
+        while (!self.atEnd()) {
+            const byte = self.peek();
+            self.advanceOne();
+            if (byte == '\\' and !self.atEnd()) {
+                self.advanceOne();
+                continue;
+            }
+            if (byte == '\'') break;
+        }
+    }
 };
 
 fn isWordTerminator(byte: u8) bool {
@@ -559,6 +578,17 @@ test "lexer removes top-level line continuations before comments" {
     try std.testing.expectEqual(token.Kind.newline, tokens[2].kind);
     try std.testing.expectEqualStrings("printf", tokens[3].text);
     try std.testing.expectEqualStrings("bar", tokens[4].text);
+}
+
+test "lexer keeps dollar single quoted words separate" {
+    const src: source_mod.Source = .{ .id = 1, .kind = .command_string, .name = "-c", .text = "printf $'\\'' $'\\\\'" };
+    const tokens = try lex(std.testing.allocator, src);
+    defer std.testing.allocator.free(tokens);
+
+    try std.testing.expectEqualStrings("$'\\''", tokens[1].text);
+    try std.testing.expect(tokens[1].quoted);
+    try std.testing.expectEqualStrings("$'\\\\'", tokens[2].text);
+    try std.testing.expect(tokens[2].quoted);
 }
 
 test "lexer keeps command substitutions inside words" {
