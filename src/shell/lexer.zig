@@ -27,6 +27,9 @@ const Lexer = struct {
                 ' ', '\t', '\r' => self.advanceOne(),
                 '\n' => try self.appendSingle(&tokens, .newline),
                 ';' => try self.appendSingle(&tokens, .semicolon),
+                '&' => try self.appendAmpersand(&tokens),
+                '|' => try self.appendPipe(&tokens),
+                '!' => try self.appendSingle(&tokens, .bang),
                 '#' => self.skipComment(),
                 else => try self.appendWord(&tokens),
             }
@@ -58,6 +61,30 @@ const Lexer = struct {
         try tokens.append(self.allocator, tok);
     }
 
+    fn appendAmpersand(self: *Lexer, tokens: *std.ArrayList(token.Token)) !void {
+        const start = self.position;
+        self.advanceOne();
+        const kind: token.Kind = if (!self.atEnd() and self.peek() == '&') kind: {
+            self.advanceOne();
+            break :kind .ampersand_ampersand;
+        } else .ampersand;
+        const tok: token.Token = .{ .kind = kind, .span = source_mod.Span.init(start, self.position.byte_offset) };
+        tok.validate();
+        try tokens.append(self.allocator, tok);
+    }
+
+    fn appendPipe(self: *Lexer, tokens: *std.ArrayList(token.Token)) !void {
+        const start = self.position;
+        self.advanceOne();
+        const kind: token.Kind = if (!self.atEnd() and self.peek() == '|') kind: {
+            self.advanceOne();
+            break :kind .pipe_pipe;
+        } else .pipe;
+        const tok: token.Token = .{ .kind = kind, .span = source_mod.Span.init(start, self.position.byte_offset) };
+        tok.validate();
+        try tokens.append(self.allocator, tok);
+    }
+
     fn skipComment(self: *Lexer) void {
         while (!self.atEnd() and self.peek() != '\n') self.advanceOne();
     }
@@ -75,7 +102,7 @@ const Lexer = struct {
 
 fn isWordTerminator(byte: u8) bool {
     return switch (byte) {
-        ' ', '\t', '\r', '\n', ';' => true,
+        ' ', '\t', '\r', '\n', ';', '&', '|', '!' => true,
         else => false,
     };
 }
@@ -88,4 +115,21 @@ test "lexer tokenizes colon command" {
     try std.testing.expectEqual(token.Kind.word, tokens[0].kind);
     try std.testing.expectEqualStrings(":", tokens[0].text);
     try std.testing.expectEqual(token.Kind.eof, tokens[1].kind);
+}
+
+test "lexer tokenizes AND-OR operators" {
+    const src: source_mod.Source = .{ .id = 1, .kind = .command_string, .name = "-c", .text = "true&&false||! true" };
+    const tokens = try lex(std.testing.allocator, src);
+    defer std.testing.allocator.free(tokens);
+
+    try std.testing.expectEqual(token.Kind.word, tokens[0].kind);
+    try std.testing.expectEqualStrings("true", tokens[0].text);
+    try std.testing.expectEqual(token.Kind.ampersand_ampersand, tokens[1].kind);
+    try std.testing.expectEqual(token.Kind.word, tokens[2].kind);
+    try std.testing.expectEqualStrings("false", tokens[2].text);
+    try std.testing.expectEqual(token.Kind.pipe_pipe, tokens[3].kind);
+    try std.testing.expectEqual(token.Kind.bang, tokens[4].kind);
+    try std.testing.expectEqual(token.Kind.word, tokens[5].kind);
+    try std.testing.expectEqualStrings("true", tokens[5].text);
+    try std.testing.expectEqual(token.Kind.eof, tokens[6].kind);
 }

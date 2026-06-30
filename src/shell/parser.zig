@@ -53,19 +53,28 @@ const Parser = struct {
     }
 
     fn parseAndOr(self: *Parser) !ast.AndOr {
-        const pipeline = try self.parsePipeline();
-        const pipelines = try self.allocator.alloc(ast.AndOrPipeline, 1);
-        pipelines[0] = .{ .pipeline = pipeline };
-        const and_or: ast.AndOr = .{ .pipelines = pipelines };
+        var pipelines: std.ArrayList(ast.AndOrPipeline) = .empty;
+        errdefer pipelines.deinit(self.allocator);
+
+        try pipelines.append(self.allocator, .{ .pipeline = try self.parsePipeline() });
+        while (self.eatAndOrOperator()) |operator| {
+            try pipelines.append(self.allocator, .{
+                .operator = operator,
+                .pipeline = try self.parsePipeline(),
+            });
+        }
+
+        const and_or: ast.AndOr = .{ .pipelines = try pipelines.toOwnedSlice(self.allocator) };
         and_or.validate();
         return and_or;
     }
 
     fn parsePipeline(self: *Parser) !ast.Pipeline {
+        const negated = self.eat(.bang) != null;
         const command = try self.parseCommand();
         const stages = try self.allocator.alloc(ast.Command, 1);
         stages[0] = command;
-        const pipeline: ast.Pipeline = .{ .stages = stages };
+        const pipeline: ast.Pipeline = .{ .stages = stages, .negated = negated };
         pipeline.validate();
         return pipeline;
     }
@@ -117,6 +126,12 @@ const Parser = struct {
         return self.tokens[self.index];
     }
 
+    fn eatAndOrOperator(self: *Parser) ?ast.AndOrOperator {
+        if (self.eat(.ampersand_ampersand) != null) return .and_if;
+        if (self.eat(.pipe_pipe) != null) return .or_if;
+        return null;
+    }
+
     fn at(self: Parser, kind: token.Kind) bool {
         std.debug.assert(self.index < self.tokens.len);
         return self.tokens[self.index].kind == kind;
@@ -133,4 +148,21 @@ test "parser builds simple colon command" {
     const program = try parse(allocator, src, tokens);
 
     try std.testing.expectEqual(@as(usize, 1), program.body.entries.len);
+}
+
+test "parser builds AND-OR lists" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const src: source_mod.Source = .{ .id = 1, .kind = .command_string, .name = "-c", .text = "true && ! false || false" };
+    const tokens = try @import("lexer.zig").lex(allocator, src);
+    const program = try parse(allocator, src, tokens);
+
+    const and_or = program.body.entries[0].and_or;
+    try std.testing.expectEqual(@as(usize, 3), and_or.pipelines.len);
+    try std.testing.expectEqual(@as(?ast.AndOrOperator, null), and_or.pipelines[0].operator);
+    try std.testing.expectEqual(ast.AndOrOperator.and_if, and_or.pipelines[1].operator.?);
+    try std.testing.expect(and_or.pipelines[1].pipeline.negated);
+    try std.testing.expectEqual(ast.AndOrOperator.or_if, and_or.pipelines[2].operator.?);
 }

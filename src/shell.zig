@@ -3,6 +3,7 @@
 const std = @import("std");
 
 pub const ast = @import("shell/ast.zig");
+pub const builtin = @import("shell/builtin.zig");
 pub const eval = @import("shell/eval.zig");
 pub const invocation = @import("shell/invocation.zig");
 pub const lexer = @import("shell/lexer.zig");

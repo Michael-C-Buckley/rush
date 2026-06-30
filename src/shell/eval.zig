@@ -3,6 +3,7 @@
 const std = @import("std");
 
 const ast = @import("ast.zig");
+const builtin = @import("builtin.zig");
 const result = @import("result.zig");
 
 pub const EvalError = error{};
@@ -57,7 +58,7 @@ fn evalSimple(shell: anytype, command: ast.SimpleCommand) EvalError!result.EvalR
     command.validate();
     if (command.words.len == 0) return .{};
     const name = literalWord(command.words[0]) orelse return .{ .status = 2 };
-    if (std.mem.eql(u8, name, ":")) return .{};
+    if (builtin.lookup(name)) |definition| return builtin.eval(definition);
     return .{ .status = 127 };
 }
 
