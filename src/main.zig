@@ -28,3 +28,7 @@ pub fn main(init: std.process.Init.Minimal) !u8 {
 
     return 2;
 }
+
+test {
+    std.testing.refAllDecls(@This());
+}

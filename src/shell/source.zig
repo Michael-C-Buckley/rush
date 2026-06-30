@@ -17,6 +17,10 @@ pub const Source = struct {
     kind: SourceKind,
     name: []const u8,
     text: []const u8,
+
+    pub fn validate(self: Source) void {
+        std.debug.assert(self.name.len != 0);
+    }
 };
 
 pub const Position = struct {
@@ -47,17 +51,25 @@ pub const Span = struct {
 
     pub fn init(start: Position, end_offset: usize) Span {
         std.debug.assert(end_offset >= start.byte_offset);
-        return .{
+        const span: Span = .{
             .source_id = start.source_id,
             .start = start.byte_offset,
             .end = end_offset,
             .start_line = start.line,
             .start_column = start.column,
         };
+        span.validate();
+        return span;
+    }
+
+    pub fn validate(self: Span) void {
+        std.debug.assert(self.end >= self.start);
+        std.debug.assert(self.start_line != 0);
+        std.debug.assert(self.start_column != 0);
     }
 
     pub fn len(self: Span) usize {
-        std.debug.assert(self.end >= self.start);
+        self.validate();
         return self.end - self.start;
     }
 

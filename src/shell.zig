@@ -1,5 +1,7 @@
 //! Public facade for the rewritten shell core.
 
+const std = @import("std");
+
 pub const ast = @import("shell/ast.zig");
 pub const host = @import("shell/host.zig");
 pub const memory = @import("shell/memory.zig");
@@ -15,3 +17,7 @@ pub const EvalResult = result.EvalResult;
 pub const ShellState = state.State;
 pub const SourceSpan = source.Span;
 pub const Token = token.Token;
+
+test {
+    std.testing.refAllDecls(@This());
+}

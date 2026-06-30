@@ -10,7 +10,7 @@ pub fn Shell(comptime Host: type) type {
         allocator: std.mem.Allocator,
         host: Host,
         state: state.State,
-        command_arena: memory.Arena,
+        arenas: memory.Arenas,
 
         const Self = @This();
 
@@ -19,22 +19,30 @@ pub fn Shell(comptime Host: type) type {
                 .allocator = allocator,
                 .host = host,
                 .state = state.State.init(allocator, options),
-                .command_arena = memory.Arena.init(allocator),
+                .arenas = memory.Arenas.init(allocator),
             };
         }
 
         pub fn deinit(self: *Self) void {
-            self.command_arena.deinit();
+            self.arenas.deinit();
             self.state.deinit();
             self.* = undefined;
         }
 
-        pub fn commandAllocator(self: *Self) std.mem.Allocator {
-            return self.command_arena.allocator();
+        pub fn astAllocator(self: *Self) std.mem.Allocator {
+            return self.arenas.ast.allocator();
         }
 
-        pub fn resetCommandArena(self: *Self) void {
-            self.command_arena.resetRetainingCapacity();
+        pub fn scratchAllocator(self: *Self) std.mem.Allocator {
+            return self.arenas.scratch.allocator();
+        }
+
+        pub fn resetForTopLevelCommand(self: *Self) void {
+            self.arenas.resetForTopLevelCommand();
+        }
+
+        pub fn resetScratch(self: *Self) void {
+            self.arenas.resetScratch();
         }
     };
 }

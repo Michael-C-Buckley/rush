@@ -1,12 +1,16 @@
 //! Tokens produced by the shell lexer.
 
+const std = @import("std");
+
 const source = @import("source.zig");
 
 pub const Kind = enum {
     word,
-    assignment_word,
     newline,
     semicolon,
+    double_semicolon,
+    semicolon_ampersand,
+    double_semicolon_ampersand,
     ampersand,
     pipe,
     pipe_pipe,
@@ -18,6 +22,7 @@ pub const Kind = enum {
     right_brace,
     less,
     less_less,
+    less_less_dash,
     less_ampersand,
     less_greater,
     greater,
@@ -50,4 +55,18 @@ pub const Token = struct {
     span: source.Span,
     text: []const u8 = "",
     reserved: ?ReservedWord = null,
+    quoted: bool = false,
+
+    pub fn validate(self: Token) void {
+        self.span.validate();
+        if (self.reserved != null) {
+            std.debug.assert(self.kind == .word);
+            std.debug.assert(!self.quoted);
+            std.debug.assert(self.text.len != 0);
+        }
+        switch (self.kind) {
+            .word, .io_number => std.debug.assert(self.text.len != 0),
+            else => {},
+        }
+    }
 };

@@ -26,3 +26,30 @@ pub const Arena = struct {
         _ = self.arena.reset(.free_all);
     }
 };
+
+pub const Arenas = struct {
+    ast: Arena,
+    scratch: Arena,
+
+    pub fn init(parent_allocator: std.mem.Allocator) Arenas {
+        return .{
+            .ast = Arena.init(parent_allocator),
+            .scratch = Arena.init(parent_allocator),
+        };
+    }
+
+    pub fn deinit(self: *Arenas) void {
+        self.scratch.deinit();
+        self.ast.deinit();
+        self.* = undefined;
+    }
+
+    pub fn resetForTopLevelCommand(self: *Arenas) void {
+        self.scratch.resetRetainingCapacity();
+        self.ast.resetRetainingCapacity();
+    }
+
+    pub fn resetScratch(self: *Arenas) void {
+        self.scratch.resetRetainingCapacity();
+    }
+};
