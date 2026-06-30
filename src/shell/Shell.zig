@@ -106,7 +106,11 @@ pub fn Shell(comptime Host: type) type {
                 };
 
                 last = evaluated;
-                if (last.flow != .normal) return last;
+                if (last.flow != .normal) {
+                    if (!self.state.options.interactive or last.flow != .fatal) return last;
+                    last.flow = .normal;
+                    self.state.last_status = last.status;
+                }
                 start = end;
             }
             return last;
@@ -125,7 +129,7 @@ pub fn Shell(comptime Host: type) type {
         }
 
         fn sourceNeedsAliasAwareEvaluation(self: *Self, src: source.Source) bool {
-            return self.state.aliases.count() != 0 or std.mem.indexOf(u8, src.text, "alias") != null;
+            return self.state.options.interactive or self.state.aliases.count() != 0 or std.mem.indexOf(u8, src.text, "alias") != null;
         }
     };
 }

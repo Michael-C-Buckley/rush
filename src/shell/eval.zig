@@ -721,7 +721,7 @@ fn evalSimple(shell: anytype, command: ast.SimpleCommand) EvalError!result.EvalR
     defer scratch.end();
 
     return evalSimpleScoped(shell, command) catch |err| switch (err) {
-        error.AssignmentError => .{ .status = 1, .flow = if (shell.state.options.interactive) .normal else .{ .fatal = 1 } },
+        error.AssignmentError => .{ .status = 1, .flow = .{ .fatal = 1 } },
         error.ExpansionError => .{ .status = 1, .flow = .{ .fatal = 1 } },
         error.BadFd, error.BrokenPipe, error.InputOutput, error.WouldBlock => .{ .status = 1 },
         else => return err,
@@ -738,6 +738,23 @@ fn writeReadonlyDiagnostic(shell: anytype, name: []const u8) !void {
 }
 
 fn evalSimpleScoped(shell: anytype, command: ast.SimpleCommand) EvalError!result.EvalResult {
+    if (command.words.len == 0 and command.assignments.len != 0) {
+        const expanded_assignments = try expandAndApplyAssignments(shell, command.assignments);
+        const has_redirections = command.redirections.len != 0;
+        var redirections: AppliedRedirections = if (has_redirections)
+            applyRedirections(shell, command.redirections) catch |err| switch (err) {
+                error.OutOfMemory => return err,
+                else => return redirectionFailure(shell, false),
+            }
+        else
+            .{ .frames = &.{}, .here_doc_writers = &.{} };
+        defer if (has_redirections) redirections.restore(shell) catch {};
+
+        try traceSimpleCommand(shell, expanded_assignments, &.{});
+        const status = assignmentExpansionStatus(expanded_assignments);
+        return .{ .status = status };
+    }
+
     const has_redirections = command.redirections.len != 0;
     var redirections: AppliedRedirections = if (has_redirections)
         applyRedirections(shell, command.redirections) catch |err| switch (err) {
@@ -750,10 +767,7 @@ fn evalSimpleScoped(shell: anytype, command: ast.SimpleCommand) EvalError!result
     defer if (restore_redirections and has_redirections) redirections.restore(shell) catch {};
 
     if (command.words.len == 0) {
-        const expanded_assignments = try expandAndApplyAssignments(shell, command.assignments);
-        try traceSimpleCommand(shell, expanded_assignments, &.{});
-        const status = assignmentExpansionStatus(expanded_assignments);
-        return .{ .status = status };
+        return .{};
     }
 
     if (try staticDeclarationBuiltinName(shell, command.words[0])) |id| {
@@ -1926,7 +1940,18 @@ fn evalEvalBuiltin(shell: anytype, args: []const []const u8) EvalError!result.Ev
     }
 
     const src: source_mod.Source = .{ .id = 0, .kind = .command_string, .name = "eval", .text = script };
-    return shell.evalSourceNested(src);
+    return shell.evalSourceNested(src) catch |err| switch (err) {
+        error.ExpectedCommand,
+        error.ExpectedRedirectionTarget,
+        error.UnclosedCommandSubstitution,
+        error.UnclosedQuote,
+        error.UnexpectedToken,
+        => {
+            try shell.host.writeAll(.stderr, "eval: syntax error\n");
+            return .{ .status = 2, .flow = .{ .fatal = 2 } };
+        },
+        else => return err,
+    };
 }
 
 fn evalExecBuiltin(shell: anytype, args: []const []const u8) EvalError!result.EvalResult {
