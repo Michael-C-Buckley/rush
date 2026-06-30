@@ -464,6 +464,7 @@ fn evalSimple(shell: anytype, command: ast.SimpleCommand) EvalError!result.EvalR
 
     return evalSimpleScoped(shell, command) catch |err| switch (err) {
         error.ExpansionError => .{ .status = 1, .flow = .{ .fatal = 1 } },
+        error.BadFd, error.BrokenPipe, error.InputOutput, error.WouldBlock => .{ .status = 1 },
         else => return err,
     };
 }
@@ -1174,6 +1175,8 @@ const DeclarationAssignment = struct {
 
 fn evalDeclarationBuiltin(shell: anytype, id: builtin.Id, words: []const ast.Word) EvalError!result.EvalResult {
     std.debug.assert(id == .export_ or id == .readonly);
+    if (words.len == 0) return evalDeclarationList(shell, id);
+
     var status: result.ExitStatus = 0;
     for (words) |word| {
         if (try declarationAssignment(shell, word)) |assignment| {
@@ -1210,6 +1213,22 @@ fn evalDeclarationBuiltin(shell: anytype, id: builtin.Id, words: []const ast.Wor
         }
     }
     return .{ .status = status };
+}
+
+fn evalDeclarationList(shell: anytype, id: builtin.Id) !result.EvalResult {
+    var iterator = shell.state.variables.iterator();
+    while (iterator.next()) |entry| {
+        const variable = entry.value_ptr.*;
+        const include = switch (id) {
+            .export_ => variable.exported,
+            .readonly => variable.readonly,
+            else => unreachable,
+        };
+        if (!include) continue;
+        try shell.host.writeAll(.stdout, variable.name);
+        try shell.host.writeAll(.stdout, "\n");
+    }
+    return .{};
 }
 
 fn declarationAssignment(shell: anytype, word: ast.Word) !?DeclarationAssignment {

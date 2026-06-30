@@ -10,6 +10,7 @@ extern "c" fn readdir(dir: *std.c.DIR) ?*std.c.dirent;
 pub const ReadError = host.ReadError;
 
 pub const WriteError = error{
+    BadFd,
     WouldBlock,
     InputOutput,
     BrokenPipe,
@@ -255,7 +256,8 @@ fn linuxWrite(fd: host.Fd, bytes: []const u8) WriteError!usize {
             .IO => return error.InputOutput,
             .PIPE => return error.BrokenPipe,
             .NOBUFS, .NOMEM => return error.SystemResources,
-            .BADF, .DESTADDRREQ, .DQUOT, .FBIG, .INVAL, .NOSPC, .PERM => return error.Unexpected,
+            .BADF => return error.BadFd,
+            .DESTADDRREQ, .DQUOT, .FBIG, .INVAL, .NOSPC, .PERM => return error.Unexpected,
             else => return error.Unexpected,
         }
     }
@@ -271,7 +273,8 @@ fn libcWrite(fd: host.Fd, bytes: []const u8) WriteError!usize {
             .IO => return error.InputOutput,
             .PIPE => return error.BrokenPipe,
             .NOBUFS, .NOMEM => return error.SystemResources,
-            .BADF, .DESTADDRREQ, .DQUOT, .FBIG, .INVAL, .NOSPC, .PERM => return error.Unexpected,
+            .BADF => return error.BadFd,
+            .DESTADDRREQ, .DQUOT, .FBIG, .INVAL, .NOSPC, .PERM => return error.Unexpected,
             else => return error.Unexpected,
         }
     }
