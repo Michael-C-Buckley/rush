@@ -714,6 +714,7 @@ fn evalSimple(shell: anytype, command: ast.SimpleCommand) EvalError!result.EvalR
     defer scratch.end();
 
     return evalSimpleScoped(shell, command) catch |err| switch (err) {
+        error.AssignmentError => .{ .status = 1, .flow = if (shell.state.options.interactive) .normal else .{ .fatal = 1 } },
         error.ExpansionError => .{ .status = 1, .flow = .{ .fatal = 1 } },
         error.BadFd, error.BrokenPipe, error.InputOutput, error.WouldBlock => .{ .status = 1 },
         else => return err,
@@ -723,6 +724,10 @@ fn evalSimple(shell: anytype, command: ast.SimpleCommand) EvalError!result.EvalR
 fn redirectionFailure(shell: anytype, fatal: bool) result.EvalResult {
     shell.host.writeAll(.stderr, "redirection failed\n") catch {};
     return .{ .status = 1, .flow = if (fatal) .{ .fatal = 1 } else .normal };
+}
+
+fn writeReadonlyDiagnostic(shell: anytype, name: []const u8) !void {
+    try shell.host.writeAll(.stderr, try std.fmt.allocPrint(shell.scratchAllocator(), "{s}: readonly variable\n", .{name}));
 }
 
 fn evalSimpleScoped(shell: anytype, command: ast.SimpleCommand) EvalError!result.EvalResult {
@@ -908,6 +913,13 @@ fn fatalSpecialBuiltinError(definition: builtin.Definition, evaluated: result.Ev
     return evaluated;
 }
 
+fn suppressFatalFlow(evaluated: result.EvalResult) result.EvalResult {
+    return if (evaluated.flow == .fatal)
+        .{ .status = evaluated.status }
+    else
+        evaluated;
+}
+
 fn evalCdBuiltin(shell: anytype, args: []const []const u8) EvalError!result.EvalResult {
     std.debug.assert(args.len != 0);
     if (args.len > 2) return .{ .status = 2 };
@@ -924,7 +936,10 @@ fn evalCdBuiltin(shell: anytype, args: []const []const u8) EvalError!result.Eval
         break :target try cdPathTarget(shell, args[1], &print_new_dir) orelse args[1];
     };
 
-    shell.host.changeDir(target) catch return .{ .status = 1 };
+    shell.host.changeDir(target) catch {
+        try shell.host.writeAll(.stderr, try std.fmt.allocPrint(allocator, "cd: {s}: cannot change directory\n", .{target}));
+        return .{ .status = 1 };
+    };
     const new_pwd = try logicalPath(allocator, old_pwd, target);
     shell.state.putVariable(.{ .name = "OLDPWD", .value = old_pwd, .exported = exportedFlag(shell, "OLDPWD") }) catch {
         return .{ .status = 1 };
@@ -959,8 +974,14 @@ fn evalDotBuiltin(shell: anytype, args: []const []const u8) EvalError!result.Eva
     std.debug.assert(args.len != 0);
     if (args.len == 1) return .{ .status = 2 };
 
-    const path = try resolveDotPath(shell, args[1]) orelse return .{ .status = 2 };
-    const script = readDotScript(shell, path) catch return .{ .status = 1 };
+    const path = try resolveDotPath(shell, args[1]) orelse {
+        try shell.host.writeAll(.stderr, try std.fmt.allocPrint(shell.scratchAllocator(), ".: {s}: not found\n", .{args[1]}));
+        return .{ .status = 2, .flow = .{ .fatal = 2 } };
+    };
+    const script = readDotScript(shell, path) catch {
+        try shell.host.writeAll(.stderr, try std.fmt.allocPrint(shell.scratchAllocator(), ".: {s}: cannot open\n", .{path}));
+        return .{ .status = 1, .flow = .{ .fatal = 1 } };
+    };
     defer shell.allocator.free(script);
 
     const saved_positionals = try savePositionals(shell);
@@ -1096,13 +1117,13 @@ fn evalCommandBuiltin(
                 const evaluated = try evalDotBuiltin(shell, args[index..]);
                 restoreVariables(shell, saved);
                 restored_assignments = true;
-                return evaluated;
+                return suppressFatalFlow(evaluated);
             },
             .eval => {
                 const evaluated = try evalEvalBuiltin(shell, args[index..]);
                 restoreVariables(shell, saved);
                 restored_assignments = true;
-                return evaluated;
+                return suppressFatalFlow(evaluated);
             },
             .exec => {
                 restore_redirections.* = false;
@@ -1150,7 +1171,7 @@ fn evalCommandBuiltin(
                 const evaluated = try builtin.eval(shell, definition, args[index..]);
                 restoreVariables(shell, saved);
                 restored_assignments = true;
-                return evaluated;
+                return suppressFatalFlow(evaluated);
             },
             .colon, .false_, .true_ => {
                 const evaluated = try builtin.eval(shell, definition, &.{name});
@@ -2504,7 +2525,13 @@ fn applyAssignmentsWithStatus(shell: anytype, assignments: []const ast.Assignmen
     var status: ?result.ExitStatus = null;
     for (assignments) |assignment| {
         const value = try expandAssignmentWordTracking(shell, assignment.value, &status);
-        try shell.state.putVariable(.{ .name = assignment.name, .value = value });
+        shell.state.putVariable(.{ .name = assignment.name, .value = value }) catch |err| switch (err) {
+            error.ReadonlyVariable => {
+                try writeReadonlyDiagnostic(shell, assignment.name);
+                return error.AssignmentError;
+            },
+            else => return err,
+        };
     }
     return status orelse 0;
 }
@@ -2515,7 +2542,13 @@ fn expandAndApplyAssignments(shell: anytype, assignments: []const ast.Assignment
     for (assignments, 0..) |assignment, index| {
         var status: ?result.ExitStatus = null;
         const value = try expandAssignmentWordTracking(shell, assignment.value, &status);
-        try shell.state.putVariable(.{ .name = assignment.name, .value = value });
+        shell.state.putVariable(.{ .name = assignment.name, .value = value }) catch |err| switch (err) {
+            error.ReadonlyVariable => {
+                try writeReadonlyDiagnostic(shell, assignment.name);
+                return error.AssignmentError;
+            },
+            else => return err,
+        };
         expanded[index] = .{ .name = assignment.name, .value = value, .status = status };
     }
     return expanded;

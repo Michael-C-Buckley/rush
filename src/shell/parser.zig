@@ -204,8 +204,10 @@ const Parser = struct {
 
         while (true) {
             const condition = try self.parseList(.then);
+            if (condition.entries.len == 0) return error.UnexpectedToken;
             _ = self.eatReserved(.then_kw) orelse return error.UnexpectedToken;
             const body = try self.parseList(.if_branch);
+            if (body.entries.len == 0) return error.UnexpectedToken;
             try branches.append(self.allocator, .{ .condition = condition, .body = body });
 
             if (self.eatReserved(.elif_kw) != null) continue;

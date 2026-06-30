@@ -529,7 +529,7 @@ fn setUsageError(shell: anytype) !result.EvalResult {
     return .{ .status = 2 };
 }
 
-fn evalUnset(shell: anytype, args: []const []const u8) result.EvalResult {
+fn evalUnset(shell: anytype, args: []const []const u8) !result.EvalResult {
     var functions = false;
     var variables = false;
     var index: usize = 1;
@@ -558,13 +558,19 @@ fn evalUnset(shell: anytype, args: []const []const u8) result.EvalResult {
             if (std.mem.indexOfScalar(u8, name, '/') == null) shell.state.removeFunction(name);
         } else if (shell.state.getVariable(name)) |variable| {
             if (variable.readonly) {
+                try shell.host.writeAll(.stderr, try std.fmt.allocPrint(shell.scratchAllocator(), "{s}: readonly variable\n", .{name}));
                 status = 1;
             } else {
                 shell.state.removeVariable(name);
             }
+        } else if (shell.state.getVariableAttributes(name)) |attributes| {
+            if (attributes.readonly) {
+                try shell.host.writeAll(.stderr, try std.fmt.allocPrint(shell.scratchAllocator(), "{s}: readonly variable\n", .{name}));
+                status = 1;
+            }
         }
     }
-    return .{ .status = status };
+    return .{ .status = status, .flow = if (status == 1) .{ .fatal = status } else .normal };
 }
 
 fn evalTrap(shell: anytype, args: []const []const u8) !result.EvalResult {
