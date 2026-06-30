@@ -167,6 +167,12 @@ const Lexer = struct {
                 self.advanceOne();
                 continue;
             }
+            if (byte == '\\') {
+                quoted = true;
+                self.advanceOne();
+                if (!self.atEnd()) self.advanceOne();
+                continue;
+            }
             if (byte == '$' and self.peekNextIs('(')) {
                 self.advanceOne();
                 self.advanceOne();
@@ -302,6 +308,17 @@ test "lexer keeps quoted spaces inside words" {
     try std.testing.expectEqual(token.Kind.word, tokens[1].kind);
     try std.testing.expect(tokens[1].quoted);
     try std.testing.expectEqualStrings("\"hello world\"", tokens[1].text);
+}
+
+test "lexer treats backslash escaped quote as word text" {
+    const src: source_mod.Source = .{ .id = 1, .kind = .command_string, .name = "-c", .text = "printf \\'3" };
+    const tokens = try lex(std.testing.allocator, src);
+    defer std.testing.allocator.free(tokens);
+
+    try std.testing.expectEqual(@as(usize, 3), tokens.len);
+    try std.testing.expectEqual(token.Kind.word, tokens[1].kind);
+    try std.testing.expectEqualStrings("\\'3", tokens[1].text);
+    try std.testing.expect(tokens[1].quoted);
 }
 
 test "lexer keeps command substitutions inside words" {

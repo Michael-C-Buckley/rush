@@ -171,7 +171,7 @@ const Parser = struct {
     }
 
     fn parseWordText(self: *Parser, text: []const u8, span: source_mod.Span) !ast.Word {
-        if (std.mem.indexOfAny(u8, text, "'\"$") == null) {
+        if (std.mem.indexOfAny(u8, text, "'\"$\\") == null) {
             const word: ast.Word = .{ .data = .{ .literal = text }, .span = span };
             word.validate();
             return word;
@@ -224,6 +224,18 @@ const Parser = struct {
                     });
 
                     index += 1;
+                    literal_start = index;
+                    continue;
+                },
+                '\\' => {
+                    if (literal_start < index) try parts.append(self.allocator, .{ .literal = text[literal_start..index] });
+                    index += 1;
+                    if (index >= end) {
+                        try parts.append(self.allocator, .{ .literal = "\\" });
+                    } else {
+                        try parts.append(self.allocator, .{ .literal = text[index .. index + 1] });
+                        index += 1;
+                    }
                     literal_start = index;
                     continue;
                 },
@@ -462,6 +474,24 @@ test "parser splits single quoted word parts" {
     try std.testing.expectEqualStrings("printf", words[0].data.literal);
     try std.testing.expectEqualStrings("%s\\n", words[1].data.parts[0].single_quoted);
     try std.testing.expectEqualStrings("hello", words[2].data.literal);
+}
+
+test "parser removes unquoted backslash escapes from word text" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const src: source_mod.Source = .{ .id = 1, .kind = .command_string, .name = "-c", .text = "printf \\'3 a\\ b" };
+    const tokens = try @import("lexer.zig").lex(allocator, src);
+    const program = try parse(allocator, src, tokens);
+    const words = program.body.entries[0].and_or.pipelines[0].pipeline.stages[0].simple.words;
+
+    try std.testing.expectEqual(@as(usize, 3), words.len);
+    try std.testing.expectEqualStrings("'", words[1].data.parts[0].literal);
+    try std.testing.expectEqualStrings("3", words[1].data.parts[1].literal);
+    try std.testing.expectEqualStrings("a", words[2].data.parts[0].literal);
+    try std.testing.expectEqualStrings(" ", words[2].data.parts[1].literal);
+    try std.testing.expectEqualStrings("b", words[2].data.parts[2].literal);
 }
 
 test "parser recognizes leading assignment words" {
