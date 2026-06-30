@@ -366,13 +366,14 @@ const Parser = struct {
         const rest = content[name_end..];
         if (rest.len == 0) return .{ .parameter = .{ .variable = name } };
 
-        const colon = rest.len >= 2 and rest[0] == ':' and rest[1] == '-';
-        if (colon or rest[0] == '-') {
+        const colon = rest.len >= 2 and rest[0] == ':' and isParameterOperator(rest[1]);
+        if (colon or isParameterOperator(rest[0])) {
+            const operator_byte = if (colon) rest[1] else rest[0];
             const word_text = if (colon) rest[2..] else rest[1..];
             return .{
                 .parameter = .{ .variable = name },
                 .colon = colon,
-                .op = .default_value,
+                .op = parameterOperator(operator_byte),
                 .word = try self.parseWordText(word_text, .{}),
             };
         }
@@ -562,6 +563,19 @@ fn isAssignmentName(name: []const u8) bool {
     if (!isNameStart(name[0])) return false;
     for (name[1..]) |byte| if (!isNameContinue(byte)) return false;
     return true;
+}
+
+fn isParameterOperator(byte: u8) bool {
+    return byte == '-' or byte == '=' or byte == '+';
+}
+
+fn parameterOperator(byte: u8) ast.ParameterOperator {
+    return switch (byte) {
+        '-' => .default_value,
+        '=' => .assign_default,
+        '+' => .alternate_value,
+        else => unreachable,
+    };
 }
 
 fn stripLeadingTabs(line: []const u8) []const u8 {

@@ -914,6 +914,8 @@ fn expandParameter(shell: anytype, parameter: ast.ParameterExpansion) EvalError!
     if (parameter.op) |operator| {
         return switch (operator) {
             .default_value => expandParameterDefault(shell, parameter),
+            .assign_default => expandParameterAssignDefault(shell, parameter),
+            .alternate_value => expandParameterAlternate(shell, parameter),
             else => "",
         };
     }
@@ -934,9 +936,35 @@ fn expandParameterDefault(shell: anytype, parameter: ast.ParameterExpansion) Eva
         else => return "",
     };
     const value = parameterValue(shell, name);
-    const use_default = value == null or (parameter.colon and value.?.len == 0);
-    if (!use_default) return value.?;
+    if (isParameterSet(parameter, value)) return value.?;
     return expandWord(shell, parameter.word.?);
+}
+
+fn expandParameterAssignDefault(shell: anytype, parameter: ast.ParameterExpansion) EvalError![]const u8 {
+    const name = switch (parameter.parameter) {
+        .variable => |variable_name| variable_name,
+        else => return "",
+    };
+    const value = parameterValue(shell, name);
+    if (isParameterSet(parameter, value)) return value.?;
+
+    const default = try expandWord(shell, parameter.word.?);
+    try shell.state.putVariable(.{ .name = name, .value = default });
+    return default;
+}
+
+fn expandParameterAlternate(shell: anytype, parameter: ast.ParameterExpansion) EvalError![]const u8 {
+    const name = switch (parameter.parameter) {
+        .variable => |variable_name| variable_name,
+        else => return "",
+    };
+    const value = parameterValue(shell, name);
+    if (!isParameterSet(parameter, value)) return "";
+    return expandWord(shell, parameter.word.?);
+}
+
+fn isParameterSet(parameter: ast.ParameterExpansion, value: ?[]const u8) bool {
+    return value != null and (!parameter.colon or value.?.len != 0);
 }
 
 fn parameterValue(shell: anytype, name: []const u8) ?[]const u8 {
