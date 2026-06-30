@@ -609,6 +609,7 @@ fn evalDotBuiltin(shell: anytype, args: []const []const u8) EvalError!result.Eva
     const evaluated = try shell.evalSourceNested(src);
     try restorePositionals(shell, saved_positionals);
     restored_positionals = true;
+    if (evaluated.flow == .return_) return .{ .status = evaluated.status };
     return evaluated;
 }
 
