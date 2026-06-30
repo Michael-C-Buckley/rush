@@ -514,6 +514,7 @@ fn evalSimpleScoped(shell: anytype, command: ast.SimpleCommand) EvalError!result
             return builtin.eval(shell, definition, args);
         }
     }
+    if (name.len == 0) return .{ .status = 127 };
     if (shell.state.getFunction(name)) |function| return evalFunction(shell, function, command.assignments);
     if (builtin.lookup(name)) |definition| {
         if (definition.id == .cd) return evalCdBuiltin(shell, fields);
@@ -1146,9 +1147,15 @@ fn evalFunction(shell: anytype, function: state_mod.Function, assignments: []con
 fn saveAssignmentVariables(shell: anytype, assignments: []const ast.Assignment) ![]const SavedVariable {
     const saved = try shell.scratchAllocator().alloc(SavedVariable, assignments.len);
     for (assignments, 0..) |assignment, index| {
+        const variable = if (shell.state.getVariable(assignment.name)) |existing| state_mod.Variable{
+            .name = try shell.scratchAllocator().dupe(u8, existing.name),
+            .value = try shell.scratchAllocator().dupe(u8, existing.value),
+            .exported = existing.exported,
+            .readonly = existing.readonly,
+        } else null;
         saved[index] = .{
             .name = assignment.name,
-            .variable = shell.state.getVariable(assignment.name),
+            .variable = variable,
         };
     }
     return saved;
@@ -3066,8 +3073,15 @@ fn evalExternalWithSearchPath(
     assignments: []const ast.Assignment,
     search_path: ?[]const u8,
 ) EvalError!result.EvalResult {
+    if (fields[0].len == 0) return .{ .status = 127 };
+    const saved = try saveAssignmentVariables(shell, assignments);
+    var restored_assignments = false;
+    errdefer if (!restored_assignments) restoreVariables(shell, saved);
+    try applyAssignments(shell, assignments);
     const request = try makeExternalSpawnRequestWithSearchPath(shell, fields, assignments, &.{}, search_path);
     const status = try shell.host.spawnAndWait(request);
+    restoreVariables(shell, saved);
+    restored_assignments = true;
     return .{ .status = status.shellStatus() };
 }
 
