@@ -3,6 +3,7 @@
 const std = @import("std");
 
 const host = @import("../host.zig");
+const output = @import("output.zig");
 const printf = @import("printf.zig");
 const result = @import("result.zig");
 
@@ -66,15 +67,13 @@ fn parseExitStatus(text: []const u8) result.ExitStatus {
 }
 
 fn evalPrintf(shell: anytype, args: []const []const u8) !result.EvalResult {
-    const allocator = shell.scratchAllocator();
-    var stdout: std.ArrayList(u8) = .empty;
-    defer stdout.deinit(allocator);
-    var stderr: std.ArrayList(u8) = .empty;
-    defer stderr.deinit(allocator);
+    const Writer = output.HostFdWriter(@TypeOf(shell.host));
+    var stdout: Writer = .{ .host = &shell.host, .fd = .stdout };
+    var stderr: Writer = .{ .host = &shell.host, .fd = .stderr };
 
-    const status = try printf.evaluate(allocator, args, &stdout, &stderr);
-    if (stdout.items.len != 0) try shell.host.writeAll(host.Fd.stdout, stdout.items);
-    if (stderr.items.len != 0) try shell.host.writeAll(host.Fd.stderr, stderr.items);
+    const status = try printf.evaluate(Writer, shell.scratchAllocator(), args, &stdout, &stderr);
+    try stdout.flush();
+    try stderr.flush();
     return .{ .status = status };
 }
 
@@ -89,7 +88,7 @@ test "builtin lookup identifies null true and false utilities" {
 
 test "builtin eval returns utility status" {
     const TestHost = struct {
-        fn writeAll(_: *@This(), _: host.Fd, _: []const u8) !void {}
+        pub fn writeAll(_: *@This(), _: host.Fd, _: []const u8) !void {}
     };
     const TestShell = struct {
         host: TestHost = .{},
@@ -110,7 +109,7 @@ test "builtin eval returns utility status" {
 
 test "exit builtin returns requested exit flow" {
     const TestHost = struct {
-        fn writeAll(_: *@This(), _: host.Fd, _: []const u8) !void {}
+        pub fn writeAll(_: *@This(), _: host.Fd, _: []const u8) !void {}
     };
     const TestShell = struct {
         host: TestHost = .{},
@@ -138,7 +137,7 @@ test "printf writes formatted output once" {
             self.stderr.deinit(std.testing.allocator);
         }
 
-        fn writeAll(self: *@This(), fd: host.Fd, bytes: []const u8) !void {
+        pub fn writeAll(self: *@This(), fd: host.Fd, bytes: []const u8) !void {
             switch (fd) {
                 .stdout => try self.stdout.appendSlice(std.testing.allocator, bytes),
                 .stderr => try self.stderr.appendSlice(std.testing.allocator, bytes),

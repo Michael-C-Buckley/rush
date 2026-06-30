@@ -9,10 +9,11 @@ const std = @import("std");
 pub const ExitStatus = u8;
 
 pub fn evaluate(
+    comptime Writer: type,
     allocator: std.mem.Allocator,
     argv: []const []const u8,
-    stdout: *std.ArrayList(u8),
-    stderr: *std.ArrayList(u8),
+    stdout: *Writer,
+    stderr: *Writer,
 ) !ExitStatus {
     std.debug.assert(argv.len != 0);
     std.debug.assert(std.mem.eql(u8, argv[0], "printf"));
@@ -21,13 +22,14 @@ pub fn evaluate(
     if (format_index < argv.len and std.mem.eql(u8, argv[format_index], "--")) format_index += 1;
     if (format_index >= argv.len) {
         var status: ExitStatus = 2;
-        try printfDiagnostic(allocator, stderr, &status, "missing format operand");
+        try printfDiagnostic(Writer, allocator, stderr, &status, "missing format operand");
         return status;
     }
 
     var status: ExitStatus = 0;
     var stderr_before_stdout = false;
     try appendPrintfOutput(
+        Writer,
         allocator,
         stdout,
         stderr,
@@ -58,9 +60,10 @@ const PrintfIntegerBase = enum { decimal, octal, lower_hex, upper_hex };
 const PrintfArgumentMode = enum { none, numbered, unnumbered };
 
 fn appendPrintfOutput(
+    comptime Writer: type,
     allocator: std.mem.Allocator,
-    stdout: *std.ArrayList(u8),
-    stderr: *std.ArrayList(u8),
+    stdout: *Writer,
+    stderr: *Writer,
     status: *ExitStatus,
     stderr_before_stdout: *bool,
     format: []const u8,
@@ -68,7 +71,7 @@ fn appendPrintfOutput(
 ) !void {
     const argument_mode = analyzePrintfFormat(format) catch |err| switch (err) {
         error.MixedArguments => {
-            try printfDiagnostic(allocator, stderr, status, "invalid format");
+            try printfDiagnostic(Writer, allocator, stderr, status, "invalid format");
             return;
         },
     };
@@ -91,28 +94,29 @@ fn appendPrintfOutput(
                     if (index >= format.len) {
                         try stdout.append(allocator, '\\');
                     } else {
-                        _ = try appendEscapedSequence(allocator, stdout, format, &index, .format);
+                        _ = try appendEscapedSequence(Writer, allocator, stdout, format, &index, .format);
                     }
                 },
                 '%' => {
                     index += 1;
                     if (index >= format.len) {
-                        try printfDiagnostic(allocator, stderr, status, "invalid format");
+                        try printfDiagnostic(Writer, allocator, stderr, status, "invalid format");
                         break;
                     }
                     const spec = parsePrintfSpec(format, &index) orelse {
-                        try printfDiagnostic(allocator, stderr, status, "invalid format");
+                        try printfDiagnostic(Writer, allocator, stderr, status, "invalid format");
                         continue;
                     };
                     if (spec.spec == '%') {
                         if (spec.width_from_argument or spec.precision_from_argument) {
-                            try printfDiagnostic(allocator, stderr, status, "invalid format");
+                            try printfDiagnostic(Writer, allocator, stderr, status, "invalid format");
                             continue;
                         }
                         try stdout.append(allocator, '%');
                         continue;
                     }
                     const resolved_spec = try resolvePrintfDynamicSpec(
+                        Writer,
                         allocator,
                         stderr,
                         status,
@@ -124,11 +128,11 @@ fn appendPrintfOutput(
                     const arg = if (spec.argument) |argument_number| blk: {
                         pass_max_numbered_argument = @max(pass_max_numbered_argument, argument_number);
                         const offset = std.math.add(usize, numbered_base, argument_number - 1) catch {
-                            try printfDiagnostic(allocator, stderr, status, "missing argument");
+                            try printfDiagnostic(Writer, allocator, stderr, status, "missing argument");
                             return;
                         };
                         if (offset >= args.len) {
-                            try printfDiagnostic(allocator, stderr, status, "missing argument");
+                            try printfDiagnostic(Writer, allocator, stderr, status, "missing argument");
                             return;
                         }
                         break :blk args[offset];
@@ -138,6 +142,7 @@ fn appendPrintfOutput(
                         break :blk value;
                     } else "";
                     if (!try appendPrintfConversion(
+                        Writer,
                         allocator,
                         stdout,
                         stderr,
@@ -156,7 +161,7 @@ fn appendPrintfOutput(
         if (argument_mode == .numbered) {
             if (pass_max_numbered_argument == 0) break;
             numbered_base = std.math.add(usize, numbered_base, pass_max_numbered_argument) catch {
-                try printfDiagnostic(allocator, stderr, status, "missing argument");
+                try printfDiagnostic(Writer, allocator, stderr, status, "missing argument");
                 return;
             };
             if (numbered_base == before) break;
@@ -222,8 +227,9 @@ fn skipPrintfFormatEscape(format: []const u8, index: *usize) void {
 }
 
 fn printfDiagnostic(
+    comptime Writer: type,
     allocator: std.mem.Allocator,
-    stderr: *std.ArrayList(u8),
+    stderr: *Writer,
     status: *ExitStatus,
     message: []const u8,
 ) !void {
@@ -234,18 +240,20 @@ fn printfDiagnostic(
 }
 
 fn printfNumericDiagnostic(
+    comptime Writer: type,
     allocator: std.mem.Allocator,
-    stderr: *std.ArrayList(u8),
+    stderr: *Writer,
     status: *ExitStatus,
     stderr_before_stdout: *bool,
 ) !void {
     stderr_before_stdout.* = true;
-    try printfDiagnostic(allocator, stderr, status, "numeric argument required");
+    try printfDiagnostic(Writer, allocator, stderr, status, "numeric argument required");
 }
 
 fn resolvePrintfDynamicSpec(
+    comptime Writer: type,
     allocator: std.mem.Allocator,
-    stderr: *std.ArrayList(u8),
+    stderr: *Writer,
     status: *ExitStatus,
     stderr_before_stdout: *bool,
     spec: PrintfSpec,
@@ -255,6 +263,7 @@ fn resolvePrintfDynamicSpec(
     var result = spec;
     if (result.width_from_argument) {
         const value = try parsePrintfSigned(
+            Writer,
             allocator,
             stderr,
             status,
@@ -265,6 +274,7 @@ fn resolvePrintfDynamicSpec(
     }
     if (result.precision_from_argument) {
         const value = try parsePrintfSigned(
+            Writer,
             allocator,
             stderr,
             status,
@@ -348,16 +358,17 @@ fn parsePrintfSpec(format: []const u8, index: *usize) ?PrintfSpec {
 }
 
 fn appendPrintfConversion(
+    comptime Writer: type,
     allocator: std.mem.Allocator,
-    stdout: *std.ArrayList(u8),
-    stderr: *std.ArrayList(u8),
+    stdout: *Writer,
+    stderr: *Writer,
     status: *ExitStatus,
     stderr_before_stdout: *bool,
     spec: PrintfSpec,
     arg: []const u8,
 ) !bool {
     if (isPrintfFloatSpec(spec.spec)) {
-        try appendPrintfFloatConversion(allocator, stdout, stderr, status, spec, arg);
+        try appendPrintfFloatConversion(Writer, allocator, stdout, stderr, status, spec, arg);
         return true;
     }
 
@@ -366,7 +377,7 @@ fn appendPrintfConversion(
             const rendered = try formatPrintfSignedInteger(
                 allocator,
                 spec,
-                try parsePrintfSigned(allocator, stderr, status, stderr_before_stdout, arg),
+                try parsePrintfSigned(Writer, allocator, stderr, status, stderr_before_stdout, arg),
             );
             defer allocator.free(rendered);
             try stdout.appendSlice(allocator, rendered);
@@ -376,7 +387,7 @@ fn appendPrintfConversion(
             const rendered = try formatPrintfUnsignedInteger(
                 allocator,
                 spec,
-                try parsePrintfUnsigned(allocator, stderr, status, stderr_before_stdout, arg),
+                try parsePrintfUnsigned(Writer, allocator, stderr, status, stderr_before_stdout, arg),
                 .decimal,
             );
             defer allocator.free(rendered);
@@ -387,7 +398,7 @@ fn appendPrintfConversion(
             const rendered = try formatPrintfUnsignedInteger(
                 allocator,
                 spec,
-                try parsePrintfUnsigned(allocator, stderr, status, stderr_before_stdout, arg),
+                try parsePrintfUnsigned(Writer, allocator, stderr, status, stderr_before_stdout, arg),
                 .octal,
             );
             defer allocator.free(rendered);
@@ -398,7 +409,7 @@ fn appendPrintfConversion(
             const rendered = try formatPrintfUnsignedInteger(
                 allocator,
                 spec,
-                try parsePrintfUnsigned(allocator, stderr, status, stderr_before_stdout, arg),
+                try parsePrintfUnsigned(Writer, allocator, stderr, status, stderr_before_stdout, arg),
                 .lower_hex,
             );
             defer allocator.free(rendered);
@@ -409,7 +420,7 @@ fn appendPrintfConversion(
             const rendered = try formatPrintfUnsignedInteger(
                 allocator,
                 spec,
-                try parsePrintfUnsigned(allocator, stderr, status, stderr_before_stdout, arg),
+                try parsePrintfUnsigned(Writer, allocator, stderr, status, stderr_before_stdout, arg),
                 .upper_hex,
             );
             defer allocator.free(rendered);
@@ -422,10 +433,10 @@ fn appendPrintfConversion(
     if (spec.spec == 'b') {
         var escaped: std.ArrayList(u8) = .empty;
         errdefer escaped.deinit(allocator);
-        const keep_going = try appendPrintfEscapedString(allocator, &escaped, arg);
+        const keep_going = try appendPrintfEscapedString(std.ArrayList(u8), allocator, &escaped, arg);
         const bytes = try escaped.toOwnedSlice(allocator);
         defer allocator.free(bytes);
-        try appendPadded(allocator, stdout, truncatePrintfBytes(bytes, spec.precision), spec);
+        try appendPadded(Writer, allocator, stdout, truncatePrintfBytes(bytes, spec.precision), spec);
         return keep_going;
     }
 
@@ -433,12 +444,12 @@ fn appendPrintfConversion(
         's' => try formatPrintfString(allocator, arg, spec.precision),
         'c' => try allocator.dupe(u8, if (arg.len == 0) &[_]u8{0} else arg[0..1]),
         else => blk: {
-            try printfDiagnostic(allocator, stderr, status, "invalid conversion");
+            try printfDiagnostic(Writer, allocator, stderr, status, "invalid conversion");
             break :blk try allocator.alloc(u8, 0);
         },
     };
     defer allocator.free(rendered);
-    try appendPadded(allocator, stdout, rendered, spec);
+    try appendPadded(Writer, allocator, stdout, rendered, spec);
     return true;
 }
 
@@ -543,7 +554,13 @@ fn formatPrintfIntegerDigits(allocator: std.mem.Allocator, value: u64, base: Pri
     };
 }
 
-fn appendPadded(allocator: std.mem.Allocator, stdout: *std.ArrayList(u8), text: []const u8, spec: PrintfSpec) !void {
+fn appendPadded(
+    comptime Writer: type,
+    allocator: std.mem.Allocator,
+    stdout: *Writer,
+    text: []const u8,
+    spec: PrintfSpec,
+) !void {
     const width = spec.width orelse 0;
     const pad_len = if (width > text.len) width - text.len else 0;
     const pad_byte: u8 = if (spec.zero_pad and !spec.left_adjust) '0' else ' ';
@@ -560,17 +577,18 @@ fn isPrintfFloatSpec(spec: u8) bool {
 }
 
 fn appendPrintfFloatConversion(
+    comptime Writer: type,
     allocator: std.mem.Allocator,
-    stdout: *std.ArrayList(u8),
-    stderr: *std.ArrayList(u8),
+    stdout: *Writer,
+    stderr: *Writer,
     status: *ExitStatus,
     spec: PrintfSpec,
     arg: []const u8,
 ) !void {
-    const value = try parsePrintfFloat(allocator, stderr, status, arg);
+    const value = try parsePrintfFloat(Writer, allocator, stderr, status, arg);
     const rendered = try formatPrintfFloat(allocator, spec, value);
     defer allocator.free(rendered);
-    try appendPrintfFloatPadded(allocator, stdout, rendered, spec);
+    try appendPrintfFloatPadded(Writer, allocator, stdout, rendered, spec);
 }
 
 fn formatPrintfFloat(allocator: std.mem.Allocator, spec: PrintfSpec, value: f64) ![]u8 {
@@ -893,8 +911,9 @@ fn applyPrintfFloatSign(allocator: std.mem.Allocator, rendered: *[]u8, spec: Pri
 }
 
 fn appendPrintfFloatPadded(
+    comptime Writer: type,
     allocator: std.mem.Allocator,
-    stdout: *std.ArrayList(u8),
+    stdout: *Writer,
     rendered: []const u8,
     spec: PrintfSpec,
 ) !void {
@@ -965,24 +984,26 @@ const PrintfUnsignedValue = struct {
 };
 
 fn parsePrintfSigned(
+    comptime Writer: type,
     allocator: std.mem.Allocator,
-    stderr: *std.ArrayList(u8),
+    stderr: *Writer,
     status: *ExitStatus,
     stderr_before_stdout: *bool,
     arg: []const u8,
 ) !i64 {
     const parsed = parsePrintfIntegerConstant(arg) catch |err| switch (err) {
         error.InvalidCharacter => {
-            try printfNumericDiagnostic(allocator, stderr, status, stderr_before_stdout);
+            try printfNumericDiagnostic(Writer, allocator, stderr, status, stderr_before_stdout);
             return 0;
         },
         error.Overflow => {
-            try printfNumericDiagnostic(allocator, stderr, status, stderr_before_stdout);
+            try printfNumericDiagnostic(Writer, allocator, stderr, status, stderr_before_stdout);
             return 0;
         },
     };
     const converted = printfSignedValue(parsed);
     if (!parsed.complete or converted.overflow) try printfNumericDiagnostic(
+        Writer,
         allocator,
         stderr,
         status,
@@ -992,24 +1013,26 @@ fn parsePrintfSigned(
 }
 
 fn parsePrintfUnsigned(
+    comptime Writer: type,
     allocator: std.mem.Allocator,
-    stderr: *std.ArrayList(u8),
+    stderr: *Writer,
     status: *ExitStatus,
     stderr_before_stdout: *bool,
     arg: []const u8,
 ) !u64 {
     const parsed = parsePrintfIntegerConstant(arg) catch |err| switch (err) {
         error.InvalidCharacter => {
-            try printfNumericDiagnostic(allocator, stderr, status, stderr_before_stdout);
+            try printfNumericDiagnostic(Writer, allocator, stderr, status, stderr_before_stdout);
             return 0;
         },
         error.Overflow => {
-            try printfNumericDiagnostic(allocator, stderr, status, stderr_before_stdout);
+            try printfNumericDiagnostic(Writer, allocator, stderr, status, stderr_before_stdout);
             return 0;
         },
     };
     const converted = printfUnsignedValue(parsed);
     if (!parsed.complete or converted.overflow) try printfNumericDiagnostic(
+        Writer,
         allocator,
         stderr,
         status,
@@ -1104,8 +1127,9 @@ fn parsePrintfIntegerConstant(arg: []const u8) !PrintfIntegerConstant {
 }
 
 fn parsePrintfFloat(
+    comptime Writer: type,
     allocator: std.mem.Allocator,
-    stderr: *std.ArrayList(u8),
+    stderr: *Writer,
     status: *ExitStatus,
     arg: []const u8,
 ) !f64 {
@@ -1115,11 +1139,11 @@ fn parsePrintfFloat(
     var end = trimmed.len;
     while (end > 0) : (end -= 1) {
         if (std.fmt.parseFloat(f64, trimmed[0..end])) |value| {
-            try printfDiagnostic(allocator, stderr, status, "numeric argument required");
+            try printfDiagnostic(Writer, allocator, stderr, status, "numeric argument required");
             return value;
         } else |_| {}
     }
-    try printfDiagnostic(allocator, stderr, status, "numeric argument required");
+    try printfDiagnostic(Writer, allocator, stderr, status, "numeric argument required");
     return 0;
 }
 
@@ -1131,7 +1155,12 @@ fn trimPrintfFloatWhitespace(arg: []const u8) []const u8 {
     return arg[start..end];
 }
 
-fn appendPrintfEscapedString(allocator: std.mem.Allocator, stdout: *std.ArrayList(u8), text: []const u8) !bool {
+fn appendPrintfEscapedString(
+    comptime Writer: type,
+    allocator: std.mem.Allocator,
+    stdout: *Writer,
+    text: []const u8,
+) !bool {
     var index: usize = 0;
     while (index < text.len) {
         if (text[index] != '\\') {
@@ -1142,7 +1171,7 @@ fn appendPrintfEscapedString(allocator: std.mem.Allocator, stdout: *std.ArrayLis
         index += 1;
         if (index >= text.len) {
             try stdout.append(allocator, '\\');
-        } else if (!try appendEscapedSequence(allocator, stdout, text, &index, .percent_b)) {
+        } else if (!try appendEscapedSequence(Writer, allocator, stdout, text, &index, .percent_b)) {
             return false;
         }
     }
@@ -1152,8 +1181,9 @@ fn appendPrintfEscapedString(allocator: std.mem.Allocator, stdout: *std.ArrayLis
 const PrintfEscapeMode = enum { format, percent_b };
 
 fn appendEscapedSequence(
+    comptime Writer: type,
     allocator: std.mem.Allocator,
-    stdout: *std.ArrayList(u8),
+    stdout: *Writer,
     text: []const u8,
     index: *usize,
     mode: PrintfEscapeMode,
@@ -1181,11 +1211,11 @@ fn appendEscapedSequence(
                 try stdout.append(allocator, '\\');
                 return true;
             }
-            try appendHexEscape(allocator, stdout, text, index);
+            try appendHexEscape(Writer, allocator, stdout, text, index);
             return true;
         },
         '0'...'7' => {
-            try appendOctalEscape(allocator, stdout, text, index, mode);
+            try appendOctalEscape(Writer, allocator, stdout, text, index, mode);
             return true;
         },
         else => {
@@ -1198,7 +1228,13 @@ fn appendEscapedSequence(
     return true;
 }
 
-fn appendHexEscape(allocator: std.mem.Allocator, stdout: *std.ArrayList(u8), text: []const u8, index: *usize) !void {
+fn appendHexEscape(
+    comptime Writer: type,
+    allocator: std.mem.Allocator,
+    stdout: *Writer,
+    text: []const u8,
+    index: *usize,
+) !void {
     var value: u8 = 0;
     var count: usize = 0;
     var cursor = index.* + 1;
@@ -1218,8 +1254,9 @@ fn appendHexEscape(allocator: std.mem.Allocator, stdout: *std.ArrayList(u8), tex
 }
 
 fn appendOctalEscape(
+    comptime Writer: type,
     allocator: std.mem.Allocator,
-    stdout: *std.ArrayList(u8),
+    stdout: *Writer,
     text: []const u8,
     index: *usize,
     mode: PrintfEscapeMode,
@@ -1248,6 +1285,7 @@ test "printf evaluates POSIX format reuse and escapes" {
     defer stderr.deinit(std.testing.allocator);
 
     const status = try evaluate(
+        std.ArrayList(u8),
         std.testing.allocator,
         &.{ "printf", "[%5s][%-5s][%.3s][%04d]\\n", "a", "b", "abcdef", "7", "c", "d", "xyz", "8" },
         &stdout,
@@ -1266,6 +1304,7 @@ test "printf reports numeric conversion diagnostics" {
     defer stderr.deinit(std.testing.allocator);
 
     const status = try evaluate(
+        std.ArrayList(u8),
         std.testing.allocator,
         &.{ "printf", "%d:%x\n", "5x ", " 0x1fg " },
         &stdout,
@@ -1287,6 +1326,7 @@ test "printf reports trailing bytes after quoted integer constants" {
     defer stderr.deinit(std.testing.allocator);
 
     const status = try evaluate(
+        std.ArrayList(u8),
         std.testing.allocator,
         &.{ "printf", "%d\n", "'3", "\"+3", "'-3" },
         &stdout,
@@ -1308,6 +1348,7 @@ test "printf format operand does not recognize hexadecimal escapes" {
     defer stderr.deinit(std.testing.allocator);
 
     const status = try evaluate(
+        std.ArrayList(u8),
         std.testing.allocator,
         &.{ "printf", "A\\x41Z\\n" },
         &stdout,
@@ -1326,6 +1367,7 @@ test "printf octal escapes wrap to one byte" {
     defer stderr.deinit(std.testing.allocator);
 
     const status = try evaluate(
+        std.ArrayList(u8),
         std.testing.allocator,
         &.{ "printf", "A\\400B:%b", "C\\0777D" },
         &stdout,
@@ -1344,6 +1386,7 @@ test "printf formats floating point conversions without C snprintf" {
     defer stderr.deinit(std.testing.allocator);
 
     const status = try evaluate(
+        std.ArrayList(u8),
         std.testing.allocator,
         &.{
             "printf",
@@ -1376,6 +1419,7 @@ test "printf floating point formatting applies flags width precision and partial
     defer stderr.deinit(std.testing.allocator);
 
     const status = try evaluate(
+        std.ArrayList(u8),
         std.testing.allocator,
         &.{
             "printf",
