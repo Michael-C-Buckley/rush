@@ -36,6 +36,17 @@ pub const Variable = struct {
     }
 };
 
+pub const VariableAttributes = struct {
+    name: []const u8,
+    exported: bool = false,
+    readonly: bool = false,
+
+    pub fn validate(self: VariableAttributes) void {
+        std.debug.assert(self.name.len != 0);
+        std.debug.assert(self.exported or self.readonly);
+    }
+};
+
 pub const Function = struct {
     name: []const u8,
     source_text: []const u8,
@@ -63,6 +74,7 @@ pub const State = struct {
     definition_arena: memory.Arena,
     options: Options = .{},
     variables: std.StringHashMapUnmanaged(Variable) = .empty,
+    variable_attributes: std.StringHashMapUnmanaged(VariableAttributes) = .empty,
     functions: std.StringHashMapUnmanaged(Function) = .empty,
     aliases: std.StringHashMapUnmanaged(Alias) = .empty,
     signal_traps: std.StringHashMapUnmanaged([]const u8) = .empty,
@@ -99,6 +111,9 @@ pub const State = struct {
             self.allocator.free(entry.value_ptr.value);
         }
         self.variables.deinit(self.allocator);
+        var attributes_iterator = self.variable_attributes.iterator();
+        while (attributes_iterator.next()) |entry| self.allocator.free(entry.value_ptr.name);
+        self.variable_attributes.deinit(self.allocator);
         self.functions.deinit(self.allocator);
         var alias_iterator = self.aliases.iterator();
         while (alias_iterator.next()) |entry| {
@@ -126,8 +141,17 @@ pub const State = struct {
         return self.variables.get(name);
     }
 
+    pub fn getVariableAttributes(self: State, name: []const u8) ?VariableAttributes {
+        std.debug.assert(name.len != 0);
+        return self.variable_attributes.get(name);
+    }
+
     pub fn putVariable(self: *State, variable: Variable) !void {
         variable.validate();
+        const attributes = self.getVariableAttributes(variable.name);
+        if (attributes) |attribute| {
+            if (attribute.readonly and !variable.readonly) return error.ReadonlyVariable;
+        }
         const owned_value = try self.allocator.dupe(u8, variable.value);
         errdefer self.allocator.free(owned_value);
 
@@ -135,8 +159,9 @@ pub const State = struct {
             if (existing.readonly and !variable.readonly) return error.ReadonlyVariable;
             self.allocator.free(existing.value);
             existing.value = owned_value;
-            existing.exported = variable.exported;
-            existing.readonly = variable.readonly;
+            existing.exported = variable.exported or (attributes != null and attributes.?.exported);
+            existing.readonly = variable.readonly or (attributes != null and attributes.?.readonly);
+            self.removeVariableAttributes(variable.name);
             return;
         }
 
@@ -146,9 +171,10 @@ pub const State = struct {
         try self.variables.put(self.allocator, owned_name, .{
             .name = owned_name,
             .value = owned_value,
-            .exported = variable.exported,
-            .readonly = variable.readonly,
+            .exported = variable.exported or (attributes != null and attributes.?.exported),
+            .readonly = variable.readonly or (attributes != null and attributes.?.readonly),
         });
+        self.removeVariableAttributes(variable.name);
     }
 
     pub fn removeVariable(self: *State, name: []const u8) void {
@@ -157,6 +183,32 @@ pub const State = struct {
             self.allocator.free(entry.value.name);
             self.allocator.free(entry.value.value);
         }
+        self.removeVariableAttributes(name);
+    }
+
+    pub fn putVariableAttributes(self: *State, attributes: VariableAttributes) !void {
+        attributes.validate();
+        if (self.variables.getPtr(attributes.name)) |variable| {
+            variable.exported = variable.exported or attributes.exported;
+            variable.readonly = variable.readonly or attributes.readonly;
+            return;
+        }
+        if (self.variable_attributes.getPtr(attributes.name)) |existing| {
+            existing.exported = existing.exported or attributes.exported;
+            existing.readonly = existing.readonly or attributes.readonly;
+            return;
+        }
+        const owned_name = try self.allocator.dupe(u8, attributes.name);
+        errdefer self.allocator.free(owned_name);
+        try self.variable_attributes.put(self.allocator, owned_name, .{
+            .name = owned_name,
+            .exported = attributes.exported,
+            .readonly = attributes.readonly,
+        });
+    }
+
+    pub fn removeVariableAttributes(self: *State, name: []const u8) void {
+        if (self.variable_attributes.fetchRemove(name)) |entry| self.allocator.free(entry.value.name);
     }
 
     pub fn setPositionals(self: *State, positionals: []const []const u8) !void {

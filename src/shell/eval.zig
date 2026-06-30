@@ -1625,9 +1625,17 @@ const DeclarationAssignment = struct {
 fn evalDeclarationBuiltin(shell: anytype, id: builtin.Id, words: []const ast.Word) EvalError!result.EvalResult {
     std.debug.assert(id == .export_ or id == .readonly);
     if (words.len == 0) return evalDeclarationList(shell, id);
+    if (words.len == 1) {
+        if (staticLiteralWord(words[0])) |literal| {
+            if (std.mem.eql(u8, literal, "-p")) return evalDeclarationList(shell, id);
+        }
+    }
 
     var status: result.ExitStatus = 0;
     for (words) |word| {
+        if (staticLiteralWord(word)) |literal| {
+            if (std.mem.eql(u8, literal, "-p")) continue;
+        }
         if (try declarationAssignment(shell, word)) |assignment| {
             const value = try expandAssignmentWordTracking(shell, assignment.value, null);
             const existing = shell.state.getVariable(assignment.name);
@@ -1650,21 +1658,43 @@ fn evalDeclarationBuiltin(shell: anytype, id: builtin.Id, words: []const ast.Wor
                 continue;
             }
             const existing = shell.state.getVariable(name);
-            shell.state.putVariable(.{
-                .name = name,
-                .value = if (existing) |variable| variable.value else "",
-                .exported = id == .export_ or (existing != null and existing.?.exported),
-                .readonly = id == .readonly or (existing != null and existing.?.readonly),
-            }) catch |err| switch (err) {
-                error.ReadonlyVariable => status = 2,
-                else => return err,
-            };
+            if (existing) |variable| {
+                shell.state.putVariable(.{
+                    .name = name,
+                    .value = variable.value,
+                    .exported = id == .export_ or variable.exported,
+                    .readonly = id == .readonly or variable.readonly,
+                }) catch |err| switch (err) {
+                    error.ReadonlyVariable => status = 2,
+                    else => return err,
+                };
+            } else {
+                try shell.state.putVariableAttributes(.{
+                    .name = name,
+                    .exported = id == .export_,
+                    .readonly = id == .readonly,
+                });
+            }
         }
     }
     return .{ .status = status };
 }
 
 fn evalDeclarationList(shell: anytype, id: builtin.Id) !result.EvalResult {
+    var attributes_iterator = shell.state.variable_attributes.iterator();
+    while (attributes_iterator.next()) |entry| {
+        const attributes = entry.value_ptr.*;
+        const include = switch (id) {
+            .export_ => attributes.exported,
+            .readonly => attributes.readonly,
+            else => unreachable,
+        };
+        if (!include) continue;
+        try shell.host.writeAll(.stdout, declarationPrefix(id));
+        try shell.host.writeAll(.stdout, attributes.name);
+        try shell.host.writeAll(.stdout, "\n");
+    }
+
     var iterator = shell.state.variables.iterator();
     while (iterator.next()) |entry| {
         const variable = entry.value_ptr.*;
@@ -1674,10 +1704,36 @@ fn evalDeclarationList(shell: anytype, id: builtin.Id) !result.EvalResult {
             else => unreachable,
         };
         if (!include) continue;
+        const quoted = try singleQuoteShell(shell.scratchAllocator(), variable.value);
+        try shell.host.writeAll(.stdout, declarationPrefix(id));
         try shell.host.writeAll(.stdout, variable.name);
+        try shell.host.writeAll(.stdout, "=");
+        try shell.host.writeAll(.stdout, quoted);
         try shell.host.writeAll(.stdout, "\n");
     }
     return .{};
+}
+
+fn declarationPrefix(id: builtin.Id) []const u8 {
+    return switch (id) {
+        .export_ => "export ",
+        .readonly => "readonly ",
+        else => unreachable,
+    };
+}
+
+fn singleQuoteShell(allocator: std.mem.Allocator, value: []const u8) ![]const u8 {
+    var output: std.ArrayList(u8) = .empty;
+    try output.append(allocator, '\'');
+    for (value) |byte| {
+        if (byte == '\'') {
+            try output.appendSlice(allocator, "'\\''");
+        } else {
+            try output.append(allocator, byte);
+        }
+    }
+    try output.append(allocator, '\'');
+    return output.toOwnedSlice(allocator);
 }
 
 fn declarationAssignment(shell: anytype, word: ast.Word) !?DeclarationAssignment {
