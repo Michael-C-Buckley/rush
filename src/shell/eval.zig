@@ -415,6 +415,13 @@ fn evalSimpleScoped(shell: anytype, command: ast.SimpleCommand) EvalError!result
         return .{ .status = status };
     }
 
+    if (try staticDeclarationBuiltinName(shell, command.words[0])) |id| {
+        if (id == .export_ or id == .readonly) {
+            try applyAssignments(shell, command.assignments);
+            return evalDeclarationBuiltin(shell, id, command.words[1..]);
+        }
+    }
+
     var expansion_status: ?result.ExitStatus = null;
     const fields = try expandWordFields(shell, command.words, &expansion_status);
     if (fields.len == 0) {
@@ -426,13 +433,107 @@ fn evalSimpleScoped(shell: anytype, command: ast.SimpleCommand) EvalError!result
         if (definition.kind == .special) try applyAssignments(shell, command.assignments);
         if (definition.id == .eval) return evalEvalBuiltin(shell, fields);
         const args = switch (definition.id) {
-            .eval, .exit, .printf, .readonly, .set => fields,
+            .eval, .export_, .exit, .printf, .readonly, .set => fields,
             else => &[_][]const u8{name},
         };
         return builtin.eval(shell, definition, args);
     }
     if (shell.state.getFunction(name)) |function| return evalFunction(shell, function, command.assignments);
     return evalExternal(shell, fields, command.assignments);
+}
+
+fn staticDeclarationBuiltinName(shell: anytype, word: ast.Word) !?builtin.Id {
+    if (wordHasDynamicExpansion(word)) return null;
+    const name = try expandWordTracking(shell, word, null);
+    if (std.mem.eql(u8, name, "export")) return .export_;
+    if (std.mem.eql(u8, name, "readonly")) return .readonly;
+    return null;
+}
+
+const DeclarationAssignment = struct {
+    name: []const u8,
+    value: ast.Word,
+};
+
+fn evalDeclarationBuiltin(shell: anytype, id: builtin.Id, words: []const ast.Word) EvalError!result.EvalResult {
+    std.debug.assert(id == .export_ or id == .readonly);
+    var status: result.ExitStatus = 0;
+    for (words) |word| {
+        if (try declarationAssignment(shell, word)) |assignment| {
+            const value = try expandAssignmentWordTracking(shell, assignment.value, null);
+            const existing = shell.state.getVariable(assignment.name);
+            shell.state.putVariable(.{
+                .name = assignment.name,
+                .value = value,
+                .exported = id == .export_ or (existing != null and existing.?.exported),
+                .readonly = id == .readonly or (existing != null and existing.?.readonly),
+            }) catch |err| switch (err) {
+                error.ReadonlyVariable => status = 2,
+                else => return err,
+            };
+            continue;
+        }
+
+        const names = try expandWordFields(shell, &.{word}, null);
+        for (names) |name| {
+            if (!isAssignmentName(name)) {
+                status = 2;
+                continue;
+            }
+            const existing = shell.state.getVariable(name);
+            shell.state.putVariable(.{
+                .name = name,
+                .value = if (existing) |variable| variable.value else "",
+                .exported = id == .export_ or (existing != null and existing.?.exported),
+                .readonly = id == .readonly or (existing != null and existing.?.readonly),
+            }) catch |err| switch (err) {
+                error.ReadonlyVariable => status = 2,
+                else => return err,
+            };
+        }
+    }
+    return .{ .status = status };
+}
+
+fn declarationAssignment(shell: anytype, word: ast.Word) !?DeclarationAssignment {
+    return switch (word.data) {
+        .literal => |literal| literalDeclarationAssignment(literal),
+        .parts => |parts| partsDeclarationAssignment(shell, parts),
+    };
+}
+
+fn literalDeclarationAssignment(literal: []const u8) ?DeclarationAssignment {
+    const equal_index = std.mem.indexOfScalar(u8, literal, '=') orelse return null;
+    const name = literal[0..equal_index];
+    if (!isAssignmentName(name)) return null;
+    return .{ .name = name, .value = .{ .data = .{ .literal = literal[equal_index + 1 ..] } } };
+}
+
+fn partsDeclarationAssignment(shell: anytype, parts: []const ast.WordPart) !?DeclarationAssignment {
+    if (parts.len == 0) return null;
+    const first_literal = switch (parts[0]) {
+        .literal => |literal| literal,
+        else => return null,
+    };
+    const equal_index = std.mem.indexOfScalar(u8, first_literal, '=') orelse return null;
+    const name = first_literal[0..equal_index];
+    if (!isAssignmentName(name)) return null;
+
+    const allocator = shell.scratchAllocator();
+    var value_parts: std.ArrayList(ast.WordPart) = .empty;
+    const suffix = first_literal[equal_index + 1 ..];
+    if (suffix.len != 0) try value_parts.append(allocator, .{ .literal = suffix });
+    try value_parts.appendSlice(allocator, parts[1..]);
+    return .{ .name = name, .value = .{ .data = .{ .parts = try value_parts.toOwnedSlice(allocator) } } };
+}
+
+fn isAssignmentName(name: []const u8) bool {
+    if (name.len == 0) return false;
+    if (!std.ascii.isAlphabetic(name[0]) and name[0] != '_') return false;
+    for (name[1..]) |byte| {
+        if (!std.ascii.isAlphanumeric(byte) and byte != '_') return false;
+    }
+    return true;
 }
 
 fn evalEvalBuiltin(shell: anytype, args: []const []const u8) EvalError!result.EvalResult {

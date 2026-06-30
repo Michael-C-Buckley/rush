@@ -16,6 +16,7 @@ pub const Kind = enum {
 pub const Id = enum {
     colon,
     eval,
+    export_,
     exit,
     false_,
     printf,
@@ -39,6 +40,7 @@ const DefinitionMap = std.StaticStringMap(Definition);
 pub const definitions: DefinitionMap = .initComptime(.{
     .{ ":", Definition{ .name = ":", .id = .colon, .kind = .special } },
     .{ "eval", Definition{ .name = "eval", .id = .eval, .kind = .special } },
+    .{ "export", Definition{ .name = "export", .id = .export_, .kind = .special } },
     .{ "exit", Definition{ .name = "exit", .id = .exit, .kind = .special } },
     .{ "false", Definition{ .name = "false", .id = .false_, .kind = .regular } },
     .{ "printf", Definition{ .name = "printf", .id = .printf, .kind = .regular } },
@@ -58,7 +60,7 @@ pub fn eval(shell: anytype, definition: Definition, args: []const []const u8) !r
     std.debug.assert(args.len != 0);
     return switch (definition.id) {
         .colon, .true_ => .{},
-        .eval => unreachable,
+        .eval, .export_ => unreachable,
         .exit => evalExit(shell, args),
         .false_ => .{ .status = 1 },
         .printf => evalPrintf(shell, args),
@@ -131,6 +133,7 @@ fn isAssignmentName(name: []const u8) bool {
 test "builtin lookup identifies null true and false utilities" {
     try std.testing.expectEqual(Id.colon, lookup(":").?.id);
     try std.testing.expectEqual(Id.eval, lookup("eval").?.id);
+    try std.testing.expectEqual(Id.export_, lookup("export").?.id);
     try std.testing.expectEqual(Id.exit, lookup("exit").?.id);
     try std.testing.expectEqual(Id.true_, lookup("true").?.id);
     try std.testing.expectEqual(Id.false_, lookup("false").?.id);
