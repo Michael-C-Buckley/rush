@@ -18,6 +18,7 @@ pub const Id = enum {
     break_,
     cd,
     colon,
+    dot,
     command,
     continue_,
     eval,
@@ -53,6 +54,7 @@ pub const definitions: DefinitionMap = .initComptime(.{
     .{ "break", Definition{ .name = "break", .id = .break_, .kind = .special } },
     .{ "cd", Definition{ .name = "cd", .id = .cd, .kind = .regular } },
     .{ ":", Definition{ .name = ":", .id = .colon, .kind = .special } },
+    .{ ".", Definition{ .name = ".", .id = .dot, .kind = .special } },
     .{ "command", Definition{ .name = "command", .id = .command, .kind = .regular } },
     .{ "continue", Definition{ .name = "continue", .id = .continue_, .kind = .special } },
     .{ "eval", Definition{ .name = "eval", .id = .eval, .kind = .special } },
@@ -84,7 +86,7 @@ pub fn eval(shell: anytype, definition: Definition, args: []const []const u8) !r
         .colon, .true_ => .{},
         .alias => evalAlias(shell, args),
         .break_ => evalBreak(args),
-        .cd, .command, .eval, .exec, .export_, .pwd, .read, .type => unreachable,
+        .cd, .command, .dot, .eval, .exec, .export_, .pwd, .read, .type => unreachable,
         .continue_ => evalContinue(args),
         .exit => evalExit(shell, args),
         .false_ => .{ .status = 1 },
@@ -292,6 +294,7 @@ test "builtin lookup identifies null true and false utilities" {
     try std.testing.expectEqual(Id.break_, lookup("break").?.id);
     try std.testing.expectEqual(Id.cd, lookup("cd").?.id);
     try std.testing.expectEqual(Id.colon, lookup(":").?.id);
+    try std.testing.expectEqual(Id.dot, lookup(".").?.id);
     try std.testing.expectEqual(Id.command, lookup("command").?.id);
     try std.testing.expectEqual(Id.continue_, lookup("continue").?.id);
     try std.testing.expectEqual(Id.eval, lookup("eval").?.id);

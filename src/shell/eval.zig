@@ -500,6 +500,7 @@ fn evalSimpleScoped(shell: anytype, command: ast.SimpleCommand) EvalError!result
             if (definition.id == .export_ or definition.id == .readonly) {
                 return evalDeclarationBuiltin(shell, definition.id, command.words[1..]);
             }
+            if (definition.id == .dot) return evalDotBuiltin(shell, fields);
             if (definition.id == .eval) return evalEvalBuiltin(shell, fields);
             if (definition.id == .exec) {
                 restore_redirections = false;
@@ -581,6 +582,97 @@ fn evalPwdBuiltin(shell: anytype, args: []const []const u8) EvalError!result.Eva
     return .{};
 }
 
+fn evalDotBuiltin(shell: anytype, args: []const []const u8) EvalError!result.EvalResult {
+    std.debug.assert(args.len != 0);
+    if (args.len == 1) return .{ .status = 2 };
+
+    const path = try resolveDotPath(shell, args[1]) orelse return .{ .status = 2 };
+    const script = readDotScript(shell, path) catch return .{ .status = 1 };
+    defer shell.allocator.free(script);
+
+    const saved_positionals = try savePositionals(shell);
+    defer freeSavedPositionals(shell, saved_positionals);
+    var restored_positionals = false;
+    errdefer if (!restored_positionals) restorePositionals(shell, saved_positionals) catch {};
+
+    if (args.len > 2) try shell.state.setPositionals(args[2..]);
+
+    const src: source_mod.Source = .{
+        .id = 0,
+        .kind = .sourced_file,
+        .name = path,
+        .text = script,
+    };
+    const ast_allocator = shell.astAllocator();
+    const tokens = try lexer.lexWithAliases(ast_allocator, src, shell.state);
+    const program = try parser.parse(ast_allocator, src, tokens);
+    program.validate();
+    const evaluated = try evalProgram(@TypeOf(shell.host), shell, program);
+    try restorePositionals(shell, saved_positionals);
+    restored_positionals = true;
+    return evaluated;
+}
+
+fn readDotScript(shell: anytype, path: []const u8) ![]const u8 {
+    const allocator = shell.allocator;
+    const path_z = try allocator.dupeZ(u8, path);
+    defer allocator.free(path_z);
+
+    const fd = try shell.host.openZ(path_z, .{ .access = .read_only });
+    defer shell.host.close(fd) catch {};
+
+    var output: std.ArrayList(u8) = .empty;
+    var buffer: [4096]u8 = undefined;
+    while (true) {
+        const read_len = try shell.host.read(fd, &buffer);
+        if (read_len == 0) break;
+        try output.appendSlice(allocator, buffer[0..read_len]);
+    }
+    return output.toOwnedSlice(allocator);
+}
+
+fn resolveDotPath(shell: anytype, operand: []const u8) !?[]const u8 {
+    if (std.mem.indexOfScalar(u8, operand, '/') != null) return operand;
+
+    const path = if (shell.state.getVariable("PATH")) |variable| variable.value else envPath(shell.env) orelse defaultUtilityPath();
+    const allocator = shell.scratchAllocator();
+    var candidate_buffer: std.ArrayList(u8) = .empty;
+    var iterator = std.mem.splitScalar(u8, path, ':');
+    while (iterator.next()) |directory| {
+        candidate_buffer.clearRetainingCapacity();
+        const prefix = if (directory.len == 0) "." else directory;
+        try candidate_buffer.appendSlice(allocator, prefix);
+        if (!std.mem.endsWith(u8, prefix, "/")) try candidate_buffer.append(allocator, '/');
+        try candidate_buffer.appendSlice(allocator, operand);
+        try candidate_buffer.append(allocator, 0);
+        const candidate = candidate_buffer.items[0 .. candidate_buffer.items.len - 1 :0];
+        if (shell.host.existsZ(candidate)) return candidate;
+    }
+    return null;
+}
+
+fn savePositionals(shell: anytype) ![]const []const u8 {
+    const allocator = shell.allocator;
+    const saved = try allocator.alloc([]const u8, shell.state.positionals.len);
+    errdefer allocator.free(saved);
+    var copied: usize = 0;
+    errdefer for (saved[0..copied]) |positional| allocator.free(positional);
+    for (shell.state.positionals, 0..) |positional, index| {
+        saved[index] = try allocator.dupe(u8, positional);
+        copied += 1;
+    }
+    return saved;
+}
+
+fn restorePositionals(shell: anytype, saved: []const []const u8) !void {
+    try shell.state.setPositionals(saved);
+}
+
+fn freeSavedPositionals(shell: anytype, saved: []const []const u8) void {
+    for (saved) |positional| shell.allocator.free(positional);
+    shell.allocator.free(saved);
+}
+
 fn evalCommandBuiltin(
     shell: anytype,
     args: []const []const u8,
@@ -626,6 +718,12 @@ fn evalCommandBuiltin(
         switch (definition.id) {
             .cd => {
                 const evaluated = try evalCdBuiltin(shell, args[index..]);
+                restoreVariables(shell, saved);
+                restored_assignments = true;
+                return evaluated;
+            },
+            .dot => {
+                const evaluated = try evalDotBuiltin(shell, args[index..]);
                 restoreVariables(shell, saved);
                 restored_assignments = true;
                 return evaluated;
