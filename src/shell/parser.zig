@@ -155,7 +155,11 @@ const Parser = struct {
             body = .{ .subshell = try self.parseList(.right_paren) };
             try self.expect(.right_paren);
         } else if (self.eat(.left_brace) != null) {
-            body = .{ .brace_group = try self.parseList(.right_brace) };
+            const list = try self.parseList(.right_brace);
+            if (list.entries.len == 0 or list.entries[list.entries.len - 1].terminator == null) {
+                return error.UnexpectedToken;
+            }
+            body = .{ .brace_group = list };
             try self.expect(.right_brace);
         } else {
             return null;
