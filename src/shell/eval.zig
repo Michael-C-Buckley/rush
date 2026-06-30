@@ -80,16 +80,36 @@ fn evalBackgroundAndOr(shell: anytype, and_or: ast.AndOr) EvalError!result.EvalR
     if (and_or.pipelines.len == 1 and and_or.pipelines[0].pipeline.stages.len > 1) {
         return evalBackgroundPipeline(shell, and_or.pipelines[0].pipeline);
     }
+    const background_subshell = backgroundSubshellInvocation(and_or);
     const pid = switch (try shell.host.forkProcess()) {
         .parent => |child_pid| child_pid,
         .child => {
-            const evaluated = evalAndOr(shell, and_or) catch shell.host.exit(2);
-            shell.host.exit(evaluated.status);
+            const scratch = shell.beginScratchScope() catch shell.host.exit(2);
+            defer scratch.end();
+            if (background_subshell) |subshell| {
+                const evaluated = evalSubshellInCurrentProcess(shell, subshell.body.subshell, subshell.redirections) catch shell.host.exit(2);
+                const status = runExitTrap(shell, evaluated.status) catch shell.host.exit(2);
+                shell.host.exit(status);
+            } else {
+                const evaluated = evalAndOr(shell, and_or) catch shell.host.exit(2);
+                shell.host.exit(evaluated.status);
+            }
         },
     };
     shell.state.last_background_pid = pid;
     try shell.state.addBackgroundPid(pid);
     return .{ .status = 0 };
+}
+
+fn backgroundSubshellInvocation(and_or: ast.AndOr) ?ast.CompoundInvocation {
+    if (and_or.pipelines.len != 1) return null;
+    const pipeline = and_or.pipelines[0].pipeline;
+    if (pipeline.negated or pipeline.stages.len != 1) return null;
+    const command = pipeline.stages[0];
+    if (command != .compound) return null;
+    const compound = command.compound;
+    if (compound.body != .subshell) return null;
+    return compound;
 }
 
 fn evalBackgroundPipeline(shell: anytype, pipeline: ast.Pipeline) EvalError!result.EvalResult {
@@ -245,6 +265,15 @@ fn staticExternalPipelineStageRequest(
 fn staticLiteralWord(word: ast.Word) ?[]const u8 {
     return switch (word.data) {
         .literal => |literal| literal,
+        .parts => |parts| staticLiteralParts(parts),
+    };
+}
+
+fn staticLiteralParts(parts: []const ast.WordPart) ?[]const u8 {
+    if (parts.len != 1) return null;
+    return switch (parts[0]) {
+        .literal, .escaped, .single_quoted => |literal| literal,
+        .double_quoted => |nested| staticLiteralParts(nested),
         else => null,
     };
 }
@@ -372,12 +401,7 @@ fn evalSubshell(shell: anytype, body: ast.List, redirections: []const ast.Redire
         .child => {
             const scratch = shell.beginScratchScope() catch shell.host.exit(2);
             defer scratch.end();
-            shell.state.loop_depth = 0;
-            shell.state.running_exit_trap = false;
-            shell.state.forgetActiveExitTrap();
-            var applied = applyRedirections(shell, redirections) catch shell.host.exit(1);
-            defer applied.restore(shell) catch {};
-            const evaluated = evalList(shell, body) catch shell.host.exit(2);
+            const evaluated = evalSubshellInCurrentProcess(shell, body, redirections) catch shell.host.exit(2);
             const status = runExitTrap(shell, evaluated.status) catch shell.host.exit(2);
             shell.host.exit(status);
         },
@@ -385,6 +409,22 @@ fn evalSubshell(shell: anytype, body: ast.List, redirections: []const ast.Redire
     };
     const wait_status = try shell.host.wait(pid);
     return .{ .status = wait_status.shellStatus() };
+}
+
+fn evalSubshellInCurrentProcess(
+    shell: anytype,
+    body: ast.List,
+    redirections: []const ast.Redirection,
+) EvalError!result.EvalResult {
+    shell.state.loop_depth = 0;
+    shell.state.running_exit_trap = false;
+    shell.state.forgetActiveExitTrap();
+    var applied = applyRedirections(shell, redirections) catch |err| switch (err) {
+        error.OutOfMemory => return err,
+        else => return redirectionFailure(shell, false),
+    };
+    defer applied.restore(shell) catch {};
+    return evalList(shell, body);
 }
 
 fn evalFor(shell: anytype, command: ast.ForCommand) EvalError!result.EvalResult {
@@ -3312,6 +3352,10 @@ fn evalCommandSubstitutionInChild(
             shell.host.close(pipe_desc.read) catch shell.host.exit(127);
             shell.host.duplicateTo(pipe_desc.write, .stdout) catch shell.host.exit(127);
             shell.host.close(pipe_desc.write) catch shell.host.exit(127);
+            const static_request = staticExternalProgramRequest(shell, program) catch shell.host.exit(2);
+            if (static_request) |request| {
+                shell.host.exec(request) catch shell.host.exit(127);
+            }
             shell.state.loop_depth = 0;
             shell.state.running_exit_trap = false;
             shell.state.diagnostic_line_offset += substitution.line_offset;
@@ -3333,6 +3377,16 @@ fn evalCommandSubstitutionInChild(
     try shell.host.close(pipe_desc.read);
     const wait_status = try shell.host.wait(pid);
     return .{ .output = output, .status = wait_status.shellStatus() };
+}
+
+fn staticExternalProgramRequest(shell: anytype, program: ast.Program) !?host_mod.SpawnRequest {
+    if (program.body.entries.len != 1) return null;
+    const entry = program.body.entries[0];
+    if (entry.terminator == .background) return null;
+    if (entry.and_or.pipelines.len != 1) return null;
+    const pipeline = entry.and_or.pipelines[0].pipeline;
+    if (pipeline.negated or pipeline.stages.len != 1) return null;
+    return staticExternalPipelineStageRequest(shell, pipeline.stages[0], &.{});
 }
 
 fn readCommandSubstitutionOutput(shell: anytype, fd: host_mod.Fd) ![]const u8 {
