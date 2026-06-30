@@ -340,7 +340,7 @@ const Parser = struct {
         span: source_mod.Span,
         source_start: usize,
     ) ParserError!ast.Word {
-        if (std.mem.indexOfAny(u8, text, "'\"$\\") == null) {
+        if (std.mem.indexOfAny(u8, text, "'\"$\\`") == null) {
             const word: ast.Word = .{ .data = .{ .literal = text }, .span = span };
             word.validate();
             return word;
@@ -406,6 +406,18 @@ const Parser = struct {
                         try parts.append(self.allocator, .{ .literal = text[index .. index + 1] });
                         index += 1;
                     }
+                    literal_start = index;
+                    continue;
+                },
+                '`' => {
+                    if (literal_start < index) try parts.append(self.allocator, .{ .literal = text[literal_start..index] });
+                    const substitution_end = try scanBackquoteSubstitution(text, index, end);
+                    const source_text = try self.backquoteSourceText(text[index + 1 .. substitution_end]);
+                    const parsed = try self.parseCommandSubstitution(source_text);
+                    try parts.append(self.allocator, .{
+                        .command_substitution = .{ .source_text = source_text, .parsed = parsed },
+                    });
+                    index = substitution_end + 1;
                     literal_start = index;
                     continue;
                 },
@@ -593,6 +605,35 @@ const Parser = struct {
         const owned = try self.allocator.create(ast.Program);
         owned.* = program;
         return owned;
+    }
+
+    fn backquoteSourceText(self: *Parser, raw: []const u8) ParserError![]const u8 {
+        var output: std.ArrayList(u8) = .empty;
+        var index: usize = 0;
+        while (index < raw.len) {
+            if (raw[index] == '\\' and index + 1 < raw.len) {
+                switch (raw[index + 1]) {
+                    '`' => {
+                        try output.append(self.allocator, '`');
+                        index += 2;
+                    },
+                    '\\' => {
+                        try output.append(self.allocator, '\\');
+                        index += 2;
+                    },
+                    '\n' => index += 2,
+                    else => {
+                        try output.append(self.allocator, raw[index]);
+                        try output.append(self.allocator, raw[index + 1]);
+                        index += 2;
+                    },
+                }
+            } else {
+                try output.append(self.allocator, raw[index]);
+                index += 1;
+            }
+        }
+        return output.toOwnedSlice(self.allocator);
     }
 
     fn spanFromOffsets(self: Parser, start: usize, end: usize) source_mod.Span {
@@ -916,6 +957,20 @@ fn scanBracedParameterEnd(text: []const u8, open_index: usize, end: usize) ?usiz
         }
     }
     return null;
+}
+
+fn scanBackquoteSubstitution(text: []const u8, open_index: usize, end: usize) ParseError!usize {
+    std.debug.assert(text[open_index] == '`');
+    var index = open_index + 1;
+    while (index < end) {
+        if (text[index] == '\\' and index + 1 < end) {
+            index += 2;
+            continue;
+        }
+        if (text[index] == '`') return index;
+        index += 1;
+    }
+    return error.UnclosedCommandSubstitution;
 }
 
 fn scanCommandSubstitution(text: []const u8, open_index: usize, end: usize) ParseError!usize {
