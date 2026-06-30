@@ -1047,9 +1047,97 @@ fn expandWordPart(shell: anytype, part: ast.WordPart, substitution_status: ?*?re
 }
 
 fn expandArithmetic(shell: anytype, text: []const u8) ![]const u8 {
-    var parser_state: ArithmeticParser(@TypeOf(shell)) = .{ .shell = shell, .text = text };
+    const expanded = try expandArithmeticText(shell, text);
+    var parser_state: ArithmeticParser(@TypeOf(shell)) = .{ .shell = shell, .text = expanded };
     const value = try parser_state.parse();
     return std.fmt.allocPrint(shell.scratchAllocator(), "{}", .{value});
+}
+
+fn expandArithmeticText(shell: anytype, text: []const u8) ![]const u8 {
+    var output: std.ArrayList(u8) = .empty;
+    const allocator = shell.scratchAllocator();
+    var index: usize = 0;
+    while (index < text.len) {
+        switch (text[index]) {
+            '\'', '"' => |quote| {
+                index += 1;
+                while (index < text.len and text[index] != quote) : (index += 1) {
+                    try output.append(allocator, text[index]);
+                }
+                if (index >= text.len) return error.InvalidArithmetic;
+                index += 1;
+            },
+            '$' => {
+                if (index + 1 >= text.len) {
+                    try output.append(allocator, '$');
+                    index += 1;
+                    continue;
+                }
+                if (text[index + 1] == '(' and (index + 2 >= text.len or text[index + 2] != '(')) {
+                    const substitution_end = try scanArithmeticCommandSubstitution(text, index + 1);
+                    const substitution: ast.CommandSubstitution = .{ .source_text = text[index + 2 .. substitution_end] };
+                    try output.appendSlice(allocator, try expandCommandSubstitution(shell, substitution, null));
+                    index = substitution_end + 1;
+                    continue;
+                }
+                const expanded = try expandArithmeticParameter(shell, text, &index);
+                try output.appendSlice(allocator, expanded);
+            },
+            else => {
+                try output.append(allocator, text[index]);
+                index += 1;
+            },
+        }
+    }
+    return output.toOwnedSlice(allocator);
+}
+
+fn expandArithmeticParameter(shell: anytype, text: []const u8, index: *usize) ![]const u8 {
+    std.debug.assert(index.* < text.len and text[index.*] == '$');
+    const parameter_start = index.* + 1;
+    if (parameter_start >= text.len) {
+        index.* += 1;
+        return "$";
+    }
+    if (!isArithmeticNameStart(text[parameter_start])) {
+        index.* += 1;
+        return "$";
+    }
+    var parameter_end = parameter_start + 1;
+    while (parameter_end < text.len and isArithmeticNameContinue(text[parameter_end])) parameter_end += 1;
+    index.* = parameter_end;
+    return parameterValue(shell, text[parameter_start..parameter_end]) orelse {
+        if (shell.state.options.nounset) return error.InvalidArithmetic;
+        return "";
+    };
+}
+
+fn scanArithmeticCommandSubstitution(text: []const u8, open_index: usize) !usize {
+    std.debug.assert(open_index < text.len and text[open_index] == '(');
+    var index = open_index + 1;
+    var depth: usize = 1;
+    while (index < text.len) {
+        switch (text[index]) {
+            '\'', '"' => |quote| {
+                index += 1;
+                while (index < text.len and text[index] != quote) index += 1;
+                if (index >= text.len) return error.InvalidArithmetic;
+                index += 1;
+            },
+            '\\' => index += if (index + 1 < text.len) 2 else 1,
+            '(' => {
+                depth += 1;
+                index += 1;
+            },
+            ')' => {
+                depth -= 1;
+                if (depth == 0) return index;
+                index += 1;
+            },
+            else => index += 1,
+        }
+    }
+    return error.InvalidArithmetic;
 }
 
 const ArithmeticError = error{InvalidArithmetic};
