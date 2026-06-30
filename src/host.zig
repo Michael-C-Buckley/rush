@@ -82,6 +82,20 @@ pub const ListDirError = error{
     Unexpected,
 };
 
+pub const ChangeDirError = error{
+    AccessDenied,
+    FileNotFound,
+    NotDir,
+    NameTooLong,
+    Unexpected,
+};
+
+pub const CurrentDirError = error{
+    AccessDenied,
+    NameTooLong,
+    Unexpected,
+};
+
 pub const SpawnFdAction = union(enum) {
     close: Fd,
     duplicate: struct {
@@ -202,6 +216,14 @@ pub const RealHost = struct {
 
     pub fn listDir(_: *RealHost, allocator: std.mem.Allocator, path: []const u8) platform.ListDirError!ListDirResult {
         return platform.listDir(allocator, path);
+    }
+
+    pub fn changeDir(_: *RealHost, path: []const u8) platform.ChangeDirError!void {
+        return platform.changeDir(path);
+    }
+
+    pub fn currentDir(_: *RealHost, allocator: std.mem.Allocator) platform.CurrentDirError![]const u8 {
+        return platform.currentDir(allocator);
     }
 
     pub fn spawn(_: *RealHost, request: SpawnRequest) platform.SpawnError!SpawnResult {

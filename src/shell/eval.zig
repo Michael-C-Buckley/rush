@@ -431,15 +431,129 @@ fn evalSimpleScoped(shell: anytype, command: ast.SimpleCommand) EvalError!result
     const name = fields[0];
     if (builtin.lookup(name)) |definition| {
         if (definition.kind == .special) try applyAssignments(shell, command.assignments);
+        if (definition.id == .cd) return evalCdBuiltin(shell, fields);
         if (definition.id == .eval) return evalEvalBuiltin(shell, fields);
+        if (definition.id == .pwd) return evalPwdBuiltin(shell, fields);
         const args = switch (definition.id) {
-            .eval, .export_, .exit, .printf, .readonly, .set => fields,
+            .cd, .eval, .export_, .exit, .printf, .pwd, .readonly, .set => fields,
             else => &[_][]const u8{name},
         };
         return builtin.eval(shell, definition, args);
     }
     if (shell.state.getFunction(name)) |function| return evalFunction(shell, function, command.assignments);
     return evalExternal(shell, fields, command.assignments);
+}
+
+fn evalCdBuiltin(shell: anytype, args: []const []const u8) EvalError!result.EvalResult {
+    std.debug.assert(args.len != 0);
+    if (args.len > 2) return .{ .status = 2 };
+
+    const allocator = shell.scratchAllocator();
+    const old_pwd = try currentLogicalDir(shell);
+    var print_new_dir = false;
+    const target = if (args.len == 1) target: {
+        break :target parameterValue(shell, "HOME") orelse return .{ .status = 1 };
+    } else if (std.mem.eql(u8, args[1], "-")) target: {
+        print_new_dir = true;
+        break :target parameterValue(shell, "OLDPWD") orelse return .{ .status = 1 };
+    } else target: {
+        break :target try cdPathTarget(shell, args[1], &print_new_dir) orelse args[1];
+    };
+
+    shell.host.changeDir(target) catch return .{ .status = 1 };
+    const new_pwd = try logicalPath(allocator, old_pwd, target);
+    shell.state.putVariable(.{ .name = "OLDPWD", .value = old_pwd, .exported = exportedFlag(shell, "OLDPWD") }) catch {
+        return .{ .status = 1 };
+    };
+    shell.state.putVariable(.{ .name = "PWD", .value = new_pwd, .exported = exportedFlag(shell, "PWD") }) catch {
+        return .{ .status = 1 };
+    };
+
+    if (print_new_dir) try shell.host.writeAll(.stdout, try std.fmt.allocPrint(allocator, "{s}\n", .{new_pwd}));
+    return .{};
+}
+
+fn evalPwdBuiltin(shell: anytype, args: []const []const u8) EvalError!result.EvalResult {
+    std.debug.assert(args.len != 0);
+    var physical = false;
+    for (args[1..]) |arg| {
+        if (std.mem.eql(u8, arg, "-P")) {
+            physical = true;
+        } else if (std.mem.eql(u8, arg, "-L")) {
+            physical = false;
+        } else {
+            return .{ .status = 2 };
+        }
+    }
+
+    const cwd = if (physical) try shell.host.currentDir(shell.scratchAllocator()) else try currentLogicalDir(shell);
+    try shell.host.writeAll(.stdout, try std.fmt.allocPrint(shell.scratchAllocator(), "{s}\n", .{cwd}));
+    return .{};
+}
+
+fn currentLogicalDir(shell: anytype) ![]const u8 {
+    return parameterValue(shell, "PWD") orelse try shell.host.currentDir(shell.scratchAllocator());
+}
+
+fn exportedFlag(shell: anytype, name: []const u8) bool {
+    return if (shell.state.getVariable(name)) |variable| variable.exported else envValue(shell.env, name) != null;
+}
+
+fn cdPathTarget(shell: anytype, operand: []const u8, print_new_dir: *bool) !?[]const u8 {
+    if (operand.len == 0 or operand[0] == '/' or startsWithDotPathComponent(operand)) return null;
+    const cdpath = parameterValue(shell, "CDPATH") orelse return null;
+    var iterator = std.mem.splitScalar(u8, cdpath, ':');
+    while (iterator.next()) |prefix| {
+        const candidate = if (prefix.len == 0)
+            operand
+        else
+            try std.fmt.allocPrint(shell.scratchAllocator(), "{s}/{s}", .{ prefix, operand });
+        if (try pathIsDirectory(shell, candidate, .other)) {
+            print_new_dir.* = prefix.len != 0;
+            return candidate;
+        }
+    }
+    return null;
+}
+
+fn startsWithDotPathComponent(path: []const u8) bool {
+    return std.mem.eql(u8, path, ".") or std.mem.eql(u8, path, "..") or
+        std.mem.startsWith(u8, path, "./") or std.mem.startsWith(u8, path, "../");
+}
+
+fn logicalPath(allocator: std.mem.Allocator, old_pwd: []const u8, target: []const u8) ![]const u8 {
+    var combined: []const u8 = target;
+    if (target.len == 0 or target[0] != '/') {
+        combined = try std.fmt.allocPrint(allocator, "{s}/{s}", .{ old_pwd, target });
+    }
+    return normalizeAbsolutePath(allocator, combined);
+}
+
+fn normalizeAbsolutePath(allocator: std.mem.Allocator, path: []const u8) ![]const u8 {
+    std.debug.assert(path.len != 0 and path[0] == '/');
+    var components: std.ArrayList([]const u8) = .empty;
+    var iterator = std.mem.splitScalar(u8, path, '/');
+    while (iterator.next()) |component| {
+        if (component.len == 0 or std.mem.eql(u8, component, ".")) continue;
+        if (std.mem.eql(u8, component, "..")) {
+            if (components.items.len != 0) components.items.len -= 1;
+            continue;
+        }
+        try components.append(allocator, component);
+    }
+    if (components.items.len == 0) return allocator.dupe(u8, "/");
+
+    var total_len: usize = 0;
+    for (components.items) |component| total_len += component.len + 1;
+    const normalized = try allocator.alloc(u8, total_len);
+    var cursor: usize = 0;
+    for (components.items) |component| {
+        normalized[cursor] = '/';
+        cursor += 1;
+        @memcpy(normalized[cursor..][0..component.len], component);
+        cursor += component.len;
+    }
+    return normalized;
 }
 
 fn staticDeclarationBuiltinName(shell: anytype, word: ast.Word) !?builtin.Id {
@@ -2466,7 +2580,13 @@ fn writeExpansionDiagnostic(
 }
 
 fn parameterValue(shell: anytype, name: []const u8) ?[]const u8 {
-    return if (shell.state.getVariable(name)) |variable| variable.value else null;
+    if (shell.state.getVariable(name)) |variable| return variable.value;
+    if (std.mem.eql(u8, name, "PWD")) {
+        if (comptime @hasDecl(@TypeOf(shell.host), "currentDir")) {
+            return shell.host.currentDir(shell.scratchAllocator()) catch envValue(shell.env, name);
+        }
+    }
+    return envValue(shell.env, name);
 }
 
 fn formatExitStatus(shell: anytype, status: result.ExitStatus) ![]const u8 {

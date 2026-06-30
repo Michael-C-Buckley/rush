@@ -14,12 +14,14 @@ pub const Kind = enum {
 };
 
 pub const Id = enum {
+    cd,
     colon,
     eval,
     export_,
     exit,
     false_,
     printf,
+    pwd,
     readonly,
     set,
     true_,
@@ -38,12 +40,14 @@ pub const Definition = struct {
 const DefinitionMap = std.StaticStringMap(Definition);
 
 pub const definitions: DefinitionMap = .initComptime(.{
+    .{ "cd", Definition{ .name = "cd", .id = .cd, .kind = .regular } },
     .{ ":", Definition{ .name = ":", .id = .colon, .kind = .special } },
     .{ "eval", Definition{ .name = "eval", .id = .eval, .kind = .special } },
     .{ "export", Definition{ .name = "export", .id = .export_, .kind = .special } },
     .{ "exit", Definition{ .name = "exit", .id = .exit, .kind = .special } },
     .{ "false", Definition{ .name = "false", .id = .false_, .kind = .regular } },
     .{ "printf", Definition{ .name = "printf", .id = .printf, .kind = .regular } },
+    .{ "pwd", Definition{ .name = "pwd", .id = .pwd, .kind = .regular } },
     .{ "readonly", Definition{ .name = "readonly", .id = .readonly, .kind = .special } },
     .{ "set", Definition{ .name = "set", .id = .set, .kind = .special } },
     .{ "true", Definition{ .name = "true", .id = .true_, .kind = .regular } },
@@ -60,7 +64,7 @@ pub fn eval(shell: anytype, definition: Definition, args: []const []const u8) !r
     std.debug.assert(args.len != 0);
     return switch (definition.id) {
         .colon, .true_ => .{},
-        .eval, .export_ => unreachable,
+        .cd, .eval, .export_, .pwd => unreachable,
         .exit => evalExit(shell, args),
         .false_ => .{ .status = 1 },
         .printf => evalPrintf(shell, args),
@@ -131,6 +135,7 @@ fn isAssignmentName(name: []const u8) bool {
 }
 
 test "builtin lookup identifies null true and false utilities" {
+    try std.testing.expectEqual(Id.cd, lookup("cd").?.id);
     try std.testing.expectEqual(Id.colon, lookup(":").?.id);
     try std.testing.expectEqual(Id.eval, lookup("eval").?.id);
     try std.testing.expectEqual(Id.export_, lookup("export").?.id);
@@ -138,6 +143,7 @@ test "builtin lookup identifies null true and false utilities" {
     try std.testing.expectEqual(Id.true_, lookup("true").?.id);
     try std.testing.expectEqual(Id.false_, lookup("false").?.id);
     try std.testing.expectEqual(Id.printf, lookup("printf").?.id);
+    try std.testing.expectEqual(Id.pwd, lookup("pwd").?.id);
     try std.testing.expectEqual(Id.readonly, lookup("readonly").?.id);
     try std.testing.expectEqual(@as(?Definition, null), lookup("missing"));
 }

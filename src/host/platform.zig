@@ -30,6 +30,10 @@ pub const OpenError = error{
 
 pub const ListDirError = host.ListDirError || std.mem.Allocator.Error;
 
+pub const ChangeDirError = host.ChangeDirError;
+
+pub const CurrentDirError = host.CurrentDirError || std.mem.Allocator.Error;
+
 pub const CloseError = host.CloseError;
 
 pub const DuplicateError = host.DuplicateError;
@@ -143,6 +147,23 @@ pub fn listDir(allocator: std.mem.Allocator, path: []const u8) ListDirError!host
     return switch (builtin.os.tag) {
         .linux => linuxListDir(allocator, path),
         .macos, .freebsd, .openbsd, .netbsd => libcListDir(allocator, path),
+        else => @compileError("unsupported host OS"),
+    };
+}
+
+pub fn changeDir(path: []const u8) ChangeDirError!void {
+    std.debug.assert(path.len != 0);
+    return switch (builtin.os.tag) {
+        .linux => linuxChangeDir(path),
+        .macos, .freebsd, .openbsd, .netbsd => libcChangeDir(path),
+        else => @compileError("unsupported host OS"),
+    };
+}
+
+pub fn currentDir(allocator: std.mem.Allocator) CurrentDirError![]const u8 {
+    return switch (builtin.os.tag) {
+        .linux => linuxCurrentDir(allocator),
+        .macos, .freebsd, .openbsd, .netbsd => libcCurrentDir(allocator),
         else => @compileError("unsupported host OS"),
     };
 }
@@ -503,6 +524,58 @@ fn libcListDir(allocator: std.mem.Allocator, path: []const u8) ListDirError!host
     const result: host.ListDirResult = .{ .allocator = allocator, .entries = try entries.toOwnedSlice(allocator) };
     result.validate();
     return result;
+}
+
+fn linuxChangeDir(path: []const u8) ChangeDirError!void {
+    const path_z = std.posix.toPosixPath(path) catch return error.NameTooLong;
+    const rc = std.os.linux.chdir(&path_z);
+    switch (std.os.linux.errno(rc)) {
+        .SUCCESS => return,
+        .ACCES, .PERM => return error.AccessDenied,
+        .NOENT => return error.FileNotFound,
+        .NOTDIR => return error.NotDir,
+        .NAMETOOLONG => return error.NameTooLong,
+        else => return error.Unexpected,
+    }
+}
+
+fn libcChangeDir(path: []const u8) ChangeDirError!void {
+    const path_z = std.posix.toPosixPath(path) catch return error.NameTooLong;
+    const rc = std.c.chdir(&path_z);
+    switch (std.c.errno(rc)) {
+        .SUCCESS => return,
+        .ACCES, .PERM => return error.AccessDenied,
+        .NOENT => return error.FileNotFound,
+        .NOTDIR => return error.NotDir,
+        .NAMETOOLONG => return error.NameTooLong,
+        else => return error.Unexpected,
+    }
+}
+
+fn linuxCurrentDir(allocator: std.mem.Allocator) CurrentDirError![]const u8 {
+    var buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
+    const rc = std.os.linux.getcwd(&buffer, buffer.len);
+    switch (std.os.linux.errno(rc)) {
+        .SUCCESS => {
+            const len = if (rc != 0 and buffer[rc - 1] == 0) rc - 1 else rc;
+            return allocator.dupe(u8, buffer[0..len]);
+        },
+        .ACCES, .PERM => return error.AccessDenied,
+        .RANGE, .NAMETOOLONG => return error.NameTooLong,
+        else => return error.Unexpected,
+    }
+}
+
+fn libcCurrentDir(allocator: std.mem.Allocator) CurrentDirError![]const u8 {
+    var buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
+    if (std.c.getcwd(&buffer, buffer.len)) |cwd| {
+        return allocator.dupe(u8, std.mem.span(cwd));
+    }
+    return switch (std.c.errno(-1)) {
+        .ACCES, .PERM => error.AccessDenied,
+        .RANGE, .NAMETOOLONG => error.NameTooLong,
+        else => error.Unexpected,
+    };
 }
 
 fn isSpecialDirectoryEntry(name: []const u8) bool {
