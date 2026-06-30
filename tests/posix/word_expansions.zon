@@ -839,6 +839,22 @@
             .status = 0,
         },
         .{
+            .name = "arithmetic expansion expands braced parameters before evaluation",
+            .script =
+            \\name=target
+            \\target=0
+            \\printf '%s:%s\n' "$(( ${name} + 2 ))" "$((_Msh__V${name}__SP = 7))"
+            \\printf '%s\n' "$_Msh__Vtarget__SP"
+            ,
+            .stdout =
+            \\2:7
+            \\7
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "arithmetic expansion uses arithmetic precedence and grouping",
             .script =
             \\printf '%s\n' "$((1 + 2 * 3))" "$(((1 + 2) * 3))"
@@ -912,10 +928,12 @@
             \\x=4
             \\printf '%s:%s\n' "$((x = x + 3))" "$x"
             \\printf '%s:%s\n' "$((x += 5))" "$x"
+            \\printf '%s:%s:%s\n' "$((x -= 2))" "$x" "$((x == 10))"
             ,
             .stdout =
             \\7:7
             \\12:12
+            \\10:10:1
             \\
             ,
             .stderr = "",

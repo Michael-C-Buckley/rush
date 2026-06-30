@@ -490,6 +490,24 @@
             .status = 0,
         },
         .{
+            .name = "set -o accepts POSIX option names",
+            .script =
+            \\set -o nounset -o noglob -o noclobber
+            \\case $- in *u*) ;; *) printf 'bad-on:%s\n' "$-" ;; esac
+            \\case $- in *f*) ;; *) printf 'bad-on:%s\n' "$-" ;; esac
+            \\case $- in *C*) printf 'named-on\n' ;; *) printf 'bad-on:%s\n' "$-" ;; esac
+            \\set +o nounset +o noglob +o noclobber
+            \\case $- in *u*|*f*|*C*) printf 'bad-off:%s\n' "$-" ;; *) printf 'named-off\n' ;; esac
+            ,
+            .stdout =
+            \\named-on
+            \\named-off
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "set non-option operands replace positional parameters",
             .script =
             \\set 'a b' c

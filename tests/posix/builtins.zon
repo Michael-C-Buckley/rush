@@ -40,6 +40,20 @@
             .status = 0,
         },
         .{
+            .name = "cd accepts physical and end-of-options operands",
+            .script =
+            \\mkdir dir
+            \\cd -P -- dir
+            \\printf '<%s>\n' "${PWD##*/}"
+            ,
+            .stdout =
+            \\<dir>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "test evaluates POSIX string integer and file primaries",
             .script =
             \\test; printf 'empty:%s\n' "$?"

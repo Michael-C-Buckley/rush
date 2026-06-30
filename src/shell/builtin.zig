@@ -513,11 +513,8 @@ fn evalSet(shell: anytype, args: []const []const u8) !result.EvalResult {
         if (std.mem.eql(u8, arg[1..], "o")) {
             index += 1;
             if (index >= args.len) return setUsageError(shell);
-            if (std.mem.eql(u8, args[index], "pipefail")) {
-                shell.state.options.pipefail = enabled;
-                continue;
-            }
-            return setUsageError(shell);
+            if (!setNamedOption(shell, args[index], enabled)) return setUsageError(shell);
+            continue;
         }
         for (arg[1..]) |option| switch (option) {
             'C' => shell.state.options.noclobber = enabled,
@@ -529,6 +526,40 @@ fn evalSet(shell: anytype, args: []const []const u8) !result.EvalResult {
         };
     }
     return .{};
+}
+
+const SetOption = enum {
+    errexit,
+    noclobber,
+    noexec,
+    noglob,
+    nounset,
+    pipefail,
+    xtrace,
+};
+
+const set_option_names = std.StaticStringMap(SetOption).initComptime(.{
+    .{ "errexit", .errexit },
+    .{ "noclobber", .noclobber },
+    .{ "noexec", .noexec },
+    .{ "noglob", .noglob },
+    .{ "nounset", .nounset },
+    .{ "pipefail", .pipefail },
+    .{ "xtrace", .xtrace },
+});
+
+fn setNamedOption(shell: anytype, name: []const u8, enabled: bool) bool {
+    const option = set_option_names.get(name) orelse return false;
+    switch (option) {
+        .errexit => shell.state.options.errexit = enabled,
+        .noclobber => shell.state.options.noclobber = enabled,
+        .noexec => shell.state.options.noexec = enabled,
+        .noglob => shell.state.options.noglob = enabled,
+        .nounset => shell.state.options.nounset = enabled,
+        .pipefail => shell.state.options.pipefail = enabled,
+        .xtrace => shell.state.options.xtrace = enabled,
+    }
+    return true;
 }
 
 fn setUsageError(shell: anytype) !result.EvalResult {

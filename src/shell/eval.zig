@@ -175,6 +175,7 @@ fn evalAndOr(shell: anytype, and_or: ast.AndOr) EvalError!result.EvalResult {
             if (ignore_errexit) shell.state.errexit_ignore_depth -= 1;
             return err;
         };
+        shell.state.last_status = last.status;
         if (ignore_errexit) shell.state.errexit_ignore_depth -= 1;
         if (last.flow != .normal) return last;
     }
@@ -414,7 +415,21 @@ fn evalLoop(shell: anytype, command: ast.LoopCommand) EvalError!result.EvalResul
             return err;
         };
         shell.state.errexit_ignore_depth -= 1;
-        if (condition.flow != .normal) return condition;
+        switch (condition.flow) {
+            .normal => {},
+            .continue_ => |count| if (count <= 1 or count > shell.state.loop_depth) continue else return .{
+                .status = condition.status,
+                .flow = .{ .continue_ = count - 1 },
+            },
+            .break_ => |count| if (count <= 1 or count > shell.state.loop_depth)
+                return .{ .status = condition.status }
+            else
+                return .{
+                    .status = condition.status,
+                    .flow = .{ .break_ = count - 1 },
+                },
+            else => return condition,
+        }
         const run_body = switch (command.kind) {
             .while_loop => condition.status == 0,
             .until_loop => condition.status != 0,
@@ -947,25 +962,43 @@ fn suppressFatalFlow(evaluated: result.EvalResult) result.EvalResult {
 
 fn evalCdBuiltin(shell: anytype, args: []const []const u8) EvalError!result.EvalResult {
     std.debug.assert(args.len != 0);
-    if (args.len > 2) return .{ .status = 2 };
+    var physical = false;
+    var index: usize = 1;
+    while (index < args.len) : (index += 1) {
+        const arg = args[index];
+        if (std.mem.eql(u8, arg, "--")) {
+            index += 1;
+            break;
+        }
+        if (std.mem.eql(u8, arg, "-L")) {
+            physical = false;
+            continue;
+        }
+        if (std.mem.eql(u8, arg, "-P")) {
+            physical = true;
+            continue;
+        }
+        break;
+    }
+    if (args.len - index > 1) return .{ .status = 2 };
 
     const allocator = shell.scratchAllocator();
     const old_pwd = try currentLogicalDir(shell);
     var print_new_dir = false;
-    const target = if (args.len == 1) target: {
+    const target = if (index >= args.len) target: {
         break :target parameterValue(shell, "HOME") orelse return .{ .status = 1 };
-    } else if (std.mem.eql(u8, args[1], "-")) target: {
+    } else if (std.mem.eql(u8, args[index], "-")) target: {
         print_new_dir = true;
         break :target parameterValue(shell, "OLDPWD") orelse return .{ .status = 1 };
     } else target: {
-        break :target try cdPathTarget(shell, args[1], &print_new_dir) orelse args[1];
+        break :target try cdPathTarget(shell, args[index], &print_new_dir) orelse args[index];
     };
 
     shell.host.changeDir(target) catch {
         try shell.host.writeAll(.stderr, try std.fmt.allocPrint(allocator, "cd: {s}: cannot change directory\n", .{target}));
         return .{ .status = 1 };
     };
-    const new_pwd = try logicalPath(allocator, old_pwd, target);
+    const new_pwd = if (physical) try shell.host.currentDir(allocator) else try logicalPath(allocator, old_pwd, target);
     shell.state.putVariable(.{ .name = "OLDPWD", .value = old_pwd, .exported = exportedFlag(shell, "OLDPWD") }) catch {
         return .{ .status = 1 };
     };
@@ -3428,6 +3461,7 @@ fn expandArithmeticParameter(shell: anytype, text: []const u8, index: *usize) ![
         index.* = parameter_start + 1;
         return expandParameter(shell, .{ .parameter = .{ .special = special } });
     }
+    if (text[parameter_start] == '{') return expandArithmeticBracedParameter(shell, text, index);
     if (!isArithmeticNameStart(text[parameter_start])) {
         index.* += 1;
         return "$";
@@ -3436,6 +3470,21 @@ fn expandArithmeticParameter(shell: anytype, text: []const u8, index: *usize) ![
     while (parameter_end < text.len and isArithmeticNameContinue(text[parameter_end])) parameter_end += 1;
     index.* = parameter_end;
     return parameterValue(shell, text[parameter_start..parameter_end]) orelse {
+        if (shell.state.options.nounset) return error.InvalidArithmetic;
+        return "";
+    };
+}
+
+fn expandArithmeticBracedParameter(shell: anytype, text: []const u8, index: *usize) ![]const u8 {
+    const name_start = index.* + 2;
+    var name_end = name_start;
+    if (name_end >= text.len or !isArithmeticNameStart(text[name_end])) return error.InvalidArithmetic;
+    name_end += 1;
+    while (name_end < text.len and isArithmeticNameContinue(text[name_end])) name_end += 1;
+    if (name_end >= text.len or text[name_end] != '}') return error.InvalidArithmetic;
+
+    index.* = name_end + 1;
+    return parameterValue(shell, text[name_start..name_end]) orelse {
         if (shell.state.options.nounset) return error.InvalidArithmetic;
         return "";
     };
@@ -3505,19 +3554,65 @@ fn ArithmeticParser(comptime ShellType: type) type {
             const rewind = self.index;
             if (self.parseName()) |name| {
                 self.skipWhitespace();
-                if (self.eat('=')) {
-                    const value = try self.parseAssignment();
-                    try self.assignVariable(name, value);
-                    return value;
-                }
-                if (self.eatString("+=")) {
-                    const value = try self.variableValue(name) + try self.parseAssignment();
+                if (self.parseAssignmentOperator()) |operator| {
+                    const rhs = try self.parseAssignment();
+                    const value = try self.applyAssignmentOperator(name, operator, rhs);
                     try self.assignVariable(name, value);
                     return value;
                 }
             }
             self.index = rewind;
             return self.parseConditional();
+        }
+
+        const AssignmentOperator = enum {
+            assign,
+            add,
+            subtract,
+            multiply,
+            divide,
+            remainder,
+            shift_left,
+            shift_right,
+            bit_and,
+            bit_xor,
+            bit_or,
+        };
+
+        fn parseAssignmentOperator(self: *Self) ?AssignmentOperator {
+            if (self.eatString("<<=")) return .shift_left;
+            if (self.eatString(">>=")) return .shift_right;
+            if (self.eatString("+=")) return .add;
+            if (self.eatString("-=")) return .subtract;
+            if (self.eatString("*=")) return .multiply;
+            if (self.eatString("/=")) return .divide;
+            if (self.eatString("%=")) return .remainder;
+            if (self.eatString("&=")) return .bit_and;
+            if (self.eatString("^=")) return .bit_xor;
+            if (self.eatString("|=")) return .bit_or;
+            if (self.peek() == '=' and self.peekOffset(1) != '=') {
+                self.index += 1;
+                return .assign;
+            }
+            return null;
+        }
+
+        fn applyAssignmentOperator(self: *Self, name: []const u8, operator: AssignmentOperator, rhs: i64) ArithmeticError!i64 {
+            if (operator == .assign) return rhs;
+            const lhs = try self.variableValue(name);
+            return switch (operator) {
+                .assign => unreachable,
+                .add => lhs + rhs,
+                .subtract => lhs - rhs,
+                .multiply => lhs * rhs,
+                .divide => if (rhs == 0) error.InvalidArithmetic else @divTrunc(lhs, rhs),
+                .remainder => if (rhs == 0) error.InvalidArithmetic else @rem(lhs, rhs),
+                .shift_left => shiftLeft(lhs, rhs),
+                .shift_right => shiftRight(lhs, rhs),
+                .bit_and => lhs & rhs,
+                .bit_xor => lhs ^ rhs,
+                .bit_or => lhs | rhs,
+            };
         }
 
         fn parseConditional(self: *Self) ArithmeticError!i64 {

@@ -58,6 +58,21 @@
             .status = 0,
         },
         .{
+            .name = "AND-OR list updates status before evaluating next pipeline",
+            .script =
+            \\false || case $? in
+            \\    1) printf 'saw-status\n' ;;
+            \\    *) printf 'bad:%s\n' "$?" ;;
+            \\esac
+            ,
+            .stdout =
+            \\saw-status
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "OR list skips next command after zero status",
             .script =
             \\true || printf '%s\n' bad

@@ -1756,6 +1756,24 @@
             .status = 0,
         },
         .{
+            .name = "while command break in condition exits the loop",
+            .script =
+            \\while case x in
+            \\    x) break ;;
+            \\esac
+            \\do
+            \\    printf 'bad\n'
+            \\done
+            \\printf 'after:%s\n' "$?"
+            ,
+            .stdout =
+            \\after:0
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "while command continue re-enters the condition compound-list",
             .script =
             \\i=0
