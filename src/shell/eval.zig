@@ -993,7 +993,8 @@ fn expandParameter(shell: anytype, parameter: ast.ParameterExpansion) EvalError!
                 try std.fmt.allocPrint(shell.scratchAllocator(), "{}", .{pid})
             else
                 "",
-            .star, .at => try joinPositionals(shell, ' '),
+            .star => try joinPositionals(shell, ifsFirstCharacter(shell)),
+            .at => try joinPositionals(shell, " "),
         },
         .positional => |position| positionalValue(shell, position) orelse "",
     };
@@ -1017,18 +1018,25 @@ fn optionFlags(shell: anytype) ![]const u8 {
     return flags.toOwnedSlice(allocator);
 }
 
-fn joinPositionals(shell: anytype, separator: u8) ![]const u8 {
+fn ifsFirstCharacter(shell: anytype) []const u8 {
+    const ifs = parameterValue(shell, "IFS") orelse " \t\n";
+    if (ifs.len == 0) return "";
+    const len = std.unicode.utf8ByteSequenceLength(ifs[0]) catch 1;
+    return ifs[0..@min(len, ifs.len)];
+}
+
+fn joinPositionals(shell: anytype, separator: []const u8) ![]const u8 {
     const positionals = shell.state.positionals;
     if (positionals.len == 0) return "";
-    var total_len: usize = positionals.len - 1;
+    var total_len = std.math.mul(usize, positionals.len - 1, separator.len) catch return error.OutOfMemory;
     for (positionals) |positional| total_len = std.math.add(usize, total_len, positional.len) catch return error.OutOfMemory;
 
     const output = try shell.scratchAllocator().alloc(u8, total_len);
     var cursor: usize = 0;
     for (positionals, 0..) |positional, index| {
         if (index != 0) {
-            output[cursor] = separator;
-            cursor += 1;
+            @memcpy(output[cursor..][0..separator.len], separator);
+            cursor += separator.len;
         }
         @memcpy(output[cursor..][0..positional.len], positional);
         cursor += positional.len;
