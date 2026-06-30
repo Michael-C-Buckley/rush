@@ -64,8 +64,9 @@ const Parser = struct {
             const and_or = try self.parseAndOr();
             var terminator: ?ast.ListTerminator = null;
             if (self.eat(.semicolon) != null) terminator = .sequence;
+            if (self.eat(.ampersand) != null) terminator = .background;
             if (self.eat(.newline)) |newline| {
-                terminator = .sequence;
+                if (terminator == null) terminator = .sequence;
                 try self.parsePendingHereDocs(newline.span.end);
                 while (self.eat(.newline) != null) {}
             }
@@ -342,6 +343,20 @@ const Parser = struct {
                             continue;
                         }
                     }
+                    if (name_start < end) {
+                        if (parseSingleParameter(text[name_start])) |parameter| {
+                            if (literal_start < index) try parts.append(self.allocator, .{ .literal = text[literal_start..index] });
+                            try parts.append(self.allocator, .{
+                                .parameter = .{
+                                    .parameter = parameter,
+                                    .span = self.spanFromOffsets(source_start + index, source_start + name_start + 1),
+                                },
+                            });
+                            index = name_start + 1;
+                            literal_start = index;
+                            continue;
+                        }
+                    }
                     if (name_start < end and text[name_start] == '?') {
                         if (literal_start < index) try parts.append(self.allocator, .{ .literal = text[literal_start..index] });
                         try parts.append(self.allocator, .{
@@ -384,6 +399,7 @@ const Parser = struct {
         span: source_mod.Span,
     ) ParserError!?ast.ParameterExpansion {
         const content = try self.removeBackslashNewlines(raw_content);
+        if (parseBracedSimpleParameter(content)) |parameter| return .{ .parameter = parameter, .span = span };
         if (content.len >= 2 and content[0] == '#') {
             const name_end = scanParameterName(content, 1, content.len);
             if (name_end == 1 or name_end != content.len) return null;
@@ -695,6 +711,36 @@ fn scanParameterName(text: []const u8, start: usize, end: usize) usize {
     var index = start + 1;
     while (index < end and isNameContinue(text[index])) index += 1;
     return index;
+}
+
+fn parseBracedSimpleParameter(content: []const u8) ?ast.Parameter {
+    if (content.len == 0) return null;
+    if (parseSpecialParameter(content[0])) |special| {
+        if (content.len == 1) return .{ .special = special };
+        return null;
+    }
+    if (!std.ascii.isDigit(content[0])) return null;
+    for (content) |byte| if (!std.ascii.isDigit(byte)) return null;
+    return .{ .positional = std.fmt.parseInt(u32, content, 10) catch return null };
+}
+
+fn parseSingleParameter(byte: u8) ?ast.Parameter {
+    if (parseSpecialParameter(byte)) |special| return .{ .special = special };
+    if (std.ascii.isDigit(byte)) return .{ .positional = byte - '0' };
+    return null;
+}
+
+fn parseSpecialParameter(byte: u8) ?ast.SpecialParameter {
+    return switch (byte) {
+        '@' => .at,
+        '*' => .star,
+        '#' => .hash,
+        '?' => .question,
+        '-' => .hyphen,
+        '$' => .dollar,
+        '!' => .bang,
+        else => null,
+    };
 }
 
 fn scanDoubleQuoteEnd(text: []const u8, start: usize, end: usize) ParseError!usize {

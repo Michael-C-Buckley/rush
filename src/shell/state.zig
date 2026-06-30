@@ -3,6 +3,7 @@
 const std = @import("std");
 
 const ast = @import("ast.zig");
+const host = @import("../host.zig");
 const memory = @import("memory.zig");
 const result = @import("result.zig");
 
@@ -15,6 +16,7 @@ pub const Options = struct {
     mode: Mode = .bash,
     errexit: bool = false,
     nounset: bool = false,
+    noglob: bool = false,
     noexec: bool = false,
     xtrace: bool = false,
     monitor: bool = false,
@@ -52,6 +54,10 @@ pub const State = struct {
     variables: std.StringHashMapUnmanaged(Variable) = .empty,
     functions: std.StringHashMapUnmanaged(Function) = .empty,
     last_status: result.ExitStatus = 0,
+    last_background_pid: ?host.Pid = null,
+    arg_zero: []const u8 = "rush",
+    positionals: []const []const u8 = &.{},
+    owned_positionals: []const []const u8 = &.{},
 
     pub fn init(allocator: std.mem.Allocator, options: Options) State {
         return .{
@@ -69,6 +75,7 @@ pub const State = struct {
         }
         self.variables.deinit(self.allocator);
         self.functions.deinit(self.allocator);
+        self.freeOwnedPositionals();
         self.definition_arena.deinit();
         self.* = undefined;
     }
@@ -113,6 +120,29 @@ pub const State = struct {
             self.allocator.free(entry.value.name);
             self.allocator.free(entry.value.value);
         }
+    }
+
+    pub fn setPositionals(self: *State, positionals: []const []const u8) !void {
+        const owned = try self.allocator.alloc([]const u8, positionals.len);
+        errdefer self.allocator.free(owned);
+
+        var copied: usize = 0;
+        errdefer for (owned[0..copied]) |item| self.allocator.free(item);
+
+        for (positionals, 0..) |positional, index| {
+            owned[index] = try self.allocator.dupe(u8, positional);
+            copied += 1;
+        }
+
+        self.freeOwnedPositionals();
+        self.owned_positionals = owned;
+        self.positionals = owned;
+    }
+
+    fn freeOwnedPositionals(self: *State) void {
+        for (self.owned_positionals) |positional| self.allocator.free(positional);
+        self.allocator.free(self.owned_positionals);
+        self.owned_positionals = &.{};
     }
 
     pub fn getFunction(self: State, name: []const u8) ?Function {

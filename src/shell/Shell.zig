@@ -13,6 +13,8 @@ const state = @import("state.zig");
 pub const InitOptions = struct {
     state: state.Options = .{},
     env: []const [*:0]const u8 = &.{},
+    arg_zero: []const u8 = "rush",
+    positionals: []const []const u8 = &.{},
 };
 
 pub fn Shell(comptime Host: type) type {
@@ -27,13 +29,16 @@ pub fn Shell(comptime Host: type) type {
         const Self = @This();
 
         pub fn init(allocator: std.mem.Allocator, host: Host, options: InitOptions) Self {
-            return .{
+            var shell: Self = .{
                 .allocator = allocator,
                 .host = host,
                 .env = options.env,
                 .state = state.State.init(allocator, options.state),
                 .arenas = memory.Arenas.init(allocator),
             };
+            shell.state.arg_zero = options.arg_zero;
+            shell.state.positionals = options.positionals;
+            return shell;
         }
 
         pub fn deinit(self: *Self) void {

@@ -23,12 +23,28 @@ pub fn evalProgram(comptime Host: type, shell: anytype, program: ast.Program) Ev
 fn evalList(shell: anytype, list: ast.List) EvalError!result.EvalResult {
     var status: result.ExitStatus = 0;
     for (list.entries) |entry| {
-        const evaluated = try evalAndOr(shell, entry.and_or);
+        const evaluated = switch (entry.terminator orelse .sequence) {
+            .sequence => try evalAndOr(shell, entry.and_or),
+            .background => try evalBackgroundAndOr(shell, entry.and_or),
+        };
         status = evaluated.status;
         shell.state.last_status = status;
         if (evaluated.flow != .normal) return evaluated;
     }
     return .{ .status = status };
+}
+
+fn evalBackgroundAndOr(shell: anytype, and_or: ast.AndOr) EvalError!result.EvalResult {
+    and_or.validate();
+    const pid = switch (try shell.host.forkProcess()) {
+        .parent => |child_pid| child_pid,
+        .child => {
+            const evaluated = evalAndOr(shell, and_or) catch shell.host.exit(2);
+            shell.host.exit(evaluated.status);
+        },
+    };
+    shell.state.last_background_pid = pid;
+    return .{ .status = 0 };
 }
 
 fn evalAndOr(shell: anytype, and_or: ast.AndOr) EvalError!result.EvalResult {
@@ -203,7 +219,7 @@ fn evalSimpleScoped(shell: anytype, command: ast.SimpleCommand) EvalError!result
     if (builtin.lookup(name)) |definition| {
         if (definition.kind == .special) try applyAssignments(shell, command.assignments);
         const args = switch (definition.id) {
-            .exit, .printf => fields,
+            .exit, .printf, .set => fields,
             else => &[_][]const u8{name},
         };
         return builtin.eval(shell, definition, args);
@@ -938,11 +954,55 @@ fn expandParameter(shell: anytype, parameter: ast.ParameterExpansion) EvalError!
     return switch (parameter.parameter) {
         .variable => |name| parameterValue(shell, name) orelse "",
         .special => |special| switch (special) {
+            .hash => try std.fmt.allocPrint(shell.scratchAllocator(), "{}", .{shell.state.positionals.len}),
             .question => try formatExitStatus(shell, shell.state.last_status),
-            else => "",
+            .hyphen => try optionFlags(shell),
+            .dollar => try std.fmt.allocPrint(shell.scratchAllocator(), "{}", .{std.c.getpid()}),
+            .bang => if (shell.state.last_background_pid) |pid|
+                try std.fmt.allocPrint(shell.scratchAllocator(), "{}", .{pid})
+            else
+                "",
+            .star, .at => try joinPositionals(shell, ' '),
         },
-        .positional => "",
+        .positional => |position| positionalValue(shell, position) orelse "",
     };
+}
+
+fn positionalValue(shell: anytype, position: u32) ?[]const u8 {
+    if (position == 0) return shell.state.arg_zero;
+    const index: usize = position - 1;
+    if (index >= shell.state.positionals.len) return null;
+    return shell.state.positionals[index];
+}
+
+fn optionFlags(shell: anytype) ![]const u8 {
+    var flags: std.ArrayList(u8) = .empty;
+    const allocator = shell.scratchAllocator();
+    if (shell.state.options.errexit) try flags.append(allocator, 'e');
+    if (shell.state.options.noglob) try flags.append(allocator, 'f');
+    if (shell.state.options.monitor) try flags.append(allocator, 'm');
+    if (shell.state.options.nounset) try flags.append(allocator, 'u');
+    if (shell.state.options.xtrace) try flags.append(allocator, 'x');
+    return flags.toOwnedSlice(allocator);
+}
+
+fn joinPositionals(shell: anytype, separator: u8) ![]const u8 {
+    const positionals = shell.state.positionals;
+    if (positionals.len == 0) return "";
+    var total_len: usize = positionals.len - 1;
+    for (positionals) |positional| total_len = std.math.add(usize, total_len, positional.len) catch return error.OutOfMemory;
+
+    const output = try shell.scratchAllocator().alloc(u8, total_len);
+    var cursor: usize = 0;
+    for (positionals, 0..) |positional, index| {
+        if (index != 0) {
+            output[cursor] = separator;
+            cursor += 1;
+        }
+        @memcpy(output[cursor..][0..positional.len], positional);
+        cursor += positional.len;
+    }
+    return output;
 }
 
 fn expandParameterLength(shell: anytype, parameter: ast.ParameterExpansion) EvalError![]const u8 {

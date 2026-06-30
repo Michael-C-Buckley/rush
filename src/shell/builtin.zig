@@ -6,6 +6,7 @@ const host = @import("../host.zig");
 const output = @import("output.zig");
 const printf = @import("printf.zig");
 const result = @import("result.zig");
+const state_mod = @import("state.zig");
 
 pub const Kind = enum {
     special,
@@ -17,6 +18,7 @@ pub const Id = enum {
     exit,
     false_,
     printf,
+    set,
     true_,
 };
 
@@ -37,6 +39,7 @@ pub const definitions: DefinitionMap = .initComptime(.{
     .{ "exit", Definition{ .name = "exit", .id = .exit, .kind = .special } },
     .{ "false", Definition{ .name = "false", .id = .false_, .kind = .regular } },
     .{ "printf", Definition{ .name = "printf", .id = .printf, .kind = .regular } },
+    .{ "set", Definition{ .name = "set", .id = .set, .kind = .special } },
     .{ "true", Definition{ .name = "true", .id = .true_, .kind = .regular } },
 });
 
@@ -54,6 +57,7 @@ pub fn eval(shell: anytype, definition: Definition, args: []const []const u8) !r
         .exit => evalExit(shell, args),
         .false_ => .{ .status = 1 },
         .printf => evalPrintf(shell, args),
+        .set => evalSet(shell, args),
     };
 }
 
@@ -77,6 +81,19 @@ fn evalPrintf(shell: anytype, args: []const []const u8) !result.EvalResult {
     return .{ .status = status };
 }
 
+fn evalSet(shell: anytype, args: []const []const u8) !result.EvalResult {
+    if (args.len == 1) return .{};
+    if (std.mem.eql(u8, args[1], "--")) {
+        try shell.state.setPositionals(args[2..]);
+        return .{};
+    }
+    if (std.mem.eql(u8, args[1], "-f")) {
+        shell.state.options.noglob = true;
+        return .{};
+    }
+    return .{ .status = 2 };
+}
+
 test "builtin lookup identifies null true and false utilities" {
     try std.testing.expectEqual(Id.colon, lookup(":").?.id);
     try std.testing.expectEqual(Id.exit, lookup("exit").?.id);
@@ -92,14 +109,15 @@ test "builtin eval returns utility status" {
     };
     const TestShell = struct {
         host: TestHost = .{},
-        state: struct { last_status: result.ExitStatus = 0 } = .{},
+        state: state_mod.State,
 
         fn scratchAllocator(_: *@This()) std.mem.Allocator {
             return std.testing.allocator;
         }
     };
 
-    var shell: TestShell = .{};
+    var shell: TestShell = .{ .state = state_mod.State.init(std.testing.allocator, .{}) };
+    defer shell.state.deinit();
     const true_definition = lookup("true").?;
     const false_definition = lookup("false").?;
 
@@ -113,14 +131,15 @@ test "exit builtin returns requested exit flow" {
     };
     const TestShell = struct {
         host: TestHost = .{},
-        state: struct { last_status: result.ExitStatus = 0 } = .{},
+        state: state_mod.State,
 
         fn scratchAllocator(_: *@This()) std.mem.Allocator {
             return std.testing.allocator;
         }
     };
 
-    var shell: TestShell = .{};
+    var shell: TestShell = .{ .state = state_mod.State.init(std.testing.allocator, .{}) };
+    defer shell.state.deinit();
     const evaluated = try eval(&shell, lookup("exit").?, &.{ "exit", "7" });
 
     try std.testing.expectEqual(@as(result.ExitStatus, 7), evaluated.status);
@@ -147,14 +166,15 @@ test "printf writes formatted output once" {
     };
     const TestShell = struct {
         host: TestHost = .{},
-        state: struct { last_status: result.ExitStatus = 0 } = .{},
+        state: state_mod.State,
 
         fn scratchAllocator(_: *@This()) std.mem.Allocator {
             return std.testing.allocator;
         }
     };
 
-    var shell: TestShell = .{};
+    var shell: TestShell = .{ .state = state_mod.State.init(std.testing.allocator, .{}) };
+    defer shell.state.deinit();
     defer shell.host.deinit();
 
     const printf_definition = lookup("printf").?;
