@@ -305,6 +305,8 @@ const Parser = struct {
                     index += 1;
                     if (index >= end) {
                         try parts.append(self.allocator, .{ .literal = "\\" });
+                    } else if (text[index] == '\n') {
+                        index += 1;
                     } else {
                         try parts.append(self.allocator, .{ .literal = text[index .. index + 1] });
                         index += 1;
@@ -378,9 +380,10 @@ const Parser = struct {
 
     fn parseBracedParameter(
         self: *Parser,
-        content: []const u8,
+        raw_content: []const u8,
         span: source_mod.Span,
     ) ParserError!?ast.ParameterExpansion {
+        const content = try self.removeBackslashNewlines(raw_content);
         if (content.len >= 2 and content[0] == '#') {
             const name_end = scanParameterName(content, 1, content.len);
             if (name_end == 1 or name_end != content.len) return null;
@@ -411,6 +414,23 @@ const Parser = struct {
         }
 
         return null;
+    }
+
+    fn removeBackslashNewlines(self: *Parser, text: []const u8) ParserError![]const u8 {
+        const first = std.mem.indexOf(u8, text, "\\\n") orelse return text;
+        var output: std.ArrayList(u8) = .empty;
+        try output.appendSlice(self.allocator, text[0..first]);
+
+        var index = first;
+        while (index < text.len) {
+            if (index + 1 < text.len and text[index] == '\\' and text[index + 1] == '\n') {
+                index += 2;
+                continue;
+            }
+            try output.append(self.allocator, text[index]);
+            index += 1;
+        }
+        return output.toOwnedSlice(self.allocator);
     }
 
     fn parseCommandSubstitution(self: *Parser, source_text: []const u8) !*const ast.Program {
