@@ -493,14 +493,36 @@ fn readCommandSubstitutionOutput(shell: anytype, fd: host_mod.Fd) ![]const u8 {
 
 fn expandParameter(shell: anytype, parameter: ast.ParameterExpansion) EvalError![]const u8 {
     parameter.validate();
+    if (parameter.op) |operator| {
+        return switch (operator) {
+            .default_value => expandParameterDefault(shell, parameter),
+            else => "",
+        };
+    }
+
     return switch (parameter.parameter) {
-        .variable => |name| if (shell.state.getVariable(name)) |variable| variable.value else "",
+        .variable => |name| parameterValue(shell, name) orelse "",
         .special => |special| switch (special) {
             .question => try formatExitStatus(shell, shell.state.last_status),
             else => "",
         },
         .positional => "",
     };
+}
+
+fn expandParameterDefault(shell: anytype, parameter: ast.ParameterExpansion) EvalError![]const u8 {
+    const name = switch (parameter.parameter) {
+        .variable => |variable_name| variable_name,
+        else => return "",
+    };
+    const value = parameterValue(shell, name);
+    const use_default = value == null or (parameter.colon and value.?.len == 0);
+    if (!use_default) return value.?;
+    return expandWord(shell, parameter.word.?);
+}
+
+fn parameterValue(shell: anytype, name: []const u8) ?[]const u8 {
+    return if (shell.state.getVariable(name)) |variable| variable.value else null;
 }
 
 fn formatExitStatus(shell: anytype, status: result.ExitStatus) ![]const u8 {

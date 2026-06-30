@@ -15,11 +15,13 @@ pub const ParseError = error{
     UnexpectedToken,
 };
 
+const ParserError = std.mem.Allocator.Error || ParseError;
+
 pub fn parse(
     allocator: std.mem.Allocator,
     src: source_mod.Source,
     tokens: []const token.Token,
-) (std.mem.Allocator.Error || ParseError)!ast.Program {
+) ParserError!ast.Program {
     src.validate();
     std.debug.assert(tokens.len != 0);
     var parser: Parser = .{ .allocator = allocator, .source = src, .tokens = tokens };
@@ -175,7 +177,7 @@ const Parser = struct {
         return self.parseWordText(word_token.text, word_token.span);
     }
 
-    fn parseWordText(self: *Parser, text: []const u8, span: source_mod.Span) !ast.Word {
+    fn parseWordText(self: *Parser, text: []const u8, span: source_mod.Span) ParserError!ast.Word {
         if (std.mem.indexOfAny(u8, text, "'\"$\\") == null) {
             const word: ast.Word = .{ .data = .{ .literal = text }, .span = span };
             word.validate();
@@ -198,7 +200,7 @@ const Parser = struct {
         start: usize,
         end: usize,
         quote: ?u8,
-    ) !void {
+    ) ParserError!void {
         var index = start;
         var literal_start = start;
         while (index < end) {
@@ -256,6 +258,19 @@ const Parser = struct {
                         literal_start = index;
                         continue;
                     }
+                    if (name_start < end and text[name_start] == '{') {
+                        const expansion_end = std.mem.indexOfScalarPos(u8, text, name_start + 1, '}') orelse {
+                            index += 1;
+                            continue;
+                        };
+                        if (try self.parseBracedParameter(text[name_start + 1 .. expansion_end])) |parameter| {
+                            if (literal_start < index) try parts.append(self.allocator, .{ .literal = text[literal_start..index] });
+                            try parts.append(self.allocator, .{ .parameter = parameter });
+                            index = expansion_end + 1;
+                            literal_start = index;
+                            continue;
+                        }
+                    }
                     if (name_start < end and text[name_start] == '?') {
                         if (literal_start < index) try parts.append(self.allocator, .{ .literal = text[literal_start..index] });
                         try parts.append(self.allocator, .{
@@ -284,6 +299,27 @@ const Parser = struct {
         }
 
         if (literal_start < end) try parts.append(self.allocator, .{ .literal = text[literal_start..end] });
+    }
+
+    fn parseBracedParameter(self: *Parser, content: []const u8) ParserError!?ast.ParameterExpansion {
+        const name_end = scanParameterName(content, 0, content.len);
+        if (name_end == 0) return null;
+        const name = content[0..name_end];
+        const rest = content[name_end..];
+        if (rest.len == 0) return .{ .parameter = .{ .variable = name } };
+
+        const colon = rest.len >= 2 and rest[0] == ':' and rest[1] == '-';
+        if (colon or rest[0] == '-') {
+            const word_text = if (colon) rest[2..] else rest[1..];
+            return .{
+                .parameter = .{ .variable = name },
+                .colon = colon,
+                .op = .default_value,
+                .word = try self.parseWordText(word_text, .{}),
+            };
+        }
+
+        return null;
     }
 
     fn parseCommandSubstitution(self: *Parser, source_text: []const u8) !*const ast.Program {
