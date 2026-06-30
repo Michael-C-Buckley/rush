@@ -36,6 +36,7 @@ pub const Id = enum {
     set,
     shift,
     test_,
+    trap,
     true_,
     type,
     umask,
@@ -79,6 +80,7 @@ pub const definitions: DefinitionMap = .initComptime(.{
     .{ "set", Definition{ .name = "set", .id = .set, .kind = .special } },
     .{ "shift", Definition{ .name = "shift", .id = .shift, .kind = .special } },
     .{ "test", Definition{ .name = "test", .id = .test_, .kind = .regular } },
+    .{ "trap", Definition{ .name = "trap", .id = .trap, .kind = .special } },
     .{ "true", Definition{ .name = "true", .id = .true_, .kind = .regular } },
     .{ "type", Definition{ .name = "type", .id = .type, .kind = .regular } },
     .{ "umask", Definition{ .name = "umask", .id = .umask, .kind = .regular } },
@@ -110,6 +112,7 @@ pub fn eval(shell: anytype, definition: Definition, args: []const []const u8) !r
         .return_ => evalReturn(shell, args),
         .set => evalSet(shell, args),
         .shift => evalShift(shell, args),
+        .trap => evalTrap(shell, args),
         .umask => evalUmask(shell, args),
         .unalias => evalUnalias(shell, args),
         .unset => evalUnset(shell, args),
@@ -509,6 +512,54 @@ fn evalUnset(shell: anytype, args: []const []const u8) result.EvalResult {
     return .{ .status = status };
 }
 
+fn evalTrap(shell: anytype, args: []const []const u8) !result.EvalResult {
+    if (args.len == 1) {
+        if (shell.state.exit_trap) |action| {
+            try shell.host.writeAll(.stdout, try std.fmt.allocPrint(
+                shell.scratchAllocator(),
+                "trap -- '{s}' EXIT\n",
+                .{action},
+            ));
+        }
+        return .{};
+    }
+
+    var index: usize = 1;
+    if (std.mem.eql(u8, args[index], "--")) {
+        index += 1;
+        if (index >= args.len) return .{ .status = 2 };
+    }
+
+    const reset = std.mem.eql(u8, args[index], "-");
+    const action = args[index];
+    index += 1;
+    if (index >= args.len) return .{ .status = 2 };
+
+    var status: result.ExitStatus = 0;
+    while (index < args.len) : (index += 1) {
+        const signal = parseTrapSignal(args[index]) orelse {
+            status = 1;
+            continue;
+        };
+        if (signal == .exit) {
+            if (reset) shell.state.clearExitTrap() else try shell.state.setExitTrap(action);
+        }
+    }
+    return .{ .status = status };
+}
+
+const TrapSignal = enum { exit, other };
+
+fn parseTrapSignal(signal: []const u8) ?TrapSignal {
+    if (std.mem.eql(u8, signal, "0") or std.mem.eql(u8, signal, "EXIT")) return .exit;
+    if (std.mem.eql(u8, signal, "TERM") or std.mem.eql(u8, signal, "INT") or
+        std.mem.eql(u8, signal, "USR1") or std.mem.eql(u8, signal, "ALRM") or
+        std.mem.eql(u8, signal, "PIPE") or std.mem.eql(u8, signal, "QUIT") or
+        std.mem.eql(u8, signal, "KILL")) return .other;
+    _ = std.fmt.parseInt(u8, signal, 10) catch return null;
+    return .other;
+}
+
 fn isAssignmentName(name: []const u8) bool {
     if (name.len == 0) return false;
     if (!std.ascii.isAlphabetic(name[0]) and name[0] != '_') return false;
@@ -538,6 +589,7 @@ test "builtin lookup identifies null true and false utilities" {
     try std.testing.expectEqual(Id.pwd, lookup("pwd").?.id);
     try std.testing.expectEqual(Id.read, lookup("read").?.id);
     try std.testing.expectEqual(Id.readonly, lookup("readonly").?.id);
+    try std.testing.expectEqual(Id.trap, lookup("trap").?.id);
     try std.testing.expectEqual(Id.type, lookup("type").?.id);
     try std.testing.expectEqual(Id.test_, lookup("test").?.id);
     try std.testing.expectEqual(Id.umask, lookup("umask").?.id);

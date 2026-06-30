@@ -22,6 +22,19 @@ pub fn evalProgram(comptime Host: type, shell: anytype, program: ast.Program) Ev
     return evalList(shell, program.body);
 }
 
+pub fn runExitTrap(shell: anytype, status: result.ExitStatus) EvalError!result.ExitStatus {
+    const action = shell.state.exit_trap orelse return status;
+    if (shell.state.running_exit_trap) return status;
+
+    shell.state.running_exit_trap = true;
+    defer shell.state.running_exit_trap = false;
+
+    shell.state.last_status = status;
+    const src: source_mod.Source = .{ .id = 0, .kind = .command_string, .name = "trap", .text = action };
+    const evaluated = try shell.evalSourceNested(src);
+    return if (evaluated.flow == .exit) evaluated.status else status;
+}
+
 fn evalList(shell: anytype, list: ast.List) EvalError!result.EvalResult {
     var status: result.ExitStatus = 0;
     for (list.entries) |entry| {
@@ -343,7 +356,8 @@ fn evalSubshell(shell: anytype, body: ast.List, redirections: []const ast.Redire
             var applied = applyRedirections(shell, redirections) catch shell.host.exit(1);
             defer applied.restore(shell) catch {};
             const evaluated = evalList(shell, body) catch shell.host.exit(2);
-            shell.host.exit(evaluated.status);
+            const status = runExitTrap(shell, evaluated.status) catch shell.host.exit(2);
+            shell.host.exit(status);
         },
         .parent => |child_pid| child_pid,
     };
@@ -606,7 +620,7 @@ fn evalSimpleScoped(shell: anytype, command: ast.SimpleCommand) EvalError!result
                 return evalExecBuiltin(shell, fields);
             }
             const args = switch (definition.id) {
-                .break_, .continue_, .exit, .return_, .set, .shift, .unset => fields,
+                .break_, .continue_, .exit, .return_, .set, .shift, .trap, .unset => fields,
                 else => &[_][]const u8{name},
             };
             return builtin.eval(shell, definition, args);
@@ -881,7 +895,7 @@ fn evalCommandBuiltin(
                 restored_assignments = true;
                 return evaluated;
             },
-            .alias, .break_, .continue_, .exit, .getopts, .printf, .return_, .set, .shift, .umask, .unalias, .unset => {
+            .alias, .break_, .continue_, .exit, .getopts, .printf, .return_, .set, .shift, .trap, .umask, .unalias, .unset => {
                 const evaluated = try builtin.eval(shell, definition, args[index..]);
                 restoreVariables(shell, saved);
                 restored_assignments = true;
@@ -3242,8 +3256,10 @@ fn evalCommandSubstitutionInChild(
             shell.host.close(pipe_desc.write) catch shell.host.exit(127);
             shell.state.loop_depth = 0;
             shell.state.diagnostic_line_offset += substitution.line_offset;
+            shell.state.clearExitTrap();
             const evaluated = evalProgram(@TypeOf(shell.host), shell, program) catch shell.host.exit(2);
-            shell.host.exit(evaluated.status);
+            const status = runExitTrap(shell, evaluated.status) catch shell.host.exit(2);
+            shell.host.exit(status);
         },
         .parent => |child_pid| child_pid,
     };

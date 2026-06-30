@@ -72,6 +72,8 @@ pub const State = struct {
     errexit_ignore_depth: usize = 0,
     loop_depth: usize = 0,
     diagnostic_line_offset: usize = 0,
+    exit_trap: ?[]const u8 = null,
+    running_exit_trap: bool = false,
     arg_zero: []const u8 = "rush",
     positionals: []const []const u8 = &.{},
     owned_positionals: []const []const u8 = &.{},
@@ -100,6 +102,7 @@ pub const State = struct {
         self.aliases.deinit(self.allocator);
         self.background_pids.deinit(self.allocator);
         self.freeOwnedPositionals();
+        self.clearExitTrap();
         self.definition_arena.deinit();
         self.* = undefined;
     }
@@ -228,6 +231,18 @@ pub const State = struct {
             self.allocator.free(entry.value_ptr.value);
         }
         self.aliases.clearRetainingCapacity();
+    }
+
+    pub fn setExitTrap(self: *State, action: []const u8) !void {
+        const owned = try self.allocator.dupe(u8, action);
+        errdefer self.allocator.free(owned);
+        self.clearExitTrap();
+        self.exit_trap = owned;
+    }
+
+    pub fn clearExitTrap(self: *State) void {
+        if (self.exit_trap) |action| self.allocator.free(action);
+        self.exit_trap = null;
     }
 
     pub fn addBackgroundPid(self: *State, pid: host.Pid) !void {

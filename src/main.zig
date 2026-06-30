@@ -61,7 +61,10 @@ pub fn main(init: std.process.Init.Minimal) !u8 {
                 try real_host.writeAll(.stderr, "rush: shell error\n");
                 return 2;
             };
-            return evaluated.status;
+            return shell.eval.runExitTrap(&sh, evaluated.status) catch {
+                try real_host.writeAll(.stderr, "rush: shell error\n");
+                return 2;
+            };
         },
     }
 }
