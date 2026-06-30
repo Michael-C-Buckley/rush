@@ -505,6 +505,7 @@ const Lexer = struct {
                 self.advanceOne();
                 continue;
             }
+            if (byte == '(') depth += 1;
             if (byte == ')') depth -= 1;
             self.advanceOne();
         }

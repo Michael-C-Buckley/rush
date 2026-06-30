@@ -1295,6 +1295,7 @@ fn scanCommandSubstitution(text: []const u8, open_index: usize, end: usize) Pars
                 depth += 1;
                 index += 1;
             },
+            '(' => depth += 1,
             ')' => {
                 depth -= 1;
                 if (depth == 0) return index;
