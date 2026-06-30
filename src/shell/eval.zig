@@ -461,6 +461,7 @@ fn copyCaseCommand(allocator: std.mem.Allocator, command: ast.CaseCommand) CopyE
 
 const AppliedRedirections = struct {
     frames: []const RedirectionFrame,
+    here_doc_writers: []const host_mod.Pid,
 
     fn restore(self: AppliedRedirections, shell: anytype) !void {
         var index = self.frames.len;
@@ -477,6 +478,7 @@ const AppliedRedirections = struct {
                 };
             }
         }
+        for (self.here_doc_writers) |pid| _ = shell.host.wait(pid) catch {};
     }
 };
 
@@ -487,16 +489,25 @@ const RedirectionFrame = struct {
 
 fn applyRedirections(shell: anytype, redirections: []const ast.Redirection) !AppliedRedirections {
     var frames: std.ArrayList(RedirectionFrame) = .empty;
+    var here_doc_writers: std.ArrayList(host_mod.Pid) = .empty;
     errdefer restoreFrames(shell, frames.items) catch {};
 
     for (redirections) |redirection| {
-        try applyRedirection(shell, redirection, &frames);
+        try applyRedirection(shell, redirection, &frames, &here_doc_writers);
     }
 
-    return .{ .frames = try frames.toOwnedSlice(shell.scratchAllocator()) };
+    return .{
+        .frames = try frames.toOwnedSlice(shell.scratchAllocator()),
+        .here_doc_writers = try here_doc_writers.toOwnedSlice(shell.scratchAllocator()),
+    };
 }
 
-fn applyRedirection(shell: anytype, redirection: ast.Redirection, frames: *std.ArrayList(RedirectionFrame)) !void {
+fn applyRedirection(
+    shell: anytype,
+    redirection: ast.Redirection,
+    frames: *std.ArrayList(RedirectionFrame),
+    here_doc_writers: *std.ArrayList(host_mod.Pid),
+) !void {
     redirection.validate();
     const target = redirectionFd(redirection);
     const saved = saveFd(shell, target) catch |err| switch (err) {
@@ -526,12 +537,147 @@ fn applyRedirection(shell: anytype, redirection: ast.Redirection, frames: *std.A
             const source = try parseFd(source_text);
             if (source != target) try shell.host.duplicateTo(source, target);
         },
-        .here_doc, .here_doc_strip_tabs => return error.UnsupportedRedirection,
+        .here_doc, .here_doc_strip_tabs => {
+            const pid = try applyHereDocRedirection(shell, target, redirection.here_doc.?);
+            try here_doc_writers.append(shell.scratchAllocator(), pid);
+        },
     }
 }
 
+fn applyHereDocRedirection(shell: anytype, target: host_mod.Fd, here_doc: ast.HereDoc) !host_mod.Pid {
+    const body = if (here_doc.delimiter_quoted) here_doc.body else try expandHereDocBody(shell, here_doc.body);
+    const pipe_desc = try shell.host.pipe();
+    errdefer {
+        shell.host.close(pipe_desc.read) catch {};
+        shell.host.close(pipe_desc.write) catch {};
+    }
+
+    const pid = switch (try shell.host.forkProcess()) {
+        .child => {
+            shell.host.close(pipe_desc.read) catch shell.host.exit(127);
+            shell.host.writeAll(pipe_desc.write, body) catch shell.host.exit(1);
+            shell.host.close(pipe_desc.write) catch shell.host.exit(1);
+            shell.host.exit(0);
+        },
+        .parent => |child_pid| child_pid,
+    };
+
+    try shell.host.close(pipe_desc.write);
+    if (pipe_desc.read != target) {
+        defer shell.host.close(pipe_desc.read) catch {};
+        try shell.host.duplicateTo(pipe_desc.read, target);
+    }
+    return pid;
+}
+
+fn expandHereDocBody(shell: anytype, body: []const u8) EvalError![]const u8 {
+    var output: std.ArrayList(u8) = .empty;
+    var index: usize = 0;
+    while (index < body.len) {
+        switch (body[index]) {
+            '\\' => {
+                if (index + 1 >= body.len) {
+                    try output.append(shell.scratchAllocator(), '\\');
+                    index += 1;
+                    continue;
+                }
+                const next = body[index + 1];
+                if (next == '\n') {
+                    index += 2;
+                } else if (next == '\\' or next == '$' or next == '`') {
+                    try output.append(shell.scratchAllocator(), next);
+                    index += 2;
+                } else {
+                    try output.append(shell.scratchAllocator(), '\\');
+                    try output.append(shell.scratchAllocator(), next);
+                    index += 2;
+                }
+            },
+            '$' => {
+                if (index + 1 < body.len and body[index + 1] == '(') {
+                    const close_index = scanHereDocCommandSubstitution(body, index + 1) orelse {
+                        try output.append(shell.scratchAllocator(), body[index]);
+                        index += 1;
+                        continue;
+                    };
+                    const source_text = body[index + 2 .. close_index];
+                    const expanded = try expandCommandSubstitution(shell, .{ .source_text = source_text }, null);
+                    try output.appendSlice(shell.scratchAllocator(), expanded);
+                    index = close_index + 1;
+                    continue;
+                }
+                if (index + 1 < body.len and body[index + 1] == '?') {
+                    try output.appendSlice(shell.scratchAllocator(), try formatExitStatus(shell, shell.state.last_status));
+                    index += 2;
+                    continue;
+                }
+                const name_start = index + 1;
+                const name_end = scanHereDocParameterName(body, name_start);
+                if (name_end == name_start) {
+                    try output.append(shell.scratchAllocator(), '$');
+                    index += 1;
+                    continue;
+                }
+                if (parameterValue(shell, body[name_start..name_end])) |value| try output.appendSlice(shell.scratchAllocator(), value);
+                index = name_end;
+            },
+            else => {
+                try output.append(shell.scratchAllocator(), body[index]);
+                index += 1;
+            },
+        }
+    }
+    return output.toOwnedSlice(shell.scratchAllocator());
+}
+
+fn scanHereDocCommandSubstitution(body: []const u8, open_index: usize) ?usize {
+    std.debug.assert(body[open_index] == '(');
+    var depth: usize = 1;
+    var quote: ?u8 = null;
+    var index = open_index + 1;
+    while (index < body.len) : (index += 1) {
+        const byte = body[index];
+        if (quote) |delimiter| {
+            if (byte == delimiter) quote = null;
+            if (byte == '\\' and delimiter == '"' and index + 1 < body.len) index += 1;
+            continue;
+        }
+        if (byte == '\'' or byte == '"') {
+            quote = byte;
+        } else if (byte == '$' and index + 1 < body.len and body[index + 1] == '(') {
+            depth += 1;
+            index += 1;
+        } else if (byte == ')') {
+            depth -= 1;
+            if (depth == 0) return index;
+        }
+    }
+    return null;
+}
+
+fn scanHereDocParameterName(body: []const u8, start: usize) usize {
+    if (start >= body.len or !isNameStart(body[start])) return start;
+    var index = start + 1;
+    while (index < body.len and isNameContinue(body[index])) index += 1;
+    return index;
+}
+
+fn isNameStart(byte: u8) bool {
+    return switch (byte) {
+        'A'...'Z', 'a'...'z', '_' => true,
+        else => false,
+    };
+}
+
+fn isNameContinue(byte: u8) bool {
+    return isNameStart(byte) or switch (byte) {
+        '0'...'9' => true,
+        else => false,
+    };
+}
+
 fn restoreFrames(shell: anytype, frames: []const RedirectionFrame) !void {
-    try (AppliedRedirections{ .frames = frames }).restore(shell);
+    try (AppliedRedirections{ .frames = frames, .here_doc_writers = &.{} }).restore(shell);
 }
 
 fn saveFd(shell: anytype, fd: host_mod.Fd) !host_mod.Fd {

@@ -33,6 +33,14 @@ const Parser = struct {
     source: source_mod.Source,
     tokens: []const token.Token,
     index: usize = 0,
+    pending_here_docs: std.ArrayList(PendingHereDoc) = .empty,
+
+    const PendingHereDoc = struct {
+        redirection: *ast.Redirection,
+        delimiter: []const u8,
+        strip_tabs: bool,
+        delimiter_quoted: bool,
+    };
 
     fn parseProgram(self: *Parser) !ast.Program {
         const body = try self.parseList(.eof);
@@ -56,7 +64,11 @@ const Parser = struct {
             const and_or = try self.parseAndOr();
             var terminator: ?ast.ListTerminator = null;
             if (self.eat(.semicolon) != null) terminator = .sequence;
-            while (self.eat(.newline) != null) terminator = .sequence;
+            if (self.eat(.newline)) |newline| {
+                terminator = .sequence;
+                try self.parsePendingHereDocs(newline.span.end);
+                while (self.eat(.newline) != null) {}
+            }
             try entries.append(self.allocator, .{ .and_or = and_or, .terminator = terminator });
         }
 
@@ -76,7 +88,6 @@ const Parser = struct {
         }
 
         const and_or: ast.AndOr = .{ .pipelines = try pipelines.toOwnedSlice(self.allocator) };
-        and_or.validate();
         return and_or;
     }
 
@@ -92,7 +103,6 @@ const Parser = struct {
         }
 
         const pipeline: ast.Pipeline = .{ .stages = try stages.toOwnedSlice(self.allocator), .negated = negated };
-        pipeline.validate();
         return pipeline;
     }
 
@@ -164,13 +174,25 @@ const Parser = struct {
         if (assignments.items.len == 0 and words.items.len == 0 and redirections.items.len == 0) {
             return error.ExpectedCommand;
         }
+        const redirection_items = try redirections.toOwnedSlice(self.allocator);
+        for (redirection_items) |*redirection| {
+            if (redirection.op == .here_doc or redirection.op == .here_doc_strip_tabs) {
+                const delimiter = try self.hereDocDelimiter(redirection.target);
+                try self.pending_here_docs.append(self.allocator, .{
+                    .redirection = redirection,
+                    .delimiter = delimiter.text,
+                    .strip_tabs = redirection.op == .here_doc_strip_tabs,
+                    .delimiter_quoted = delimiter.quoted,
+                });
+            }
+        }
         const command: ast.SimpleCommand = .{
             .assignments = try assignments.toOwnedSlice(self.allocator),
             .words = try words.toOwnedSlice(self.allocator),
-            .redirections = try redirections.toOwnedSlice(self.allocator),
+            .redirections = redirection_items,
             .span = command_span.?,
         };
-        command.validate();
+        if (!hasPendingHereDoc(command.redirections)) command.validate();
         return command;
     }
 
@@ -190,7 +212,7 @@ const Parser = struct {
                 spanTo(operator_token.span, target_token.span.end),
             ),
         };
-        redirection.validate();
+        if (redirection.op != .here_doc and redirection.op != .here_doc_strip_tabs) redirection.validate();
         return redirection;
     }
 
@@ -395,6 +417,8 @@ const Parser = struct {
     fn eatRedirectionOperator(self: *Parser) ?token.Token {
         return switch (self.tokens[self.index].kind) {
             .less,
+            .less_less,
+            .less_less_dash,
             .less_ampersand,
             .less_greater,
             .greater,
@@ -404,6 +428,87 @@ const Parser = struct {
             => self.eat(self.tokens[self.index].kind).?,
             else => null,
         };
+    }
+
+    const HereDocDelimiter = struct {
+        text: []const u8,
+        quoted: bool,
+    };
+
+    fn hereDocDelimiter(self: *Parser, word: ast.Word) ParserError!HereDocDelimiter {
+        var quoted = false;
+        const text = try self.hereDocDelimiterText(word, &quoted);
+        return .{ .text = text, .quoted = quoted };
+    }
+
+    fn hereDocDelimiterText(self: *Parser, word: ast.Word, quoted: *bool) ParserError![]const u8 {
+        return switch (word.data) {
+            .literal => |literal| literal,
+            .parts => |parts| self.hereDocDelimiterParts(parts, quoted),
+        };
+    }
+
+    fn hereDocDelimiterParts(self: *Parser, parts: []const ast.WordPart, quoted: *bool) ParserError![]const u8 {
+        var output: std.ArrayList(u8) = .empty;
+        for (parts) |part| switch (part) {
+            .literal => |bytes| try output.appendSlice(self.allocator, bytes),
+            .single_quoted => |bytes| {
+                quoted.* = true;
+                try output.appendSlice(self.allocator, bytes);
+            },
+            .double_quoted => |nested| {
+                quoted.* = true;
+                try output.appendSlice(self.allocator, try self.hereDocDelimiterParts(nested, quoted));
+            },
+            .parameter, .command_substitution, .arithmetic => quoted.* = true,
+        };
+        return output.toOwnedSlice(self.allocator);
+    }
+
+    fn parsePendingHereDocs(self: *Parser, start_offset: usize) ParserError!void {
+        if (self.pending_here_docs.items.len == 0) return;
+
+        var offset = start_offset;
+        for (self.pending_here_docs.items) |pending| {
+            const parsed = try self.parseHereDocBody(offset, pending);
+            pending.redirection.here_doc = .{
+                .body = parsed.body,
+                .delimiter_quoted = pending.delimiter_quoted,
+            };
+            offset = parsed.next_offset;
+        }
+        self.pending_here_docs.clearRetainingCapacity();
+
+        while (self.index < self.tokens.len and self.tokens[self.index].span.start < offset) self.index += 1;
+        if (self.index >= self.tokens.len) self.index = self.tokens.len - 1;
+    }
+
+    const ParsedHereDoc = struct {
+        body: []const u8,
+        next_offset: usize,
+    };
+
+    fn parseHereDocBody(self: *Parser, start_offset: usize, pending: PendingHereDoc) ParserError!ParsedHereDoc {
+        var body: std.ArrayList(u8) = .empty;
+        var offset = start_offset;
+        while (offset <= self.source.text.len) {
+            const line_start = offset;
+            const newline_index = std.mem.indexOfScalarPos(u8, self.source.text, offset, '\n');
+            const line_end = newline_index orelse self.source.text.len;
+            const next_offset = if (newline_index) |newline| newline + 1 else self.source.text.len;
+            const raw_line = self.source.text[line_start..line_end];
+            const delimiter_line = if (pending.strip_tabs) stripLeadingTabs(raw_line) else raw_line;
+            if (std.mem.eql(u8, delimiter_line, pending.delimiter)) {
+                return .{ .body = try body.toOwnedSlice(self.allocator), .next_offset = next_offset };
+            }
+
+            const body_line = if (pending.strip_tabs) delimiter_line else raw_line;
+            try body.appendSlice(self.allocator, body_line);
+            if (newline_index != null) try body.append(self.allocator, '\n');
+            if (next_offset == offset) break;
+            offset = next_offset;
+        }
+        return .{ .body = try body.toOwnedSlice(self.allocator), .next_offset = offset };
     }
 
     fn at(self: Parser, kind: token.Kind) bool {
@@ -419,6 +524,8 @@ fn parseIoNumber(text: []const u8) !u31 {
 fn redirectionOperator(kind: token.Kind) ast.RedirectionOperator {
     return switch (kind) {
         .less => .input,
+        .less_less => .here_doc,
+        .less_less_dash => .here_doc_strip_tabs,
         .less_ampersand => .duplicate_input,
         .less_greater => .read_write,
         .greater => .output,
@@ -455,6 +562,21 @@ fn isAssignmentName(name: []const u8) bool {
     if (!isNameStart(name[0])) return false;
     for (name[1..]) |byte| if (!isNameContinue(byte)) return false;
     return true;
+}
+
+fn stripLeadingTabs(line: []const u8) []const u8 {
+    var index: usize = 0;
+    while (index < line.len and line[index] == '\t') index += 1;
+    return line[index..];
+}
+
+fn hasPendingHereDoc(redirections: []const ast.Redirection) bool {
+    for (redirections) |redirection| {
+        if ((redirection.op == .here_doc or redirection.op == .here_doc_strip_tabs) and redirection.here_doc == null) {
+            return true;
+        }
+    }
+    return false;
 }
 
 fn scanParameterName(text: []const u8, start: usize, end: usize) usize {
