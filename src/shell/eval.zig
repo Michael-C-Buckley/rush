@@ -188,6 +188,7 @@ fn evalCompound(shell: anytype, command: ast.CompoundInvocation) EvalError!resul
     return switch (command.body) {
         .brace_group => |body| evalList(shell, body),
         .if_command => |if_command| evalIf(shell, if_command),
+        .loop => |loop| evalLoop(shell, loop),
         .for_command => |for_command| evalFor(shell, for_command),
         .case_command => |case_command| evalCase(shell, case_command),
         else => .{ .status = 2 },
@@ -203,6 +204,35 @@ fn evalIf(shell: anytype, command: ast.IfCommand) EvalError!result.EvalResult {
     }
     if (command.else_body) |body| return evalList(shell, body);
     return .{};
+}
+
+fn evalLoop(shell: anytype, command: ast.LoopCommand) EvalError!result.EvalResult {
+    command.validate();
+    var status: result.ExitStatus = 0;
+    while (true) {
+        const condition = try evalList(shell, command.condition);
+        if (condition.flow != .normal) return condition;
+        const run_body = switch (command.kind) {
+            .while_loop => condition.status == 0,
+            .until_loop => condition.status != 0,
+        };
+        if (!run_body) return .{ .status = status };
+
+        const evaluated = try evalList(shell, command.body);
+        status = evaluated.status;
+        switch (evaluated.flow) {
+            .normal => {},
+            .continue_ => |count| if (count <= 1) continue else return .{
+                .status = status,
+                .flow = .{ .continue_ = count - 1 },
+            },
+            .break_ => |count| if (count <= 1) return .{ .status = status } else return .{
+                .status = status,
+                .flow = .{ .break_ = count - 1 },
+            },
+            else => return evaluated,
+        }
+    }
 }
 
 fn evalSubshell(shell: anytype, body: ast.List, redirections: []const ast.Redirection) EvalError!result.EvalResult {
@@ -447,7 +477,7 @@ fn evalSimpleScoped(shell: anytype, command: ast.SimpleCommand) EvalError!result
         if (definition.id == .eval) return evalEvalBuiltin(shell, fields);
         if (definition.id == .pwd) return evalPwdBuiltin(shell, fields);
         const args = switch (definition.id) {
-            .cd, .eval, .export_, .exit, .printf, .pwd, .readonly, .set => fields,
+            .break_, .cd, .continue_, .eval, .export_, .exit, .printf, .pwd, .readonly, .set => fields,
             else => &[_][]const u8{name},
         };
         return builtin.eval(shell, definition, args);

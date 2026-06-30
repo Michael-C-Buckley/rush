@@ -14,8 +14,10 @@ pub const Kind = enum {
 };
 
 pub const Id = enum {
+    break_,
     cd,
     colon,
+    continue_,
     eval,
     export_,
     exit,
@@ -40,8 +42,10 @@ pub const Definition = struct {
 const DefinitionMap = std.StaticStringMap(Definition);
 
 pub const definitions: DefinitionMap = .initComptime(.{
+    .{ "break", Definition{ .name = "break", .id = .break_, .kind = .special } },
     .{ "cd", Definition{ .name = "cd", .id = .cd, .kind = .regular } },
     .{ ":", Definition{ .name = ":", .id = .colon, .kind = .special } },
+    .{ "continue", Definition{ .name = "continue", .id = .continue_, .kind = .special } },
     .{ "eval", Definition{ .name = "eval", .id = .eval, .kind = .special } },
     .{ "export", Definition{ .name = "export", .id = .export_, .kind = .special } },
     .{ "exit", Definition{ .name = "exit", .id = .exit, .kind = .special } },
@@ -64,7 +68,9 @@ pub fn eval(shell: anytype, definition: Definition, args: []const []const u8) !r
     std.debug.assert(args.len != 0);
     return switch (definition.id) {
         .colon, .true_ => .{},
+        .break_ => evalBreak(args),
         .cd, .eval, .export_, .pwd => unreachable,
+        .continue_ => evalContinue(args),
         .exit => evalExit(shell, args),
         .false_ => .{ .status = 1 },
         .printf => evalPrintf(shell, args),
@@ -80,6 +86,23 @@ fn evalExit(shell: anytype, args: []const []const u8) result.EvalResult {
 
 fn parseExitStatus(text: []const u8) result.ExitStatus {
     return std.fmt.parseInt(u8, text, 10) catch 2;
+}
+
+fn evalBreak(args: []const []const u8) result.EvalResult {
+    const count = parseLoopControlCount(args) orelse return .{ .status = 2 };
+    return .{ .flow = .{ .break_ = count } };
+}
+
+fn evalContinue(args: []const []const u8) result.EvalResult {
+    const count = parseLoopControlCount(args) orelse return .{ .status = 2 };
+    return .{ .flow = .{ .continue_ = count } };
+}
+
+fn parseLoopControlCount(args: []const []const u8) ?usize {
+    if (args.len > 2) return null;
+    if (args.len == 1) return 1;
+    const count = std.fmt.parseInt(usize, args[1], 10) catch return null;
+    return if (count == 0) null else count;
 }
 
 fn evalPrintf(shell: anytype, args: []const []const u8) !result.EvalResult {
@@ -135,8 +158,10 @@ fn isAssignmentName(name: []const u8) bool {
 }
 
 test "builtin lookup identifies null true and false utilities" {
+    try std.testing.expectEqual(Id.break_, lookup("break").?.id);
     try std.testing.expectEqual(Id.cd, lookup("cd").?.id);
     try std.testing.expectEqual(Id.colon, lookup(":").?.id);
+    try std.testing.expectEqual(Id.continue_, lookup("continue").?.id);
     try std.testing.expectEqual(Id.eval, lookup("eval").?.id);
     try std.testing.expectEqual(Id.export_, lookup("export").?.id);
     try std.testing.expectEqual(Id.exit, lookup("exit").?.id);

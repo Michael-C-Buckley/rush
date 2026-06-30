@@ -55,6 +55,7 @@ const Parser = struct {
         right_brace,
         right_paren,
         esac,
+        do,
         done,
         then,
         if_branch,
@@ -144,6 +145,8 @@ const Parser = struct {
         var body: ast.CompoundCommand = undefined;
         if (try self.parseIfCommand()) |if_command| {
             body = .{ .if_command = if_command };
+        } else if (try self.parseLoopCommand()) |loop| {
+            body = .{ .loop = loop };
         } else if (try self.parseForCommand()) |for_command| {
             body = .{ .for_command = for_command };
         } else if (try self.parseCaseCommand()) |case_command| {
@@ -185,6 +188,24 @@ const Parser = struct {
             command.validate();
             return command;
         }
+    }
+
+    fn parseLoopCommand(self: *Parser) ParserError!?ast.LoopCommand {
+        const kind: ast.LoopKind = if (self.eatReserved(.while_kw) != null)
+            .while_loop
+        else if (self.eatReserved(.until_kw) != null)
+            .until_loop
+        else
+            return null;
+
+        const condition = try self.parseList(.do);
+        _ = self.eatReserved(.do_kw) orelse return error.UnexpectedToken;
+        const body = try self.parseList(.done);
+        _ = self.eatReserved(.done_kw) orelse return error.UnexpectedToken;
+
+        const command: ast.LoopCommand = .{ .kind = kind, .condition = condition, .body = body };
+        command.validate();
+        return command;
     }
 
     fn parseForCommand(self: *Parser) ParserError!?ast.ForCommand {
@@ -840,6 +861,7 @@ const Parser = struct {
             .right_brace => self.at(.right_brace),
             .right_paren => self.at(.right_paren),
             .esac => self.atReserved(.esac_kw),
+            .do => self.atReserved(.do_kw),
             .done => self.atReserved(.done_kw),
             .then => self.atReserved(.then_kw),
             .if_branch => self.atReserved(.elif_kw) or self.atReserved(.else_kw) or self.atReserved(.fi_kw),
