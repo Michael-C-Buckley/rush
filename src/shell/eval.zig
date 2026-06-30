@@ -6,7 +6,7 @@ const ast = @import("ast.zig");
 const builtin = @import("builtin.zig");
 const result = @import("result.zig");
 
-pub const EvalError = error{};
+pub const EvalError = anyerror;
 
 pub fn evalProgram(comptime Host: type, shell: anytype, program: ast.Program) EvalError!result.EvalResult {
     _ = Host;
@@ -54,20 +54,39 @@ fn evalCommand(shell: anytype, command: ast.Command) EvalError!result.EvalResult
 }
 
 fn evalSimple(shell: anytype, command: ast.SimpleCommand) EvalError!result.EvalResult {
-    _ = shell;
     command.validate();
     if (command.words.len == 0) return .{};
-    const name = literalWord(command.words[0]) orelse return .{ .status = 2 };
-    if (builtin.lookup(name)) |definition| return builtin.eval(definition);
+    shell.resetScratch();
+    const name = try expandWord(shell.scratchAllocator(), command.words[0]);
+    if (builtin.lookup(name)) |definition| {
+        const args = if (definition.id == .printf)
+            try expandWords(shell.scratchAllocator(), command.words)
+        else
+            &[_][]const u8{name};
+        return builtin.eval(shell, definition, args);
+    }
     return .{ .status = 127 };
 }
 
-fn literalWord(word: ast.Word) ?[]const u8 {
+fn expandWords(allocator: std.mem.Allocator, words: []const ast.Word) ![]const []const u8 {
+    std.debug.assert(words.len != 0);
+    const expanded = try allocator.alloc([]const u8, words.len);
+    for (words, 0..) |word, index| expanded[index] = try expandWord(allocator, word);
+    return expanded;
+}
+
+fn expandWord(allocator: std.mem.Allocator, word: ast.Word) ![]const u8 {
     return switch (word.data) {
         .literal => |literal| literal,
-        .parts => |parts| if (parts.len == 1) switch (parts[0]) {
-            .literal => |literal| literal,
-            else => null,
-        } else null,
+        .parts => |parts| expandWordParts(allocator, parts),
     };
+}
+
+fn expandWordParts(allocator: std.mem.Allocator, parts: []const ast.WordPart) ![]const u8 {
+    var output: std.ArrayList(u8) = .empty;
+    for (parts) |part| switch (part) {
+        .literal, .single_quoted, .arithmetic => |bytes| try output.appendSlice(allocator, bytes),
+        else => return error.UnsupportedExpansion,
+    };
+    return output.toOwnedSlice(allocator);
 }

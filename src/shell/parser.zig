@@ -8,6 +8,7 @@ const token = @import("token.zig");
 
 pub const ParseError = error{
     ExpectedCommand,
+    UnclosedQuote,
     UnexpectedToken,
 };
 
@@ -89,7 +90,7 @@ const Parser = struct {
         var command_span: ?source_mod.Span = null;
 
         while (self.eat(.word)) |word_token| {
-            const word: ast.Word = .{ .data = .{ .literal = word_token.text }, .span = word_token.span };
+            const word = try self.parseWord(word_token);
             word.validate();
             try words.append(self.allocator, word);
             command_span = if (command_span) |span| .{
@@ -108,6 +109,44 @@ const Parser = struct {
         };
         command.validate();
         return command;
+    }
+
+    fn parseWord(self: *Parser, word_token: token.Token) !ast.Word {
+        std.debug.assert(word_token.kind == .word);
+        if (!word_token.quoted) return .{ .data = .{ .literal = word_token.text }, .span = word_token.span };
+
+        var parts: std.ArrayList(ast.WordPart) = .empty;
+        errdefer parts.deinit(self.allocator);
+
+        var index: usize = 0;
+        var literal_start: usize = 0;
+        while (index < word_token.text.len) {
+            if (word_token.text[index] != '\'') {
+                index += 1;
+                continue;
+            }
+
+            if (literal_start < index) {
+                try parts.append(self.allocator, .{ .literal = word_token.text[literal_start..index] });
+            }
+
+            const quote_start = index + 1;
+            index = quote_start;
+            while (index < word_token.text.len and word_token.text[index] != '\'') index += 1;
+            if (index >= word_token.text.len) return error.UnclosedQuote;
+            try parts.append(self.allocator, .{ .single_quoted = word_token.text[quote_start..index] });
+
+            index += 1;
+            literal_start = index;
+        }
+
+        if (literal_start < word_token.text.len) {
+            try parts.append(self.allocator, .{ .literal = word_token.text[literal_start..] });
+        }
+
+        const word: ast.Word = .{ .data = .{ .parts = try parts.toOwnedSlice(self.allocator) }, .span = word_token.span };
+        word.validate();
+        return word;
     }
 
     fn skipSeparators(self: *Parser) void {
@@ -163,4 +202,20 @@ test "parser builds AND-OR lists" {
     try std.testing.expectEqual(ast.AndOrOperator.and_if, and_or.pipelines[1].operator.?);
     try std.testing.expect(and_or.pipelines[1].pipeline.negated);
     try std.testing.expectEqual(ast.AndOrOperator.or_if, and_or.pipelines[2].operator.?);
+}
+
+test "parser splits single quoted word parts" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const src: source_mod.Source = .{ .id = 1, .kind = .command_string, .name = "-c", .text = "printf '%s\\n' hello" };
+    const tokens = try @import("lexer.zig").lex(allocator, src);
+    const program = try parse(allocator, src, tokens);
+    const words = program.body.entries[0].and_or.pipelines[0].pipeline.stages[0].simple.words;
+
+    try std.testing.expectEqual(@as(usize, 3), words.len);
+    try std.testing.expectEqualStrings("printf", words[0].data.literal);
+    try std.testing.expectEqualStrings("%s\\n", words[1].data.parts[0].single_quoted);
+    try std.testing.expectEqualStrings("hello", words[2].data.literal);
 }

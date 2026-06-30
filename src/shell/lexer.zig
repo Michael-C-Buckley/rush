@@ -92,13 +92,16 @@ const Lexer = struct {
     fn appendWord(self: *Lexer, tokens: *std.ArrayList(token.Token)) !void {
         const start = self.position;
         const start_offset = self.position.byte_offset;
+        var quoted = false;
         while (!self.atEnd() and !isWordTerminator(self.peek())) self.advanceOne();
         const text = self.source.text[start_offset..self.position.byte_offset];
+        quoted = std.mem.indexOfScalar(u8, text, '\'') != null;
         const tok: token.Token = .{
             .kind = .word,
             .span = source_mod.Span.init(start, self.position.byte_offset),
             .text = text,
-            .reserved = token.lookupReservedWord(text),
+            .reserved = if (quoted) null else token.lookupReservedWord(text),
+            .quoted = quoted,
         };
         tok.validate();
         try tokens.append(self.allocator, tok);
@@ -148,4 +151,13 @@ test "lexer marks reserved words" {
     try std.testing.expectEqual(@as(?token.ReservedWord, null), tokens[1].reserved);
     try std.testing.expectEqual(token.ReservedWord.then_kw, tokens[3].reserved.?);
     try std.testing.expectEqual(token.ReservedWord.fi_kw, tokens[6].reserved.?);
+}
+
+test "lexer marks quoted words as non-reserved" {
+    const src: source_mod.Source = .{ .id = 1, .kind = .command_string, .name = "-c", .text = "'if'" };
+    const tokens = try lex(std.testing.allocator, src);
+    defer std.testing.allocator.free(tokens);
+
+    try std.testing.expect(tokens[0].quoted);
+    try std.testing.expectEqual(@as(?token.ReservedWord, null), tokens[0].reserved);
 }
