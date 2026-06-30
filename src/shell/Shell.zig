@@ -136,8 +136,14 @@ pub fn Shell(comptime Host: type) type {
 
 fn nextLineEnd(text: []const u8, start: usize) usize {
     std.debug.assert(start < text.len);
-    const newline_index = std.mem.indexOfScalar(u8, text[start..], '\n') orelse return text.len;
-    return start + newline_index + 1;
+    var cursor = start;
+    while (cursor < text.len) {
+        const newline_index = std.mem.indexOfScalar(u8, text[cursor..], '\n') orelse return text.len;
+        const end = cursor + newline_index + 1;
+        if (end < 2 or text[end - 2] != '\\') return end;
+        cursor = end;
+    }
+    return text.len;
 }
 
 test "Shell caches exec environment pointer array" {

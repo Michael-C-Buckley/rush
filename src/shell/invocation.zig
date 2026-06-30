@@ -57,6 +57,7 @@ pub fn parse(args: []const []const u8) ParseError!Invocation {
         if (arg.len > 1 and arg[0] == '-' and !std.mem.eql(u8, arg, "-c")) {
             for (arg[1..]) |option| switch (option) {
                 'i' => options.interactive = true,
+                'u' => options.nounset = true,
                 'x' => options.xtrace = true,
                 else => return error.UnsupportedOption,
             };
@@ -113,6 +114,17 @@ test "invocation parses xtrace option" {
         .help, .script_file => return error.TestExpectedEqual,
     };
     try std.testing.expect(command.options.xtrace);
+    try std.testing.expectEqual(state.Mode.posix, command.options.mode);
+}
+
+test "invocation parses nounset option" {
+    const args = [_][]const u8{ "rush", "--posix", "-u", "-c", ":" };
+    const invocation = try parse(&args);
+    const command = switch (invocation) {
+        .command_string => |command| command,
+        .help, .script_file => return error.TestExpectedEqual,
+    };
+    try std.testing.expect(command.options.nounset);
     try std.testing.expectEqual(state.Mode.posix, command.options.mode);
 }
 

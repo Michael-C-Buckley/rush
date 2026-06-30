@@ -1796,6 +1796,22 @@ fn evalDeclarationBuiltin(shell: anytype, id: builtin.Id, words: []const ast.Wor
 
         const names = try expandWordFields(shell, &.{word}, null);
         for (names) |name| {
+            if (literalDeclarationAssignment(name)) |assignment| {
+                const existing = shell.state.getVariable(assignment.name);
+                shell.state.putVariable(.{
+                    .name = assignment.name,
+                    .value = switch (assignment.value.data) {
+                        .literal => |literal| literal,
+                        .parts => unreachable,
+                    },
+                    .exported = id == .export_ or (existing != null and existing.?.exported),
+                    .readonly = id == .readonly or (existing != null and existing.?.readonly),
+                }) catch |err| switch (err) {
+                    error.ReadonlyVariable => status = 2,
+                    else => return err,
+                };
+                continue;
+            }
             if (!isAssignmentName(name)) {
                 status = 2;
                 continue;
@@ -3014,6 +3030,16 @@ fn bracketExpressionMatches(pattern: PathnamePattern, start: usize, character: [
     var matched = false;
     var saw_member = false;
     while (index < pattern.text.len) {
+        if (pattern.byteIsSpecial(index) and pattern.text[index] == '\\' and index + 1 < pattern.text.len) {
+            index += 1;
+            const member_len = utf8SequenceLength(pattern.text[index..]);
+            if (index + member_len > pattern.text.len) return null;
+            const member = pattern.text[index..][0..member_len];
+            index += member_len;
+            saw_member = true;
+            matched = matched or std.mem.eql(u8, member, character);
+            continue;
+        }
         if (pattern.text[index] == ']' and saw_member) break;
         if (bracketNamedExpression(pattern.text, &index)) |named| {
             saw_member = true;
@@ -3050,6 +3076,14 @@ fn bracketExpressionEnd(pattern: PathnamePattern, start: usize) ?usize {
     }
     var saw_member = false;
     while (index < pattern.text.len) {
+        if (pattern.byteIsSpecial(index) and pattern.text[index] == '\\' and index + 1 < pattern.text.len) {
+            index += 1;
+            const member_len = utf8SequenceLength(pattern.text[index..]);
+            if (index + member_len > pattern.text.len) return null;
+            index += member_len;
+            saw_member = true;
+            continue;
+        }
         if (pattern.text[index] == ']' and saw_member) break;
         if (bracketNamedExpression(pattern.text, &index) != null) {
             saw_member = true;
@@ -4037,11 +4071,7 @@ fn expandParameterPatternRemoval(
     parameter: ast.ParameterExpansion,
     operator: ast.ParameterOperator,
 ) EvalError![]const u8 {
-    const name = switch (parameter.parameter) {
-        .variable => |variable_name| variable_name,
-        else => return "",
-    };
-    const value = parameterValue(shell, name) orelse "";
+    const value = (try parameterCurrentValue(shell, parameter.parameter)) orelse "";
     const pattern = try expandPatternWord(shell, parameter.word.?);
     return switch (operator) {
         .remove_small_prefix => removePrefix(value, pattern, .small),
@@ -4082,7 +4112,7 @@ fn expandPatternParts(shell: anytype, parts: []const ast.WordPart) ![]const u8 {
 
 fn appendPatternLiteral(allocator: std.mem.Allocator, output: *std.ArrayList(u8), bytes: []const u8) !void {
     for (bytes) |byte| {
-        if (byte == '*' or byte == '?' or byte == '[' or byte == '\\') try output.append(allocator, '\\');
+        if (byte == '*' or byte == '?' or byte == '[' or byte == ']' or byte == '\\') try output.append(allocator, '\\');
         try output.append(allocator, byte);
     }
 }

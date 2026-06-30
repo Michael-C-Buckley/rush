@@ -798,6 +798,22 @@
             .status = 0,
         },
         .{
+            .name = "case command word recognizes nested braced parameter defaults",
+            .script =
+            \\unset outer inner
+            \\case ${outer:-${inner:-fallback}} in
+            \\    fallback) printf 'ok\n' ;;
+            \\    *) printf 'bad\n' ;;
+            \\esac
+            ,
+            .stdout =
+            \\ok
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "case command uses the first matching clause",
             .script =
             \\case abc in
@@ -1017,6 +1033,22 @@
             .stdout =
             \\literal
             \\variable
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "case command bracket patterns preserve quoted closing bracket",
+            .script =
+            \\chars='ab]cd'
+            \\case c in
+            \\    *["$chars"]*) printf 'match\n' ;;
+            \\    *) printf 'bad\n' ;;
+            \\esac
+            ,
+            .stdout =
+            \\match
             \\
             ,
             .stderr = "",

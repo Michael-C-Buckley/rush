@@ -16,6 +16,33 @@
             .status = 0,
         },
         .{
+            .name = "unquoted parameter expansion recognizes nested braced defaults",
+            .script =
+            \\unset outer inner
+            \\printf '<%s>\n' ${outer:-${inner:-fallback}}
+            ,
+            .stdout =
+            \\<fallback>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "assignment words recognize nested braced parameter defaults",
+            .script =
+            \\unset outer inner
+            \\value=${outer:-${inner:-fallback}}
+            \\printf '<%s>\n' "$value"
+            ,
+            .stdout =
+            \\<fallback>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "parameter expansion removes backslash newline in parameter name",
             .script = "A=ok; printf '<%s>\\n' ${A\\\n}\n",
             .stdout =
@@ -218,6 +245,19 @@
             .stdout =
             \\one/two/three
             \\three
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "parameter expansion removes patterns from positional parameters",
+            .script =
+            \\set ' foo -> bar' foo
+            \\printf '<%s>\n' "${1#" $2 -> "}"
+            ,
+            .stdout =
+            \\<bar>
             \\
             ,
             .stderr = "",

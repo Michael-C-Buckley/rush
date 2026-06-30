@@ -693,9 +693,7 @@ const Parser = struct {
         const rest = content[prefix.end..];
         if (rest.len == 0) return .{ .parameter = prefix.parameter, .span = span };
 
-        if (prefix.parameter == .variable) {
-            if (try self.parsePatternRemoval(prefix.parameter.variable, rest, span)) |parameter| return parameter;
-        }
+        if (try self.parsePatternRemoval(prefix.parameter, rest, span)) |parameter| return parameter;
 
         const colon = rest.len >= 2 and rest[0] == ':' and isParameterOperator(rest[1]);
         if (colon or isParameterOperator(rest[0])) {
@@ -715,7 +713,7 @@ const Parser = struct {
 
     fn parsePatternRemoval(
         self: *Parser,
-        name: []const u8,
+        parameter: ast.Parameter,
         rest: []const u8,
         span: source_mod.Span,
     ) ParserError!?ast.ParameterExpansion {
@@ -742,7 +740,7 @@ const Parser = struct {
             else => return null,
         };
         return .{
-            .parameter = .{ .variable = name },
+            .parameter = parameter,
             .op = removal.operator,
             .word = try self.parseWordText(removal.word_text, .{}),
             .span = span,
@@ -1306,6 +1304,10 @@ fn scanCommandSubstitution(text: []const u8, open_index: usize, end: usize) Pars
             index = try scanCaseCommandText(text, index, end);
             continue;
         }
+        if (text[index] == '#' and commentStartsAt(text, index)) {
+            index = skipCommentText(text, index, end);
+            continue;
+        }
         switch (text[index]) {
             '\'', '"' => |quote| {
                 index += 1;
@@ -1328,9 +1330,31 @@ fn scanCommandSubstitution(text: []const u8, open_index: usize, end: usize) Pars
     return error.UnclosedCommandSubstitution;
 }
 
+fn skipCommentText(text: []const u8, start: usize, end: usize) usize {
+    std.debug.assert(start < end);
+    std.debug.assert(text[start] == '#');
+
+    var index = start;
+    while (index < end and text[index] != '\n') index += 1;
+    return index;
+}
+
+fn commentStartsAt(text: []const u8, index: usize) bool {
+    std.debug.assert(index < text.len);
+    if (index == 0) return true;
+    return switch (text[index - 1]) {
+        ' ', '\t', '\n', '\r', ';', '&', '|', '(', ')' => true,
+        else => false,
+    };
+}
+
 fn scanCaseCommandText(text: []const u8, start: usize, end: usize) ParseError!usize {
     var index = start + "case".len;
     while (index < end) {
+        if (text[index] == '#' and commentStartsAt(text, index)) {
+            index = skipCommentText(text, index, end);
+            continue;
+        }
         if (text[index] == '\\') {
             index += if (index + 1 < end) 2 else 1;
             continue;

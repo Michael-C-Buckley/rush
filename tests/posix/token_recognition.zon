@@ -189,6 +189,21 @@
             .status = 0,
         },
         .{
+            .name = "alias-aware evaluation keeps backslash-newline continuations together",
+            .script =
+            \\alias marker=:
+            \\true \
+            \\|| printf 'bad\n'
+            \\printf 'ok\n'
+            ,
+            .stdout =
+            \\ok
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "alias substitution does not apply to ordinary arguments",
             .script =
             \\alias hi='printf "%s\n" alias'

@@ -41,6 +41,20 @@
             .status = 0,
         },
         .{
+            .name = "eval command substitution ignores quotes in comments",
+            .script =
+            \\eval ': || $( : # "
+            \\)'
+            \\printf '<%s>\n' "$?"
+            ,
+            .stdout =
+            \\<0>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "eval with no arguments returns zero",
             .script =
             \\eval
@@ -240,6 +254,33 @@
             .status = 0,
         },
         .{
+            .name = "readonly assigns quoted assignment operands",
+            .script =
+            \\readonly "ro=value"
+            \\printf '<%s>\n' "$ro"
+            ,
+            .stdout =
+            \\<value>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "export assigns expanded assignment operands",
+            .script =
+            \\operand=ex=value
+            \\export $operand
+            \\printf '<%s>\n' "$ex"
+            ,
+            .stdout =
+            \\<value>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "assignment to readonly variable exits nonzero",
             .script =
             \\readonly ro=value
@@ -427,6 +468,35 @@
             ,
             .stdout =
             \\<0>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "set accepts option flags before double dash operands",
+            .script =
+            \\set -u -- a b
+            \\printf '<%s:%s:%s>\n' "$#" "$1" "$2"
+            \\set +u --
+            \\printf '<%s>\n' "$#"
+            ,
+            .stdout =
+            \\<2:a:b>
+            \\<0>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "set non-option operands replace positional parameters",
+            .script =
+            \\set 'a b' c
+            \\printf '<%s:%s:%s>\n' "$#" "$1" "$2"
+            ,
+            .stdout =
+            \\<2:a b:c>
             \\
             ,
             .stderr = "",

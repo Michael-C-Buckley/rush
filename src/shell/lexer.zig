@@ -532,6 +532,10 @@ const Lexer = struct {
                 self.advanceOne();
                 continue;
             }
+            if (byte == '#' and self.commentStartsAtCurrentOffset()) {
+                self.skipComment();
+                continue;
+            }
             if (byte == '\'' or byte == '"') {
                 quote = byte;
                 self.advanceOne();
@@ -549,6 +553,15 @@ const Lexer = struct {
         }
     }
 
+    fn commentStartsAtCurrentOffset(self: Lexer) bool {
+        const offset = self.position.byte_offset;
+        if (offset == 0) return true;
+        return switch (self.source.text[offset - 1]) {
+            ' ', '\t', '\n', '\r', ';', '&', '|', '(', ')' => true,
+            else => false,
+        };
+    }
+
     fn skipCaseCommandText(self: *Lexer) void {
         self.advanceBytes("case".len);
         while (!self.atEnd()) {
@@ -558,6 +571,10 @@ const Lexer = struct {
             }
 
             const byte = self.peek();
+            if (byte == '#' and self.commentStartsAtCurrentOffset()) {
+                self.skipComment();
+                continue;
+            }
             if (byte == '\\') {
                 self.advanceOne();
                 if (!self.atEnd()) self.advanceOne();
@@ -596,6 +613,7 @@ const Lexer = struct {
     }
 
     fn skipBracedParameter(self: *Lexer) void {
+        var depth: usize = 1;
         var quote: ?u8 = null;
         while (!self.atEnd()) {
             const byte = self.peek();
@@ -609,8 +627,28 @@ const Lexer = struct {
                 self.advanceOne();
                 continue;
             }
+            if (byte == '\\') {
+                self.advanceOne();
+                if (!self.atEnd()) self.advanceOne();
+                continue;
+            }
+            if (byte == '$' and self.peekNextIs('{')) {
+                depth += 1;
+                self.advanceOne();
+                self.advanceOne();
+                continue;
+            }
+            if (byte == '$' and self.peekNextIs('(')) {
+                self.advanceOne();
+                self.advanceOne();
+                self.skipCommandSubstitution();
+                continue;
+            }
             self.advanceOne();
-            if (byte == '}') break;
+            if (byte == '}') {
+                depth -= 1;
+                if (depth == 0) break;
+            }
         }
     }
 
