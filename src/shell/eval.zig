@@ -264,7 +264,7 @@ fn evalCompound(shell: anytype, command: ast.CompoundInvocation) EvalError!resul
 
     var redirections = applyRedirections(shell, command.redirections) catch |err| switch (err) {
         error.OutOfMemory => return err,
-        else => return redirectionFailure(shell),
+        else => return redirectionFailure(shell, false),
     };
     defer redirections.restore(shell) catch {};
 
@@ -559,15 +559,15 @@ fn evalSimple(shell: anytype, command: ast.SimpleCommand) EvalError!result.EvalR
     };
 }
 
-fn redirectionFailure(shell: anytype) result.EvalResult {
+fn redirectionFailure(shell: anytype, fatal: bool) result.EvalResult {
     shell.host.writeAll(.stderr, "redirection failed\n") catch {};
-    return .{ .status = 1 };
+    return .{ .status = 1, .flow = if (fatal) .{ .fatal = 1 } else .normal };
 }
 
 fn evalSimpleScoped(shell: anytype, command: ast.SimpleCommand) EvalError!result.EvalResult {
     var redirections = applyRedirections(shell, command.redirections) catch |err| switch (err) {
         error.OutOfMemory => return err,
-        else => return redirectionFailure(shell),
+        else => return redirectionFailure(shell, simpleRedirectionFailureIsFatal(command)),
     };
     var restore_redirections = true;
     defer if (restore_redirections) redirections.restore(shell) catch {};
@@ -631,6 +631,13 @@ fn evalSimpleScoped(shell: anytype, command: ast.SimpleCommand) EvalError!result
         return builtin.eval(shell, definition, args);
     }
     return evalExternal(shell, fields, command.assignments);
+}
+
+fn simpleRedirectionFailureIsFatal(command: ast.SimpleCommand) bool {
+    if (command.words.len == 0) return false;
+    const name = staticLiteralWord(command.words[0]) orelse return false;
+    const definition = builtin.lookup(name) orelse return false;
+    return definition.kind == .special;
 }
 
 fn evalCdBuiltin(shell: anytype, args: []const []const u8) EvalError!result.EvalResult {
@@ -3028,7 +3035,7 @@ fn expandCommandSubstitution(
         const tokens = try lexer.lexWithAliases(ast_allocator, src, shell.state);
         break :program try parser.parseWithAliases(ast_allocator, src, tokens, shell.state);
     };
-    const capture = try evalCommandSubstitutionInChild(shell, program);
+    const capture = try evalCommandSubstitutionInChild(shell, substitution, program);
     const status = capture.status;
     if (substitution_status) |tracked| tracked.* = status;
     shell.state.last_status = status;
@@ -3040,7 +3047,11 @@ const CommandSubstitutionCapture = struct {
     status: result.ExitStatus,
 };
 
-fn evalCommandSubstitutionInChild(shell: anytype, program: ast.Program) !CommandSubstitutionCapture {
+fn evalCommandSubstitutionInChild(
+    shell: anytype,
+    substitution: ast.CommandSubstitution,
+    program: ast.Program,
+) !CommandSubstitutionCapture {
     const pipe_desc = try shell.host.pipe();
     errdefer {
         shell.host.close(pipe_desc.read) catch {};
@@ -3053,6 +3064,7 @@ fn evalCommandSubstitutionInChild(shell: anytype, program: ast.Program) !Command
             shell.host.duplicateTo(pipe_desc.write, .stdout) catch shell.host.exit(127);
             shell.host.close(pipe_desc.write) catch shell.host.exit(127);
             shell.state.loop_depth = 0;
+            shell.state.diagnostic_line_offset += substitution.line_offset;
             const evaluated = evalProgram(@TypeOf(shell.host), shell, program) catch shell.host.exit(2);
             shell.host.exit(evaluated.status);
         },
@@ -3107,7 +3119,13 @@ fn expandParameter(shell: anytype, parameter: ast.ParameterExpansion) EvalError!
     }
 
     return switch (parameter.parameter) {
-        .variable => |name| parameterValue(shell, name) orelse "",
+        .variable => |name| parameterValue(shell, name) orelse {
+            if (shell.state.options.nounset) {
+                try writeExpansionDiagnostic(shell, parameter, "parameter", "parameter not set");
+                return error.ExpansionError;
+            }
+            return "";
+        },
         .special => |special| switch (special) {
             .hash => try std.fmt.allocPrint(shell.scratchAllocator(), "{}", .{shell.state.positionals.len}),
             .question => try formatExitStatus(shell, shell.state.last_status),
@@ -3394,7 +3412,7 @@ fn writeExpansionDiagnostic(
     const diagnostic = try std.fmt.allocPrint(
         shell.scratchAllocator(),
         "{}: expansion error: {s}: {s}\n",
-        .{ parameter.span.start_line, name, message },
+        .{ parameter.span.start_line + shell.state.diagnostic_line_offset, name, message },
     );
     try shell.host.writeAll(.stderr, diagnostic);
 }

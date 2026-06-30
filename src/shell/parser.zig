@@ -523,9 +523,10 @@ const Parser = struct {
                     if (literal_start < index) try parts.append(self.allocator, .{ .literal = text[literal_start..index] });
                     const substitution_end = try scanBackquoteSubstitution(text, index, end);
                     const source_text = try self.backquoteSourceText(text[index + 1 .. substitution_end]);
-                    const parsed = try self.parseCommandSubstitution(source_text);
+                    const line_offset = self.commandSubstitutionLineOffset(span, text, index + 1);
+                    const parsed = try self.parseCommandSubstitution(source_text, line_offset);
                     try parts.append(self.allocator, .{
-                        .command_substitution = .{ .source_text = source_text, .parsed = parsed },
+                        .command_substitution = .{ .source_text = source_text, .parsed = parsed, .line_offset = line_offset },
                     });
                     index = substitution_end + 1;
                     literal_start = index;
@@ -556,9 +557,10 @@ const Parser = struct {
                         if (literal_start < index) try parts.append(self.allocator, .{ .literal = text[literal_start..index] });
                         const substitution_end = try scanCommandSubstitution(text, name_start, end);
                         const source_text = text[name_start + 1 .. substitution_end];
-                        const parsed = try self.parseCommandSubstitution(source_text);
+                        const line_offset = self.commandSubstitutionLineOffset(span, text, name_start + 1);
+                        const parsed = try self.parseCommandSubstitution(source_text, line_offset);
                         try parts.append(self.allocator, .{
-                            .command_substitution = .{ .source_text = source_text, .parsed = parsed },
+                            .command_substitution = .{ .source_text = source_text, .parsed = parsed, .line_offset = line_offset },
                         });
                         index = substitution_end + 1;
                         literal_start = index;
@@ -762,7 +764,8 @@ const Parser = struct {
         return output.toOwnedSlice(self.allocator);
     }
 
-    fn parseCommandSubstitution(self: *Parser, source_text: []const u8) !*const ast.Program {
+    fn parseCommandSubstitution(self: *Parser, source_text: []const u8, line_offset: usize) !*const ast.Program {
+        _ = line_offset;
         const src: source_mod.Source = .{
             .id = self.source.id,
             .kind = .command_string,
@@ -777,6 +780,12 @@ const Parser = struct {
         const owned = try self.allocator.create(ast.Program);
         owned.* = program;
         return owned;
+    }
+
+    fn commandSubstitutionLineOffset(self: *Parser, span: source_mod.Span, text: []const u8, start: usize) usize {
+        _ = self;
+        const source_start = spanFromRelativeOffsets(span, text, start, start);
+        return source_start.start_line - 1;
     }
 
     fn backquoteSourceText(self: *Parser, raw: []const u8) ParserError![]const u8 {

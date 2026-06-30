@@ -159,6 +159,7 @@ pub const WordPart = union(enum) {
 pub const CommandSubstitution = struct {
     source_text: []const u8,
     parsed: ?*const Program = null,
+    line_offset: usize = 0,
 
     pub fn validate(self: CommandSubstitution) void {
         if (self.parsed) |program| program.validate();

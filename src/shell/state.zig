@@ -71,6 +71,7 @@ pub const State = struct {
     getopts_char_index: usize = 1,
     errexit_ignore_depth: usize = 0,
     loop_depth: usize = 0,
+    diagnostic_line_offset: usize = 0,
     arg_zero: []const u8 = "rush",
     positionals: []const []const u8 = &.{},
     owned_positionals: []const []const u8 = &.{},
