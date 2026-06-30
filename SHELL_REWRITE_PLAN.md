@@ -113,6 +113,22 @@ Host responsibilities include:
 Host does not decide shell semantics such as assignment persistence, special
 builtin behavior, `errexit`, variable scoping, or pipeline state isolation.
 
+## Allocator policy
+
+`main` owns the root allocator: DebugAllocator in Debug builds and
+`std.heap.smp_allocator` otherwise. All shell allocators derive from that root.
+
+Persistent shell state uses the shell state's allocator and owns any strings that
+must survive a top-level command. Parser AST, word expansion scratch, command
+substitution buffers, and other per-command data should normally use arena
+allocators. The owning `Shell(Host)` keeps a resettable command arena so common
+eval paths can reuse capacity without heap-allocation interfaces or global state.
+
+Assertions should guard programmer/model bugs: impossible AST shapes, invalid
+source spans, contradictory state transitions, invalid Host requests, and
+mutation commits to the wrong execution context. Ordinary shell errors remain
+diagnostics, statuses, or error values.
+
 ## Testing policy
 
 Shell behavior should prefer conformance scripts under `tests/`.
@@ -146,9 +162,6 @@ Primary comparison shells:
 - dash
 - `bash --posix`
 - yash
-
-zsh sh emulation is not a primary reference. Use it only for exploratory
-compatibility work when explicitly desired.
 
 ## Initial implementation order
 

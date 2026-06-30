@@ -2,6 +2,7 @@
 
 pub const ast = @import("shell/ast.zig");
 pub const host = @import("shell/host.zig");
+pub const memory = @import("shell/memory.zig");
 pub const result = @import("shell/result.zig");
 pub const source = @import("shell/source.zig");
 pub const state = @import("shell/state.zig");

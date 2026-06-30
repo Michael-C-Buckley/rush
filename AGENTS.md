@@ -44,7 +44,7 @@ platform-specific shell:
 ```bash
 zig build conformance -- --shell dash --mode posix
 zig build conformance -- --shell bash --shell-arg --posix --mode posix
-zig build conformance -- --shell zsh --shell-arg --emulate --shell-arg sh --shell-arg -f --mode posix
+zig build conformance -- --shell yash --mode posix
 ```
 
 The full conformance suite intentionally prints compact one-line failures. Add
@@ -55,16 +55,14 @@ Conformance comparisons are primarily a Rush validation tool, not a requirement
 that every reference shell pass every case. If Rush matches the documented POSIX
 target or an intentional compatibility choice, a reference-shell mismatch is
 acceptable evidence about that shell's behavior. Do not weaken a test solely to
-make dash, Bash, or zsh pass; only relax expectations when the relaxed output is
+make dash, Bash, or yash pass; only relax expectations when the relaxed output is
 still the intended Rush contract.
 
 The Bash reference is current stable GNU Bash in POSIX mode; do not substitute
-macOS `/bin/bash` 3.2 or `/bin/sh` for it. The zsh reference is zsh in sh
-emulation with startup files disabled; do not run default zsh or substitute
-`/bin/sh` for it. If one of these shells is not installed, report that it was
-not run rather than silently using another shell. FreeBSD `/bin/sh`, macOS
-`/bin/sh`, BusyBox ash, ksh, yash, and other shells are secondary/platform
-references only.
+macOS `/bin/bash` 3.2 or `/bin/sh` for it. The yash reference is current yash in
+POSIX mode. If one of these shells is not installed, report that it was not run
+rather than silently using another shell. FreeBSD `/bin/sh`, macOS `/bin/sh`,
+BusyBox ash, ksh, and other shells are secondary/platform references only.
 
 ## Current Zig Patterns
 
@@ -141,26 +139,32 @@ const output = try writer.toOwnedSlice();
 
 ## Architecture
 
-- Prefer a functional core with an imperative shell: policy, planning, pure
-  computation, and state transitions belong in deterministic core types; code
-  that performs irreversible effects should be a thin, policy-free adapter.
-- Dependency injection is only a boundary mechanism for effectful ports, not a
-  generic container or a reason to mock every operation.
+- Prefer direct execution from a small shell AST. Do not reintroduce broad
+  command-plan, state-delta, or output-routing architectures unless the user
+  explicitly changes the rewrite direction.
+- Keep shell semantics in `src/shell/*`: command lookup, assignment persistence,
+  redirection policy, pipeline status, control flow, and mutation boundaries.
+- All evaluation-time host effects go through a comptime-known concrete Host
+  type. The evaluator must not call `std.Io`, `std.posix`, `std.fs`,
+  `std.process`, signal, terminal, clock, or global environment APIs directly.
+- `RealHost` should use `std.posix` or targeted platform APIs directly. Do not
+  use `std.Io` as the evaluator effects boundary.
 - Make ownership and mutation boundaries explicit. Many bugs are state commits
   to the wrong owner, lifetime, process, or abstraction layer; in shell execution,
   this especially means making current-shell vs child/subshell mutation explicit.
-- Shape semantic objects so invariants are checked where plans, deltas, outcomes,
-  and state transitions are constructed or committed.
-- For shell execution specifically, keep shell policy in `src/shell/*` and POSIX
-  effects like fork/exec/wait, fd operations, cwd/fs, signals, and tty I/O in
-  boring `src/runtime/*` adapters.
+- Main owns the root allocator: DebugAllocator in Debug and `std.heap.smp_allocator`
+  otherwise. All shell allocators must derive from that root allocator.
+- Use arena allocators heavily for parser/evaluator lifetimes. Persistent shell
+  state owns its strings through the shell state's allocator; AST and per-command
+  expansion data should normally live in resettable arenas.
 
 ## Safety
 
 - Use TigerStyle/TigerBeetle-like assertions at API boundaries, state transitions,
-  plan construction, and commit/discard points; avoid trivial assertions.
+  parser/evaluator construction points, and mutation commit/discard points; avoid
+  trivial assertions.
 - Assertions are for Rush/programmer/model bugs only: impossible states,
-  contradictory mutations, invalid plan shapes, mismatched counts, invalid enum
+  contradictory mutations, invalid AST shapes, mismatched counts, invalid enum
   combinations, or mutation targets that violate the semantic model.
 - Ordinary user/script/input/runtime errors must be diagnostics, error values,
   statuses, or `CommandOutcome` values, not assertions: syntax errors, command
