@@ -3,6 +3,15 @@
     .mode = .posix,
     .cases = .{
         .{
+            .name = "colon builtin succeeds",
+            .script =
+            \\:
+            ,
+            .stdout = "",
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "printf writes stdout",
             .script =
             \\printf '%s\n' hello

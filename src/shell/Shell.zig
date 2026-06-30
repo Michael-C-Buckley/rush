@@ -2,7 +2,12 @@
 
 const std = @import("std");
 
+const eval = @import("eval.zig");
+const lexer = @import("lexer.zig");
 const memory = @import("memory.zig");
+const parser = @import("parser.zig");
+const result = @import("result.zig");
+const source = @import("source.zig");
 const state = @import("state.zig");
 
 pub fn Shell(comptime Host: type) type {
@@ -43,6 +48,17 @@ pub fn Shell(comptime Host: type) type {
 
         pub fn resetScratch(self: *Self) void {
             self.arenas.resetScratch();
+        }
+
+        pub fn evalSource(self: *Self, src: source.Source) !result.EvalResult {
+            src.validate();
+            self.resetForTopLevelCommand();
+
+            const ast_allocator = self.astAllocator();
+            const tokens = try lexer.lex(ast_allocator, src);
+            const program = try parser.parse(ast_allocator, src, tokens);
+            program.validate();
+            return eval.evalProgram(Host, self, program);
         }
     };
 }

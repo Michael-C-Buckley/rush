@@ -1,10 +1,6 @@
-//! Concrete host effect contract used by the direct evaluator.
-//!
-//! The evaluator is generic over a comptime-known Host type. These types define
-//! the values passed across that boundary; the real host implementation should
-//! call `std.posix` or targeted platform APIs directly.
+//! Host effects boundary for the rewritten shell.
 
-const std = @import("std");
+pub const platform = @import("host/platform.zig");
 
 pub const Fd = enum(i32) {
     stdin = 0,
@@ -25,9 +21,8 @@ pub const OpenAccess = enum {
     read_write,
 };
 
-pub const OpenRequest = struct {
-    path: []const u8,
-    access: OpenAccess,
+pub const OpenOptions = struct {
+    access: OpenAccess = .read_only,
     create: bool = false,
     truncate: bool = false,
     append: bool = false,
@@ -69,6 +64,7 @@ pub const SpawnRequest = struct {
     process_group: ?Pid = null,
 
     pub fn validate(self: SpawnRequest) void {
+        const std = @import("std");
         std.debug.assert(self.path.len != 0);
         std.debug.assert(self.argv.len != 0);
         std.debug.assert(self.argv[0].len != 0);
@@ -97,4 +93,14 @@ pub const WaitStatus = union(enum) {
 pub const DirectoryEntry = struct {
     name: []const u8,
     kind: FileKind,
+};
+
+pub const RealHost = struct {
+    pub fn writeAll(_: *RealHost, fd: Fd, bytes: []const u8) platform.WriteError!void {
+        try platform.writeAll(fd, bytes);
+    }
+
+    pub fn openZ(_: *RealHost, path: [:0]const u8, options: OpenOptions) platform.OpenError!Fd {
+        return platform.openZ(path, options);
+    }
 };
