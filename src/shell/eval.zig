@@ -20724,7 +20724,16 @@ fn evaluateEchoRouted(
     var frame = try buffers.outputFrame();
     defer frame.deinit();
     if (stdout.items.len != 0 and frame.routingRef().destination(1) == .closed) status = 1;
-    try frame.write(1, stdout.items);
+    frame.write(1, stdout.items) catch |err| switch (err) {
+        error.Unimplemented => {
+            status = 1;
+            frame.addBuiltinDiagnostic("echo", "write error") catch |diagnostic_err| switch (diagnostic_err) {
+                error.Unimplemented => {},
+                else => |e| return e,
+            };
+        },
+        else => |e| return e,
+    };
     return status;
 }
 

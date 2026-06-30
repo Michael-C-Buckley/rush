@@ -918,6 +918,23 @@
             .status = 0,
         },
         .{
+            .name = "echo reports failure when stdout write fails",
+            .script =
+            \\if [ -e /dev/full ]
+            \\then
+            \\    echo hidden >/dev/full || printf 'write-failed\n'
+            \\else
+            \\    printf 'write-failed\n'
+            \\fi
+            ,
+            .stdout =
+            \\write-failed
+            \\
+            ,
+            .stderr_match = .any,
+            .status = 0,
+        },
+        .{
             .name = "buffered regular builtin reports failure when stdout is closed",
             .script =
             \\pwd >&-
