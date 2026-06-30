@@ -447,6 +447,15 @@ fn evalSet(shell: anytype, args: []const []const u8) !result.EvalResult {
         const arg = args[index];
         if (arg.len < 2 or (arg[0] != '-' and arg[0] != '+')) return .{ .status = 2 };
         const enabled = arg[0] == '-';
+        if (std.mem.eql(u8, arg[1..], "o")) {
+            index += 1;
+            if (index >= args.len) return .{ .status = 2 };
+            if (std.mem.eql(u8, args[index], "pipefail")) {
+                shell.state.options.pipefail = enabled;
+                continue;
+            }
+            return .{ .status = 2 };
+        }
         for (arg[1..]) |option| switch (option) {
             'e' => shell.state.options.errexit = enabled,
             'f' => shell.state.options.noglob = enabled,

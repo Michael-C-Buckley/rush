@@ -44,6 +44,9 @@ fn shouldApplyErrexit(shell: anytype, evaluated: result.EvalResult) bool {
 
 fn evalBackgroundAndOr(shell: anytype, and_or: ast.AndOr) EvalError!result.EvalResult {
     and_or.validate();
+    if (and_or.pipelines.len == 1 and and_or.pipelines[0].pipeline.stages.len > 1) {
+        return evalBackgroundPipeline(shell, and_or.pipelines[0].pipeline);
+    }
     const pid = switch (try shell.host.forkProcess()) {
         .parent => |child_pid| child_pid,
         .child => {
@@ -53,6 +56,16 @@ fn evalBackgroundAndOr(shell: anytype, and_or: ast.AndOr) EvalError!result.EvalR
     };
     shell.state.last_background_pid = pid;
     try shell.state.addBackgroundPid(pid);
+    return .{ .status = 0 };
+}
+
+fn evalBackgroundPipeline(shell: anytype, pipeline: ast.Pipeline) EvalError!result.EvalResult {
+    pipeline.validate();
+    std.debug.assert(pipeline.stages.len > 1);
+    const pids = try spawnPipelineStages(shell, pipeline.stages, true);
+    defer shell.allocator.free(pids);
+    for (pids) |pid| try shell.state.addBackgroundPid(pid);
+    shell.state.last_background_pid = pids[pids.len - 1];
     return .{ .status = 0 };
 }
 
@@ -88,6 +101,28 @@ fn evalPipeline(shell: anytype, pipeline: ast.Pipeline) EvalError!result.EvalRes
 
 fn evalExternalPipeline(shell: anytype, stages: []const ast.Command) EvalError!result.EvalResult {
     std.debug.assert(stages.len > 1);
+    const pipefail = shell.state.options.pipefail;
+    const pids = try spawnPipelineStages(shell, stages, false);
+    defer shell.allocator.free(pids);
+    const scratch = try shell.beginScratchScope();
+    defer scratch.end();
+    const statuses = try waitPids(shell, pids);
+    return .{ .status = pipelineStatus(statuses, pipefail) };
+}
+
+fn pipelineStatus(statuses: []const host_mod.WaitStatus, pipefail: bool) result.ExitStatus {
+    if (!pipefail) return statuses[statuses.len - 1].shellStatus();
+    var index = statuses.len;
+    while (index != 0) {
+        index -= 1;
+        const status = statuses[index].shellStatus();
+        if (status != 0) return status;
+    }
+    return 0;
+}
+
+fn spawnPipelineStages(shell: anytype, stages: []const ast.Command, direct_static_externals: bool) EvalError![]const host_mod.Pid {
+    std.debug.assert(stages.len > 1);
     const scratch = try shell.beginScratchScope();
     defer scratch.end();
 
@@ -100,7 +135,8 @@ fn evalExternalPipeline(shell: anytype, stages: []const ast.Command) EvalError!r
         open_pipes += 1;
     }
 
-    const pids = try allocator.alloc(host_mod.Pid, stages.len);
+    const pids = try shell.allocator.alloc(host_mod.Pid, stages.len);
+    errdefer shell.allocator.free(pids);
     var spawned: usize = 0;
     errdefer {
         closePipes(shell, pipes[0..open_pipes]);
@@ -108,14 +144,13 @@ fn evalExternalPipeline(shell: anytype, stages: []const ast.Command) EvalError!r
     }
 
     for (stages, 0..) |stage, index| {
-        pids[index] = try forkPipelineStage(shell, stage, pipes, index);
+        pids[index] = try forkPipelineStage(shell, stage, pipes, index, direct_static_externals);
         spawned += 1;
     }
 
     closePipes(shell, pipes);
     open_pipes = 0;
-    const statuses = try waitPids(shell, pids);
-    return .{ .status = statuses[statuses.len - 1].shellStatus() };
+    return pids;
 }
 
 fn closePipes(shell: anytype, pipes: []const host_mod.Pipe) void {
@@ -136,8 +171,14 @@ fn forkPipelineStage(
     command: ast.Command,
     pipes: []const host_mod.Pipe,
     stage_index: usize,
+    direct_static_external: bool,
 ) !host_mod.Pid {
     const fd_actions = try pipelineFdActions(shell, pipes, stage_index);
+    if (direct_static_external) {
+        if (try staticExternalPipelineStageRequest(shell, command, fd_actions)) |request| {
+            return (try shell.host.spawn(request)).pid;
+        }
+    }
     return switch (try shell.host.forkProcess()) {
         .parent => |pid| pid,
         .child => {
@@ -145,6 +186,33 @@ fn forkPipelineStage(
             const evaluated = evalCommand(shell, command) catch shell.host.exit(2);
             shell.host.exit(evaluated.status);
         },
+    };
+}
+
+fn staticExternalPipelineStageRequest(
+    shell: anytype,
+    command: ast.Command,
+    fd_actions: []const host_mod.SpawnFdAction,
+) !?host_mod.SpawnRequest {
+    if (command != .simple) return null;
+    const simple = command.simple;
+    if (simple.assignments.len != 0 or simple.redirections.len != 0 or simple.words.len == 0) return null;
+
+    const fields = try shell.scratchAllocator().alloc([]const u8, simple.words.len);
+    for (simple.words, 0..) |word, index| {
+        fields[index] = staticLiteralWord(word) orelse return null;
+    }
+    if (builtin.lookup(fields[0]) != null or shell.state.getFunction(fields[0]) != null) return null;
+    return makeExternalSpawnRequest(shell, fields, &.{}, fd_actions) catch |err| switch (err) {
+        error.OutOfMemory => return err,
+        else => return null,
+    };
+}
+
+fn staticLiteralWord(word: ast.Word) ?[]const u8 {
+    return switch (word.data) {
+        .literal => |literal| literal,
+        else => null,
     };
 }
 
