@@ -58,6 +58,8 @@ pub const WaitError = error{
 
 pub const KillError = host.KillError;
 
+pub const SignalDispositionError = host.SignalDispositionError;
+
 pub fn read(fd: host.Fd, buffer: []u8) ReadError!usize {
     if (buffer.len == 0) return 0;
     return switch (builtin.os.tag) {
@@ -170,6 +172,23 @@ pub fn sendSignal(pid: host.Pid, signal: u8) KillError!void {
         .macos, .freebsd, .openbsd, .netbsd => libcSendSignal(pid, signal),
         else => @compileError("unsupported host OS"),
     };
+}
+
+pub fn setSignalIgnored(signal: u8) SignalDispositionError!void {
+    setSignalAction(signal, std.posix.SIG.IGN) catch return error.InvalidSignal;
+}
+
+pub fn setSignalDefault(signal: u8) SignalDispositionError!void {
+    setSignalAction(signal, std.posix.SIG.DFL) catch return error.InvalidSignal;
+}
+
+fn setSignalAction(signal: u8, handler: ?std.posix.Sigaction.handler_fn) !void {
+    var action: std.posix.Sigaction = .{
+        .handler = .{ .handler = handler },
+        .mask = std.posix.sigemptyset(),
+        .flags = 0,
+    };
+    std.posix.sigaction(@enumFromInt(signal), &action, null);
 }
 
 pub fn isExecutableZ(path: [:0]const u8) bool {

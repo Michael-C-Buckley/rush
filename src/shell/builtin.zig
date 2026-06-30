@@ -594,7 +594,10 @@ fn evalTrap(shell: anytype, args: []const []const u8) !result.EvalResult {
         };
         switch (signal) {
             .exit => if (reset) shell.state.clearExitTrap() else try shell.state.setExitTrap(action),
-            .other => |name| if (reset) shell.state.clearSignalTrap(name) else try shell.state.setSignalTrap(name, action),
+            .other => |name| if (reset) {
+                shell.state.clearSignalTrap(name);
+                if (signalNumber(name)) |number| shell.host.setSignalDefault(number) catch {};
+            } else try shell.state.setSignalTrap(name, action),
         }
     }
     return .{ .status = status };
@@ -701,6 +704,8 @@ test "builtin eval returns utility status" {
         }
 
         pub fn sendSignal(_: *@This(), _: host.Pid, _: u8) !void {}
+
+        pub fn setSignalDefault(_: *@This(), _: u8) !void {}
     };
     const TestShell = struct {
         host: TestHost = .{},
@@ -733,6 +738,8 @@ test "exit builtin returns requested exit flow" {
         }
 
         pub fn sendSignal(_: *@This(), _: host.Pid, _: u8) !void {}
+
+        pub fn setSignalDefault(_: *@This(), _: u8) !void {}
     };
     const TestShell = struct {
         host: TestHost = .{},
@@ -778,6 +785,8 @@ test "printf writes formatted output once" {
         }
 
         pub fn sendSignal(_: *@This(), _: host.Pid, _: u8) !void {}
+
+        pub fn setSignalDefault(_: *@This(), _: u8) !void {}
     };
     const TestShell = struct {
         host: TestHost = .{},

@@ -86,6 +86,7 @@ fn evalBackgroundAndOr(shell: anytype, and_or: ast.AndOr) EvalError!result.EvalR
         .child => {
             const scratch = shell.beginScratchScope() catch shell.host.exit(2);
             defer scratch.end();
+            if (!shell.state.options.monitor) ignoreAsynchronousJobSignals(shell) catch shell.host.exit(2);
             if (background_subshell) |subshell| {
                 const evaluated = evalSubshellInCurrentProcess(shell, subshell.body.subshell, subshell.redirections) catch shell.host.exit(2);
                 const status = runExitTrap(shell, evaluated.status) catch shell.host.exit(2);
@@ -99,6 +100,11 @@ fn evalBackgroundAndOr(shell: anytype, and_or: ast.AndOr) EvalError!result.EvalR
     shell.state.last_background_pid = pid;
     try shell.state.addBackgroundPid(pid);
     return .{ .status = 0 };
+}
+
+fn ignoreAsynchronousJobSignals(shell: anytype) !void {
+    try shell.host.setSignalIgnored(2);
+    try shell.host.setSignalIgnored(3);
 }
 
 fn backgroundSubshellInvocation(and_or: ast.AndOr) ?ast.CompoundInvocation {

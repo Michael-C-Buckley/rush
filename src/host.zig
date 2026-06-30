@@ -146,6 +146,11 @@ pub const KillError = error{
     Unexpected,
 };
 
+pub const SignalDispositionError = error{
+    InvalidSignal,
+    Unexpected,
+};
+
 pub const SpawnFdAction = union(enum) {
     close: Fd,
     duplicate: struct {
@@ -315,6 +320,14 @@ pub const RealHost = struct {
 
     pub fn sendSignal(_: *RealHost, pid: Pid, signal: u8) platform.KillError!void {
         try platform.sendSignal(pid, signal);
+    }
+
+    pub fn setSignalIgnored(_: *RealHost, signal: u8) platform.SignalDispositionError!void {
+        try platform.setSignalIgnored(signal);
+    }
+
+    pub fn setSignalDefault(_: *RealHost, signal: u8) platform.SignalDispositionError!void {
+        try platform.setSignalDefault(signal);
     }
 
     pub fn spawn(_: *RealHost, request: SpawnRequest) platform.SpawnError!SpawnResult {
