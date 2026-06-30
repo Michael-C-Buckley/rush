@@ -5,6 +5,8 @@ const build_options = @import("builtin");
 
 const state = @import("state.zig");
 
+pub const inherited_ppid_env = "__RUSH_PPID";
+
 pub fn initializeInvocationState(
     allocator: std.mem.Allocator,
     io: std.Io,
@@ -16,9 +18,12 @@ pub fn initializeInvocationState(
     shell_state.validate();
     shell_state.options = shell_options;
 
+    const inherited_ppid = if (environ_map) |map| validInheritedPpid(map.get(inherited_ppid_env)) else null;
+
     if (environ_map) |map| {
         var iterator = map.iterator();
         while (iterator.next()) |entry| {
+            if (std.mem.eql(u8, entry.key_ptr.*, inherited_ppid_env)) continue;
             if (!isValidVariableName(entry.key_ptr.*)) continue;
             if (std.mem.indexOfScalar(u8, entry.value_ptr.*, 0) != null) continue;
             try shell_state.putVariable(entry.key_ptr.*, entry.value_ptr.*, .{ .exported = true });
@@ -31,7 +36,7 @@ pub fn initializeInvocationState(
     if (shell_state.getVariable("PS4") == null) try shell_state.putVariable("PS4", "+ ", .{});
 
     var ppid_buffer: [32]u8 = undefined;
-    const ppid = try std.fmt.bufPrint(&ppid_buffer, "{d}", .{std.posix.getppid()});
+    const ppid = inherited_ppid orelse try std.fmt.bufPrint(&ppid_buffer, "{d}", .{std.posix.getppid()});
     try shell_state.putVariable("PPID", ppid, .{});
 
     if (shell_state.getVariable("PWD")) |pwd| {
@@ -91,6 +96,13 @@ fn parseShellLevel(text: []const u8) ?i64 {
         if (!std.ascii.isDigit(text[index])) return null;
     }
     return std.fmt.parseInt(i64, text, 10) catch null;
+}
+
+fn validInheritedPpid(value: ?[]const u8) ?[]const u8 {
+    const text = value orelse return null;
+    if (text.len == 0) return null;
+    for (text) |byte| if (!std.ascii.isDigit(byte)) return null;
+    return text;
 }
 
 fn isValidLogicalPwd(allocator: std.mem.Allocator, pwd: []const u8) bool {

@@ -3166,16 +3166,17 @@ test "runScriptWithEnvironment imports initial shell variables" {
     try env.put("IFS", ":");
     try env.put("OPTIND", "7");
     try env.put("PWD", "/definitely/not/rush/current/directory");
+    try env.put(shell.startup.inherited_ppid_env, "12345");
 
     var result = try runScriptWithEnvironment(std.testing.allocator, std.testing.io,
-        \\case $PPID in ''|*[!0123456789]*) echo bad-ppid ;; *) echo ppid-ok ;; esac
+        \\printf '<%s>\n' "$PPID" "${__RUSH_PPID-unset}"
         \\printf '<%s>\n' "$RUSH_IMPORTED_ENV" "$IFS" "$OPTIND"
         \\case $PWD in /definitely/not/rush/*) echo bad-pwd ;; /*) echo pwd-ok ;; *) echo bad-pwd ;; esac
     , .{ .io = std.testing.io, .allow_external = true }, &env);
     defer result.deinit();
 
     try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
-    try std.testing.expectEqualStrings("ppid-ok\n<present>\n< \t\n>\n<1>\npwd-ok\n", result.stdout);
+    try std.testing.expectEqualStrings("<12345>\n<unset>\n<present>\n< \t\n>\n<1>\npwd-ok\n", result.stdout);
 }
 test "semantic non-interactive invocation initializes environment arg zero and positionals" {
     var env = std.process.Environ.Map.init(std.testing.allocator);

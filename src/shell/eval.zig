@@ -38,6 +38,7 @@ const printf = @import("printf.zig");
 const redirection_plan = @import("redirection_plan.zig");
 const runtime = @import("../runtime.zig");
 const shell_expand = @import("expansion_context.zig");
+const shell_startup = @import("startup.zig");
 const state = @import("state.zig");
 const trap_semantics = @import("trap.zig");
 
@@ -16167,6 +16168,13 @@ fn buildExternalEnvironmentWithProcessOverlay(
         try environment.put(entry.name, entry.value);
     }
 
+    if (shell_state.getVariable("PPID")) |ppid| {
+        if (ppid.value_set) {
+            assertValidEnvironmentEntry(shell_startup.inherited_ppid_env, ppid.value);
+            try environment.put(shell_startup.inherited_ppid_env, ppid.value);
+        }
+    }
+
     assertValidEnvironmentMap(environment);
     return environment;
 }
@@ -27105,6 +27113,7 @@ test "semantic evaluator executes external commands through runtime process and 
     try shell_state.putVariable("FOO", "parent", .{ .exported = true });
     try shell_state.putVariable("PATH", "/mock/bin", .{ .exported = true });
     try shell_state.putVariable("HIDDEN", "secret", .{});
+    try shell_state.putVariable("PPID", "12345", .{});
 
     const assignments = [_]command_plan.Assignment{
         .{ .name = "FOO", .value = "child" },
@@ -27141,6 +27150,7 @@ test "semantic evaluator executes external commands through runtime process and 
     try std.testing.expectEqualStrings("child", fake.observed_environment.get("FOO").?);
     try std.testing.expectEqualStrings("value", fake.observed_environment.get("TEMP").?);
     try std.testing.expectEqualStrings("/mock/bin", fake.observed_environment.get("PATH").?);
+    try std.testing.expectEqualStrings("12345", fake.observed_environment.get(shell_startup.inherited_ppid_env).?);
     try std.testing.expect(!fake.observed_environment.contains("HIDDEN"));
     try std.testing.expectEqual(runtime.process.StandardIo.inherit, fake.observed_stdin);
     try std.testing.expectEqual(runtime.process.StandardIo.inherit, fake.observed_stdout);
