@@ -20,6 +20,7 @@ pub fn Shell(comptime Host: type) type {
         allocator: std.mem.Allocator,
         host: Host,
         env: []const [*:0]const u8,
+        exec_envp_cache: ?[:null]const ?[*:0]const u8 = null,
         state: state.State,
         arenas: memory.Arenas,
 
@@ -36,9 +37,19 @@ pub fn Shell(comptime Host: type) type {
         }
 
         pub fn deinit(self: *Self) void {
+            if (self.exec_envp_cache) |envp| self.allocator.free(envp);
             self.arenas.deinit();
             self.state.deinit();
             self.* = undefined;
+        }
+
+        pub fn execEnvp(self: *Self) ![:null]const ?[*:0]const u8 {
+            if (self.exec_envp_cache) |envp| return envp;
+
+            const envp = try self.allocator.allocSentinel(?[*:0]const u8, self.env.len, null);
+            for (self.env, 0..) |entry, index| envp[index] = entry;
+            self.exec_envp_cache = envp;
+            return envp;
         }
 
         pub fn astAllocator(self: *Self) std.mem.Allocator {
@@ -68,4 +79,20 @@ pub fn Shell(comptime Host: type) type {
             return eval.evalProgram(Host, self, program);
         }
     };
+}
+
+test "Shell caches exec environment pointer array" {
+    const TestHost = struct {};
+    const env = [_][*:0]const u8{ "A=1", "B=2" };
+
+    var shell = Shell(TestHost).init(std.testing.allocator, .{}, .{ .env = &env });
+    defer shell.deinit();
+
+    const first = try shell.execEnvp();
+    const second = try shell.execEnvp();
+
+    try std.testing.expectEqual(first.ptr, second.ptr);
+    try std.testing.expectEqualStrings("A=1", std.mem.span(first[0].?));
+    try std.testing.expectEqualStrings("B=2", std.mem.span(first[1].?));
+    try std.testing.expectEqual(@as(?[*:0]const u8, null), first[2]);
 }

@@ -233,9 +233,27 @@ fn expandWordParts(shell: anytype, parts: []const ast.WordPart, substitution_sta
     if (parts.len == 1) return expandWordPart(shell, parts[0], substitution_status);
 
     const allocator = shell.scratchAllocator();
-    var output: std.ArrayList(u8) = .empty;
-    for (parts) |part| try output.appendSlice(allocator, try expandWordPart(shell, part, substitution_status));
-    return output.toOwnedSlice(allocator);
+    var stack_expanded: [8][]const u8 = undefined;
+    const expanded = if (parts.len <= stack_expanded.len)
+        stack_expanded[0..parts.len]
+    else
+        try allocator.alloc([]const u8, parts.len);
+
+    var total_len: usize = 0;
+    for (parts, 0..) |part, index| {
+        const bytes = try expandWordPart(shell, part, substitution_status);
+        expanded[index] = bytes;
+        total_len = std.math.add(usize, total_len, bytes.len) catch return error.OutOfMemory;
+    }
+    if (total_len == 0) return "";
+
+    const output = try allocator.alloc(u8, total_len);
+    var cursor: usize = 0;
+    for (expanded) |bytes| {
+        @memcpy(output[cursor..][0..bytes.len], bytes);
+        cursor += bytes.len;
+    }
+    return output;
 }
 
 fn expandWordPart(shell: anytype, part: ast.WordPart, substitution_status: ?*?result.ExitStatus) EvalError![]const u8 {
@@ -306,15 +324,36 @@ fn evalExternal(shell: anytype, words: []const ast.Word) EvalError!result.EvalRe
 fn expandExecArgv(shell: anytype, words: []const ast.Word) ![:null]const ?[*:0]const u8 {
     std.debug.assert(words.len != 0);
     const allocator = shell.scratchAllocator();
-    const expanded = try allocator.allocSentinel(?[*:0]const u8, words.len, null);
+    const argv = try allocator.allocSentinel(?[*:0]const u8, words.len, null);
+
+    var stack_expanded: [8][]const u8 = undefined;
+    const expanded = if (words.len <= stack_expanded.len)
+        stack_expanded[0..words.len]
+    else
+        try allocator.alloc([]const u8, words.len);
+
+    var total_len: usize = 0;
     for (words, 0..) |word, index| {
         const bytes = try expandWord(shell, word);
-        expanded[index] = (try allocator.dupeZ(u8, bytes)).ptr;
+        expanded[index] = bytes;
+        total_len = std.math.add(usize, total_len, bytes.len + 1) catch return error.OutOfMemory;
     }
-    return expanded;
+
+    const arg_bytes = try allocator.alloc(u8, total_len);
+    var cursor: usize = 0;
+    for (expanded, 0..) |bytes, index| {
+        @memcpy(arg_bytes[cursor..][0..bytes.len], bytes);
+        arg_bytes[cursor + bytes.len] = 0;
+        argv[index] = arg_bytes[cursor .. cursor + bytes.len :0].ptr;
+        cursor += bytes.len + 1;
+    }
+
+    return argv;
 }
 
 fn makeExecEnvp(shell: anytype) ![:null]const ?[*:0]const u8 {
+    if (comptime @hasDecl(@TypeOf(shell.*), "execEnvp")) return shell.execEnvp();
+
     const envp = try shell.scratchAllocator().allocSentinel(?[*:0]const u8, shell.env.len, null);
     for (shell.env, 0..) |entry, index| envp[index] = entry;
     return envp;
