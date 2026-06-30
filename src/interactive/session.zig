@@ -942,6 +942,8 @@ pub fn run(
     var signal_handlers = signals.install();
     defer signal_handlers.restore();
 
+    if (!stdinIsTty(io)) return runStdinInteractiveScript(allocator, io, environ_map, options);
+
     var command_history = history.History.init(allocator);
     defer command_history.deinit();
     var history_service = history.InteractiveHistoryService.init(&command_history);
@@ -1277,6 +1279,75 @@ pub fn run(
     }
 
     return last_status;
+}
+
+fn runStdinInteractiveScript(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    environ_map: *const std.process.Environ.Map,
+    options: Options,
+) !u8 {
+    var interactive_shell = Shell.init(allocator);
+    defer interactive_shell.deinit();
+    try interactive_shell.initializeSemanticStartup(io, environ_map, options);
+
+    const script = try readStdinScript(allocator, io);
+    defer allocator.free(script);
+
+    var cursor: usize = 0;
+    var last_status: shell.ExitStatus = 0;
+    var command: std.ArrayList(u8) = .empty;
+    defer command.deinit(allocator);
+
+    while (true) {
+        if (interactivePendingExit(&interactive_shell)) |status| return status;
+
+        try writeAll(io, .stderr, prompt_mod.text(&interactive_shell.semantic_state, "PS1", "$ "));
+        const line = nextBufferedLine(script, &cursor) orelse break;
+        command.clearRetainingCapacity();
+        try command.appendSlice(allocator, line);
+
+        while (try interactive_input.needsContinuation(allocator, command.items, options.features)) {
+            try writeAll(io, .stderr, prompt_mod.text(&interactive_shell.semantic_state, "PS2", "> "));
+            const continuation = nextBufferedLine(script, &cursor) orelse break;
+            try command.append(allocator, '\n');
+            try command.appendSlice(allocator, continuation);
+        }
+
+        if (command.items.len == 0) continue;
+
+        var result = try runInteractiveScript(allocator, io, &interactive_shell, command.items, .{
+            .io = io,
+            .allow_external = true,
+            .features = options.features,
+            .external_stdio = .capture,
+            .interactive = true,
+            .arg_zero = options.arg_zero,
+        });
+        defer result.deinit();
+        try writeAll(io, .stdout, result.stdout);
+        try writeAll(io, .stderr, result.stderr);
+        last_status = result.status;
+    }
+
+    return last_status;
+}
+
+fn readStdinScript(allocator: std.mem.Allocator, io: std.Io) ![]u8 {
+    var buffer: [4096]u8 = undefined;
+    var reader = std.Io.File.stdin().reader(io, &buffer);
+    return reader.interface.allocRemaining(allocator, .unlimited);
+}
+
+fn nextBufferedLine(script: []const u8, cursor: *usize) ?[]const u8 {
+    if (cursor.* >= script.len) return null;
+    const start = cursor.*;
+    if (std.mem.indexOfScalarPos(u8, script, start, '\n')) |end| {
+        cursor.* = end + 1;
+        return script[start..end];
+    }
+    cursor.* = script.len;
+    return script[start..];
 }
 
 fn runInteractiveScript(

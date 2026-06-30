@@ -130,7 +130,7 @@ pub fn parse(args: []const []const u8) ?ShellInvocation {
 
 pub fn shouldRunInteractiveStandardInput(invocation: ShellInvocation, stdin_is_tty: bool, stderr_is_tty: bool) bool {
     if (invocation.kind != .standard_input) return false;
-    if (invocation.interactive) return stdin_is_tty;
+    if (invocation.interactive) return true;
     return stdin_is_tty and stderr_is_tty;
 }
 
@@ -305,7 +305,7 @@ test "interactive invocation tracks explicit monitor option" {
 test "standard input invocation uses interactive editor when terminal rules require it" {
     const forced = parse(&.{ "rush", "-i" }) orelse return error.ExpectedInvocation;
     try std.testing.expect(shouldRunInteractiveStandardInput(forced, true, false));
-    try std.testing.expect(!shouldRunInteractiveStandardInput(forced, false, true));
+    try std.testing.expect(shouldRunInteractiveStandardInput(forced, false, true));
 
     const implicit = parse(&.{ "rush", "--posix", "-u" }) orelse return error.ExpectedInvocation;
     try std.testing.expect(shouldRunInteractiveStandardInput(implicit, true, true));
