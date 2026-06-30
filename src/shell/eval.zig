@@ -1935,7 +1935,7 @@ fn restoreFrames(shell: anytype, frames: []const RedirectionFrame) !void {
 }
 
 fn saveFd(shell: anytype, fd: host_mod.Fd) !host_mod.Fd {
-    return shell.host.duplicate(fd);
+    return shell.host.duplicateAtLeast(fd, 10);
 }
 
 fn redirectionFd(redirection: ast.Redirection) host_mod.Fd {

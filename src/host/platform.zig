@@ -106,6 +106,14 @@ pub fn duplicate(fd: host.Fd) DuplicateError!host.Fd {
     };
 }
 
+pub fn duplicateAtLeast(fd: host.Fd, min_fd: u31) DuplicateError!host.Fd {
+    return switch (builtin.os.tag) {
+        .linux => linuxDuplicateAtLeast(fd, min_fd),
+        .macos, .freebsd, .openbsd, .netbsd => libcDuplicateAtLeast(fd, min_fd),
+        else => @compileError("unsupported host OS"),
+    };
+}
+
 pub fn duplicateTo(from: host.Fd, to: host.Fd) DuplicateError!void {
     return switch (builtin.os.tag) {
         .linux => linuxDuplicateTo(from, to),
@@ -375,6 +383,42 @@ fn libcDuplicate(fd: host.Fd) DuplicateError!host.Fd {
     const rc = std.c.dup(@intCast(fd.raw()));
     switch (std.c.errno(rc)) {
         .SUCCESS => return @enumFromInt(@as(i32, @intCast(rc))),
+        .BADF => return error.BadFd,
+        .INTR => return error.Interrupted,
+        .MFILE => return error.SystemResources,
+        else => return error.Unexpected,
+    }
+}
+
+fn linuxDuplicateAtLeast(fd: host.Fd, min_fd: u31) DuplicateError!host.Fd {
+    const linux = std.os.linux;
+    const rc = linux.fcntl(fd.raw(), linux.F.DUPFD_CLOEXEC, min_fd);
+    switch (linux.errno(rc)) {
+        .SUCCESS => return @enumFromInt(@as(i32, @intCast(rc))),
+        .BADF => return error.BadFd,
+        .INTR => return error.Interrupted,
+        .MFILE => return error.SystemResources,
+        else => return error.Unexpected,
+    }
+}
+
+fn libcDuplicateAtLeast(fd: host.Fd, min_fd: u31) DuplicateError!host.Fd {
+    const command = if (comptime @hasDecl(std.c.F, "DUPFD_CLOEXEC")) std.c.F.DUPFD_CLOEXEC else std.c.F.DUPFD;
+    const rc = std.c.fcntl(@intCast(fd.raw()), command, @as(c_int, @intCast(min_fd)));
+    switch (std.c.errno(rc)) {
+        .SUCCESS => {
+            const duplicated: host.Fd = @enumFromInt(@as(i32, @intCast(rc)));
+            if (comptime !@hasDecl(std.c.F, "DUPFD_CLOEXEC")) {
+                libcSetCloseOnExec(duplicated, true) catch |err| {
+                    close(duplicated) catch {};
+                    return switch (err) {
+                        error.BadFd => error.BadFd,
+                        error.Unexpected => error.Unexpected,
+                    };
+                };
+            }
+            return duplicated;
+        },
         .BADF => return error.BadFd,
         .INTR => return error.Interrupted,
         .MFILE => return error.SystemResources,

@@ -209,6 +209,10 @@ pub const RealHost = struct {
         return platform.duplicate(fd);
     }
 
+    pub fn duplicateAtLeast(_: *RealHost, fd: Fd, min_fd: u31) platform.DuplicateError!Fd {
+        return platform.duplicateAtLeast(fd, min_fd);
+    }
+
     pub fn duplicateTo(_: *RealHost, from: Fd, to: Fd) platform.DuplicateError!void {
         try platform.duplicateTo(from, to);
     }
