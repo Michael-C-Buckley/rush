@@ -761,11 +761,15 @@ fn libcStatusFromStat(stat: std.posix.Stat) host.FileStatus {
         .kind = libcFileKindFromMode(stat.mode),
         .size = @intCast(@max(stat.size, 0)),
         .mode = @intCast(stat.mode),
-        .device = @intCast(stat.dev),
-        .inode = @intCast(stat.ino),
+        .device = statIdentifier(stat.dev),
+        .inode = statIdentifier(stat.ino),
         .mtime_sec = @intCast(mtime.sec),
         .mtime_nsec = @intCast(mtime.nsec),
     };
+}
+
+fn statIdentifier(value: anytype) u64 {
+    return std.math.cast(u64, value) orelse @as(u64, @bitCast(@as(i64, @intCast(value))));
 }
 
 fn linuxFileAccessZ(path: [:0]const u8, access: host.FileAccess) bool {
