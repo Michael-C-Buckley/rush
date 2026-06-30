@@ -556,22 +556,7 @@ fn evalUnset(shell: anytype, args: []const []const u8) result.EvalResult {
 
 fn evalTrap(shell: anytype, args: []const []const u8) !result.EvalResult {
     if (args.len == 1) {
-        if (shell.state.exit_trap_listing) |action| {
-            try shell.host.writeAll(.stdout, try std.fmt.allocPrint(
-                shell.scratchAllocator(),
-                "trap -- '{s}' EXIT\n",
-                .{action},
-            ));
-        }
-        for (trap_signal_names) |signal| {
-            if (shell.state.getSignalTrap(signal)) |action| {
-                try shell.host.writeAll(.stdout, try std.fmt.allocPrint(
-                    shell.scratchAllocator(),
-                    "trap -- '{s}' {s}\n",
-                    .{ action, signal },
-                ));
-            }
-        }
+        try listAllTraps(shell);
         return .{};
     }
 
@@ -579,6 +564,22 @@ fn evalTrap(shell: anytype, args: []const []const u8) !result.EvalResult {
     if (std.mem.eql(u8, args[index], "--")) {
         index += 1;
         if (index >= args.len) return .{ .status = 2 };
+    }
+    if (std.mem.eql(u8, args[index], "-p")) {
+        index += 1;
+        if (index >= args.len) {
+            try listAllTraps(shell);
+            return .{};
+        }
+        var status: result.ExitStatus = 0;
+        while (index < args.len) : (index += 1) {
+            const signal = parseTrapSignal(args[index]) orelse {
+                status = 1;
+                continue;
+            };
+            try listTrap(shell, signal);
+        }
+        return .{ .status = status };
     }
 
     const reset = std.mem.eql(u8, args[index], "-");
@@ -604,6 +605,30 @@ fn evalTrap(shell: anytype, args: []const []const u8) !result.EvalResult {
         }
     }
     return .{ .status = status };
+}
+
+fn listAllTraps(shell: anytype) !void {
+    try listTrap(shell, .exit);
+    for (trap_signal_names) |signal| try listTrap(shell, .{ .other = signal });
+}
+
+fn listTrap(shell: anytype, signal: TrapSignal) !void {
+    switch (signal) {
+        .exit => if (shell.state.exit_trap_listing) |action| {
+            try shell.host.writeAll(.stdout, try std.fmt.allocPrint(
+                shell.scratchAllocator(),
+                "trap -- '{s}' EXIT\n",
+                .{action},
+            ));
+        },
+        .other => |name| if (shell.state.getSignalTrap(name)) |action| {
+            try shell.host.writeAll(.stdout, try std.fmt.allocPrint(
+                shell.scratchAllocator(),
+                "trap -- '{s}' {s}\n",
+                .{ action, name },
+            ));
+        },
+    }
 }
 
 const TrapSignal = union(enum) { exit, other: []const u8 };
