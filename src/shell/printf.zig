@@ -374,63 +374,66 @@ fn appendPrintfConversion(
 
     switch (spec.spec) {
         'd', 'i' => {
-            const rendered = try formatPrintfSignedInteger(
+            try appendPrintfSignedInteger(
+                Writer,
                 allocator,
+                stdout,
                 spec,
                 try parsePrintfSigned(Writer, allocator, stderr, status, stderr_before_stdout, arg),
             );
-            defer allocator.free(rendered);
-            try stdout.appendSlice(allocator, rendered);
             return true;
         },
         'u' => {
-            const rendered = try formatPrintfUnsignedInteger(
+            try appendPrintfUnsignedInteger(
+                Writer,
                 allocator,
+                stdout,
                 spec,
                 try parsePrintfUnsigned(Writer, allocator, stderr, status, stderr_before_stdout, arg),
                 .decimal,
             );
-            defer allocator.free(rendered);
-            try stdout.appendSlice(allocator, rendered);
             return true;
         },
         'o' => {
-            const rendered = try formatPrintfUnsignedInteger(
+            try appendPrintfUnsignedInteger(
+                Writer,
                 allocator,
+                stdout,
                 spec,
                 try parsePrintfUnsigned(Writer, allocator, stderr, status, stderr_before_stdout, arg),
                 .octal,
             );
-            defer allocator.free(rendered);
-            try stdout.appendSlice(allocator, rendered);
             return true;
         },
         'x' => {
-            const rendered = try formatPrintfUnsignedInteger(
+            try appendPrintfUnsignedInteger(
+                Writer,
                 allocator,
+                stdout,
                 spec,
                 try parsePrintfUnsigned(Writer, allocator, stderr, status, stderr_before_stdout, arg),
                 .lower_hex,
             );
-            defer allocator.free(rendered);
-            try stdout.appendSlice(allocator, rendered);
             return true;
         },
         'X' => {
-            const rendered = try formatPrintfUnsignedInteger(
+            try appendPrintfUnsignedInteger(
+                Writer,
                 allocator,
+                stdout,
                 spec,
                 try parsePrintfUnsigned(Writer, allocator, stderr, status, stderr_before_stdout, arg),
                 .upper_hex,
             );
-            defer allocator.free(rendered);
-            try stdout.appendSlice(allocator, rendered);
             return true;
         },
         else => {},
     }
 
     if (spec.spec == 'b') {
+        if (spec.width == null and spec.precision == null) {
+            return appendPrintfEscapedString(Writer, allocator, stdout, arg);
+        }
         var escaped: std.ArrayList(u8) = .empty;
         errdefer escaped.deinit(allocator);
         const keep_going = try appendPrintfEscapedString(std.ArrayList(u8), allocator, &escaped, arg);
@@ -440,21 +443,17 @@ fn appendPrintfConversion(
         return keep_going;
     }
 
-    const rendered: []u8 = switch (spec.spec) {
-        's' => try formatPrintfString(allocator, arg, spec.precision),
-        'c' => try allocator.dupe(u8, if (arg.len == 0) &[_]u8{0} else arg[0..1]),
-        else => blk: {
-            try printfDiagnostic(Writer, allocator, stderr, status, "invalid conversion");
-            break :blk try allocator.alloc(u8, 0);
+    switch (spec.spec) {
+        's' => try appendPadded(Writer, allocator, stdout, truncatePrintfBytes(arg, spec.precision), spec),
+        'c' => {
+            const byte: [1]u8 = .{if (arg.len == 0) 0 else arg[0]};
+            try appendPadded(Writer, allocator, stdout, &byte, spec);
         },
-    };
-    defer allocator.free(rendered);
-    try appendPadded(Writer, allocator, stdout, rendered, spec);
+        else => {
+            try printfDiagnostic(Writer, allocator, stderr, status, "invalid conversion");
+        },
+    }
     return true;
-}
-
-fn formatPrintfString(allocator: std.mem.Allocator, arg: []const u8, precision: ?usize) ![]u8 {
-    return allocator.dupe(u8, truncatePrintfBytes(arg, precision));
 }
 
 fn truncatePrintfBytes(text: []const u8, precision: ?usize) []const u8 {
@@ -462,33 +461,43 @@ fn truncatePrintfBytes(text: []const u8, precision: ?usize) []const u8 {
     return text[0..limit];
 }
 
-fn formatPrintfSignedInteger(allocator: std.mem.Allocator, spec: PrintfSpec, value: i64) ![]u8 {
+fn appendPrintfSignedInteger(
+    comptime Writer: type,
+    allocator: std.mem.Allocator,
+    stdout: *Writer,
+    spec: PrintfSpec,
+    value: i64,
+) !void {
     const negative = value < 0;
     const magnitude: u64 = if (negative) @as(u64, @intCast(-(value + 1))) + 1 else @intCast(value);
-    return formatPrintfInteger(allocator, spec, magnitude, negative, .decimal);
+    try appendPrintfInteger(Writer, allocator, stdout, spec, magnitude, negative, .decimal);
 }
 
-fn formatPrintfUnsignedInteger(
+fn appendPrintfUnsignedInteger(
+    comptime Writer: type,
     allocator: std.mem.Allocator,
+    stdout: *Writer,
     spec: PrintfSpec,
     value: u64,
     base: PrintfIntegerBase,
-) ![]u8 {
+) !void {
     var unsigned_spec = spec;
     unsigned_spec.sign_plus = false;
     unsigned_spec.sign_space = false;
-    return formatPrintfInteger(allocator, unsigned_spec, value, false, base);
+    try appendPrintfInteger(Writer, allocator, stdout, unsigned_spec, value, false, base);
 }
 
-fn formatPrintfInteger(
+fn appendPrintfInteger(
+    comptime Writer: type,
     allocator: std.mem.Allocator,
+    stdout: *Writer,
     spec: PrintfSpec,
     magnitude: u64,
     negative: bool,
     base: PrintfIntegerBase,
-) ![]u8 {
-    const raw_digits = try formatPrintfIntegerDigits(allocator, magnitude, base);
-    defer allocator.free(raw_digits);
+) !void {
+    var digit_buffer: [64]u8 = undefined;
+    const raw_digits = try formatPrintfIntegerDigits(&digit_buffer, magnitude, base);
 
     var digits: []const u8 = raw_digits;
     if (spec.precision == 0 and magnitude == 0) digits = "";
@@ -535,22 +544,19 @@ fn formatPrintfInteger(
     const width_zeroes: usize = if (use_zero_width_pad) width_pad else 0;
     const trailing_spaces: usize = if (spec.left_adjust) width_pad else 0;
 
-    var out: std.ArrayList(u8) = .empty;
-    errdefer out.deinit(allocator);
-    try out.appendNTimes(allocator, ' ', leading_spaces);
-    try out.appendSlice(allocator, prefix);
-    try out.appendNTimes(allocator, '0', width_zeroes + precision_zeroes);
-    try out.appendSlice(allocator, digits);
-    try out.appendNTimes(allocator, ' ', trailing_spaces);
-    return out.toOwnedSlice(allocator);
+    try stdout.appendNTimes(allocator, ' ', leading_spaces);
+    try stdout.appendSlice(allocator, prefix);
+    try stdout.appendNTimes(allocator, '0', width_zeroes + precision_zeroes);
+    try stdout.appendSlice(allocator, digits);
+    try stdout.appendNTimes(allocator, ' ', trailing_spaces);
 }
 
-fn formatPrintfIntegerDigits(allocator: std.mem.Allocator, value: u64, base: PrintfIntegerBase) ![]u8 {
+fn formatPrintfIntegerDigits(buffer: []u8, value: u64, base: PrintfIntegerBase) ![]const u8 {
     return switch (base) {
-        .decimal => std.fmt.allocPrint(allocator, "{d}", .{value}),
-        .octal => std.fmt.allocPrint(allocator, "{o}", .{value}),
-        .lower_hex => std.fmt.allocPrint(allocator, "{x}", .{value}),
-        .upper_hex => std.fmt.allocPrint(allocator, "{X}", .{value}),
+        .decimal => std.fmt.bufPrint(buffer, "{d}", .{value}),
+        .octal => std.fmt.bufPrint(buffer, "{o}", .{value}),
+        .lower_hex => std.fmt.bufPrint(buffer, "{x}", .{value}),
+        .upper_hex => std.fmt.bufPrint(buffer, "{X}", .{value}),
     };
 }
 
@@ -1276,6 +1282,53 @@ fn appendOctalEscape(
         try stdout.append(allocator, @intCast(value & 0xff));
         index.* = cursor;
     }
+}
+
+const FixedTestWriter = struct {
+    bytes: [256]u8 = undefined,
+    len: usize = 0,
+
+    fn append(self: *FixedTestWriter, allocator: std.mem.Allocator, byte: u8) !void {
+        _ = allocator;
+        try self.writeAll(&.{byte});
+    }
+
+    fn appendSlice(self: *FixedTestWriter, allocator: std.mem.Allocator, bytes: []const u8) !void {
+        _ = allocator;
+        try self.writeAll(bytes);
+    }
+
+    fn appendNTimes(self: *FixedTestWriter, allocator: std.mem.Allocator, byte: u8, count: usize) !void {
+        _ = allocator;
+        for (0..count) |_| try self.writeAll(&.{byte});
+    }
+
+    fn writeAll(self: *FixedTestWriter, bytes: []const u8) !void {
+        if (self.len + bytes.len > self.bytes.len) return error.NoSpaceLeft;
+        @memcpy(self.bytes[self.len..][0..bytes.len], bytes);
+        self.len += bytes.len;
+    }
+
+    fn written(self: *const FixedTestWriter) []const u8 {
+        return self.bytes[0..self.len];
+    }
+};
+
+test "printf formats integer string and character conversions without allocation" {
+    var stdout: FixedTestWriter = .{};
+    var stderr: FixedTestWriter = .{};
+
+    const status = try evaluate(
+        FixedTestWriter,
+        std.testing.failing_allocator,
+        &.{ "printf", "<%+05d><%.3s><%c><%b>", "7", "abcdef", "Z", "A\\nB" },
+        &stdout,
+        &stderr,
+    );
+
+    try std.testing.expectEqual(@as(ExitStatus, 0), status);
+    try std.testing.expectEqualStrings("<+0007><abc><Z><A\nB>", stdout.written());
+    try std.testing.expectEqualStrings("", stderr.written());
 }
 
 test "printf evaluates POSIX format reuse and escapes" {
