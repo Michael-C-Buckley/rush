@@ -1061,23 +1061,14 @@ fn appendMaybePathnameExpandedField(
 }
 
 fn appendPathnameExpandedField(shell: anytype, fields: *std.ArrayList([]const u8), field: []const u8) !void {
-    if (shell.state.options.noglob or !containsPatternMeta(field) or std.mem.indexOfScalar(u8, field, '/') != null) {
+    if (shell.state.options.noglob or !containsPatternMeta(field)) {
         try fields.append(shell.scratchAllocator(), field);
         return;
     }
 
     var matches: std.ArrayList([]const u8) = .empty;
     const allocator = shell.scratchAllocator();
-    const directory = shell.host.listDir(allocator, ".") catch {
-        try fields.append(allocator, field);
-        return;
-    };
-
-    for (directory.entries) |entry| {
-        if ((entry.name[0] != '.' or (field.len != 0 and field[0] == '.')) and globMatches(field, entry.name)) {
-            try matches.append(allocator, entry.name);
-        }
-    }
+    try expandPathnamePattern(shell, allocator, &matches, "", field);
 
     if (matches.items.len == 0) {
         try fields.append(allocator, field);
@@ -1085,6 +1076,48 @@ fn appendPathnameExpandedField(shell: anytype, fields: *std.ArrayList([]const u8
     }
     std.mem.sort([]const u8, matches.items, {}, stringLessThan);
     try fields.appendSlice(allocator, matches.items);
+}
+
+fn expandPathnamePattern(
+    shell: anytype,
+    allocator: std.mem.Allocator,
+    matches: *std.ArrayList([]const u8),
+    prefix: []const u8,
+    remaining: []const u8,
+) !void {
+    const slash_index = std.mem.indexOfScalar(u8, remaining, '/');
+    const component = if (slash_index) |index| remaining[0..index] else remaining;
+    const rest = if (slash_index) |index| remaining[index + 1 ..] else "";
+    if (component.len == 0) return;
+
+    if (!containsPatternMeta(component)) {
+        const candidate = try joinPathComponent(allocator, prefix, component);
+        if (rest.len == 0) {
+            try matches.append(allocator, candidate);
+        } else {
+            try expandPathnamePattern(shell, allocator, matches, candidate, rest);
+        }
+        return;
+    }
+
+    const directory_path = if (prefix.len == 0) "." else prefix;
+    const directory = shell.host.listDir(allocator, directory_path) catch return;
+    for (directory.entries) |entry| {
+        if (entry.name[0] == '.' and component[0] != '.') continue;
+        if (!globMatches(component, entry.name)) continue;
+
+        const candidate = try joinPathComponent(allocator, prefix, entry.name);
+        if (rest.len == 0) {
+            try matches.append(allocator, candidate);
+        } else {
+            try expandPathnamePattern(shell, allocator, matches, candidate, rest);
+        }
+    }
+}
+
+fn joinPathComponent(allocator: std.mem.Allocator, prefix: []const u8, component: []const u8) ![]const u8 {
+    if (prefix.len == 0) return allocator.dupe(u8, component);
+    return std.fmt.allocPrint(allocator, "{s}/{s}", .{ prefix, component });
 }
 
 fn stringLessThan(_: void, lhs: []const u8, rhs: []const u8) bool {
