@@ -44,7 +44,7 @@
 <span class="cmd">printf</span> <span class="str">'%s\n'</span> <span class="var">${1:=fallback}</span>
 <span class="cmd">printf</span> <span class="str">'after\n'</span></pre>
 
-  <p>POSIX <code>:=</code> assigns only shell variables. Rush reports the error and does not print <code>after</code>. This matches dash, ksh93, and yash. Bash POSIX mode reports the error but continues; zsh <code>sh</code> emulation assigns the parameter.</p>
+  <p>POSIX <code>:=</code> assigns only shell variables. Rush reports the error and does not print <code>after</code>. This matches dash, ksh93, and yash. Bash POSIX mode reports the error but continues.</p>
 
   <h3 id="non-integer-arithmetic-variables"><a href="#non-integer-arithmetic-variables">Non-integer variables in arithmetic expansion</a></h3>
 

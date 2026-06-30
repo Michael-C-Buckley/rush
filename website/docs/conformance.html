@@ -63,10 +63,10 @@
   <ul>
     <li><strong>dash</strong>, representing Debian and Ubuntu <code>/bin/sh</code> behavior;</li>
     <li><strong>current stable GNU Bash in POSIX mode</strong>, representing the most widely deployed shell in its POSIX-facing configuration;</li>
-    <li><strong>zsh in sh emulation</strong>, representing modern macOS's default interactive shell and an independent Bourne-family implementation.</li>
+    <li><strong>yash</strong>, representing a strict POSIX-focused shell implementation.</li>
   </ul>
 
-  <p>When they agree, normally follow them. When they disagree, consult platform or migration references as needed: FreeBSD <code>/bin/sh</code>, macOS <code>/bin/sh</code>, BusyBox ash, yash, ksh93, Bash default mode, or macOS Bash 3.2.</p>
+  <p>When they agree, normally follow them. When they disagree, consult platform or migration references as needed: FreeBSD <code>/bin/sh</code>, macOS <code>/bin/sh</code>, BusyBox ash, ksh93, Bash default mode, or macOS Bash 3.2.</p>
 
   <p>Run platform shells when available, in platform CI, or when the decision affects those systems.</p>
 
@@ -114,7 +114,7 @@
 
   <p>For Bash extensions, use current stable GNU Bash default mode as the main reference. Treat macOS Bash 3.2 as a migration signal.</p>
 
-  <p>For cross-shell extensions, survey ksh93, mksh, zsh, BusyBox ash, dash, or FreeBSD sh as needed. Aim for practical compatibility, not bug-for-bug emulation.</p>
+  <p>For cross-shell extensions, survey ksh93, mksh, BusyBox ash, dash, or FreeBSD sh as needed. Aim for practical compatibility, not bug-for-bug emulation.</p>
 
   <h2 id="bash-compatibility"><a href="#bash-compatibility">Bash compatibility</a></h2>
 
