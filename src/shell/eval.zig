@@ -1052,7 +1052,7 @@ fn evalCommandBuiltin(
                 restored_assignments = true;
                 return evaluated;
             },
-            .alias, .break_, .continue_, .exit, .getopts, .kill, .printf, .return_, .set, .shift, .trap, .umask, .unalias, .unset => {
+            .alias, .break_, .continue_, .exit, .getopts, .kill, .printf, .return_, .set, .shift, .times, .trap, .umask, .unalias, .unset => {
                 const evaluated = try builtin.eval(shell, definition, args[index..]);
                 restoreVariables(shell, saved);
                 restored_assignments = true;

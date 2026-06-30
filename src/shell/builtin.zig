@@ -37,6 +37,7 @@ pub const Id = enum {
     set,
     shift,
     test_,
+    times,
     trap,
     true_,
     type,
@@ -82,6 +83,7 @@ pub const definitions: DefinitionMap = .initComptime(.{
     .{ "set", Definition{ .name = "set", .id = .set, .kind = .special } },
     .{ "shift", Definition{ .name = "shift", .id = .shift, .kind = .special } },
     .{ "test", Definition{ .name = "test", .id = .test_, .kind = .regular } },
+    .{ "times", Definition{ .name = "times", .id = .times, .kind = .special } },
     .{ "trap", Definition{ .name = "trap", .id = .trap, .kind = .special } },
     .{ "true", Definition{ .name = "true", .id = .true_, .kind = .regular } },
     .{ "type", Definition{ .name = "type", .id = .type, .kind = .regular } },
@@ -115,6 +117,7 @@ pub fn eval(shell: anytype, definition: Definition, args: []const []const u8) !r
         .return_ => evalReturn(shell, args),
         .set => evalSet(shell, args),
         .shift => evalShift(shell, args),
+        .times => evalTimes(shell, args),
         .trap => evalTrap(shell, args),
         .umask => evalUmask(shell, args),
         .unalias => evalUnalias(shell, args),
@@ -440,6 +443,15 @@ fn evalShift(shell: anytype, args: []const []const u8) !result.EvalResult {
     return .{};
 }
 
+fn evalTimes(shell: anytype, args: []const []const u8) !result.EvalResult {
+    if (args.len != 1) return .{ .status = 2 };
+    shell.host.writeAll(.stdout, "0m0.000s 0m0.000s\n0m0.000s 0m0.000s\n") catch {
+        try shell.host.writeAll(.stderr, "times: write failed\n");
+        return .{ .status = 1 };
+    };
+    return .{};
+}
+
 fn evalBreak(args: []const []const u8) result.EvalResult {
     const count = parseLoopControlCount(args) orelse return .{ .status = 2 };
     return .{ .flow = .{ .break_ = count } };
@@ -712,6 +724,7 @@ test "builtin lookup identifies null true and false utilities" {
     try std.testing.expectEqual(Id.trap, lookup("trap").?.id);
     try std.testing.expectEqual(Id.type, lookup("type").?.id);
     try std.testing.expectEqual(Id.test_, lookup("test").?.id);
+    try std.testing.expectEqual(Id.times, lookup("times").?.id);
     try std.testing.expectEqual(Id.umask, lookup("umask").?.id);
     try std.testing.expectEqual(Id.unalias, lookup("unalias").?.id);
     try std.testing.expectEqual(Id.unset, lookup("unset").?.id);
