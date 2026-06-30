@@ -810,10 +810,11 @@
             .script =
             \\printf data >in
             \\out=$(exec cat <in | wc -c)
-            \\printf '<%s>\n' "$out"
+            \\set -- $out
+            \\printf '<%s>\n' "$1"
             ,
             .stdout =
-            \\<       4>
+            \\<4>
             \\
             ,
             .stderr = "",
