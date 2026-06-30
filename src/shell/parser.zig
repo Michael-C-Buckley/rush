@@ -163,7 +163,7 @@ const Parser = struct {
             .body = compound.body,
             .redirections = compound.redirections,
         };
-        definition.validate();
+        if (self.canValidateHereDocs()) definition.validate();
         return definition;
     }
 
@@ -193,7 +193,7 @@ const Parser = struct {
 
         const redirections = try self.parseRedirectionList();
         const invocation: ast.CompoundInvocation = .{ .body = body, .redirections = redirections };
-        invocation.validate();
+        if (self.canValidateHereDocs()) invocation.validate();
         return invocation;
     }
 
@@ -215,7 +215,7 @@ const Parser = struct {
                 .branches = try branches.toOwnedSlice(self.allocator),
                 .else_body = else_body,
             };
-            command.validate();
+            if (self.canValidateHereDocs()) command.validate();
             return command;
         }
     }
@@ -234,7 +234,7 @@ const Parser = struct {
         _ = self.eatReserved(.done_kw) orelse return error.UnexpectedToken;
 
         const command: ast.LoopCommand = .{ .kind = kind, .condition = condition, .body = body };
-        command.validate();
+        if (self.canValidateHereDocs()) command.validate();
         return command;
     }
 
@@ -260,7 +260,7 @@ const Parser = struct {
         _ = self.eatReserved(.done_kw) orelse return error.UnexpectedToken;
 
         const command: ast.ForCommand = .{ .name = name_token.text, .words = words, .body = body };
-        command.validate();
+        if (self.canValidateHereDocs()) command.validate();
         return command;
     }
 
@@ -280,7 +280,7 @@ const Parser = struct {
         _ = self.eatReserved(.esac_kw).?;
 
         const command: ast.CaseCommand = .{ .word = word, .arms = try arms.toOwnedSlice(self.allocator) };
-        command.validate();
+        if (self.canValidateHereDocs()) command.validate();
         return command;
     }
 
@@ -310,7 +310,7 @@ const Parser = struct {
             .body = body,
             .fallthrough = fallthrough,
         };
-        arm.validate();
+        if (self.canValidateHereDocs()) arm.validate();
         return arm;
     }
 
@@ -355,8 +355,12 @@ const Parser = struct {
             .redirections = redirection_items,
             .span = command_span.?,
         };
-        if (!hasPendingHereDoc(command.redirections)) command.validate();
+        if (self.canValidateHereDocs()) command.validate();
         return command;
+    }
+
+    fn canValidateHereDocs(self: Parser) bool {
+        return self.pending_here_docs.items.len == 0;
     }
 
     fn parseRedirectionList(self: *Parser) ParserError![]const ast.Redirection {
@@ -1066,15 +1070,6 @@ fn stripLeadingTabs(line: []const u8) []const u8 {
     var index: usize = 0;
     while (index < line.len and line[index] == '\t') index += 1;
     return line[index..];
-}
-
-fn hasPendingHereDoc(redirections: []const ast.Redirection) bool {
-    for (redirections) |redirection| {
-        if ((redirection.op == .here_doc or redirection.op == .here_doc_strip_tabs) and redirection.here_doc == null) {
-            return true;
-        }
-    }
-    return false;
 }
 
 fn scanParameterName(text: []const u8, start: usize, end: usize) usize {
