@@ -2,6 +2,7 @@
 
 const std = @import("std");
 const zig_builtin = @import("builtin");
+const uucode = @import("uucode");
 
 const ast = @import("ast.zig");
 const builtin = @import("builtin.zig");
@@ -2921,6 +2922,15 @@ fn globMatches(pattern: PathnamePattern, text: []const u8) bool {
 
 fn globMatchesFrom(pattern: PathnamePattern, pattern_index: usize, text: []const u8, text_index: usize) bool {
     if (pattern_index == pattern.text.len) return text_index == text.len;
+    if (pattern.byteIsSpecial(pattern_index) and pattern.text[pattern_index] == '\\' and pattern_index + 1 < pattern.text.len) {
+        if (text_index == text.len) return false;
+        const pattern_len = utf8SequenceLength(pattern.text[pattern_index + 1 ..]);
+        if (pattern_index + 1 + pattern_len > pattern.text.len or text_index + pattern_len > text.len) return false;
+        if (!std.mem.eql(u8, pattern.text[pattern_index + 1 ..][0..pattern_len], text[text_index..][0..pattern_len])) {
+            return false;
+        }
+        return globMatchesFrom(pattern, pattern_index + 1 + pattern_len, text, text_index + pattern_len);
+    }
     if (pattern.byteIsSpecial(pattern_index) and pattern.text[pattern_index] == '*') {
         var next_pattern = pattern_index + 1;
         while (next_pattern < pattern.text.len and pattern.byteIsSpecial(next_pattern) and
@@ -2968,7 +2978,13 @@ fn bracketExpressionMatches(pattern: PathnamePattern, start: usize, character: [
     }
     var matched = false;
     var saw_member = false;
-    while (index < pattern.text.len and pattern.text[index] != ']') {
+    while (index < pattern.text.len) {
+        if (pattern.text[index] == ']' and saw_member) break;
+        if (bracketNamedExpression(pattern.text, &index)) |named| {
+            saw_member = true;
+            matched = matched or bracketNamedExpressionMatches(named, character);
+            continue;
+        }
         const member_len = utf8SequenceLength(pattern.text[index..]);
         if (index + member_len > pattern.text.len) return null;
         const member = pattern.text[index..][0..member_len];
@@ -2998,7 +3014,12 @@ fn bracketExpressionEnd(pattern: PathnamePattern, start: usize) ?usize {
         index += 1;
     }
     var saw_member = false;
-    while (index < pattern.text.len and pattern.text[index] != ']') {
+    while (index < pattern.text.len) {
+        if (pattern.text[index] == ']' and saw_member) break;
+        if (bracketNamedExpression(pattern.text, &index) != null) {
+            saw_member = true;
+            continue;
+        }
         const member_len = utf8SequenceLength(pattern.text[index..]);
         if (index + member_len > pattern.text.len) return null;
         index += member_len;
@@ -3019,6 +3040,91 @@ fn bracketExpressionEnd(pattern: PathnamePattern, start: usize) ?usize {
 fn bracketRangeMatches(start: []const u8, end: []const u8, character: []const u8) bool {
     if (start.len != 1 or end.len != 1 or character.len != 1) return false;
     return start[0] <= character[0] and character[0] <= end[0];
+}
+
+const BracketNamedExpression = struct {
+    kind: u8,
+    name: []const u8,
+};
+
+fn bracketNamedExpression(text: []const u8, index: *usize) ?BracketNamedExpression {
+    if (index.* + 3 >= text.len or text[index.*] != '[') return null;
+    const kind = text[index.* + 1];
+    const close = switch (kind) {
+        ':', '.', '=' => kind,
+        else => return null,
+    };
+    const name_start = index.* + 2;
+    var cursor = name_start;
+    while (cursor + 1 < text.len) : (cursor += 1) {
+        if (text[cursor] == close and text[cursor + 1] == ']') {
+            const named: BracketNamedExpression = .{ .kind = kind, .name = text[name_start..cursor] };
+            index.* = cursor + 2;
+            return named;
+        }
+    }
+    return null;
+}
+
+fn bracketNamedExpressionMatches(named: BracketNamedExpression, character: []const u8) bool {
+    return switch (named.kind) {
+        ':' => characterClassMatches(named.name, character),
+        '.', '=' => std.mem.eql(u8, named.name, character),
+        else => false,
+    };
+}
+
+fn characterClassMatches(name: []const u8, character: []const u8) bool {
+    const class = std.meta.stringToEnum(PatternCharacterClass, name) orelse return false;
+    const codepoint = std.unicode.utf8Decode(character) catch return false;
+    const category = uucode.get(.general_category, codepoint);
+    return switch (class) {
+        .digit => category == .number_decimal_digit,
+        .alpha => isCategoryLetter(category),
+        .alnum => isCategoryLetter(category) or category == .number_decimal_digit,
+        .lower => category == .letter_lowercase,
+        .upper => category == .letter_uppercase,
+        .punct => switch (category) {
+            .punctuation_connector,
+            .punctuation_dash,
+            .punctuation_open,
+            .punctuation_close,
+            .punctuation_initial_quote,
+            .punctuation_final_quote,
+            .punctuation_other,
+            => true,
+            else => false,
+        },
+        .space => switch (category) {
+            .separator_space,
+            .separator_line,
+            .separator_paragraph,
+            => true,
+            else => codepoint == '\t' or codepoint == '\n' or codepoint == '\r' or codepoint == 0x0b or codepoint == 0x0c,
+        },
+    };
+}
+
+const PatternCharacterClass = enum {
+    alnum,
+    alpha,
+    digit,
+    lower,
+    punct,
+    space,
+    upper,
+};
+
+fn isCategoryLetter(category: uucode.types.GeneralCategory) bool {
+    return switch (category) {
+        .letter_uppercase,
+        .letter_lowercase,
+        .letter_titlecase,
+        .letter_modifier,
+        .letter_other,
+        => true,
+        else => false,
+    };
 }
 
 fn isDefaultIfsWhitespace(byte: u8) bool {
@@ -3950,15 +4056,17 @@ fn removePrefix(value: []const u8, pattern: []const u8, size: RemovalSize) []con
     switch (size) {
         .small => {
             var cut: usize = 0;
-            while (cut <= value.len) : (cut += 1) {
+            while (cut <= value.len) : (cut = nextPatternCut(value, cut)) {
                 if (patternMatches(pattern, value[0..cut])) return value[cut..];
+                if (cut == value.len) break;
             }
         },
         .large => {
-            var cut = value.len + 1;
-            while (cut != 0) {
-                cut -= 1;
+            var cut = value.len;
+            while (true) {
                 if (patternMatches(pattern, value[0..cut])) return value[cut..];
+                if (cut == 0) break;
+                cut = previousPatternCut(value, cut);
             }
         },
     }
@@ -3968,69 +4076,39 @@ fn removePrefix(value: []const u8, pattern: []const u8, size: RemovalSize) []con
 fn removeSuffix(value: []const u8, pattern: []const u8, size: RemovalSize) []const u8 {
     switch (size) {
         .small => {
-            var cut = value.len + 1;
-            while (cut != 0) {
-                cut -= 1;
+            var cut = value.len;
+            while (true) {
                 if (patternMatches(pattern, value[cut..])) return value[0..cut];
+                if (cut == 0) break;
+                cut = previousPatternCut(value, cut);
             }
         },
         .large => {
             var cut: usize = 0;
-            while (cut <= value.len) : (cut += 1) {
+            while (cut <= value.len) : (cut = nextPatternCut(value, cut)) {
                 if (patternMatches(pattern, value[cut..])) return value[0..cut];
+                if (cut == value.len) break;
             }
         },
     }
     return value;
 }
 
+fn nextPatternCut(value: []const u8, cut: usize) usize {
+    if (cut >= value.len) return value.len + 1;
+    return cut + utf8SequenceLength(value[cut..]);
+}
+
+fn previousPatternCut(value: []const u8, cut: usize) usize {
+    std.debug.assert(cut <= value.len);
+    if (cut == 0) return 0;
+    var previous = cut - 1;
+    while (previous > 0 and (value[previous] & 0xc0) == 0x80) previous -= 1;
+    return previous;
+}
+
 fn patternMatches(pattern: []const u8, text: []const u8) bool {
-    if (pattern.len == 0) return text.len == 0;
-    return switch (pattern[0]) {
-        '\\' => if (pattern.len >= 2)
-            text.len != 0 and pattern[1] == text[0] and patternMatches(pattern[2..], text[1..])
-        else
-            text.len != 0 and pattern[0] == text[0] and patternMatches(pattern[1..], text[1..]),
-        '*' => patternMatchesStar(pattern[1..], text),
-        '?' => text.len != 0 and patternMatches(pattern[1..], text[1..]),
-        '[' => matchBracketPattern(pattern, text),
-        else => text.len != 0 and pattern[0] == text[0] and patternMatches(pattern[1..], text[1..]),
-    };
-}
-
-fn patternMatchesStar(pattern: []const u8, text: []const u8) bool {
-    if (pattern.len == 0) return true;
-    var offset: usize = 0;
-    while (offset <= text.len) : (offset += 1) {
-        if (patternMatches(pattern, text[offset..])) return true;
-    }
-    return false;
-}
-
-fn matchBracketPattern(pattern: []const u8, text: []const u8) bool {
-    if (text.len == 0) return false;
-    const close = std.mem.indexOfScalarPos(u8, pattern, 1, ']') orelse {
-        return pattern[0] == text[0] and patternMatches(pattern[1..], text[1..]);
-    };
-    if (bracketContains(pattern[1..close], text[0])) return patternMatches(pattern[close + 1 ..], text[1..]);
-    return false;
-}
-
-fn bracketContains(expression: []const u8, byte: u8) bool {
-    const negated = expression.len != 0 and (expression[0] == '!' or expression[0] == '^');
-    const members = if (negated) expression[1..] else expression;
-    var matched = false;
-    var index: usize = 0;
-    while (index < members.len) {
-        if (index + 2 < members.len and members[index + 1] == '-') {
-            if (byte >= members[index] and byte <= members[index + 2]) matched = true;
-            index += 3;
-        } else {
-            if (byte == members[index]) matched = true;
-            index += 1;
-        }
-    }
-    return if (negated) !matched else matched;
+    return globMatches(.{ .text = pattern }, text);
 }
 
 fn isParameterSet(parameter: ast.ParameterExpansion, value: ?[]const u8) bool {
