@@ -175,6 +175,13 @@ fn evalSimple(shell: anytype, command: ast.SimpleCommand) EvalError!result.EvalR
     const scratch = try shell.beginScratchScope();
     defer scratch.end();
 
+    return evalSimpleScoped(shell, command) catch |err| switch (err) {
+        error.ExpansionError => .{ .status = 1, .flow = .{ .fatal = 1 } },
+        else => return err,
+    };
+}
+
+fn evalSimpleScoped(shell: anytype, command: ast.SimpleCommand) EvalError!result.EvalResult {
     var redirections = applyRedirections(shell, command.redirections) catch |err| switch (err) {
         error.OutOfMemory => return err,
         else => return .{ .status = 1 },
@@ -381,6 +388,7 @@ fn copyParameterExpansion(allocator: std.mem.Allocator, parameter: ast.Parameter
         .colon = parameter.colon,
         .op = parameter.op,
         .word = if (parameter.word) |word| try copyWord(allocator, word) else null,
+        .span = parameter.span,
     };
 }
 
@@ -916,6 +924,7 @@ fn expandParameter(shell: anytype, parameter: ast.ParameterExpansion) EvalError!
             .default_value => expandParameterDefault(shell, parameter),
             .assign_default => expandParameterAssignDefault(shell, parameter),
             .alternate_value => expandParameterAlternate(shell, parameter),
+            .error_if_unset => expandParameterErrorIfUnset(shell, parameter),
             else => "",
         };
     }
@@ -963,8 +972,35 @@ fn expandParameterAlternate(shell: anytype, parameter: ast.ParameterExpansion) E
     return expandWord(shell, parameter.word.?);
 }
 
+fn expandParameterErrorIfUnset(shell: anytype, parameter: ast.ParameterExpansion) EvalError![]const u8 {
+    const name = switch (parameter.parameter) {
+        .variable => |variable_name| variable_name,
+        else => return "",
+    };
+    const value = parameterValue(shell, name);
+    if (isParameterSet(parameter, value)) return value.?;
+
+    const message = try expandWord(shell, parameter.word.?);
+    try writeExpansionDiagnostic(shell, parameter, name, message);
+    return error.ExpansionError;
+}
+
 fn isParameterSet(parameter: ast.ParameterExpansion, value: ?[]const u8) bool {
     return value != null and (!parameter.colon or value.?.len != 0);
+}
+
+fn writeExpansionDiagnostic(
+    shell: anytype,
+    parameter: ast.ParameterExpansion,
+    name: []const u8,
+    message: []const u8,
+) !void {
+    const diagnostic = try std.fmt.allocPrint(
+        shell.scratchAllocator(),
+        "{}: expansion error: {s}: {s}\n",
+        .{ parameter.span.start_line, name, message },
+    );
+    try shell.host.writeAll(.stderr, diagnostic);
 }
 
 fn parameterValue(shell: anytype, name: []const u8) ?[]const u8 {

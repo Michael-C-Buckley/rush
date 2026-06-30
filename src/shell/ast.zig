@@ -192,9 +192,11 @@ pub const ParameterExpansion = struct {
     colon: bool = false,
     op: ?ParameterOperator = null,
     word: ?Word = null,
+    span: source.Span = .{},
 
     pub fn validate(self: ParameterExpansion) void {
         self.parameter.validate();
+        self.span.validate();
         if (self.op == null) {
             std.debug.assert(!self.colon);
             std.debug.assert(self.word == null);

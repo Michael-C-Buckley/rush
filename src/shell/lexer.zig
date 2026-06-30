@@ -189,6 +189,12 @@ const Lexer = struct {
                 self.skipCommandSubstitution();
                 continue;
             }
+            if (byte == '$' and self.peekNextIs('{')) {
+                self.advanceOne();
+                self.advanceOne();
+                self.skipBracedParameter();
+                continue;
+            }
             if (isWordTerminator(byte)) break;
             self.advanceOne();
         }
@@ -239,6 +245,25 @@ const Lexer = struct {
             }
             if (byte == ')') depth -= 1;
             self.advanceOne();
+        }
+    }
+
+    fn skipBracedParameter(self: *Lexer) void {
+        var quote: ?u8 = null;
+        while (!self.atEnd()) {
+            const byte = self.peek();
+            if (quote) |delimiter| {
+                if (byte == delimiter) quote = null;
+                self.advanceOne();
+                continue;
+            }
+            if (byte == '\'' or byte == '"') {
+                quote = byte;
+                self.advanceOne();
+                continue;
+            }
+            self.advanceOne();
+            if (byte == '}') break;
         }
     }
 };

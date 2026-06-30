@@ -220,7 +220,11 @@ const Parser = struct {
         const equals_index = std.mem.indexOfScalar(u8, word_token.text, '=') orelse return null;
         if (!isAssignmentName(word_token.text[0..equals_index])) return null;
 
-        const value = try self.parseWordText(word_token.text[equals_index + 1 ..], word_token.span);
+        const value = try self.parseWordText(
+            word_token.text[equals_index + 1 ..],
+            word_token.span,
+            word_token.span.start + equals_index + 1,
+        );
         const assignment: ast.Assignment = .{
             .name = word_token.text[0..equals_index],
             .value = value,
@@ -232,10 +236,15 @@ const Parser = struct {
 
     fn parseWordToken(self: *Parser, word_token: token.Token) !ast.Word {
         std.debug.assert(word_token.kind == .word);
-        return self.parseWordText(word_token.text, word_token.span);
+        return self.parseWordText(word_token.text, word_token.span, word_token.span.start);
     }
 
-    fn parseWordText(self: *Parser, text: []const u8, span: source_mod.Span) ParserError!ast.Word {
+    fn parseWordText(
+        self: *Parser,
+        text: []const u8,
+        span: source_mod.Span,
+        source_start: usize,
+    ) ParserError!ast.Word {
         if (std.mem.indexOfAny(u8, text, "'\"$\\") == null) {
             const word: ast.Word = .{ .data = .{ .literal = text }, .span = span };
             word.validate();
@@ -244,7 +253,7 @@ const Parser = struct {
 
         var parts: std.ArrayList(ast.WordPart) = .empty;
         errdefer parts.deinit(self.allocator);
-        try self.appendWordParts(&parts, text, 0, text.len, null);
+        try self.appendWordParts(&parts, text, 0, text.len, null, source_start);
 
         const word: ast.Word = .{ .data = .{ .parts = try parts.toOwnedSlice(self.allocator) }, .span = span };
         word.validate();
@@ -258,6 +267,7 @@ const Parser = struct {
         start: usize,
         end: usize,
         quote: ?u8,
+        source_start: usize,
     ) ParserError!void {
         var index = start;
         var literal_start = start;
@@ -281,7 +291,7 @@ const Parser = struct {
 
                     var quoted_parts: std.ArrayList(ast.WordPart) = .empty;
                     errdefer quoted_parts.deinit(self.allocator);
-                    try self.appendWordParts(&quoted_parts, text, quote_start, index, '"');
+                    try self.appendWordParts(&quoted_parts, text, quote_start, index, '"', source_start);
                     try parts.append(self.allocator, .{
                         .double_quoted = try quoted_parts.toOwnedSlice(self.allocator),
                     });
@@ -321,7 +331,8 @@ const Parser = struct {
                             index += 1;
                             continue;
                         };
-                        if (try self.parseBracedParameter(text[name_start + 1 .. expansion_end])) |parameter| {
+                        const expansion_span = self.spanFromOffsets(source_start + index, source_start + expansion_end + 1);
+                        if (try self.parseBracedParameter(text[name_start + 1 .. expansion_end], expansion_span)) |parameter| {
                             if (literal_start < index) try parts.append(self.allocator, .{ .literal = text[literal_start..index] });
                             try parts.append(self.allocator, .{ .parameter = parameter });
                             index = expansion_end + 1;
@@ -332,7 +343,10 @@ const Parser = struct {
                     if (name_start < end and text[name_start] == '?') {
                         if (literal_start < index) try parts.append(self.allocator, .{ .literal = text[literal_start..index] });
                         try parts.append(self.allocator, .{
-                            .parameter = .{ .parameter = .{ .special = .question } },
+                            .parameter = .{
+                                .parameter = .{ .special = .question },
+                                .span = self.spanFromOffsets(source_start + index, source_start + name_start + 1),
+                            },
                         });
                         index = name_start + 1;
                         literal_start = index;
@@ -345,7 +359,10 @@ const Parser = struct {
                     }
                     if (literal_start < index) try parts.append(self.allocator, .{ .literal = text[literal_start..index] });
                     try parts.append(self.allocator, .{
-                        .parameter = .{ .parameter = .{ .variable = text[name_start..name_end] } },
+                        .parameter = .{
+                            .parameter = .{ .variable = text[name_start..name_end] },
+                            .span = self.spanFromOffsets(source_start + index, source_start + name_end),
+                        },
                     });
                     index = name_end;
                     literal_start = index;
@@ -359,12 +376,16 @@ const Parser = struct {
         if (literal_start < end) try parts.append(self.allocator, .{ .literal = text[literal_start..end] });
     }
 
-    fn parseBracedParameter(self: *Parser, content: []const u8) ParserError!?ast.ParameterExpansion {
+    fn parseBracedParameter(
+        self: *Parser,
+        content: []const u8,
+        span: source_mod.Span,
+    ) ParserError!?ast.ParameterExpansion {
         const name_end = scanParameterName(content, 0, content.len);
         if (name_end == 0) return null;
         const name = content[0..name_end];
         const rest = content[name_end..];
-        if (rest.len == 0) return .{ .parameter = .{ .variable = name } };
+        if (rest.len == 0) return .{ .parameter = .{ .variable = name }, .span = span };
 
         const colon = rest.len >= 2 and rest[0] == ':' and isParameterOperator(rest[1]);
         if (colon or isParameterOperator(rest[0])) {
@@ -374,7 +395,8 @@ const Parser = struct {
                 .parameter = .{ .variable = name },
                 .colon = colon,
                 .op = parameterOperator(operator_byte),
-                .word = try self.parseWordText(word_text, .{}),
+                .word = try self.parseWordText(word_text, .{}, 0),
+                .span = span,
             };
         }
 
@@ -393,6 +415,12 @@ const Parser = struct {
         const owned = try self.allocator.create(ast.Program);
         owned.* = program;
         return owned;
+    }
+
+    fn spanFromOffsets(self: Parser, start: usize, end: usize) source_mod.Span {
+        var position: source_mod.Position = .{ .source_id = self.source.id };
+        position.advance(self.source.text[0..start]);
+        return source_mod.Span.init(position, end);
     }
 
     fn skipSeparators(self: *Parser) void {
@@ -566,7 +594,7 @@ fn isAssignmentName(name: []const u8) bool {
 }
 
 fn isParameterOperator(byte: u8) bool {
-    return byte == '-' or byte == '=' or byte == '+';
+    return byte == '-' or byte == '=' or byte == '+' or byte == '?';
 }
 
 fn parameterOperator(byte: u8) ast.ParameterOperator {
@@ -574,6 +602,7 @@ fn parameterOperator(byte: u8) ast.ParameterOperator {
         '-' => .default_value,
         '=' => .assign_default,
         '+' => .alternate_value,
+        '?' => .error_if_unset,
         else => unreachable,
     };
 }
