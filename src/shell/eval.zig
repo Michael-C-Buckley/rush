@@ -441,7 +441,7 @@ fn evalCase(shell: anytype, command: ast.CaseCommand) EvalError!result.EvalResul
 
 fn caseArmMatches(shell: anytype, arm: ast.CaseArm, word: []const u8) EvalError!bool {
     for (arm.patterns) |pattern_word| {
-        const pattern = try expandWord(shell, pattern_word);
+        const pattern = try expandPatternWord(shell, pattern_word);
         if (patternMatches(pattern, word)) return true;
     }
     return false;
