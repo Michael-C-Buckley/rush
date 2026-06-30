@@ -766,6 +766,9 @@ fn evalSimpleScoped(shell: anytype, command: ast.SimpleCommand) EvalError!result
                 if (fields.len == 1) return .{};
                 return evalExecBuiltin(shell, fields);
             }
+            if ((definition.id == .break_ or definition.id == .continue_) and shell.state.loop_depth == 0) {
+                return .{ .status = 2 };
+            }
             const args = switch (definition.id) {
                 .break_, .continue_, .exit, .return_, .set, .shift, .trap, .unset => fields,
                 else => &[_][]const u8{name},
@@ -1829,13 +1832,18 @@ fn evalFunction(
 
     try applyExportedAssignments(shell, assignments);
     try shell.state.setPositionals(args);
+    const saved_loop_depth = shell.state.loop_depth;
+    shell.state.loop_depth = 0;
+    errdefer shell.state.loop_depth = saved_loop_depth;
     const evaluated = try evalCommand(shell, .{ .compound = .{
         .body = function.definition.body,
         .redirections = function.definition.redirections,
     } });
+    shell.state.loop_depth = saved_loop_depth;
     try restorePositionals(shell, saved_positionals);
     restored_positionals = true;
     if (evaluated.flow == .return_) return .{ .status = evaluated.status };
+    if (evaluated.flow == .break_ or evaluated.flow == .continue_) return .{ .status = 2 };
     return evaluated;
 }
 
