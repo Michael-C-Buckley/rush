@@ -7,6 +7,8 @@ const host = @import("../host.zig");
 
 extern "c" fn readdir(dir: *std.c.DIR) ?*std.c.dirent;
 
+var pending_signal_bits: std.atomic.Value(u64) = .init(0);
+
 pub const ReadError = host.ReadError;
 
 pub const WriteError = error{
@@ -180,15 +182,42 @@ pub fn setSignalIgnored(signal: u8) SignalDispositionError!void {
 
 pub fn setSignalDefault(signal: u8) SignalDispositionError!void {
     setSignalAction(signal, std.posix.SIG.DFL) catch return error.InvalidSignal;
+    _ = consumePendingSignal(signal);
+}
+
+pub fn installSignalTrap(signal: u8) SignalDispositionError!void {
+    setSignalAction(signal, trapSignalHandler) catch return error.InvalidSignal;
+}
+
+pub fn consumePendingSignal(signal: u8) bool {
+    if (signal >= 64) return false;
+    const mask = @as(u64, 1) << @intCast(signal);
+    return (pending_signal_bits.fetchAnd(~mask, .seq_cst) & mask) != 0;
 }
 
 fn setSignalAction(signal: u8, handler: ?std.posix.Sigaction.handler_fn) !void {
+    if (signal == @intFromEnum(std.posix.SIG.KILL) or signal == @intFromEnum(std.posix.SIG.STOP)) {
+        return error.InvalidSignal;
+    }
     var action: std.posix.Sigaction = .{
         .handler = .{ .handler = handler },
         .mask = std.posix.sigemptyset(),
         .flags = 0,
     };
     std.posix.sigaction(@enumFromInt(signal), &action, null);
+}
+
+fn trapSignalHandler(signal: std.posix.SIG) callconv(.c) void {
+    const number: u8 = @intCast(@intFromEnum(signal));
+    if (number >= 64) return;
+    const mask = @as(u64, 1) << @intCast(number);
+    _ = pending_signal_bits.fetchOr(mask, .seq_cst);
+}
+
+fn peekPendingSignal() ?u8 {
+    const bits = pending_signal_bits.load(.seq_cst);
+    if (bits == 0) return null;
+    return @intCast(@ctz(bits));
 }
 
 pub fn isExecutableZ(path: [:0]const u8) bool {
@@ -298,6 +327,14 @@ pub fn wait(pid: host.Pid) WaitError!host.WaitStatus {
     return switch (builtin.os.tag) {
         .linux => linuxWait(pid),
         .macos, .freebsd, .openbsd, .netbsd => libcWait(pid),
+        else => @compileError("unsupported host OS"),
+    };
+}
+
+pub fn waitInterruptible(pid: host.Pid) WaitError!host.WaitStatus {
+    return switch (builtin.os.tag) {
+        .linux => linuxWaitInterruptible(pid),
+        .macos, .freebsd, .openbsd, .netbsd => libcWaitInterruptible(pid),
         else => @compileError("unsupported host OS"),
     };
 }
@@ -980,6 +1017,19 @@ fn linuxWait(pid: host.Pid) WaitError!host.WaitStatus {
     }
 }
 
+fn linuxWaitInterruptible(pid: host.Pid) WaitError!host.WaitStatus {
+    const linux = std.os.linux;
+    var status: u32 = 0;
+    while (true) {
+        const wait_rc = linux.waitpid(pid, &status, 0);
+        switch (linux.errno(wait_rc)) {
+            .SUCCESS => return decodeWaitStatus(status),
+            .INTR => if (peekPendingSignal()) |signal| return .{ .signaled = signal } else continue,
+            else => return error.Unexpected,
+        }
+    }
+}
+
 fn libcSpawn(request: host.SpawnRequest) SpawnError!host.SpawnResult {
     const fork_rc = std.c.fork();
     switch (std.c.errno(fork_rc)) {
@@ -1019,6 +1069,18 @@ fn libcWait(pid: host.Pid) WaitError!host.WaitStatus {
         switch (std.c.errno(wait_rc)) {
             .SUCCESS => return decodeWaitStatus(@bitCast(status)),
             .INTR => continue,
+            else => return error.Unexpected,
+        }
+    }
+}
+
+fn libcWaitInterruptible(pid: host.Pid) WaitError!host.WaitStatus {
+    var status: c_int = 0;
+    while (true) {
+        const wait_rc = std.c.waitpid(pid, &status, 0);
+        switch (std.c.errno(wait_rc)) {
+            .SUCCESS => return decodeWaitStatus(@bitCast(status)),
+            .INTR => if (peekPendingSignal()) |signal| return .{ .signaled = signal } else continue,
             else => return error.Unexpected,
         }
     }

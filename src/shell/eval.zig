@@ -39,6 +39,7 @@ pub fn runExitTrap(shell: anytype, status: result.ExitStatus) EvalError!result.E
 
 fn runPendingTrapCheckpoint(shell: anytype) EvalError!result.EvalResult {
     if (shell.state.running_signal_trap) return .{};
+    try queuePolledSignalTraps(shell);
     const name = shell.state.popPendingTrap() orelse return .{};
     const action = shell.state.getSignalTrap(name) orelse return .{};
 
@@ -51,6 +52,14 @@ fn runPendingTrapCheckpoint(shell: anytype) EvalError!result.EvalResult {
     shell.state.last_status = saved_status;
     if (evaluated.flow != .normal) return evaluated;
     return .{ .status = saved_status };
+}
+
+fn queuePolledSignalTraps(shell: anytype) !void {
+    var iterator = shell.state.signal_traps.iterator();
+    while (iterator.next()) |entry| {
+        const number = builtin.signalNumber(entry.key_ptr.*) orelse continue;
+        if (shell.host.consumePendingSignal(number)) try shell.state.queueTrap(entry.key_ptr.*);
+    }
 }
 
 fn evalList(shell: anytype, list: ast.List) EvalError!result.EvalResult {
@@ -80,6 +89,7 @@ fn evalBackgroundAndOr(shell: anytype, and_or: ast.AndOr) EvalError!result.EvalR
     if (and_or.pipelines.len == 1 and and_or.pipelines[0].pipeline.stages.len > 1) {
         return evalBackgroundPipeline(shell, and_or.pipelines[0].pipeline);
     }
+    _ = shellProcessId(shell);
     const background_subshell = backgroundSubshellInvocation(and_or);
     const pid = switch (try shell.host.forkProcess()) {
         .parent => |child_pid| child_pid,
@@ -107,6 +117,13 @@ fn ignoreAsynchronousJobSignals(shell: anytype) !void {
     try shell.host.setSignalIgnored(3);
 }
 
+fn shellProcessId(shell: anytype) host_mod.Pid {
+    if (shell.state.shell_pid) |pid| return pid;
+    const pid = shell.host.currentProcessId();
+    shell.state.shell_pid = pid;
+    return pid;
+}
+
 fn backgroundSubshellInvocation(and_or: ast.AndOr) ?ast.CompoundInvocation {
     if (and_or.pipelines.len != 1) return null;
     const pipeline = and_or.pipelines[0].pipeline;
@@ -121,6 +138,7 @@ fn backgroundSubshellInvocation(and_or: ast.AndOr) ?ast.CompoundInvocation {
 fn evalBackgroundPipeline(shell: anytype, pipeline: ast.Pipeline) EvalError!result.EvalResult {
     pipeline.validate();
     std.debug.assert(pipeline.stages.len > 1);
+    _ = shellProcessId(shell);
     const pids = try spawnPipelineStages(shell, pipeline.stages, true);
     defer shell.allocator.free(pids);
     for (pids) |pid| try shell.state.addBackgroundPid(pid);
@@ -1220,9 +1238,14 @@ fn evalTypeBuiltin(shell: anytype, args: []const []const u8) !result.EvalResult 
 fn evalWaitBuiltin(shell: anytype, args: []const []const u8) !result.EvalResult {
     std.debug.assert(args.len != 0);
     if (args.len == 1) {
-        for (shell.state.background_pids.items) |pid| _ = shell.host.wait(pid) catch {};
+        var status: result.ExitStatus = 0;
+        for (shell.state.background_pids.items) |pid| {
+            const waited = shell.host.waitInterruptible(pid) catch continue;
+            status = waited.shellStatus();
+            if (status > 128) break;
+        }
         shell.state.clearBackgroundPids();
-        return .{};
+        return .{ .status = status };
     }
 
     var status: result.ExitStatus = 0;
@@ -1237,7 +1260,7 @@ fn evalWaitBuiltin(shell: anytype, args: []const []const u8) !result.EvalResult 
             status = 127;
             continue;
         }
-        const waited = shell.host.wait(pid) catch {
+        const waited = shell.host.waitInterruptible(pid) catch {
             status = 127;
             continue;
         };
@@ -3358,6 +3381,7 @@ fn evalCommandSubstitutionInChild(
             shell.host.close(pipe_desc.read) catch shell.host.exit(127);
             shell.host.duplicateTo(pipe_desc.write, .stdout) catch shell.host.exit(127);
             shell.host.close(pipe_desc.write) catch shell.host.exit(127);
+            shell.state.shell_pid = shell.host.currentProcessId();
             const static_request = staticExternalProgramRequest(shell, program) catch shell.host.exit(2);
             if (static_request) |request| {
                 shell.host.exec(request) catch shell.host.exit(127);
@@ -3443,7 +3467,7 @@ fn expandParameter(shell: anytype, parameter: ast.ParameterExpansion) EvalError!
             .hash => try std.fmt.allocPrint(shell.scratchAllocator(), "{}", .{shell.state.positionals.len}),
             .question => try formatExitStatus(shell, shell.state.last_status),
             .hyphen => try optionFlags(shell),
-            .dollar => try std.fmt.allocPrint(shell.scratchAllocator(), "{}", .{shell.host.currentProcessId()}),
+            .dollar => try std.fmt.allocPrint(shell.scratchAllocator(), "{}", .{shellProcessId(shell)}),
             .bang => if (shell.state.last_background_pid) |pid|
                 try std.fmt.allocPrint(shell.scratchAllocator(), "{}", .{pid})
             else
@@ -3561,7 +3585,7 @@ fn parameterCurrentValue(shell: anytype, parameter: ast.Parameter) !?[]const u8 
             .hash => try std.fmt.allocPrint(shell.scratchAllocator(), "{}", .{shell.state.positionals.len}),
             .question => try formatExitStatus(shell, shell.state.last_status),
             .hyphen => try optionFlags(shell),
-            .dollar => try std.fmt.allocPrint(shell.scratchAllocator(), "{}", .{shell.host.currentProcessId()}),
+            .dollar => try std.fmt.allocPrint(shell.scratchAllocator(), "{}", .{shellProcessId(shell)}),
             .bang => if (shell.state.last_background_pid) |pid|
                 try std.fmt.allocPrint(shell.scratchAllocator(), "{}", .{pid})
             else

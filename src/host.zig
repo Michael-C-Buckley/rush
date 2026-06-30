@@ -330,6 +330,14 @@ pub const RealHost = struct {
         try platform.setSignalDefault(signal);
     }
 
+    pub fn installSignalTrap(_: *RealHost, signal: u8) platform.SignalDispositionError!void {
+        try platform.installSignalTrap(signal);
+    }
+
+    pub fn consumePendingSignal(_: *RealHost, signal: u8) bool {
+        return platform.consumePendingSignal(signal);
+    }
+
     pub fn spawn(_: *RealHost, request: SpawnRequest) platform.SpawnError!SpawnResult {
         return platform.spawn(request);
     }
@@ -340,6 +348,10 @@ pub const RealHost = struct {
 
     pub fn wait(_: *RealHost, pid: Pid) platform.WaitError!WaitStatus {
         return platform.wait(pid);
+    }
+
+    pub fn waitInterruptible(_: *RealHost, pid: Pid) platform.WaitError!WaitStatus {
+        return platform.waitInterruptible(pid);
     }
 
     pub fn spawnAndWait(

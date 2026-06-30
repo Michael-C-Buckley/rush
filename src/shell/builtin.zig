@@ -597,7 +597,10 @@ fn evalTrap(shell: anytype, args: []const []const u8) !result.EvalResult {
             .other => |name| if (reset) {
                 shell.state.clearSignalTrap(name);
                 if (signalNumber(name)) |number| shell.host.setSignalDefault(number) catch {};
-            } else try shell.state.setSignalTrap(name, action),
+            } else {
+                try shell.state.setSignalTrap(name, action);
+                if (signalNumber(name)) |number| shell.host.installSignalTrap(number) catch {};
+            },
         }
     }
     return .{ .status = status };
@@ -637,7 +640,7 @@ fn signalName(signal: []const u8) ?[]const u8 {
     return null;
 }
 
-fn signalNumber(signal: []const u8) ?u8 {
+pub fn signalNumber(signal: []const u8) ?u8 {
     inline for (trap_signal_names) |name| {
         if (std.mem.eql(u8, signal, name) and @hasField(std.c.SIG, name)) {
             return @intCast(@intFromEnum(@field(std.c.SIG, name)));
@@ -706,6 +709,8 @@ test "builtin eval returns utility status" {
         pub fn sendSignal(_: *@This(), _: host.Pid, _: u8) !void {}
 
         pub fn setSignalDefault(_: *@This(), _: u8) !void {}
+
+        pub fn installSignalTrap(_: *@This(), _: u8) !void {}
     };
     const TestShell = struct {
         host: TestHost = .{},
@@ -740,6 +745,8 @@ test "exit builtin returns requested exit flow" {
         pub fn sendSignal(_: *@This(), _: host.Pid, _: u8) !void {}
 
         pub fn setSignalDefault(_: *@This(), _: u8) !void {}
+
+        pub fn installSignalTrap(_: *@This(), _: u8) !void {}
     };
     const TestShell = struct {
         host: TestHost = .{},
@@ -787,6 +794,8 @@ test "printf writes formatted output once" {
         pub fn sendSignal(_: *@This(), _: host.Pid, _: u8) !void {}
 
         pub fn setSignalDefault(_: *@This(), _: u8) !void {}
+
+        pub fn installSignalTrap(_: *@This(), _: u8) !void {}
     };
     const TestShell = struct {
         host: TestHost = .{},
