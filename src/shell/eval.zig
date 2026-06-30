@@ -3678,6 +3678,8 @@ fn ArithmeticParser(comptime ShellType: type) type {
             self.skipWhitespace();
             if (self.eat('+')) return self.parseUnary();
             if (self.eat('-')) return -(try self.parseUnary());
+            if (self.eat('!')) return if (try self.parseUnary() == 0) 1 else 0;
+            if (self.eat('~')) return ~(try self.parseUnary());
             return self.parsePrimary();
         }
 

@@ -1055,6 +1055,21 @@
             .status = 0,
         },
         .{
+            .name = "case command bracket patterns keep shell metacharacters literal",
+            .script =
+            \\case x in
+            \\    *[!{}]*) printf 'match\n' ;;
+            \\    *) printf 'bad\n' ;;
+            \\esac
+            ,
+            .stdout =
+            \\match
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "if command status is selected then body status",
             .script =
             \\if true

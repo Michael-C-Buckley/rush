@@ -14,19 +14,41 @@ pub fn lex(allocator: std.mem.Allocator, src: source_mod.Source) std.mem.Allocat
     return lexer.lex();
 }
 
+pub const AliasLexResult = struct {
+    source: source_mod.Source,
+    tokens: []const token.Token,
+};
+
 pub fn lexWithAliases(
     allocator: std.mem.Allocator,
     src: source_mod.Source,
     shell_state: state_mod.State,
 ) std.mem.Allocator.Error![]const token.Token {
+    return (try lexWithAliasesSource(allocator, src, shell_state)).tokens;
+}
+
+pub fn lexWithAliasesSource(
+    allocator: std.mem.Allocator,
+    src: source_mod.Source,
+    shell_state: state_mod.State,
+) std.mem.Allocator.Error!AliasLexResult {
     var current_src = src;
     var seen_sources: std.ArrayList([]const u8) = .empty;
     while (true) {
         const tokens = try lex(allocator, current_src);
-        const expanded = try aliasExpandedSource(allocator, current_src, tokens, shell_state) orelse return tokens;
-        if (std.mem.eql(u8, expanded, current_src.text)) return lex(allocator, current_src);
+        const expanded = try aliasExpandedSource(allocator, current_src, tokens, shell_state) orelse return .{
+            .source = current_src,
+            .tokens = tokens,
+        };
+        if (std.mem.eql(u8, expanded, current_src.text)) return .{
+            .source = current_src,
+            .tokens = try lex(allocator, current_src),
+        };
         for (seen_sources.items) |seen| {
-            if (std.mem.eql(u8, expanded, seen)) return lex(allocator, current_src);
+            if (std.mem.eql(u8, expanded, seen)) return .{
+                .source = current_src,
+                .tokens = try lex(allocator, current_src),
+            };
         }
         try seen_sources.append(allocator, current_src.text);
         current_src = .{ .id = src.id, .kind = src.kind, .name = src.name, .text = expanded };
@@ -409,6 +431,7 @@ const Lexer = struct {
                 self.skipBackquoteSubstitution();
                 continue;
             }
+            if (byte == '[' and self.skipBracketExpression()) continue;
             if (isWordTerminator(byte)) break;
             self.advanceOne();
         }
@@ -662,6 +685,34 @@ const Lexer = struct {
             }
             if (byte == '`') break;
         }
+    }
+
+    fn skipBracketExpression(self: *Lexer) bool {
+        std.debug.assert(!self.atEnd());
+        std.debug.assert(self.peek() == '[');
+
+        var index = self.position.byte_offset + 1;
+        if (index >= self.source.text.len or isWordTerminator(self.source.text[index])) return false;
+        if (index < self.source.text.len and (self.source.text[index] == '!' or self.source.text[index] == '^')) {
+            index += 1;
+        }
+        var saw_member = false;
+        while (index < self.source.text.len) {
+            const byte = self.source.text[index];
+            if (byte == '\\' and index + 1 < self.source.text.len) {
+                index += 2;
+                saw_member = true;
+                continue;
+            }
+            if (byte == ']' and saw_member) {
+                self.advanceBytes(index + 1 - self.position.byte_offset);
+                return true;
+            }
+            if (byte == '\n' or byte == '\r') return false;
+            saw_member = true;
+            index += 1;
+        }
+        return false;
     }
 
     fn skipDollarSingleQuote(self: *Lexer) void {

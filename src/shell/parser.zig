@@ -772,11 +772,11 @@ const Parser = struct {
             .name = "$()",
             .text = source_text,
         };
-        const tokens = if (self.alias_state) |alias_state|
-            try lexer.lexWithAliases(self.allocator, src, alias_state)
+        const lexed = if (self.alias_state) |alias_state|
+            try lexer.lexWithAliasesSource(self.allocator, src, alias_state)
         else
-            try lexer.lex(self.allocator, src);
-        const program = try parseWithAliasState(self.allocator, src, tokens, self.alias_state);
+            lexer.AliasLexResult{ .source = src, .tokens = try lexer.lex(self.allocator, src) };
+        const program = try parseWithAliasState(self.allocator, lexed.source, lexed.tokens, self.alias_state);
         const owned = try self.allocator.create(ast.Program);
         owned.* = program;
         return owned;

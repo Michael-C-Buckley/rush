@@ -122,8 +122,8 @@ pub fn Shell(comptime Host: type) type {
             const chunk_src: source.Source = .{ .id = src.id, .kind = src.kind, .name = src.name, .text = text };
 
             const ast_allocator = self.astAllocator();
-            const tokens = try lexer.lexWithAliases(ast_allocator, chunk_src, self.state);
-            const program = try parser.parseWithAliases(ast_allocator, chunk_src, tokens, self.state);
+            const lexed = try lexer.lexWithAliasesSource(ast_allocator, chunk_src, self.state);
+            const program = try parser.parseWithAliases(ast_allocator, lexed.source, lexed.tokens, self.state);
             program.validate();
             return eval.evalProgram(Host, self, program);
         }
