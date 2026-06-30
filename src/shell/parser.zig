@@ -85,25 +85,29 @@ const Parser = struct {
     }
 
     fn parseSimpleCommand(self: *Parser) !ast.SimpleCommand {
+        var assignments: std.ArrayList(ast.Assignment) = .empty;
+        errdefer assignments.deinit(self.allocator);
         var words: std.ArrayList(ast.Word) = .empty;
         errdefer words.deinit(self.allocator);
         var command_span: ?source_mod.Span = null;
 
         while (self.eat(.word)) |word_token| {
-            const word = try self.parseWord(word_token);
-            word.validate();
+            if (words.items.len == 0) {
+                if (try self.parseAssignment(word_token)) |assignment| {
+                    try assignments.append(self.allocator, assignment);
+                    command_span = extendCommandSpan(command_span, word_token.span);
+                    continue;
+                }
+            }
+
+            const word = try self.parseWordToken(word_token);
             try words.append(self.allocator, word);
-            command_span = if (command_span) |span| .{
-                .source_id = span.source_id,
-                .start = span.start,
-                .end = word_token.span.end,
-                .start_line = span.start_line,
-                .start_column = span.start_column,
-            } else word_token.span;
+            command_span = extendCommandSpan(command_span, word_token.span);
         }
 
-        if (words.items.len == 0) return error.ExpectedCommand;
+        if (assignments.items.len == 0 and words.items.len == 0) return error.ExpectedCommand;
         const command: ast.SimpleCommand = .{
+            .assignments = try assignments.toOwnedSlice(self.allocator),
             .words = try words.toOwnedSlice(self.allocator),
             .span = command_span.?,
         };
@@ -111,42 +115,104 @@ const Parser = struct {
         return command;
     }
 
-    fn parseWord(self: *Parser, word_token: token.Token) !ast.Word {
+    fn parseAssignment(self: *Parser, word_token: token.Token) !?ast.Assignment {
+        if (word_token.quoted) return null;
+        const equals_index = std.mem.indexOfScalar(u8, word_token.text, '=') orelse return null;
+        if (!isAssignmentName(word_token.text[0..equals_index])) return null;
+
+        const value = try self.parseWordText(word_token.text[equals_index + 1 ..], word_token.span);
+        const assignment: ast.Assignment = .{
+            .name = word_token.text[0..equals_index],
+            .value = value,
+            .span = word_token.span,
+        };
+        assignment.validate();
+        return assignment;
+    }
+
+    fn parseWordToken(self: *Parser, word_token: token.Token) !ast.Word {
         std.debug.assert(word_token.kind == .word);
-        if (!word_token.quoted) return .{ .data = .{ .literal = word_token.text }, .span = word_token.span };
+        return self.parseWordText(word_token.text, word_token.span);
+    }
+
+    fn parseWordText(self: *Parser, text: []const u8, span: source_mod.Span) !ast.Word {
+        if (std.mem.indexOfAny(u8, text, "'\"$") == null) {
+            const word: ast.Word = .{ .data = .{ .literal = text }, .span = span };
+            word.validate();
+            return word;
+        }
 
         var parts: std.ArrayList(ast.WordPart) = .empty;
         errdefer parts.deinit(self.allocator);
+        try self.appendWordParts(&parts, text, 0, text.len, null);
 
-        var index: usize = 0;
-        var literal_start: usize = 0;
-        while (index < word_token.text.len) {
-            if (word_token.text[index] != '\'') {
-                index += 1;
-                continue;
-            }
-
-            if (literal_start < index) {
-                try parts.append(self.allocator, .{ .literal = word_token.text[literal_start..index] });
-            }
-
-            const quote_start = index + 1;
-            index = quote_start;
-            while (index < word_token.text.len and word_token.text[index] != '\'') index += 1;
-            if (index >= word_token.text.len) return error.UnclosedQuote;
-            try parts.append(self.allocator, .{ .single_quoted = word_token.text[quote_start..index] });
-
-            index += 1;
-            literal_start = index;
-        }
-
-        if (literal_start < word_token.text.len) {
-            try parts.append(self.allocator, .{ .literal = word_token.text[literal_start..] });
-        }
-
-        const word: ast.Word = .{ .data = .{ .parts = try parts.toOwnedSlice(self.allocator) }, .span = word_token.span };
+        const word: ast.Word = .{ .data = .{ .parts = try parts.toOwnedSlice(self.allocator) }, .span = span };
         word.validate();
         return word;
+    }
+
+    fn appendWordParts(
+        self: *Parser,
+        parts: *std.ArrayList(ast.WordPart),
+        text: []const u8,
+        start: usize,
+        end: usize,
+        quote: ?u8,
+    ) !void {
+        var index = start;
+        var literal_start = start;
+        while (index < end) {
+            switch (text[index]) {
+                '\'' => if (quote == null) {
+                    if (literal_start < index) try parts.append(self.allocator, .{ .literal = text[literal_start..index] });
+                    const quote_start = index + 1;
+                    index = quote_start;
+                    while (index < end and text[index] != '\'') index += 1;
+                    if (index >= end) return error.UnclosedQuote;
+                    try parts.append(self.allocator, .{ .single_quoted = text[quote_start..index] });
+                    index += 1;
+                    literal_start = index;
+                    continue;
+                },
+                '"' => if (quote == null) {
+                    if (literal_start < index) try parts.append(self.allocator, .{ .literal = text[literal_start..index] });
+                    const quote_start = index + 1;
+                    index = quote_start;
+                    while (index < end and text[index] != '"') index += 1;
+                    if (index >= end) return error.UnclosedQuote;
+
+                    var quoted_parts: std.ArrayList(ast.WordPart) = .empty;
+                    errdefer quoted_parts.deinit(self.allocator);
+                    try self.appendWordParts(&quoted_parts, text, quote_start, index, '"');
+                    try parts.append(self.allocator, .{
+                        .double_quoted = try quoted_parts.toOwnedSlice(self.allocator),
+                    });
+
+                    index += 1;
+                    literal_start = index;
+                    continue;
+                },
+                '$' => {
+                    const name_start = index + 1;
+                    const name_end = scanParameterName(text, name_start, end);
+                    if (name_end == name_start) {
+                        index += 1;
+                        continue;
+                    }
+                    if (literal_start < index) try parts.append(self.allocator, .{ .literal = text[literal_start..index] });
+                    try parts.append(self.allocator, .{
+                        .parameter = .{ .parameter = .{ .variable = text[name_start..name_end] } },
+                    });
+                    index = name_end;
+                    literal_start = index;
+                    continue;
+                },
+                else => {},
+            }
+            index += 1;
+        }
+
+        if (literal_start < end) try parts.append(self.allocator, .{ .literal = text[literal_start..end] });
     }
 
     fn skipSeparators(self: *Parser) void {
@@ -174,6 +240,44 @@ const Parser = struct {
         return self.tokens[self.index].kind == kind;
     }
 };
+
+fn extendCommandSpan(existing: ?source_mod.Span, span: source_mod.Span) source_mod.Span {
+    return if (existing) |current| .{
+        .source_id = current.source_id,
+        .start = current.start,
+        .end = span.end,
+        .start_line = current.start_line,
+        .start_column = current.start_column,
+    } else span;
+}
+
+fn isAssignmentName(name: []const u8) bool {
+    if (name.len == 0) return false;
+    if (!isNameStart(name[0])) return false;
+    for (name[1..]) |byte| if (!isNameContinue(byte)) return false;
+    return true;
+}
+
+fn scanParameterName(text: []const u8, start: usize, end: usize) usize {
+    if (start >= end or !isNameStart(text[start])) return start;
+    var index = start + 1;
+    while (index < end and isNameContinue(text[index])) index += 1;
+    return index;
+}
+
+fn isNameStart(byte: u8) bool {
+    return switch (byte) {
+        'A'...'Z', 'a'...'z', '_' => true,
+        else => false,
+    };
+}
+
+fn isNameContinue(byte: u8) bool {
+    return isNameStart(byte) or switch (byte) {
+        '0'...'9' => true,
+        else => false,
+    };
+}
 
 test "parser builds simple colon command" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
@@ -218,4 +322,35 @@ test "parser splits single quoted word parts" {
     try std.testing.expectEqualStrings("printf", words[0].data.literal);
     try std.testing.expectEqualStrings("%s\\n", words[1].data.parts[0].single_quoted);
     try std.testing.expectEqualStrings("hello", words[2].data.literal);
+}
+
+test "parser recognizes leading assignment words" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const src: source_mod.Source = .{ .id = 1, .kind = .command_string, .name = "-c", .text = "x=hello printf x=arg" };
+    const tokens = try @import("lexer.zig").lex(allocator, src);
+    const program = try parse(allocator, src, tokens);
+    const command = program.body.entries[0].and_or.pipelines[0].pipeline.stages[0].simple;
+
+    try std.testing.expectEqual(@as(usize, 1), command.assignments.len);
+    try std.testing.expectEqualStrings("x", command.assignments[0].name);
+    try std.testing.expectEqualStrings("hello", command.assignments[0].value.data.literal);
+    try std.testing.expectEqual(@as(usize, 2), command.words.len);
+    try std.testing.expectEqualStrings("x=arg", command.words[1].data.literal);
+}
+
+test "parser builds parameter parts inside double quotes" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const src: source_mod.Source = .{ .id = 1, .kind = .command_string, .name = "-c", .text = "printf \"$x\"" };
+    const tokens = try @import("lexer.zig").lex(allocator, src);
+    const program = try parse(allocator, src, tokens);
+    const word = program.body.entries[0].and_or.pipelines[0].pipeline.stages[0].simple.words[1];
+
+    const quoted_parts = word.data.parts[0].double_quoted;
+    try std.testing.expectEqualStrings("x", quoted_parts[0].parameter.parameter.variable);
 }

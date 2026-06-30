@@ -55,12 +55,18 @@ fn evalCommand(shell: anytype, command: ast.Command) EvalError!result.EvalResult
 
 fn evalSimple(shell: anytype, command: ast.SimpleCommand) EvalError!result.EvalResult {
     command.validate();
-    if (command.words.len == 0) return .{};
     shell.resetScratch();
-    const name = try expandWord(shell.scratchAllocator(), command.words[0]);
+
+    if (command.words.len == 0) {
+        try applyAssignments(shell, command.assignments);
+        return .{};
+    }
+
+    const name = try expandWord(shell, command.words[0]);
     if (builtin.lookup(name)) |definition| {
+        if (definition.kind == .special) try applyAssignments(shell, command.assignments);
         const args = if (definition.id == .printf)
-            try expandWords(shell.scratchAllocator(), command.words)
+            try expandWords(shell, command.words)
         else
             &[_][]const u8{name};
         return builtin.eval(shell, definition, args);
@@ -68,25 +74,51 @@ fn evalSimple(shell: anytype, command: ast.SimpleCommand) EvalError!result.EvalR
     return .{ .status = 127 };
 }
 
-fn expandWords(allocator: std.mem.Allocator, words: []const ast.Word) ![]const []const u8 {
+fn applyAssignments(shell: anytype, assignments: []const ast.Assignment) !void {
+    for (assignments) |assignment| {
+        const value = try expandWord(shell, assignment.value);
+        try shell.state.putVariable(.{ .name = assignment.name, .value = value });
+    }
+}
+
+fn expandWords(shell: anytype, words: []const ast.Word) ![]const []const u8 {
     std.debug.assert(words.len != 0);
+    const allocator = shell.scratchAllocator();
     const expanded = try allocator.alloc([]const u8, words.len);
-    for (words, 0..) |word, index| expanded[index] = try expandWord(allocator, word);
+    for (words, 0..) |word, index| expanded[index] = try expandWord(shell, word);
     return expanded;
 }
 
-fn expandWord(allocator: std.mem.Allocator, word: ast.Word) ![]const u8 {
+fn expandWord(shell: anytype, word: ast.Word) ![]const u8 {
     return switch (word.data) {
         .literal => |literal| literal,
-        .parts => |parts| expandWordParts(allocator, parts),
+        .parts => |parts| expandWordParts(shell, parts),
     };
 }
 
-fn expandWordParts(allocator: std.mem.Allocator, parts: []const ast.WordPart) ![]const u8 {
+fn expandWordParts(shell: anytype, parts: []const ast.WordPart) EvalError![]const u8 {
+    if (parts.len == 0) return "";
+    if (parts.len == 1) return expandWordPart(shell, parts[0]);
+
+    const allocator = shell.scratchAllocator();
     var output: std.ArrayList(u8) = .empty;
-    for (parts) |part| switch (part) {
-        .literal, .single_quoted, .arithmetic => |bytes| try output.appendSlice(allocator, bytes),
-        else => return error.UnsupportedExpansion,
-    };
+    for (parts) |part| try output.appendSlice(allocator, try expandWordPart(shell, part));
     return output.toOwnedSlice(allocator);
+}
+
+fn expandWordPart(shell: anytype, part: ast.WordPart) EvalError![]const u8 {
+    return switch (part) {
+        .literal, .single_quoted, .arithmetic => |bytes| bytes,
+        .double_quoted => |parts| expandWordParts(shell, parts),
+        .parameter => |parameter| expandParameter(shell, parameter),
+        .command_substitution => error.UnsupportedExpansion,
+    };
+}
+
+fn expandParameter(shell: anytype, parameter: ast.ParameterExpansion) []const u8 {
+    parameter.validate();
+    return switch (parameter.parameter) {
+        .variable => |name| if (shell.state.getVariable(name)) |variable| variable.value else "",
+        .positional, .special => "",
+    };
 }

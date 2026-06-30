@@ -93,9 +93,24 @@ const Lexer = struct {
         const start = self.position;
         const start_offset = self.position.byte_offset;
         var quoted = false;
-        while (!self.atEnd() and !isWordTerminator(self.peek())) self.advanceOne();
+        var quote: ?u8 = null;
+        while (!self.atEnd()) {
+            const byte = self.peek();
+            if (quote) |delimiter| {
+                if (byte == delimiter) quote = null;
+                self.advanceOne();
+                continue;
+            }
+            if (byte == '\'' or byte == '"') {
+                quoted = true;
+                quote = byte;
+                self.advanceOne();
+                continue;
+            }
+            if (isWordTerminator(byte)) break;
+            self.advanceOne();
+        }
         const text = self.source.text[start_offset..self.position.byte_offset];
-        quoted = std.mem.indexOfScalar(u8, text, '\'') != null;
         const tok: token.Token = .{
             .kind = .word,
             .span = source_mod.Span.init(start, self.position.byte_offset),
@@ -160,4 +175,16 @@ test "lexer marks quoted words as non-reserved" {
 
     try std.testing.expect(tokens[0].quoted);
     try std.testing.expectEqual(@as(?token.ReservedWord, null), tokens[0].reserved);
+}
+
+test "lexer keeps quoted spaces inside words" {
+    const src: source_mod.Source = .{ .id = 1, .kind = .command_string, .name = "-c", .text = "printf \"hello world\"" };
+    const tokens = try lex(std.testing.allocator, src);
+    defer std.testing.allocator.free(tokens);
+
+    try std.testing.expectEqual(token.Kind.word, tokens[0].kind);
+    try std.testing.expectEqualStrings("printf", tokens[0].text);
+    try std.testing.expectEqual(token.Kind.word, tokens[1].kind);
+    try std.testing.expect(tokens[1].quoted);
+    try std.testing.expectEqualStrings("\"hello world\"", tokens[1].text);
 }

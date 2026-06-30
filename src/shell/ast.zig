@@ -130,11 +130,8 @@ pub const WordData = union(enum) {
 
     pub fn validate(self: WordData) void {
         switch (self) {
-            .literal => |literal| std.debug.assert(literal.len != 0),
-            .parts => |parts| {
-                std.debug.assert(parts.len != 0);
-                for (parts) |part| part.validate();
-            },
+            .literal => {},
+            .parts => |parts| for (parts) |part| part.validate(),
         }
     }
 };
