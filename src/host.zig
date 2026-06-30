@@ -56,9 +56,9 @@ pub const SpawnFdAction = union(enum) {
 };
 
 pub const SpawnRequest = struct {
-    path: []const u8,
-    argv: []const []const u8,
-    env: []const []const u8,
+    path: [:0]const u8,
+    argv: []const [:0]const u8,
+    env: []const [*:0]const u8,
     cwd: ?[]const u8 = null,
     fd_actions: []const SpawnFdAction = &.{},
     process_group: ?Pid = null,
@@ -102,5 +102,17 @@ pub const RealHost = struct {
 
     pub fn openZ(_: *RealHost, path: [:0]const u8, options: OpenOptions) platform.OpenError!Fd {
         return platform.openZ(path, options);
+    }
+
+    pub fn isExecutableZ(_: *RealHost, path: [:0]const u8) bool {
+        return platform.isExecutableZ(path);
+    }
+
+    pub fn spawnAndWait(
+        _: *RealHost,
+        allocator: @import("std").mem.Allocator,
+        request: SpawnRequest,
+    ) platform.SpawnError!WaitStatus {
+        return platform.spawnAndWait(allocator, request);
     }
 };

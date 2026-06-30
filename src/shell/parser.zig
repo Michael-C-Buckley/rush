@@ -194,6 +194,15 @@ const Parser = struct {
                 },
                 '$' => {
                     const name_start = index + 1;
+                    if (name_start < end and text[name_start] == '?') {
+                        if (literal_start < index) try parts.append(self.allocator, .{ .literal = text[literal_start..index] });
+                        try parts.append(self.allocator, .{
+                            .parameter = .{ .parameter = .{ .special = .question } },
+                        });
+                        index = name_start + 1;
+                        literal_start = index;
+                        continue;
+                    }
                     const name_end = scanParameterName(text, name_start, end);
                     if (name_end == name_start) {
                         index += 1;

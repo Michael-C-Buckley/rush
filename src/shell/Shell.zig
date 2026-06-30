@@ -10,20 +10,27 @@ const result = @import("result.zig");
 const source = @import("source.zig");
 const state = @import("state.zig");
 
+pub const InitOptions = struct {
+    state: state.Options = .{},
+    env: []const [*:0]const u8 = &.{},
+};
+
 pub fn Shell(comptime Host: type) type {
     return struct {
         allocator: std.mem.Allocator,
         host: Host,
+        env: []const [*:0]const u8,
         state: state.State,
         arenas: memory.Arenas,
 
         const Self = @This();
 
-        pub fn init(allocator: std.mem.Allocator, host: Host, options: state.Options) Self {
+        pub fn init(allocator: std.mem.Allocator, host: Host, options: InitOptions) Self {
             return .{
                 .allocator = allocator,
                 .host = host,
-                .state = state.State.init(allocator, options),
+                .env = options.env,
+                .state = state.State.init(allocator, options.state),
                 .arenas = memory.Arenas.init(allocator),
             };
         }

@@ -24,6 +24,11 @@ pub const OpenError = error{
     Unexpected,
 };
 
+pub const SpawnError = error{
+    SystemResources,
+    Unexpected,
+} || std.mem.Allocator.Error;
+
 pub fn writeAll(fd: host.Fd, bytes: []const u8) WriteError!void {
     var written: usize = 0;
     while (written < bytes.len) {
@@ -45,6 +50,24 @@ pub fn openZ(path: [:0]const u8, options: host.OpenOptions) OpenError!host.Fd {
     return switch (builtin.os.tag) {
         .linux => linuxOpenZ(path, options),
         .macos, .freebsd, .openbsd, .netbsd => libcOpenZ(path, options),
+        else => @compileError("unsupported host OS"),
+    };
+}
+
+pub fn isExecutableZ(path: [:0]const u8) bool {
+    std.debug.assert(path.len != 0);
+    return switch (builtin.os.tag) {
+        .linux => linuxIsExecutableZ(path),
+        .macos, .freebsd, .openbsd, .netbsd => libcIsExecutableZ(path),
+        else => @compileError("unsupported host OS"),
+    };
+}
+
+pub fn spawnAndWait(allocator: std.mem.Allocator, request: host.SpawnRequest) SpawnError!host.WaitStatus {
+    request.validate();
+    return switch (builtin.os.tag) {
+        .linux => linuxSpawnAndWait(allocator, request),
+        .macos, .freebsd, .openbsd, .netbsd => libcSpawnAndWait(allocator, request),
         else => @compileError("unsupported host OS"),
     };
 }
@@ -115,6 +138,92 @@ fn libcOpenZ(path: [:0]const u8, options: host.OpenOptions) OpenError!host.Fd {
         .NFILE, .MFILE, .NOMEM, .NOBUFS => return error.SystemResources,
         else => return error.Unexpected,
     }
+}
+
+fn linuxIsExecutableZ(path: [:0]const u8) bool {
+    const rc = std.os.linux.access(path.ptr, std.os.linux.X_OK);
+    return std.os.linux.errno(rc) == .SUCCESS;
+}
+
+fn libcIsExecutableZ(path: [:0]const u8) bool {
+    const rc = std.c.access(path.ptr, std.c.X_OK);
+    return std.c.errno(rc) == .SUCCESS;
+}
+
+fn linuxSpawnAndWait(allocator: std.mem.Allocator, request: host.SpawnRequest) SpawnError!host.WaitStatus {
+    const argv = try makeExecArgv(allocator, request.argv);
+    const envp = try makeExecEnvp(allocator, request.env);
+
+    const linux = std.os.linux;
+    const fork_rc = linux.fork();
+    switch (linux.errno(fork_rc)) {
+        .SUCCESS => {},
+        .AGAIN, .NOMEM => return error.SystemResources,
+        else => return error.Unexpected,
+    }
+
+    const pid: i32 = @intCast(fork_rc);
+    if (pid == 0) {
+        _ = linux.execve(request.path.ptr, argv.ptr, envp.ptr);
+        linux.exit(127);
+    }
+
+    var status: u32 = 0;
+    while (true) {
+        const wait_rc = linux.waitpid(pid, &status, 0);
+        switch (linux.errno(wait_rc)) {
+            .SUCCESS => return decodeWaitStatus(status),
+            .INTR => continue,
+            else => return error.Unexpected,
+        }
+    }
+}
+
+fn libcSpawnAndWait(allocator: std.mem.Allocator, request: host.SpawnRequest) SpawnError!host.WaitStatus {
+    const argv = try makeExecArgv(allocator, request.argv);
+    const envp = try makeExecEnvp(allocator, request.env);
+
+    const fork_rc = std.c.fork();
+    switch (std.c.errno(fork_rc)) {
+        .SUCCESS => {},
+        .AGAIN, .NOMEM => return error.SystemResources,
+        else => return error.Unexpected,
+    }
+
+    const pid: i32 = @intCast(fork_rc);
+    if (pid == 0) {
+        _ = std.c.execve(request.path.ptr, argv.ptr, envp.ptr);
+        std.c._exit(127);
+    }
+
+    var status: c_int = 0;
+    while (true) {
+        const wait_rc = std.c.waitpid(pid, &status, 0);
+        switch (std.c.errno(wait_rc)) {
+            .SUCCESS => return decodeWaitStatus(@bitCast(status)),
+            .INTR => continue,
+            else => return error.Unexpected,
+        }
+    }
+}
+
+fn makeExecArgv(allocator: std.mem.Allocator, argv: []const [:0]const u8) std.mem.Allocator.Error![:null]const ?[*:0]const u8 {
+    std.debug.assert(argv.len != 0);
+    const result = try allocator.allocSentinel(?[*:0]const u8, argv.len, null);
+    for (argv, 0..) |arg, index| result[index] = arg.ptr;
+    return result;
+}
+
+fn makeExecEnvp(allocator: std.mem.Allocator, env: []const [*:0]const u8) std.mem.Allocator.Error![:null]const ?[*:0]const u8 {
+    const result = try allocator.allocSentinel(?[*:0]const u8, env.len, null);
+    for (env, 0..) |entry, index| result[index] = entry;
+    return result;
+}
+
+fn decodeWaitStatus(status: u32) host.WaitStatus {
+    if ((status & 0xff) == 0x7f) return .{ .stopped = @intCast((status >> 8) & 0xff) };
+    if ((status & 0x7f) == 0) return .{ .exited = @intCast((status >> 8) & 0xff) };
+    return .{ .signaled = @intCast(status & 0x7f) };
 }
 
 fn linuxOpenFlags(options: host.OpenOptions) std.os.linux.O {
