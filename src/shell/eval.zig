@@ -508,7 +508,7 @@ fn evalSimpleScoped(shell: anytype, command: ast.SimpleCommand) EvalError!result
                 return evalExecBuiltin(shell, fields);
             }
             const args = switch (definition.id) {
-                .break_, .continue_, .exit, .set => fields,
+                .break_, .continue_, .exit, .set, .unset => fields,
                 else => &[_][]const u8{name},
             };
             return builtin.eval(shell, definition, args);
@@ -665,7 +665,7 @@ fn evalCommandBuiltin(
                 restored_assignments = true;
                 return evaluated;
             },
-            .break_, .continue_, .exit, .printf, .set => {
+            .break_, .continue_, .exit, .printf, .set, .unset => {
                 const evaluated = try builtin.eval(shell, definition, args[index..]);
                 restoreVariables(shell, saved);
                 restored_assignments = true;

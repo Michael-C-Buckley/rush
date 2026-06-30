@@ -157,6 +157,11 @@ pub const State = struct {
         function.validate();
         try self.functions.put(self.allocator, function.name, function);
     }
+
+    pub fn removeFunction(self: *State, name: []const u8) void {
+        std.debug.assert(name.len != 0);
+        _ = self.functions.remove(name);
+    }
 };
 
 test "State replaces variable values without losing the binding" {

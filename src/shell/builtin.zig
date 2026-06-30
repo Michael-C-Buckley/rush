@@ -31,6 +31,7 @@ pub const Id = enum {
     set,
     true_,
     type,
+    unset,
 };
 
 pub const Definition = struct {
@@ -63,6 +64,7 @@ pub const definitions: DefinitionMap = .initComptime(.{
     .{ "set", Definition{ .name = "set", .id = .set, .kind = .special } },
     .{ "true", Definition{ .name = "true", .id = .true_, .kind = .regular } },
     .{ "type", Definition{ .name = "type", .id = .type, .kind = .regular } },
+    .{ "unset", Definition{ .name = "unset", .id = .unset, .kind = .special } },
 });
 
 pub fn lookup(name: []const u8) ?Definition {
@@ -84,6 +86,7 @@ pub fn eval(shell: anytype, definition: Definition, args: []const []const u8) !r
         .printf => evalPrintf(shell, args),
         .readonly => evalReadonly(shell, args),
         .set => evalSet(shell, args),
+        .unset => evalUnset(shell, args),
     };
 }
 
@@ -156,6 +159,44 @@ fn evalSet(shell: anytype, args: []const []const u8) !result.EvalResult {
     return .{};
 }
 
+fn evalUnset(shell: anytype, args: []const []const u8) result.EvalResult {
+    var functions = false;
+    var variables = false;
+    var index: usize = 1;
+    while (index < args.len) : (index += 1) {
+        const arg = args[index];
+        if (std.mem.eql(u8, arg, "--")) {
+            index += 1;
+            break;
+        }
+        if (arg.len < 2 or arg[0] != '-') break;
+        for (arg[1..]) |option| switch (option) {
+            'f' => functions = true,
+            'v' => variables = true,
+            else => return .{ .status = 2 },
+        };
+    }
+    if (functions and variables) return .{ .status = 2 };
+    const unset_functions = functions and !variables;
+    var status: result.ExitStatus = 0;
+    for (args[index..]) |name| {
+        if (!isAssignmentName(name) and !unset_functions) {
+            status = 2;
+            continue;
+        }
+        if (unset_functions) {
+            if (std.mem.indexOfScalar(u8, name, '/') == null) shell.state.removeFunction(name);
+        } else if (shell.state.getVariable(name)) |variable| {
+            if (variable.readonly) {
+                status = 1;
+            } else {
+                shell.state.removeVariable(name);
+            }
+        }
+    }
+    return .{ .status = status };
+}
+
 fn isAssignmentName(name: []const u8) bool {
     if (name.len == 0) return false;
     if (!std.ascii.isAlphabetic(name[0]) and name[0] != '_') return false;
@@ -182,6 +223,7 @@ test "builtin lookup identifies null true and false utilities" {
     try std.testing.expectEqual(Id.read, lookup("read").?.id);
     try std.testing.expectEqual(Id.readonly, lookup("readonly").?.id);
     try std.testing.expectEqual(Id.type, lookup("type").?.id);
+    try std.testing.expectEqual(Id.unset, lookup("unset").?.id);
     try std.testing.expectEqual(@as(?Definition, null), lookup("missing"));
 }
 
