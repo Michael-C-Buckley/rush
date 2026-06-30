@@ -2493,6 +2493,14 @@ fn expandArithmeticParameter(shell: anytype, text: []const u8, index: *usize) ![
         index.* += 1;
         return "$";
     }
+    if (std.ascii.isDigit(text[parameter_start])) {
+        index.* = parameter_start + 1;
+        return positionalValue(shell, text[parameter_start] - '0') orelse "";
+    }
+    if (arithmeticSpecialParameter(text[parameter_start])) |special| {
+        index.* = parameter_start + 1;
+        return expandParameter(shell, .{ .parameter = .{ .special = special } });
+    }
     if (!isArithmeticNameStart(text[parameter_start])) {
         index.* += 1;
         return "$";
@@ -2503,6 +2511,19 @@ fn expandArithmeticParameter(shell: anytype, text: []const u8, index: *usize) ![
     return parameterValue(shell, text[parameter_start..parameter_end]) orelse {
         if (shell.state.options.nounset) return error.InvalidArithmetic;
         return "";
+    };
+}
+
+fn arithmeticSpecialParameter(byte: u8) ?ast.SpecialParameter {
+    return switch (byte) {
+        '@' => .at,
+        '*' => .star,
+        '#' => .hash,
+        '?' => .question,
+        '-' => .hyphen,
+        '$' => .dollar,
+        '!' => .bang,
+        else => null,
     };
 }
 
