@@ -41,6 +41,8 @@ pub const CloseError = host.CloseError;
 
 pub const DuplicateError = host.DuplicateError;
 
+pub const FdFlagError = host.FdFlagError;
+
 pub const PipeError = host.PipeError;
 
 pub const ForkError = host.ForkError;
@@ -108,6 +110,14 @@ pub fn duplicateTo(from: host.Fd, to: host.Fd) DuplicateError!void {
     return switch (builtin.os.tag) {
         .linux => linuxDuplicateTo(from, to),
         .macos, .freebsd, .openbsd, .netbsd => libcDuplicateTo(from, to),
+        else => @compileError("unsupported host OS"),
+    };
+}
+
+pub fn setCloseOnExec(fd: host.Fd, enabled: bool) FdFlagError!void {
+    return switch (builtin.os.tag) {
+        .linux => linuxSetCloseOnExec(fd, enabled),
+        .macos, .freebsd, .openbsd, .netbsd => libcSetCloseOnExec(fd, enabled),
         else => @compileError("unsupported host OS"),
     };
 }
@@ -417,15 +427,48 @@ fn libcPipe() PipeError!host.Pipe {
     }
     errdefer close(@enumFromInt(fds[0])) catch {};
     errdefer close(@enumFromInt(fds[1])) catch {};
-    try setCloseOnExec(@enumFromInt(fds[0]));
-    try setCloseOnExec(@enumFromInt(fds[1]));
+    try setCloseOnExecForPipe(@enumFromInt(fds[0]));
+    try setCloseOnExecForPipe(@enumFromInt(fds[1]));
     return .{ .read = @enumFromInt(fds[0]), .write = @enumFromInt(fds[1]) };
 }
 
-fn setCloseOnExec(fd: host.Fd) PipeError!void {
+fn setCloseOnExecForPipe(fd: host.Fd) PipeError!void {
     const rc = std.c.fcntl(@intCast(fd.raw()), std.c.F.SETFD, @as(c_int, std.c.FD_CLOEXEC));
     switch (std.c.errno(rc)) {
         .SUCCESS => return,
+        else => return error.Unexpected,
+    }
+}
+
+fn linuxSetCloseOnExec(fd: host.Fd, enabled: bool) FdFlagError!void {
+    const linux = std.os.linux;
+    const get_rc = linux.fcntl(fd.raw(), linux.F.GETFD, 0);
+    const flags = switch (linux.errno(get_rc)) {
+        .SUCCESS => get_rc,
+        .BADF => return error.BadFd,
+        else => return error.Unexpected,
+    };
+    const new_flags = if (enabled) flags | linux.FD_CLOEXEC else flags & ~@as(usize, linux.FD_CLOEXEC);
+    const set_rc = linux.fcntl(fd.raw(), linux.F.SETFD, new_flags);
+    switch (linux.errno(set_rc)) {
+        .SUCCESS => return,
+        .BADF => return error.BadFd,
+        else => return error.Unexpected,
+    }
+}
+
+fn libcSetCloseOnExec(fd: host.Fd, enabled: bool) FdFlagError!void {
+    const get_rc = std.c.fcntl(@intCast(fd.raw()), std.c.F.GETFD, @as(c_int, 0));
+    const flags: c_int = switch (std.c.errno(get_rc)) {
+        .SUCCESS => get_rc,
+        .BADF => return error.BadFd,
+        else => return error.Unexpected,
+    };
+    const new_flags = if (enabled) flags | std.c.FD_CLOEXEC else flags & ~@as(c_int, std.c.FD_CLOEXEC);
+    const set_rc = std.c.fcntl(@intCast(fd.raw()), std.c.F.SETFD, new_flags);
+    switch (std.c.errno(set_rc)) {
+        .SUCCESS => return,
+        .BADF => return error.BadFd,
         else => return error.Unexpected,
     }
 }

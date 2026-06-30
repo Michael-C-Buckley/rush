@@ -105,6 +105,11 @@ pub const FileStatusError = error{
     Unexpected,
 };
 
+pub const FdFlagError = error{
+    BadFd,
+    Unexpected,
+};
+
 pub const SpawnFdAction = union(enum) {
     close: Fd,
     duplicate: struct {
@@ -206,6 +211,10 @@ pub const RealHost = struct {
 
     pub fn duplicateTo(_: *RealHost, from: Fd, to: Fd) platform.DuplicateError!void {
         try platform.duplicateTo(from, to);
+    }
+
+    pub fn setCloseOnExec(_: *RealHost, fd: Fd, enabled: bool) platform.FdFlagError!void {
+        try platform.setCloseOnExec(fd, enabled);
     }
 
     pub fn pipe(_: *RealHost) platform.PipeError!Pipe {

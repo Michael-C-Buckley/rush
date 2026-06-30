@@ -1751,6 +1751,8 @@ fn applyRedirection(
             if (opened != target) {
                 defer shell.host.close(opened) catch {};
                 try shell.host.duplicateTo(opened, target);
+            } else {
+                try shell.host.setCloseOnExec(target, false);
             }
         },
         .duplicate_input, .duplicate_output => unreachable,
@@ -1816,6 +1818,8 @@ fn applyHereDocRedirection(shell: anytype, target: host_mod.Fd, here_doc: ast.He
     if (pipe_desc.read != target) {
         defer shell.host.close(pipe_desc.read) catch {};
         try shell.host.duplicateTo(pipe_desc.read, target);
+    } else {
+        try shell.host.setCloseOnExec(target, false);
     }
     return pid;
 }
