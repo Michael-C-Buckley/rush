@@ -370,7 +370,7 @@ const Lexer = struct {
                 continue;
             }
             if (byte == '\\') {
-                quoted = true;
+                if (!self.peekNextIs('\n')) quoted = true;
                 self.advanceOne();
                 if (!self.atEnd()) self.advanceOne();
                 continue;
@@ -409,7 +409,8 @@ const Lexer = struct {
             if (isWordTerminator(byte)) break;
             self.advanceOne();
         }
-        const text = self.source.text[start_offset..self.position.byte_offset];
+        const raw_text = self.source.text[start_offset..self.position.byte_offset];
+        const text = try self.wordText(raw_text);
         const tok: token.Token = .{
             .kind = .word,
             .span = source_mod.Span.init(start, self.position.byte_offset),
@@ -419,6 +420,40 @@ const Lexer = struct {
         };
         tok.validate();
         try tokens.append(self.allocator, tok);
+    }
+
+    fn wordText(self: Lexer, raw_text: []const u8) ![]const u8 {
+        if (std.mem.indexOf(u8, raw_text, "\\\n") == null) return raw_text;
+
+        var output: std.ArrayList(u8) = .empty;
+        var index: usize = 0;
+        var quote: ?u8 = null;
+        while (index < raw_text.len) {
+            const byte = raw_text[index];
+            if (quote) |delimiter| {
+                if (byte == delimiter) quote = null;
+                if (delimiter == '"' and byte == '\\' and index + 1 < raw_text.len and raw_text[index + 1] == '\n') {
+                    index += 2;
+                    continue;
+                }
+                try output.append(self.allocator, byte);
+                index += 1;
+                continue;
+            }
+            if (byte == '\'' or byte == '"') {
+                quote = byte;
+                try output.append(self.allocator, byte);
+                index += 1;
+                continue;
+            }
+            if (byte == '\\' and index + 1 < raw_text.len and raw_text[index + 1] == '\n') {
+                index += 2;
+                continue;
+            }
+            try output.append(self.allocator, byte);
+            index += 1;
+        }
+        return output.toOwnedSlice(self.allocator);
     }
 
     fn startsIoNumber(self: Lexer) bool {
@@ -719,6 +754,27 @@ test "lexer removes top-level line continuations before comments" {
     try std.testing.expectEqual(token.Kind.newline, tokens[2].kind);
     try std.testing.expectEqualStrings("printf", tokens[3].text);
     try std.testing.expectEqualStrings("bar", tokens[4].text);
+}
+
+test "lexer removes line continuations inside word tokens" {
+    var arena: std.heap.ArenaAllocator = .init(std.testing.allocator);
+    defer arena.deinit();
+
+    const src: source_mod.Source = .{
+        .id = 1,
+        .kind = .command_string,
+        .name = "-c",
+        .text =
+        \\f\
+        \\(){ :; }
+        ,
+    };
+    const tokens = try lex(arena.allocator(), src);
+
+    try std.testing.expectEqual(token.Kind.word, tokens[0].kind);
+    try std.testing.expectEqualStrings("f", tokens[0].text);
+    try std.testing.expect(!tokens[0].quoted);
+    try std.testing.expectEqual(token.Kind.left_paren, tokens[1].kind);
 }
 
 test "lexer keeps dollar single quoted words separate" {
