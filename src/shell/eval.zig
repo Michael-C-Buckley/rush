@@ -363,13 +363,19 @@ fn evalCompound(shell: anytype, command: ast.CompoundInvocation) EvalError!resul
     const scratch = try shell.beginScratchScope();
     defer scratch.end();
 
+    if (command.redirections.len == 0) return evalCompoundBody(shell, command.body);
+
     var redirections = applyRedirections(shell, command.redirections) catch |err| switch (err) {
         error.OutOfMemory => return err,
         else => return redirectionFailure(shell, false),
     };
     defer redirections.restore(shell) catch {};
 
-    return switch (command.body) {
+    return evalCompoundBody(shell, command.body);
+}
+
+fn evalCompoundBody(shell: anytype, command: ast.CompoundCommand) EvalError!result.EvalResult {
+    return switch (command) {
         .brace_group => |body| evalList(shell, body),
         .if_command => |if_command| evalIf(shell, if_command),
         .loop => |loop| evalLoop(shell, loop),
@@ -732,12 +738,16 @@ fn writeReadonlyDiagnostic(shell: anytype, name: []const u8) !void {
 }
 
 fn evalSimpleScoped(shell: anytype, command: ast.SimpleCommand) EvalError!result.EvalResult {
-    var redirections = applyRedirections(shell, command.redirections) catch |err| switch (err) {
-        error.OutOfMemory => return err,
-        else => return redirectionFailure(shell, simpleRedirectionFailureIsFatal(command)),
-    };
+    const has_redirections = command.redirections.len != 0;
+    var redirections: AppliedRedirections = if (has_redirections)
+        applyRedirections(shell, command.redirections) catch |err| switch (err) {
+            error.OutOfMemory => return err,
+            else => return redirectionFailure(shell, simpleRedirectionFailureIsFatal(command)),
+        }
+    else
+        .{ .frames = &.{}, .here_doc_writers = &.{} };
     var restore_redirections = true;
-    defer if (restore_redirections) redirections.restore(shell) catch {};
+    defer if (restore_redirections and has_redirections) redirections.restore(shell) catch {};
 
     if (command.words.len == 0) {
         const expanded_assignments = try expandAndApplyAssignments(shell, command.assignments);
@@ -771,7 +781,7 @@ fn evalSimpleScoped(shell: anytype, command: ast.SimpleCommand) EvalError!result
             if (definition.id == .eval) return evalEvalBuiltin(shell, fields);
             if (definition.id == .exec) {
                 restore_redirections = false;
-                try redirections.commit(shell);
+                if (has_redirections) try redirections.commit(shell);
                 if (fields.len == 1) return .{};
                 return evalExecBuiltin(shell, fields);
             }
