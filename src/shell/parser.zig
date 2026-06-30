@@ -387,7 +387,7 @@ const Parser = struct {
                         continue;
                     }
                     if (name_start < end and text[name_start] == '{') {
-                        const expansion_end = std.mem.indexOfScalarPos(u8, text, name_start + 1, '}') orelse {
+                        const expansion_end = scanBracedParameterEnd(text, name_start, end) orelse {
                             index += 1;
                             continue;
                         };
@@ -833,6 +833,45 @@ fn scanDoubleQuoteEnd(text: []const u8, start: usize, end: usize) ParseError!usi
         index += 1;
     }
     return error.UnclosedQuote;
+}
+
+fn scanBracedParameterEnd(text: []const u8, open_index: usize, end: usize) ?usize {
+    std.debug.assert(open_index > 0);
+    std.debug.assert(text[open_index] == '{');
+
+    var index = open_index + 1;
+    var depth: usize = 1;
+    var quote: ?u8 = null;
+    while (index < end) {
+        const byte = text[index];
+        if (quote) |delimiter| {
+            if (byte == delimiter) quote = null;
+            index += 1;
+            continue;
+        }
+        switch (byte) {
+            '\'', '"' => {
+                quote = byte;
+                index += 1;
+            },
+            '\\' => index += if (index + 1 < end) 2 else 1,
+            '$' => if (index + 1 < end and text[index + 1] == '{') {
+                depth += 1;
+                index += 2;
+            } else if (index + 1 < end and text[index + 1] == '(') {
+                index = (scanCommandSubstitution(text, index + 1, end) catch return null) + 1;
+            } else {
+                index += 1;
+            },
+            '}' => {
+                depth -= 1;
+                if (depth == 0) return index;
+                index += 1;
+            },
+            else => index += 1,
+        }
+    }
+    return null;
 }
 
 fn scanCommandSubstitution(text: []const u8, open_index: usize, end: usize) ParseError!usize {
