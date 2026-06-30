@@ -26,6 +26,12 @@ const Lexer = struct {
             switch (self.peek()) {
                 ' ', '\t', '\r' => self.advanceOne(),
                 '\n' => try self.appendSingle(&tokens, .newline),
+                '\\' => if (self.peekNextIs('\n'))
+                    self.skipLineContinuation()
+                else if (self.startsIoNumber())
+                    try self.appendIoNumber(&tokens)
+                else
+                    try self.appendWord(&tokens),
                 ';' => try self.appendSemicolon(&tokens),
                 '&' => try self.appendAmpersand(&tokens),
                 '|' => try self.appendPipe(&tokens),
@@ -176,6 +182,13 @@ const Lexer = struct {
         while (!self.atEnd() and self.peek() != '\n') self.advanceOne();
     }
 
+    fn skipLineContinuation(self: *Lexer) void {
+        std.debug.assert(self.peek() == '\\');
+        std.debug.assert(self.peekNextIs('\n'));
+        self.advanceOne();
+        self.advanceOne();
+    }
+
     fn appendWord(self: *Lexer, tokens: *std.ArrayList(token.Token)) !void {
         const start = self.position;
         const start_offset = self.position.byte_offset;
@@ -265,6 +278,11 @@ const Lexer = struct {
         if (!isDigit(self.peek())) return false;
         var offset = self.position.byte_offset;
         while (offset < self.source.text.len and isDigit(self.source.text[offset])) offset += 1;
+        while (offset + 1 < self.source.text.len and self.source.text[offset] == '\\' and
+            self.source.text[offset + 1] == '\n')
+        {
+            offset += 2;
+        }
         return offset < self.source.text.len and isRedirectionStart(self.source.text[offset]);
     }
 
@@ -520,6 +538,27 @@ test "lexer treats backslash escaped quote as word text" {
     try std.testing.expectEqual(token.Kind.word, tokens[1].kind);
     try std.testing.expectEqualStrings("\\'3", tokens[1].text);
     try std.testing.expect(tokens[1].quoted);
+}
+
+test "lexer removes top-level line continuations before comments" {
+    const src: source_mod.Source = .{
+        .id = 1,
+        .kind = .command_string,
+        .name = "-c",
+        .text =
+        \\printf foo \
+        \\# comment
+        \\printf bar
+        ,
+    };
+    const tokens = try lex(std.testing.allocator, src);
+    defer std.testing.allocator.free(tokens);
+
+    try std.testing.expectEqualStrings("printf", tokens[0].text);
+    try std.testing.expectEqualStrings("foo", tokens[1].text);
+    try std.testing.expectEqual(token.Kind.newline, tokens[2].kind);
+    try std.testing.expectEqualStrings("printf", tokens[3].text);
+    try std.testing.expectEqualStrings("bar", tokens[4].text);
 }
 
 test "lexer keeps command substitutions inside words" {
