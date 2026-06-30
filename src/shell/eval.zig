@@ -9,8 +9,10 @@ const lexer = @import("lexer.zig");
 const parser = @import("parser.zig");
 const result = @import("result.zig");
 const source_mod = @import("source.zig");
+const state_mod = @import("state.zig");
 
 pub const EvalError = anyerror;
+const CopyError = std.mem.Allocator.Error;
 
 pub fn evalProgram(comptime Host: type, shell: anytype, program: ast.Program) EvalError!result.EvalResult {
     _ = Host;
@@ -149,8 +151,23 @@ fn pipelineFdActions(
 fn evalCommand(shell: anytype, command: ast.Command) EvalError!result.EvalResult {
     return switch (command) {
         .simple => |simple| evalSimple(shell, simple),
-        .compound, .function_definition => .{ .status = 2 },
+        .compound => |compound| evalCompound(shell, compound),
+        .function_definition => |definition| evalFunctionDefinition(shell, definition),
     };
+}
+
+fn evalCompound(shell: anytype, command: ast.CompoundInvocation) EvalError!result.EvalResult {
+    command.validate();
+    return switch (command.body) {
+        .brace_group => |body| evalList(shell, body),
+        else => .{ .status = 2 },
+    };
+}
+
+fn evalFunctionDefinition(shell: anytype, definition: ast.FunctionDefinition) EvalError!result.EvalResult {
+    definition.validate();
+    try shell.state.putPersistentFunction(try copyFunction(shell.state.definitionAllocator(), definition));
+    return .{};
 }
 
 fn evalSimple(shell: anytype, command: ast.SimpleCommand) EvalError!result.EvalResult {
@@ -184,7 +201,262 @@ fn evalSimple(shell: anytype, command: ast.SimpleCommand) EvalError!result.EvalR
         };
         return builtin.eval(shell, definition, args);
     }
+    if (shell.state.getFunction(name)) |function| return evalFunction(shell, function, command.assignments);
     return evalExternal(shell, fields, command.assignments);
+}
+
+const SavedVariable = struct {
+    name: []const u8,
+    variable: ?state_mod.Variable,
+};
+
+fn evalFunction(shell: anytype, function: state_mod.Function, assignments: []const ast.Assignment) EvalError!result.EvalResult {
+    function.validate();
+    const saved = try saveAssignmentVariables(shell, assignments);
+    defer restoreVariables(shell, saved);
+
+    try applyExportedAssignments(shell, assignments);
+    return evalCommand(shell, .{ .compound = .{ .body = function.definition.body } });
+}
+
+fn saveAssignmentVariables(shell: anytype, assignments: []const ast.Assignment) ![]const SavedVariable {
+    const saved = try shell.scratchAllocator().alloc(SavedVariable, assignments.len);
+    for (assignments, 0..) |assignment, index| {
+        saved[index] = .{
+            .name = assignment.name,
+            .variable = shell.state.getVariable(assignment.name),
+        };
+    }
+    return saved;
+}
+
+fn restoreVariables(shell: anytype, saved: []const SavedVariable) void {
+    var index = saved.len;
+    while (index != 0) {
+        index -= 1;
+        const entry = saved[index];
+        if (entry.variable) |variable| {
+            shell.state.putVariable(variable) catch {};
+        } else {
+            shell.state.removeVariable(entry.name);
+        }
+    }
+}
+
+fn applyExportedAssignments(shell: anytype, assignments: []const ast.Assignment) !void {
+    var status: ?result.ExitStatus = null;
+    for (assignments) |assignment| {
+        const value = try expandWordTracking(shell, assignment.value, &status);
+        try shell.state.putVariable(.{ .name = assignment.name, .value = value, .exported = true });
+    }
+}
+
+fn copyFunction(allocator: std.mem.Allocator, definition: ast.FunctionDefinition) CopyError!state_mod.Function {
+    const copied_name = try allocator.dupe(u8, definition.name);
+    errdefer allocator.free(copied_name);
+    const copied_definition: ast.FunctionDefinition = .{
+        .name = copied_name,
+        .body = try copyCompoundCommand(allocator, definition.body),
+        .redirections = try copyRedirections(allocator, definition.redirections),
+    };
+    copied_definition.validate();
+    return .{
+        .name = copied_name,
+        .source_text = copied_name,
+        .definition = copied_definition,
+    };
+}
+
+fn copyList(allocator: std.mem.Allocator, list: ast.List) CopyError!ast.List {
+    const entries = try allocator.alloc(ast.ListEntry, list.entries.len);
+    for (list.entries, 0..) |entry, index| {
+        entries[index] = .{
+            .and_or = try copyAndOr(allocator, entry.and_or),
+            .terminator = entry.terminator,
+        };
+    }
+    return .{ .entries = entries };
+}
+
+fn copyAndOr(allocator: std.mem.Allocator, and_or: ast.AndOr) CopyError!ast.AndOr {
+    const pipelines = try allocator.alloc(ast.AndOrPipeline, and_or.pipelines.len);
+    for (and_or.pipelines, 0..) |pipeline, index| {
+        pipelines[index] = .{
+            .operator = pipeline.operator,
+            .pipeline = try copyPipeline(allocator, pipeline.pipeline),
+        };
+    }
+    return .{ .pipelines = pipelines };
+}
+
+fn copyPipeline(allocator: std.mem.Allocator, pipeline: ast.Pipeline) CopyError!ast.Pipeline {
+    const stages = try allocator.alloc(ast.Command, pipeline.stages.len);
+    for (pipeline.stages, 0..) |stage, index| stages[index] = try copyCommand(allocator, stage);
+    return .{ .stages = stages, .negated = pipeline.negated };
+}
+
+fn copyCommand(allocator: std.mem.Allocator, command: ast.Command) CopyError!ast.Command {
+    return switch (command) {
+        .simple => |simple| .{ .simple = try copySimpleCommand(allocator, simple) },
+        .compound => |compound| .{ .compound = try copyCompoundInvocation(allocator, compound) },
+        .function_definition => |definition| .{ .function_definition = (try copyFunction(allocator, definition)).definition },
+    };
+}
+
+fn copyCompoundInvocation(allocator: std.mem.Allocator, invocation: ast.CompoundInvocation) CopyError!ast.CompoundInvocation {
+    return .{
+        .body = try copyCompoundCommand(allocator, invocation.body),
+        .redirections = try copyRedirections(allocator, invocation.redirections),
+    };
+}
+
+fn copyCompoundCommand(allocator: std.mem.Allocator, command: ast.CompoundCommand) CopyError!ast.CompoundCommand {
+    return switch (command) {
+        .brace_group => |list| .{ .brace_group = try copyList(allocator, list) },
+        .subshell => |list| .{ .subshell = try copyList(allocator, list) },
+        .if_command => |if_command| .{ .if_command = try copyIfCommand(allocator, if_command) },
+        .loop => |loop| .{ .loop = try copyLoopCommand(allocator, loop) },
+        .for_command => |for_command| .{ .for_command = try copyForCommand(allocator, for_command) },
+        .case_command => |case_command| .{ .case_command = try copyCaseCommand(allocator, case_command) },
+    };
+}
+
+fn copySimpleCommand(allocator: std.mem.Allocator, command: ast.SimpleCommand) CopyError!ast.SimpleCommand {
+    const assignments = try allocator.alloc(ast.Assignment, command.assignments.len);
+    for (command.assignments, 0..) |assignment, index| {
+        assignments[index] = .{
+            .name = assignment.name,
+            .value = try copyWord(allocator, assignment.value),
+            .span = assignment.span,
+        };
+    }
+
+    const words = try copyWords(allocator, command.words);
+    const redirections = try copyRedirections(allocator, command.redirections);
+    return .{
+        .assignments = assignments,
+        .words = words,
+        .redirections = redirections,
+        .span = command.span,
+    };
+}
+
+fn copyWords(allocator: std.mem.Allocator, words: []const ast.Word) CopyError![]const ast.Word {
+    const copied = try allocator.alloc(ast.Word, words.len);
+    for (words, 0..) |word, index| copied[index] = try copyWord(allocator, word);
+    return copied;
+}
+
+fn copyWord(allocator: std.mem.Allocator, word: ast.Word) CopyError!ast.Word {
+    return .{
+        .data = switch (word.data) {
+            .literal => |literal| .{ .literal = literal },
+            .parts => |parts| .{ .parts = try copyWordParts(allocator, parts) },
+        },
+        .span = word.span,
+    };
+}
+
+fn copyWordParts(allocator: std.mem.Allocator, parts: []const ast.WordPart) CopyError![]const ast.WordPart {
+    const copied = try allocator.alloc(ast.WordPart, parts.len);
+    for (parts, 0..) |part, index| {
+        copied[index] = switch (part) {
+            .literal => |bytes| .{ .literal = bytes },
+            .single_quoted => |bytes| .{ .single_quoted = bytes },
+            .double_quoted => |nested| .{ .double_quoted = try copyWordParts(allocator, nested) },
+            .parameter => |parameter| .{ .parameter = try copyParameterExpansion(allocator, parameter) },
+            .command_substitution => |substitution| .{
+                .command_substitution = try copyCommandSubstitution(allocator, substitution),
+            },
+            .arithmetic => |bytes| .{ .arithmetic = bytes },
+        };
+    }
+    return copied;
+}
+
+fn copyParameterExpansion(allocator: std.mem.Allocator, parameter: ast.ParameterExpansion) CopyError!ast.ParameterExpansion {
+    return .{
+        .parameter = parameter.parameter,
+        .length = parameter.length,
+        .colon = parameter.colon,
+        .op = parameter.op,
+        .word = if (parameter.word) |word| try copyWord(allocator, word) else null,
+    };
+}
+
+fn copyCommandSubstitution(
+    allocator: std.mem.Allocator,
+    substitution: ast.CommandSubstitution,
+) CopyError!ast.CommandSubstitution {
+    return .{
+        .source_text = substitution.source_text,
+        .parsed = if (substitution.parsed) |program| try copyProgramPtr(allocator, program.*) else null,
+    };
+}
+
+fn copyProgramPtr(allocator: std.mem.Allocator, program: ast.Program) CopyError!*const ast.Program {
+    const copied = try allocator.create(ast.Program);
+    copied.* = .{ .source_id = program.source_id, .body = try copyList(allocator, program.body) };
+    return copied;
+}
+
+fn copyRedirections(allocator: std.mem.Allocator, redirections: []const ast.Redirection) CopyError![]const ast.Redirection {
+    const copied = try allocator.alloc(ast.Redirection, redirections.len);
+    for (redirections, 0..) |redirection, index| {
+        copied[index] = .{
+            .fd = redirection.fd,
+            .op = redirection.op,
+            .target = try copyWord(allocator, redirection.target),
+            .here_doc = redirection.here_doc,
+            .span = redirection.span,
+        };
+    }
+    return copied;
+}
+
+fn copyIfCommand(allocator: std.mem.Allocator, command: ast.IfCommand) CopyError!ast.IfCommand {
+    const branches = try allocator.alloc(ast.IfBranch, command.branches.len);
+    for (command.branches, 0..) |branch, index| {
+        branches[index] = .{
+            .condition = try copyList(allocator, branch.condition),
+            .body = try copyList(allocator, branch.body),
+        };
+    }
+    return .{
+        .branches = branches,
+        .else_body = if (command.else_body) |body| try copyList(allocator, body) else null,
+    };
+}
+
+fn copyLoopCommand(allocator: std.mem.Allocator, command: ast.LoopCommand) CopyError!ast.LoopCommand {
+    return .{
+        .kind = command.kind,
+        .condition = try copyList(allocator, command.condition),
+        .body = try copyList(allocator, command.body),
+    };
+}
+
+fn copyForCommand(allocator: std.mem.Allocator, command: ast.ForCommand) CopyError!ast.ForCommand {
+    return .{
+        .name = command.name,
+        .words = switch (command.words) {
+            .positional_parameters => .positional_parameters,
+            .words => |words| .{ .words = try copyWords(allocator, words) },
+        },
+        .body = try copyList(allocator, command.body),
+    };
+}
+
+fn copyCaseCommand(allocator: std.mem.Allocator, command: ast.CaseCommand) CopyError!ast.CaseCommand {
+    const arms = try allocator.alloc(ast.CaseArm, command.arms.len);
+    for (command.arms, 0..) |arm, index| {
+        arms[index] = .{
+            .patterns = try copyWords(allocator, arm.patterns),
+            .body = try copyList(allocator, arm.body),
+            .fallthrough = arm.fallthrough,
+        };
+    }
+    return .{ .word = try copyWord(allocator, command.word), .arms = arms };
 }
 
 const AppliedRedirections = struct {
@@ -584,7 +856,8 @@ const AssignmentEnvEntry = struct {
 };
 
 fn makeExecEnvp(shell: anytype, assignments: []const ast.Assignment) ![:null]const ?[*:0]const u8 {
-    if (assignments.len == 0) {
+    const exported_count = countExportedVariables(shell);
+    if (assignments.len == 0 and exported_count == 0) {
         if (comptime @hasDecl(@TypeOf(shell.*), "execEnvp")) return shell.execEnvp();
 
         const envp = try shell.scratchAllocator().allocSentinel(?[*:0]const u8, shell.env.len, null);
@@ -593,13 +866,23 @@ fn makeExecEnvp(shell: anytype, assignments: []const ast.Assignment) ![:null]con
     }
 
     const allocator = shell.scratchAllocator();
-    const assignment_entries = try allocator.alloc(AssignmentEnvEntry, assignments.len);
-    for (assignments, 0..) |assignment, index| {
-        assignment_entries[index] = .{
+    const assignment_entries = try allocator.alloc(AssignmentEnvEntry, exported_count + assignments.len);
+    var entry_count: usize = 0;
+    var variable_iterator = shell.state.variables.iterator();
+    while (variable_iterator.next()) |entry| {
+        const variable = entry.value_ptr.*;
+        if (!variable.exported) continue;
+        assignment_entries[entry_count] = .{ .name = variable.name, .value = variable.value };
+        entry_count += 1;
+    }
+    for (assignments) |assignment| {
+        assignment_entries[entry_count] = .{
             .name = assignment.name,
             .value = try expandWord(shell, assignment.value),
         };
+        entry_count += 1;
     }
+    std.debug.assert(entry_count == assignment_entries.len);
 
     var env_len: usize = countBaseEnv(shell.env, assignment_entries);
     for (assignment_entries, 0..) |entry, index| {
@@ -622,6 +905,15 @@ fn makeExecEnvp(shell: anytype, assignments: []const ast.Assignment) ![:null]con
     }
     std.debug.assert(env_index == env_len);
     return envp;
+}
+
+fn countExportedVariables(shell: anytype) usize {
+    var count: usize = 0;
+    var iterator = shell.state.variables.iterator();
+    while (iterator.next()) |entry| {
+        if (entry.value_ptr.exported) count += 1;
+    }
+    return count;
 }
 
 fn makeEnvEntryZ(allocator: std.mem.Allocator, name: []const u8, value: []const u8) ![:0]const u8 {

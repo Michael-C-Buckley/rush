@@ -30,6 +30,10 @@ const Lexer = struct {
                 '&' => try self.appendAmpersand(&tokens),
                 '|' => try self.appendPipe(&tokens),
                 '!' => try self.appendSingle(&tokens, .bang),
+                '(' => try self.appendSingle(&tokens, .left_paren),
+                ')' => try self.appendSingle(&tokens, .right_paren),
+                '{' => try self.appendSingle(&tokens, .left_brace),
+                '}' => try self.appendSingle(&tokens, .right_brace),
                 '<', '>' => try self.appendRedirectionOperator(&tokens),
                 '#' => self.skipComment(),
                 else => if (self.startsIoNumber()) try self.appendIoNumber(&tokens) else try self.appendWord(&tokens),
@@ -241,7 +245,7 @@ const Lexer = struct {
 
 fn isWordTerminator(byte: u8) bool {
     return switch (byte) {
-        ' ', '\t', '\r', '\n', ';', '&', '|', '!', '<', '>' => true,
+        ' ', '\t', '\r', '\n', ';', '&', '|', '!', '(', ')', '{', '}', '<', '>' => true,
         else => false,
     };
 }

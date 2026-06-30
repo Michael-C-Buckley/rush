@@ -107,6 +107,14 @@ pub const State = struct {
         });
     }
 
+    pub fn removeVariable(self: *State, name: []const u8) void {
+        std.debug.assert(name.len != 0);
+        if (self.variables.fetchRemove(name)) |entry| {
+            self.allocator.free(entry.value.name);
+            self.allocator.free(entry.value.value);
+        }
+    }
+
     pub fn getFunction(self: State, name: []const u8) ?Function {
         std.debug.assert(name.len != 0);
         return self.functions.get(name);

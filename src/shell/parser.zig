@@ -35,19 +35,24 @@ const Parser = struct {
     index: usize = 0,
 
     fn parseProgram(self: *Parser) !ast.Program {
-        const body = try self.parseList();
+        const body = try self.parseList(.eof);
         try self.expect(.eof);
         const program: ast.Program = .{ .source_id = self.source.id, .body = body };
         program.validate();
         return program;
     }
 
-    fn parseList(self: *Parser) !ast.List {
+    const ListEnd = enum {
+        eof,
+        right_brace,
+    };
+
+    fn parseList(self: *Parser, end_kind: ListEnd) ParserError!ast.List {
         var entries: std.ArrayList(ast.ListEntry) = .empty;
         errdefer entries.deinit(self.allocator);
 
         self.skipSeparators();
-        while (!self.at(.eof)) {
+        while (!self.at(.eof) and !(end_kind == .right_brace and self.at(.right_brace))) {
             const and_or = try self.parseAndOr();
             var terminator: ?ast.ListTerminator = null;
             if (self.eat(.semicolon) != null) terminator = .sequence;
@@ -58,7 +63,7 @@ const Parser = struct {
         return .{ .entries = try entries.toOwnedSlice(self.allocator) };
     }
 
-    fn parseAndOr(self: *Parser) !ast.AndOr {
+    fn parseAndOr(self: *Parser) ParserError!ast.AndOr {
         var pipelines: std.ArrayList(ast.AndOrPipeline) = .empty;
         errdefer pipelines.deinit(self.allocator);
 
@@ -75,7 +80,7 @@ const Parser = struct {
         return and_or;
     }
 
-    fn parsePipeline(self: *Parser) !ast.Pipeline {
+    fn parsePipeline(self: *Parser) ParserError!ast.Pipeline {
         const negated = self.eat(.bang) != null;
         var stages: std.ArrayList(ast.Command) = .empty;
         errdefer stages.deinit(self.allocator);
@@ -91,11 +96,42 @@ const Parser = struct {
         return pipeline;
     }
 
-    fn parseCommand(self: *Parser) !ast.Command {
+    fn parseCommand(self: *Parser) ParserError!ast.Command {
+        if (try self.parseFunctionDefinition()) |definition| return .{ .function_definition = definition };
+        if (try self.parseCompoundCommand()) |compound| return .{ .compound = compound };
         return .{ .simple = try self.parseSimpleCommand() };
     }
 
-    fn parseSimpleCommand(self: *Parser) !ast.SimpleCommand {
+    fn parseFunctionDefinition(self: *Parser) ParserError!?ast.FunctionDefinition {
+        if (!self.at(.word)) return null;
+        const name_token = self.tokens[self.index];
+        if (name_token.quoted or !isAssignmentName(name_token.text)) return null;
+        if (self.index + 2 >= self.tokens.len) return null;
+        if (self.tokens[self.index + 1].kind != .left_paren or self.tokens[self.index + 2].kind != .right_paren) return null;
+
+        self.index += 3;
+        self.skipSeparators();
+        const compound = (try self.parseCompoundCommand()) orelse return error.ExpectedCommand;
+
+        const definition: ast.FunctionDefinition = .{
+            .name = name_token.text,
+            .body = compound.body,
+            .redirections = compound.redirections,
+        };
+        definition.validate();
+        return definition;
+    }
+
+    fn parseCompoundCommand(self: *Parser) ParserError!?ast.CompoundInvocation {
+        if (self.eat(.left_brace) == null) return null;
+        const body = try self.parseList(.right_brace);
+        try self.expect(.right_brace);
+        const invocation: ast.CompoundInvocation = .{ .body = .{ .brace_group = body } };
+        invocation.validate();
+        return invocation;
+    }
+
+    fn parseSimpleCommand(self: *Parser) ParserError!ast.SimpleCommand {
         var assignments: std.ArrayList(ast.Assignment) = .empty;
         errdefer assignments.deinit(self.allocator);
         var words: std.ArrayList(ast.Word) = .empty;
