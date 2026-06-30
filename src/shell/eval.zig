@@ -1728,6 +1728,11 @@ fn applyRedirection(
 ) !void {
     redirection.validate();
     const target = redirectionFd(redirection);
+    if (redirection.op == .duplicate_input or redirection.op == .duplicate_output) {
+        try applyDuplicateRedirection(shell, redirection, target, frames);
+        return;
+    }
+
     const saved = saveFd(shell, target) catch |err| switch (err) {
         error.BadFd => null,
         else => return err,
@@ -1743,23 +1748,45 @@ fn applyRedirection(
                 try shell.host.duplicateTo(opened, target);
             }
         },
-        .duplicate_input, .duplicate_output => {
-            const source_text = try expandWord(shell, redirection.target);
-            if (std.mem.eql(u8, source_text, "-")) {
-                shell.host.close(target) catch |err| switch (err) {
-                    error.Unexpected => {},
-                    else => return err,
-                };
-                return;
-            }
-            const source = try parseFd(source_text);
-            if (source != target) try shell.host.duplicateTo(source, target);
-        },
+        .duplicate_input, .duplicate_output => unreachable,
         .here_doc, .here_doc_strip_tabs => {
             const pid = try applyHereDocRedirection(shell, target, redirection.here_doc.?);
             try here_doc_writers.append(shell.scratchAllocator(), pid);
         },
     }
+}
+
+fn applyDuplicateRedirection(
+    shell: anytype,
+    redirection: ast.Redirection,
+    target: host_mod.Fd,
+    frames: *std.ArrayList(RedirectionFrame),
+) !void {
+    const source_text = try expandWord(shell, redirection.target);
+    if (std.mem.eql(u8, source_text, "-")) {
+        const saved = saveFd(shell, target) catch |err| switch (err) {
+            error.BadFd => null,
+            else => return err,
+        };
+        try frames.append(shell.scratchAllocator(), .{ .target = target, .saved = saved });
+        shell.host.close(target) catch |err| switch (err) {
+            error.Unexpected => {},
+            else => return err,
+        };
+        return;
+    }
+
+    const source = try parseFd(source_text);
+    if (source == target) return;
+    const probe = try shell.host.duplicate(source);
+    try shell.host.close(probe);
+
+    const saved = saveFd(shell, target) catch |err| switch (err) {
+        error.BadFd => null,
+        else => return err,
+    };
+    try frames.append(shell.scratchAllocator(), .{ .target = target, .saved = saved });
+    try shell.host.duplicateTo(source, target);
 }
 
 fn applyHereDocRedirection(shell: anytype, target: host_mod.Fd, here_doc: ast.HereDoc) !host_mod.Pid {
