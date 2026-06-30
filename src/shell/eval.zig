@@ -1147,6 +1147,7 @@ fn ArithmeticParser(comptime ShellType: type) type {
         shell: ShellType,
         text: []const u8,
         index: usize = 0,
+        evaluating: bool = true,
 
         const Self = @This();
 
@@ -1174,7 +1175,125 @@ fn ArithmeticParser(comptime ShellType: type) type {
                 }
             }
             self.index = rewind;
-            return self.parseAdd();
+            return self.parseConditional();
+        }
+
+        fn parseConditional(self: *Self) ArithmeticError!i64 {
+            const condition = try self.parseLogicalOr();
+            self.skipWhitespace();
+            if (!self.eat('?')) return condition;
+
+            const outer_evaluating = self.evaluating;
+            self.evaluating = outer_evaluating and condition != 0;
+            const true_value = try self.parseAssignment();
+            self.skipWhitespace();
+            if (!self.eat(':')) return error.InvalidArithmetic;
+            self.evaluating = outer_evaluating and condition == 0;
+            const false_value = try self.parseAssignment();
+            self.evaluating = outer_evaluating;
+            return if (condition != 0) true_value else false_value;
+        }
+
+        fn parseLogicalOr(self: *Self) ArithmeticError!i64 {
+            var value = try self.parseLogicalAnd();
+            var saw_operator = false;
+            while (true) {
+                self.skipWhitespace();
+                if (!self.eatString("||")) return if (saw_operator) if (value != 0) 1 else 0 else value;
+                saw_operator = true;
+                const outer_evaluating = self.evaluating;
+                self.evaluating = outer_evaluating and value == 0;
+                const rhs = try self.parseLogicalAnd();
+                self.evaluating = outer_evaluating;
+                value = if (value != 0 or rhs != 0) 1 else 0;
+            }
+        }
+
+        fn parseLogicalAnd(self: *Self) ArithmeticError!i64 {
+            var value = try self.parseBitOr();
+            var saw_operator = false;
+            while (true) {
+                self.skipWhitespace();
+                if (!self.eatString("&&")) return if (saw_operator) if (value != 0) 1 else 0 else value;
+                saw_operator = true;
+                const outer_evaluating = self.evaluating;
+                self.evaluating = outer_evaluating and value != 0;
+                const rhs = try self.parseBitOr();
+                self.evaluating = outer_evaluating;
+                value = if (value != 0 and rhs != 0) 1 else 0;
+            }
+        }
+
+        fn parseBitOr(self: *Self) ArithmeticError!i64 {
+            var value = try self.parseBitXor();
+            while (true) {
+                self.skipWhitespace();
+                if (self.eatSingle('|')) {
+                    value |= try self.parseBitXor();
+                } else {
+                    return value;
+                }
+            }
+        }
+
+        fn parseBitXor(self: *Self) ArithmeticError!i64 {
+            var value = try self.parseBitAnd();
+            while (true) {
+                self.skipWhitespace();
+                if (self.eat('^')) {
+                    value ^= try self.parseBitAnd();
+                } else {
+                    return value;
+                }
+            }
+        }
+
+        fn parseBitAnd(self: *Self) ArithmeticError!i64 {
+            var value = try self.parseRelational();
+            while (true) {
+                self.skipWhitespace();
+                if (self.eatSingle('&')) {
+                    value &= try self.parseRelational();
+                } else {
+                    return value;
+                }
+            }
+        }
+
+        fn parseRelational(self: *Self) ArithmeticError!i64 {
+            var value = try self.parseShift();
+            while (true) {
+                self.skipWhitespace();
+                if (self.eatString("==")) {
+                    value = if (value == try self.parseShift()) 1 else 0;
+                } else if (self.eatString("!=")) {
+                    value = if (value != try self.parseShift()) 1 else 0;
+                } else if (self.eatString(">=")) {
+                    value = if (value >= try self.parseShift()) 1 else 0;
+                } else if (self.eatString("<=")) {
+                    value = if (value <= try self.parseShift()) 1 else 0;
+                } else if (self.eat('>')) {
+                    value = if (value > try self.parseShift()) 1 else 0;
+                } else if (self.eat('<')) {
+                    value = if (value < try self.parseShift()) 1 else 0;
+                } else {
+                    return value;
+                }
+            }
+        }
+
+        fn parseShift(self: *Self) ArithmeticError!i64 {
+            var value = try self.parseAdd();
+            while (true) {
+                self.skipWhitespace();
+                if (self.eatString("<<")) {
+                    value = shiftLeft(value, try self.parseAdd());
+                } else if (self.eatString(">>")) {
+                    value = shiftRight(value, try self.parseAdd());
+                } else {
+                    return value;
+                }
+            }
         }
 
         fn parseAdd(self: *Self) ArithmeticError!i64 {
@@ -1199,10 +1318,12 @@ fn ArithmeticParser(comptime ShellType: type) type {
                     value *= try self.parseUnary();
                 } else if (self.eat('/')) {
                     const rhs = try self.parseUnary();
+                    if (!self.evaluating) return 0;
                     if (rhs == 0) return error.InvalidArithmetic;
                     value = @divTrunc(value, rhs);
                 } else if (self.eat('%')) {
                     const rhs = try self.parseUnary();
+                    if (!self.evaluating) return 0;
                     if (rhs == 0) return error.InvalidArithmetic;
                     value = @rem(value, rhs);
                 } else {
@@ -1262,6 +1383,7 @@ fn ArithmeticParser(comptime ShellType: type) type {
         }
 
         fn variableValue(self: *Self, name: []const u8) ArithmeticError!i64 {
+            if (!self.evaluating) return 0;
             const value = parameterValue(self.shell, name) orelse {
                 if (self.shell.state.options.nounset) return error.InvalidArithmetic;
                 return 0;
@@ -1270,6 +1392,7 @@ fn ArithmeticParser(comptime ShellType: type) type {
         }
 
         fn assignVariable(self: *Self, name: []const u8, value: i64) ArithmeticError!void {
+            if (!self.evaluating) return;
             const text = try std.fmt.allocPrint(self.shell.scratchAllocator(), "{}", .{value});
             self.shell.state.putVariable(.{ .name = name, .value = text }) catch |err| switch (err) {
                 error.OutOfMemory => return error.OutOfMemory,
@@ -1287,6 +1410,12 @@ fn ArithmeticParser(comptime ShellType: type) type {
             return true;
         }
 
+        fn eatSingle(self: *Self, byte: u8) bool {
+            if (self.peek() != byte or self.peekOffset(1) == byte) return false;
+            self.index += 1;
+            return true;
+        }
+
         fn eatString(self: *Self, bytes: []const u8) bool {
             if (!std.mem.startsWith(u8, self.text[self.index..], bytes)) return false;
             self.index += bytes.len;
@@ -1297,6 +1426,12 @@ fn ArithmeticParser(comptime ShellType: type) type {
             if (self.index >= self.text.len) return 0;
             return self.text[self.index];
         }
+
+        fn peekOffset(self: Self, offset: usize) u8 {
+            const target = self.index + offset;
+            if (target >= self.text.len) return 0;
+            return self.text[target];
+        }
     };
 }
 
@@ -1306,6 +1441,16 @@ fn isArithmeticNameStart(byte: u8) bool {
 
 fn isArithmeticNameContinue(byte: u8) bool {
     return isArithmeticNameStart(byte) or std.ascii.isDigit(byte);
+}
+
+fn shiftLeft(value: i64, amount: i64) i64 {
+    if (amount < 0 or amount >= 63) return 0;
+    return value << @as(u6, @intCast(amount));
+}
+
+fn shiftRight(value: i64, amount: i64) i64 {
+    if (amount < 0 or amount >= 63) return 0;
+    return value >> @as(u6, @intCast(amount));
 }
 
 fn expandCommandSubstitution(
