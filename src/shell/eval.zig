@@ -1088,11 +1088,16 @@ fn expandPathnamePattern(
     const slash_index = std.mem.indexOfScalar(u8, remaining, '/');
     const component = if (slash_index) |index| remaining[0..index] else remaining;
     const rest = if (slash_index) |index| remaining[index + 1 ..] else "";
+    const trailing_slash = slash_index != null and rest.len == 0;
     if (component.len == 0) return;
 
     if (!containsPatternMeta(component)) {
         const candidate = try joinPathComponent(allocator, prefix, component);
-        if (rest.len == 0) {
+        if (trailing_slash) {
+            if (try pathIsDirectory(shell, candidate, .other)) {
+                try matches.append(allocator, try std.fmt.allocPrint(allocator, "{s}/", .{candidate}));
+            }
+        } else if (rest.len == 0) {
             try matches.append(allocator, candidate);
         } else {
             try expandPathnamePattern(shell, allocator, matches, candidate, rest);
@@ -1107,7 +1112,11 @@ fn expandPathnamePattern(
         if (!globMatches(component, entry.name)) continue;
 
         const candidate = try joinPathComponent(allocator, prefix, entry.name);
-        if (rest.len == 0) {
+        if (trailing_slash) {
+            if (try pathIsDirectory(shell, candidate, entry.kind)) {
+                try matches.append(allocator, try std.fmt.allocPrint(allocator, "{s}/", .{candidate}));
+            }
+        } else if (rest.len == 0) {
             try matches.append(allocator, candidate);
         } else {
             try expandPathnamePattern(shell, allocator, matches, candidate, rest);
@@ -1118,6 +1127,15 @@ fn expandPathnamePattern(
 fn joinPathComponent(allocator: std.mem.Allocator, prefix: []const u8, component: []const u8) ![]const u8 {
     if (prefix.len == 0) return allocator.dupe(u8, component);
     return std.fmt.allocPrint(allocator, "{s}/{s}", .{ prefix, component });
+}
+
+fn pathIsDirectory(shell: anytype, path: []const u8, kind: host_mod.FileKind) !bool {
+    if (kind == .directory) return true;
+    if (kind == .file) return false;
+    const allocator = shell.scratchAllocator();
+    const directory = shell.host.listDir(allocator, path) catch return false;
+    _ = directory;
+    return true;
 }
 
 fn stringLessThan(_: void, lhs: []const u8, rhs: []const u8) bool {
