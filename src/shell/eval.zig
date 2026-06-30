@@ -511,7 +511,7 @@ fn evalSimpleScoped(shell: anytype, command: ast.SimpleCommand) EvalError!result
                 return evalExecBuiltin(shell, fields);
             }
             const args = switch (definition.id) {
-                .break_, .continue_, .exit, .set, .unset => fields,
+                .break_, .continue_, .exit, .return_, .set, .unset => fields,
                 else => &[_][]const u8{name},
             };
             return builtin.eval(shell, definition, args);
@@ -769,7 +769,7 @@ fn evalCommandBuiltin(
                 restored_assignments = true;
                 return evaluated;
             },
-            .alias, .break_, .continue_, .exit, .getopts, .printf, .set, .umask, .unalias, .unset => {
+            .alias, .break_, .continue_, .exit, .getopts, .printf, .return_, .set, .umask, .unalias, .unset => {
                 const evaluated = try builtin.eval(shell, definition, args[index..]);
                 restoreVariables(shell, saved);
                 restored_assignments = true;
@@ -1326,6 +1326,7 @@ fn evalFunction(
     } });
     try restorePositionals(shell, saved_positionals);
     restored_positionals = true;
+    if (evaluated.flow == .return_) return .{ .status = evaluated.status };
     return evaluated;
 }
 

@@ -31,6 +31,7 @@ pub const Id = enum {
     pwd,
     read,
     readonly,
+    return_,
     set,
     true_,
     type,
@@ -70,6 +71,7 @@ pub const definitions: DefinitionMap = .initComptime(.{
     .{ "pwd", Definition{ .name = "pwd", .id = .pwd, .kind = .regular } },
     .{ "read", Definition{ .name = "read", .id = .read, .kind = .regular } },
     .{ "readonly", Definition{ .name = "readonly", .id = .readonly, .kind = .special } },
+    .{ "return", Definition{ .name = "return", .id = .return_, .kind = .special } },
     .{ "set", Definition{ .name = "set", .id = .set, .kind = .special } },
     .{ "true", Definition{ .name = "true", .id = .true_, .kind = .regular } },
     .{ "type", Definition{ .name = "type", .id = .type, .kind = .regular } },
@@ -99,6 +101,7 @@ pub fn eval(shell: anytype, definition: Definition, args: []const []const u8) !r
         .getopts => evalGetopts(shell, args),
         .printf => evalPrintf(shell, args),
         .readonly => evalReadonly(shell, args),
+        .return_ => evalReturn(shell, args),
         .set => evalSet(shell, args),
         .umask => evalUmask(shell, args),
         .unalias => evalUnalias(shell, args),
@@ -369,6 +372,12 @@ fn permissionsForWho(who_mask: u32, permissions: u32) u32 {
 fn evalExit(shell: anytype, args: []const []const u8) result.EvalResult {
     const status = if (args.len > 1) parseExitStatus(args[1]) else shell.state.last_status;
     return .{ .status = status, .flow = .{ .exit = status } };
+}
+
+fn evalReturn(shell: anytype, args: []const []const u8) result.EvalResult {
+    if (args.len > 2) return .{ .status = 2 };
+    const status = if (args.len > 1) parseExitStatus(args[1]) else shell.state.last_status;
+    return .{ .status = status, .flow = .{ .return_ = status } };
 }
 
 fn parseExitStatus(text: []const u8) result.ExitStatus {
