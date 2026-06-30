@@ -734,9 +734,8 @@ fn evalSimpleScoped(shell: anytype, command: ast.SimpleCommand) EvalError!result
     defer if (restore_redirections) redirections.restore(shell) catch {};
 
     if (command.words.len == 0) {
-        const expanded_assignments = try expandAssignments(shell, command.assignments);
+        const expanded_assignments = try expandAndApplyAssignments(shell, command.assignments);
         try traceSimpleCommand(shell, expanded_assignments, &.{});
-        try applyExpandedAssignments(shell, expanded_assignments);
         const status = assignmentExpansionStatus(expanded_assignments);
         return .{ .status = status };
     }
@@ -2502,26 +2501,24 @@ fn applyAssignments(shell: anytype, assignments: []const ast.Assignment) !void {
 }
 
 fn applyAssignmentsWithStatus(shell: anytype, assignments: []const ast.Assignment) !result.ExitStatus {
-    const expanded = try expandAssignments(shell, assignments);
-    try applyExpandedAssignments(shell, expanded);
-    return assignmentExpansionStatus(expanded);
+    var status: ?result.ExitStatus = null;
+    for (assignments) |assignment| {
+        const value = try expandAssignmentWordTracking(shell, assignment.value, &status);
+        try shell.state.putVariable(.{ .name = assignment.name, .value = value });
+    }
+    return status orelse 0;
 }
 
-fn expandAssignments(shell: anytype, assignments: []const ast.Assignment) ![]const ExpandedAssignment {
+fn expandAndApplyAssignments(shell: anytype, assignments: []const ast.Assignment) ![]const ExpandedAssignment {
     if (assignments.len == 0) return &.{};
     const expanded = try shell.scratchAllocator().alloc(ExpandedAssignment, assignments.len);
     for (assignments, 0..) |assignment, index| {
         var status: ?result.ExitStatus = null;
         const value = try expandAssignmentWordTracking(shell, assignment.value, &status);
+        try shell.state.putVariable(.{ .name = assignment.name, .value = value });
         expanded[index] = .{ .name = assignment.name, .value = value, .status = status };
     }
     return expanded;
-}
-
-fn applyExpandedAssignments(shell: anytype, assignments: []const ExpandedAssignment) !void {
-    for (assignments) |assignment| {
-        try shell.state.putVariable(.{ .name = assignment.name, .value = assignment.value });
-    }
 }
 
 fn assignmentExpansionStatus(assignments: []const ExpandedAssignment) result.ExitStatus {
