@@ -1084,7 +1084,7 @@ fn expandPathnamePattern(
     matches: *std.ArrayList([]const u8),
     prefix: []const u8,
     remaining: []const u8,
-) !void {
+) error{OutOfMemory}!void {
     const slash_index = std.mem.indexOfScalar(u8, remaining, '/');
     const component = if (slash_index) |index| remaining[0..index] else remaining;
     const rest = if (slash_index) |index| remaining[index + 1 ..] else "";
@@ -1107,7 +1107,11 @@ fn expandPathnamePattern(
 
     const directory_path = if (prefix.len == 0) "." else prefix;
     const directory = shell.host.listDir(allocator, directory_path) catch return;
+    var saw_dot = false;
+    var saw_dotdot = false;
     for (directory.entries) |entry| {
+        if (std.mem.eql(u8, entry.name, ".")) saw_dot = true;
+        if (std.mem.eql(u8, entry.name, "..")) saw_dotdot = true;
         if (entry.name[0] == '.' and component[0] != '.') continue;
         if (!globMatches(component, entry.name)) continue;
 
@@ -1121,6 +1125,53 @@ fn expandPathnamePattern(
         } else {
             try expandPathnamePattern(shell, allocator, matches, candidate, rest);
         }
+    }
+    if (component[0] == '.') {
+        if (!saw_dot) {
+            try appendSyntheticDotPathnameMatch(
+                shell,
+                allocator,
+                matches,
+                prefix,
+                component,
+                rest,
+                trailing_slash,
+                ".",
+            );
+        }
+        if (!saw_dotdot) {
+            try appendSyntheticDotPathnameMatch(
+                shell,
+                allocator,
+                matches,
+                prefix,
+                component,
+                rest,
+                trailing_slash,
+                "..",
+            );
+        }
+    }
+}
+
+fn appendSyntheticDotPathnameMatch(
+    shell: anytype,
+    allocator: std.mem.Allocator,
+    matches: *std.ArrayList([]const u8),
+    prefix: []const u8,
+    component: []const u8,
+    rest: []const u8,
+    trailing_slash: bool,
+    entry_name: []const u8,
+) error{OutOfMemory}!void {
+    if (!globMatches(component, entry_name)) return;
+    const candidate = try joinPathComponent(allocator, prefix, entry_name);
+    if (trailing_slash) {
+        try matches.append(allocator, try std.fmt.allocPrint(allocator, "{s}/", .{candidate}));
+    } else if (rest.len == 0) {
+        try matches.append(allocator, candidate);
+    } else {
+        try expandPathnamePattern(shell, allocator, matches, candidate, rest);
     }
 }
 
