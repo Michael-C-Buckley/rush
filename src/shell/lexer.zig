@@ -19,10 +19,18 @@ pub fn lexWithAliases(
     src: source_mod.Source,
     shell_state: state_mod.State,
 ) std.mem.Allocator.Error![]const token.Token {
-    const tokens = try lex(allocator, src);
-    const expanded = try aliasExpandedSource(allocator, src, tokens, shell_state) orelse return tokens;
-    const expanded_src: source_mod.Source = .{ .id = src.id, .kind = src.kind, .name = src.name, .text = expanded };
-    return lex(allocator, expanded_src);
+    var current_src = src;
+    var seen_sources: std.ArrayList([]const u8) = .empty;
+    while (true) {
+        const tokens = try lex(allocator, current_src);
+        const expanded = try aliasExpandedSource(allocator, current_src, tokens, shell_state) orelse return tokens;
+        if (std.mem.eql(u8, expanded, current_src.text)) return lex(allocator, current_src);
+        for (seen_sources.items) |seen| {
+            if (std.mem.eql(u8, expanded, seen)) return lex(allocator, current_src);
+        }
+        try seen_sources.append(allocator, current_src.text);
+        current_src = .{ .id = src.id, .kind = src.kind, .name = src.name, .text = expanded };
+    }
 }
 
 fn aliasExpandedSource(
