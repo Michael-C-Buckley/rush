@@ -382,10 +382,15 @@ const Parser = struct {
         const equals_index = std.mem.indexOfScalar(u8, word_token.text, '=') orelse return null;
         if (!isAssignmentName(word_token.text[0..equals_index])) return null;
 
+        const value_span = spanFromRelativeOffsets(
+            word_token.span,
+            word_token.text,
+            equals_index + 1,
+            word_token.text.len,
+        );
         var value = try self.parseWordText(
             word_token.text[equals_index + 1 ..],
-            word_token.span,
-            word_token.span.start + equals_index + 1,
+            value_span,
         );
         value.quoted = word_token.quoted;
         value.validate();
@@ -400,7 +405,7 @@ const Parser = struct {
 
     fn parseWordToken(self: *Parser, word_token: token.Token) !ast.Word {
         std.debug.assert(word_token.kind == .word);
-        var word = try self.parseWordText(word_token.text, word_token.span, word_token.span.start);
+        var word = try self.parseWordText(word_token.text, word_token.span);
         word.quoted = word_token.quoted;
         word.validate();
         return word;
@@ -410,7 +415,6 @@ const Parser = struct {
         self: *Parser,
         text: []const u8,
         span: source_mod.Span,
-        source_start: usize,
     ) ParserError!ast.Word {
         if (std.mem.indexOfAny(u8, text, "'\"$\\`") == null) {
             const word: ast.Word = .{ .data = .{ .literal = text }, .span = span };
@@ -420,7 +424,7 @@ const Parser = struct {
 
         var parts: std.ArrayList(ast.WordPart) = .empty;
         errdefer parts.deinit(self.allocator);
-        try self.appendWordParts(&parts, text, 0, text.len, null, source_start);
+        try self.appendWordParts(&parts, text, 0, text.len, null, span);
 
         const word: ast.Word = .{ .data = .{ .parts = try parts.toOwnedSlice(self.allocator) }, .span = span };
         word.validate();
@@ -434,7 +438,7 @@ const Parser = struct {
         start: usize,
         end: usize,
         quote: ?u8,
-        source_start: usize,
+        span: source_mod.Span,
     ) ParserError!void {
         var index = start;
         var literal_start = start;
@@ -458,7 +462,7 @@ const Parser = struct {
 
                     var quoted_parts: std.ArrayList(ast.WordPart) = .empty;
                     errdefer quoted_parts.deinit(self.allocator);
-                    try self.appendWordParts(&quoted_parts, text, quote_start, index, '"', source_start);
+                    try self.appendWordParts(&quoted_parts, text, quote_start, index, '"', span);
                     try parts.append(self.allocator, .{
                         .double_quoted = try quoted_parts.toOwnedSlice(self.allocator),
                     });
@@ -535,7 +539,7 @@ const Parser = struct {
                             index += 1;
                             continue;
                         };
-                        const expansion_span = self.spanFromOffsets(source_start + index, source_start + expansion_end + 1);
+                        const expansion_span = spanFromRelativeOffsets(span, text, index, expansion_end + 1);
                         if (try self.parseBracedParameter(text[name_start + 1 .. expansion_end], expansion_span)) |parameter| {
                             if (literal_start < index) try parts.append(self.allocator, .{ .literal = text[literal_start..index] });
                             try parts.append(self.allocator, .{ .parameter = parameter });
@@ -550,7 +554,7 @@ const Parser = struct {
                             try parts.append(self.allocator, .{
                                 .parameter = .{
                                     .parameter = parameter,
-                                    .span = self.spanFromOffsets(source_start + index, source_start + name_start + 1),
+                                    .span = spanFromRelativeOffsets(span, text, index, name_start + 1),
                                 },
                             });
                             index = name_start + 1;
@@ -563,7 +567,7 @@ const Parser = struct {
                         try parts.append(self.allocator, .{
                             .parameter = .{
                                 .parameter = .{ .special = .question },
-                                .span = self.spanFromOffsets(source_start + index, source_start + name_start + 1),
+                                .span = spanFromRelativeOffsets(span, text, index, name_start + 1),
                             },
                         });
                         index = name_start + 1;
@@ -579,7 +583,7 @@ const Parser = struct {
                     try parts.append(self.allocator, .{
                         .parameter = .{
                             .parameter = .{ .variable = text[name_start..name_end] },
-                            .span = self.spanFromOffsets(source_start + index, source_start + name_end),
+                            .span = spanFromRelativeOffsets(span, text, index, name_end),
                         },
                     });
                     index = name_end;
@@ -667,7 +671,7 @@ const Parser = struct {
                 .parameter = prefix.parameter,
                 .colon = colon,
                 .op = parameterOperator(operator_byte),
-                .word = try self.parseWordText(word_text, .{}, 0),
+                .word = try self.parseWordText(word_text, .{}),
                 .span = span,
             };
         }
@@ -706,7 +710,7 @@ const Parser = struct {
         return .{
             .parameter = .{ .variable = name },
             .op = removal.operator,
-            .word = try self.parseWordText(removal.word_text, .{}, 0),
+            .word = try self.parseWordText(removal.word_text, .{}),
             .span = span,
         };
     }
@@ -771,10 +775,18 @@ const Parser = struct {
         return output.toOwnedSlice(self.allocator);
     }
 
-    fn spanFromOffsets(self: Parser, start: usize, end: usize) source_mod.Span {
-        var position: source_mod.Position = .{ .source_id = self.source.id };
-        position.advance(self.source.text[0..start]);
-        return source_mod.Span.init(position, end);
+    fn spanFromRelativeOffsets(span: source_mod.Span, text: []const u8, start: usize, end: usize) source_mod.Span {
+        std.debug.assert(start <= end);
+        std.debug.assert(end <= text.len);
+
+        var position: source_mod.Position = .{
+            .source_id = span.source_id,
+            .byte_offset = span.start,
+            .line = span.start_line,
+            .column = span.start_column,
+        };
+        position.advance(text[0..start]);
+        return source_mod.Span.init(position, span.start + end);
     }
 
     fn skipSeparators(self: *Parser) void {
