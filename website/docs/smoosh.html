@@ -19,9 +19,64 @@
 
   <p>Rush uses the Smoosh shell test suite as third-party compatibility evidence, not as the final POSIX authority.</p>
 
-  <p>When a Smoosh expectation disagrees with POSIX.1-2024 / Issue 8, <code>rush --posix</code> follows POSIX. The case below is Rush's documented expected Smoosh failure.</p>
+  <p>When a Smoosh expectation disagrees with POSIX.1-2024 / Issue 8, <code>rush --posix</code> follows POSIX. The cases below are Rush's documented expected Smoosh failures.</p>
 
-  <h2 id="expected-failure"><a href="#expected-failure">Expected failure</a></h2>
+  <h2 id="expected-failures"><a href="#expected-failures">Expected failures</a></h2>
+
+  <h3 id="non-posix-extensions"><a href="#non-posix-extensions">Non-POSIX extensions</a></h3>
+
+  <p>Rush does not need to match Smoosh expectations for extension features that POSIX does not require in <code>sh</code>.</p>
+
+  <ul>
+    <li><code>shell/builtin.history.nonposix</code>: tests <code>history</code>, <code>history -c</code>, and <code>set -o nolog</code>.</li>
+    <li><code>shell/builtin.source.nonexistent.earlyexit</code> and <code>shell/builtin.source.nonexistent</code>: <code>source</code> is a compatibility alias, not the POSIX dot utility.</li>
+    <li><code>shell/semantics.-h.nonposix</code>: <code>set -h</code> and command hash table contents are not a portable shell-script contract.</li>
+  </ul>
+
+  <h3 id="unspecified-control-flow"><a href="#unspecified-control-flow">Unspecified non-lexical loop control</a></h3>
+
+  <p>POSIX Issue 8 defines loop control in terms of lexically enclosing loops. It explicitly leaves room for unspecified behavior when <code>break</code> or <code>continue</code> is evaluated outside a lexically enclosing loop but another loop is in progress in the same execution environment.</p>
+
+  <ul>
+    <li><code>shell/builtin.break.nonlexical</code></li>
+    <li><code>shell/builtin.continue.nonlexical</code></li>
+    <li><code>shell/builtin.dot.break</code></li>
+  </ul>
+
+  <h3 id="diagnostic-and-status-details"><a href="#diagnostic-and-status-details">Diagnostic wording and exact status details</a></h3>
+
+  <p>Several Smoosh cases require exact diagnostics or exact non-zero status values where POSIX only requires a diagnostic, a non-zero status, or non-interactive shell abort semantics. Rush should keep the POSIX behavior, but does not need to match Smoosh byte-for-byte.</p>
+
+  <ul>
+    <li><code>shell/builtin.command.nospecial</code>: <code>command readonly</code> suppresses special-builtin abort, and Rush reports the readonly failure with non-zero status.</li>
+    <li><code>shell/builtin.dot.nonexistent</code>: POSIX requires a diagnostic and abort for a non-interactive <code>.</code> failure, not a specific message.</li>
+    <li><code>shell/builtin.readonly.assign.noninteractive</code>: assigning a readonly variable is fatal in a non-interactive POSIX shell; exact status and text are not normative.</li>
+    <li><code>shell/builtin.special.redir.error</code> and <code>shell/semantics.redir.close</code>: bad file descriptor redirection failures must diagnose and fail; exact wording and status vary across shells.</li>
+    <li><code>shell/builtin.unset</code>: unsetting a readonly variable fails with diagnostic and non-zero status; exact text is not normative.</li>
+    <li><code>shell/semantics.error.noninteractive</code>: non-interactive expansion errors abort with diagnostic; Smoosh's exact message is not a requirement.</li>
+  </ul>
+
+  <h3 id="assignment-redirection-order"><a href="#assignment-redirection-order">Function assignment and redirection expansion order</a></h3>
+
+  <p>Smoosh test: <code>shell/semantics.evalorder.fun</code></p>
+
+  <p>The case relies on side effects from <code>${x=...}</code> while expanding both an assignment word and a redirection word for a function invocation. POSIX specifies the broad ordering of redirections and assignments, but also says it is unspecified whether expansions for words used with assignments or redirections are carried out in the current execution environment or in the command's environment.</p>
+
+  <p>Dash and Smoosh choose the redirection-side effect; Bash POSIX and Rush choose the assignment-side effect. Rush should not change POSIX mode solely to match this Smoosh expectation.</p>
+
+  <h3 id="trap-status-cases"><a href="#trap-status-cases">Trap status cases where Smoosh is not the POSIX oracle</a></h3>
+
+  <p>Some Smoosh trap cases encode historical or reference-shell behavior around EXIT traps and status propagation. Rush should follow Issue 8 trap and exit rules rather than matching every Smoosh status expectation.</p>
+
+  <ul>
+    <li><code>shell/builtin.trap.subshell.false.exit</code></li>
+    <li><code>shell/builtin.trap.subshell.loud</code></li>
+    <li><code>shell/builtin.trap.subshell.loud2</code></li>
+    <li><code>shell/builtin.trap.subshell.true.ec1</code></li>
+    <li><code>shell/semantics.return.trap</code></li>
+  </ul>
+
+  <p>The <code>trap.chained</code>, async trap, and trap-inheritance Smoosh failures are not listed here because they track real Rush follow-up work.</p>
 
   <h3 id="trap-exit-status-after-special-builtin-error"><a href="#trap-exit-status-after-special-builtin-error">Trap exit status after a special builtin error</a></h3>
 
