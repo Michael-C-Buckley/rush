@@ -468,6 +468,10 @@ const Parser = struct {
                     continue;
                 },
                 '\\' => {
+                    if (quote == '"' and index + 1 < end and !doubleQuoteEscapes(text[index + 1])) {
+                        index += 1;
+                        continue;
+                    }
                     if (literal_start < index) try parts.append(self.allocator, .{ .literal = text[literal_start..index] });
                     index += 1;
                     if (index >= end) {
@@ -1030,6 +1034,13 @@ fn scanDoubleQuoteEnd(text: []const u8, start: usize, end: usize) ParseError!usi
     return error.UnclosedQuote;
 }
 
+fn doubleQuoteEscapes(byte: u8) bool {
+    return switch (byte) {
+        '$', '`', '"', '\\', '\n' => true,
+        else => false,
+    };
+}
+
 fn scanBracedParameterEnd(text: []const u8, open_index: usize, end: usize) ?usize {
     std.debug.assert(open_index > 0);
     std.debug.assert(text[open_index] == '{');
@@ -1277,6 +1288,25 @@ test "parser removes unquoted backslash escapes from word text" {
     try std.testing.expectEqualStrings("a", words[2].data.parts[0].literal);
     try std.testing.expectEqualStrings(" ", words[2].data.parts[1].escaped);
     try std.testing.expectEqualStrings("b", words[2].data.parts[2].literal);
+}
+
+test "parser preserves non-escaper backslashes inside double quotes" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const src: source_mod.Source = .{
+        .id = 1,
+        .kind = .command_string,
+        .name = "-c",
+        .text = "printf \"a\\ b\" \"ok\\n\"",
+    };
+    const tokens = try @import("lexer.zig").lex(allocator, src);
+    const program = try parse(allocator, src, tokens);
+    const words = program.body.entries[0].and_or.pipelines[0].pipeline.stages[0].simple.words;
+
+    try std.testing.expectEqualStrings("a\\ b", words[1].data.parts[0].double_quoted[0].literal);
+    try std.testing.expectEqualStrings("ok\\n", words[2].data.parts[0].double_quoted[0].literal);
 }
 
 test "parser recognizes leading assignment words" {
