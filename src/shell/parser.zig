@@ -5,6 +5,7 @@ const std = @import("std");
 const ast = @import("ast.zig");
 const lexer = @import("lexer.zig");
 const source_mod = @import("source.zig");
+const state_mod = @import("state.zig");
 const token = @import("token.zig");
 
 pub const ParseError = error{
@@ -22,9 +23,27 @@ pub fn parse(
     src: source_mod.Source,
     tokens: []const token.Token,
 ) ParserError!ast.Program {
+    return parseWithAliasState(allocator, src, tokens, null);
+}
+
+pub fn parseWithAliases(
+    allocator: std.mem.Allocator,
+    src: source_mod.Source,
+    tokens: []const token.Token,
+    shell_state: state_mod.State,
+) ParserError!ast.Program {
+    return parseWithAliasState(allocator, src, tokens, shell_state);
+}
+
+fn parseWithAliasState(
+    allocator: std.mem.Allocator,
+    src: source_mod.Source,
+    tokens: []const token.Token,
+    alias_state: ?state_mod.State,
+) ParserError!ast.Program {
     src.validate();
     std.debug.assert(tokens.len != 0);
-    var parser: Parser = .{ .allocator = allocator, .source = src, .tokens = tokens };
+    var parser: Parser = .{ .allocator = allocator, .source = src, .tokens = tokens, .alias_state = alias_state };
     return parser.parseProgram();
 }
 
@@ -32,6 +51,7 @@ const Parser = struct {
     allocator: std.mem.Allocator,
     source: source_mod.Source,
     tokens: []const token.Token,
+    alias_state: ?state_mod.State,
     index: usize = 0,
     pending_here_docs: std.ArrayList(PendingHereDoc) = .empty,
 
@@ -740,8 +760,11 @@ const Parser = struct {
             .name = "$()",
             .text = source_text,
         };
-        const tokens = try lexer.lex(self.allocator, src);
-        const program = try parse(self.allocator, src, tokens);
+        const tokens = if (self.alias_state) |alias_state|
+            try lexer.lexWithAliases(self.allocator, src, alias_state)
+        else
+            try lexer.lex(self.allocator, src);
+        const program = try parseWithAliasState(self.allocator, src, tokens, self.alias_state);
         const owned = try self.allocator.create(ast.Program);
         owned.* = program;
         return owned;

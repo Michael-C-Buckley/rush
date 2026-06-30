@@ -2845,8 +2845,8 @@ fn expandCommandSubstitution(
             .text = substitution.source_text,
         };
         const ast_allocator = shell.astAllocator();
-        const tokens = try lexer.lex(ast_allocator, src);
-        break :program try parser.parse(ast_allocator, src, tokens);
+        const tokens = try lexer.lexWithAliases(ast_allocator, src, shell.state);
+        break :program try parser.parseWithAliases(ast_allocator, src, tokens, shell.state);
     };
     const capture = try evalCommandSubstitutionInChild(shell, program);
     const status = capture.status;

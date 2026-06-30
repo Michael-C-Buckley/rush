@@ -118,7 +118,7 @@ pub fn Shell(comptime Host: type) type {
 
             const ast_allocator = self.astAllocator();
             const tokens = try lexer.lexWithAliases(ast_allocator, chunk_src, self.state);
-            const program = try parser.parse(ast_allocator, chunk_src, tokens);
+            const program = try parser.parseWithAliases(ast_allocator, chunk_src, tokens, self.state);
             program.validate();
             return eval.evalProgram(Host, self, program);
         }
