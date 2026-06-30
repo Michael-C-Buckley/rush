@@ -927,7 +927,11 @@ fn expandParameter(shell: anytype, parameter: ast.ParameterExpansion) EvalError!
             .assign_default => expandParameterAssignDefault(shell, parameter),
             .alternate_value => expandParameterAlternate(shell, parameter),
             .error_if_unset => expandParameterErrorIfUnset(shell, parameter),
-            else => "",
+            .remove_small_prefix,
+            .remove_large_prefix,
+            .remove_small_suffix,
+            .remove_large_suffix,
+            => expandParameterPatternRemoval(shell, parameter, operator),
         };
     }
 
@@ -994,6 +998,111 @@ fn expandParameterErrorIfUnset(shell: anytype, parameter: ast.ParameterExpansion
     const message = try expandWord(shell, parameter.word.?);
     try writeExpansionDiagnostic(shell, parameter, name, message);
     return error.ExpansionError;
+}
+
+fn expandParameterPatternRemoval(
+    shell: anytype,
+    parameter: ast.ParameterExpansion,
+    operator: ast.ParameterOperator,
+) EvalError![]const u8 {
+    const name = switch (parameter.parameter) {
+        .variable => |variable_name| variable_name,
+        else => return "",
+    };
+    const value = parameterValue(shell, name) orelse "";
+    const pattern = try expandWord(shell, parameter.word.?);
+    return switch (operator) {
+        .remove_small_prefix => removePrefix(value, pattern, .small),
+        .remove_large_prefix => removePrefix(value, pattern, .large),
+        .remove_small_suffix => removeSuffix(value, pattern, .small),
+        .remove_large_suffix => removeSuffix(value, pattern, .large),
+        else => unreachable,
+    };
+}
+
+const RemovalSize = enum {
+    small,
+    large,
+};
+
+fn removePrefix(value: []const u8, pattern: []const u8, size: RemovalSize) []const u8 {
+    switch (size) {
+        .small => {
+            var cut: usize = 0;
+            while (cut <= value.len) : (cut += 1) {
+                if (patternMatches(pattern, value[0..cut])) return value[cut..];
+            }
+        },
+        .large => {
+            var cut = value.len + 1;
+            while (cut != 0) {
+                cut -= 1;
+                if (patternMatches(pattern, value[0..cut])) return value[cut..];
+            }
+        },
+    }
+    return value;
+}
+
+fn removeSuffix(value: []const u8, pattern: []const u8, size: RemovalSize) []const u8 {
+    switch (size) {
+        .small => {
+            var cut = value.len + 1;
+            while (cut != 0) {
+                cut -= 1;
+                if (patternMatches(pattern, value[cut..])) return value[0..cut];
+            }
+        },
+        .large => {
+            var cut: usize = 0;
+            while (cut <= value.len) : (cut += 1) {
+                if (patternMatches(pattern, value[cut..])) return value[0..cut];
+            }
+        },
+    }
+    return value;
+}
+
+fn patternMatches(pattern: []const u8, text: []const u8) bool {
+    if (pattern.len == 0) return text.len == 0;
+    return switch (pattern[0]) {
+        '*' => patternMatchesStar(pattern[1..], text),
+        '?' => text.len != 0 and patternMatches(pattern[1..], text[1..]),
+        '[' => matchBracketPattern(pattern, text),
+        else => text.len != 0 and pattern[0] == text[0] and patternMatches(pattern[1..], text[1..]),
+    };
+}
+
+fn patternMatchesStar(pattern: []const u8, text: []const u8) bool {
+    if (pattern.len == 0) return true;
+    var offset: usize = 0;
+    while (offset <= text.len) : (offset += 1) {
+        if (patternMatches(pattern, text[offset..])) return true;
+    }
+    return false;
+}
+
+fn matchBracketPattern(pattern: []const u8, text: []const u8) bool {
+    if (text.len == 0) return false;
+    const close = std.mem.indexOfScalarPos(u8, pattern, 1, ']') orelse {
+        return pattern[0] == text[0] and patternMatches(pattern[1..], text[1..]);
+    };
+    if (bracketContains(pattern[1..close], text[0])) return patternMatches(pattern[close + 1 ..], text[1..]);
+    return false;
+}
+
+fn bracketContains(expression: []const u8, byte: u8) bool {
+    var index: usize = 0;
+    while (index < expression.len) {
+        if (index + 2 < expression.len and expression[index + 1] == '-') {
+            if (byte >= expression[index] and byte <= expression[index + 2]) return true;
+            index += 3;
+        } else {
+            if (byte == expression[index]) return true;
+            index += 1;
+        }
+    }
+    return false;
 }
 
 fn isParameterSet(parameter: ast.ParameterExpansion, value: ?[]const u8) bool {

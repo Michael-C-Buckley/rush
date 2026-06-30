@@ -400,6 +400,8 @@ const Parser = struct {
         const rest = content[name_end..];
         if (rest.len == 0) return .{ .parameter = .{ .variable = name }, .span = span };
 
+        if (try self.parsePatternRemoval(name, rest, span)) |parameter| return parameter;
+
         const colon = rest.len >= 2 and rest[0] == ':' and isParameterOperator(rest[1]);
         if (colon or isParameterOperator(rest[0])) {
             const operator_byte = if (colon) rest[1] else rest[0];
@@ -414,6 +416,42 @@ const Parser = struct {
         }
 
         return null;
+    }
+
+    fn parsePatternRemoval(
+        self: *Parser,
+        name: []const u8,
+        rest: []const u8,
+        span: source_mod.Span,
+    ) ParserError!?ast.ParameterExpansion {
+        if (rest.len == 0) return null;
+        const PatternRemoval = struct {
+            operator: ast.ParameterOperator,
+            word_text: []const u8,
+        };
+        const removal: PatternRemoval = switch (rest[0]) {
+            '#' => if (rest.len >= 2 and rest[1] == '#') .{
+                .operator = .remove_large_prefix,
+                .word_text = rest[2..],
+            } else .{
+                .operator = .remove_small_prefix,
+                .word_text = rest[1..],
+            },
+            '%' => if (rest.len >= 2 and rest[1] == '%') .{
+                .operator = .remove_large_suffix,
+                .word_text = rest[2..],
+            } else .{
+                .operator = .remove_small_suffix,
+                .word_text = rest[1..],
+            },
+            else => return null,
+        };
+        return .{
+            .parameter = .{ .variable = name },
+            .op = removal.operator,
+            .word = try self.parseWordText(removal.word_text, .{}, 0),
+            .span = span,
+        };
     }
 
     fn removeBackslashNewlines(self: *Parser, text: []const u8) ParserError![]const u8 {
