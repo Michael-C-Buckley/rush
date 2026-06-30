@@ -248,14 +248,14 @@ fn expandForWordFields(shell: anytype, words: []const ast.Word) ![]const []const
     const allocator = shell.scratchAllocator();
     var fields: std.ArrayList([]const u8) = .empty;
     for (words) |word| {
-        if (try appendSpecialQuotedFields(shell, &fields, word)) {
+        if (try appendUnquotedAtFields(shell, &fields, word) or try appendSpecialQuotedFields(shell, &fields, word)) {
             continue;
         } else {
             const expanded = try expandWordTracking(shell, word, null);
             if (wordContainsQuotes(word)) {
                 try fields.append(allocator, expanded);
             } else {
-                try appendSplitFields(allocator, &fields, expanded);
+                try appendSplitFields(shell, &fields, expanded);
             }
         }
     }
@@ -297,6 +297,30 @@ fn singleDoubleQuotedParameter(word: ast.Word) ?ast.ParameterExpansion {
             } else null,
             else => null,
         } else null,
+    };
+}
+
+fn appendUnquotedAtFields(shell: anytype, fields: *std.ArrayList([]const u8), word: ast.Word) !bool {
+    if (!wordIsUnquotedAt(word)) return false;
+    const preserve_empty = ifsHasNonWhitespaceDelimiter(parameterValue(shell, "IFS") orelse " \t\n");
+    for (shell.state.positionals) |positional| {
+        if (positional.len == 0 and preserve_empty) {
+            try fields.append(shell.scratchAllocator(), "");
+        } else {
+            try appendSplitFields(shell, fields, positional);
+        }
+    }
+    return true;
+}
+
+fn wordIsUnquotedAt(word: ast.Word) bool {
+    return switch (word.data) {
+        .literal => false,
+        .parts => |parts| parts.len == 1 and switch (parts[0]) {
+            .parameter => |parameter| parameter.op == null and parameter.parameter == .special and
+                parameter.parameter.special == .at,
+            else => false,
+        },
     };
 }
 
@@ -946,14 +970,14 @@ fn expandWordFields(
     var fields: std.ArrayList([]const u8) = .empty;
 
     for (words) |word| {
-        if (try appendSpecialQuotedFields(shell, &fields, word)) {
+        if (try appendUnquotedAtFields(shell, &fields, word) or try appendSpecialQuotedFields(shell, &fields, word)) {
             continue;
         } else {
             const expanded = try expandWordTracking(shell, word, substitution_status);
             if (wordContainsQuotes(word)) {
                 try fields.append(allocator, expanded);
             } else {
-                try appendSplitFields(allocator, &fields, expanded);
+                try appendSplitFields(shell, &fields, expanded);
             }
         }
     }
@@ -962,21 +986,97 @@ fn expandWordFields(
 }
 
 fn appendSplitFields(
-    allocator: std.mem.Allocator,
+    shell: anytype,
     fields: *std.ArrayList([]const u8),
     text: []const u8,
 ) !void {
-    var index: usize = 0;
-    while (index < text.len) {
-        while (index < text.len and isDefaultIfsWhitespace(text[index])) index += 1;
-        const start = index;
-        while (index < text.len and !isDefaultIfsWhitespace(text[index])) index += 1;
-        if (start != index) try fields.append(allocator, text[start..index]);
+    const allocator = shell.scratchAllocator();
+    const ifs = parameterValue(shell, "IFS") orelse " \t\n";
+    if (ifs.len == 0) {
+        if (text.len != 0) try fields.append(allocator, text);
+        return;
     }
+
+    var index: usize = 0;
+    while (ifsDelimiter(ifs, text, index)) |delimiter| {
+        if (!delimiter.whitespace) break;
+        index += delimiter.len;
+    }
+
+    var field_start = index;
+    while (index < text.len) {
+        if (ifsDelimiter(ifs, text, index)) |delimiter| {
+            if (delimiter.whitespace) {
+                if (field_start < index) try fields.append(allocator, text[field_start..index]);
+                index += delimiter.len;
+                while (ifsDelimiter(ifs, text, index)) |next| {
+                    if (!next.whitespace) break;
+                    index += next.len;
+                }
+                if (ifsDelimiter(ifs, text, index)) |next| {
+                    if (!next.whitespace) {
+                        index += next.len;
+                        while (ifsDelimiter(ifs, text, index)) |after| {
+                            if (!after.whitespace) break;
+                            index += after.len;
+                        }
+                    }
+                }
+                field_start = index;
+                continue;
+            }
+
+            try fields.append(allocator, text[field_start..index]);
+            index += delimiter.len;
+            while (ifsDelimiter(ifs, text, index)) |next| {
+                if (!next.whitespace) break;
+                index += next.len;
+            }
+            field_start = index;
+            continue;
+        }
+
+        index += utf8SequenceLength(text[index..]);
+    }
+    if (field_start < text.len) try fields.append(allocator, text[field_start..]);
 }
 
 fn isDefaultIfsWhitespace(byte: u8) bool {
     return byte == ' ' or byte == '\t' or byte == '\n';
+}
+
+const IfsDelimiter = struct {
+    len: usize,
+    whitespace: bool,
+};
+
+fn ifsDelimiter(ifs: []const u8, text: []const u8, index: usize) ?IfsDelimiter {
+    if (index >= text.len) return null;
+    var ifs_index: usize = 0;
+    while (ifs_index < ifs.len) {
+        const len = utf8SequenceLength(ifs[ifs_index..]);
+        if (index + len <= text.len and std.mem.eql(u8, text[index..][0..len], ifs[ifs_index..][0..len])) {
+            return .{ .len = len, .whitespace = len == 1 and isDefaultIfsWhitespace(ifs[ifs_index]) };
+        }
+        ifs_index += len;
+    }
+    return null;
+}
+
+fn ifsHasNonWhitespaceDelimiter(ifs: []const u8) bool {
+    var index: usize = 0;
+    while (index < ifs.len) {
+        const len = utf8SequenceLength(ifs[index..]);
+        if (len != 1 or !isDefaultIfsWhitespace(ifs[index])) return true;
+        index += len;
+    }
+    return false;
+}
+
+fn utf8SequenceLength(text: []const u8) usize {
+    if (text.len == 0) return 0;
+    const len = std.unicode.utf8ByteSequenceLength(text[0]) catch 1;
+    return @min(len, text.len);
 }
 
 fn wordContainsQuotes(word: ast.Word) bool {
