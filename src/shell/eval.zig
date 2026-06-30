@@ -7548,6 +7548,17 @@ fn executePendingTrapsWithFrame(
             effective_control_flow;
         result = .{ .status = action_outcome.status, .control_flow = action_control_flow };
         if (action_control_flow != .normal) break;
+        if (try executeNestedRuntimeTraps(
+            evaluator,
+            &working_state,
+            eval_context,
+            resolver,
+            &trap_frame,
+            &buffers,
+        )) |nested_result| {
+            result = nested_result;
+            if (nested_result.control_flow != .normal) break;
+        }
     }
 
     var state_delta = delta.StateDelta.init(evaluator.allocator, eval_context.target);
@@ -7576,6 +7587,68 @@ fn executePendingTrapsWithFrame(
         control_flow,
         &buffers,
     );
+}
+
+fn executeNestedRuntimeTraps(
+    evaluator: *Evaluator,
+    shell_state: *state.ShellState,
+    eval_context: context.EvalContext,
+    resolver: TrapActionResolver,
+    trap_frame: *execution_frame.ExecutionFrame,
+    buffers: *EvaluationBuffers,
+) EvalError!?SimpleEvalResult {
+    eval_context.validate();
+    resolver.validate();
+    trap_frame.validate();
+    shell_state.validate();
+    std.debug.assert(shell_state.trap_execution == .running);
+    const signal_port = evaluator.signal_port orelse return null;
+    _ = signal_port;
+
+    var result: ?SimpleEvalResult = null;
+    while (try observeRuntimeSignal(evaluator, shell_state, eval_context)) |observed| {
+        var observation = observed;
+        defer observation.deinit();
+        switch (observation.delivery) {
+            .ignored => continue,
+            .default_action => return .{
+                .status = observation.command_outcome.status,
+                .control_flow = observation.command_outcome.effectiveControlFlow(),
+            },
+            .queued => {},
+        }
+
+        const registered = shell_state.getTrapForSignal(observation.signal) orelse continue;
+        registered.validate();
+        if (registered.kind() == .ignore) continue;
+
+        const preserved_status = shell_state.last_status;
+        var body = (resolver.resolve(
+            evaluator.allocator,
+            registered.action,
+            observation.signal,
+            eval_context,
+            shell_state,
+        ) catch |err| switch (err) {
+            error.OutOfMemory => return error.OutOfMemory,
+            else => return error.Unimplemented,
+        }) orelse return error.Unimplemented;
+        defer body.deinit();
+
+        var action_outcome = try evaluateTrapActionBody(evaluator, shell_state, eval_context, body, trap_frame);
+        defer action_outcome.deinit();
+        try appendOutcomeBuffers(buffers, action_outcome);
+        try applyOutcomeToWorkingState(shell_state, &action_outcome, action_outcome.state_delta.target);
+
+        const control_flow = action_outcome.effectiveControlFlow();
+        if (control_flow == .normal) {
+            shell_state.last_status = preserved_status;
+            result = .{ .status = preserved_status };
+            continue;
+        }
+        return .{ .status = action_outcome.status, .control_flow = control_flow };
+    }
+    return result;
 }
 
 fn interactiveSubshellExitTrapActionEndsWithExit(

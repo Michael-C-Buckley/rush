@@ -49,6 +49,17 @@
             .status = 7,
         },
         .{
+            .name = "exit without operands in nested trap uses nested pre-trap status",
+            .script =
+            \\trap exit INT
+            \\trap 'true; kill -s INT $$' EXIT
+            \\false
+            ,
+            .stdout = "",
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "EXIT signal name is equivalent to signal number zero",
             .script =
             \\trap 'printf "%s\n" exit-name' EXIT
