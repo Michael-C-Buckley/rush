@@ -9,6 +9,7 @@ pub const invocation = @import("shell/invocation.zig");
 pub const lexer = @import("shell/lexer.zig");
 pub const memory = @import("shell/memory.zig");
 pub const parser = @import("shell/parser.zig");
+pub const printf = @import("shell/printf.zig");
 pub const result = @import("shell/result.zig");
 pub const source = @import("shell/source.zig");
 pub const state = @import("shell/state.zig");

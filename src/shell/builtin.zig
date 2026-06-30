@@ -3,6 +3,7 @@
 const std = @import("std");
 
 const host = @import("../host.zig");
+const printf = @import("printf.zig");
 const result = @import("result.zig");
 
 pub const Kind = enum {
@@ -48,75 +49,21 @@ pub fn eval(shell: anytype, definition: Definition, args: []const []const u8) !r
     return switch (definition.id) {
         .colon, .true_ => .{},
         .false_ => .{ .status = 1 },
-        .printf => evalPrintf(shell, args[1..]),
+        .printf => evalPrintf(shell, args),
     };
 }
 
 fn evalPrintf(shell: anytype, args: []const []const u8) !result.EvalResult {
-    if (args.len == 0) return .{};
-
-    var output: std.ArrayList(u8) = .empty;
     const allocator = shell.scratchAllocator();
-    defer output.deinit(allocator);
-    const format = args[0];
-    var arg_index: usize = 1;
+    var stdout: std.ArrayList(u8) = .empty;
+    defer stdout.deinit(allocator);
+    var stderr: std.ArrayList(u8) = .empty;
+    defer stderr.deinit(allocator);
 
-    while (arg_index < args.len or arg_index == 1) {
-        try appendPrintfFormat(&output, allocator, format, args, &arg_index);
-        if (arg_index >= args.len) break;
-    }
-
-    try shell.host.writeAll(host.Fd.stdout, output.items);
-    return .{};
-}
-
-fn appendPrintfFormat(
-    output: *std.ArrayList(u8),
-    allocator: std.mem.Allocator,
-    format: []const u8,
-    args: []const []const u8,
-    arg_index: *usize,
-) std.mem.Allocator.Error!void {
-    var index: usize = 0;
-    while (index < format.len) {
-        switch (format[index]) {
-            '%' => {
-                index += 1;
-                if (index >= format.len) {
-                    try output.append(allocator, '%');
-                    break;
-                }
-                switch (format[index]) {
-                    '%' => try output.append(allocator, '%'),
-                    's' => {
-                        const arg = if (arg_index.* < args.len) args[arg_index.*] else "";
-                        if (arg_index.* < args.len) arg_index.* += 1;
-                        try output.appendSlice(allocator, arg);
-                    },
-                    else => |byte| {
-                        try output.append(allocator, '%');
-                        try output.append(allocator, byte);
-                    },
-                }
-            },
-            '\\' => {
-                index += 1;
-                if (index >= format.len) {
-                    try output.append(allocator, '\\');
-                    break;
-                }
-                try output.append(allocator, switch (format[index]) {
-                    'n' => '\n',
-                    'r' => '\r',
-                    't' => '\t',
-                    '\\' => '\\',
-                    else => format[index],
-                });
-            },
-            else => |byte| try output.append(allocator, byte),
-        }
-        index += 1;
-    }
+    const status = try printf.evaluate(allocator, args, &stdout, &stderr);
+    if (stdout.items.len != 0) try shell.host.writeAll(host.Fd.stdout, stdout.items);
+    if (stderr.items.len != 0) try shell.host.writeAll(host.Fd.stderr, stderr.items);
+    return .{ .status = status };
 }
 
 test "builtin lookup identifies null true and false utilities" {
@@ -149,15 +96,20 @@ test "builtin eval returns utility status" {
 
 test "printf writes formatted output once" {
     const TestHost = struct {
-        output: std.ArrayList(u8) = .empty,
+        stdout: std.ArrayList(u8) = .empty,
+        stderr: std.ArrayList(u8) = .empty,
 
         fn deinit(self: *@This()) void {
-            self.output.deinit(std.testing.allocator);
+            self.stdout.deinit(std.testing.allocator);
+            self.stderr.deinit(std.testing.allocator);
         }
 
         fn writeAll(self: *@This(), fd: host.Fd, bytes: []const u8) !void {
-            try std.testing.expectEqual(host.Fd.stdout, fd);
-            try self.output.appendSlice(std.testing.allocator, bytes);
+            switch (fd) {
+                .stdout => try self.stdout.appendSlice(std.testing.allocator, bytes),
+                .stderr => try self.stderr.appendSlice(std.testing.allocator, bytes),
+                else => unreachable,
+            }
         }
     };
     const TestShell = struct {
@@ -175,5 +127,6 @@ test "printf writes formatted output once" {
     const evaluated = try eval(&shell, printf_definition, &.{ "printf", "%s\\n", "hello" });
 
     try std.testing.expectEqual(@as(result.ExitStatus, 0), evaluated.status);
-    try std.testing.expectEqualStrings("hello\n", shell.host.output.items);
+    try std.testing.expectEqualStrings("hello\n", shell.host.stdout.items);
+    try std.testing.expectEqualStrings("", shell.host.stderr.items);
 }
