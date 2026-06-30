@@ -1316,7 +1316,10 @@ fn evalFunction(shell: anytype, function: state_mod.Function, assignments: []con
     defer restoreVariables(shell, saved);
 
     try applyExportedAssignments(shell, assignments);
-    return evalCommand(shell, .{ .compound = .{ .body = function.definition.body } });
+    return evalCommand(shell, .{ .compound = .{
+        .body = function.definition.body,
+        .redirections = function.definition.redirections,
+    } });
 }
 
 fn saveAssignmentVariables(shell: anytype, assignments: []const ast.Assignment) ![]const SavedVariable {

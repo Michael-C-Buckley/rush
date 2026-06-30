@@ -90,6 +90,7 @@ const Parser = struct {
 
         try pipelines.append(self.allocator, .{ .pipeline = try self.parsePipeline() });
         while (self.eatAndOrOperator()) |operator| {
+            while (self.eat(.newline) != null) {}
             try pipelines.append(self.allocator, .{
                 .operator = operator,
                 .pipeline = try self.parsePipeline(),
