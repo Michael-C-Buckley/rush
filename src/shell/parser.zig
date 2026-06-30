@@ -8,6 +8,7 @@ const token = @import("token.zig");
 
 pub const ParseError = error{
     ExpectedCommand,
+    ExpectedRedirectionTarget,
     UnclosedQuote,
     UnexpectedToken,
 };
@@ -89,9 +90,18 @@ const Parser = struct {
         errdefer assignments.deinit(self.allocator);
         var words: std.ArrayList(ast.Word) = .empty;
         errdefer words.deinit(self.allocator);
+        var redirections: std.ArrayList(ast.Redirection) = .empty;
+        errdefer redirections.deinit(self.allocator);
         var command_span: ?source_mod.Span = null;
 
-        while (self.eat(.word)) |word_token| {
+        while (true) {
+            if (try self.parseRedirection()) |redirection| {
+                try redirections.append(self.allocator, redirection);
+                command_span = extendCommandSpan(command_span, redirection.span);
+                continue;
+            }
+
+            const word_token = self.eat(.word) orelse break;
             if (words.items.len == 0) {
                 if (try self.parseAssignment(word_token)) |assignment| {
                     try assignments.append(self.allocator, assignment);
@@ -105,14 +115,37 @@ const Parser = struct {
             command_span = extendCommandSpan(command_span, word_token.span);
         }
 
-        if (assignments.items.len == 0 and words.items.len == 0) return error.ExpectedCommand;
+        if (assignments.items.len == 0 and words.items.len == 0 and redirections.items.len == 0) {
+            return error.ExpectedCommand;
+        }
         const command: ast.SimpleCommand = .{
             .assignments = try assignments.toOwnedSlice(self.allocator),
             .words = try words.toOwnedSlice(self.allocator),
+            .redirections = try redirections.toOwnedSlice(self.allocator),
             .span = command_span.?,
         };
         command.validate();
         return command;
+    }
+
+    fn parseRedirection(self: *Parser) !?ast.Redirection {
+        const fd_token = self.eat(.io_number);
+        const operator_token = if (self.eatRedirectionOperator()) |tok| tok else {
+            if (fd_token != null) return error.UnexpectedToken;
+            return null;
+        };
+        const target_token = self.eat(.word) orelse return error.ExpectedRedirectionTarget;
+        const redirection: ast.Redirection = .{
+            .fd = if (fd_token) |tok| try parseIoNumber(tok.text) else null,
+            .op = redirectionOperator(operator_token.kind),
+            .target = try self.parseWordToken(target_token),
+            .span = extendCommandSpan(
+                if (fd_token) |tok| tok.span else null,
+                spanTo(operator_token.span, target_token.span.end),
+            ),
+        };
+        redirection.validate();
+        return redirection;
     }
 
     fn parseAssignment(self: *Parser, word_token: token.Token) !?ast.Assignment {
@@ -244,11 +277,42 @@ const Parser = struct {
         return null;
     }
 
+    fn eatRedirectionOperator(self: *Parser) ?token.Token {
+        return switch (self.tokens[self.index].kind) {
+            .less,
+            .less_ampersand,
+            .less_greater,
+            .greater,
+            .greater_greater,
+            .greater_ampersand,
+            .clobber,
+            => self.eat(self.tokens[self.index].kind).?,
+            else => null,
+        };
+    }
+
     fn at(self: Parser, kind: token.Kind) bool {
         std.debug.assert(self.index < self.tokens.len);
         return self.tokens[self.index].kind == kind;
     }
 };
+
+fn parseIoNumber(text: []const u8) !u31 {
+    return std.fmt.parseInt(u31, text, 10) catch error.UnexpectedToken;
+}
+
+fn redirectionOperator(kind: token.Kind) ast.RedirectionOperator {
+    return switch (kind) {
+        .less => .input,
+        .less_ampersand => .duplicate_input,
+        .less_greater => .read_write,
+        .greater => .output,
+        .greater_greater => .append,
+        .greater_ampersand => .duplicate_output,
+        .clobber => .clobber,
+        else => unreachable,
+    };
+}
 
 fn extendCommandSpan(existing: ?source_mod.Span, span: source_mod.Span) source_mod.Span {
     return if (existing) |current| .{
@@ -258,6 +322,17 @@ fn extendCommandSpan(existing: ?source_mod.Span, span: source_mod.Span) source_m
         .start_line = current.start_line,
         .start_column = current.start_column,
     } else span;
+}
+
+fn spanTo(start: source_mod.Span, end: usize) source_mod.Span {
+    std.debug.assert(end >= start.start);
+    return .{
+        .source_id = start.source_id,
+        .start = start.start,
+        .end = end,
+        .start_line = start.start_line,
+        .start_column = start.start_column,
+    };
 }
 
 fn isAssignmentName(name: []const u8) bool {

@@ -4,6 +4,7 @@ const std = @import("std");
 
 const ast = @import("ast.zig");
 const builtin = @import("builtin.zig");
+const host_mod = @import("../host.zig");
 const result = @import("result.zig");
 
 pub const EvalError = anyerror;
@@ -58,6 +59,12 @@ fn evalSimple(shell: anytype, command: ast.SimpleCommand) EvalError!result.EvalR
     command.validate();
     shell.resetScratch();
 
+    var redirections = applyRedirections(shell, command.redirections) catch |err| switch (err) {
+        error.OutOfMemory => return err,
+        else => return .{ .status = 1 },
+    };
+    defer redirections.restore(shell) catch {};
+
     if (command.words.len == 0) {
         try applyAssignments(shell, command.assignments);
         return .{};
@@ -73,6 +80,111 @@ fn evalSimple(shell: anytype, command: ast.SimpleCommand) EvalError!result.EvalR
         return builtin.eval(shell, definition, args);
     }
     return evalExternal(shell, command.words);
+}
+
+const AppliedRedirections = struct {
+    frames: []const RedirectionFrame,
+
+    fn restore(self: AppliedRedirections, shell: anytype) !void {
+        var index = self.frames.len;
+        while (index != 0) {
+            index -= 1;
+            const frame = self.frames[index];
+            if (frame.saved) |saved| {
+                try shell.host.duplicateTo(saved, frame.target);
+                try shell.host.close(saved);
+            } else {
+                shell.host.close(frame.target) catch |err| switch (err) {
+                    error.Unexpected => {},
+                    else => return err,
+                };
+            }
+        }
+    }
+};
+
+const RedirectionFrame = struct {
+    target: host_mod.Fd,
+    saved: ?host_mod.Fd,
+};
+
+fn applyRedirections(shell: anytype, redirections: []const ast.Redirection) !AppliedRedirections {
+    var frames: std.ArrayList(RedirectionFrame) = .empty;
+    errdefer restoreFrames(shell, frames.items) catch {};
+
+    for (redirections) |redirection| {
+        try applyRedirection(shell, redirection, &frames);
+    }
+
+    return .{ .frames = try frames.toOwnedSlice(shell.scratchAllocator()) };
+}
+
+fn applyRedirection(shell: anytype, redirection: ast.Redirection, frames: *std.ArrayList(RedirectionFrame)) !void {
+    redirection.validate();
+    const target = redirectionFd(redirection);
+    const saved = saveFd(shell, target) catch |err| switch (err) {
+        error.BadFd => null,
+        else => return err,
+    };
+    try frames.append(shell.scratchAllocator(), .{ .target = target, .saved = saved });
+
+    switch (redirection.op) {
+        .input, .output, .append, .read_write, .clobber => {
+            const path = try shell.scratchAllocator().dupeZ(u8, try expandWord(shell, redirection.target));
+            const opened = try shell.host.openZ(path, openOptions(redirection.op));
+            if (opened != target) {
+                defer shell.host.close(opened) catch {};
+                try shell.host.duplicateTo(opened, target);
+            }
+        },
+        .duplicate_input, .duplicate_output => {
+            const source_text = try expandWord(shell, redirection.target);
+            if (std.mem.eql(u8, source_text, "-")) {
+                shell.host.close(target) catch |err| switch (err) {
+                    error.Unexpected => {},
+                    else => return err,
+                };
+                return;
+            }
+            const source = try parseFd(source_text);
+            if (source != target) try shell.host.duplicateTo(source, target);
+        },
+        .here_doc, .here_doc_strip_tabs => return error.UnsupportedRedirection,
+    }
+}
+
+fn restoreFrames(shell: anytype, frames: []const RedirectionFrame) !void {
+    try (AppliedRedirections{ .frames = frames }).restore(shell);
+}
+
+fn saveFd(shell: anytype, fd: host_mod.Fd) !host_mod.Fd {
+    return shell.host.duplicate(fd);
+}
+
+fn redirectionFd(redirection: ast.Redirection) host_mod.Fd {
+    return if (redirection.fd) |fd| parseKnownFd(fd) else switch (redirection.op) {
+        .input, .duplicate_input, .read_write, .here_doc, .here_doc_strip_tabs => .stdin,
+        .output, .append, .duplicate_output, .clobber => .stdout,
+    };
+}
+
+fn openOptions(operator: ast.RedirectionOperator) host_mod.OpenOptions {
+    return switch (operator) {
+        .input => .{ .access = .read_only },
+        .output, .clobber => .{ .access = .write_only, .create = true, .truncate = true },
+        .append => .{ .access = .write_only, .create = true, .append = true },
+        .read_write => .{ .access = .read_write, .create = true },
+        else => unreachable,
+    };
+}
+
+fn parseFd(text: []const u8) !host_mod.Fd {
+    const raw = std.fmt.parseInt(u31, text, 10) catch return error.UnsupportedRedirection;
+    return parseKnownFd(raw);
+}
+
+fn parseKnownFd(raw: u31) host_mod.Fd {
+    return @enumFromInt(@as(i32, @intCast(raw)));
 }
 
 fn applyAssignments(shell: anytype, assignments: []const ast.Assignment) !void {

@@ -24,6 +24,10 @@ pub const OpenError = error{
     Unexpected,
 };
 
+pub const CloseError = host.CloseError;
+
+pub const DuplicateError = host.DuplicateError;
+
 pub const SpawnError = error{
     SystemResources,
     Unexpected,
@@ -50,6 +54,30 @@ pub fn openZ(path: [:0]const u8, options: host.OpenOptions) OpenError!host.Fd {
     return switch (builtin.os.tag) {
         .linux => linuxOpenZ(path, options),
         .macos, .freebsd, .openbsd, .netbsd => libcOpenZ(path, options),
+        else => @compileError("unsupported host OS"),
+    };
+}
+
+pub fn close(fd: host.Fd) CloseError!void {
+    return switch (builtin.os.tag) {
+        .linux => linuxClose(fd),
+        .macos, .freebsd, .openbsd, .netbsd => libcClose(fd),
+        else => @compileError("unsupported host OS"),
+    };
+}
+
+pub fn duplicate(fd: host.Fd) DuplicateError!host.Fd {
+    return switch (builtin.os.tag) {
+        .linux => linuxDuplicate(fd),
+        .macos, .freebsd, .openbsd, .netbsd => libcDuplicate(fd),
+        else => @compileError("unsupported host OS"),
+    };
+}
+
+pub fn duplicateTo(from: host.Fd, to: host.Fd) DuplicateError!void {
+    return switch (builtin.os.tag) {
+        .linux => linuxDuplicateTo(from, to),
+        .macos, .freebsd, .openbsd, .netbsd => libcDuplicateTo(from, to),
         else => @compileError("unsupported host OS"),
     };
 }
@@ -136,6 +164,77 @@ fn libcOpenZ(path: [:0]const u8, options: host.OpenOptions) OpenError!host.Fd {
         .ISDIR => return error.IsDir,
         .NAMETOOLONG => return error.NameTooLong,
         .NFILE, .MFILE, .NOMEM, .NOBUFS => return error.SystemResources,
+        else => return error.Unexpected,
+    }
+}
+
+fn linuxClose(fd: host.Fd) CloseError!void {
+    const linux = std.os.linux;
+    const rc = linux.close(fd.raw());
+    switch (linux.errno(rc)) {
+        .SUCCESS => return,
+        .INTR => return error.Interrupted,
+        .IO => return error.InputOutput,
+        .BADF => return error.Unexpected,
+        else => return error.Unexpected,
+    }
+}
+
+fn libcClose(fd: host.Fd) CloseError!void {
+    const rc = std.c.close(@intCast(fd.raw()));
+    switch (std.c.errno(rc)) {
+        .SUCCESS => return,
+        .INTR => return error.Interrupted,
+        .IO => return error.InputOutput,
+        .BADF => return error.Unexpected,
+        else => return error.Unexpected,
+    }
+}
+
+fn linuxDuplicate(fd: host.Fd) DuplicateError!host.Fd {
+    const linux = std.os.linux;
+    const rc = linux.dup(fd.raw());
+    switch (linux.errno(rc)) {
+        .SUCCESS => return @enumFromInt(@as(i32, @intCast(rc))),
+        .BADF => return error.BadFd,
+        .INTR => return error.Interrupted,
+        .MFILE => return error.SystemResources,
+        else => return error.Unexpected,
+    }
+}
+
+fn libcDuplicate(fd: host.Fd) DuplicateError!host.Fd {
+    const rc = std.c.dup(@intCast(fd.raw()));
+    switch (std.c.errno(rc)) {
+        .SUCCESS => return @enumFromInt(@as(i32, @intCast(rc))),
+        .BADF => return error.BadFd,
+        .INTR => return error.Interrupted,
+        .MFILE => return error.SystemResources,
+        else => return error.Unexpected,
+    }
+}
+
+fn linuxDuplicateTo(from: host.Fd, to: host.Fd) DuplicateError!void {
+    if (from == to) return;
+    const linux = std.os.linux;
+    const rc = linux.dup2(from.raw(), to.raw());
+    switch (linux.errno(rc)) {
+        .SUCCESS => return,
+        .BADF => return error.BadFd,
+        .INTR => return error.Interrupted,
+        .MFILE => return error.SystemResources,
+        else => return error.Unexpected,
+    }
+}
+
+fn libcDuplicateTo(from: host.Fd, to: host.Fd) DuplicateError!void {
+    if (from == to) return;
+    const rc = std.c.dup2(@intCast(from.raw()), @intCast(to.raw()));
+    switch (std.c.errno(rc)) {
+        .SUCCESS => return,
+        .BADF => return error.BadFd,
+        .INTR => return error.Interrupted,
+        .MFILE => return error.SystemResources,
         else => return error.Unexpected,
     }
 }
@@ -227,7 +326,7 @@ fn decodeWaitStatus(status: u32) host.WaitStatus {
 }
 
 fn linuxOpenFlags(options: host.OpenOptions) std.os.linux.O {
-    var flags: std.os.linux.O = .{ .ACCMODE = accessMode(std.os.linux.ACCMODE, options.access) };
+    var flags: std.os.linux.O = .{ .ACCMODE = accessMode(std.posix.ACCMODE, options.access) };
     flags.CREAT = options.create;
     flags.TRUNC = options.truncate;
     flags.APPEND = options.append;

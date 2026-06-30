@@ -75,6 +75,19 @@ pub const SpawnResult = struct {
     pid: Pid,
 };
 
+pub const CloseError = error{
+    Interrupted,
+    InputOutput,
+    Unexpected,
+};
+
+pub const DuplicateError = error{
+    BadFd,
+    Interrupted,
+    SystemResources,
+    Unexpected,
+};
+
 pub const WaitStatus = union(enum) {
     exited: u8,
     signaled: u8,
@@ -102,6 +115,18 @@ pub const RealHost = struct {
 
     pub fn openZ(_: *RealHost, path: [:0]const u8, options: OpenOptions) platform.OpenError!Fd {
         return platform.openZ(path, options);
+    }
+
+    pub fn close(_: *RealHost, fd: Fd) platform.CloseError!void {
+        try platform.close(fd);
+    }
+
+    pub fn duplicate(_: *RealHost, fd: Fd) platform.DuplicateError!Fd {
+        return platform.duplicate(fd);
+    }
+
+    pub fn duplicateTo(_: *RealHost, from: Fd, to: Fd) platform.DuplicateError!void {
+        try platform.duplicateTo(from, to);
     }
 
     pub fn isExecutableZ(_: *RealHost, path: [:0]const u8) bool {

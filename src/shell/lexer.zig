@@ -30,8 +30,9 @@ const Lexer = struct {
                 '&' => try self.appendAmpersand(&tokens),
                 '|' => try self.appendPipe(&tokens),
                 '!' => try self.appendSingle(&tokens, .bang),
+                '<', '>' => try self.appendRedirectionOperator(&tokens),
                 '#' => self.skipComment(),
-                else => try self.appendWord(&tokens),
+                else => if (self.startsIoNumber()) try self.appendIoNumber(&tokens) else try self.appendWord(&tokens),
             }
         }
 
@@ -85,6 +86,65 @@ const Lexer = struct {
         try tokens.append(self.allocator, tok);
     }
 
+    fn appendRedirectionOperator(self: *Lexer, tokens: *std.ArrayList(token.Token)) !void {
+        const start = self.position;
+        const first = self.peek();
+        self.advanceOne();
+        const kind: token.Kind = switch (first) {
+            '<' => if (!self.atEnd()) switch (self.peek()) {
+                '<' => kind: {
+                    self.advanceOne();
+                    if (!self.atEnd() and self.peek() == '-') {
+                        self.advanceOne();
+                        break :kind .less_less_dash;
+                    }
+                    break :kind .less_less;
+                },
+                '&' => kind: {
+                    self.advanceOne();
+                    break :kind .less_ampersand;
+                },
+                '>' => kind: {
+                    self.advanceOne();
+                    break :kind .less_greater;
+                },
+                else => .less,
+            } else .less,
+            '>' => if (!self.atEnd()) switch (self.peek()) {
+                '>' => kind: {
+                    self.advanceOne();
+                    break :kind .greater_greater;
+                },
+                '&' => kind: {
+                    self.advanceOne();
+                    break :kind .greater_ampersand;
+                },
+                '|' => kind: {
+                    self.advanceOne();
+                    break :kind .clobber;
+                },
+                else => .greater,
+            } else .greater,
+            else => unreachable,
+        };
+        const tok: token.Token = .{ .kind = kind, .span = source_mod.Span.init(start, self.position.byte_offset) };
+        tok.validate();
+        try tokens.append(self.allocator, tok);
+    }
+
+    fn appendIoNumber(self: *Lexer, tokens: *std.ArrayList(token.Token)) !void {
+        const start = self.position;
+        const start_offset = self.position.byte_offset;
+        while (!self.atEnd() and isDigit(self.peek())) self.advanceOne();
+        const tok: token.Token = .{
+            .kind = .io_number,
+            .span = source_mod.Span.init(start, self.position.byte_offset),
+            .text = self.source.text[start_offset..self.position.byte_offset],
+        };
+        tok.validate();
+        try tokens.append(self.allocator, tok);
+    }
+
     fn skipComment(self: *Lexer) void {
         while (!self.atEnd() and self.peek() != '\n') self.advanceOne();
     }
@@ -121,13 +181,31 @@ const Lexer = struct {
         tok.validate();
         try tokens.append(self.allocator, tok);
     }
+
+    fn startsIoNumber(self: Lexer) bool {
+        if (!isDigit(self.peek())) return false;
+        var offset = self.position.byte_offset;
+        while (offset < self.source.text.len and isDigit(self.source.text[offset])) offset += 1;
+        return offset < self.source.text.len and isRedirectionStart(self.source.text[offset]);
+    }
 };
 
 fn isWordTerminator(byte: u8) bool {
     return switch (byte) {
-        ' ', '\t', '\r', '\n', ';', '&', '|', '!' => true,
+        ' ', '\t', '\r', '\n', ';', '&', '|', '!', '<', '>' => true,
         else => false,
     };
+}
+
+fn isDigit(byte: u8) bool {
+    return switch (byte) {
+        '0'...'9' => true,
+        else => false,
+    };
+}
+
+fn isRedirectionStart(byte: u8) bool {
+    return byte == '<' or byte == '>';
 }
 
 test "lexer tokenizes colon command" {
