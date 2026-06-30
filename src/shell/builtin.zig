@@ -35,6 +35,7 @@ pub const Id = enum {
     type,
     unalias,
     unset,
+    wait,
 };
 
 pub const Definition = struct {
@@ -71,6 +72,7 @@ pub const definitions: DefinitionMap = .initComptime(.{
     .{ "type", Definition{ .name = "type", .id = .type, .kind = .regular } },
     .{ "unalias", Definition{ .name = "unalias", .id = .unalias, .kind = .regular } },
     .{ "unset", Definition{ .name = "unset", .id = .unset, .kind = .special } },
+    .{ "wait", Definition{ .name = "wait", .id = .wait, .kind = .regular } },
 });
 
 pub fn lookup(name: []const u8) ?Definition {
@@ -86,7 +88,7 @@ pub fn eval(shell: anytype, definition: Definition, args: []const []const u8) !r
         .colon, .true_ => .{},
         .alias => evalAlias(shell, args),
         .break_ => evalBreak(args),
-        .cd, .command, .dot, .eval, .exec, .export_, .pwd, .read, .type => unreachable,
+        .cd, .command, .dot, .eval, .exec, .export_, .pwd, .read, .type, .wait => unreachable,
         .continue_ => evalContinue(args),
         .exit => evalExit(shell, args),
         .false_ => .{ .status = 1 },
@@ -310,6 +312,7 @@ test "builtin lookup identifies null true and false utilities" {
     try std.testing.expectEqual(Id.type, lookup("type").?.id);
     try std.testing.expectEqual(Id.unalias, lookup("unalias").?.id);
     try std.testing.expectEqual(Id.unset, lookup("unset").?.id);
+    try std.testing.expectEqual(Id.wait, lookup("wait").?.id);
     try std.testing.expectEqual(@as(?Definition, null), lookup("missing"));
 }
 

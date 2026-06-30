@@ -46,6 +46,7 @@ fn evalBackgroundAndOr(shell: anytype, and_or: ast.AndOr) EvalError!result.EvalR
         },
     };
     shell.state.last_background_pid = pid;
+    try shell.state.addBackgroundPid(pid);
     return .{ .status = 0 };
 }
 
@@ -525,8 +526,9 @@ fn evalSimpleScoped(shell: anytype, command: ast.SimpleCommand) EvalError!result
         if (definition.id == .pwd) return evalPwdBuiltin(shell, fields);
         if (definition.id == .read) return evalReadBuiltin(shell, fields, command.assignments);
         if (definition.id == .type) return evalTypeBuiltin(shell, fields);
+        if (definition.id == .wait) return evalWaitBuiltin(shell, fields);
         const args = switch (definition.id) {
-            .alias, .cd, .command, .printf, .pwd, .read, .type, .unalias => fields,
+            .alias, .cd, .command, .printf, .pwd, .read, .type, .unalias, .wait => fields,
             .false_, .true_ => &[_][]const u8{name},
             else => unreachable,
         };
@@ -764,6 +766,12 @@ fn evalCommandBuiltin(
                 restored_assignments = true;
                 return evaluated;
             },
+            .wait => {
+                const evaluated = try evalWaitBuiltin(shell, args[index..]);
+                restoreVariables(shell, saved);
+                restored_assignments = true;
+                return evaluated;
+            },
             .alias, .break_, .continue_, .exit, .printf, .set, .unalias, .unset => {
                 const evaluated = try builtin.eval(shell, definition, args[index..]);
                 restoreVariables(shell, saved);
@@ -841,6 +849,50 @@ fn evalTypeBuiltin(shell: anytype, args: []const []const u8) !result.EvalResult 
     std.debug.assert(args.len != 0);
     if (args.len == 1) return .{ .status = 2 };
     return evalCommandLookup(shell, args[1..], .verbose, null);
+}
+
+fn evalWaitBuiltin(shell: anytype, args: []const []const u8) !result.EvalResult {
+    std.debug.assert(args.len != 0);
+    if (args.len == 1) {
+        for (shell.state.background_pids.items) |pid| _ = shell.host.wait(pid) catch {};
+        shell.state.clearBackgroundPids();
+        return .{};
+    }
+
+    var status: result.ExitStatus = 0;
+    for (args[1..]) |arg| {
+        const pid = waitOperandPid(shell, arg) orelse {
+            try shell.host.writeAll(.stderr, "wait: invalid pid\n");
+            status = 1;
+            continue;
+        };
+        if (!shell.state.removeBackgroundPid(pid)) {
+            try shell.host.writeAll(.stderr, "wait: unknown pid\n");
+            status = 127;
+            continue;
+        }
+        const waited = shell.host.wait(pid) catch {
+            status = 127;
+            continue;
+        };
+        status = waited.shellStatus();
+    }
+    return .{ .status = status };
+}
+
+fn waitOperandPid(shell: anytype, arg: []const u8) ?host_mod.Pid {
+    if (arg.len >= 2 and arg[0] == '%') {
+        const job_id = std.fmt.parseInt(usize, arg[1..], 10) catch return null;
+        if (job_id == 0 or job_id > shell.state.background_pids.items.len) return null;
+        return shell.state.background_pids.items[job_id - 1];
+    }
+    return parseWaitPid(arg);
+}
+
+fn parseWaitPid(arg: []const u8) ?host_mod.Pid {
+    if (arg.len == 0) return null;
+    if (arg[0] == '%') return null;
+    return std.fmt.parseInt(host_mod.Pid, arg, 10) catch null;
 }
 
 fn evalReadBuiltin(shell: anytype, args: []const []const u8, assignments: []const ast.Assignment) EvalError!result.EvalResult {

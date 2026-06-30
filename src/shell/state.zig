@@ -63,6 +63,7 @@ pub const State = struct {
     variables: std.StringHashMapUnmanaged(Variable) = .empty,
     functions: std.StringHashMapUnmanaged(Function) = .empty,
     aliases: std.StringHashMapUnmanaged(Alias) = .empty,
+    background_pids: std.ArrayListUnmanaged(host.Pid) = .empty,
     last_status: result.ExitStatus = 0,
     last_background_pid: ?host.Pid = null,
     loop_depth: usize = 0,
@@ -92,6 +93,7 @@ pub const State = struct {
             self.allocator.free(entry.value_ptr.value);
         }
         self.aliases.deinit(self.allocator);
+        self.background_pids.deinit(self.allocator);
         self.freeOwnedPositionals();
         self.definition_arena.deinit();
         self.* = undefined;
@@ -221,6 +223,23 @@ pub const State = struct {
             self.allocator.free(entry.value_ptr.value);
         }
         self.aliases.clearRetainingCapacity();
+    }
+
+    pub fn addBackgroundPid(self: *State, pid: host.Pid) !void {
+        try self.background_pids.append(self.allocator, pid);
+    }
+
+    pub fn removeBackgroundPid(self: *State, pid: host.Pid) bool {
+        for (self.background_pids.items, 0..) |known, index| {
+            if (known != pid) continue;
+            _ = self.background_pids.orderedRemove(index);
+            return true;
+        }
+        return false;
+    }
+
+    pub fn clearBackgroundPids(self: *State) void {
+        self.background_pids.clearRetainingCapacity();
     }
 };
 
