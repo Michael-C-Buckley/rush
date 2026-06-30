@@ -230,6 +230,10 @@ pub const RealHost = struct {
         return platform.spawn(request);
     }
 
+    pub fn exec(_: *RealHost, request: SpawnRequest) platform.SpawnError!void {
+        return platform.exec(request);
+    }
+
     pub fn wait(_: *RealHost, pid: Pid) platform.WaitError!WaitStatus {
         return platform.wait(pid);
     }

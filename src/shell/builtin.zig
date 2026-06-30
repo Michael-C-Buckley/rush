@@ -19,6 +19,7 @@ pub const Id = enum {
     colon,
     continue_,
     eval,
+    exec,
     export_,
     exit,
     false_,
@@ -47,6 +48,7 @@ pub const definitions: DefinitionMap = .initComptime(.{
     .{ ":", Definition{ .name = ":", .id = .colon, .kind = .special } },
     .{ "continue", Definition{ .name = "continue", .id = .continue_, .kind = .special } },
     .{ "eval", Definition{ .name = "eval", .id = .eval, .kind = .special } },
+    .{ "exec", Definition{ .name = "exec", .id = .exec, .kind = .special } },
     .{ "export", Definition{ .name = "export", .id = .export_, .kind = .special } },
     .{ "exit", Definition{ .name = "exit", .id = .exit, .kind = .special } },
     .{ "false", Definition{ .name = "false", .id = .false_, .kind = .regular } },
@@ -69,7 +71,7 @@ pub fn eval(shell: anytype, definition: Definition, args: []const []const u8) !r
     return switch (definition.id) {
         .colon, .true_ => .{},
         .break_ => evalBreak(args),
-        .cd, .eval, .export_, .pwd => unreachable,
+        .cd, .eval, .exec, .export_, .pwd => unreachable,
         .continue_ => evalContinue(args),
         .exit => evalExit(shell, args),
         .false_ => .{ .status = 1 },
@@ -163,6 +165,7 @@ test "builtin lookup identifies null true and false utilities" {
     try std.testing.expectEqual(Id.colon, lookup(":").?.id);
     try std.testing.expectEqual(Id.continue_, lookup("continue").?.id);
     try std.testing.expectEqual(Id.eval, lookup("eval").?.id);
+    try std.testing.expectEqual(Id.exec, lookup("exec").?.id);
     try std.testing.expectEqual(Id.export_, lookup("export").?.id);
     try std.testing.expectEqual(Id.exit, lookup("exit").?.id);
     try std.testing.expectEqual(Id.true_, lookup("true").?.id);

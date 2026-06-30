@@ -183,6 +183,15 @@ pub fn spawn(request: host.SpawnRequest) SpawnError!host.SpawnResult {
     };
 }
 
+pub fn exec(request: host.SpawnRequest) SpawnError!void {
+    request.validate();
+    return switch (builtin.os.tag) {
+        .linux => linuxExec(request),
+        .macos, .freebsd, .openbsd, .netbsd => libcExec(request),
+        else => @compileError("unsupported host OS"),
+    };
+}
+
 pub fn wait(pid: host.Pid) WaitError!host.WaitStatus {
     return switch (builtin.os.tag) {
         .linux => linuxWait(pid),
@@ -615,6 +624,13 @@ fn linuxSpawn(request: host.SpawnRequest) SpawnError!host.SpawnResult {
     return .{ .pid = pid };
 }
 
+fn linuxExec(request: host.SpawnRequest) SpawnError!void {
+    const linux = std.os.linux;
+    applyLinuxFdActions(request.fd_actions);
+    _ = linux.execve(request.path.ptr, request.argv.ptr, request.envp.ptr);
+    return error.Unexpected;
+}
+
 fn linuxWait(pid: host.Pid) WaitError!host.WaitStatus {
     const linux = std.os.linux;
     var status: u32 = 0;
@@ -644,6 +660,12 @@ fn libcSpawn(request: host.SpawnRequest) SpawnError!host.SpawnResult {
     }
 
     return .{ .pid = pid };
+}
+
+fn libcExec(request: host.SpawnRequest) SpawnError!void {
+    applyLibcFdActions(request.fd_actions);
+    _ = std.c.execve(request.path.ptr, request.argv.ptr, request.envp.ptr);
+    return error.Unexpected;
 }
 
 fn libcWait(pid: host.Pid) WaitError!host.WaitStatus {

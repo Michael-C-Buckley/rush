@@ -470,7 +470,8 @@ fn evalSimpleScoped(shell: anytype, command: ast.SimpleCommand) EvalError!result
         error.OutOfMemory => return err,
         else => return .{ .status = 1 },
     };
-    defer redirections.restore(shell) catch {};
+    var restore_redirections = true;
+    defer if (restore_redirections) redirections.restore(shell) catch {};
 
     if (command.words.len == 0) {
         const status = try applyAssignmentsWithStatus(shell, command.assignments);
@@ -495,9 +496,15 @@ fn evalSimpleScoped(shell: anytype, command: ast.SimpleCommand) EvalError!result
         if (definition.kind == .special) try applyAssignments(shell, command.assignments);
         if (definition.id == .cd) return evalCdBuiltin(shell, fields);
         if (definition.id == .eval) return evalEvalBuiltin(shell, fields);
+        if (definition.id == .exec) {
+            restore_redirections = false;
+            try redirections.commit(shell);
+            if (fields.len == 1) return .{};
+            return evalExecBuiltin(shell, fields);
+        }
         if (definition.id == .pwd) return evalPwdBuiltin(shell, fields);
         const args = switch (definition.id) {
-            .break_, .cd, .continue_, .eval, .export_, .exit, .printf, .pwd, .readonly, .set => fields,
+            .break_, .cd, .continue_, .eval, .exec, .export_, .exit, .printf, .pwd, .readonly, .set => fields,
             else => &[_][]const u8{name},
         };
         return builtin.eval(shell, definition, args);
@@ -736,6 +743,13 @@ fn evalEvalBuiltin(shell: anytype, args: []const []const u8) EvalError!result.Ev
     const tokens = try lexer.lex(ast_allocator, src);
     const program = try parser.parse(ast_allocator, src, tokens);
     return evalProgram(@TypeOf(shell.host), shell, program);
+}
+
+fn evalExecBuiltin(shell: anytype, args: []const []const u8) EvalError!result.EvalResult {
+    std.debug.assert(args.len > 1);
+    const request = try makeExternalSpawnRequest(shell, args[1..], &.{}, &.{});
+    try shell.host.exec(request);
+    return .{ .status = 127 };
 }
 
 const SavedVariable = struct {
@@ -998,6 +1012,13 @@ fn copyCaseCommand(allocator: std.mem.Allocator, command: ast.CaseCommand) CopyE
 const AppliedRedirections = struct {
     frames: []const RedirectionFrame,
     here_doc_writers: []const host_mod.Pid,
+
+    fn commit(self: AppliedRedirections, shell: anytype) !void {
+        for (self.frames) |frame| {
+            if (frame.saved) |saved| try shell.host.close(saved);
+        }
+        for (self.here_doc_writers) |pid| _ = shell.host.wait(pid) catch {};
+    }
 
     fn restore(self: AppliedRedirections, shell: anytype) !void {
         var index = self.frames.len;
