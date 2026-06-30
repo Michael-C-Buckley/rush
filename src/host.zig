@@ -318,6 +318,10 @@ pub const RealHost = struct {
         return platform.currentProcessId();
     }
 
+    pub fn currentParentProcessId(_: *RealHost) Pid {
+        return platform.currentParentProcessId();
+    }
+
     pub fn sendSignal(_: *RealHost, pid: Pid, signal: u8) platform.KillError!void {
         try platform.sendSignal(pid, signal);
     }

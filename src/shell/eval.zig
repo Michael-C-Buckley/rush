@@ -90,6 +90,7 @@ fn evalBackgroundAndOr(shell: anytype, and_or: ast.AndOr) EvalError!result.EvalR
         return evalBackgroundPipeline(shell, and_or.pipelines[0].pipeline);
     }
     _ = shellProcessId(shell);
+    _ = parentProcessId(shell);
     const background_subshell = backgroundSubshellInvocation(and_or);
     const pid = switch (try shell.host.forkProcess()) {
         .parent => |child_pid| child_pid,
@@ -124,6 +125,13 @@ fn shellProcessId(shell: anytype) host_mod.Pid {
     return pid;
 }
 
+fn parentProcessId(shell: anytype) host_mod.Pid {
+    if (shell.state.parent_pid) |pid| return pid;
+    const pid = shell.host.currentParentProcessId();
+    shell.state.parent_pid = pid;
+    return pid;
+}
+
 fn backgroundSubshellInvocation(and_or: ast.AndOr) ?ast.CompoundInvocation {
     if (and_or.pipelines.len != 1) return null;
     const pipeline = and_or.pipelines[0].pipeline;
@@ -139,6 +147,7 @@ fn evalBackgroundPipeline(shell: anytype, pipeline: ast.Pipeline) EvalError!resu
     pipeline.validate();
     std.debug.assert(pipeline.stages.len > 1);
     _ = shellProcessId(shell);
+    _ = parentProcessId(shell);
     const pids = try spawnPipelineStages(shell, pipeline.stages, true);
     defer shell.allocator.free(pids);
     for (pids) |pid| try shell.state.addBackgroundPid(pid);
@@ -421,6 +430,8 @@ fn evalLoop(shell: anytype, command: ast.LoopCommand) EvalError!result.EvalResul
 }
 
 fn evalSubshell(shell: anytype, body: ast.List, redirections: []const ast.Redirection) EvalError!result.EvalResult {
+    _ = shellProcessId(shell);
+    _ = parentProcessId(shell);
     const pid = switch (try shell.host.forkProcess()) {
         .child => {
             const scratch = shell.beginScratchScope() catch shell.host.exit(2);
@@ -3756,6 +3767,11 @@ fn writeExpansionDiagnostic(
 
 fn parameterValue(shell: anytype, name: []const u8) ?[]const u8 {
     if (shell.state.getVariable(name)) |variable| return variable.value;
+    if (std.mem.eql(u8, name, "PPID")) return std.fmt.allocPrint(
+        shell.scratchAllocator(),
+        "{}",
+        .{parentProcessId(shell)},
+    ) catch null;
     if (std.mem.eql(u8, name, "PWD")) {
         if (comptime @hasDecl(@TypeOf(shell.host), "currentDir")) {
             return shell.host.currentDir(shell.scratchAllocator()) catch envValue(shell.env, name);

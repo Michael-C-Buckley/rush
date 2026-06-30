@@ -168,6 +168,14 @@ pub fn currentProcessId() host.Pid {
     };
 }
 
+pub fn currentParentProcessId() host.Pid {
+    return switch (builtin.os.tag) {
+        .linux => @intCast(std.os.linux.getppid()),
+        .macos, .freebsd, .openbsd, .netbsd => @intCast(std.c.getppid()),
+        else => @compileError("unsupported host OS"),
+    };
+}
+
 pub fn sendSignal(pid: host.Pid, signal: u8) KillError!void {
     return switch (builtin.os.tag) {
         .linux => linuxSendSignal(pid, signal),

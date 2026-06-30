@@ -79,6 +79,7 @@ pub const State = struct {
     running_exit_trap: bool = false,
     running_signal_trap: bool = false,
     shell_pid: ?host.Pid = null,
+    parent_pid: ?host.Pid = null,
     arg_zero: []const u8 = "rush",
     positionals: []const []const u8 = &.{},
     owned_positionals: []const []const u8 = &.{},
