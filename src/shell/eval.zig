@@ -170,20 +170,21 @@ fn evalSimple(shell: anytype, command: ast.SimpleCommand) EvalError!result.EvalR
     }
 
     var expansion_status: ?result.ExitStatus = null;
-    const name = try expandWordTracking(shell, command.words[0], &expansion_status);
-    if (name.len == 0) {
+    const fields = try expandWordFields(shell, command.words, &expansion_status);
+    if (fields.len == 0) {
         const status = try applyAssignmentsWithStatus(shell, command.assignments);
         return .{ .status = expansion_status orelse status };
     }
+    const name = fields[0];
     if (builtin.lookup(name)) |definition| {
         if (definition.kind == .special) try applyAssignments(shell, command.assignments);
         const args = switch (definition.id) {
-            .exit, .printf => try expandWords(shell, command.words),
+            .exit, .printf => fields,
             else => &[_][]const u8{name},
         };
         return builtin.eval(shell, definition, args);
     }
-    return evalExternal(shell, command.words, command.assignments);
+    return evalExternal(shell, fields, command.assignments);
 }
 
 const AppliedRedirections = struct {
@@ -310,6 +311,60 @@ fn expandWords(shell: anytype, words: []const ast.Word) ![]const []const u8 {
     const expanded = try allocator.alloc([]const u8, words.len);
     for (words, 0..) |word, index| expanded[index] = try expandWord(shell, word);
     return expanded;
+}
+
+fn expandWordFields(
+    shell: anytype,
+    words: []const ast.Word,
+    substitution_status: ?*?result.ExitStatus,
+) EvalError![]const []const u8 {
+    std.debug.assert(words.len != 0);
+    const allocator = shell.scratchAllocator();
+    var fields: std.ArrayList([]const u8) = .empty;
+
+    for (words) |word| {
+        const expanded = try expandWordTracking(shell, word, substitution_status);
+        if (wordContainsQuotes(word)) {
+            try fields.append(allocator, expanded);
+        } else {
+            try appendSplitFields(allocator, &fields, expanded);
+        }
+    }
+
+    return fields.toOwnedSlice(allocator);
+}
+
+fn appendSplitFields(
+    allocator: std.mem.Allocator,
+    fields: *std.ArrayList([]const u8),
+    text: []const u8,
+) !void {
+    var index: usize = 0;
+    while (index < text.len) {
+        while (index < text.len and isDefaultIfsWhitespace(text[index])) index += 1;
+        const start = index;
+        while (index < text.len and !isDefaultIfsWhitespace(text[index])) index += 1;
+        if (start != index) try fields.append(allocator, text[start..index]);
+    }
+}
+
+fn isDefaultIfsWhitespace(byte: u8) bool {
+    return byte == ' ' or byte == '\t' or byte == '\n';
+}
+
+fn wordContainsQuotes(word: ast.Word) bool {
+    return switch (word.data) {
+        .literal => false,
+        .parts => |parts| partsContainQuotes(parts),
+    };
+}
+
+fn partsContainQuotes(parts: []const ast.WordPart) bool {
+    for (parts) |part| switch (part) {
+        .single_quoted, .double_quoted => return true,
+        else => {},
+    };
+    return false;
 }
 
 fn expandWord(shell: anytype, word: ast.Word) ![]const u8 {
@@ -454,19 +509,19 @@ fn formatExitStatus(shell: anytype, status: result.ExitStatus) ![]const u8 {
     return shell.scratchAllocator().dupe(u8, text);
 }
 
-fn evalExternal(shell: anytype, words: []const ast.Word, assignments: []const ast.Assignment) EvalError!result.EvalResult {
-    const request = try makeExternalSpawnRequest(shell, words, assignments, &.{});
+fn evalExternal(shell: anytype, fields: []const []const u8, assignments: []const ast.Assignment) EvalError!result.EvalResult {
+    const request = try makeExternalSpawnRequest(shell, fields, assignments, &.{});
     const status = try shell.host.spawnAndWait(request);
     return .{ .status = status.shellStatus() };
 }
 
 fn makeExternalSpawnRequest(
     shell: anytype,
-    words: []const ast.Word,
+    fields: []const []const u8,
     assignments: []const ast.Assignment,
     fd_actions: []const host_mod.SpawnFdAction,
 ) !host_mod.SpawnRequest {
-    const argv = try expandExecArgv(shell, words);
+    const argv = try makeExecArgv(shell, fields);
     const command_text = std.mem.span(argv[0].?);
     const command = argv[0].?[0..command_text.len :0];
     const path = try resolveCommandPath(shell, command);
@@ -479,27 +534,19 @@ fn makeExternalSpawnRequest(
     };
 }
 
-fn expandExecArgv(shell: anytype, words: []const ast.Word) ![:null]const ?[*:0]const u8 {
-    std.debug.assert(words.len != 0);
+fn makeExecArgv(shell: anytype, fields: []const []const u8) ![:null]const ?[*:0]const u8 {
+    std.debug.assert(fields.len != 0);
     const allocator = shell.scratchAllocator();
-    const argv = try allocator.allocSentinel(?[*:0]const u8, words.len, null);
-
-    var stack_expanded: [8][]const u8 = undefined;
-    const expanded = if (words.len <= stack_expanded.len)
-        stack_expanded[0..words.len]
-    else
-        try allocator.alloc([]const u8, words.len);
+    const argv = try allocator.allocSentinel(?[*:0]const u8, fields.len, null);
 
     var total_len: usize = 0;
-    for (words, 0..) |word, index| {
-        const bytes = try expandWord(shell, word);
-        expanded[index] = bytes;
+    for (fields) |bytes| {
         total_len = std.math.add(usize, total_len, bytes.len + 1) catch return error.OutOfMemory;
     }
 
     const arg_bytes = try allocator.alloc(u8, total_len);
     var cursor: usize = 0;
-    for (expanded, 0..) |bytes, index| {
+    for (fields, 0..) |bytes, index| {
         @memcpy(arg_bytes[cursor..][0..bytes.len], bytes);
         arg_bytes[cursor + bytes.len] = 0;
         argv[index] = arg_bytes[cursor .. cursor + bytes.len :0].ptr;

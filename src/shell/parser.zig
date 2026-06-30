@@ -157,7 +157,6 @@ const Parser = struct {
     }
 
     fn parseAssignment(self: *Parser, word_token: token.Token) !?ast.Assignment {
-        if (word_token.quoted) return null;
         const equals_index = std.mem.indexOfScalar(u8, word_token.text, '=') orelse return null;
         if (!isAssignmentName(word_token.text[0..equals_index])) return null;
 
