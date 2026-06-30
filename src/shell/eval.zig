@@ -63,9 +63,11 @@ fn evalSimple(shell: anytype, command: ast.SimpleCommand) EvalError!result.EvalR
 }
 
 fn literalWord(word: ast.Word) ?[]const u8 {
-    if (word.parts.len != 1) return null;
-    return switch (word.parts[0]) {
+    return switch (word.data) {
         .literal => |literal| literal,
-        else => null,
+        .parts => |parts| if (parts.len == 1) switch (parts[0]) {
+            .literal => |literal| literal,
+            else => null,
+        } else null,
     };
 }

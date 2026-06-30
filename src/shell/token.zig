@@ -50,6 +50,29 @@ pub const ReservedWord = enum {
     function_kw,
 };
 
+const ReservedWordMap = std.StaticStringMap(ReservedWord);
+
+pub const reserved_words: ReservedWordMap = .initComptime(.{
+    .{ "case", .case_kw },
+    .{ "do", .do_kw },
+    .{ "done", .done_kw },
+    .{ "elif", .elif_kw },
+    .{ "else", .else_kw },
+    .{ "esac", .esac_kw },
+    .{ "fi", .fi_kw },
+    .{ "for", .for_kw },
+    .{ "function", .function_kw },
+    .{ "if", .if_kw },
+    .{ "in", .in_kw },
+    .{ "then", .then_kw },
+    .{ "until", .until_kw },
+    .{ "while", .while_kw },
+});
+
+pub fn lookupReservedWord(text: []const u8) ?ReservedWord {
+    return reserved_words.get(text);
+}
+
 pub const Token = struct {
     kind: Kind,
     span: source.Span,
@@ -70,3 +93,10 @@ pub const Token = struct {
         }
     }
 };
+
+test "reserved word lookup uses static map" {
+    try std.testing.expectEqual(ReservedWord.if_kw, lookupReservedWord("if").?);
+    try std.testing.expectEqual(ReservedWord.then_kw, lookupReservedWord("then").?);
+    try std.testing.expectEqual(ReservedWord.done_kw, lookupReservedWord("done").?);
+    try std.testing.expectEqual(@as(?ReservedWord, null), lookupReservedWord("printf"));
+}

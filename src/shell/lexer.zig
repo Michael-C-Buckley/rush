@@ -94,7 +94,12 @@ const Lexer = struct {
         const start_offset = self.position.byte_offset;
         while (!self.atEnd() and !isWordTerminator(self.peek())) self.advanceOne();
         const text = self.source.text[start_offset..self.position.byte_offset];
-        const tok: token.Token = .{ .kind = .word, .span = source_mod.Span.init(start, self.position.byte_offset), .text = text };
+        const tok: token.Token = .{
+            .kind = .word,
+            .span = source_mod.Span.init(start, self.position.byte_offset),
+            .text = text,
+            .reserved = token.lookupReservedWord(text),
+        };
         tok.validate();
         try tokens.append(self.allocator, tok);
     }
@@ -132,4 +137,15 @@ test "lexer tokenizes AND-OR operators" {
     try std.testing.expectEqual(token.Kind.word, tokens[5].kind);
     try std.testing.expectEqualStrings("true", tokens[5].text);
     try std.testing.expectEqual(token.Kind.eof, tokens[6].kind);
+}
+
+test "lexer marks reserved words" {
+    const src: source_mod.Source = .{ .id = 1, .kind = .command_string, .name = "-c", .text = "if true; then :; fi" };
+    const tokens = try lex(std.testing.allocator, src);
+    defer std.testing.allocator.free(tokens);
+
+    try std.testing.expectEqual(token.ReservedWord.if_kw, tokens[0].reserved.?);
+    try std.testing.expectEqual(@as(?token.ReservedWord, null), tokens[1].reserved);
+    try std.testing.expectEqual(token.ReservedWord.then_kw, tokens[3].reserved.?);
+    try std.testing.expectEqual(token.ReservedWord.fi_kw, tokens[6].reserved.?);
 }

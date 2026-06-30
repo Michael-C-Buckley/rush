@@ -115,12 +115,27 @@ pub const Assignment = struct {
 };
 
 pub const Word = struct {
-    parts: []const WordPart = &.{},
+    data: WordData,
     span: source.Span = .{},
 
     pub fn validate(self: Word) void {
         self.span.validate();
-        for (self.parts) |part| part.validate();
+        self.data.validate();
+    }
+};
+
+pub const WordData = union(enum) {
+    literal: []const u8,
+    parts: []const WordPart,
+
+    pub fn validate(self: WordData) void {
+        switch (self) {
+            .literal => |literal| std.debug.assert(literal.len != 0),
+            .parts => |parts| {
+                std.debug.assert(parts.len != 0);
+                for (parts) |part| part.validate();
+            },
+        }
     }
 };
 
@@ -374,8 +389,7 @@ pub const FunctionDefinition = struct {
 };
 
 test "AST models list, and-or, and pipeline as distinct grammar levels" {
-    const word_parts = [_]WordPart{.{ .literal = ":" }};
-    const words = [_]Word{.{ .parts = &word_parts }};
+    const words = [_]Word{.{ .data = .{ .literal = ":" } }};
     const stages = [_]Command{.{ .simple = .{ .words = &words } }};
     const pipeline: Pipeline = .{ .stages = &stages };
     const and_or_pipelines = [_]AndOrPipeline{.{ .pipeline = pipeline }};

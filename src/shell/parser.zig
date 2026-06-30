@@ -89,9 +89,7 @@ const Parser = struct {
         var command_span: ?source_mod.Span = null;
 
         while (self.eat(.word)) |word_token| {
-            const parts = try self.allocator.alloc(ast.WordPart, 1);
-            parts[0] = .{ .literal = word_token.text };
-            const word: ast.Word = .{ .parts = parts, .span = word_token.span };
+            const word: ast.Word = .{ .data = .{ .literal = word_token.text }, .span = word_token.span };
             word.validate();
             try words.append(self.allocator, word);
             command_span = if (command_span) |span| .{
