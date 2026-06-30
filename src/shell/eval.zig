@@ -1007,7 +1007,7 @@ fn appendSplitFields(
     while (index < text.len) {
         if (ifsDelimiter(ifs, text, index)) |delimiter| {
             if (delimiter.whitespace) {
-                if (field_start < index) try fields.append(allocator, text[field_start..index]);
+                if (field_start < index) try appendPathnameExpandedField(shell, fields, text[field_start..index]);
                 index += delimiter.len;
                 while (ifsDelimiter(ifs, text, index)) |next| {
                     if (!next.whitespace) break;
@@ -1026,7 +1026,7 @@ fn appendSplitFields(
                 continue;
             }
 
-            try fields.append(allocator, text[field_start..index]);
+            try appendPathnameExpandedField(shell, fields, text[field_start..index]);
             index += delimiter.len;
             while (ifsDelimiter(ifs, text, index)) |next| {
                 if (!next.whitespace) break;
@@ -1038,7 +1038,118 @@ fn appendSplitFields(
 
         index += utf8SequenceLength(text[index..]);
     }
-    if (field_start < text.len) try fields.append(allocator, text[field_start..]);
+    if (field_start < text.len) try appendPathnameExpandedField(shell, fields, text[field_start..]);
+}
+
+fn appendPathnameExpandedField(shell: anytype, fields: *std.ArrayList([]const u8), field: []const u8) !void {
+    if (shell.state.options.noglob or !containsPatternMeta(field) or std.mem.indexOfScalar(u8, field, '/') != null) {
+        try fields.append(shell.scratchAllocator(), field);
+        return;
+    }
+
+    var matches: std.ArrayList([]const u8) = .empty;
+    const allocator = shell.scratchAllocator();
+    const directory = shell.host.listDir(allocator, ".") catch {
+        try fields.append(allocator, field);
+        return;
+    };
+
+    for (directory.entries) |entry| {
+        if ((entry.name[0] != '.' or (field.len != 0 and field[0] == '.')) and globMatches(field, entry.name)) {
+            try matches.append(allocator, entry.name);
+        }
+    }
+
+    if (matches.items.len == 0) {
+        try fields.append(allocator, field);
+        return;
+    }
+    std.mem.sort([]const u8, matches.items, {}, stringLessThan);
+    try fields.appendSlice(allocator, matches.items);
+}
+
+fn stringLessThan(_: void, lhs: []const u8, rhs: []const u8) bool {
+    return std.mem.lessThan(u8, lhs, rhs);
+}
+
+fn containsPatternMeta(text: []const u8) bool {
+    for (text) |byte| {
+        if (byte == '*' or byte == '?' or byte == '[') return true;
+    }
+    return false;
+}
+
+fn globMatches(pattern: []const u8, text: []const u8) bool {
+    return globMatchesFrom(pattern, 0, text, 0);
+}
+
+fn globMatchesFrom(pattern: []const u8, pattern_index: usize, text: []const u8, text_index: usize) bool {
+    if (pattern_index == pattern.len) return text_index == text.len;
+    if (pattern[pattern_index] == '*') {
+        var next_pattern = pattern_index + 1;
+        while (next_pattern < pattern.len and pattern[next_pattern] == '*') next_pattern += 1;
+        var next_text = text_index;
+        while (next_text <= text.len) : (next_text += if (next_text < text.len) utf8SequenceLength(text[next_text..]) else 1) {
+            if (globMatchesFrom(pattern, next_pattern, text, next_text)) return true;
+            if (next_text == text.len) break;
+        }
+        return false;
+    }
+    if (text_index == text.len) return false;
+    const text_len = utf8SequenceLength(text[text_index..]);
+    if (pattern[pattern_index] == '?') {
+        return globMatchesFrom(pattern, pattern_index + 1, text, text_index + text_len);
+    }
+    if (pattern[pattern_index] == '[') {
+        if (bracketExpressionMatches(pattern, pattern_index, text[text_index..][0..text_len])) |matched| {
+            return matched.matched and globMatchesFrom(pattern, matched.end, text, text_index + text_len);
+        }
+    }
+    const pattern_len = utf8SequenceLength(pattern[pattern_index..]);
+    if (pattern_index + pattern_len > pattern.len or text_index + pattern_len > text.len) return false;
+    if (!std.mem.eql(u8, pattern[pattern_index..][0..pattern_len], text[text_index..][0..pattern_len])) return false;
+    return globMatchesFrom(pattern, pattern_index + pattern_len, text, text_index + pattern_len);
+}
+
+const BracketMatch = struct {
+    matched: bool,
+    end: usize,
+};
+
+fn bracketExpressionMatches(pattern: []const u8, start: usize, character: []const u8) ?BracketMatch {
+    std.debug.assert(pattern[start] == '[');
+    var index = start + 1;
+    var negated = false;
+    if (index < pattern.len and (pattern[index] == '!' or pattern[index] == '^')) {
+        negated = true;
+        index += 1;
+    }
+    var matched = false;
+    var saw_member = false;
+    while (index < pattern.len and pattern[index] != ']') {
+        const member_len = utf8SequenceLength(pattern[index..]);
+        if (index + member_len > pattern.len) return null;
+        const member = pattern[index..][0..member_len];
+        index += member_len;
+        saw_member = true;
+        if (index < pattern.len and pattern[index] == '-' and index + 1 < pattern.len and pattern[index + 1] != ']') {
+            index += 1;
+            const end_len = utf8SequenceLength(pattern[index..]);
+            if (index + end_len > pattern.len) return null;
+            const end = pattern[index..][0..end_len];
+            index += end_len;
+            matched = matched or bracketRangeMatches(member, end, character);
+        } else {
+            matched = matched or std.mem.eql(u8, member, character);
+        }
+    }
+    if (!saw_member or index >= pattern.len or pattern[index] != ']') return null;
+    return .{ .matched = if (negated) !matched else matched, .end = index + 1 };
+}
+
+fn bracketRangeMatches(start: []const u8, end: []const u8, character: []const u8) bool {
+    if (start.len != 1 or end.len != 1 or character.len != 1) return false;
+    return start[0] <= character[0] and character[0] <= end[0];
 }
 
 fn isDefaultIfsWhitespace(byte: u8) bool {

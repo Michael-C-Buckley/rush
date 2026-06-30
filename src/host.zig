@@ -1,5 +1,7 @@
 //! Host effects boundary for the rewritten shell.
 
+const std = @import("std");
+
 pub const platform = @import("host/platform.zig");
 
 pub const Fd = enum(i32) {
@@ -47,6 +49,39 @@ pub const FileStatus = struct {
     executable: bool = false,
 };
 
+pub const DirectoryEntry = struct {
+    name: []const u8,
+    kind: FileKind = .other,
+
+    pub fn validate(self: DirectoryEntry) void {
+        std.debug.assert(self.name.len != 0);
+    }
+};
+
+pub const ListDirResult = struct {
+    allocator: std.mem.Allocator,
+    entries: []const DirectoryEntry,
+
+    pub fn deinit(self: *ListDirResult) void {
+        for (self.entries) |entry| self.allocator.free(entry.name);
+        self.allocator.free(self.entries);
+        self.* = undefined;
+    }
+
+    pub fn validate(self: ListDirResult) void {
+        for (self.entries) |entry| entry.validate();
+    }
+};
+
+pub const ListDirError = error{
+    AccessDenied,
+    FileNotFound,
+    NotDir,
+    NameTooLong,
+    SystemResources,
+    Unexpected,
+};
+
 pub const SpawnFdAction = union(enum) {
     close: Fd,
     duplicate: struct {
@@ -64,7 +99,6 @@ pub const SpawnRequest = struct {
     process_group: ?Pid = null,
 
     pub fn validate(self: SpawnRequest) void {
-        const std = @import("std");
         std.debug.assert(self.path.len != 0);
         std.debug.assert(self.argv.len != 0);
         std.debug.assert(self.argv[0] != null);
@@ -125,11 +159,6 @@ pub const WaitStatus = union(enum) {
     }
 };
 
-pub const DirectoryEntry = struct {
-    name: []const u8,
-    kind: FileKind,
-};
-
 pub const RealHost = struct {
     pub fn read(_: *RealHost, fd: Fd, buffer: []u8) platform.ReadError!usize {
         return platform.read(fd, buffer);
@@ -169,6 +198,10 @@ pub const RealHost = struct {
 
     pub fn isExecutableZ(_: *RealHost, path: [:0]const u8) bool {
         return platform.isExecutableZ(path);
+    }
+
+    pub fn listDir(_: *RealHost, allocator: std.mem.Allocator, path: []const u8) platform.ListDirError!ListDirResult {
+        return platform.listDir(allocator, path);
     }
 
     pub fn spawn(_: *RealHost, request: SpawnRequest) platform.SpawnError!SpawnResult {

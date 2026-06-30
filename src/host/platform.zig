@@ -5,6 +5,8 @@ const builtin = @import("builtin");
 
 const host = @import("../host.zig");
 
+extern "c" fn readdir(dir: *std.c.DIR) ?*std.c.dirent;
+
 pub const ReadError = host.ReadError;
 
 pub const WriteError = error{
@@ -25,6 +27,8 @@ pub const OpenError = error{
     SystemResources,
     Unexpected,
 };
+
+pub const ListDirError = host.ListDirError || std.mem.Allocator.Error;
 
 pub const CloseError = host.CloseError;
 
@@ -130,6 +134,15 @@ pub fn isExecutableZ(path: [:0]const u8) bool {
     return switch (builtin.os.tag) {
         .linux => linuxIsExecutableZ(path),
         .macos, .freebsd, .openbsd, .netbsd => libcIsExecutableZ(path),
+        else => @compileError("unsupported host OS"),
+    };
+}
+
+pub fn listDir(allocator: std.mem.Allocator, path: []const u8) ListDirError!host.ListDirResult {
+    std.debug.assert(path.len != 0);
+    return switch (builtin.os.tag) {
+        .linux => linuxListDir(allocator, path),
+        .macos, .freebsd, .openbsd, .netbsd => libcListDir(allocator, path),
         else => @compileError("unsupported host OS"),
     };
 }
@@ -392,6 +405,122 @@ fn linuxIsExecutableZ(path: [:0]const u8) bool {
 fn libcIsExecutableZ(path: [:0]const u8) bool {
     const rc = std.c.access(path.ptr, std.c.X_OK);
     return std.c.errno(rc) == .SUCCESS;
+}
+
+fn linuxListDir(allocator: std.mem.Allocator, path: []const u8) ListDirError!host.ListDirResult {
+    const path_z = std.posix.toPosixPath(path) catch return error.NameTooLong;
+    const flags: std.os.linux.O = .{ .ACCMODE = .RDONLY, .DIRECTORY = true, .CLOEXEC = true };
+    const fd = std.os.linux.openat(std.os.linux.AT.FDCWD, &path_z, flags, 0);
+    switch (std.os.linux.errno(fd)) {
+        .SUCCESS => {},
+        .ACCES, .PERM => return error.AccessDenied,
+        .NOENT => return error.FileNotFound,
+        .NOTDIR => return error.NotDir,
+        .NAMETOOLONG => return error.NameTooLong,
+        .MFILE, .NFILE, .NOMEM, .NOBUFS => return error.SystemResources,
+        else => return error.Unexpected,
+    }
+    const directory_fd: host.Fd = @enumFromInt(@as(i32, @intCast(fd)));
+    defer close(directory_fd) catch {};
+
+    var entries: std.ArrayList(host.DirectoryEntry) = .empty;
+    errdefer freeDirectoryEntryList(allocator, &entries);
+
+    var buffer: [4096]u8 = undefined;
+    while (true) {
+        const read_len = try linuxGetDents(directory_fd.raw(), &buffer);
+        if (read_len == 0) break;
+        var index: usize = 0;
+        while (index < read_len) {
+            const entry: *align(1) std.os.linux.dirent64 = @ptrCast(&buffer[index]);
+            const name_start = index + @offsetOf(std.os.linux.dirent64, "name");
+            const name_limit = entry.reclen - @offsetOf(std.os.linux.dirent64, "name");
+            const name_len = std.mem.indexOfScalar(u8, buffer[name_start..][0..name_limit], 0) orelse name_limit;
+            const name = buffer[name_start..][0..name_len];
+            if (!isSpecialDirectoryEntry(name)) {
+                const owned_name = try allocator.dupe(u8, name);
+                entries.append(allocator, .{
+                    .name = owned_name,
+                    .kind = fileKindFromDirentType(entry.type),
+                }) catch |err| {
+                    allocator.free(owned_name);
+                    return err;
+                };
+            }
+            index += entry.reclen;
+        }
+    }
+
+    const result: host.ListDirResult = .{ .allocator = allocator, .entries = try entries.toOwnedSlice(allocator) };
+    result.validate();
+    return result;
+}
+
+fn linuxGetDents(fd: i32, buffer: []u8) ListDirError!usize {
+    while (true) {
+        const rc = std.os.linux.getdents64(fd, buffer.ptr, buffer.len);
+        switch (std.os.linux.errno(rc)) {
+            .SUCCESS => return rc,
+            .INTR => continue,
+            .ACCES, .PERM => return error.AccessDenied,
+            .NOENT => return error.FileNotFound,
+            .NOTDIR => return error.NotDir,
+            .NAMETOOLONG => return error.NameTooLong,
+            .NOMEM, .NOBUFS => return error.SystemResources,
+            else => return error.Unexpected,
+        }
+    }
+}
+
+fn libcListDir(allocator: std.mem.Allocator, path: []const u8) ListDirError!host.ListDirResult {
+    const path_z = std.posix.toPosixPath(path) catch return error.NameTooLong;
+    const dir = std.c.opendir(&path_z) orelse return switch (std.c.errno(-1)) {
+        .ACCES, .PERM => error.AccessDenied,
+        .NOENT => error.FileNotFound,
+        .NOTDIR => error.NotDir,
+        .NAMETOOLONG => error.NameTooLong,
+        .MFILE, .NFILE, .NOMEM, .NOBUFS => error.SystemResources,
+        else => error.Unexpected,
+    };
+    defer _ = std.c.closedir(dir);
+
+    var entries: std.ArrayList(host.DirectoryEntry) = .empty;
+    errdefer freeDirectoryEntryList(allocator, &entries);
+
+    while (readdir(dir)) |entry| {
+        const name = std.mem.sliceTo(&entry.name, 0);
+        if (isSpecialDirectoryEntry(name)) continue;
+        const owned_name = try allocator.dupe(u8, name);
+        entries.append(allocator, .{
+            .name = owned_name,
+            .kind = fileKindFromDirentType(entry.type),
+        }) catch |err| {
+            allocator.free(owned_name);
+            return err;
+        };
+    }
+
+    const result: host.ListDirResult = .{ .allocator = allocator, .entries = try entries.toOwnedSlice(allocator) };
+    result.validate();
+    return result;
+}
+
+fn isSpecialDirectoryEntry(name: []const u8) bool {
+    return name.len == 0 or std.mem.eql(u8, name, ".") or std.mem.eql(u8, name, "..");
+}
+
+fn freeDirectoryEntryList(allocator: std.mem.Allocator, entries: *std.ArrayList(host.DirectoryEntry)) void {
+    for (entries.items) |entry| allocator.free(entry.name);
+    entries.deinit(allocator);
+}
+
+fn fileKindFromDirentType(kind: u8) host.FileKind {
+    return switch (kind) {
+        std.c.DT.REG => .file,
+        std.c.DT.DIR => .directory,
+        std.c.DT.LNK => .symlink,
+        else => .other,
+    };
 }
 
 fn linuxSpawn(request: host.SpawnRequest) SpawnError!host.SpawnResult {
