@@ -734,7 +734,10 @@ fn evalSimpleScoped(shell: anytype, command: ast.SimpleCommand) EvalError!result
     defer if (restore_redirections) redirections.restore(shell) catch {};
 
     if (command.words.len == 0) {
-        const status = try applyAssignmentsWithStatus(shell, command.assignments);
+        const expanded_assignments = try expandAssignments(shell, command.assignments);
+        try traceSimpleCommand(shell, expanded_assignments, &.{});
+        try applyExpandedAssignments(shell, expanded_assignments);
+        const status = assignmentExpansionStatus(expanded_assignments);
         return .{ .status = status };
     }
 
@@ -751,6 +754,7 @@ fn evalSimpleScoped(shell: anytype, command: ast.SimpleCommand) EvalError!result
         const status = try applyAssignmentsWithStatus(shell, command.assignments);
         return .{ .status = expansion_status orelse status };
     }
+    try traceSimpleCommand(shell, &.{}, fields);
     const name = fields[0];
     if (builtin.lookup(name)) |definition| {
         if (definition.kind == .special) {
@@ -798,6 +802,97 @@ fn evalSimpleScoped(shell: anytype, command: ast.SimpleCommand) EvalError!result
         return builtin.eval(shell, definition, args);
     }
     return evalExternal(shell, fields, command.assignments);
+}
+
+const ExpandedAssignment = struct {
+    name: []const u8,
+    value: []const u8,
+    status: ?result.ExitStatus = null,
+};
+
+fn traceSimpleCommand(shell: anytype, assignments: []const ExpandedAssignment, fields: []const []const u8) EvalError!void {
+    if (!shell.state.options.xtrace) return;
+    if (assignments.len == 0 and fields.len == 0) return;
+
+    const prefix = try expandXtracePrefix(shell);
+    try shell.host.writeAll(.stderr, prefix);
+    var needs_space = false;
+    for (assignments) |assignment| {
+        if (needs_space) try shell.host.writeAll(.stderr, " ");
+        try shell.host.writeAll(.stderr, assignment.name);
+        try shell.host.writeAll(.stderr, "=");
+        try shell.host.writeAll(.stderr, assignment.value);
+        needs_space = true;
+    }
+    for (fields) |field| {
+        if (needs_space) try shell.host.writeAll(.stderr, " ");
+        try shell.host.writeAll(.stderr, field);
+        needs_space = true;
+    }
+    try shell.host.writeAll(.stderr, "\n");
+}
+
+fn expandXtracePrefix(shell: anytype) EvalError![]const u8 {
+    const raw = if (shell.state.getVariable("PS4")) |variable| variable.value else "";
+    if (raw.len == 0) return "";
+
+    const saved_xtrace = shell.state.options.xtrace;
+    const saved_status = shell.state.last_status;
+    shell.state.options.xtrace = false;
+    defer {
+        shell.state.options.xtrace = saved_xtrace;
+        shell.state.last_status = saved_status;
+    }
+
+    var output: std.ArrayList(u8) = .empty;
+    const allocator = shell.scratchAllocator();
+    var index: usize = 0;
+    while (index < raw.len) {
+        if (index + 1 < raw.len and raw[index] == '$' and raw[index + 1] == '(') {
+            if (commandSubstitutionEnd(raw, index + 2)) |end| {
+                const substitution: ast.CommandSubstitution = .{ .source_text = raw[index + 2 .. end] };
+                try output.appendSlice(allocator, try expandCommandSubstitution(shell, substitution, null));
+                index = end + 1;
+                continue;
+            }
+        }
+        try output.append(allocator, raw[index]);
+        index += 1;
+    }
+    return output.toOwnedSlice(allocator);
+}
+
+fn commandSubstitutionEnd(text: []const u8, start: usize) ?usize {
+    var index = start;
+    var depth: usize = 1;
+    var single_quoted = false;
+    var double_quoted = false;
+    while (index < text.len) : (index += 1) {
+        const byte = text[index];
+        if (byte == '\\') {
+            if (index + 1 < text.len) index += 1;
+            continue;
+        }
+        if (!double_quoted and byte == '\'') {
+            single_quoted = !single_quoted;
+            continue;
+        }
+        if (!single_quoted and byte == '"') {
+            double_quoted = !double_quoted;
+            continue;
+        }
+        if (single_quoted) continue;
+        if (index + 1 < text.len and byte == '$' and text[index + 1] == '(') {
+            depth += 1;
+            index += 1;
+            continue;
+        }
+        if (byte == ')') {
+            depth -= 1;
+            if (depth == 0) return index;
+        }
+    }
+    return null;
 }
 
 fn simpleRedirectionFailureIsFatal(command: ast.SimpleCommand) bool {
@@ -2407,10 +2502,32 @@ fn applyAssignments(shell: anytype, assignments: []const ast.Assignment) !void {
 }
 
 fn applyAssignmentsWithStatus(shell: anytype, assignments: []const ast.Assignment) !result.ExitStatus {
+    const expanded = try expandAssignments(shell, assignments);
+    try applyExpandedAssignments(shell, expanded);
+    return assignmentExpansionStatus(expanded);
+}
+
+fn expandAssignments(shell: anytype, assignments: []const ast.Assignment) ![]const ExpandedAssignment {
+    if (assignments.len == 0) return &.{};
+    const expanded = try shell.scratchAllocator().alloc(ExpandedAssignment, assignments.len);
+    for (assignments, 0..) |assignment, index| {
+        var status: ?result.ExitStatus = null;
+        const value = try expandAssignmentWordTracking(shell, assignment.value, &status);
+        expanded[index] = .{ .name = assignment.name, .value = value, .status = status };
+    }
+    return expanded;
+}
+
+fn applyExpandedAssignments(shell: anytype, assignments: []const ExpandedAssignment) !void {
+    for (assignments) |assignment| {
+        try shell.state.putVariable(.{ .name = assignment.name, .value = assignment.value });
+    }
+}
+
+fn assignmentExpansionStatus(assignments: []const ExpandedAssignment) result.ExitStatus {
     var status: ?result.ExitStatus = null;
     for (assignments) |assignment| {
-        const value = try expandAssignmentWordTracking(shell, assignment.value, &status);
-        try shell.state.putVariable(.{ .name = assignment.name, .value = value });
+        if (assignment.status) |value| status = value;
     }
     return status orelse 0;
 }
@@ -3507,16 +3624,20 @@ fn evalCommandSubstitutionInChild(
             shell.host.duplicateTo(pipe_desc.write, .stdout) catch shell.host.exit(127);
             shell.host.close(pipe_desc.write) catch shell.host.exit(127);
             shell.state.shell_pid = shell.host.currentProcessId();
-            const static_request = staticExternalProgramRequest(shell, program) catch shell.host.exit(2);
-            if (static_request) |request| {
-                shell.host.exec(request) catch shell.host.exit(127);
-            }
             shell.state.loop_depth = 0;
             shell.state.running_exit_trap = false;
             shell.state.diagnostic_line_offset += substitution.line_offset;
             shell.state.forgetActiveExitTrap();
             shell.state.exit_trap_listing = null;
-            const evaluated = evalProgram(@TypeOf(shell.host), shell, program) catch shell.host.exit(2);
+            const evaluated = if (shell.state.options.xtrace) evaluated: {
+                break :evaluated evalProgram(@TypeOf(shell.host), shell, program) catch shell.host.exit(2);
+            } else evaluated: {
+                const static_request = staticExternalProgramRequest(shell, program) catch shell.host.exit(2);
+                if (static_request) |request| {
+                    shell.host.exec(request) catch shell.host.exit(127);
+                }
+                break :evaluated evalProgram(@TypeOf(shell.host), shell, program) catch shell.host.exit(2);
+            };
             const status = runExitTrap(shell, evaluated.status) catch shell.host.exit(2);
             shell.host.exit(status);
         },

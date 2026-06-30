@@ -44,7 +44,7 @@ pub fn main(init: std.process.Init.Minimal) !u8 {
         },
         .command_string => |command| {
             var sh = shell.Shell(host.RealHost).init(process_allocator, real_host, .{
-                .state = .{ .mode = command.mode },
+                .state = command.options,
                 .env = init.environ.block.view().slice,
                 .arg_zero = command.arg_zero,
                 .positionals = command.positionals,

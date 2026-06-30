@@ -36,6 +36,7 @@ pub fn Shell(comptime Host: type) type {
                 .state = state.State.init(allocator, options.state),
                 .arenas = memory.Arenas.init(allocator),
             };
+            shell.state.putVariable(.{ .name = "PS4", .value = "+ " }) catch unreachable;
             shell.state.arg_zero = options.arg_zero;
             shell.state.positionals = options.positionals;
             return shell;

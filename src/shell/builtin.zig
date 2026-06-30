@@ -517,6 +517,7 @@ fn evalSet(shell: anytype, args: []const []const u8) !result.EvalResult {
             'e' => shell.state.options.errexit = enabled,
             'f' => shell.state.options.noglob = enabled,
             'u' => shell.state.options.nounset = enabled,
+            'x' => shell.state.options.xtrace = enabled,
             else => return setUsageError(shell),
         };
     }
