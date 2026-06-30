@@ -278,11 +278,13 @@ const Parser = struct {
         const equals_index = std.mem.indexOfScalar(u8, word_token.text, '=') orelse return null;
         if (!isAssignmentName(word_token.text[0..equals_index])) return null;
 
-        const value = try self.parseWordText(
+        var value = try self.parseWordText(
             word_token.text[equals_index + 1 ..],
             word_token.span,
             word_token.span.start + equals_index + 1,
         );
+        value.quoted = word_token.quoted;
+        value.validate();
         const assignment: ast.Assignment = .{
             .name = word_token.text[0..equals_index],
             .value = value,
@@ -294,7 +296,10 @@ const Parser = struct {
 
     fn parseWordToken(self: *Parser, word_token: token.Token) !ast.Word {
         std.debug.assert(word_token.kind == .word);
-        return self.parseWordText(word_token.text, word_token.span, word_token.span.start);
+        var word = try self.parseWordText(word_token.text, word_token.span, word_token.span.start);
+        word.quoted = word_token.quoted;
+        word.validate();
+        return word;
     }
 
     fn parseWordText(

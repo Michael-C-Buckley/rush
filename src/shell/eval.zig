@@ -300,7 +300,7 @@ fn restoreVariables(shell: anytype, saved: []const SavedVariable) void {
 fn applyExportedAssignments(shell: anytype, assignments: []const ast.Assignment) !void {
     var status: ?result.ExitStatus = null;
     for (assignments) |assignment| {
-        const value = try expandWordTracking(shell, assignment.value, &status);
+        const value = try expandAssignmentWordTracking(shell, assignment.value, &status);
         try shell.state.putVariable(.{ .name = assignment.name, .value = value, .exported = true });
     }
 }
@@ -408,6 +408,7 @@ fn copyWord(allocator: std.mem.Allocator, word: ast.Word) CopyError!ast.Word {
             .parts => |parts| .{ .parts = try copyWordParts(allocator, parts) },
         },
         .span = word.span,
+        .quoted = word.quoted,
     };
 }
 
@@ -772,7 +773,7 @@ fn applyAssignments(shell: anytype, assignments: []const ast.Assignment) !void {
 fn applyAssignmentsWithStatus(shell: anytype, assignments: []const ast.Assignment) !result.ExitStatus {
     var status: ?result.ExitStatus = null;
     for (assignments) |assignment| {
-        const value = try expandWordTracking(shell, assignment.value, &status);
+        const value = try expandAssignmentWordTracking(shell, assignment.value, &status);
         try shell.state.putVariable(.{ .name = assignment.name, .value = value });
     }
     return status orelse 0;
@@ -845,10 +846,67 @@ fn expandWord(shell: anytype, word: ast.Word) ![]const u8 {
 }
 
 fn expandWordTracking(shell: anytype, word: ast.Word, substitution_status: ?*?result.ExitStatus) ![]const u8 {
-    return switch (word.data) {
+    const expanded = switch (word.data) {
         .literal => |literal| literal,
-        .parts => |parts| expandWordParts(shell, parts, substitution_status),
+        .parts => |parts| try expandWordParts(shell, parts, substitution_status),
     };
+    return expandLeadingTilde(shell, word, expanded);
+}
+
+fn expandAssignmentWordTracking(shell: anytype, word: ast.Word, substitution_status: ?*?result.ExitStatus) ![]const u8 {
+    if (word.quoted) return expandWordTracking(shell, word, substitution_status);
+    return switch (word.data) {
+        .literal => |literal| expandAssignmentLiteralTildes(shell, literal),
+        .parts => expandWordTracking(shell, word, substitution_status),
+    };
+}
+
+fn expandAssignmentLiteralTildes(shell: anytype, literal: []const u8) ![]const u8 {
+    const home = homeValue(shell) orelse return literal;
+    var output: std.ArrayList(u8) = .empty;
+    const allocator = shell.scratchAllocator();
+    var index: usize = 0;
+    while (index < literal.len) {
+        if ((index == 0 or literal[index - 1] == ':') and assignmentTildePrefixLen(literal[index..]) != null) {
+            try output.appendSlice(allocator, home);
+            index += 1;
+        } else {
+            try output.append(allocator, literal[index]);
+            index += 1;
+        }
+    }
+    return output.toOwnedSlice(allocator);
+}
+
+fn expandLeadingTilde(shell: anytype, word: ast.Word, expanded: []const u8) ![]const u8 {
+    if (word.quoted) return expanded;
+    const literal = switch (word.data) {
+        .literal => |literal| literal,
+        .parts => |parts| if (parts.len != 0) switch (parts[0]) {
+            .literal => |literal| literal,
+            else => return expanded,
+        } else return expanded,
+    };
+    const prefix_len = tildePrefixLen(literal) orelse return expanded;
+    const home = homeValue(shell) orelse return expanded;
+    return std.fmt.allocPrint(shell.scratchAllocator(), "{s}{s}", .{ home, expanded[prefix_len..] });
+}
+
+fn tildePrefixLen(literal: []const u8) ?usize {
+    if (literal.len == 0 or literal[0] != '~') return null;
+    if (literal.len == 1 or literal[1] == '/') return 1;
+    return null;
+}
+
+fn assignmentTildePrefixLen(literal: []const u8) ?usize {
+    if (literal.len == 0 or literal[0] != '~') return null;
+    if (literal.len == 1 or literal[1] == '/' or literal[1] == ':') return 1;
+    return null;
+}
+
+fn homeValue(shell: anytype) ?[]const u8 {
+    if (parameterValue(shell, "HOME")) |home| return home;
+    return envValue(shell.env, "HOME");
 }
 
 fn expandWordParts(shell: anytype, parts: []const ast.WordPart, substitution_status: ?*?result.ExitStatus) EvalError![]const u8 {
@@ -1310,7 +1368,7 @@ fn makeExecEnvp(shell: anytype, assignments: []const ast.Assignment) ![:null]con
     for (assignments) |assignment| {
         assignment_entries[entry_count] = .{
             .name = assignment.name,
-            .value = try expandWord(shell, assignment.value),
+            .value = try expandAssignmentWordTracking(shell, assignment.value, null),
         };
         entry_count += 1;
     }
@@ -1407,9 +1465,14 @@ fn resolveCommandPath(shell: anytype, command: [:0]const u8) ![:0]const u8 {
 }
 
 fn envPath(env: []const [*:0]const u8) ?[]const u8 {
+    return envValue(env, "PATH");
+}
+
+fn envValue(env: []const [*:0]const u8, name: []const u8) ?[]const u8 {
     for (env) |entry| {
         const text = std.mem.span(entry);
-        if (std.mem.startsWith(u8, text, "PATH=")) return text["PATH=".len..];
+        const equals = std.mem.indexOfScalar(u8, text, '=') orelse continue;
+        if (std.mem.eql(u8, text[0..equals], name)) return text[equals + 1 ..];
     }
     return null;
 }

@@ -117,6 +117,7 @@ pub const Assignment = struct {
 pub const Word = struct {
     data: WordData,
     span: source.Span = .{},
+    quoted: bool = false,
 
     pub fn validate(self: Word) void {
         self.span.validate();
