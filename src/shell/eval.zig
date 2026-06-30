@@ -176,8 +176,39 @@ fn evalCompound(shell: anytype, command: ast.CompoundInvocation) EvalError!resul
     command.validate();
     return switch (command.body) {
         .brace_group => |body| evalList(shell, body),
+        .case_command => |case_command| evalCase(shell, case_command),
         else => .{ .status = 2 },
     };
+}
+
+fn evalCase(shell: anytype, command: ast.CaseCommand) EvalError!result.EvalResult {
+    command.validate();
+    const scratch = try shell.beginScratchScope();
+    defer scratch.end();
+
+    const word = try expandWord(shell, command.word);
+    var execute_next = false;
+    for (command.arms) |arm| {
+        const matches = execute_next or try caseArmMatches(shell, arm, word);
+        if (!matches) continue;
+
+        const evaluated = try evalList(shell, arm.body);
+        if (evaluated.flow != .normal) return evaluated;
+        switch (arm.fallthrough) {
+            .none => return evaluated,
+            .execute_next => execute_next = true,
+            .test_next => execute_next = false,
+        }
+    }
+    return .{ .status = 0 };
+}
+
+fn caseArmMatches(shell: anytype, arm: ast.CaseArm, word: []const u8) EvalError!bool {
+    for (arm.patterns) |pattern_word| {
+        const pattern = try expandWord(shell, pattern_word);
+        if (patternMatches(pattern, word)) return true;
+    }
+    return false;
 }
 
 fn evalFunctionDefinition(shell: anytype, definition: ast.FunctionDefinition) EvalError!result.EvalResult {
@@ -1152,17 +1183,20 @@ fn matchBracketPattern(pattern: []const u8, text: []const u8) bool {
 }
 
 fn bracketContains(expression: []const u8, byte: u8) bool {
+    const negated = expression.len != 0 and (expression[0] == '!' or expression[0] == '^');
+    const members = if (negated) expression[1..] else expression;
+    var matched = false;
     var index: usize = 0;
-    while (index < expression.len) {
-        if (index + 2 < expression.len and expression[index + 1] == '-') {
-            if (byte >= expression[index] and byte <= expression[index + 2]) return true;
+    while (index < members.len) {
+        if (index + 2 < members.len and members[index + 1] == '-') {
+            if (byte >= members[index] and byte <= members[index + 2]) matched = true;
             index += 3;
         } else {
-            if (byte == expression[index]) return true;
+            if (byte == members[index]) matched = true;
             index += 1;
         }
     }
-    return false;
+    return if (negated) !matched else matched;
 }
 
 fn isParameterSet(parameter: ast.ParameterExpansion, value: ?[]const u8) bool {

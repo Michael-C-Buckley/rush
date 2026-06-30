@@ -53,6 +53,8 @@ const Parser = struct {
     const ListEnd = enum {
         eof,
         right_brace,
+        esac,
+        case_item,
     };
 
     fn parseList(self: *Parser, end_kind: ListEnd) ParserError!ast.List {
@@ -60,7 +62,7 @@ const Parser = struct {
         errdefer entries.deinit(self.allocator);
 
         self.skipSeparators();
-        while (!self.at(.eof) and !(end_kind == .right_brace and self.at(.right_brace))) {
+        while (!self.atListEnd(end_kind)) {
             const and_or = try self.parseAndOr();
             var terminator: ?ast.ListTerminator = null;
             if (self.eat(.semicolon) != null) terminator = .sequence;
@@ -134,12 +136,67 @@ const Parser = struct {
     }
 
     fn parseCompoundCommand(self: *Parser) ParserError!?ast.CompoundInvocation {
+        if (try self.parseCaseCommand()) |case_command| {
+            const invocation: ast.CompoundInvocation = .{ .body = .{ .case_command = case_command } };
+            invocation.validate();
+            return invocation;
+        }
         if (self.eat(.left_brace) == null) return null;
         const body = try self.parseList(.right_brace);
         try self.expect(.right_brace);
         const invocation: ast.CompoundInvocation = .{ .body = .{ .brace_group = body } };
         invocation.validate();
         return invocation;
+    }
+
+    fn parseCaseCommand(self: *Parser) ParserError!?ast.CaseCommand {
+        if (self.eatReserved(.case_kw) == null) return null;
+        const word = try self.parseWordToken(self.eat(.word) orelse return error.UnexpectedToken);
+        self.skipSeparators();
+        _ = self.eatReserved(.in_kw) orelse return error.UnexpectedToken;
+        self.skipSeparators();
+
+        var arms: std.ArrayList(ast.CaseArm) = .empty;
+        errdefer arms.deinit(self.allocator);
+        while (!self.atReserved(.esac_kw)) {
+            try arms.append(self.allocator, try self.parseCaseArm());
+            self.skipSeparators();
+        }
+        _ = self.eatReserved(.esac_kw).?;
+
+        const command: ast.CaseCommand = .{ .word = word, .arms = try arms.toOwnedSlice(self.allocator) };
+        command.validate();
+        return command;
+    }
+
+    fn parseCaseArm(self: *Parser) ParserError!ast.CaseArm {
+        _ = self.eat(.left_paren);
+
+        var patterns: std.ArrayList(ast.Word) = .empty;
+        errdefer patterns.deinit(self.allocator);
+        while (true) {
+            try patterns.append(self.allocator, try self.parseWordToken(self.eat(.word) orelse return error.UnexpectedToken));
+            if (self.eat(.pipe) == null) break;
+        }
+        try self.expect(.right_paren);
+
+        const body = try self.parseList(.case_item);
+        const fallthrough: ast.Fallthrough = if (self.eat(.double_semicolon) != null)
+            .none
+        else if (self.eat(.semicolon_ampersand) != null)
+            .execute_next
+        else if (self.eat(.double_semicolon_ampersand) != null)
+            .test_next
+        else
+            .none;
+
+        const arm: ast.CaseArm = .{
+            .patterns = try patterns.toOwnedSlice(self.allocator),
+            .body = body,
+            .fallthrough = fallthrough,
+        };
+        arm.validate();
+        return arm;
     }
 
     fn parseSimpleCommand(self: *Parser) ParserError!ast.SimpleCommand {
@@ -521,6 +578,12 @@ const Parser = struct {
         return self.tokens[self.index];
     }
 
+    fn eatReserved(self: *Parser, reserved: token.ReservedWord) ?token.Token {
+        if (!self.atReserved(reserved)) return null;
+        defer self.index += 1;
+        return self.tokens[self.index];
+    }
+
     fn eatAndOrOperator(self: *Parser) ?ast.AndOrOperator {
         if (self.eat(.ampersand_ampersand) != null) return .and_if;
         if (self.eat(.pipe_pipe) != null) return .or_if;
@@ -627,6 +690,23 @@ const Parser = struct {
     fn at(self: Parser, kind: token.Kind) bool {
         std.debug.assert(self.index < self.tokens.len);
         return self.tokens[self.index].kind == kind;
+    }
+
+    fn atReserved(self: Parser, reserved: token.ReservedWord) bool {
+        return self.tokens[self.index].reserved == reserved;
+    }
+
+    fn atListEnd(self: Parser, end_kind: ListEnd) bool {
+        if (self.at(.eof)) return true;
+        return switch (end_kind) {
+            .eof => false,
+            .right_brace => self.at(.right_brace),
+            .esac => self.atReserved(.esac_kw),
+            .case_item => self.at(.double_semicolon) or
+                self.at(.semicolon_ampersand) or
+                self.at(.double_semicolon_ampersand) or
+                self.atReserved(.esac_kw),
+        };
     }
 };
 

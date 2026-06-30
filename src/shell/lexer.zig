@@ -26,7 +26,7 @@ const Lexer = struct {
             switch (self.peek()) {
                 ' ', '\t', '\r' => self.advanceOne(),
                 '\n' => try self.appendSingle(&tokens, .newline),
-                ';' => try self.appendSingle(&tokens, .semicolon),
+                ';' => try self.appendSemicolon(&tokens),
                 '&' => try self.appendAmpersand(&tokens),
                 '|' => try self.appendPipe(&tokens),
                 '!' => try self.appendSingle(&tokens, .bang),
@@ -61,6 +61,29 @@ const Lexer = struct {
     fn appendSingle(self: *Lexer, tokens: *std.ArrayList(token.Token), kind: token.Kind) !void {
         const start = self.position;
         self.advanceOne();
+        const tok: token.Token = .{ .kind = kind, .span = source_mod.Span.init(start, self.position.byte_offset) };
+        tok.validate();
+        try tokens.append(self.allocator, tok);
+    }
+
+    fn appendSemicolon(self: *Lexer, tokens: *std.ArrayList(token.Token)) !void {
+        const start = self.position;
+        self.advanceOne();
+        const kind: token.Kind = if (!self.atEnd()) switch (self.peek()) {
+            ';' => kind: {
+                self.advanceOne();
+                if (!self.atEnd() and self.peek() == '&') {
+                    self.advanceOne();
+                    break :kind .double_semicolon_ampersand;
+                }
+                break :kind .double_semicolon;
+            },
+            '&' => kind: {
+                self.advanceOne();
+                break :kind .semicolon_ampersand;
+            },
+            else => .semicolon,
+        } else .semicolon;
         const tok: token.Token = .{ .kind = kind, .span = source_mod.Span.init(start, self.position.byte_offset) };
         tok.validate();
         try tokens.append(self.allocator, tok);
@@ -270,7 +293,7 @@ const Lexer = struct {
 
 fn isWordTerminator(byte: u8) bool {
     return switch (byte) {
-        ' ', '\t', '\r', '\n', ';', '&', '|', '!', '(', ')', '{', '}', '<', '>' => true,
+        ' ', '\t', '\r', '\n', ';', '&', '|', '(', ')', '{', '}', '<', '>' => true,
         else => false,
     };
 }
