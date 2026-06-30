@@ -176,8 +176,76 @@ fn evalCompound(shell: anytype, command: ast.CompoundInvocation) EvalError!resul
     command.validate();
     return switch (command.body) {
         .brace_group => |body| evalList(shell, body),
+        .for_command => |for_command| evalFor(shell, for_command),
         .case_command => |case_command| evalCase(shell, case_command),
         else => .{ .status = 2 },
+    };
+}
+
+fn evalFor(shell: anytype, command: ast.ForCommand) EvalError!result.EvalResult {
+    command.validate();
+    const scratch = try shell.beginScratchScope();
+    defer scratch.end();
+
+    const words = try forCommandWords(shell, command.words);
+    var status: result.ExitStatus = 0;
+    for (words) |word| {
+        try shell.state.putVariable(.{ .name = command.name, .value = word });
+        const evaluated = try evalList(shell, command.body);
+        status = evaluated.status;
+        switch (evaluated.flow) {
+            .normal => {},
+            .continue_ => |count| if (count <= 1) continue else return .{
+                .status = status,
+                .flow = .{ .continue_ = count - 1 },
+            },
+            .break_ => |count| if (count <= 1) return .{ .status = status } else return .{
+                .status = status,
+                .flow = .{ .break_ = count - 1 },
+            },
+            else => return evaluated,
+        }
+    }
+    return .{ .status = status };
+}
+
+fn forCommandWords(shell: anytype, words: ast.ForWords) ![]const []const u8 {
+    return switch (words) {
+        .positional_parameters => shell.state.positionals,
+        .words => |word_list| expandForWordFields(shell, word_list),
+    };
+}
+
+fn expandForWordFields(shell: anytype, words: []const ast.Word) ![]const []const u8 {
+    if (words.len == 0) return &.{};
+    const allocator = shell.scratchAllocator();
+    var fields: std.ArrayList([]const u8) = .empty;
+    for (words) |word| {
+        if (wordIsQuotedAt(word)) {
+            try fields.appendSlice(allocator, shell.state.positionals);
+        } else {
+            const expanded = try expandWordTracking(shell, word, null);
+            if (wordContainsQuotes(word)) {
+                try fields.append(allocator, expanded);
+            } else {
+                try appendSplitFields(allocator, &fields, expanded);
+            }
+        }
+    }
+    return fields.toOwnedSlice(allocator);
+}
+
+fn wordIsQuotedAt(word: ast.Word) bool {
+    return switch (word.data) {
+        .literal => false,
+        .parts => |parts| parts.len == 1 and switch (parts[0]) {
+            .double_quoted => |quoted| quoted.len == 1 and switch (quoted[0]) {
+                .parameter => |parameter| parameter.op == null and parameter.parameter == .special and
+                    parameter.parameter.special == .at,
+                else => false,
+            },
+            else => false,
+        },
     };
 }
 

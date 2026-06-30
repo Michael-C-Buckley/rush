@@ -54,6 +54,7 @@ const Parser = struct {
         eof,
         right_brace,
         esac,
+        done,
         case_item,
     };
 
@@ -136,6 +137,11 @@ const Parser = struct {
     }
 
     fn parseCompoundCommand(self: *Parser) ParserError!?ast.CompoundInvocation {
+        if (try self.parseForCommand()) |for_command| {
+            const invocation: ast.CompoundInvocation = .{ .body = .{ .for_command = for_command } };
+            invocation.validate();
+            return invocation;
+        }
         if (try self.parseCaseCommand()) |case_command| {
             const invocation: ast.CompoundInvocation = .{ .body = .{ .case_command = case_command } };
             invocation.validate();
@@ -147,6 +153,32 @@ const Parser = struct {
         const invocation: ast.CompoundInvocation = .{ .body = .{ .brace_group = body } };
         invocation.validate();
         return invocation;
+    }
+
+    fn parseForCommand(self: *Parser) ParserError!?ast.ForCommand {
+        if (self.eatReserved(.for_kw) == null) return null;
+        const name_token = self.eat(.word) orelse return error.UnexpectedToken;
+        if (name_token.quoted or !isAssignmentName(name_token.text)) return error.UnexpectedToken;
+
+        var words: ast.ForWords = .positional_parameters;
+        self.skipSeparators();
+        if (self.eatReserved(.in_kw) != null) {
+            var word_list: std.ArrayList(ast.Word) = .empty;
+            errdefer word_list.deinit(self.allocator);
+            while (!self.at(.eof) and !self.at(.semicolon) and !self.at(.newline) and !self.atReserved(.do_kw)) {
+                try word_list.append(self.allocator, try self.parseWordToken(self.eat(.word) orelse return error.UnexpectedToken));
+            }
+            words = .{ .words = try word_list.toOwnedSlice(self.allocator) };
+        }
+
+        self.skipSeparators();
+        _ = self.eatReserved(.do_kw) orelse return error.UnexpectedToken;
+        const body = try self.parseList(.done);
+        _ = self.eatReserved(.done_kw) orelse return error.UnexpectedToken;
+
+        const command: ast.ForCommand = .{ .name = name_token.text, .words = words, .body = body };
+        command.validate();
+        return command;
     }
 
     fn parseCaseCommand(self: *Parser) ParserError!?ast.CaseCommand {
@@ -707,6 +739,7 @@ const Parser = struct {
             .eof => false,
             .right_brace => self.at(.right_brace),
             .esac => self.atReserved(.esac_kw),
+            .done => self.atReserved(.done_kw),
             .case_item => self.at(.double_semicolon) or
                 self.at(.semicolon_ampersand) or
                 self.at(.double_semicolon_ampersand) or
