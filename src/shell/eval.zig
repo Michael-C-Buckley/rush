@@ -3517,7 +3517,7 @@ fn expandParameter(shell: anytype, parameter: ast.ParameterExpansion) EvalError!
     }
 
     return switch (parameter.parameter) {
-        .variable => |name| parameterValue(shell, name) orelse {
+        .variable => |name| parameterExpansionValue(shell, name, parameter.span) orelse {
             if (shell.state.options.nounset) {
                 try writeExpansionDiagnostic(shell, parameter, "parameter", "parameter not set");
                 return error.ExpansionError;
@@ -3653,6 +3653,15 @@ fn parameterCurrentValue(shell: anytype, parameter: ast.Parameter) !?[]const u8 
                 null,
         },
     };
+}
+
+fn parameterExpansionValue(shell: anytype, name: []const u8, span: source_mod.Span) ?[]const u8 {
+    if (std.mem.eql(u8, name, "LINENO")) return std.fmt.allocPrint(
+        shell.scratchAllocator(),
+        "{}",
+        .{span.start_line + shell.state.diagnostic_line_offset},
+    ) catch null;
+    return parameterValue(shell, name);
 }
 
 fn expandParameterPatternRemoval(
