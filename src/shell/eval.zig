@@ -3381,6 +3381,12 @@ fn evalExternalWithSearchPath(
         restored_assignments = true;
         return .{ .status = 126 };
     }
+    if (try findCommandPath(shell, fields[0], search_path) == null) {
+        try shell.host.writeAll(.stderr, try std.fmt.allocPrint(shell.scratchAllocator(), "{s}: not found\n", .{fields[0]}));
+        restoreVariables(shell, saved);
+        restored_assignments = true;
+        return .{ .status = 127 };
+    }
     const request = try makeExternalSpawnRequestWithSearchPath(shell, fields, assignments, &.{}, search_path);
     const status = try shell.host.spawnAndWait(request);
     restoreVariables(shell, saved);
