@@ -26,6 +26,7 @@ pub const Id = enum {
     export_,
     exit,
     false_,
+    getopts,
     printf,
     pwd,
     read,
@@ -63,6 +64,7 @@ pub const definitions: DefinitionMap = .initComptime(.{
     .{ "export", Definition{ .name = "export", .id = .export_, .kind = .special } },
     .{ "exit", Definition{ .name = "exit", .id = .exit, .kind = .special } },
     .{ "false", Definition{ .name = "false", .id = .false_, .kind = .regular } },
+    .{ "getopts", Definition{ .name = "getopts", .id = .getopts, .kind = .regular } },
     .{ "printf", Definition{ .name = "printf", .id = .printf, .kind = .regular } },
     .{ "pwd", Definition{ .name = "pwd", .id = .pwd, .kind = .regular } },
     .{ "read", Definition{ .name = "read", .id = .read, .kind = .regular } },
@@ -92,6 +94,7 @@ pub fn eval(shell: anytype, definition: Definition, args: []const []const u8) !r
         .continue_ => evalContinue(args),
         .exit => evalExit(shell, args),
         .false_ => .{ .status = 1 },
+        .getopts => evalGetopts(shell, args),
         .printf => evalPrintf(shell, args),
         .readonly => evalReadonly(shell, args),
         .set => evalSet(shell, args),
@@ -173,6 +176,91 @@ fn evalUnalias(shell: anytype, args: []const []const u8) result.EvalResult {
         if (!shell.state.removeAlias(name)) status = 1;
     }
     return .{ .status = status };
+}
+
+fn evalGetopts(shell: anytype, args: []const []const u8) !result.EvalResult {
+    if (args.len < 3) return .{ .status = 2 };
+    const optstring = args[1];
+    const name = args[2];
+    if (!isAssignmentName(name)) return .{ .status = 2 };
+
+    const operands = if (args.len > 3) args[3..] else shell.state.positionals;
+    var optind = getoptsOptind(shell);
+    if (optind == 0) optind = 1;
+    const operand_index = optind - 1;
+    if (operand_index >= operands.len) {
+        try putGetoptsOptind(shell, optind);
+        shell.state.getopts_char_index = 1;
+        return .{ .status = 1 };
+    }
+
+    const operand = operands[operand_index];
+    if (shell.state.getopts_char_index == 1) {
+        if (!isGetoptsOptionOperand(operand)) return .{ .status = 1 };
+        if (std.mem.eql(u8, operand, "--")) {
+            try putGetoptsOptind(shell, optind + 1);
+            return .{ .status = 1 };
+        }
+    }
+
+    if (shell.state.getopts_char_index >= operand.len) {
+        shell.state.getopts_char_index = 1;
+        try putGetoptsOptind(shell, optind + 1);
+        return .{ .status = 1 };
+    }
+
+    const option = operand[shell.state.getopts_char_index];
+    const option_index = std.mem.indexOfScalar(u8, optstring, option);
+    if (option_index == null or option == ':') {
+        try shell.state.putVariable(.{ .name = name, .value = "?" });
+        try advanceGetopts(shell, optind, operand);
+        return .{};
+    }
+
+    try shell.state.putVariable(.{ .name = name, .value = operand[shell.state.getopts_char_index..][0..1] });
+    if (option_index.? + 1 < optstring.len and optstring[option_index.? + 1] == ':') {
+        if (shell.state.getopts_char_index + 1 < operand.len) {
+            try shell.state.putVariable(.{ .name = "OPTARG", .value = operand[shell.state.getopts_char_index + 1 ..] });
+            shell.state.getopts_char_index = 1;
+            try putGetoptsOptind(shell, optind + 1);
+        } else if (operand_index + 1 < operands.len) {
+            try shell.state.putVariable(.{ .name = "OPTARG", .value = operands[operand_index + 1] });
+            shell.state.getopts_char_index = 1;
+            try putGetoptsOptind(shell, optind + 2);
+        } else {
+            try shell.state.putVariable(.{ .name = name, .value = "?" });
+            try shell.state.putVariable(.{ .name = "OPTARG", .value = operand[shell.state.getopts_char_index..][0..1] });
+            shell.state.getopts_char_index = 1;
+            try putGetoptsOptind(shell, optind + 1);
+        }
+    } else {
+        try advanceGetopts(shell, optind, operand);
+    }
+    return .{};
+}
+
+fn getoptsOptind(shell: anytype) usize {
+    const value = if (shell.state.getVariable("OPTIND")) |variable| variable.value else "1";
+    return std.fmt.parseInt(usize, value, 10) catch 1;
+}
+
+fn putGetoptsOptind(shell: anytype, optind: usize) !void {
+    const value = try std.fmt.allocPrint(shell.scratchAllocator(), "{}", .{optind});
+    try shell.state.putVariable(.{ .name = "OPTIND", .value = value });
+}
+
+fn advanceGetopts(shell: anytype, optind: usize, operand: []const u8) !void {
+    shell.state.getopts_char_index += 1;
+    if (shell.state.getopts_char_index >= operand.len) {
+        shell.state.getopts_char_index = 1;
+        try putGetoptsOptind(shell, optind + 1);
+    } else {
+        try putGetoptsOptind(shell, optind);
+    }
+}
+
+fn isGetoptsOptionOperand(operand: []const u8) bool {
+    return operand.len >= 2 and operand[0] == '-' and !std.mem.eql(u8, operand, "-");
 }
 
 fn evalExit(shell: anytype, args: []const []const u8) result.EvalResult {
@@ -303,6 +391,7 @@ test "builtin lookup identifies null true and false utilities" {
     try std.testing.expectEqual(Id.exec, lookup("exec").?.id);
     try std.testing.expectEqual(Id.export_, lookup("export").?.id);
     try std.testing.expectEqual(Id.exit, lookup("exit").?.id);
+    try std.testing.expectEqual(Id.getopts, lookup("getopts").?.id);
     try std.testing.expectEqual(Id.true_, lookup("true").?.id);
     try std.testing.expectEqual(Id.false_, lookup("false").?.id);
     try std.testing.expectEqual(Id.printf, lookup("printf").?.id);

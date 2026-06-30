@@ -528,7 +528,7 @@ fn evalSimpleScoped(shell: anytype, command: ast.SimpleCommand) EvalError!result
         if (definition.id == .type) return evalTypeBuiltin(shell, fields);
         if (definition.id == .wait) return evalWaitBuiltin(shell, fields);
         const args = switch (definition.id) {
-            .alias, .cd, .command, .printf, .pwd, .read, .type, .unalias, .wait => fields,
+            .alias, .cd, .command, .getopts, .printf, .pwd, .read, .type, .unalias, .wait => fields,
             .false_, .true_ => &[_][]const u8{name},
             else => unreachable,
         };
@@ -772,7 +772,7 @@ fn evalCommandBuiltin(
                 restored_assignments = true;
                 return evaluated;
             },
-            .alias, .break_, .continue_, .exit, .printf, .set, .unalias, .unset => {
+            .alias, .break_, .continue_, .exit, .getopts, .printf, .set, .unalias, .unset => {
                 const evaluated = try builtin.eval(shell, definition, args[index..]);
                 restoreVariables(shell, saved);
                 restored_assignments = true;
