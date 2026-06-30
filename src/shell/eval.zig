@@ -536,6 +536,7 @@ fn expandForWordFields(shell: anytype, words: []const ast.Word) ![]const []const
 }
 
 fn appendSpecialQuotedFields(shell: anytype, fields: *std.ArrayList([]const u8), word: ast.Word) !bool {
+    if (try appendEmbeddedQuotedAtFields(shell, fields, word)) return true;
     if (wordIsQuotedAt(word)) {
         try fields.appendSlice(shell.scratchAllocator(), shell.state.positionals);
         return true;
@@ -558,6 +559,50 @@ fn appendSpecialQuotedFields(shell: anytype, fields: *std.ArrayList([]const u8),
         },
         else => return false,
     }
+}
+
+fn appendEmbeddedQuotedAtFields(shell: anytype, fields: *std.ArrayList([]const u8), word: ast.Word) !bool {
+    const quoted = switch (word.data) {
+        .literal => return false,
+        .parts => |parts| if (parts.len == 1) switch (parts[0]) {
+            .double_quoted => |nested| nested,
+            else => return false,
+        } else return false,
+    };
+    const at_index = quotedAtPartIndex(quoted) orelse return false;
+    if (shell.state.positionals.len == 0) {
+        const expanded = try expandWordParts(shell, quoted, null);
+        if (expanded.len != 0) try fields.append(shell.scratchAllocator(), expanded);
+        return true;
+    }
+
+    const prefix = try expandWordParts(shell, quoted[0..at_index], null);
+    const suffix = try expandWordParts(shell, quoted[at_index + 1 ..], null);
+    const positionals = shell.state.positionals;
+    const allocator = shell.scratchAllocator();
+    try fields.append(allocator, try std.fmt.allocPrint(allocator, "{s}{s}", .{ prefix, positionals[0] }));
+    if (positionals.len > 2) try fields.appendSlice(allocator, positionals[1 .. positionals.len - 1]);
+    if (positionals.len > 1) {
+        try fields.append(allocator, try std.fmt.allocPrint(allocator, "{s}{s}", .{ positionals[positionals.len - 1], suffix }));
+    } else if (suffix.len != 0) {
+        const last = &fields.items[fields.items.len - 1];
+        last.* = try std.fmt.allocPrint(allocator, "{s}{s}", .{ last.*, suffix });
+    }
+    return true;
+}
+
+fn quotedAtPartIndex(parts: []const ast.WordPart) ?usize {
+    var found: ?usize = null;
+    for (parts, 0..) |part, index| switch (part) {
+        .parameter => |parameter| {
+            if (parameter.op != null or parameter.parameter != .special or parameter.parameter.special != .at) continue;
+            if (found != null) return null;
+            found = index;
+        },
+        .double_quoted => return null,
+        else => {},
+    };
+    return found;
 }
 
 fn singleDoubleQuotedParameter(word: ast.Word) ?ast.ParameterExpansion {
