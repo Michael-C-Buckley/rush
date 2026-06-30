@@ -55,6 +55,7 @@ pub const State = struct {
     functions: std.StringHashMapUnmanaged(Function) = .empty,
     last_status: result.ExitStatus = 0,
     last_background_pid: ?host.Pid = null,
+    loop_depth: usize = 0,
     arg_zero: []const u8 = "rush",
     positionals: []const []const u8 = &.{},
     owned_positionals: []const []const u8 = &.{},

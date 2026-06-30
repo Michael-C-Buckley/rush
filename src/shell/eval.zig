@@ -208,6 +208,9 @@ fn evalIf(shell: anytype, command: ast.IfCommand) EvalError!result.EvalResult {
 
 fn evalLoop(shell: anytype, command: ast.LoopCommand) EvalError!result.EvalResult {
     command.validate();
+    shell.state.loop_depth += 1;
+    defer shell.state.loop_depth -= 1;
+
     var status: result.ExitStatus = 0;
     while (true) {
         const condition = try evalList(shell, command.condition);
@@ -222,14 +225,17 @@ fn evalLoop(shell: anytype, command: ast.LoopCommand) EvalError!result.EvalResul
         status = evaluated.status;
         switch (evaluated.flow) {
             .normal => {},
-            .continue_ => |count| if (count <= 1) continue else return .{
+            .continue_ => |count| if (count <= 1 or count > shell.state.loop_depth) continue else return .{
                 .status = status,
                 .flow = .{ .continue_ = count - 1 },
             },
-            .break_ => |count| if (count <= 1) return .{ .status = status } else return .{
-                .status = status,
-                .flow = .{ .break_ = count - 1 },
-            },
+            .break_ => |count| if (count <= 1 or count > shell.state.loop_depth)
+                return .{ .status = status }
+            else
+                return .{
+                    .status = status,
+                    .flow = .{ .break_ = count - 1 },
+                },
             else => return evaluated,
         }
     }
@@ -253,10 +259,13 @@ fn evalSubshell(shell: anytype, body: ast.List, redirections: []const ast.Redire
 
 fn evalFor(shell: anytype, command: ast.ForCommand) EvalError!result.EvalResult {
     command.validate();
+    shell.state.loop_depth += 1;
+    defer shell.state.loop_depth -= 1;
+
     const scratch = try shell.beginScratchScope();
     defer scratch.end();
 
-    const words = try forCommandWords(shell, command.words);
+    const words = try snapshotFields(shell, try forCommandWords(shell, command.words));
     var status: result.ExitStatus = 0;
     for (words) |word| {
         try shell.state.putVariable(.{ .name = command.name, .value = word });
@@ -264,14 +273,17 @@ fn evalFor(shell: anytype, command: ast.ForCommand) EvalError!result.EvalResult 
         status = evaluated.status;
         switch (evaluated.flow) {
             .normal => {},
-            .continue_ => |count| if (count <= 1) continue else return .{
+            .continue_ => |count| if (count <= 1 or count > shell.state.loop_depth) continue else return .{
                 .status = status,
                 .flow = .{ .continue_ = count - 1 },
             },
-            .break_ => |count| if (count <= 1) return .{ .status = status } else return .{
-                .status = status,
-                .flow = .{ .break_ = count - 1 },
-            },
+            .break_ => |count| if (count <= 1 or count > shell.state.loop_depth)
+                return .{ .status = status }
+            else
+                return .{
+                    .status = status,
+                    .flow = .{ .break_ = count - 1 },
+                },
             else => return evaluated,
         }
     }
@@ -283,6 +295,13 @@ fn forCommandWords(shell: anytype, words: ast.ForWords) ![]const []const u8 {
         .positional_parameters => shell.state.positionals,
         .words => |word_list| expandForWordFields(shell, word_list),
     };
+}
+
+fn snapshotFields(shell: anytype, fields: []const []const u8) ![]const []const u8 {
+    const allocator = shell.scratchAllocator();
+    const snapshot = try allocator.alloc([]const u8, fields.len);
+    for (fields, 0..) |field, index| snapshot[index] = try allocator.dupe(u8, field);
+    return snapshot;
 }
 
 fn expandForWordFields(shell: anytype, words: []const ast.Word) ![]const []const u8 {
