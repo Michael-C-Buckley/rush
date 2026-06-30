@@ -35,5 +35,14 @@
             .stdout = "after\n",
             .stderr_match = .nonempty,
         },
+        .{
+            .name = "expansion error skips command but not the interactive shell",
+            .script =
+            \\echo ${x?alas, poor yorick}
+            \\echo hello
+            ,
+            .stdout = "hello\n",
+            .stderr_match = .nonempty,
+        },
     },
 }

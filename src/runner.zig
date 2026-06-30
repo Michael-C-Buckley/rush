@@ -1125,7 +1125,7 @@ fn runSemanticLoweredProgram(
         if (semanticBodyUnsupportedMessage(body)) |message| {
             return semanticUnsupported(allocator, message);
         }
-        const body_failed = semanticBodyIsStoppingFailure(body, eval_context.features);
+        const body_failed = semanticBodyIsStoppingFailure(body, eval_context);
         if (evaluator.external_stdio == .inherit and semanticBodyUsesInheritedExternal(body)) {
             const flush_result = try output_frame.flushPendingToInheritedDescriptors();
             if (flush_result.stdout_failed or flush_result.stderr_failed) return error.Unimplemented;
@@ -1863,28 +1863,31 @@ fn semanticBodyUnsupportedMessage(body: shell.TrapActionBody) ?[]const u8 {
     };
 }
 
-fn semanticBodyIsStoppingFailure(body: shell.TrapActionBody, features: compat.Features) bool {
+fn semanticBodyIsStoppingFailure(body: shell.TrapActionBody, eval_context: shell.EvalContext) bool {
     body.validate();
+    eval_context.validate();
     return switch (body) {
-        .failure => |failure| semanticFailureStopsProgram(failure, features),
+        .failure => |failure| semanticFailureStopsProgram(failure, eval_context),
         .owned => |owned| switch (owned.body) {
-            .failure => |failure| semanticFailureStopsProgram(failure, features),
+            .failure => |failure| semanticFailureStopsProgram(failure, eval_context),
             .simple, .compound, .pipeline => false,
         },
         .simple, .compound, .pipeline => false,
     };
 }
 
-fn semanticFailureStopsProgram(failure: shell.TrapActionFailure, features: compat.Features) bool {
+fn semanticFailureStopsProgram(failure: shell.TrapActionFailure, eval_context: shell.EvalContext) bool {
     failure.validate();
-    if (features.isBash() and
+    eval_context.validate();
+    if (eval_context.interactive and failure.kind == .expansion_error) return false;
+    if (eval_context.features.isBash() and
         failure.kind == .parse_error and
         failure.status == 1 and
         std.mem.endsWith(u8, failure.message, ": not a valid identifier"))
     {
         return false;
     }
-    return !(features.isBash() and
+    return !(eval_context.features.isBash() and
         failure.kind == .expansion_error and
         (failure.bash_arithmetic_expansion or
             failure.bash_arithmetic_assignment_only_expansion or
@@ -3247,6 +3250,32 @@ test "semantic interactive invocation runs cd" {
             try std.testing.expectEqualStrings("", result.stdout);
             try std.testing.expectEqualStrings("", result.stderr);
             try std.testing.expectEqualStrings(target_path, shell_state.getVariable("PWD").?.value);
+        },
+    }
+}
+
+test "semantic interactive invocation continues after expansion errors" {
+    var shell_state = shell.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    try shell.startup.initializeInvocationState(std.testing.allocator, std.testing.io, &shell_state, null, &.{}, .{});
+
+    var execution = try runInteractiveCommandString(
+        std.testing.allocator,
+        std.testing.io,
+        &shell_state,
+        "echo ${x?alas, poor yorick}; echo hello",
+        shell.InvocationContext.init(.{ .arg_zero = "rush", .source = .interactive, .interactive = true }),
+        .capture,
+        false,
+    );
+    defer execution.deinit(std.testing.allocator);
+
+    switch (execution) {
+        .unsupported => return error.ExpectedSemanticExecution,
+        .output => |result| {
+            try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
+            try std.testing.expectEqualStrings("hello\n", result.stdout);
+            try std.testing.expect(std.mem.indexOf(u8, result.stderr, "alas, poor yorick") != null);
         },
     }
 }
