@@ -54,7 +54,7 @@ pub fn render(
     evaluator.io = io;
     evaluator.features = options.features;
     evaluator.arg_zero = options.arg_zero;
-    evaluator.command_substitution_execution = .in_process_snapshot;
+    evaluator.command_substitution_execution = .parent_process_snapshot;
     evaluator.setExtensionHandlerLookup(&lookup_context, promptExtensionLookup);
 
     var working_state = shell_state.clone(allocator) catch |err| switch (err) {
@@ -408,7 +408,10 @@ test "interactive prompt async runs shell functions in hidden refresh" {
     });
     try shell_state.putFunction(.{
         .name = "rush_prompt_value",
-        .source_body = "/usr/bin/printf async 2>/dev/null",
+        .source_body =
+        \\value="$(/usr/bin/printf async 2>/dev/null)"
+        \\/usr/bin/printf '%s' "$value"
+        ,
     });
 
     var async_state: AsyncState = .{};

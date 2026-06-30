@@ -161,7 +161,24 @@ const ExecutionScratch = struct {
 
 pub const CommandSubstitutionExecution = enum {
     forked_subshell,
-    in_process_snapshot,
+    parent_process_snapshot,
+    forked_child_snapshot,
+
+    fn usesSnapshot(self: CommandSubstitutionExecution) bool {
+        return switch (self) {
+            .forked_subshell => false,
+            .parent_process_snapshot, .forked_child_snapshot => true,
+        };
+    }
+
+    fn canExecCommandSubstitutionBody(self: CommandSubstitutionExecution, depth: u32) bool {
+        std.debug.assert(depth != 0);
+        return switch (self) {
+            .forked_subshell => true,
+            .forked_child_snapshot => depth == 1,
+            .parent_process_snapshot => false,
+        };
+    }
 };
 
 pub const Evaluator = struct {
@@ -7899,7 +7916,7 @@ fn runForkedCommandSubstitution(opaque_context: *anyopaque) u8 {
     if (fork_context.evaluator.features.isBash()) substitution_state.options.set(.errexit, false);
 
     const previous_command_substitution_execution = fork_context.evaluator.command_substitution_execution;
-    fork_context.evaluator.command_substitution_execution = .in_process_snapshot;
+    fork_context.evaluator.command_substitution_execution = .forked_child_snapshot;
     defer fork_context.evaluator.command_substitution_execution = previous_command_substitution_execution;
 
     tailExecSimpleExternalCommandSubstitution(fork_context, &substitution_state) catch return 125;
@@ -8345,7 +8362,7 @@ fn evaluateCommandSubstitutionSnapshot(
 
     var parent_frame = rootExecutionFrame(context.EvalContext.forTarget(.current_shell));
     defer parent_frame.spec.fd_table.deinit(evaluator.allocator);
-    if (evaluator.command_substitution_execution == .in_process_snapshot) {
+    if (evaluator.command_substitution_execution.usesSnapshot()) {
         var substitution_state = parent_state.snapshotForSubshell(evaluator.allocator) catch |err| switch (err) {
             error.OutOfMemory => return error.OutOfMemory,
             error.ReadonlyVariable => unreachable,
@@ -8853,7 +8870,7 @@ fn runSemanticCommandSubstitution(
             expansion_context.parent_input,
             expansion_context.suppress_inherited_xtrace,
         ),
-        .in_process_snapshot => blk: {
+        .parent_process_snapshot, .forked_child_snapshot => blk: {
             var substitution_state = parent_state.snapshotForSubshell(
                 expansion_context.evaluator.allocator,
             ) catch |err| switch (err) {
@@ -18759,8 +18776,7 @@ fn evaluateExec(
         .target = .child_process,
     });
     if (((eval_context.command_substitution_depth != 0 and
-        (evaluator.command_substitution_execution == .forked_subshell or
-            eval_context.command_substitution_depth == 1) and
+        evaluator.command_substitution_execution.canExecCommandSubstitutionBody(eval_context.command_substitution_depth) and
         eval_context.pipeline_depth == 0) or
         (eval_context.target.isIsolatedFromParent() and eval_context.function_depth != 0)) and
         !externalNeedsBufferedStdin(target_plan, buffers))
@@ -23760,6 +23776,36 @@ test "semantic command substitution captures external command stdout" {
 
     try std.testing.expectEqual(@as(outcome.ExitStatus, 0), result.status);
     try std.testing.expectEqualStrings("external", result.output.items);
+    try std.testing.expectEqualStrings("", result.stderr.items);
+}
+
+test "parent snapshot command substitution does not process-overlay exec" {
+    var fake = FakeExternalRuntime.init(std.testing.allocator);
+    defer fake.deinit();
+    fake.setRunResult("exec-output\n", "", .{ .exited = 0 });
+    var evaluator = Evaluator.initWithExternalPorts(std.testing.allocator, fake.fdPort(), fake.processPort());
+    evaluator.command_substitution_execution = .parent_process_snapshot;
+    var shell_state = state.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+
+    const plan = command_plan.classifyExpandedSimpleCommand(.{
+        .command = .{ .argv = &[_][]const u8{ "exec", "/test/printf" } },
+        .target = .subshell,
+    });
+
+    var result = try evaluateCommandSubstitution(
+        &evaluator,
+        &shell_state,
+        context.EvalContext.forTarget(.current_shell),
+        .{ .simple = plan },
+    );
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(usize, 0), fake.start_subshell_count);
+    try std.testing.expectEqual(@as(usize, 0), fake.spawn_count);
+    try std.testing.expectEqual(@as(usize, 1), fake.run_count);
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("exec-output", result.output.items);
     try std.testing.expectEqualStrings("", result.stderr.items);
 }
 

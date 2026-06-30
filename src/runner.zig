@@ -640,6 +640,7 @@ pub fn runHiddenShellStateCommandWithExtensionHandlersApplyOptionsAndAssignments
     evaluator.io = io;
     evaluator.read_stdin_from_fd = false;
     evaluator.external_stdio = external_stdio;
+    evaluator.command_substitution_execution = .parent_process_snapshot;
     evaluator.event_dispatch_depth = event_dispatch_depth;
     extension_handlers.apply(&evaluator);
 
