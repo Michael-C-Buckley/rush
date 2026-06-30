@@ -73,6 +73,7 @@ pub const State = struct {
     loop_depth: usize = 0,
     diagnostic_line_offset: usize = 0,
     exit_trap: ?[]const u8 = null,
+    exit_trap_listing: ?[]const u8 = null,
     running_exit_trap: bool = false,
     arg_zero: []const u8 = "rush",
     positionals: []const []const u8 = &.{},
@@ -236,12 +237,21 @@ pub const State = struct {
     pub fn setExitTrap(self: *State, action: []const u8) !void {
         const owned = try self.allocator.dupe(u8, action);
         errdefer self.allocator.free(owned);
+        const listed = try self.allocator.dupe(u8, action);
+        errdefer self.allocator.free(listed);
         self.clearExitTrap();
         self.exit_trap = owned;
+        self.exit_trap_listing = listed;
     }
 
     pub fn clearExitTrap(self: *State) void {
         if (self.exit_trap) |action| self.allocator.free(action);
+        self.exit_trap = null;
+        if (self.exit_trap_listing) |action| self.allocator.free(action);
+        self.exit_trap_listing = null;
+    }
+
+    pub fn forgetActiveExitTrap(self: *State) void {
         self.exit_trap = null;
     }
 

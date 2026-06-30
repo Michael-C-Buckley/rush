@@ -514,7 +514,7 @@ fn evalUnset(shell: anytype, args: []const []const u8) result.EvalResult {
 
 fn evalTrap(shell: anytype, args: []const []const u8) !result.EvalResult {
     if (args.len == 1) {
-        if (shell.state.exit_trap) |action| {
+        if (shell.state.exit_trap_listing) |action| {
             try shell.host.writeAll(.stdout, try std.fmt.allocPrint(
                 shell.scratchAllocator(),
                 "trap -- '{s}' EXIT\n",

@@ -353,6 +353,8 @@ fn evalSubshell(shell: anytype, body: ast.List, redirections: []const ast.Redire
             const scratch = shell.beginScratchScope() catch shell.host.exit(2);
             defer scratch.end();
             shell.state.loop_depth = 0;
+            shell.state.running_exit_trap = false;
+            shell.state.forgetActiveExitTrap();
             var applied = applyRedirections(shell, redirections) catch shell.host.exit(1);
             defer applied.restore(shell) catch {};
             const evaluated = evalList(shell, body) catch shell.host.exit(2);
@@ -3284,8 +3286,10 @@ fn evalCommandSubstitutionInChild(
             shell.host.duplicateTo(pipe_desc.write, .stdout) catch shell.host.exit(127);
             shell.host.close(pipe_desc.write) catch shell.host.exit(127);
             shell.state.loop_depth = 0;
+            shell.state.running_exit_trap = false;
             shell.state.diagnostic_line_offset += substitution.line_offset;
-            shell.state.clearExitTrap();
+            shell.state.forgetActiveExitTrap();
+            shell.state.exit_trap_listing = null;
             const evaluated = evalProgram(@TypeOf(shell.host), shell, program) catch shell.host.exit(2);
             const status = runExitTrap(shell, evaluated.status) catch shell.host.exit(2);
             shell.host.exit(status);
