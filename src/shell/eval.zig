@@ -430,6 +430,7 @@ fn pipelineStageExecutionFrame(
     parent_frame: *execution_frame.ExecutionFrame,
     stage_target: context.ExecutionTarget,
     is_last_stage: bool,
+    downstream_closes_input: bool,
     previous_stdin: []const u8,
     redirections: redirection_plan.RedirectionPlan,
 ) EvalError!execution_frame.ExecutionFrame {
@@ -447,7 +448,10 @@ fn pipelineStageExecutionFrame(
         .{ .bytes = previous_stdin }
     else
         pipelineStageInheritedInput(parent_frame.*, fd_table);
-    const stdout = pipelineStageOutputEndpoint(parent_frame.*, fd_table, is_last_stage);
+    const stdout: execution_frame.OutputEndpoint = if (downstream_closes_input)
+        .discard
+    else
+        pipelineStageOutputEndpoint(parent_frame.*, fd_table, is_last_stage);
     const stderr = pipelineStageErrorEndpoint(parent_frame.*, fd_table);
     try fd_table.bindInput(allocator, 0, stdin);
     try fd_table.bindOutput(allocator, 1, stdout);
@@ -721,6 +725,39 @@ fn pipelineStageRedirections(stage: pipeline_plan.PipelineStagePlan) redirection
     return switch (stage) {
         .simple => |plan| plan.redirections,
         .compound => |plan| plan.redirections,
+    };
+}
+
+fn pipelineStageClosesInputImmediately(stage: pipeline_plan.PipelineStagePlan) bool {
+    stage.validate();
+    return switch (stage) {
+        .compound => false,
+        .simple => |plan| switch (plan.classification) {
+            .regular_builtin, .special_builtin => |definition| builtinClosesInputImmediately(definition),
+            .empty,
+            .assignment_only,
+            .function_definition,
+            .function,
+            .external,
+            .not_found,
+            => false,
+        },
+    };
+}
+
+fn builtinClosesInputImmediately(definition: builtin.Builtin) bool {
+    definition.validate();
+    return switch (definition.semantic_class) {
+        .no_op, .status_constant => true,
+        .unsupported,
+        .output,
+        .predicate,
+        .declaration,
+        .shell_state,
+        .extension_state,
+        .job_control,
+        .control_flow,
+        => false,
     };
 }
 
@@ -9942,6 +9979,7 @@ fn evaluateFallbackPipeline(
             buffers.frame,
             stage_target,
             is_last_stage,
+            !is_last_stage and pipelineStageClosesInputImmediately(plan.stages[index + 1]),
             next_stdin.items,
             pipelineStageRedirections(stage),
         );
@@ -10075,6 +10113,7 @@ fn evaluateStreamingExternalToSemanticPipeline(
         buffers.frame,
         consumer_target,
         true,
+        false,
         &.{},
         pipelineStageRedirections(plan.stages[1]),
     );
@@ -10195,6 +10234,7 @@ fn runStreamingSemanticPipelineProducer(opaque_context: *anyopaque) u8 {
         producer_context.evaluator.scoped_exec_redirections,
         &parent_frame,
         stage_target,
+        false,
         false,
         &.{},
         pipelineStageRedirections(producer_context.stage),
@@ -17411,15 +17451,39 @@ fn evaluateTimes(
 
     const process_port = evaluator.process_port orelse return error.Unimplemented;
     const times = process_port.getTimes() catch return error.Unimplemented;
-    try printProcessTime(buffers.allocator, &buffers.stdout, times.shell_user);
-    try buffers.stdout.append(buffers.allocator, ' ');
-    try printProcessTime(buffers.allocator, &buffers.stdout, times.shell_system);
-    try buffers.stdout.append(buffers.allocator, '\n');
-    try printProcessTime(buffers.allocator, &buffers.stdout, times.children_user);
-    try buffers.stdout.append(buffers.allocator, ' ');
-    try printProcessTime(buffers.allocator, &buffers.stdout, times.children_system);
-    try buffers.stdout.append(buffers.allocator, '\n');
-    return 0;
+    var stdout: std.ArrayList(u8) = .empty;
+    defer stdout.deinit(buffers.allocator);
+    try printProcessTime(buffers.allocator, &stdout, times.shell_user);
+    try stdout.append(buffers.allocator, ' ');
+    try printProcessTime(buffers.allocator, &stdout, times.shell_system);
+    try stdout.append(buffers.allocator, '\n');
+    try printProcessTime(buffers.allocator, &stdout, times.children_user);
+    try stdout.append(buffers.allocator, ' ');
+    try printProcessTime(buffers.allocator, &stdout, times.children_system);
+    try stdout.append(buffers.allocator, '\n');
+
+    var status: outcome.ExitStatus = 0;
+    var frame = try buffers.outputFrame();
+    defer frame.deinit();
+    if (stdout.items.len != 0 and frame.routingRef().destination(1) == .closed) {
+        status = 1;
+        frame.addBuiltinDiagnostic("times", "write error") catch |diagnostic_err| switch (diagnostic_err) {
+            error.Unimplemented => {},
+            else => |e| return e,
+        };
+    } else {
+        frame.write(1, stdout.items) catch |err| switch (err) {
+            error.Unimplemented => {
+                status = 1;
+                frame.addBuiltinDiagnostic("times", "write error") catch |diagnostic_err| switch (diagnostic_err) {
+                    error.Unimplemented => {},
+                    else => |e| return e,
+                };
+            },
+            else => |e| return e,
+        };
+    }
+    return status;
 }
 
 fn printProcessTime(
@@ -23722,6 +23786,7 @@ test "fallback pipeline stage frames model stdin stdout stderr and redirection o
         &parent_frame,
         .subshell,
         false,
+        false,
         "",
         first_redirections,
     );
@@ -23737,6 +23802,7 @@ test "fallback pipeline stage frames model stdin stdout stderr and redirection o
         &parent_frame,
         .subshell,
         true,
+        false,
         "from-first",
         .{},
     );
