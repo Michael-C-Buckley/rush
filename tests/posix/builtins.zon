@@ -40,6 +40,71 @@
             .status = 0,
         },
         .{
+            .name = "test evaluates POSIX string integer and file primaries",
+            .script =
+            \\test; printf 'empty:%s\n' "$?"
+            \\test value; printf 'string:%s\n' "$?"
+            \\test ""; printf 'null:%s\n' "$?"
+            \\test ! ""; printf 'not-null:%s\n' "$?"
+            \\test -n value; printf 'n:%s\n' "$?"
+            \\test -z ""; printf 'z:%s\n' "$?"
+            \\test x != y; printf 'neq:%s\n' "$?"
+            \\[ 2 -gt 1 ]; printf 'gt:%s\n' "$?"
+            \\[ 1 -le 1 ]; printf 'le:%s\n' "$?"
+            \\: >empty
+            \\printf x >nonempty
+            \\mkdir dir
+            \\ln -s nonempty link
+            \\mkfifo pipe
+            \\chmod +x nonempty
+            \\test -e empty; printf 'e:%s\n' "$?"
+            \\test -f empty; printf 'f:%s\n' "$?"
+            \\test -d dir; printf 'd:%s\n' "$?"
+            \\test -s nonempty; printf 's:%s\n' "$?"
+            \\test ! -s empty; printf 'not-s:%s\n' "$?"
+            \\test -h link; printf 'h:%s\n' "$?"
+            \\test -L link; printf 'L:%s\n' "$?"
+            \\test -p pipe; printf 'p:%s\n' "$?"
+            \\test -r nonempty; printf 'r:%s\n' "$?"
+            \\test -w nonempty; printf 'w:%s\n' "$?"
+            \\test -x nonempty; printf 'x:%s\n' "$?"
+            \\test nonempty -ef link; printf 'ef:%s\n' "$?"
+            \\: >old
+            \\sleep 1
+            \\: >new
+            \\test new -nt old; printf 'nt:%s\n' "$?"
+            \\test old -ot new; printf 'ot:%s\n' "$?"
+            ,
+            .stdout =
+            \\empty:1
+            \\string:0
+            \\null:1
+            \\not-null:0
+            \\n:0
+            \\z:0
+            \\neq:0
+            \\gt:0
+            \\le:0
+            \\e:0
+            \\f:0
+            \\d:0
+            \\s:0
+            \\not-s:0
+            \\h:0
+            \\L:0
+            \\p:0
+            \\r:0
+            \\w:0
+            \\x:0
+            \\ef:0
+            \\nt:0
+            \\ot:0
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "cd dash changes to OLDPWD and writes the new directory",
             .script =
             \\out=$PWD/cd.out

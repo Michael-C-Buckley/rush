@@ -175,7 +175,10 @@ const Lexer = struct {
                 ';' => try self.appendSemicolon(&tokens),
                 '&' => try self.appendAmpersand(&tokens),
                 '|' => try self.appendPipe(&tokens),
-                '!' => try self.appendSingle(&tokens, .bang),
+                '!' => if (self.peekByte(1)) |next|
+                    if (isWordTerminator(next)) try self.appendSingle(&tokens, .bang) else try self.appendWord(&tokens)
+                else
+                    try self.appendSingle(&tokens, .bang),
                 '(' => try self.appendSingle(&tokens, .left_paren),
                 ')' => try self.appendSingle(&tokens, .right_paren),
                 '{' => try self.appendSingle(&tokens, .left_brace),
@@ -690,6 +693,23 @@ test "lexer tokenizes AND-OR operators" {
     try std.testing.expectEqual(token.Kind.word, tokens[5].kind);
     try std.testing.expectEqualStrings("true", tokens[5].text);
     try std.testing.expectEqual(token.Kind.eof, tokens[6].kind);
+}
+
+test "lexer keeps exclamation mark words together" {
+    const src: source_mod.Source = .{ .id = 1, .kind = .command_string, .name = "-c", .text = "test x != y; ! false" };
+    const tokens = try lex(std.testing.allocator, src);
+    defer std.testing.allocator.free(tokens);
+
+    try std.testing.expectEqual(token.Kind.word, tokens[0].kind);
+    try std.testing.expectEqualStrings("test", tokens[0].text);
+    try std.testing.expectEqual(token.Kind.word, tokens[1].kind);
+    try std.testing.expectEqualStrings("x", tokens[1].text);
+    try std.testing.expectEqual(token.Kind.word, tokens[2].kind);
+    try std.testing.expectEqualStrings("!=", tokens[2].text);
+    try std.testing.expectEqual(token.Kind.word, tokens[3].kind);
+    try std.testing.expectEqualStrings("y", tokens[3].text);
+    try std.testing.expectEqual(token.Kind.semicolon, tokens[4].kind);
+    try std.testing.expectEqual(token.Kind.bang, tokens[5].kind);
 }
 
 test "lexer marks reserved words" {

@@ -38,15 +38,44 @@ pub const Pipe = struct {
 };
 
 pub const FileKind = enum {
+    block_device,
+    character_device,
     file,
     directory,
+    named_pipe,
     symlink,
+    socket,
     other,
 };
 
 pub const FileStatus = struct {
     kind: FileKind,
-    executable: bool = false,
+    size: u64 = 0,
+    mode: u32 = 0,
+    device: u64 = 0,
+    inode: u64 = 0,
+    mtime_sec: i64 = 0,
+    mtime_nsec: i64 = 0,
+
+    pub fn sameFile(self: FileStatus, other: FileStatus) bool {
+        return self.device == other.device and self.inode == other.inode;
+    }
+
+    pub fn newerThan(self: FileStatus, other: FileStatus) bool {
+        return self.mtime_sec > other.mtime_sec or
+            (self.mtime_sec == other.mtime_sec and self.mtime_nsec > other.mtime_nsec);
+    }
+
+    pub fn olderThan(self: FileStatus, other: FileStatus) bool {
+        return self.mtime_sec < other.mtime_sec or
+            (self.mtime_sec == other.mtime_sec and self.mtime_nsec < other.mtime_nsec);
+    }
+};
+
+pub const FileAccess = enum {
+    read,
+    write,
+    execute,
 };
 
 pub const DirectoryEntry = struct {
@@ -243,6 +272,18 @@ pub const RealHost = struct {
 
     pub fn fileStatusZ(_: *RealHost, path: [:0]const u8) platform.FileStatusError!FileStatus {
         return platform.fileStatusZ(path);
+    }
+
+    pub fn fileTestStatusZ(_: *RealHost, path: [:0]const u8, follow_symlinks: bool) ?FileStatus {
+        return platform.fileTestStatusZ(path, follow_symlinks);
+    }
+
+    pub fn fileAccessZ(_: *RealHost, path: [:0]const u8, access: FileAccess) bool {
+        return platform.fileAccessZ(path, access);
+    }
+
+    pub fn isTerminalFd(_: *RealHost, fd: Fd) bool {
+        return platform.isTerminalFd(fd);
     }
 
     pub fn listDir(_: *RealHost, allocator: std.mem.Allocator, path: []const u8) platform.ListDirError!ListDirResult {

@@ -181,6 +181,28 @@ pub fn fileStatusZ(path: [:0]const u8) FileStatusError!host.FileStatus {
     };
 }
 
+pub fn fileTestStatusZ(path: [:0]const u8, follow_symlinks: bool) ?host.FileStatus {
+    std.debug.assert(path.len != 0);
+    return switch (builtin.os.tag) {
+        .linux => linuxFileTestStatusZ(path, follow_symlinks),
+        .macos, .freebsd, .openbsd, .netbsd => libcFileTestStatusZ(path, follow_symlinks),
+        else => @compileError("unsupported host OS"),
+    };
+}
+
+pub fn fileAccessZ(path: [:0]const u8, access: host.FileAccess) bool {
+    std.debug.assert(path.len != 0);
+    return switch (builtin.os.tag) {
+        .linux => linuxFileAccessZ(path, access),
+        .macos, .freebsd, .openbsd, .netbsd => libcFileAccessZ(path, access),
+        else => @compileError("unsupported host OS"),
+    };
+}
+
+pub fn isTerminalFd(fd: host.Fd) bool {
+    return std.c.isatty(@intCast(fd.raw())) == 1;
+}
+
 pub fn listDir(allocator: std.mem.Allocator, path: []const u8) ListDirError!host.ListDirResult {
     std.debug.assert(path.len != 0);
     return switch (builtin.os.tag) {
@@ -564,9 +586,9 @@ fn libcExistsZ(path: [:0]const u8) bool {
 fn linuxFileStatusZ(path: [:0]const u8) FileStatusError!host.FileStatus {
     const linux = std.os.linux;
     var status: linux.Statx = undefined;
-    const rc = linux.statx(linux.AT.FDCWD, path.ptr, 0, .{ .TYPE = true, .MODE = true }, &status);
+    const rc = linux.statx(linux.AT.FDCWD, path.ptr, 0, file_status_mask, &status);
     switch (linux.errno(rc)) {
-        .SUCCESS => return .{ .kind = linuxFileKindFromMode(status.mode) },
+        .SUCCESS => return linuxStatusFromStatx(status),
         .ACCES, .PERM => return error.AccessDenied,
         .NOENT => return error.FileNotFound,
         .NOTDIR => return error.NotDir,
@@ -580,7 +602,7 @@ fn libcFileStatusZ(path: [:0]const u8) FileStatusError!host.FileStatus {
     var status: std.c.Stat = undefined;
     const rc = std.c.fstatat(std.c.AT.FDCWD, path.ptr, &status, 0);
     switch (std.c.errno(rc)) {
-        .SUCCESS => return .{ .kind = libcFileKindFromMode(status.mode) },
+        .SUCCESS => return libcStatusFromStat(status),
         .ACCES, .PERM => return error.AccessDenied,
         .NOENT => return error.FileNotFound,
         .NOTDIR => return error.NotDir,
@@ -588,6 +610,78 @@ fn libcFileStatusZ(path: [:0]const u8) FileStatusError!host.FileStatus {
         .NFILE, .MFILE, .NOMEM, .NOBUFS => return error.SystemResources,
         else => return error.Unexpected,
     }
+}
+
+const file_status_mask: std.os.linux.STATX = .{
+    .TYPE = true,
+    .MODE = true,
+    .MTIME = true,
+    .INO = true,
+    .SIZE = true,
+};
+
+fn linuxFileTestStatusZ(path: [:0]const u8, follow_symlinks: bool) ?host.FileStatus {
+    const linux = std.os.linux;
+    var flags: u32 = linux.AT.NO_AUTOMOUNT;
+    if (!follow_symlinks) flags |= linux.AT.SYMLINK_NOFOLLOW;
+    var statx = std.mem.zeroes(linux.Statx);
+    const rc = linux.statx(linux.AT.FDCWD, path.ptr, flags, file_status_mask, &statx);
+    if (linux.errno(rc) != .SUCCESS) return null;
+    return linuxStatusFromStatx(statx);
+}
+
+fn linuxStatusFromStatx(statx: std.os.linux.Statx) host.FileStatus {
+    return .{
+        .kind = linuxFileKindFromMode(statx.mode),
+        .size = statx.size,
+        .mode = statx.mode,
+        .device = (@as(u64, statx.dev_major) << 32) | statx.dev_minor,
+        .inode = statx.ino,
+        .mtime_sec = statx.mtime.sec,
+        .mtime_nsec = statx.mtime.nsec,
+    };
+}
+
+fn libcFileTestStatusZ(path: [:0]const u8, follow_symlinks: bool) ?host.FileStatus {
+    const flags: u32 = if (follow_symlinks) 0 else std.c.AT.SYMLINK_NOFOLLOW;
+    const fstatat_sym = if (std.posix.lfs64_abi) std.c.fstatat64 else std.c.fstatat;
+    var stat = std.mem.zeroes(std.posix.Stat);
+    const rc = fstatat_sym(std.c.AT.FDCWD, path.ptr, &stat, flags);
+    if (std.c.errno(rc) != .SUCCESS) return null;
+    return libcStatusFromStat(stat);
+}
+
+fn libcStatusFromStat(stat: std.posix.Stat) host.FileStatus {
+    const mtime = stat.mtime();
+    return .{
+        .kind = libcFileKindFromMode(stat.mode),
+        .size = @intCast(@max(stat.size, 0)),
+        .mode = @intCast(stat.mode),
+        .device = @intCast(stat.dev),
+        .inode = @intCast(stat.ino),
+        .mtime_sec = @intCast(mtime.sec),
+        .mtime_nsec = @intCast(mtime.nsec),
+    };
+}
+
+fn linuxFileAccessZ(path: [:0]const u8, access: host.FileAccess) bool {
+    const mode: u32 = switch (access) {
+        .read => std.os.linux.R_OK,
+        .write => std.os.linux.W_OK,
+        .execute => std.os.linux.X_OK,
+    };
+    const rc = std.os.linux.access(path.ptr, mode);
+    return std.os.linux.errno(rc) == .SUCCESS;
+}
+
+fn libcFileAccessZ(path: [:0]const u8, access: host.FileAccess) bool {
+    const mode: c_uint = switch (access) {
+        .read => std.c.R_OK,
+        .write => std.c.W_OK,
+        .execute => std.c.X_OK,
+    };
+    const rc = std.c.access(path.ptr, mode);
+    return std.c.errno(rc) == .SUCCESS;
 }
 
 fn linuxListDir(allocator: std.mem.Allocator, path: []const u8) ListDirError!host.ListDirResult {
@@ -760,17 +854,25 @@ fn fileKindFromDirentType(kind: u8) host.FileKind {
 
 fn linuxFileKindFromMode(mode: std.os.linux.mode_t) host.FileKind {
     const S = std.os.linux.S;
+    if (S.ISBLK(mode)) return .block_device;
+    if (S.ISCHR(mode)) return .character_device;
     if (S.ISREG(mode)) return .file;
     if (S.ISDIR(mode)) return .directory;
+    if (S.ISFIFO(mode)) return .named_pipe;
     if (S.ISLNK(mode)) return .symlink;
+    if (S.ISSOCK(mode)) return .socket;
     return .other;
 }
 
 fn libcFileKindFromMode(mode: std.c.mode_t) host.FileKind {
     const S = std.c.S;
+    if (S.ISBLK(mode)) return .block_device;
+    if (S.ISCHR(mode)) return .character_device;
     if (S.ISREG(mode)) return .file;
     if (S.ISDIR(mode)) return .directory;
+    if (S.ISFIFO(mode)) return .named_pipe;
     if (S.ISLNK(mode)) return .symlink;
+    if (S.ISSOCK(mode)) return .socket;
     return .other;
 }
 

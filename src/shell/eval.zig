@@ -621,7 +621,9 @@ fn evalSimpleScoped(shell: anytype, command: ast.SimpleCommand) EvalError!result
         }
         if (definition.id == .pwd) return evalPwdBuiltin(shell, fields);
         if (definition.id == .read) return evalReadBuiltin(shell, fields, command.assignments);
-        if (definition.id == .test_ or definition.id == .bracket) return evalTestBuiltin(shell, fields, command.assignments);
+        if (definition.id == .test_ or definition.id == .bracket) {
+            return evalTestBuiltin(shell, fields, command.assignments);
+        }
         if (definition.id == .type) return evalTypeBuiltin(shell, fields);
         if (definition.id == .wait) return evalWaitBuiltin(shell, fields);
         const args = switch (definition.id) {
@@ -905,69 +907,172 @@ fn evalCommandBuiltin(
     return evaluated;
 }
 
-fn evalTestBuiltin(shell: anytype, args: []const []const u8, assignments: []const ast.Assignment) EvalError!result.EvalResult {
+fn evalTestBuiltin(
+    shell: anytype,
+    args: []const []const u8,
+    assignments: []const ast.Assignment,
+) EvalError!result.EvalResult {
+    _ = assignments;
     std.debug.assert(args.len != 0);
-    if (evalFastTest(args)) |matches| return .{ .status = if (matches) 0 else 1 };
-    return evalExternalWithSearchPath(shell, args, assignments, defaultUtilityPath());
+    const operands = testOperands(args) catch |err| {
+        try writeTestDiagnostic(shell, args[0], err);
+        return .{ .status = 2 };
+    };
+    const matches = evalTestOperands(shell, operands) catch |err| {
+        switch (err) {
+            error.Syntax => {
+                try writeTestDiagnostic(shell, args[0], error.Syntax);
+                return .{ .status = 2 };
+            },
+            error.Integer => {
+                try writeTestDiagnostic(shell, args[0], error.Integer);
+                return .{ .status = 2 };
+            },
+            else => return err,
+        }
+    };
+    return .{ .status = if (matches) 0 else 1 };
 }
 
-fn evalFastTest(args: []const []const u8) ?bool {
-    std.debug.assert(args.len != 0);
-    const operands = testOperands(args) orelse return null;
-    return evalTestOperands(operands);
-}
+const TestEvalError = error{
+    Syntax,
+    Integer,
+};
 
-fn testOperands(args: []const []const u8) ?[]const []const u8 {
+fn testOperands(args: []const []const u8) TestEvalError![]const []const u8 {
     if (std.mem.eql(u8, args[0], "[")) {
-        if (args.len < 2 or !std.mem.eql(u8, args[args.len - 1], "]")) return null;
+        if (args.len < 2 or !std.mem.eql(u8, args[args.len - 1], "]")) return error.Syntax;
         return args[1 .. args.len - 1];
     }
     std.debug.assert(std.mem.eql(u8, args[0], "test"));
     return args[1..];
 }
 
-fn evalTestOperands(args: []const []const u8) ?bool {
+fn evalTestOperands(shell: anytype, args: []const []const u8) EvalError!bool {
     return switch (args.len) {
         0 => false,
         1 => args[0].len != 0,
-        2 => evalTwoArgumentTest(args[0], args[1]),
-        3 => evalThreeArgumentTest(args[0], args[1], args[2]),
+        2 => evalTwoArgumentTest(shell, args[0], args[1]),
+        3 => evalThreeArgumentTest(shell, args[0], args[1], args[2]),
         4 => if (std.mem.eql(u8, args[0], "!"))
-            if (evalThreeArgumentTest(args[1], args[2], args[3])) |matches| !matches else null
+            !try evalThreeArgumentTest(shell, args[1], args[2], args[3])
         else
-            null,
-        else => null,
+            error.Syntax,
+        else => error.Syntax,
     };
 }
 
-fn evalTwoArgumentTest(operator: []const u8, operand: []const u8) ?bool {
+fn evalTwoArgumentTest(shell: anytype, operator: []const u8, operand: []const u8) EvalError!bool {
     if (std.mem.eql(u8, operator, "!")) return operand.len == 0;
     if (std.mem.eql(u8, operator, "-n")) return operand.len != 0;
     if (std.mem.eql(u8, operator, "-z")) return operand.len == 0;
-    return null;
+    return (try evalFileUnaryTest(shell, operator, operand)) orelse error.Syntax;
 }
 
-fn evalThreeArgumentTest(left: []const u8, operator: []const u8, right: []const u8) ?bool {
+fn evalThreeArgumentTest(shell: anytype, left: []const u8, operator: []const u8, right: []const u8) EvalError!bool {
     if (std.mem.eql(u8, operator, "=")) return std.mem.eql(u8, left, right);
     if (std.mem.eql(u8, operator, "!=")) return !std.mem.eql(u8, left, right);
+    if (std.mem.eql(u8, operator, ">")) return std.mem.order(u8, left, right) == .gt;
+    if (std.mem.eql(u8, operator, "<")) return std.mem.order(u8, left, right) == .lt;
     if (std.mem.eql(u8, left, "!")) {
-        if (evalTwoArgumentTest(operator, right)) |matches| return !matches;
-        return null;
+        return !try evalTwoArgumentTest(shell, operator, right);
     }
 
-    return evalIntegerComparison(left, operator, right);
+    if (try evalFileBinaryTest(shell, left, operator, right)) |matches| return matches;
+    if (try evalIntegerComparison(left, operator, right)) |matches| return matches;
+    return error.Syntax;
 }
 
-fn evalIntegerComparison(left: []const u8, operator: []const u8, right: []const u8) ?bool {
-    const lhs = std.fmt.parseInt(i64, left, 10) catch return null;
-    const rhs = std.fmt.parseInt(i64, right, 10) catch return null;
+fn evalIntegerComparison(left: []const u8, operator: []const u8, right: []const u8) TestEvalError!?bool {
+    if (!isIntegerComparisonOperator(operator)) return null;
+    const lhs = std.fmt.parseInt(i64, left, 10) catch return error.Integer;
+    const rhs = std.fmt.parseInt(i64, right, 10) catch return error.Integer;
     if (std.mem.eql(u8, operator, "-eq")) return lhs == rhs;
     if (std.mem.eql(u8, operator, "-ne")) return lhs != rhs;
     if (std.mem.eql(u8, operator, "-gt")) return lhs > rhs;
     if (std.mem.eql(u8, operator, "-ge")) return lhs >= rhs;
     if (std.mem.eql(u8, operator, "-lt")) return lhs < rhs;
     if (std.mem.eql(u8, operator, "-le")) return lhs <= rhs;
+    unreachable;
+}
+
+fn isIntegerComparisonOperator(operator: []const u8) bool {
+    return std.mem.eql(u8, operator, "-eq") or
+        std.mem.eql(u8, operator, "-ne") or
+        std.mem.eql(u8, operator, "-gt") or
+        std.mem.eql(u8, operator, "-ge") or
+        std.mem.eql(u8, operator, "-lt") or
+        std.mem.eql(u8, operator, "-le");
+}
+
+fn evalFileUnaryTest(shell: anytype, operator: []const u8, operand: []const u8) EvalError!?bool {
+    if (std.mem.eql(u8, operator, "-t")) return evalTerminalTest(shell, operand);
+
+    const follow_symlinks = !std.mem.eql(u8, operator, "-h") and !std.mem.eql(u8, operator, "-L");
+    const status = try fileStatus(shell, operand, follow_symlinks);
+    if (std.mem.eql(u8, operator, "-b")) return if (status) |st| st.kind == .block_device else false;
+    if (std.mem.eql(u8, operator, "-c")) return if (status) |st| st.kind == .character_device else false;
+    if (std.mem.eql(u8, operator, "-d")) return if (status) |st| st.kind == .directory else false;
+    if (std.mem.eql(u8, operator, "-e")) return status != null;
+    if (std.mem.eql(u8, operator, "-f")) return if (status) |st| st.kind == .file else false;
+    if (std.mem.eql(u8, operator, "-g")) return if (status) |st| st.mode & 0o2000 != 0 else false;
+    if (std.mem.eql(u8, operator, "-h")) return if (status) |st| st.kind == .symlink else false;
+    if (std.mem.eql(u8, operator, "-L")) return if (status) |st| st.kind == .symlink else false;
+    if (std.mem.eql(u8, operator, "-p")) return if (status) |st| st.kind == .named_pipe else false;
+    if (std.mem.eql(u8, operator, "-r")) return try fileAccess(shell, operand, .read);
+    if (std.mem.eql(u8, operator, "-S")) return if (status) |st| st.kind == .socket else false;
+    if (std.mem.eql(u8, operator, "-s")) return if (status) |st| st.size > 0 else false;
+    if (std.mem.eql(u8, operator, "-u")) return if (status) |st| st.mode & 0o4000 != 0 else false;
+    if (std.mem.eql(u8, operator, "-w")) return try fileAccess(shell, operand, .write);
+    if (std.mem.eql(u8, operator, "-x")) return try fileAccess(shell, operand, .execute);
     return null;
+}
+
+fn evalFileBinaryTest(shell: anytype, left: []const u8, operator: []const u8, right: []const u8) EvalError!?bool {
+    if (std.mem.eql(u8, operator, "-ef")) {
+        const lhs = try fileStatus(shell, left, true) orelse return false;
+        const rhs = try fileStatus(shell, right, true) orelse return false;
+        return lhs.sameFile(rhs);
+    }
+    if (std.mem.eql(u8, operator, "-nt")) {
+        const lhs = try fileStatus(shell, left, true) orelse return false;
+        const rhs = try fileStatus(shell, right, true) orelse return true;
+        return lhs.newerThan(rhs);
+    }
+    if (std.mem.eql(u8, operator, "-ot")) {
+        const lhs = try fileStatus(shell, left, true);
+        const rhs = try fileStatus(shell, right, true) orelse return false;
+        return if (lhs) |status| status.olderThan(rhs) else true;
+    }
+    return null;
+}
+
+fn evalTerminalTest(shell: anytype, operand: []const u8) bool {
+    const fd = std.fmt.parseInt(i32, operand, 10) catch return false;
+    return shell.host.isTerminalFd(@enumFromInt(fd));
+}
+
+fn fileStatus(shell: anytype, path: []const u8, follow_symlinks: bool) !?host_mod.FileStatus {
+    if (path.len == 0) return null;
+    const path_z = try shell.scratchAllocator().dupeZ(u8, path);
+    return shell.host.fileTestStatusZ(path_z, follow_symlinks);
+}
+
+fn fileAccess(shell: anytype, path: []const u8, access: host_mod.FileAccess) !bool {
+    if (path.len == 0) return false;
+    const path_z = try shell.scratchAllocator().dupeZ(u8, path);
+    return shell.host.fileAccessZ(path_z, access);
+}
+
+fn writeTestDiagnostic(shell: anytype, name: []const u8, err: TestEvalError) !void {
+    const message = switch (err) {
+        error.Syntax => "invalid expression",
+        error.Integer => "integer expression expected",
+    };
+    try shell.host.writeAll(.stderr, name);
+    try shell.host.writeAll(.stderr, ": ");
+    try shell.host.writeAll(.stderr, message);
+    try shell.host.writeAll(.stderr, "\n");
 }
 
 fn evalCommandLookup(
