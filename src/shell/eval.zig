@@ -208,13 +208,16 @@ pub const Evaluator = struct {
     command_substitution_execution: CommandSubstitutionExecution = .forked_subshell,
     event_dispatch_depth: u32 = 0,
     directory_change_event_observed: bool = false,
+    process_pid: runtime.process.ProcessId,
 
     pub fn init(allocator: std.mem.Allocator) Evaluator {
-        return .{ .allocator = allocator, .shell_pid = currentProcessId() };
+        const process_pid = currentProcessId();
+        return .{ .allocator = allocator, .shell_pid = process_pid, .process_pid = process_pid };
     }
 
     pub fn initWithFdPort(allocator: std.mem.Allocator, fd_port: runtime.fd.Port) Evaluator {
-        return .{ .allocator = allocator, .fd_port = fd_port, .shell_pid = currentProcessId() };
+        const process_pid = currentProcessId();
+        return .{ .allocator = allocator, .fd_port = fd_port, .shell_pid = process_pid, .process_pid = process_pid };
     }
 
     pub fn initWithExternalPorts(
@@ -222,31 +225,37 @@ pub const Evaluator = struct {
         fd_port: runtime.fd.Port,
         process_port: runtime.process.Port,
     ) Evaluator {
+        const process_pid = currentProcessId();
         return .{
             .allocator = allocator,
             .fd_port = fd_port,
             .process_port = process_port,
-            .shell_pid = currentProcessId(),
+            .shell_pid = process_pid,
+            .process_pid = process_pid,
         };
     }
 
     pub fn initWithFsPort(allocator: std.mem.Allocator, fs_port: runtime.fs.Port) Evaluator {
-        return .{ .allocator = allocator, .fs_port = fs_port, .shell_pid = currentProcessId() };
+        const process_pid = currentProcessId();
+        return .{ .allocator = allocator, .fs_port = fs_port, .shell_pid = process_pid, .process_pid = process_pid };
     }
 
     pub fn initWithRuntimePorts(allocator: std.mem.Allocator, ports: runtime.Ports) Evaluator {
+        const process_pid = currentProcessId();
         return .{
             .allocator = allocator,
             .fd_port = ports.fd,
             .fs_port = ports.fs,
             .process_port = ports.process,
             .signal_port = ports.signal,
-            .shell_pid = currentProcessId(),
+            .shell_pid = process_pid,
+            .process_pid = process_pid,
         };
     }
 
     pub fn initWithSignalPort(allocator: std.mem.Allocator, signal_port: runtime.signal.Port) Evaluator {
-        return .{ .allocator = allocator, .signal_port = signal_port, .shell_pid = currentProcessId() };
+        const process_pid = currentProcessId();
+        return .{ .allocator = allocator, .signal_port = signal_port, .shell_pid = process_pid, .process_pid = process_pid };
     }
 
     pub fn setExtensionHandlerLookup(
@@ -6902,6 +6911,7 @@ fn shouldForkSemanticSubshell(
 fn runForkedSemanticSubshell(opaque_context: *anyopaque) u8 {
     const fork_context: *ForkedSemanticSubshellContext = @ptrCast(@alignCast(opaque_context));
     fork_context.validate();
+    fork_context.evaluator.process_pid = currentProcessId();
 
     var command_frame = semanticCommandExecutionFrame(
         fork_context.evaluator.allocator,
@@ -8039,6 +8049,7 @@ fn tailExecSimpleExternalCommandSubstitution(
         target_plan,
         resolution,
         &.{},
+        fork_context.evaluator.process_pid,
     );
     defer invocation.deinit(fork_context.evaluator.allocator);
     invocation.exec(process_port, .{}) catch return;
@@ -9286,6 +9297,7 @@ fn startBackgroundSemanticPipeline(
 fn runBackgroundSemanticSubshell(opaque_context: *anyopaque) u8 {
     const semantic_context: *BackgroundSemanticContext = @ptrCast(@alignCast(opaque_context));
     semantic_context.validate();
+    semantic_context.evaluator.process_pid = currentProcessId();
 
     var child_state = semantic_context.parent_state.snapshotForSubshell(
         semantic_context.evaluator.allocator,
@@ -9463,7 +9475,7 @@ fn startBackgroundSingleExternal(
         else => unreachable,
     };
 
-    var invocation = try ExternalInvocation.init(evaluator.allocator, shell_state, plan, resolution, &.{});
+    var invocation = try ExternalInvocation.init(evaluator.allocator, shell_state, plan, resolution, &.{}, evaluator.process_pid);
     defer invocation.deinit(evaluator.allocator);
 
     var redirection_guard = RedirectionGuard.empty(.child_only);
@@ -10226,6 +10238,7 @@ fn spawnStreamingPipelineProducer(
 fn runStreamingSemanticPipelineProducer(opaque_context: *anyopaque) u8 {
     const producer_context: *StreamingSemanticProducerContext = @ptrCast(@alignCast(opaque_context));
     producer_context.validate();
+    producer_context.evaluator.process_pid = currentProcessId();
 
     var child_state = producer_context.parent_state.snapshotForSubshell(
         producer_context.evaluator.allocator,
@@ -10586,7 +10599,7 @@ fn spawnExternalPipelineStage(
         else => unreachable,
     };
 
-    var invocation = try ExternalInvocation.init(evaluator.allocator, shell_state, plan, resolution, &.{});
+    var invocation = try ExternalInvocation.init(evaluator.allocator, shell_state, plan, resolution, &.{}, evaluator.process_pid);
     defer invocation.deinit(evaluator.allocator);
 
     const result = invocation.spawn(evaluator, process_port, .{
@@ -15343,6 +15356,7 @@ const ExternalInvocation = struct {
         plan: command_plan.CommandPlan,
         resolution: command_plan.ExternalResolution,
         process_overlay: []const assignment_runtime.ProcessEnvironmentEntry,
+        process_pid: runtime.process.ProcessId,
     ) !ExternalInvocation {
         resolution.validate();
         std.debug.assert(plan.target == .child_process);
@@ -15364,6 +15378,7 @@ const ExternalInvocation = struct {
             shell_state,
             temporary_environment,
             process_overlay,
+            process_pid,
         );
         errdefer environment.deinit();
 
@@ -15469,7 +15484,14 @@ fn evaluateExternalWithProcessEnvironment(
     const fd_port = evaluator.fd_port orelse return error.Unimplemented;
     const process_port = evaluator.process_port orelse return error.Unimplemented;
 
-    var invocation = try ExternalInvocation.init(evaluator.allocator, shell_state, plan, resolution, process_overlay);
+    var invocation = try ExternalInvocation.init(
+        evaluator.allocator,
+        shell_state,
+        plan,
+        resolution,
+        process_overlay,
+        evaluator.process_pid,
+    );
     defer invocation.deinit(evaluator.allocator);
 
     if (externalNeedsBufferedStdin(plan, buffers)) {
@@ -15854,7 +15876,14 @@ fn runExternalWithPipelineInputWithProcessEnvironment(
 
     const process_port = evaluator.process_port orelse return error.Unimplemented;
 
-    var invocation = try ExternalInvocation.init(evaluator.allocator, shell_state, plan, resolution, process_overlay);
+    var invocation = try ExternalInvocation.init(
+        evaluator.allocator,
+        shell_state,
+        plan,
+        resolution,
+        process_overlay,
+        evaluator.process_pid,
+    );
     defer invocation.deinit(evaluator.allocator);
 
     var redirection_guard = RedirectionGuard.empty(.child_only);
@@ -16171,6 +16200,7 @@ fn buildExternalEnvironmentWithProcessOverlay(
     shell_state: state.ShellState,
     temporary_environment: assignment_runtime.TemporaryEnvironment,
     process_overlay: []const assignment_runtime.ProcessEnvironmentEntry,
+    process_pid: runtime.process.ProcessId,
 ) !std.process.Environ.Map {
     var environment = std.process.Environ.Map.init(allocator);
     errdefer environment.deinit();
@@ -16198,12 +16228,10 @@ fn buildExternalEnvironmentWithProcessOverlay(
         try environment.put(entry.name, entry.value);
     }
 
-    if (shell_state.getVariable("PPID")) |ppid| {
-        if (ppid.value_set) {
-            assertValidEnvironmentEntry(shell_startup.inherited_ppid_env, ppid.value);
-            try environment.put(shell_startup.inherited_ppid_env, ppid.value);
-        }
-    }
+    const inherited_ppid = try std.fmt.allocPrint(allocator, "{}", .{process_pid});
+    defer allocator.free(inherited_ppid);
+    assertValidEnvironmentEntry(shell_startup.inherited_ppid_env, inherited_ppid);
+    try environment.put(shell_startup.inherited_ppid_env, inherited_ppid);
 
     assertValidEnvironmentMap(environment);
     return environment;
@@ -17292,6 +17320,7 @@ fn evaluateEnv(
         shell_state,
         temporary_environment,
         process_overlay.entries.items,
+        evaluator.process_pid,
     );
     defer environment.deinit();
     var iterator = environment.iterator();
@@ -18884,7 +18913,14 @@ fn evaluateExec(
         !externalNeedsBufferedStdin(target_plan, buffers))
     {
         const process_port = evaluator.process_port orelse return error.Unimplemented;
-        var invocation = try ExternalInvocation.init(evaluator.allocator, shell_state, target_plan, resolution, &.{});
+        var invocation = try ExternalInvocation.init(
+            evaluator.allocator,
+            shell_state,
+            target_plan,
+            resolution,
+            &.{},
+            evaluator.process_pid,
+        );
         defer invocation.deinit(evaluator.allocator);
         var redirection_guard = RedirectionGuard.empty(.child_only);
         defer redirection_guard.restore();
@@ -27137,6 +27173,7 @@ test "semantic evaluator executes external commands through runtime process and 
     var fake = FakeExternalRuntime.init(std.testing.allocator);
     defer fake.deinit();
     var evaluator = Evaluator.initWithExternalPorts(std.testing.allocator, fake.fdPort(), fake.processPort());
+    evaluator.process_pid = 67890;
 
     var shell_state = state.ShellState.init(std.testing.allocator);
     defer shell_state.deinit();
@@ -27180,7 +27217,7 @@ test "semantic evaluator executes external commands through runtime process and 
     try std.testing.expectEqualStrings("child", fake.observed_environment.get("FOO").?);
     try std.testing.expectEqualStrings("value", fake.observed_environment.get("TEMP").?);
     try std.testing.expectEqualStrings("/mock/bin", fake.observed_environment.get("PATH").?);
-    try std.testing.expectEqualStrings("12345", fake.observed_environment.get(shell_startup.inherited_ppid_env).?);
+    try std.testing.expectEqualStrings("67890", fake.observed_environment.get(shell_startup.inherited_ppid_env).?);
     try std.testing.expect(!fake.observed_environment.contains("HIDDEN"));
     try std.testing.expectEqual(runtime.process.StandardIo.inherit, fake.observed_stdin);
     try std.testing.expectEqual(runtime.process.StandardIo.inherit, fake.observed_stdout);
