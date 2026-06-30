@@ -5,6 +5,8 @@ const builtin = @import("builtin");
 
 const host = @import("../host.zig");
 
+pub const ReadError = host.ReadError;
+
 pub const WriteError = error{
     WouldBlock,
     InputOutput,
@@ -28,10 +30,27 @@ pub const CloseError = host.CloseError;
 
 pub const DuplicateError = host.DuplicateError;
 
+pub const PipeError = host.PipeError;
+
+pub const ForkError = host.ForkError;
+
 pub const SpawnError = error{
     SystemResources,
     Unexpected,
 };
+
+pub const WaitError = error{
+    Unexpected,
+};
+
+pub fn read(fd: host.Fd, buffer: []u8) ReadError!usize {
+    if (buffer.len == 0) return 0;
+    return switch (builtin.os.tag) {
+        .linux => linuxRead(fd, buffer),
+        .macos, .freebsd, .openbsd, .netbsd => libcRead(fd, buffer),
+        else => @compileError("unsupported host OS"),
+    };
+}
 
 pub fn writeAll(fd: host.Fd, bytes: []const u8) WriteError!void {
     var written: usize = 0;
@@ -82,6 +101,30 @@ pub fn duplicateTo(from: host.Fd, to: host.Fd) DuplicateError!void {
     };
 }
 
+pub fn pipe() PipeError!host.Pipe {
+    return switch (builtin.os.tag) {
+        .linux => linuxPipe(),
+        .macos, .freebsd, .openbsd, .netbsd => libcPipe(),
+        else => @compileError("unsupported host OS"),
+    };
+}
+
+pub fn forkProcess() ForkError!host.ForkResult {
+    return switch (builtin.os.tag) {
+        .linux => linuxForkProcess(),
+        .macos, .freebsd, .openbsd, .netbsd => libcForkProcess(),
+        else => @compileError("unsupported host OS"),
+    };
+}
+
+pub fn exit(status: u8) noreturn {
+    switch (builtin.os.tag) {
+        .linux => std.os.linux.exit(status),
+        .macos, .freebsd, .openbsd, .netbsd => std.c._exit(status),
+        else => @compileError("unsupported host OS"),
+    }
+}
+
 pub fn isExecutableZ(path: [:0]const u8) bool {
     std.debug.assert(path.len != 0);
     return switch (builtin.os.tag) {
@@ -93,11 +136,56 @@ pub fn isExecutableZ(path: [:0]const u8) bool {
 
 pub fn spawnAndWait(request: host.SpawnRequest) SpawnError!host.WaitStatus {
     request.validate();
+    const spawned = try spawn(request);
+    return wait(spawned.pid) catch error.Unexpected;
+}
+
+pub fn spawn(request: host.SpawnRequest) SpawnError!host.SpawnResult {
+    request.validate();
     return switch (builtin.os.tag) {
-        .linux => linuxSpawnAndWait(request),
-        .macos, .freebsd, .openbsd, .netbsd => libcSpawnAndWait(request),
+        .linux => linuxSpawn(request),
+        .macos, .freebsd, .openbsd, .netbsd => libcSpawn(request),
         else => @compileError("unsupported host OS"),
     };
+}
+
+pub fn wait(pid: host.Pid) WaitError!host.WaitStatus {
+    return switch (builtin.os.tag) {
+        .linux => linuxWait(pid),
+        .macos, .freebsd, .openbsd, .netbsd => libcWait(pid),
+        else => @compileError("unsupported host OS"),
+    };
+}
+
+fn linuxRead(fd: host.Fd, buffer: []u8) ReadError!usize {
+    const linux = std.os.linux;
+    while (true) {
+        const rc = linux.read(fd.raw(), buffer.ptr, buffer.len);
+        switch (linux.errno(rc)) {
+            .SUCCESS => return rc,
+            .INTR => continue,
+            .AGAIN => return error.WouldBlock,
+            .IO => return error.InputOutput,
+            .NOBUFS, .NOMEM => return error.SystemResources,
+            .BADF, .FAULT, .INVAL, .ISDIR => return error.Unexpected,
+            else => return error.Unexpected,
+        }
+    }
+}
+
+fn libcRead(fd: host.Fd, buffer: []u8) ReadError!usize {
+    while (true) {
+        const rc = std.c.read(@intCast(fd.raw()), buffer.ptr, buffer.len);
+        switch (std.c.errno(rc)) {
+            .SUCCESS => return @intCast(rc),
+            .INTR => continue,
+            .AGAIN => return error.WouldBlock,
+            .IO => return error.InputOutput,
+            .NOBUFS, .NOMEM => return error.SystemResources,
+            .BADF, .FAULT, .INVAL, .ISDIR => return error.Unexpected,
+            else => return error.Unexpected,
+        }
+    }
 }
 
 fn linuxWrite(fd: host.Fd, bytes: []const u8) WriteError!usize {
@@ -239,6 +327,63 @@ fn libcDuplicateTo(from: host.Fd, to: host.Fd) DuplicateError!void {
     }
 }
 
+fn linuxPipe() PipeError!host.Pipe {
+    var fds: [2]i32 = undefined;
+    const rc = std.os.linux.pipe2(&fds, .{ .CLOEXEC = true });
+    switch (std.os.linux.errno(rc)) {
+        .SUCCESS => return .{ .read = @enumFromInt(fds[0]), .write = @enumFromInt(fds[1]) },
+        .MFILE, .NFILE, .NOMEM => return error.SystemResources,
+        else => return error.Unexpected,
+    }
+}
+
+fn libcPipe() PipeError!host.Pipe {
+    var fds: [2]std.c.fd_t = undefined;
+    const rc = std.c.pipe(&fds);
+    switch (std.c.errno(rc)) {
+        .SUCCESS => {},
+        .MFILE, .NFILE, .NOMEM => return error.SystemResources,
+        else => return error.Unexpected,
+    }
+    errdefer close(@enumFromInt(fds[0])) catch {};
+    errdefer close(@enumFromInt(fds[1])) catch {};
+    try setCloseOnExec(@enumFromInt(fds[0]));
+    try setCloseOnExec(@enumFromInt(fds[1]));
+    return .{ .read = @enumFromInt(fds[0]), .write = @enumFromInt(fds[1]) };
+}
+
+fn setCloseOnExec(fd: host.Fd) PipeError!void {
+    const rc = std.c.fcntl(@intCast(fd.raw()), std.c.F.SETFD, @as(c_int, std.c.FD_CLOEXEC));
+    switch (std.c.errno(rc)) {
+        .SUCCESS => return,
+        else => return error.Unexpected,
+    }
+}
+
+fn linuxForkProcess() ForkError!host.ForkResult {
+    const rc = std.os.linux.fork();
+    switch (std.os.linux.errno(rc)) {
+        .SUCCESS => {},
+        .AGAIN, .NOMEM => return error.SystemResources,
+        else => return error.Unexpected,
+    }
+
+    const pid: i32 = @intCast(rc);
+    return if (pid == 0) .child else .{ .parent = pid };
+}
+
+fn libcForkProcess() ForkError!host.ForkResult {
+    const rc = std.c.fork();
+    switch (std.c.errno(rc)) {
+        .SUCCESS => {},
+        .AGAIN, .NOMEM => return error.SystemResources,
+        else => return error.Unexpected,
+    }
+
+    const pid: i32 = @intCast(rc);
+    return if (pid == 0) .child else .{ .parent = pid };
+}
+
 fn linuxIsExecutableZ(path: [:0]const u8) bool {
     const rc = std.os.linux.access(path.ptr, std.os.linux.X_OK);
     return std.os.linux.errno(rc) == .SUCCESS;
@@ -249,7 +394,7 @@ fn libcIsExecutableZ(path: [:0]const u8) bool {
     return std.c.errno(rc) == .SUCCESS;
 }
 
-fn linuxSpawnAndWait(request: host.SpawnRequest) SpawnError!host.WaitStatus {
+fn linuxSpawn(request: host.SpawnRequest) SpawnError!host.SpawnResult {
     const linux = std.os.linux;
     const fork_rc = linux.fork();
     switch (linux.errno(fork_rc)) {
@@ -260,10 +405,16 @@ fn linuxSpawnAndWait(request: host.SpawnRequest) SpawnError!host.WaitStatus {
 
     const pid: i32 = @intCast(fork_rc);
     if (pid == 0) {
+        applyLinuxFdActions(request.fd_actions);
         _ = linux.execve(request.path.ptr, request.argv.ptr, request.envp.ptr);
         linux.exit(127);
     }
 
+    return .{ .pid = pid };
+}
+
+fn linuxWait(pid: host.Pid) WaitError!host.WaitStatus {
+    const linux = std.os.linux;
     var status: u32 = 0;
     while (true) {
         const wait_rc = linux.waitpid(pid, &status, 0);
@@ -275,7 +426,7 @@ fn linuxSpawnAndWait(request: host.SpawnRequest) SpawnError!host.WaitStatus {
     }
 }
 
-fn libcSpawnAndWait(request: host.SpawnRequest) SpawnError!host.WaitStatus {
+fn libcSpawn(request: host.SpawnRequest) SpawnError!host.SpawnResult {
     const fork_rc = std.c.fork();
     switch (std.c.errno(fork_rc)) {
         .SUCCESS => {},
@@ -285,10 +436,15 @@ fn libcSpawnAndWait(request: host.SpawnRequest) SpawnError!host.WaitStatus {
 
     const pid: i32 = @intCast(fork_rc);
     if (pid == 0) {
+        applyLibcFdActions(request.fd_actions);
         _ = std.c.execve(request.path.ptr, request.argv.ptr, request.envp.ptr);
         std.c._exit(127);
     }
 
+    return .{ .pid = pid };
+}
+
+fn libcWait(pid: host.Pid) WaitError!host.WaitStatus {
     var status: c_int = 0;
     while (true) {
         const wait_rc = std.c.waitpid(pid, &status, 0);
@@ -298,6 +454,33 @@ fn libcSpawnAndWait(request: host.SpawnRequest) SpawnError!host.WaitStatus {
             else => return error.Unexpected,
         }
     }
+}
+
+fn applyLinuxFdActions(actions: []const host.SpawnFdAction) void {
+    const linux = std.os.linux;
+    for (actions) |action| switch (action) {
+        .close => |fd| {
+            const rc = linux.close(fd.raw());
+            if (linux.errno(rc) != .SUCCESS) linux.exit(127);
+        },
+        .duplicate => |dup| {
+            const rc = linux.dup2(dup.from.raw(), dup.to.raw());
+            if (linux.errno(rc) != .SUCCESS) linux.exit(127);
+        },
+    };
+}
+
+fn applyLibcFdActions(actions: []const host.SpawnFdAction) void {
+    for (actions) |action| switch (action) {
+        .close => |fd| {
+            const rc = std.c.close(@intCast(fd.raw()));
+            if (std.c.errno(rc) != .SUCCESS) std.c._exit(127);
+        },
+        .duplicate => |dup| {
+            const rc = std.c.dup2(@intCast(dup.from.raw()), @intCast(dup.to.raw()));
+            if (std.c.errno(rc) != .SUCCESS) std.c._exit(127);
+        },
+    };
 }
 
 fn decodeWaitStatus(status: u32) host.WaitStatus {

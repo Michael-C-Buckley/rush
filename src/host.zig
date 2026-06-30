@@ -75,15 +75,37 @@ pub const SpawnResult = struct {
     pid: Pid,
 };
 
+pub const ForkResult = union(enum) {
+    child,
+    parent: Pid,
+};
+
 pub const CloseError = error{
     Interrupted,
     InputOutput,
     Unexpected,
 };
 
+pub const ReadError = error{
+    WouldBlock,
+    InputOutput,
+    SystemResources,
+    Unexpected,
+};
+
 pub const DuplicateError = error{
     BadFd,
     Interrupted,
+    SystemResources,
+    Unexpected,
+};
+
+pub const PipeError = error{
+    SystemResources,
+    Unexpected,
+};
+
+pub const ForkError = error{
     SystemResources,
     Unexpected,
 };
@@ -109,6 +131,10 @@ pub const DirectoryEntry = struct {
 };
 
 pub const RealHost = struct {
+    pub fn read(_: *RealHost, fd: Fd, buffer: []u8) platform.ReadError!usize {
+        return platform.read(fd, buffer);
+    }
+
     pub fn writeAll(_: *RealHost, fd: Fd, bytes: []const u8) platform.WriteError!void {
         try platform.writeAll(fd, bytes);
     }
@@ -129,8 +155,28 @@ pub const RealHost = struct {
         try platform.duplicateTo(from, to);
     }
 
+    pub fn pipe(_: *RealHost) platform.PipeError!Pipe {
+        return platform.pipe();
+    }
+
+    pub fn forkProcess(_: *RealHost) platform.ForkError!ForkResult {
+        return platform.forkProcess();
+    }
+
+    pub fn exit(_: *RealHost, status: u8) noreturn {
+        platform.exit(status);
+    }
+
     pub fn isExecutableZ(_: *RealHost, path: [:0]const u8) bool {
         return platform.isExecutableZ(path);
+    }
+
+    pub fn spawn(_: *RealHost, request: SpawnRequest) platform.SpawnError!SpawnResult {
+        return platform.spawn(request);
+    }
+
+    pub fn wait(_: *RealHost, pid: Pid) platform.WaitError!WaitStatus {
+        return platform.wait(pid);
     }
 
     pub fn spawnAndWait(

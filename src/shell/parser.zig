@@ -75,10 +75,16 @@ const Parser = struct {
 
     fn parsePipeline(self: *Parser) !ast.Pipeline {
         const negated = self.eat(.bang) != null;
-        const command = try self.parseCommand();
-        const stages = try self.allocator.alloc(ast.Command, 1);
-        stages[0] = command;
-        const pipeline: ast.Pipeline = .{ .stages = stages, .negated = negated };
+        var stages: std.ArrayList(ast.Command) = .empty;
+        errdefer stages.deinit(self.allocator);
+
+        try stages.append(self.allocator, try self.parseCommand());
+        while (self.eat(.pipe) != null) {
+            while (self.eat(.newline) != null) {}
+            try stages.append(self.allocator, try self.parseCommand());
+        }
+
+        const pipeline: ast.Pipeline = .{ .stages = try stages.toOwnedSlice(self.allocator), .negated = negated };
         pipeline.validate();
         return pipeline;
     }
@@ -212,9 +218,7 @@ const Parser = struct {
                 '"' => if (quote == null) {
                     if (literal_start < index) try parts.append(self.allocator, .{ .literal = text[literal_start..index] });
                     const quote_start = index + 1;
-                    index = quote_start;
-                    while (index < end and text[index] != '"') index += 1;
-                    if (index >= end) return error.UnclosedQuote;
+                    index = try scanDoubleQuoteEnd(text, quote_start, end);
 
                     var quoted_parts: std.ArrayList(ast.WordPart) = .empty;
                     errdefer quoted_parts.deinit(self.allocator);
@@ -389,6 +393,18 @@ fn scanParameterName(text: []const u8, start: usize, end: usize) usize {
     return index;
 }
 
+fn scanDoubleQuoteEnd(text: []const u8, start: usize, end: usize) ParseError!usize {
+    var index = start;
+    while (index < end) {
+        if (text[index] == '"') return index;
+        if (text[index] == '$' and index + 1 < end and text[index + 1] == '(') {
+            index = try scanCommandSubstitution(text, index + 1, end);
+        }
+        index += 1;
+    }
+    return error.UnclosedQuote;
+}
+
 fn scanCommandSubstitution(text: []const u8, open_index: usize, end: usize) ParseError!usize {
     std.debug.assert(open_index > 0);
     std.debug.assert(text[open_index] == '(');
@@ -458,6 +474,21 @@ test "parser builds AND-OR lists" {
     try std.testing.expectEqual(ast.AndOrOperator.and_if, and_or.pipelines[1].operator.?);
     try std.testing.expect(and_or.pipelines[1].pipeline.negated);
     try std.testing.expectEqual(ast.AndOrOperator.or_if, and_or.pipelines[2].operator.?);
+}
+
+test "parser builds pipeline stages" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const src: source_mod.Source = .{ .id = 1, .kind = .command_string, .name = "-c", .text = "printf x | cat" };
+    const tokens = try @import("lexer.zig").lex(allocator, src);
+    const program = try parse(allocator, src, tokens);
+    const pipeline = program.body.entries[0].and_or.pipelines[0].pipeline;
+
+    try std.testing.expectEqual(@as(usize, 2), pipeline.stages.len);
+    try std.testing.expectEqualStrings("printf", pipeline.stages[0].simple.words[0].data.literal);
+    try std.testing.expectEqualStrings("cat", pipeline.stages[1].simple.words[0].data.literal);
 }
 
 test "parser splits single quoted word parts" {

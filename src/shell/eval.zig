@@ -45,10 +45,105 @@ fn evalAndOr(shell: anytype, and_or: ast.AndOr) EvalError!result.EvalResult {
 
 fn evalPipeline(shell: anytype, pipeline: ast.Pipeline) EvalError!result.EvalResult {
     pipeline.validate();
-    std.debug.assert(pipeline.stages.len == 1);
-    var evaluated = try evalCommand(shell, pipeline.stages[0]);
+    var evaluated = if (pipeline.stages.len == 1)
+        try evalCommand(shell, pipeline.stages[0])
+    else
+        try evalExternalPipeline(shell, pipeline.stages);
     if (pipeline.negated and evaluated.flow == .normal) evaluated.status = if (evaluated.status == 0) 1 else 0;
     return evaluated;
+}
+
+fn evalExternalPipeline(shell: anytype, stages: []const ast.Command) EvalError!result.EvalResult {
+    std.debug.assert(stages.len > 1);
+    const scratch = try shell.beginScratchScope();
+    defer scratch.end();
+
+    const allocator = shell.scratchAllocator();
+    const pipes = try allocator.alloc(host_mod.Pipe, stages.len - 1);
+    var open_pipes: usize = 0;
+    errdefer closePipes(shell, pipes[0..open_pipes]);
+    for (pipes) |*pipe_desc| {
+        pipe_desc.* = try shell.host.pipe();
+        open_pipes += 1;
+    }
+
+    const pids = try allocator.alloc(host_mod.Pid, stages.len);
+    var spawned: usize = 0;
+    errdefer {
+        closePipes(shell, pipes[0..open_pipes]);
+        _ = waitPids(shell, pids[0..spawned]) catch {};
+    }
+
+    for (stages, 0..) |stage, index| {
+        pids[index] = try forkPipelineStage(shell, stage, pipes, index);
+        spawned += 1;
+    }
+
+    closePipes(shell, pipes);
+    open_pipes = 0;
+    const statuses = try waitPids(shell, pids);
+    return .{ .status = statuses[statuses.len - 1].shellStatus() };
+}
+
+fn closePipes(shell: anytype, pipes: []const host_mod.Pipe) void {
+    for (pipes) |pipe_desc| {
+        shell.host.close(pipe_desc.read) catch {};
+        shell.host.close(pipe_desc.write) catch {};
+    }
+}
+
+fn waitPids(shell: anytype, pids: []const host_mod.Pid) ![]const host_mod.WaitStatus {
+    const statuses = try shell.scratchAllocator().alloc(host_mod.WaitStatus, pids.len);
+    for (pids, 0..) |pid, index| statuses[index] = try shell.host.wait(pid);
+    return statuses;
+}
+
+fn forkPipelineStage(
+    shell: anytype,
+    command: ast.Command,
+    pipes: []const host_mod.Pipe,
+    stage_index: usize,
+) !host_mod.Pid {
+    const fd_actions = try pipelineFdActions(shell, pipes, stage_index);
+    return switch (try shell.host.forkProcess()) {
+        .parent => |pid| pid,
+        .child => {
+            applyPipelineChildFdActions(shell, fd_actions) catch shell.host.exit(127);
+            const evaluated = evalCommand(shell, command) catch shell.host.exit(2);
+            shell.host.exit(evaluated.status);
+        },
+    };
+}
+
+fn applyPipelineChildFdActions(shell: anytype, actions: []const host_mod.SpawnFdAction) !void {
+    for (actions) |action| switch (action) {
+        .close => |fd| try shell.host.close(fd),
+        .duplicate => |dup| try shell.host.duplicateTo(dup.from, dup.to),
+    };
+}
+
+fn pipelineFdActions(
+    shell: anytype,
+    pipes: []const host_mod.Pipe,
+    stage_index: usize,
+) ![]const host_mod.SpawnFdAction {
+    const allocator = shell.scratchAllocator();
+    var actions: std.ArrayList(host_mod.SpawnFdAction) = .empty;
+
+    if (stage_index != 0) try actions.append(allocator, .{ .duplicate = .{
+        .from = pipes[stage_index - 1].read,
+        .to = .stdin,
+    } });
+    if (stage_index < pipes.len) try actions.append(allocator, .{ .duplicate = .{
+        .from = pipes[stage_index].write,
+        .to = .stdout,
+    } });
+    for (pipes) |pipe_desc| {
+        try actions.append(allocator, .{ .close = pipe_desc.read });
+        try actions.append(allocator, .{ .close = pipe_desc.write });
+    }
+
+    return actions.toOwnedSlice(allocator);
 }
 
 fn evalCommand(shell: anytype, command: ast.Command) EvalError!result.EvalResult {
@@ -282,11 +377,63 @@ fn expandCommandSubstitution(
         const tokens = try lexer.lex(ast_allocator, src);
         break :program try parser.parse(ast_allocator, src, tokens);
     };
-    const evaluated = try evalProgram(@TypeOf(shell.host), shell, program);
-    const status = evaluated.status;
+    const capture = try evalCommandSubstitutionInChild(shell, program);
+    const status = capture.status;
     if (substitution_status) |tracked| tracked.* = status;
     shell.state.last_status = status;
-    return "";
+    return capture.output;
+}
+
+const CommandSubstitutionCapture = struct {
+    output: []const u8,
+    status: result.ExitStatus,
+};
+
+fn evalCommandSubstitutionInChild(shell: anytype, program: ast.Program) !CommandSubstitutionCapture {
+    const pipe_desc = try shell.host.pipe();
+    errdefer {
+        shell.host.close(pipe_desc.read) catch {};
+        shell.host.close(pipe_desc.write) catch {};
+    }
+
+    const pid = switch (try shell.host.forkProcess()) {
+        .child => {
+            shell.host.close(pipe_desc.read) catch shell.host.exit(127);
+            shell.host.duplicateTo(pipe_desc.write, .stdout) catch shell.host.exit(127);
+            shell.host.close(pipe_desc.write) catch shell.host.exit(127);
+            const evaluated = evalProgram(@TypeOf(shell.host), shell, program) catch shell.host.exit(2);
+            shell.host.exit(evaluated.status);
+        },
+        .parent => |child_pid| child_pid,
+    };
+
+    try shell.host.close(pipe_desc.write);
+    const output = readCommandSubstitutionOutput(shell, pipe_desc.read) catch |err| {
+        shell.host.close(pipe_desc.read) catch {};
+        _ = shell.host.wait(pid) catch {};
+        return err;
+    };
+    try shell.host.close(pipe_desc.read);
+    const wait_status = try shell.host.wait(pid);
+    return .{ .output = output, .status = wait_status.shellStatus() };
+}
+
+fn readCommandSubstitutionOutput(shell: anytype, fd: host_mod.Fd) ![]const u8 {
+    const allocator = shell.scratchAllocator();
+    var output: std.ArrayList(u8) = .empty;
+    var buffer: [4096]u8 = undefined;
+    while (true) {
+        const read_len = try shell.host.read(fd, &buffer);
+        if (read_len == 0) break;
+        for (buffer[0..read_len]) |byte| {
+            if (byte != 0) try output.append(allocator, byte);
+        }
+    }
+    while (output.items.len != 0 and output.items[output.items.len - 1] == '\n') {
+        output.items.len -= 1;
+    }
+    if (output.items.len == 0) return "";
+    return output.toOwnedSlice(allocator);
 }
 
 fn expandParameter(shell: anytype, parameter: ast.ParameterExpansion) EvalError![]const u8 {
@@ -308,17 +455,27 @@ fn formatExitStatus(shell: anytype, status: result.ExitStatus) ![]const u8 {
 }
 
 fn evalExternal(shell: anytype, words: []const ast.Word) EvalError!result.EvalResult {
+    const request = try makeExternalSpawnRequest(shell, words, &.{});
+    const status = try shell.host.spawnAndWait(request);
+    return .{ .status = status.shellStatus() };
+}
+
+fn makeExternalSpawnRequest(
+    shell: anytype,
+    words: []const ast.Word,
+    fd_actions: []const host_mod.SpawnFdAction,
+) !host_mod.SpawnRequest {
     const argv = try expandExecArgv(shell, words);
     const command_text = std.mem.span(argv[0].?);
     const command = argv[0].?[0..command_text.len :0];
     const path = try resolveCommandPath(shell, command);
     const envp = try makeExecEnvp(shell);
-    const status = try shell.host.spawnAndWait(.{
+    return .{
         .path = path,
         .argv = argv,
         .envp = envp,
-    });
-    return .{ .status = status.shellStatus() };
+        .fd_actions = fd_actions,
+    };
 }
 
 fn expandExecArgv(shell: anytype, words: []const ast.Word) ![:null]const ?[*:0]const u8 {
