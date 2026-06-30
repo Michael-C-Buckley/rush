@@ -10,9 +10,11 @@ const parser = @import("parser.zig");
 const result = @import("result.zig");
 const source_mod = @import("source.zig");
 const state_mod = @import("state.zig");
+const token_mod = @import("token.zig");
 
 pub const EvalError = anyerror;
 const CopyError = std.mem.Allocator.Error;
+const CommandLookupMode = enum { none, terse, verbose };
 
 pub fn evalProgram(comptime Host: type, shell: anytype, program: ast.Program) EvalError!result.EvalResult {
     _ = Host;
@@ -493,24 +495,41 @@ fn evalSimpleScoped(shell: anytype, command: ast.SimpleCommand) EvalError!result
     }
     const name = fields[0];
     if (builtin.lookup(name)) |definition| {
-        if (definition.kind == .special) try applyAssignments(shell, command.assignments);
+        if (definition.kind == .special) {
+            try applyAssignments(shell, command.assignments);
+            if (definition.id == .export_ or definition.id == .readonly) {
+                return evalDeclarationBuiltin(shell, definition.id, command.words[1..]);
+            }
+            if (definition.id == .eval) return evalEvalBuiltin(shell, fields);
+            if (definition.id == .exec) {
+                restore_redirections = false;
+                try redirections.commit(shell);
+                if (fields.len == 1) return .{};
+                return evalExecBuiltin(shell, fields);
+            }
+            const args = switch (definition.id) {
+                .break_, .continue_, .exit, .set => fields,
+                else => &[_][]const u8{name},
+            };
+            return builtin.eval(shell, definition, args);
+        }
+    }
+    if (shell.state.getFunction(name)) |function| return evalFunction(shell, function, command.assignments);
+    if (builtin.lookup(name)) |definition| {
         if (definition.id == .cd) return evalCdBuiltin(shell, fields);
-        if (definition.id == .eval) return evalEvalBuiltin(shell, fields);
-        if (definition.id == .exec) {
-            restore_redirections = false;
-            try redirections.commit(shell);
-            if (fields.len == 1) return .{};
-            return evalExecBuiltin(shell, fields);
+        if (definition.id == .command) {
+            return evalCommandBuiltin(shell, fields, command.assignments, &redirections, &restore_redirections);
         }
         if (definition.id == .pwd) return evalPwdBuiltin(shell, fields);
         if (definition.id == .read) return evalReadBuiltin(shell, fields, command.assignments);
+        if (definition.id == .type) return evalTypeBuiltin(shell, fields);
         const args = switch (definition.id) {
-            .break_, .cd, .continue_, .eval, .exec, .export_, .exit, .printf, .pwd, .read, .readonly, .set => fields,
-            else => &[_][]const u8{name},
+            .cd, .command, .printf, .pwd, .read, .type => fields,
+            .false_, .true_ => &[_][]const u8{name},
+            else => unreachable,
         };
         return builtin.eval(shell, definition, args);
     }
-    if (shell.state.getFunction(name)) |function| return evalFunction(shell, function, command.assignments);
     return evalExternal(shell, fields, command.assignments);
 }
 
@@ -559,6 +578,164 @@ fn evalPwdBuiltin(shell: anytype, args: []const []const u8) EvalError!result.Eva
     const cwd = if (physical) try shell.host.currentDir(shell.scratchAllocator()) else try currentLogicalDir(shell);
     try shell.host.writeAll(.stdout, try std.fmt.allocPrint(shell.scratchAllocator(), "{s}\n", .{cwd}));
     return .{};
+}
+
+fn evalCommandBuiltin(
+    shell: anytype,
+    args: []const []const u8,
+    assignments: []const ast.Assignment,
+    redirections: *AppliedRedirections,
+    restore_redirections: *bool,
+) EvalError!result.EvalResult {
+    std.debug.assert(args.len != 0);
+    var use_default_path = false;
+    var lookup_mode: CommandLookupMode = .none;
+    var index: usize = 1;
+    while (index < args.len) : (index += 1) {
+        const arg = args[index];
+        if (std.mem.eql(u8, arg, "--")) {
+            index += 1;
+            break;
+        }
+        if (arg.len < 2 or arg[0] != '-') break;
+        for (arg[1..]) |option| switch (option) {
+            'p' => use_default_path = true,
+            'v' => lookup_mode = .terse,
+            'V' => lookup_mode = .verbose,
+            else => return .{ .status = 2 },
+        };
+    }
+    if (index >= args.len) return .{};
+
+    const saved = try saveAssignmentVariables(shell, assignments);
+    var restored_assignments = false;
+    errdefer if (!restored_assignments) restoreVariables(shell, saved);
+    try applyAssignments(shell, assignments);
+
+    const search_path: ?[]const u8 = if (use_default_path) defaultUtilityPath() else null;
+    if (lookup_mode != .none) {
+        const evaluated = try evalCommandLookup(shell, args[index..], lookup_mode, search_path);
+        restoreVariables(shell, saved);
+        restored_assignments = true;
+        return evaluated;
+    }
+
+    const name = args[index];
+    if (builtin.lookup(name)) |definition| {
+        switch (definition.id) {
+            .cd => {
+                const evaluated = try evalCdBuiltin(shell, args[index..]);
+                restoreVariables(shell, saved);
+                restored_assignments = true;
+                return evaluated;
+            },
+            .eval => {
+                const evaluated = try evalEvalBuiltin(shell, args[index..]);
+                restoreVariables(shell, saved);
+                restored_assignments = true;
+                return evaluated;
+            },
+            .exec => {
+                restore_redirections.* = false;
+                try redirections.commit(shell);
+                if (index + 1 == args.len) return .{};
+                return evalExecBuiltin(shell, args[index..]);
+            },
+            .export_, .readonly => {
+                const evaluated = try evalDeclarationBuiltin(shell, definition.id, commandFieldsAsWords(shell, args[index + 1 ..]) catch return error.OutOfMemory);
+                restoreVariables(shell, saved);
+                restored_assignments = true;
+                return evaluated;
+            },
+            .pwd => {
+                const evaluated = try evalPwdBuiltin(shell, args[index..]);
+                restoreVariables(shell, saved);
+                restored_assignments = true;
+                return evaluated;
+            },
+            .read => {
+                const evaluated = try evalReadBuiltin(shell, args[index..], &.{});
+                restoreVariables(shell, saved);
+                restored_assignments = true;
+                return evaluated;
+            },
+            .type => {
+                const evaluated = try evalTypeBuiltin(shell, args[index..]);
+                restoreVariables(shell, saved);
+                restored_assignments = true;
+                return evaluated;
+            },
+            .break_, .continue_, .exit, .printf, .set => {
+                const evaluated = try builtin.eval(shell, definition, args[index..]);
+                restoreVariables(shell, saved);
+                restored_assignments = true;
+                return evaluated;
+            },
+            .colon, .false_, .true_ => {
+                const evaluated = try builtin.eval(shell, definition, &.{name});
+                restoreVariables(shell, saved);
+                restored_assignments = true;
+                return evaluated;
+            },
+            .command => {
+                const evaluated = try evalCommandBuiltin(shell, args[index..], &.{}, redirections, restore_redirections);
+                restoreVariables(shell, saved);
+                restored_assignments = true;
+                return evaluated;
+            },
+        }
+    }
+    const evaluated = try evalExternalWithSearchPath(shell, args[index..], assignments, search_path);
+    restoreVariables(shell, saved);
+    restored_assignments = true;
+    return evaluated;
+}
+
+fn evalCommandLookup(
+    shell: anytype,
+    names: []const []const u8,
+    mode: CommandLookupMode,
+    search_path: ?[]const u8,
+) !result.EvalResult {
+    var status: result.ExitStatus = 0;
+    for (names) |name| {
+        if (try commandLookupText(shell, name, mode, search_path)) |text| {
+            try shell.host.writeAll(.stdout, text);
+            try shell.host.writeAll(.stdout, "\n");
+        } else {
+            status = 1;
+        }
+    }
+    return .{ .status = status };
+}
+
+fn commandLookupText(shell: anytype, name: []const u8, mode: CommandLookupMode, search_path: ?[]const u8) !?[]const u8 {
+    const allocator = shell.scratchAllocator();
+    if (shell.state.getFunction(name) != null) {
+        return if (mode == .verbose) try std.fmt.allocPrint(allocator, "{s} is a shell function", .{name}) else name;
+    }
+    if (token_mod.lookupReservedWord(name) != null) {
+        return if (mode == .verbose) try std.fmt.allocPrint(allocator, "{s} is a shell reserved word", .{name}) else name;
+    }
+    if (builtin.lookup(name) != null) {
+        return if (mode == .verbose) try std.fmt.allocPrint(allocator, "{s} is a shell builtin", .{name}) else name;
+    }
+    if (try findCommandPath(shell, name, search_path)) |path| {
+        return if (mode == .verbose) try std.fmt.allocPrint(allocator, "{s} is {s}", .{ name, path }) else path;
+    }
+    return null;
+}
+
+fn commandFieldsAsWords(shell: anytype, fields: []const []const u8) ![]const ast.Word {
+    const words = try shell.scratchAllocator().alloc(ast.Word, fields.len);
+    for (fields, 0..) |field, index| words[index] = .{ .data = .{ .literal = field } };
+    return words;
+}
+
+fn evalTypeBuiltin(shell: anytype, args: []const []const u8) !result.EvalResult {
+    std.debug.assert(args.len != 0);
+    if (args.len == 1) return .{ .status = 2 };
+    return evalCommandLookup(shell, args[1..], .verbose, null);
 }
 
 fn evalReadBuiltin(shell: anytype, args: []const []const u8, assignments: []const ast.Assignment) EvalError!result.EvalResult {
@@ -2880,7 +3057,16 @@ fn formatExitStatus(shell: anytype, status: result.ExitStatus) ![]const u8 {
 }
 
 fn evalExternal(shell: anytype, fields: []const []const u8, assignments: []const ast.Assignment) EvalError!result.EvalResult {
-    const request = try makeExternalSpawnRequest(shell, fields, assignments, &.{});
+    return evalExternalWithSearchPath(shell, fields, assignments, null);
+}
+
+fn evalExternalWithSearchPath(
+    shell: anytype,
+    fields: []const []const u8,
+    assignments: []const ast.Assignment,
+    search_path: ?[]const u8,
+) EvalError!result.EvalResult {
+    const request = try makeExternalSpawnRequestWithSearchPath(shell, fields, assignments, &.{}, search_path);
     const status = try shell.host.spawnAndWait(request);
     return .{ .status = status.shellStatus() };
 }
@@ -2891,10 +3077,20 @@ fn makeExternalSpawnRequest(
     assignments: []const ast.Assignment,
     fd_actions: []const host_mod.SpawnFdAction,
 ) !host_mod.SpawnRequest {
+    return makeExternalSpawnRequestWithSearchPath(shell, fields, assignments, fd_actions, null);
+}
+
+fn makeExternalSpawnRequestWithSearchPath(
+    shell: anytype,
+    fields: []const []const u8,
+    assignments: []const ast.Assignment,
+    fd_actions: []const host_mod.SpawnFdAction,
+    search_path: ?[]const u8,
+) !host_mod.SpawnRequest {
     const argv = try makeExecArgv(shell, fields);
     const command_text = std.mem.span(argv[0].?);
     const command = argv[0].?[0..command_text.len :0];
-    const path = try resolveCommandPath(shell, command);
+    const path = try resolveCommandPathWithSearchPath(shell, command, search_path);
     const envp = try makeExecEnvp(shell, assignments);
     return .{
         .path = path,
@@ -3030,9 +3226,13 @@ fn lastAssignmentIndex(assignments: []const AssignmentEnvEntry, name: []const u8
 }
 
 fn resolveCommandPath(shell: anytype, command: [:0]const u8) ![:0]const u8 {
+    return resolveCommandPathWithSearchPath(shell, command, null);
+}
+
+fn resolveCommandPathWithSearchPath(shell: anytype, command: [:0]const u8, search_path: ?[]const u8) ![:0]const u8 {
     if (std.mem.indexOfScalar(u8, command, '/') != null) return command;
 
-    const path = if (shell.state.getVariable("PATH")) |variable| variable.value else envPath(shell.env) orelse "/usr/bin:/bin";
+    const path = search_path orelse if (shell.state.getVariable("PATH")) |variable| variable.value else envPath(shell.env) orelse defaultUtilityPath();
     const allocator = shell.scratchAllocator();
     var candidate_buffer: std.ArrayList(u8) = .empty;
     var iterator = std.mem.splitScalar(u8, path, ':');
@@ -3048,6 +3248,33 @@ fn resolveCommandPath(shell: anytype, command: [:0]const u8) ![:0]const u8 {
     }
 
     return allocator.dupeZ(u8, command);
+}
+
+fn findCommandPath(shell: anytype, command: []const u8, search_path: ?[]const u8) !?[]const u8 {
+    const allocator = shell.scratchAllocator();
+    if (std.mem.indexOfScalar(u8, command, '/') != null) {
+        const command_z = try allocator.dupeZ(u8, command);
+        return if (shell.host.isExecutableZ(command_z)) command else null;
+    }
+
+    const path = search_path orelse if (shell.state.getVariable("PATH")) |variable| variable.value else envPath(shell.env) orelse defaultUtilityPath();
+    var candidate_buffer: std.ArrayList(u8) = .empty;
+    var iterator = std.mem.splitScalar(u8, path, ':');
+    while (iterator.next()) |directory| {
+        candidate_buffer.clearRetainingCapacity();
+        const prefix = if (directory.len == 0) "." else directory;
+        try candidate_buffer.appendSlice(allocator, prefix);
+        if (!std.mem.endsWith(u8, prefix, "/")) try candidate_buffer.append(allocator, '/');
+        try candidate_buffer.appendSlice(allocator, command);
+        try candidate_buffer.append(allocator, 0);
+        const candidate = candidate_buffer.items[0 .. candidate_buffer.items.len - 1 :0];
+        if (shell.host.isExecutableZ(candidate)) return candidate;
+    }
+    return null;
+}
+
+fn defaultUtilityPath() []const u8 {
+    return "/bin:/usr/bin";
 }
 
 fn envPath(env: []const [*:0]const u8) ?[]const u8 {

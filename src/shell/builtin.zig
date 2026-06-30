@@ -17,6 +17,7 @@ pub const Id = enum {
     break_,
     cd,
     colon,
+    command,
     continue_,
     eval,
     exec,
@@ -29,6 +30,7 @@ pub const Id = enum {
     readonly,
     set,
     true_,
+    type,
 };
 
 pub const Definition = struct {
@@ -47,6 +49,7 @@ pub const definitions: DefinitionMap = .initComptime(.{
     .{ "break", Definition{ .name = "break", .id = .break_, .kind = .special } },
     .{ "cd", Definition{ .name = "cd", .id = .cd, .kind = .regular } },
     .{ ":", Definition{ .name = ":", .id = .colon, .kind = .special } },
+    .{ "command", Definition{ .name = "command", .id = .command, .kind = .regular } },
     .{ "continue", Definition{ .name = "continue", .id = .continue_, .kind = .special } },
     .{ "eval", Definition{ .name = "eval", .id = .eval, .kind = .special } },
     .{ "exec", Definition{ .name = "exec", .id = .exec, .kind = .special } },
@@ -59,6 +62,7 @@ pub const definitions: DefinitionMap = .initComptime(.{
     .{ "readonly", Definition{ .name = "readonly", .id = .readonly, .kind = .special } },
     .{ "set", Definition{ .name = "set", .id = .set, .kind = .special } },
     .{ "true", Definition{ .name = "true", .id = .true_, .kind = .regular } },
+    .{ "type", Definition{ .name = "type", .id = .type, .kind = .regular } },
 });
 
 pub fn lookup(name: []const u8) ?Definition {
@@ -73,7 +77,7 @@ pub fn eval(shell: anytype, definition: Definition, args: []const []const u8) !r
     return switch (definition.id) {
         .colon, .true_ => .{},
         .break_ => evalBreak(args),
-        .cd, .eval, .exec, .export_, .pwd, .read => unreachable,
+        .cd, .command, .eval, .exec, .export_, .pwd, .read, .type => unreachable,
         .continue_ => evalContinue(args),
         .exit => evalExit(shell, args),
         .false_ => .{ .status = 1 },
@@ -165,6 +169,7 @@ test "builtin lookup identifies null true and false utilities" {
     try std.testing.expectEqual(Id.break_, lookup("break").?.id);
     try std.testing.expectEqual(Id.cd, lookup("cd").?.id);
     try std.testing.expectEqual(Id.colon, lookup(":").?.id);
+    try std.testing.expectEqual(Id.command, lookup("command").?.id);
     try std.testing.expectEqual(Id.continue_, lookup("continue").?.id);
     try std.testing.expectEqual(Id.eval, lookup("eval").?.id);
     try std.testing.expectEqual(Id.exec, lookup("exec").?.id);
@@ -176,6 +181,7 @@ test "builtin lookup identifies null true and false utilities" {
     try std.testing.expectEqual(Id.pwd, lookup("pwd").?.id);
     try std.testing.expectEqual(Id.read, lookup("read").?.id);
     try std.testing.expectEqual(Id.readonly, lookup("readonly").?.id);
+    try std.testing.expectEqual(Id.type, lookup("type").?.id);
     try std.testing.expectEqual(@as(?Definition, null), lookup("missing"));
 }
 
