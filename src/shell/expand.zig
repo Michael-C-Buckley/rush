@@ -3872,7 +3872,7 @@ const ArithmeticParser = struct {
 
     fn lookupNumber(self: ArithmeticParser, name: []const u8) !i64 {
         const value = self.env.get(name) orelse {
-            if (self.features.isBash() and self.nounset) return error.NounsetParameter;
+            if (self.nounset) return error.NounsetParameter;
             return 0;
         };
         const trimmed = std.mem.trim(u8, value, " \t");
@@ -10228,6 +10228,19 @@ test "arithmetic expansion evaluates integer expressions" {
     defer quoted.deinit();
     try std.testing.expectEqual(@as(usize, 1), quoted.fields.len);
     try std.testing.expectEqualStrings("value=3", quoted.fields[0]);
+}
+
+test "arithmetic expansion honors nounset for bare variables" {
+    try std.testing.expectEqual(@as(i64, 0), try evalArithmeticWithFeatures("MISSING + 1", test_env, .{}, .{}, false));
+    try std.testing.expectError(
+        error.NounsetParameter,
+        evalArithmeticWithFeatures("MISSING + 1", test_env, .{}, .{}, true),
+    );
+
+    try std.testing.expectError(
+        error.NounsetParameter,
+        expandWordScalar(std.testing.allocator, "$((MISSING + 1))", .{ .env = test_env, .nounset = true }),
+    );
 }
 
 test "arithmetic expansion trims shell blanks around variable integer values" {

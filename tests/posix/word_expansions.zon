@@ -819,6 +819,22 @@
             .status = 0,
         },
         .{
+            .name = "arithmetic expansion honors nounset for bare variables",
+            .script =
+            \\( set -u
+            \\  unset missing
+            \\  printf 'bad:%s\n' "$((missing + 1))"
+            \\  printf 'after\n' ) 2>/dev/null
+            \\case $? in 0) printf 'zero\n' ;; *) printf 'nonzero\n' ;; esac
+            ,
+            .stdout =
+            \\nonzero
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "arithmetic expansion expands parameters and commands before evaluation",
             .script =
             \\x='1 + 2'
