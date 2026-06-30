@@ -1183,10 +1183,11 @@ const RemovalSize = enum {
 };
 
 fn expandPatternWord(shell: anytype, word: ast.Word) ![]const u8 {
-    return switch (word.data) {
+    const pattern = switch (word.data) {
         .literal => |literal| literal,
-        .parts => |parts| expandPatternParts(shell, parts),
+        .parts => |parts| try expandPatternParts(shell, parts),
     };
+    return expandLeadingTilde(shell, word, pattern);
 }
 
 fn expandPatternParts(shell: anytype, parts: []const ast.WordPart) ![]const u8 {
