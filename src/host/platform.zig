@@ -731,8 +731,7 @@ fn linuxCurrentDir(allocator: std.mem.Allocator) CurrentDirError![]const u8 {
 fn libcCurrentDir(allocator: std.mem.Allocator) CurrentDirError![]const u8 {
     var buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
     if (std.c.getcwd(&buffer, buffer.len)) |cwd| {
-        const len = std.mem.indexOfScalar(u8, buffer[0..], 0) orelse buffer.len;
-        return allocator.dupe(u8, cwd[0..len]);
+        return allocator.dupe(u8, std.mem.sliceTo(cwd, 0));
     }
     return switch (std.c.errno(-1)) {
         .ACCES, .PERM => error.AccessDenied,

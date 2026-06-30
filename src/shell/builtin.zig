@@ -15,6 +15,7 @@ pub const Kind = enum {
 
 pub const Id = enum {
     alias,
+    bracket,
     break_,
     cd,
     colon,
@@ -34,6 +35,7 @@ pub const Id = enum {
     return_,
     set,
     shift,
+    test_,
     true_,
     type,
     umask,
@@ -55,6 +57,7 @@ pub const Definition = struct {
 const DefinitionMap = std.StaticStringMap(Definition);
 
 pub const definitions: DefinitionMap = .initComptime(.{
+    .{ "[", Definition{ .name = "[", .id = .bracket, .kind = .regular } },
     .{ "alias", Definition{ .name = "alias", .id = .alias, .kind = .regular } },
     .{ "break", Definition{ .name = "break", .id = .break_, .kind = .special } },
     .{ "cd", Definition{ .name = "cd", .id = .cd, .kind = .regular } },
@@ -75,6 +78,7 @@ pub const definitions: DefinitionMap = .initComptime(.{
     .{ "return", Definition{ .name = "return", .id = .return_, .kind = .special } },
     .{ "set", Definition{ .name = "set", .id = .set, .kind = .special } },
     .{ "shift", Definition{ .name = "shift", .id = .shift, .kind = .special } },
+    .{ "test", Definition{ .name = "test", .id = .test_, .kind = .regular } },
     .{ "true", Definition{ .name = "true", .id = .true_, .kind = .regular } },
     .{ "type", Definition{ .name = "type", .id = .type, .kind = .regular } },
     .{ "umask", Definition{ .name = "umask", .id = .umask, .kind = .regular } },
@@ -96,7 +100,7 @@ pub fn eval(shell: anytype, definition: Definition, args: []const []const u8) !r
         .colon, .true_ => .{},
         .alias => evalAlias(shell, args),
         .break_ => evalBreak(args),
-        .cd, .command, .dot, .eval, .exec, .export_, .pwd, .read, .type, .wait => unreachable,
+        .bracket, .cd, .command, .dot, .eval, .exec, .export_, .pwd, .read, .test_, .type, .wait => unreachable,
         .continue_ => evalContinue(args),
         .exit => evalExit(shell, args),
         .false_ => .{ .status = 1 },
@@ -515,6 +519,7 @@ fn isAssignmentName(name: []const u8) bool {
 }
 
 test "builtin lookup identifies null true and false utilities" {
+    try std.testing.expectEqual(Id.bracket, lookup("[").?.id);
     try std.testing.expectEqual(Id.alias, lookup("alias").?.id);
     try std.testing.expectEqual(Id.break_, lookup("break").?.id);
     try std.testing.expectEqual(Id.cd, lookup("cd").?.id);
@@ -534,6 +539,7 @@ test "builtin lookup identifies null true and false utilities" {
     try std.testing.expectEqual(Id.read, lookup("read").?.id);
     try std.testing.expectEqual(Id.readonly, lookup("readonly").?.id);
     try std.testing.expectEqual(Id.type, lookup("type").?.id);
+    try std.testing.expectEqual(Id.test_, lookup("test").?.id);
     try std.testing.expectEqual(Id.umask, lookup("umask").?.id);
     try std.testing.expectEqual(Id.unalias, lookup("unalias").?.id);
     try std.testing.expectEqual(Id.unset, lookup("unset").?.id);

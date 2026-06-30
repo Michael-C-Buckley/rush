@@ -621,6 +621,7 @@ fn evalSimpleScoped(shell: anytype, command: ast.SimpleCommand) EvalError!result
         }
         if (definition.id == .pwd) return evalPwdBuiltin(shell, fields);
         if (definition.id == .read) return evalReadBuiltin(shell, fields, command.assignments);
+        if (definition.id == .test_ or definition.id == .bracket) return evalTestBuiltin(shell, fields, command.assignments);
         if (definition.id == .type) return evalTypeBuiltin(shell, fields);
         if (definition.id == .wait) return evalWaitBuiltin(shell, fields);
         const args = switch (definition.id) {
@@ -860,6 +861,12 @@ fn evalCommandBuiltin(
                 restored_assignments = true;
                 return evaluated;
             },
+            .test_, .bracket => {
+                const evaluated = try evalTestBuiltin(shell, args[index..], assignments);
+                restoreVariables(shell, saved);
+                restored_assignments = true;
+                return evaluated;
+            },
             .type => {
                 const evaluated = try evalTypeBuiltin(shell, args[index..]);
                 restoreVariables(shell, saved);
@@ -896,6 +903,71 @@ fn evalCommandBuiltin(
     restoreVariables(shell, saved);
     restored_assignments = true;
     return evaluated;
+}
+
+fn evalTestBuiltin(shell: anytype, args: []const []const u8, assignments: []const ast.Assignment) EvalError!result.EvalResult {
+    std.debug.assert(args.len != 0);
+    if (evalFastTest(args)) |matches| return .{ .status = if (matches) 0 else 1 };
+    return evalExternalWithSearchPath(shell, args, assignments, defaultUtilityPath());
+}
+
+fn evalFastTest(args: []const []const u8) ?bool {
+    std.debug.assert(args.len != 0);
+    const operands = testOperands(args) orelse return null;
+    return evalTestOperands(operands);
+}
+
+fn testOperands(args: []const []const u8) ?[]const []const u8 {
+    if (std.mem.eql(u8, args[0], "[")) {
+        if (args.len < 2 or !std.mem.eql(u8, args[args.len - 1], "]")) return null;
+        return args[1 .. args.len - 1];
+    }
+    std.debug.assert(std.mem.eql(u8, args[0], "test"));
+    return args[1..];
+}
+
+fn evalTestOperands(args: []const []const u8) ?bool {
+    return switch (args.len) {
+        0 => false,
+        1 => args[0].len != 0,
+        2 => evalTwoArgumentTest(args[0], args[1]),
+        3 => evalThreeArgumentTest(args[0], args[1], args[2]),
+        4 => if (std.mem.eql(u8, args[0], "!"))
+            if (evalThreeArgumentTest(args[1], args[2], args[3])) |matches| !matches else null
+        else
+            null,
+        else => null,
+    };
+}
+
+fn evalTwoArgumentTest(operator: []const u8, operand: []const u8) ?bool {
+    if (std.mem.eql(u8, operator, "!")) return operand.len == 0;
+    if (std.mem.eql(u8, operator, "-n")) return operand.len != 0;
+    if (std.mem.eql(u8, operator, "-z")) return operand.len == 0;
+    return null;
+}
+
+fn evalThreeArgumentTest(left: []const u8, operator: []const u8, right: []const u8) ?bool {
+    if (std.mem.eql(u8, operator, "=")) return std.mem.eql(u8, left, right);
+    if (std.mem.eql(u8, operator, "!=")) return !std.mem.eql(u8, left, right);
+    if (std.mem.eql(u8, left, "!")) {
+        if (evalTwoArgumentTest(operator, right)) |matches| return !matches;
+        return null;
+    }
+
+    return evalIntegerComparison(left, operator, right);
+}
+
+fn evalIntegerComparison(left: []const u8, operator: []const u8, right: []const u8) ?bool {
+    const lhs = std.fmt.parseInt(i64, left, 10) catch return null;
+    const rhs = std.fmt.parseInt(i64, right, 10) catch return null;
+    if (std.mem.eql(u8, operator, "-eq")) return lhs == rhs;
+    if (std.mem.eql(u8, operator, "-ne")) return lhs != rhs;
+    if (std.mem.eql(u8, operator, "-gt")) return lhs > rhs;
+    if (std.mem.eql(u8, operator, "-ge")) return lhs >= rhs;
+    if (std.mem.eql(u8, operator, "-lt")) return lhs < rhs;
+    if (std.mem.eql(u8, operator, "-le")) return lhs <= rhs;
+    return null;
 }
 
 fn evalCommandLookup(
