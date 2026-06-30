@@ -636,7 +636,10 @@ fn linuxSpawn(request: host.SpawnRequest) SpawnError!host.SpawnResult {
     const pid: i32 = @intCast(fork_rc);
     if (pid == 0) {
         applyLinuxFdActions(request.fd_actions);
-        _ = linux.execve(request.path.ptr, request.argv.ptr, request.envp.ptr);
+        const exec_rc = linux.execve(request.path.ptr, request.argv.ptr, request.envp.ptr);
+        if (linux.errno(exec_rc) == .NOEXEC) {
+            if (request.fallback_argv) |argv| _ = linux.execve(default_shell_path.ptr, argv.ptr, request.envp.ptr);
+        }
         linux.exit(127);
     }
 
@@ -646,7 +649,10 @@ fn linuxSpawn(request: host.SpawnRequest) SpawnError!host.SpawnResult {
 fn linuxExec(request: host.SpawnRequest) SpawnError!void {
     const linux = std.os.linux;
     applyLinuxFdActions(request.fd_actions);
-    _ = linux.execve(request.path.ptr, request.argv.ptr, request.envp.ptr);
+    const exec_rc = linux.execve(request.path.ptr, request.argv.ptr, request.envp.ptr);
+    if (linux.errno(exec_rc) == .NOEXEC) {
+        if (request.fallback_argv) |argv| _ = linux.execve(default_shell_path.ptr, argv.ptr, request.envp.ptr);
+    }
     return error.Unexpected;
 }
 
@@ -674,7 +680,10 @@ fn libcSpawn(request: host.SpawnRequest) SpawnError!host.SpawnResult {
     const pid: i32 = @intCast(fork_rc);
     if (pid == 0) {
         applyLibcFdActions(request.fd_actions);
-        _ = std.c.execve(request.path.ptr, request.argv.ptr, request.envp.ptr);
+        const exec_rc = std.c.execve(request.path.ptr, request.argv.ptr, request.envp.ptr);
+        if (std.c.errno(exec_rc) == .NOEXEC) {
+            if (request.fallback_argv) |argv| _ = std.c.execve(default_shell_path.ptr, argv.ptr, request.envp.ptr);
+        }
         std.c._exit(127);
     }
 
@@ -683,9 +692,14 @@ fn libcSpawn(request: host.SpawnRequest) SpawnError!host.SpawnResult {
 
 fn libcExec(request: host.SpawnRequest) SpawnError!void {
     applyLibcFdActions(request.fd_actions);
-    _ = std.c.execve(request.path.ptr, request.argv.ptr, request.envp.ptr);
+    const exec_rc = std.c.execve(request.path.ptr, request.argv.ptr, request.envp.ptr);
+    if (std.c.errno(exec_rc) == .NOEXEC) {
+        if (request.fallback_argv) |argv| _ = std.c.execve(default_shell_path.ptr, argv.ptr, request.envp.ptr);
+    }
     return error.Unexpected;
 }
+
+const default_shell_path: [:0]const u8 = "/bin/sh";
 
 fn libcWait(pid: host.Pid) WaitError!host.WaitStatus {
     var status: c_int = 0;

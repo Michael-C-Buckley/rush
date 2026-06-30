@@ -107,6 +107,7 @@ pub const SpawnFdAction = union(enum) {
 pub const SpawnRequest = struct {
     path: [:0]const u8,
     argv: [:null]const ?[*:0]const u8,
+    fallback_argv: ?[:null]const ?[*:0]const u8 = null,
     envp: [:null]const ?[*:0]const u8,
     cwd: ?[]const u8 = null,
     fd_actions: []const SpawnFdAction = &.{},

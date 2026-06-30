@@ -3144,10 +3144,26 @@ fn makeExternalSpawnRequestWithSearchPath(
     return .{
         .path = path,
         .argv = argv,
+        .fallback_argv = try makeShellFallbackArgv(shell, path, fields[1..]),
         .envp = envp,
         .fd_actions = fd_actions,
     };
 }
+
+fn makeShellFallbackArgv(
+    shell: anytype,
+    path: [:0]const u8,
+    args: []const []const u8,
+) ![:null]const ?[*:0]const u8 {
+    const allocator = shell.scratchAllocator();
+    const argv = try allocator.allocSentinel(?[*:0]const u8, args.len + 2, null);
+    argv[0] = default_shell_path.ptr;
+    argv[1] = path.ptr;
+    for (args, 0..) |arg, index| argv[index + 2] = (try allocator.dupeZ(u8, arg)).ptr;
+    return argv;
+}
+
+const default_shell_path: [:0]const u8 = "/bin/sh";
 
 fn makeExecArgv(shell: anytype, fields: []const []const u8) ![:null]const ?[*:0]const u8 {
     std.debug.assert(fields.len != 0);
