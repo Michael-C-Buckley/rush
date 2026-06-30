@@ -2523,8 +2523,12 @@ fn stringLessThan(_: void, lhs: []const u8, rhs: []const u8) bool {
 }
 
 fn containsPatternMeta(pattern: PathnamePattern) bool {
-    for (pattern.text, 0..) |byte, index| {
-        if (pattern.byteIsSpecial(index) and (byte == '*' or byte == '?' or byte == '[')) return true;
+    var index: usize = 0;
+    while (index < pattern.text.len) : (index += utf8SequenceLength(pattern.text[index..])) {
+        const byte = pattern.text[index];
+        if (!pattern.byteIsSpecial(index)) continue;
+        if (byte == '*' or byte == '?') return true;
+        if (byte == '[' and bracketExpressionEnd(pattern, index) != null) return true;
     }
     return false;
 }
@@ -2603,6 +2607,31 @@ fn bracketExpressionMatches(pattern: PathnamePattern, start: usize, character: [
     }
     if (!saw_member or index >= pattern.text.len or pattern.text[index] != ']') return null;
     return .{ .matched = if (negated) !matched else matched, .end = index + 1 };
+}
+
+fn bracketExpressionEnd(pattern: PathnamePattern, start: usize) ?usize {
+    std.debug.assert(pattern.text[start] == '[');
+    var index = start + 1;
+    if (index < pattern.text.len and (pattern.text[index] == '!' or pattern.text[index] == '^')) {
+        index += 1;
+    }
+    var saw_member = false;
+    while (index < pattern.text.len and pattern.text[index] != ']') {
+        const member_len = utf8SequenceLength(pattern.text[index..]);
+        if (index + member_len > pattern.text.len) return null;
+        index += member_len;
+        saw_member = true;
+        if (index < pattern.text.len and pattern.text[index] == '-' and index + 1 < pattern.text.len and
+            pattern.text[index + 1] != ']')
+        {
+            index += 1;
+            const end_len = utf8SequenceLength(pattern.text[index..]);
+            if (index + end_len > pattern.text.len) return null;
+            index += end_len;
+        }
+    }
+    if (!saw_member or index >= pattern.text.len or pattern.text[index] != ']') return null;
+    return index + 1;
 }
 
 fn bracketRangeMatches(start: []const u8, end: []const u8, character: []const u8) bool {

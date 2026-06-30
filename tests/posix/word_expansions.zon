@@ -1273,6 +1273,20 @@
             .status = 0,
         },
         .{
+            .name = "pathname expansion leaves invalid bracket expressions unchanged",
+            .script =
+            \\printf '<%s>\n' [ name[ abc[def
+            ,
+            .stdout =
+            \\<[>
+            \\<name[>
+            \\<abc[def>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "pathname expansion leaves unreadable directory patterns unchanged",
             .script =
             \\dir=unreadable
