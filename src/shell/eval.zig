@@ -32,8 +32,14 @@ fn evalList(shell: anytype, list: ast.List) EvalError!result.EvalResult {
         status = evaluated.status;
         shell.state.last_status = status;
         if (evaluated.flow != .normal) return evaluated;
+        if (shouldApplyErrexit(shell, evaluated)) return .{ .status = status, .flow = .{ .exit = status } };
     }
     return .{ .status = status };
+}
+
+fn shouldApplyErrexit(shell: anytype, evaluated: result.EvalResult) bool {
+    return shell.state.options.errexit and shell.state.errexit_ignore_depth == 0 and evaluated.flow == .normal and
+        evaluated.status != 0;
 }
 
 fn evalBackgroundAndOr(shell: anytype, and_or: ast.AndOr) EvalError!result.EvalResult {
@@ -58,7 +64,13 @@ fn evalAndOr(shell: anytype, and_or: ast.AndOr) EvalError!result.EvalResult {
             .and_if => if (last.status != 0) continue,
             .or_if => if (last.status == 0) continue,
         };
-        last = try evalPipeline(shell, pipeline.pipeline);
+        const ignore_errexit = index + 1 < and_or.pipelines.len;
+        if (ignore_errexit) shell.state.errexit_ignore_depth += 1;
+        last = evalPipeline(shell, pipeline.pipeline) catch |err| {
+            if (ignore_errexit) shell.state.errexit_ignore_depth -= 1;
+            return err;
+        };
+        if (ignore_errexit) shell.state.errexit_ignore_depth -= 1;
         if (last.flow != .normal) return last;
     }
     return last;
@@ -201,7 +213,12 @@ fn evalCompound(shell: anytype, command: ast.CompoundInvocation) EvalError!resul
 fn evalIf(shell: anytype, command: ast.IfCommand) EvalError!result.EvalResult {
     command.validate();
     for (command.branches) |branch| {
-        const condition = try evalList(shell, branch.condition);
+        shell.state.errexit_ignore_depth += 1;
+        const condition = evalList(shell, branch.condition) catch |err| {
+            shell.state.errexit_ignore_depth -= 1;
+            return err;
+        };
+        shell.state.errexit_ignore_depth -= 1;
         if (condition.flow != .normal) return condition;
         if (condition.status == 0) return evalList(shell, branch.body);
     }
@@ -216,7 +233,12 @@ fn evalLoop(shell: anytype, command: ast.LoopCommand) EvalError!result.EvalResul
 
     var status: result.ExitStatus = 0;
     while (true) {
-        const condition = try evalList(shell, command.condition);
+        shell.state.errexit_ignore_depth += 1;
+        const condition = evalList(shell, command.condition) catch |err| {
+            shell.state.errexit_ignore_depth -= 1;
+            return err;
+        };
+        shell.state.errexit_ignore_depth -= 1;
         if (condition.flow != .normal) return condition;
         const run_body = switch (command.kind) {
             .while_loop => condition.status == 0,

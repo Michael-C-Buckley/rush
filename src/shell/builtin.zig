@@ -448,6 +448,7 @@ fn evalSet(shell: anytype, args: []const []const u8) !result.EvalResult {
         if (arg.len < 2 or (arg[0] != '-' and arg[0] != '+')) return .{ .status = 2 };
         const enabled = arg[0] == '-';
         for (arg[1..]) |option| switch (option) {
+            'e' => shell.state.options.errexit = enabled,
             'f' => shell.state.options.noglob = enabled,
             'u' => shell.state.options.nounset = enabled,
             else => return .{ .status = 2 },
