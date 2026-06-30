@@ -34,6 +34,7 @@ pub const Id = enum {
     set,
     true_,
     type,
+    umask,
     unalias,
     unset,
     wait,
@@ -72,6 +73,7 @@ pub const definitions: DefinitionMap = .initComptime(.{
     .{ "set", Definition{ .name = "set", .id = .set, .kind = .special } },
     .{ "true", Definition{ .name = "true", .id = .true_, .kind = .regular } },
     .{ "type", Definition{ .name = "type", .id = .type, .kind = .regular } },
+    .{ "umask", Definition{ .name = "umask", .id = .umask, .kind = .regular } },
     .{ "unalias", Definition{ .name = "unalias", .id = .unalias, .kind = .regular } },
     .{ "unset", Definition{ .name = "unset", .id = .unset, .kind = .special } },
     .{ "wait", Definition{ .name = "wait", .id = .wait, .kind = .regular } },
@@ -98,6 +100,7 @@ pub fn eval(shell: anytype, definition: Definition, args: []const []const u8) !r
         .printf => evalPrintf(shell, args),
         .readonly => evalReadonly(shell, args),
         .set => evalSet(shell, args),
+        .umask => evalUmask(shell, args),
         .unalias => evalUnalias(shell, args),
         .unset => evalUnset(shell, args),
     };
@@ -263,6 +266,106 @@ fn isGetoptsOptionOperand(operand: []const u8) bool {
     return operand.len >= 2 and operand[0] == '-' and !std.mem.eql(u8, operand, "-");
 }
 
+fn evalUmask(shell: anytype, args: []const []const u8) !result.EvalResult {
+    if (args.len > 2) return .{ .status = 2 };
+    const current = currentUmask(shell);
+    if (args.len == 1) {
+        try shell.host.writeAll(.stdout, try std.fmt.allocPrint(shell.scratchAllocator(), "{o:0>4}\n", .{current}));
+        return .{};
+    }
+    if (std.mem.eql(u8, args[1], "-S")) {
+        try shell.host.writeAll(.stdout, try symbolicUmask(shell, current));
+        return .{};
+    }
+
+    const new_mask = parseOctalUmask(args[1]) orelse parseSymbolicUmask(current, args[1]) orelse return .{ .status = 2 };
+    _ = shell.host.setFileCreationMask(new_mask);
+    return .{};
+}
+
+fn currentUmask(shell: anytype) u32 {
+    const current = shell.host.setFileCreationMask(0);
+    _ = shell.host.setFileCreationMask(current);
+    return current & 0o777;
+}
+
+fn parseOctalUmask(text: []const u8) ?u32 {
+    if (text.len == 0) return null;
+    var value: u32 = 0;
+    for (text) |byte| {
+        if (byte < '0' or byte > '7') return null;
+        value = value * 8 + byte - '0';
+        if (value > 0o777) return null;
+    }
+    return value;
+}
+
+fn symbolicUmask(shell: anytype, mask: u32) ![]const u8 {
+    const allowed = (~mask) & 0o777;
+    return std.fmt.allocPrint(
+        shell.scratchAllocator(),
+        "u={s}{s}{s},g={s}{s}{s},o={s}{s}{s}\n",
+        .{
+            if ((allowed & 0o400) != 0) "r" else "",
+            if ((allowed & 0o200) != 0) "w" else "",
+            if ((allowed & 0o100) != 0) "x" else "",
+            if ((allowed & 0o040) != 0) "r" else "",
+            if ((allowed & 0o020) != 0) "w" else "",
+            if ((allowed & 0o010) != 0) "x" else "",
+            if ((allowed & 0o004) != 0) "r" else "",
+            if ((allowed & 0o002) != 0) "w" else "",
+            if ((allowed & 0o001) != 0) "x" else "",
+        },
+    );
+}
+
+fn parseSymbolicUmask(current: u32, text: []const u8) ?u32 {
+    var mask = current & 0o777;
+    var iterator = std.mem.splitScalar(u8, text, ',');
+    while (iterator.next()) |clause| {
+        if (clause.len == 0) return null;
+        mask = applyUmaskClause(mask, clause) orelse return null;
+    }
+    return mask;
+}
+
+fn applyUmaskClause(current: u32, clause: []const u8) ?u32 {
+    var index: usize = 0;
+    var who_mask: u32 = 0;
+    while (index < clause.len) : (index += 1) switch (clause[index]) {
+        'u' => who_mask |= 0o700,
+        'g' => who_mask |= 0o070,
+        'o' => who_mask |= 0o007,
+        'a' => who_mask |= 0o777,
+        '+', '-', '=' => break,
+        else => return null,
+    };
+    if (who_mask == 0) who_mask = 0o777;
+    if (index >= clause.len) return null;
+    const op = clause[index];
+    index += 1;
+
+    var permissions: u32 = 0;
+    while (index < clause.len) : (index += 1) switch (clause[index]) {
+        'r' => permissions |= permissionsForWho(who_mask, 0o444),
+        'w' => permissions |= permissionsForWho(who_mask, 0o222),
+        'x' => permissions |= permissionsForWho(who_mask, 0o111),
+        else => return null,
+    };
+
+    const updated: u32 = switch (op) {
+        '+' => current & ~permissions,
+        '-' => current | permissions,
+        '=' => (current & ~who_mask) | (who_mask & ~permissions),
+        else => unreachable,
+    };
+    return updated & 0o777;
+}
+
+fn permissionsForWho(who_mask: u32, permissions: u32) u32 {
+    return who_mask & permissions;
+}
+
 fn evalExit(shell: anytype, args: []const []const u8) result.EvalResult {
     const status = if (args.len > 1) parseExitStatus(args[1]) else shell.state.last_status;
     return .{ .status = status, .flow = .{ .exit = status } };
@@ -399,6 +502,7 @@ test "builtin lookup identifies null true and false utilities" {
     try std.testing.expectEqual(Id.read, lookup("read").?.id);
     try std.testing.expectEqual(Id.readonly, lookup("readonly").?.id);
     try std.testing.expectEqual(Id.type, lookup("type").?.id);
+    try std.testing.expectEqual(Id.umask, lookup("umask").?.id);
     try std.testing.expectEqual(Id.unalias, lookup("unalias").?.id);
     try std.testing.expectEqual(Id.unset, lookup("unset").?.id);
     try std.testing.expectEqual(Id.wait, lookup("wait").?.id);
@@ -408,6 +512,10 @@ test "builtin lookup identifies null true and false utilities" {
 test "builtin eval returns utility status" {
     const TestHost = struct {
         pub fn writeAll(_: *@This(), _: host.Fd, _: []const u8) !void {}
+
+        pub fn setFileCreationMask(_: *@This(), mask: u32) u32 {
+            return mask;
+        }
     };
     const TestShell = struct {
         host: TestHost = .{},
@@ -430,6 +538,10 @@ test "builtin eval returns utility status" {
 test "exit builtin returns requested exit flow" {
     const TestHost = struct {
         pub fn writeAll(_: *@This(), _: host.Fd, _: []const u8) !void {}
+
+        pub fn setFileCreationMask(_: *@This(), mask: u32) u32 {
+            return mask;
+        }
     };
     const TestShell = struct {
         host: TestHost = .{},
@@ -464,6 +576,10 @@ test "printf writes formatted output once" {
                 .stderr => try self.stderr.appendSlice(std.testing.allocator, bytes),
                 else => unreachable,
             }
+        }
+
+        pub fn setFileCreationMask(_: *@This(), mask: u32) u32 {
+            return mask;
         }
     };
     const TestShell = struct {

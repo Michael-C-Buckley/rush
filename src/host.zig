@@ -231,6 +231,10 @@ pub const RealHost = struct {
         return platform.currentDir(allocator);
     }
 
+    pub fn setFileCreationMask(_: *RealHost, mask: u32) u32 {
+        return platform.setFileCreationMask(mask);
+    }
+
     pub fn spawn(_: *RealHost, request: SpawnRequest) platform.SpawnError!SpawnResult {
         return platform.spawn(request);
     }

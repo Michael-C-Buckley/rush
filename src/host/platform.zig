@@ -177,6 +177,10 @@ pub fn currentDir(allocator: std.mem.Allocator) CurrentDirError![]const u8 {
     };
 }
 
+pub fn setFileCreationMask(mask: u32) u32 {
+    return @intCast(std.c.umask(@intCast(mask)));
+}
+
 pub fn spawnAndWait(request: host.SpawnRequest) SpawnError!host.WaitStatus {
     request.validate();
     const spawned = try spawn(request);
