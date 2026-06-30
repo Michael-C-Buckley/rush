@@ -183,7 +183,7 @@ fn evalSimple(shell: anytype, command: ast.SimpleCommand) EvalError!result.EvalR
         };
         return builtin.eval(shell, definition, args);
     }
-    return evalExternal(shell, command.words);
+    return evalExternal(shell, command.words, command.assignments);
 }
 
 const AppliedRedirections = struct {
@@ -454,8 +454,8 @@ fn formatExitStatus(shell: anytype, status: result.ExitStatus) ![]const u8 {
     return shell.scratchAllocator().dupe(u8, text);
 }
 
-fn evalExternal(shell: anytype, words: []const ast.Word) EvalError!result.EvalResult {
-    const request = try makeExternalSpawnRequest(shell, words, &.{});
+fn evalExternal(shell: anytype, words: []const ast.Word, assignments: []const ast.Assignment) EvalError!result.EvalResult {
+    const request = try makeExternalSpawnRequest(shell, words, assignments, &.{});
     const status = try shell.host.spawnAndWait(request);
     return .{ .status = status.shellStatus() };
 }
@@ -463,13 +463,14 @@ fn evalExternal(shell: anytype, words: []const ast.Word) EvalError!result.EvalRe
 fn makeExternalSpawnRequest(
     shell: anytype,
     words: []const ast.Word,
+    assignments: []const ast.Assignment,
     fd_actions: []const host_mod.SpawnFdAction,
 ) !host_mod.SpawnRequest {
     const argv = try expandExecArgv(shell, words);
     const command_text = std.mem.span(argv[0].?);
     const command = argv[0].?[0..command_text.len :0];
     const path = try resolveCommandPath(shell, command);
-    const envp = try makeExecEnvp(shell);
+    const envp = try makeExecEnvp(shell, assignments);
     return .{
         .path = path,
         .argv = argv,
@@ -508,12 +509,87 @@ fn expandExecArgv(shell: anytype, words: []const ast.Word) ![:null]const ?[*:0]c
     return argv;
 }
 
-fn makeExecEnvp(shell: anytype) ![:null]const ?[*:0]const u8 {
-    if (comptime @hasDecl(@TypeOf(shell.*), "execEnvp")) return shell.execEnvp();
+const AssignmentEnvEntry = struct {
+    name: []const u8,
+    value: []const u8,
+};
 
-    const envp = try shell.scratchAllocator().allocSentinel(?[*:0]const u8, shell.env.len, null);
-    for (shell.env, 0..) |entry, index| envp[index] = entry;
+fn makeExecEnvp(shell: anytype, assignments: []const ast.Assignment) ![:null]const ?[*:0]const u8 {
+    if (assignments.len == 0) {
+        if (comptime @hasDecl(@TypeOf(shell.*), "execEnvp")) return shell.execEnvp();
+
+        const envp = try shell.scratchAllocator().allocSentinel(?[*:0]const u8, shell.env.len, null);
+        for (shell.env, 0..) |entry, index| envp[index] = entry;
+        return envp;
+    }
+
+    const allocator = shell.scratchAllocator();
+    const assignment_entries = try allocator.alloc(AssignmentEnvEntry, assignments.len);
+    for (assignments, 0..) |assignment, index| {
+        assignment_entries[index] = .{
+            .name = assignment.name,
+            .value = try expandWord(shell, assignment.value),
+        };
+    }
+
+    var env_len: usize = countBaseEnv(shell.env, assignment_entries);
+    for (assignment_entries, 0..) |entry, index| {
+        if (lastAssignmentIndex(assignment_entries, entry.name) == index) env_len += 1;
+    }
+
+    const envp = try allocator.allocSentinel(?[*:0]const u8, env_len, null);
+    var env_index: usize = 0;
+    for (shell.env) |entry| {
+        const text = std.mem.span(entry);
+        const name = envEntryName(text);
+        if (containsAssignmentName(assignment_entries, name)) continue;
+        envp[env_index] = entry;
+        env_index += 1;
+    }
+    for (assignment_entries, 0..) |entry, index| {
+        if (lastAssignmentIndex(assignment_entries, entry.name) != index) continue;
+        envp[env_index] = (try makeEnvEntryZ(allocator, entry.name, entry.value)).ptr;
+        env_index += 1;
+    }
+    std.debug.assert(env_index == env_len);
     return envp;
+}
+
+fn makeEnvEntryZ(allocator: std.mem.Allocator, name: []const u8, value: []const u8) ![:0]const u8 {
+    const entry = try allocator.allocSentinel(u8, name.len + 1 + value.len, 0);
+    @memcpy(entry[0..name.len], name);
+    entry[name.len] = '=';
+    @memcpy(entry[name.len + 1 ..][0..value.len], value);
+    return entry;
+}
+
+fn countBaseEnv(env: []const [*:0]const u8, assignments: []const AssignmentEnvEntry) usize {
+    var count: usize = 0;
+    for (env) |entry| {
+        const name = envEntryName(std.mem.span(entry));
+        if (!containsAssignmentName(assignments, name)) count += 1;
+    }
+    return count;
+}
+
+fn envEntryName(entry: []const u8) []const u8 {
+    return entry[0 .. std.mem.indexOfScalar(u8, entry, '=') orelse entry.len];
+}
+
+fn containsAssignmentName(assignments: []const AssignmentEnvEntry, name: []const u8) bool {
+    for (assignments) |assignment| {
+        if (std.mem.eql(u8, assignment.name, name)) return true;
+    }
+    return false;
+}
+
+fn lastAssignmentIndex(assignments: []const AssignmentEnvEntry, name: []const u8) usize {
+    var index = assignments.len;
+    while (index != 0) {
+        index -= 1;
+        if (std.mem.eql(u8, assignments[index].name, name)) return index;
+    }
+    unreachable;
 }
 
 fn resolveCommandPath(shell: anytype, command: [:0]const u8) ![:0]const u8 {
