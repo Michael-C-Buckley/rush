@@ -832,8 +832,14 @@ fn scanDoubleQuoteEnd(text: []const u8, start: usize, end: usize) ParseError!usi
     var index = start;
     while (index < end) {
         if (text[index] == '"') return index;
+        if (text[index] == '\\') {
+            index += if (index + 1 < end) 2 else 1;
+            continue;
+        }
         if (text[index] == '$' and index + 1 < end and text[index + 1] == '(') {
             index = try scanCommandSubstitution(text, index + 1, end);
+        } else if (text[index] == '$' and index + 1 < end and text[index + 1] == '{') {
+            index = scanBracedParameterEnd(text, index + 1, end) orelse return error.UnclosedQuote;
         }
         index += 1;
     }

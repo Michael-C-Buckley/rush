@@ -1167,7 +1167,7 @@ fn expandParameterPatternRemoval(
         else => return "",
     };
     const value = parameterValue(shell, name) orelse "";
-    const pattern = try expandWord(shell, parameter.word.?);
+    const pattern = try expandPatternWord(shell, parameter.word.?);
     return switch (operator) {
         .remove_small_prefix => removePrefix(value, pattern, .small),
         .remove_large_prefix => removePrefix(value, pattern, .large),
@@ -1181,6 +1181,34 @@ const RemovalSize = enum {
     small,
     large,
 };
+
+fn expandPatternWord(shell: anytype, word: ast.Word) ![]const u8 {
+    return switch (word.data) {
+        .literal => |literal| literal,
+        .parts => |parts| expandPatternParts(shell, parts),
+    };
+}
+
+fn expandPatternParts(shell: anytype, parts: []const ast.WordPart) ![]const u8 {
+    var output: std.ArrayList(u8) = .empty;
+    const allocator = shell.scratchAllocator();
+    for (parts) |part| switch (part) {
+        .literal => |bytes| try output.appendSlice(allocator, bytes),
+        .single_quoted => |bytes| try appendPatternLiteral(allocator, &output, bytes),
+        .double_quoted => |nested| try appendPatternLiteral(allocator, &output, try expandWordParts(shell, nested, null)),
+        .parameter, .command_substitution, .arithmetic => {
+            try output.appendSlice(allocator, try expandWordPart(shell, part, null));
+        },
+    };
+    return output.toOwnedSlice(allocator);
+}
+
+fn appendPatternLiteral(allocator: std.mem.Allocator, output: *std.ArrayList(u8), bytes: []const u8) !void {
+    for (bytes) |byte| {
+        if (byte == '*' or byte == '?' or byte == '[' or byte == '\\') try output.append(allocator, '\\');
+        try output.append(allocator, byte);
+    }
+}
 
 fn removePrefix(value: []const u8, pattern: []const u8, size: RemovalSize) []const u8 {
     switch (size) {
@@ -1223,6 +1251,10 @@ fn removeSuffix(value: []const u8, pattern: []const u8, size: RemovalSize) []con
 fn patternMatches(pattern: []const u8, text: []const u8) bool {
     if (pattern.len == 0) return text.len == 0;
     return switch (pattern[0]) {
+        '\\' => if (pattern.len >= 2)
+            text.len != 0 and pattern[1] == text[0] and patternMatches(pattern[2..], text[1..])
+        else
+            text.len != 0 and pattern[0] == text[0] and patternMatches(pattern[1..], text[1..]),
         '*' => patternMatchesStar(pattern[1..], text),
         '?' => text.len != 0 and patternMatches(pattern[1..], text[1..]),
         '[' => matchBracketPattern(pattern, text),

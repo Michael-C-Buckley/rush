@@ -184,10 +184,21 @@ const Lexer = struct {
         while (!self.atEnd()) {
             const byte = self.peek();
             if (quote) |delimiter| {
+                if (delimiter == '"' and byte == '\\') {
+                    self.advanceOne();
+                    if (!self.atEnd()) self.advanceOne();
+                    continue;
+                }
                 if (delimiter == '"' and byte == '$' and self.peekNextIs('(')) {
                     self.advanceOne();
                     self.advanceOne();
                     self.skipCommandSubstitution();
+                    continue;
+                }
+                if (delimiter == '"' and byte == '$' and self.peekNextIs('{')) {
+                    self.advanceOne();
+                    self.advanceOne();
+                    self.skipBracedParameter();
                     continue;
                 }
                 if (byte == delimiter) quote = null;
