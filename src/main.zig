@@ -58,6 +58,7 @@ pub fn main(init: std.process.Init.Minimal) !u8 {
                 .text = command.script,
             };
             const evaluated = sh.evalSource(src) catch {
+                try real_host.writeAll(.stderr, "rush: shell error\n");
                 return 2;
             };
             return evaluated.status;
