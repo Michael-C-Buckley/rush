@@ -214,6 +214,10 @@ pub const RealHost = struct {
         return platform.isExecutableZ(path);
     }
 
+    pub fn existsZ(_: *RealHost, path: [:0]const u8) bool {
+        return platform.existsZ(path);
+    }
+
     pub fn listDir(_: *RealHost, allocator: std.mem.Allocator, path: []const u8) platform.ListDirError!ListDirResult {
         return platform.listDir(allocator, path);
     }

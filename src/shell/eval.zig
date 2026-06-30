@@ -3078,11 +3078,46 @@ fn evalExternalWithSearchPath(
     var restored_assignments = false;
     errdefer if (!restored_assignments) restoreVariables(shell, saved);
     try applyAssignments(shell, assignments);
+    if (try commandFoundButNotExecutable(shell, fields[0], search_path)) {
+        restoreVariables(shell, saved);
+        restored_assignments = true;
+        return .{ .status = 126 };
+    }
     const request = try makeExternalSpawnRequestWithSearchPath(shell, fields, assignments, &.{}, search_path);
     const status = try shell.host.spawnAndWait(request);
     restoreVariables(shell, saved);
     restored_assignments = true;
     return .{ .status = status.shellStatus() };
+}
+
+fn commandFoundButNotExecutable(shell: anytype, command: []const u8, search_path: ?[]const u8) !bool {
+    const allocator = shell.scratchAllocator();
+    if (std.mem.indexOfScalar(u8, command, '/') != null) {
+        const command_z = try allocator.dupeZ(u8, command);
+        if (try pathIsDirectory(shell, command, .other)) return true;
+        return !shell.host.isExecutableZ(command_z) and shell.host.existsZ(command_z);
+    }
+
+    var found = false;
+    const path = search_path orelse if (shell.state.getVariable("PATH")) |variable| variable.value else envPath(shell.env) orelse defaultUtilityPath();
+    var candidate_buffer: std.ArrayList(u8) = .empty;
+    var iterator = std.mem.splitScalar(u8, path, ':');
+    while (iterator.next()) |directory| {
+        candidate_buffer.clearRetainingCapacity();
+        const prefix = if (directory.len == 0) "." else directory;
+        try candidate_buffer.appendSlice(allocator, prefix);
+        if (!std.mem.endsWith(u8, prefix, "/")) try candidate_buffer.append(allocator, '/');
+        try candidate_buffer.appendSlice(allocator, command);
+        try candidate_buffer.append(allocator, 0);
+        const candidate = candidate_buffer.items[0 .. candidate_buffer.items.len - 1 :0];
+        if (try pathIsDirectory(shell, candidate, .other)) {
+            found = true;
+            continue;
+        }
+        if (shell.host.isExecutableZ(candidate)) return false;
+        found = found or shell.host.existsZ(candidate);
+    }
+    return found;
 }
 
 fn makeExternalSpawnRequest(

@@ -142,6 +142,15 @@ pub fn isExecutableZ(path: [:0]const u8) bool {
     };
 }
 
+pub fn existsZ(path: [:0]const u8) bool {
+    std.debug.assert(path.len != 0);
+    return switch (builtin.os.tag) {
+        .linux => linuxExistsZ(path),
+        .macos, .freebsd, .openbsd, .netbsd => libcExistsZ(path),
+        else => @compileError("unsupported host OS"),
+    };
+}
+
 pub fn listDir(allocator: std.mem.Allocator, path: []const u8) ListDirError!host.ListDirResult {
     std.debug.assert(path.len != 0);
     return switch (builtin.os.tag) {
@@ -432,8 +441,18 @@ fn linuxIsExecutableZ(path: [:0]const u8) bool {
     return std.os.linux.errno(rc) == .SUCCESS;
 }
 
+fn linuxExistsZ(path: [:0]const u8) bool {
+    const rc = std.os.linux.access(path.ptr, std.os.linux.F_OK);
+    return std.os.linux.errno(rc) == .SUCCESS;
+}
+
 fn libcIsExecutableZ(path: [:0]const u8) bool {
     const rc = std.c.access(path.ptr, std.c.X_OK);
+    return std.c.errno(rc) == .SUCCESS;
+}
+
+fn libcExistsZ(path: [:0]const u8) bool {
+    const rc = std.c.access(path.ptr, std.c.F_OK);
     return std.c.errno(rc) == .SUCCESS;
 }
 
