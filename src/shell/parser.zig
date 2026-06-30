@@ -304,7 +304,7 @@ const Parser = struct {
                 continue;
             }
 
-            const word_token = self.eat(.word) orelse break;
+            const word_token = self.eatSimpleCommandWord(words.items.len != 0) orelse break;
             if (words.items.len == 0) {
                 if (try self.parseAssignment(word_token)) |assignment| {
                     try assignments.append(self.allocator, assignment);
@@ -801,6 +801,23 @@ const Parser = struct {
         if (!self.at(kind)) return null;
         defer self.index += 1;
         return self.tokens[self.index];
+    }
+
+    fn eatSimpleCommandWord(self: *Parser, after_command_name: bool) ?token.Token {
+        if (self.eat(.word)) |word| return word;
+        if (!after_command_name) return null;
+        return switch (self.tokens[self.index].kind) {
+            .bang, .left_brace, .right_brace => token_word: {
+                const tok = self.tokens[self.index];
+                self.index += 1;
+                break :token_word .{
+                    .kind = .word,
+                    .span = tok.span,
+                    .text = self.source.text[tok.span.start..tok.span.end],
+                };
+            },
+            else => null,
+        };
     }
 
     fn eatReserved(self: *Parser, reserved: token.ReservedWord) ?token.Token {
