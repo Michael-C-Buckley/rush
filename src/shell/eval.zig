@@ -2074,7 +2074,7 @@ fn copySimpleCommand(allocator: std.mem.Allocator, command: ast.SimpleCommand) C
     const assignments = try allocator.alloc(ast.Assignment, command.assignments.len);
     for (command.assignments, 0..) |assignment, index| {
         assignments[index] = .{
-            .name = assignment.name,
+            .name = try allocator.dupe(u8, assignment.name),
             .value = try copyWord(allocator, assignment.value),
             .span = assignment.span,
         };
@@ -2099,7 +2099,7 @@ fn copyWords(allocator: std.mem.Allocator, words: []const ast.Word) CopyError![]
 fn copyWord(allocator: std.mem.Allocator, word: ast.Word) CopyError!ast.Word {
     return .{
         .data = switch (word.data) {
-            .literal => |literal| .{ .literal = literal },
+            .literal => |literal| .{ .literal = try allocator.dupe(u8, literal) },
             .parts => |parts| .{ .parts = try copyWordParts(allocator, parts) },
         },
         .span = word.span,
@@ -2111,15 +2111,15 @@ fn copyWordParts(allocator: std.mem.Allocator, parts: []const ast.WordPart) Copy
     const copied = try allocator.alloc(ast.WordPart, parts.len);
     for (parts, 0..) |part, index| {
         copied[index] = switch (part) {
-            .literal => |bytes| .{ .literal = bytes },
-            .escaped => |bytes| .{ .escaped = bytes },
-            .single_quoted => |bytes| .{ .single_quoted = bytes },
+            .literal => |bytes| .{ .literal = try allocator.dupe(u8, bytes) },
+            .escaped => |bytes| .{ .escaped = try allocator.dupe(u8, bytes) },
+            .single_quoted => |bytes| .{ .single_quoted = try allocator.dupe(u8, bytes) },
             .double_quoted => |nested| .{ .double_quoted = try copyWordParts(allocator, nested) },
             .parameter => |parameter| .{ .parameter = try copyParameterExpansion(allocator, parameter) },
             .command_substitution => |substitution| .{
                 .command_substitution = try copyCommandSubstitution(allocator, substitution),
             },
-            .arithmetic => |bytes| .{ .arithmetic = bytes },
+            .arithmetic => |bytes| .{ .arithmetic = try allocator.dupe(u8, bytes) },
         };
     }
     return copied;
@@ -2127,7 +2127,7 @@ fn copyWordParts(allocator: std.mem.Allocator, parts: []const ast.WordPart) Copy
 
 fn copyParameterExpansion(allocator: std.mem.Allocator, parameter: ast.ParameterExpansion) CopyError!ast.ParameterExpansion {
     return .{
-        .parameter = parameter.parameter,
+        .parameter = try copyParameter(allocator, parameter.parameter),
         .length = parameter.length,
         .colon = parameter.colon,
         .op = parameter.op,
@@ -2136,13 +2136,22 @@ fn copyParameterExpansion(allocator: std.mem.Allocator, parameter: ast.Parameter
     };
 }
 
+fn copyParameter(allocator: std.mem.Allocator, parameter: ast.Parameter) CopyError!ast.Parameter {
+    return switch (parameter) {
+        .variable => |name| .{ .variable = try allocator.dupe(u8, name) },
+        .positional => |position| .{ .positional = position },
+        .special => |special| .{ .special = special },
+    };
+}
+
 fn copyCommandSubstitution(
     allocator: std.mem.Allocator,
     substitution: ast.CommandSubstitution,
 ) CopyError!ast.CommandSubstitution {
     return .{
-        .source_text = substitution.source_text,
+        .source_text = try allocator.dupe(u8, substitution.source_text),
         .parsed = if (substitution.parsed) |program| try copyProgramPtr(allocator, program.*) else null,
+        .line_offset = substitution.line_offset,
     };
 }
 
@@ -2159,7 +2168,10 @@ fn copyRedirections(allocator: std.mem.Allocator, redirections: []const ast.Redi
             .fd = redirection.fd,
             .op = redirection.op,
             .target = try copyWord(allocator, redirection.target),
-            .here_doc = redirection.here_doc,
+            .here_doc = if (redirection.here_doc) |here_doc| .{
+                .body = try allocator.dupe(u8, here_doc.body),
+                .delimiter_quoted = here_doc.delimiter_quoted,
+            } else null,
             .span = redirection.span,
         };
     }
@@ -2190,7 +2202,7 @@ fn copyLoopCommand(allocator: std.mem.Allocator, command: ast.LoopCommand) CopyE
 
 fn copyForCommand(allocator: std.mem.Allocator, command: ast.ForCommand) CopyError!ast.ForCommand {
     return .{
-        .name = command.name,
+        .name = try allocator.dupe(u8, command.name),
         .words = switch (command.words) {
             .positional_parameters => .positional_parameters,
             .words => |words| .{ .words = try copyWords(allocator, words) },
