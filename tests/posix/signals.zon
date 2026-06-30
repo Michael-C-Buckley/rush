@@ -162,17 +162,14 @@
             .status_match = .nonzero,
         },
         .{
-            .name = "self-signal trap is contained inside command substitution",
+            .name = "signal to shell pid from command substitution terminates shell",
             .script =
             \\out=$(trap 'printf trap; exit' ALRM; kill -s ALRM $$; printf bad)
             \\printf 'out=<%s> status=%s\n' "$out" "$?"
             ,
-            .stdout =
-            \\out=<trap> status=0
-            \\
-            ,
+            .stdout = "",
             .stderr = "",
-            .status = 0,
+            .status = 142,
         },
         .{
             .name = "trap and kill accept standard symbolic signal names",

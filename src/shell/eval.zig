@@ -3829,6 +3829,9 @@ fn evalCommandSubstitutionInChild(
     substitution: ast.CommandSubstitution,
     program: ast.Program,
 ) !CommandSubstitutionCapture {
+    _ = shellProcessId(shell);
+    _ = parentProcessId(shell);
+
     const pipe_desc = try shell.host.pipe();
     errdefer {
         shell.host.close(pipe_desc.read) catch {};
@@ -3840,7 +3843,6 @@ fn evalCommandSubstitutionInChild(
             shell.host.close(pipe_desc.read) catch shell.host.exit(127);
             shell.host.duplicateTo(pipe_desc.write, .stdout) catch shell.host.exit(127);
             shell.host.close(pipe_desc.write) catch shell.host.exit(127);
-            shell.state.shell_pid = shell.host.currentProcessId();
             shell.state.loop_depth = 0;
             shell.state.running_exit_trap = false;
             shell.state.diagnostic_line_offset += substitution.line_offset;

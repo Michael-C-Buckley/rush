@@ -313,6 +313,24 @@
             .status = 0,
         },
         .{
+            .name = "command substitution preserves shell pid special parameters",
+            .script =
+            \\outer=$$
+            \\outer_parent=$PPID
+            \\sub=$(printf '%s:%s' "$$" "$PPID")
+            \\case $outer:$outer_parent:$sub in
+            \\    "$outer:$outer_parent:$outer:$outer_parent") printf 'pid\n' ;;
+            \\    *) printf 'bad:%s\n' "$sub" ;;
+            \\esac
+            ,
+            .stdout =
+            \\pid
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "quoted at expands positional parameters as separate fields",
             .script =
             \\set -- 'a b' '' c
