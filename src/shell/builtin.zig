@@ -13,6 +13,7 @@ pub const Kind = enum {
 
 pub const Id = enum {
     colon,
+    exit,
     false_,
     printf,
     true_,
@@ -32,6 +33,7 @@ const DefinitionMap = std.StaticStringMap(Definition);
 
 pub const definitions: DefinitionMap = .initComptime(.{
     .{ ":", Definition{ .name = ":", .id = .colon, .kind = .special } },
+    .{ "exit", Definition{ .name = "exit", .id = .exit, .kind = .special } },
     .{ "false", Definition{ .name = "false", .id = .false_, .kind = .regular } },
     .{ "printf", Definition{ .name = "printf", .id = .printf, .kind = .regular } },
     .{ "true", Definition{ .name = "true", .id = .true_, .kind = .regular } },
@@ -48,9 +50,19 @@ pub fn eval(shell: anytype, definition: Definition, args: []const []const u8) !r
     std.debug.assert(args.len != 0);
     return switch (definition.id) {
         .colon, .true_ => .{},
+        .exit => evalExit(shell, args),
         .false_ => .{ .status = 1 },
         .printf => evalPrintf(shell, args),
     };
+}
+
+fn evalExit(shell: anytype, args: []const []const u8) result.EvalResult {
+    const status = if (args.len > 1) parseExitStatus(args[1]) else shell.state.last_status;
+    return .{ .status = status, .flow = .{ .exit = status } };
+}
+
+fn parseExitStatus(text: []const u8) result.ExitStatus {
+    return std.fmt.parseInt(u8, text, 10) catch 2;
 }
 
 fn evalPrintf(shell: anytype, args: []const []const u8) !result.EvalResult {
@@ -68,6 +80,7 @@ fn evalPrintf(shell: anytype, args: []const []const u8) !result.EvalResult {
 
 test "builtin lookup identifies null true and false utilities" {
     try std.testing.expectEqual(Id.colon, lookup(":").?.id);
+    try std.testing.expectEqual(Id.exit, lookup("exit").?.id);
     try std.testing.expectEqual(Id.true_, lookup("true").?.id);
     try std.testing.expectEqual(Id.false_, lookup("false").?.id);
     try std.testing.expectEqual(Id.printf, lookup("printf").?.id);
@@ -80,6 +93,7 @@ test "builtin eval returns utility status" {
     };
     const TestShell = struct {
         host: TestHost = .{},
+        state: struct { last_status: result.ExitStatus = 0 } = .{},
 
         fn scratchAllocator(_: *@This()) std.mem.Allocator {
             return std.testing.allocator;
@@ -92,6 +106,26 @@ test "builtin eval returns utility status" {
 
     try std.testing.expectEqual(@as(result.ExitStatus, 0), (try eval(&shell, true_definition, &.{"true"})).status);
     try std.testing.expectEqual(@as(result.ExitStatus, 1), (try eval(&shell, false_definition, &.{"false"})).status);
+}
+
+test "exit builtin returns requested exit flow" {
+    const TestHost = struct {
+        fn writeAll(_: *@This(), _: host.Fd, _: []const u8) !void {}
+    };
+    const TestShell = struct {
+        host: TestHost = .{},
+        state: struct { last_status: result.ExitStatus = 0 } = .{},
+
+        fn scratchAllocator(_: *@This()) std.mem.Allocator {
+            return std.testing.allocator;
+        }
+    };
+
+    var shell: TestShell = .{};
+    const evaluated = try eval(&shell, lookup("exit").?, &.{ "exit", "7" });
+
+    try std.testing.expectEqual(@as(result.ExitStatus, 7), evaluated.status);
+    try std.testing.expectEqual(result.ControlFlow{ .exit = 7 }, evaluated.flow);
 }
 
 test "printf writes formatted output once" {
@@ -114,6 +148,7 @@ test "printf writes formatted output once" {
     };
     const TestShell = struct {
         host: TestHost = .{},
+        state: struct { last_status: result.ExitStatus = 0 } = .{},
 
         fn scratchAllocator(_: *@This()) std.mem.Allocator {
             return std.testing.allocator;

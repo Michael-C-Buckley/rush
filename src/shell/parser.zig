@@ -3,12 +3,14 @@
 const std = @import("std");
 
 const ast = @import("ast.zig");
+const lexer = @import("lexer.zig");
 const source_mod = @import("source.zig");
 const token = @import("token.zig");
 
 pub const ParseError = error{
     ExpectedCommand,
     ExpectedRedirectionTarget,
+    UnclosedCommandSubstitution,
     UnclosedQuote,
     UnexpectedToken,
 };
@@ -227,6 +229,18 @@ const Parser = struct {
                 },
                 '$' => {
                     const name_start = index + 1;
+                    if (name_start < end and text[name_start] == '(') {
+                        if (literal_start < index) try parts.append(self.allocator, .{ .literal = text[literal_start..index] });
+                        const substitution_end = try scanCommandSubstitution(text, name_start, end);
+                        const source_text = text[name_start + 1 .. substitution_end];
+                        const parsed = try self.parseCommandSubstitution(source_text);
+                        try parts.append(self.allocator, .{
+                            .command_substitution = .{ .source_text = source_text, .parsed = parsed },
+                        });
+                        index = substitution_end + 1;
+                        literal_start = index;
+                        continue;
+                    }
                     if (name_start < end and text[name_start] == '?') {
                         if (literal_start < index) try parts.append(self.allocator, .{ .literal = text[literal_start..index] });
                         try parts.append(self.allocator, .{
@@ -255,6 +269,20 @@ const Parser = struct {
         }
 
         if (literal_start < end) try parts.append(self.allocator, .{ .literal = text[literal_start..end] });
+    }
+
+    fn parseCommandSubstitution(self: *Parser, source_text: []const u8) !*const ast.Program {
+        const src: source_mod.Source = .{
+            .id = self.source.id,
+            .kind = .command_string,
+            .name = "$()",
+            .text = source_text,
+        };
+        const tokens = try lexer.lex(self.allocator, src);
+        const program = try parse(self.allocator, src, tokens);
+        const owned = try self.allocator.create(ast.Program);
+        owned.* = program;
+        return owned;
     }
 
     fn skipSeparators(self: *Parser) void {
@@ -349,6 +377,34 @@ fn scanParameterName(text: []const u8, start: usize, end: usize) usize {
     return index;
 }
 
+fn scanCommandSubstitution(text: []const u8, open_index: usize, end: usize) ParseError!usize {
+    std.debug.assert(open_index > 0);
+    std.debug.assert(text[open_index] == '(');
+
+    var index = open_index + 1;
+    var depth: usize = 1;
+    while (index < end) {
+        switch (text[index]) {
+            '\'', '"' => |quote| {
+                index += 1;
+                while (index < end and text[index] != quote) index += 1;
+                if (index >= end) return error.UnclosedQuote;
+            },
+            '$' => if (index + 1 < end and text[index + 1] == '(') {
+                depth += 1;
+                index += 1;
+            },
+            ')' => {
+                depth -= 1;
+                if (depth == 0) return index;
+            },
+            else => {},
+        }
+        index += 1;
+    }
+    return error.UnclosedCommandSubstitution;
+}
+
 fn isNameStart(byte: u8) bool {
     return switch (byte) {
         'A'...'Z', 'a'...'z', '_' => true,
@@ -437,4 +493,20 @@ test "parser builds parameter parts inside double quotes" {
 
     const quoted_parts = word.data.parts[0].double_quoted;
     try std.testing.expectEqualStrings("x", quoted_parts[0].parameter.parameter.variable);
+}
+
+test "parser builds command substitution word parts" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const src: source_mod.Source = .{ .id = 1, .kind = .command_string, .name = "-c", .text = "x=$(exit 7)" };
+    const tokens = try @import("lexer.zig").lex(allocator, src);
+    const program = try parse(allocator, src, tokens);
+    const assignment = program.body.entries[0].and_or.pipelines[0].pipeline.stages[0].simple.assignments[0];
+
+    try std.testing.expectEqualStrings("x", assignment.name);
+    const substitution = assignment.value.data.parts[0].command_substitution;
+    try std.testing.expectEqualStrings("exit 7", substitution.source_text);
+    try std.testing.expect(substitution.parsed != null);
 }

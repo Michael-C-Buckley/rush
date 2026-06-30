@@ -46,15 +46,15 @@ pub fn Shell(comptime Host: type) type {
         }
 
         pub fn scratchAllocator(self: *Self) std.mem.Allocator {
-            return self.arenas.scratch.allocator();
+            return self.arenas.scratchAllocator();
         }
 
         pub fn resetForTopLevelCommand(self: *Self) void {
             self.arenas.resetForTopLevelCommand();
         }
 
-        pub fn resetScratch(self: *Self) void {
-            self.arenas.resetScratch();
+        pub fn beginScratchScope(self: *Self) !memory.ScratchScope {
+            return self.arenas.beginScratchScope();
         }
 
         pub fn evalSource(self: *Self, src: source.Source) !result.EvalResult {

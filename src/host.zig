@@ -57,8 +57,8 @@ pub const SpawnFdAction = union(enum) {
 
 pub const SpawnRequest = struct {
     path: [:0]const u8,
-    argv: []const [:0]const u8,
-    env: []const [*:0]const u8,
+    argv: [:null]const ?[*:0]const u8,
+    envp: [:null]const ?[*:0]const u8,
     cwd: ?[]const u8 = null,
     fd_actions: []const SpawnFdAction = &.{},
     process_group: ?Pid = null,
@@ -67,7 +67,7 @@ pub const SpawnRequest = struct {
         const std = @import("std");
         std.debug.assert(self.path.len != 0);
         std.debug.assert(self.argv.len != 0);
-        std.debug.assert(self.argv[0].len != 0);
+        std.debug.assert(self.argv[0] != null);
     }
 };
 
@@ -135,9 +135,8 @@ pub const RealHost = struct {
 
     pub fn spawnAndWait(
         _: *RealHost,
-        allocator: @import("std").mem.Allocator,
         request: SpawnRequest,
     ) platform.SpawnError!WaitStatus {
-        return platform.spawnAndWait(allocator, request);
+        return platform.spawnAndWait(request);
     }
 };

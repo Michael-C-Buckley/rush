@@ -167,6 +167,12 @@ const Lexer = struct {
                 self.advanceOne();
                 continue;
             }
+            if (byte == '$' and self.peekNextIs('(')) {
+                self.advanceOne();
+                self.advanceOne();
+                self.skipCommandSubstitution();
+                continue;
+            }
             if (isWordTerminator(byte)) break;
             self.advanceOne();
         }
@@ -187,6 +193,37 @@ const Lexer = struct {
         var offset = self.position.byte_offset;
         while (offset < self.source.text.len and isDigit(self.source.text[offset])) offset += 1;
         return offset < self.source.text.len and isRedirectionStart(self.source.text[offset]);
+    }
+
+    fn peekNextIs(self: Lexer, byte: u8) bool {
+        const next = self.position.byte_offset + 1;
+        return next < self.source.text.len and self.source.text[next] == byte;
+    }
+
+    fn skipCommandSubstitution(self: *Lexer) void {
+        var depth: usize = 1;
+        var quote: ?u8 = null;
+        while (!self.atEnd() and depth != 0) {
+            const byte = self.peek();
+            if (quote) |delimiter| {
+                if (byte == delimiter) quote = null;
+                self.advanceOne();
+                continue;
+            }
+            if (byte == '\'' or byte == '"') {
+                quote = byte;
+                self.advanceOne();
+                continue;
+            }
+            if (byte == '$' and self.peekNextIs('(')) {
+                depth += 1;
+                self.advanceOne();
+                self.advanceOne();
+                continue;
+            }
+            if (byte == ')') depth -= 1;
+            self.advanceOne();
+        }
     }
 };
 
@@ -265,4 +302,14 @@ test "lexer keeps quoted spaces inside words" {
     try std.testing.expectEqual(token.Kind.word, tokens[1].kind);
     try std.testing.expect(tokens[1].quoted);
     try std.testing.expectEqualStrings("\"hello world\"", tokens[1].text);
+}
+
+test "lexer keeps command substitutions inside words" {
+    const src: source_mod.Source = .{ .id = 1, .kind = .command_string, .name = "-c", .text = "x=$(printf a; printf b)" };
+    const tokens = try lex(std.testing.allocator, src);
+    defer std.testing.allocator.free(tokens);
+
+    try std.testing.expectEqual(token.Kind.word, tokens[0].kind);
+    try std.testing.expectEqualStrings("x=$(printf a; printf b)", tokens[0].text);
+    try std.testing.expectEqual(token.Kind.eof, tokens[1].kind);
 }

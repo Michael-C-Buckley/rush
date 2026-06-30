@@ -5,7 +5,10 @@ const std = @import("std");
 const ast = @import("ast.zig");
 const builtin = @import("builtin.zig");
 const host_mod = @import("../host.zig");
+const lexer = @import("lexer.zig");
+const parser = @import("parser.zig");
 const result = @import("result.zig");
+const source_mod = @import("source.zig");
 
 pub const EvalError = anyerror;
 
@@ -57,7 +60,8 @@ fn evalCommand(shell: anytype, command: ast.Command) EvalError!result.EvalResult
 
 fn evalSimple(shell: anytype, command: ast.SimpleCommand) EvalError!result.EvalResult {
     command.validate();
-    shell.resetScratch();
+    const scratch = try shell.beginScratchScope();
+    defer scratch.end();
 
     var redirections = applyRedirections(shell, command.redirections) catch |err| switch (err) {
         error.OutOfMemory => return err,
@@ -66,17 +70,22 @@ fn evalSimple(shell: anytype, command: ast.SimpleCommand) EvalError!result.EvalR
     defer redirections.restore(shell) catch {};
 
     if (command.words.len == 0) {
-        try applyAssignments(shell, command.assignments);
-        return .{};
+        const status = try applyAssignmentsWithStatus(shell, command.assignments);
+        return .{ .status = status };
     }
 
-    const name = try expandWord(shell, command.words[0]);
+    var expansion_status: ?result.ExitStatus = null;
+    const name = try expandWordTracking(shell, command.words[0], &expansion_status);
+    if (name.len == 0) {
+        const status = try applyAssignmentsWithStatus(shell, command.assignments);
+        return .{ .status = expansion_status orelse status };
+    }
     if (builtin.lookup(name)) |definition| {
         if (definition.kind == .special) try applyAssignments(shell, command.assignments);
-        const args = if (definition.id == .printf)
-            try expandWords(shell, command.words)
-        else
-            &[_][]const u8{name};
+        const args = switch (definition.id) {
+            .exit, .printf => try expandWords(shell, command.words),
+            else => &[_][]const u8{name},
+        };
         return builtin.eval(shell, definition, args);
     }
     return evalExternal(shell, command.words);
@@ -188,10 +197,16 @@ fn parseKnownFd(raw: u31) host_mod.Fd {
 }
 
 fn applyAssignments(shell: anytype, assignments: []const ast.Assignment) !void {
+    _ = try applyAssignmentsWithStatus(shell, assignments);
+}
+
+fn applyAssignmentsWithStatus(shell: anytype, assignments: []const ast.Assignment) !result.ExitStatus {
+    var status: ?result.ExitStatus = null;
     for (assignments) |assignment| {
-        const value = try expandWord(shell, assignment.value);
+        const value = try expandWordTracking(shell, assignment.value, &status);
         try shell.state.putVariable(.{ .name = assignment.name, .value = value });
     }
+    return status orelse 0;
 }
 
 fn expandWords(shell: anytype, words: []const ast.Word) ![]const []const u8 {
@@ -203,29 +218,57 @@ fn expandWords(shell: anytype, words: []const ast.Word) ![]const []const u8 {
 }
 
 fn expandWord(shell: anytype, word: ast.Word) ![]const u8 {
+    return expandWordTracking(shell, word, null);
+}
+
+fn expandWordTracking(shell: anytype, word: ast.Word, substitution_status: ?*?result.ExitStatus) ![]const u8 {
     return switch (word.data) {
         .literal => |literal| literal,
-        .parts => |parts| expandWordParts(shell, parts),
+        .parts => |parts| expandWordParts(shell, parts, substitution_status),
     };
 }
 
-fn expandWordParts(shell: anytype, parts: []const ast.WordPart) EvalError![]const u8 {
+fn expandWordParts(shell: anytype, parts: []const ast.WordPart, substitution_status: ?*?result.ExitStatus) EvalError![]const u8 {
     if (parts.len == 0) return "";
-    if (parts.len == 1) return expandWordPart(shell, parts[0]);
+    if (parts.len == 1) return expandWordPart(shell, parts[0], substitution_status);
 
     const allocator = shell.scratchAllocator();
     var output: std.ArrayList(u8) = .empty;
-    for (parts) |part| try output.appendSlice(allocator, try expandWordPart(shell, part));
+    for (parts) |part| try output.appendSlice(allocator, try expandWordPart(shell, part, substitution_status));
     return output.toOwnedSlice(allocator);
 }
 
-fn expandWordPart(shell: anytype, part: ast.WordPart) EvalError![]const u8 {
+fn expandWordPart(shell: anytype, part: ast.WordPart, substitution_status: ?*?result.ExitStatus) EvalError![]const u8 {
     return switch (part) {
         .literal, .single_quoted, .arithmetic => |bytes| bytes,
-        .double_quoted => |parts| expandWordParts(shell, parts),
+        .double_quoted => |parts| expandWordParts(shell, parts, substitution_status),
         .parameter => |parameter| expandParameter(shell, parameter),
-        .command_substitution => error.UnsupportedExpansion,
+        .command_substitution => |substitution| expandCommandSubstitution(shell, substitution, substitution_status),
     };
+}
+
+fn expandCommandSubstitution(
+    shell: anytype,
+    substitution: ast.CommandSubstitution,
+    substitution_status: ?*?result.ExitStatus,
+) EvalError![]const u8 {
+    substitution.validate();
+    const program = if (substitution.parsed) |program| program.* else program: {
+        const src: source_mod.Source = .{
+            .id = 0,
+            .kind = .command_string,
+            .name = "$()",
+            .text = substitution.source_text,
+        };
+        const ast_allocator = shell.astAllocator();
+        const tokens = try lexer.lex(ast_allocator, src);
+        break :program try parser.parse(ast_allocator, src, tokens);
+    };
+    const evaluated = try evalProgram(@TypeOf(shell.host), shell, program);
+    const status = evaluated.status;
+    if (substitution_status) |tracked| tracked.* = status;
+    shell.state.last_status = status;
+    return "";
 }
 
 fn expandParameter(shell: anytype, parameter: ast.ParameterExpansion) EvalError![]const u8 {
@@ -233,47 +276,69 @@ fn expandParameter(shell: anytype, parameter: ast.ParameterExpansion) EvalError!
     return switch (parameter.parameter) {
         .variable => |name| if (shell.state.getVariable(name)) |variable| variable.value else "",
         .special => |special| switch (special) {
-            .question => try std.fmt.allocPrint(shell.scratchAllocator(), "{}", .{shell.state.last_status}),
+            .question => try formatExitStatus(shell, shell.state.last_status),
             else => "",
         },
         .positional => "",
     };
 }
 
+fn formatExitStatus(shell: anytype, status: result.ExitStatus) ![]const u8 {
+    var buffer: [3]u8 = undefined;
+    const text = try std.fmt.bufPrint(&buffer, "{}", .{status});
+    return shell.scratchAllocator().dupe(u8, text);
+}
+
 fn evalExternal(shell: anytype, words: []const ast.Word) EvalError!result.EvalResult {
-    const argv = try expandZWords(shell, words);
-    const path = try resolveCommandPath(shell, argv[0]);
-    const status = try shell.host.spawnAndWait(shell.scratchAllocator(), .{
+    const argv = try expandExecArgv(shell, words);
+    const command_text = std.mem.span(argv[0].?);
+    const command = argv[0].?[0..command_text.len :0];
+    const path = try resolveCommandPath(shell, command);
+    const envp = try makeExecEnvp(shell);
+    const status = try shell.host.spawnAndWait(.{
         .path = path,
         .argv = argv,
-        .env = shell.env,
+        .envp = envp,
     });
     return .{ .status = status.shellStatus() };
 }
 
-fn expandZWords(shell: anytype, words: []const ast.Word) ![]const [:0]const u8 {
+fn expandExecArgv(shell: anytype, words: []const ast.Word) ![:null]const ?[*:0]const u8 {
     std.debug.assert(words.len != 0);
     const allocator = shell.scratchAllocator();
-    const expanded = try allocator.alloc([:0]const u8, words.len);
+    const expanded = try allocator.allocSentinel(?[*:0]const u8, words.len, null);
     for (words, 0..) |word, index| {
         const bytes = try expandWord(shell, word);
-        expanded[index] = try allocator.dupeZ(u8, bytes);
+        expanded[index] = (try allocator.dupeZ(u8, bytes)).ptr;
     }
     return expanded;
+}
+
+fn makeExecEnvp(shell: anytype) ![:null]const ?[*:0]const u8 {
+    const envp = try shell.scratchAllocator().allocSentinel(?[*:0]const u8, shell.env.len, null);
+    for (shell.env, 0..) |entry, index| envp[index] = entry;
+    return envp;
 }
 
 fn resolveCommandPath(shell: anytype, command: [:0]const u8) ![:0]const u8 {
     if (std.mem.indexOfScalar(u8, command, '/') != null) return command;
 
     const path = if (shell.state.getVariable("PATH")) |variable| variable.value else envPath(shell.env) orelse "/usr/bin:/bin";
+    const allocator = shell.scratchAllocator();
+    var candidate_buffer: std.ArrayList(u8) = .empty;
     var iterator = std.mem.splitScalar(u8, path, ':');
     while (iterator.next()) |directory| {
+        candidate_buffer.clearRetainingCapacity();
         const prefix = if (directory.len == 0) "." else directory;
-        const candidate = try std.fs.path.joinZ(shell.scratchAllocator(), &.{ prefix, command });
+        try candidate_buffer.appendSlice(allocator, prefix);
+        if (!std.mem.endsWith(u8, prefix, "/")) try candidate_buffer.append(allocator, '/');
+        try candidate_buffer.appendSlice(allocator, command);
+        try candidate_buffer.append(allocator, 0);
+        const candidate = candidate_buffer.items[0 .. candidate_buffer.items.len - 1 :0];
         if (shell.host.isExecutableZ(candidate)) return candidate;
     }
 
-    return command;
+    return allocator.dupeZ(u8, command);
 }
 
 fn envPath(env: []const [*:0]const u8) ?[]const u8 {

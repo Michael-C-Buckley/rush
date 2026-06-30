@@ -31,7 +31,7 @@ pub const DuplicateError = host.DuplicateError;
 pub const SpawnError = error{
     SystemResources,
     Unexpected,
-} || std.mem.Allocator.Error;
+};
 
 pub fn writeAll(fd: host.Fd, bytes: []const u8) WriteError!void {
     var written: usize = 0;
@@ -91,11 +91,11 @@ pub fn isExecutableZ(path: [:0]const u8) bool {
     };
 }
 
-pub fn spawnAndWait(allocator: std.mem.Allocator, request: host.SpawnRequest) SpawnError!host.WaitStatus {
+pub fn spawnAndWait(request: host.SpawnRequest) SpawnError!host.WaitStatus {
     request.validate();
     return switch (builtin.os.tag) {
-        .linux => linuxSpawnAndWait(allocator, request),
-        .macos, .freebsd, .openbsd, .netbsd => libcSpawnAndWait(allocator, request),
+        .linux => linuxSpawnAndWait(request),
+        .macos, .freebsd, .openbsd, .netbsd => libcSpawnAndWait(request),
         else => @compileError("unsupported host OS"),
     };
 }
@@ -249,10 +249,7 @@ fn libcIsExecutableZ(path: [:0]const u8) bool {
     return std.c.errno(rc) == .SUCCESS;
 }
 
-fn linuxSpawnAndWait(allocator: std.mem.Allocator, request: host.SpawnRequest) SpawnError!host.WaitStatus {
-    const argv = try makeExecArgv(allocator, request.argv);
-    const envp = try makeExecEnvp(allocator, request.env);
-
+fn linuxSpawnAndWait(request: host.SpawnRequest) SpawnError!host.WaitStatus {
     const linux = std.os.linux;
     const fork_rc = linux.fork();
     switch (linux.errno(fork_rc)) {
@@ -263,7 +260,7 @@ fn linuxSpawnAndWait(allocator: std.mem.Allocator, request: host.SpawnRequest) S
 
     const pid: i32 = @intCast(fork_rc);
     if (pid == 0) {
-        _ = linux.execve(request.path.ptr, argv.ptr, envp.ptr);
+        _ = linux.execve(request.path.ptr, request.argv.ptr, request.envp.ptr);
         linux.exit(127);
     }
 
@@ -278,10 +275,7 @@ fn linuxSpawnAndWait(allocator: std.mem.Allocator, request: host.SpawnRequest) S
     }
 }
 
-fn libcSpawnAndWait(allocator: std.mem.Allocator, request: host.SpawnRequest) SpawnError!host.WaitStatus {
-    const argv = try makeExecArgv(allocator, request.argv);
-    const envp = try makeExecEnvp(allocator, request.env);
-
+fn libcSpawnAndWait(request: host.SpawnRequest) SpawnError!host.WaitStatus {
     const fork_rc = std.c.fork();
     switch (std.c.errno(fork_rc)) {
         .SUCCESS => {},
@@ -291,7 +285,7 @@ fn libcSpawnAndWait(allocator: std.mem.Allocator, request: host.SpawnRequest) Sp
 
     const pid: i32 = @intCast(fork_rc);
     if (pid == 0) {
-        _ = std.c.execve(request.path.ptr, argv.ptr, envp.ptr);
+        _ = std.c.execve(request.path.ptr, request.argv.ptr, request.envp.ptr);
         std.c._exit(127);
     }
 
@@ -304,19 +298,6 @@ fn libcSpawnAndWait(allocator: std.mem.Allocator, request: host.SpawnRequest) Sp
             else => return error.Unexpected,
         }
     }
-}
-
-fn makeExecArgv(allocator: std.mem.Allocator, argv: []const [:0]const u8) std.mem.Allocator.Error![:null]const ?[*:0]const u8 {
-    std.debug.assert(argv.len != 0);
-    const result = try allocator.allocSentinel(?[*:0]const u8, argv.len, null);
-    for (argv, 0..) |arg, index| result[index] = arg.ptr;
-    return result;
-}
-
-fn makeExecEnvp(allocator: std.mem.Allocator, env: []const [*:0]const u8) std.mem.Allocator.Error![:null]const ?[*:0]const u8 {
-    const result = try allocator.allocSentinel(?[*:0]const u8, env.len, null);
-    for (env, 0..) |entry, index| result[index] = entry;
-    return result;
 }
 
 fn decodeWaitStatus(status: u32) host.WaitStatus {
