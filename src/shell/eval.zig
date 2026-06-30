@@ -174,12 +174,39 @@ fn evalCommand(shell: anytype, command: ast.Command) EvalError!result.EvalResult
 
 fn evalCompound(shell: anytype, command: ast.CompoundInvocation) EvalError!result.EvalResult {
     command.validate();
+    if (command.body == .subshell) return evalSubshell(shell, command.body.subshell, command.redirections);
+
+    const scratch = try shell.beginScratchScope();
+    defer scratch.end();
+
+    var redirections = applyRedirections(shell, command.redirections) catch |err| switch (err) {
+        error.OutOfMemory => return err,
+        else => return .{ .status = 1 },
+    };
+    defer redirections.restore(shell) catch {};
+
     return switch (command.body) {
         .brace_group => |body| evalList(shell, body),
         .for_command => |for_command| evalFor(shell, for_command),
         .case_command => |case_command| evalCase(shell, case_command),
         else => .{ .status = 2 },
     };
+}
+
+fn evalSubshell(shell: anytype, body: ast.List, redirections: []const ast.Redirection) EvalError!result.EvalResult {
+    const pid = switch (try shell.host.forkProcess()) {
+        .child => {
+            const scratch = shell.beginScratchScope() catch shell.host.exit(2);
+            defer scratch.end();
+            var applied = applyRedirections(shell, redirections) catch shell.host.exit(1);
+            defer applied.restore(shell) catch {};
+            const evaluated = evalList(shell, body) catch shell.host.exit(2);
+            shell.host.exit(evaluated.status);
+        },
+        .parent => |child_pid| child_pid,
+    };
+    const wait_status = try shell.host.wait(pid);
+    return .{ .status = wait_status.shellStatus() };
 }
 
 fn evalFor(shell: anytype, command: ast.ForCommand) EvalError!result.EvalResult {
@@ -1127,7 +1154,10 @@ fn ArithmeticParser(comptime ShellType: type) type {
         }
 
         fn variableValue(self: *Self, name: []const u8) ArithmeticError!i64 {
-            const value = parameterValue(self.shell, name) orelse "0";
+            const value = parameterValue(self.shell, name) orelse {
+                if (self.shell.state.options.nounset) return error.InvalidArithmetic;
+                return 0;
+            };
             return std.fmt.parseInt(i64, value, 10) catch error.InvalidArithmetic;
         }
 

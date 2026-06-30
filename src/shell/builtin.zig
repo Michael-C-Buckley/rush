@@ -87,11 +87,18 @@ fn evalSet(shell: anytype, args: []const []const u8) !result.EvalResult {
         try shell.state.setPositionals(args[2..]);
         return .{};
     }
-    if (std.mem.eql(u8, args[1], "-f")) {
-        shell.state.options.noglob = true;
-        return .{};
+    var index: usize = 1;
+    while (index < args.len) : (index += 1) {
+        const arg = args[index];
+        if (arg.len < 2 or (arg[0] != '-' and arg[0] != '+')) return .{ .status = 2 };
+        const enabled = arg[0] == '-';
+        for (arg[1..]) |option| switch (option) {
+            'f' => shell.state.options.noglob = enabled,
+            'u' => shell.state.options.nounset = enabled,
+            else => return .{ .status = 2 },
+        };
     }
-    return .{ .status = 2 };
+    return .{};
 }
 
 test "builtin lookup identifies null true and false utilities" {

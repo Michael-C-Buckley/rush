@@ -53,6 +53,7 @@ const Parser = struct {
     const ListEnd = enum {
         eof,
         right_brace,
+        right_paren,
         esac,
         done,
         case_item,
@@ -137,20 +138,23 @@ const Parser = struct {
     }
 
     fn parseCompoundCommand(self: *Parser) ParserError!?ast.CompoundInvocation {
+        var body: ast.CompoundCommand = undefined;
         if (try self.parseForCommand()) |for_command| {
-            const invocation: ast.CompoundInvocation = .{ .body = .{ .for_command = for_command } };
-            invocation.validate();
-            return invocation;
+            body = .{ .for_command = for_command };
+        } else if (try self.parseCaseCommand()) |case_command| {
+            body = .{ .case_command = case_command };
+        } else if (self.eat(.left_paren) != null) {
+            body = .{ .subshell = try self.parseList(.right_paren) };
+            try self.expect(.right_paren);
+        } else if (self.eat(.left_brace) != null) {
+            body = .{ .brace_group = try self.parseList(.right_brace) };
+            try self.expect(.right_brace);
+        } else {
+            return null;
         }
-        if (try self.parseCaseCommand()) |case_command| {
-            const invocation: ast.CompoundInvocation = .{ .body = .{ .case_command = case_command } };
-            invocation.validate();
-            return invocation;
-        }
-        if (self.eat(.left_brace) == null) return null;
-        const body = try self.parseList(.right_brace);
-        try self.expect(.right_brace);
-        const invocation: ast.CompoundInvocation = .{ .body = .{ .brace_group = body } };
+
+        const redirections = try self.parseRedirectionList();
+        const invocation: ast.CompoundInvocation = .{ .body = body, .redirections = redirections };
         invocation.validate();
         return invocation;
     }
@@ -265,7 +269,30 @@ const Parser = struct {
             return error.ExpectedCommand;
         }
         const redirection_items = try redirections.toOwnedSlice(self.allocator);
-        for (redirection_items) |*redirection| {
+        try self.registerPendingHereDocs(redirection_items);
+        const command: ast.SimpleCommand = .{
+            .assignments = try assignments.toOwnedSlice(self.allocator),
+            .words = try words.toOwnedSlice(self.allocator),
+            .redirections = redirection_items,
+            .span = command_span.?,
+        };
+        if (!hasPendingHereDoc(command.redirections)) command.validate();
+        return command;
+    }
+
+    fn parseRedirectionList(self: *Parser) ParserError![]const ast.Redirection {
+        var redirections: std.ArrayList(ast.Redirection) = .empty;
+        errdefer redirections.deinit(self.allocator);
+        while (try self.parseRedirection()) |redirection| {
+            try redirections.append(self.allocator, redirection);
+        }
+        const redirection_items = try redirections.toOwnedSlice(self.allocator);
+        try self.registerPendingHereDocs(redirection_items);
+        return redirection_items;
+    }
+
+    fn registerPendingHereDocs(self: *Parser, redirections: []ast.Redirection) !void {
+        for (redirections) |*redirection| {
             if (redirection.op == .here_doc or redirection.op == .here_doc_strip_tabs) {
                 const delimiter = try self.hereDocDelimiter(redirection.target);
                 try self.pending_here_docs.append(self.allocator, .{
@@ -276,14 +303,6 @@ const Parser = struct {
                 });
             }
         }
-        const command: ast.SimpleCommand = .{
-            .assignments = try assignments.toOwnedSlice(self.allocator),
-            .words = try words.toOwnedSlice(self.allocator),
-            .redirections = redirection_items,
-            .span = command_span.?,
-        };
-        if (!hasPendingHereDoc(command.redirections)) command.validate();
-        return command;
     }
 
     fn parseRedirection(self: *Parser) !?ast.Redirection {
@@ -787,6 +806,7 @@ const Parser = struct {
         return switch (end_kind) {
             .eof => false,
             .right_brace => self.at(.right_brace),
+            .right_paren => self.at(.right_paren),
             .esac => self.atReserved(.esac_kw),
             .done => self.atReserved(.done_kw),
             .case_item => self.at(.double_semicolon) or
