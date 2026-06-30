@@ -32,7 +32,9 @@ pub fn runExitTrap(shell: anytype, status: result.ExitStatus) EvalError!result.E
     shell.state.last_status = status;
     const src: source_mod.Source = .{ .id = 0, .kind = .command_string, .name = "trap", .text = action };
     const evaluated = try shell.evalSourceNested(src);
-    return if (evaluated.flow == .exit) evaluated.status else status;
+    if (evaluated.flow == .exit) return evaluated.status;
+    const pending = try runPendingTrapCheckpoint(shell);
+    return if (pending.flow != .normal) pending.status else status;
 }
 
 fn runPendingTrapCheckpoint(shell: anytype) EvalError!result.EvalResult {
@@ -643,7 +645,7 @@ fn evalSimpleScoped(shell: anytype, command: ast.SimpleCommand) EvalError!result
                 .break_, .continue_, .exit, .return_, .set, .shift, .trap, .unset => fields,
                 else => &[_][]const u8{name},
             };
-            return builtin.eval(shell, definition, args);
+            return fatalSpecialBuiltinError(definition, try builtin.eval(shell, definition, args));
         }
     }
     if (name.len == 0) return .{ .status = 127 };
@@ -675,6 +677,13 @@ fn simpleRedirectionFailureIsFatal(command: ast.SimpleCommand) bool {
     const name = staticLiteralWord(command.words[0]) orelse return false;
     const definition = builtin.lookup(name) orelse return false;
     return definition.kind == .special;
+}
+
+fn fatalSpecialBuiltinError(definition: builtin.Definition, evaluated: result.EvalResult) result.EvalResult {
+    if (definition.kind == .special and evaluated.flow == .normal and evaluated.status == 2) {
+        return .{ .status = evaluated.status, .flow = .{ .fatal = evaluated.status } };
+    }
+    return evaluated;
 }
 
 fn evalCdBuiltin(shell: anytype, args: []const []const u8) EvalError!result.EvalResult {

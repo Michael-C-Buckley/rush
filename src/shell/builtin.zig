@@ -489,26 +489,31 @@ fn evalSet(shell: anytype, args: []const []const u8) !result.EvalResult {
     var index: usize = 1;
     while (index < args.len) : (index += 1) {
         const arg = args[index];
-        if (arg.len < 2 or (arg[0] != '-' and arg[0] != '+')) return .{ .status = 2 };
+        if (arg.len < 2 or (arg[0] != '-' and arg[0] != '+')) return setUsageError(shell);
         const enabled = arg[0] == '-';
         if (std.mem.eql(u8, arg[1..], "o")) {
             index += 1;
-            if (index >= args.len) return .{ .status = 2 };
+            if (index >= args.len) return setUsageError(shell);
             if (std.mem.eql(u8, args[index], "pipefail")) {
                 shell.state.options.pipefail = enabled;
                 continue;
             }
-            return .{ .status = 2 };
+            return setUsageError(shell);
         }
         for (arg[1..]) |option| switch (option) {
             'C' => shell.state.options.noclobber = enabled,
             'e' => shell.state.options.errexit = enabled,
             'f' => shell.state.options.noglob = enabled,
             'u' => shell.state.options.nounset = enabled,
-            else => return .{ .status = 2 },
+            else => return setUsageError(shell),
         };
     }
     return .{};
+}
+
+fn setUsageError(shell: anytype) !result.EvalResult {
+    try shell.host.writeAll(.stderr, "set: invalid option\n");
+    return .{ .status = 2 };
 }
 
 fn evalUnset(shell: anytype, args: []const []const u8) result.EvalResult {
