@@ -543,20 +543,20 @@ const Parser = struct {
             };
         }
 
-        const name_end = scanParameterName(content, 0, content.len);
-        if (name_end == 0) return null;
-        const name = content[0..name_end];
-        const rest = content[name_end..];
-        if (rest.len == 0) return .{ .parameter = .{ .variable = name }, .span = span };
+        const prefix = parseBracedParameterPrefix(content) orelse return null;
+        const rest = content[prefix.end..];
+        if (rest.len == 0) return .{ .parameter = prefix.parameter, .span = span };
 
-        if (try self.parsePatternRemoval(name, rest, span)) |parameter| return parameter;
+        if (prefix.parameter == .variable) {
+            if (try self.parsePatternRemoval(prefix.parameter.variable, rest, span)) |parameter| return parameter;
+        }
 
         const colon = rest.len >= 2 and rest[0] == ':' and isParameterOperator(rest[1]);
         if (colon or isParameterOperator(rest[0])) {
             const operator_byte = if (colon) rest[1] else rest[0];
             const word_text = if (colon) rest[2..] else rest[1..];
             return .{
-                .parameter = .{ .variable = name },
+                .parameter = prefix.parameter,
                 .colon = colon,
                 .op = parameterOperator(operator_byte),
                 .word = try self.parseWordText(word_text, .{}, 0),
@@ -909,6 +909,27 @@ fn parseBracedSimpleParameter(content: []const u8) ?ast.Parameter {
     if (!std.ascii.isDigit(content[0])) return null;
     for (content) |byte| if (!std.ascii.isDigit(byte)) return null;
     return .{ .positional = std.fmt.parseInt(u32, content, 10) catch return null };
+}
+
+const BracedParameterPrefix = struct {
+    parameter: ast.Parameter,
+    end: usize,
+};
+
+fn parseBracedParameterPrefix(content: []const u8) ?BracedParameterPrefix {
+    if (content.len == 0) return null;
+    if (parseSpecialParameter(content[0])) |special| return .{ .parameter = .{ .special = special }, .end = 1 };
+    if (std.ascii.isDigit(content[0])) {
+        var end: usize = 1;
+        while (end < content.len and std.ascii.isDigit(content[end])) end += 1;
+        return .{
+            .parameter = .{ .positional = std.fmt.parseInt(u32, content[0..end], 10) catch return null },
+            .end = end,
+        };
+    }
+    const end = scanParameterName(content, 0, content.len);
+    if (end == 0) return null;
+    return .{ .parameter = .{ .variable = content[0..end] }, .end = end };
 }
 
 fn parseSingleParameter(byte: u8) ?ast.Parameter {

@@ -248,8 +248,8 @@ fn expandForWordFields(shell: anytype, words: []const ast.Word) ![]const []const
     const allocator = shell.scratchAllocator();
     var fields: std.ArrayList([]const u8) = .empty;
     for (words) |word| {
-        if (wordIsQuotedAt(word)) {
-            try fields.appendSlice(allocator, shell.state.positionals);
+        if (try appendSpecialQuotedFields(shell, &fields, word)) {
+            continue;
         } else {
             const expanded = try expandWordTracking(shell, word, null);
             if (wordContainsQuotes(word)) {
@@ -262,10 +262,64 @@ fn expandForWordFields(shell: anytype, words: []const ast.Word) ![]const []const
     return fields.toOwnedSlice(allocator);
 }
 
+fn appendSpecialQuotedFields(shell: anytype, fields: *std.ArrayList([]const u8), word: ast.Word) !bool {
+    if (wordIsQuotedAt(word)) {
+        try fields.appendSlice(shell.scratchAllocator(), shell.state.positionals);
+        return true;
+    }
+    const parameter = singleDoubleQuotedParameter(word) orelse return false;
+    if (parameter.parameter != .special or parameter.parameter.special != .at or parameter.op == null) return false;
+
+    switch (parameter.op.?) {
+        .default_value => {
+            if (shell.state.positionals.len == 0) return false;
+            try fields.appendSlice(shell.scratchAllocator(), shell.state.positionals);
+            return true;
+        },
+        .alternate_value => {
+            if (shell.state.positionals.len == 0 or parameter.word == null or !wordIsAtParameter(parameter.word.?)) {
+                return false;
+            }
+            try fields.appendSlice(shell.scratchAllocator(), shell.state.positionals);
+            return true;
+        },
+        else => return false,
+    }
+}
+
+fn singleDoubleQuotedParameter(word: ast.Word) ?ast.ParameterExpansion {
+    return switch (word.data) {
+        .literal => null,
+        .parts => |parts| if (parts.len == 1) switch (parts[0]) {
+            .double_quoted => |quoted| if (quoted.len == 1) switch (quoted[0]) {
+                .parameter => |parameter| parameter,
+                else => null,
+            } else null,
+            else => null,
+        } else null,
+    };
+}
+
 fn wordIsQuotedAt(word: ast.Word) bool {
     return switch (word.data) {
         .literal => false,
         .parts => |parts| parts.len == 1 and switch (parts[0]) {
+            .double_quoted => |quoted| quoted.len == 1 and switch (quoted[0]) {
+                .parameter => |parameter| parameter.op == null and parameter.parameter == .special and
+                    parameter.parameter.special == .at,
+                else => false,
+            },
+            else => false,
+        },
+    };
+}
+
+fn wordIsAtParameter(word: ast.Word) bool {
+    return switch (word.data) {
+        .literal => false,
+        .parts => |parts| parts.len == 1 and switch (parts[0]) {
+            .parameter => |parameter| parameter.op == null and parameter.parameter == .special and
+                parameter.parameter.special == .at,
             .double_quoted => |quoted| quoted.len == 1 and switch (quoted[0]) {
                 .parameter => |parameter| parameter.op == null and parameter.parameter == .special and
                     parameter.parameter.special == .at,
@@ -892,8 +946,8 @@ fn expandWordFields(
     var fields: std.ArrayList([]const u8) = .empty;
 
     for (words) |word| {
-        if (wordIsQuotedAt(word)) {
-            try fields.appendSlice(allocator, shell.state.positionals);
+        if (try appendSpecialQuotedFields(shell, &fields, word)) {
+            continue;
         } else {
             const expanded = try expandWordTracking(shell, word, substitution_status);
             if (wordContainsQuotes(word)) {
@@ -1619,11 +1673,7 @@ fn expandParameterLength(shell: anytype, parameter: ast.ParameterExpansion) Eval
 }
 
 fn expandParameterDefault(shell: anytype, parameter: ast.ParameterExpansion) EvalError![]const u8 {
-    const name = switch (parameter.parameter) {
-        .variable => |variable_name| variable_name,
-        else => return "",
-    };
-    const value = parameterValue(shell, name);
+    const value = try parameterCurrentValue(shell, parameter.parameter);
     if (isParameterSet(parameter, value)) return value.?;
     return expandWord(shell, parameter.word.?);
 }
@@ -1642,26 +1692,45 @@ fn expandParameterAssignDefault(shell: anytype, parameter: ast.ParameterExpansio
 }
 
 fn expandParameterAlternate(shell: anytype, parameter: ast.ParameterExpansion) EvalError![]const u8 {
-    const name = switch (parameter.parameter) {
-        .variable => |variable_name| variable_name,
-        else => return "",
-    };
-    const value = parameterValue(shell, name);
+    const value = try parameterCurrentValue(shell, parameter.parameter);
     if (!isParameterSet(parameter, value)) return "";
     return expandWord(shell, parameter.word.?);
 }
 
 fn expandParameterErrorIfUnset(shell: anytype, parameter: ast.ParameterExpansion) EvalError![]const u8 {
-    const name = switch (parameter.parameter) {
-        .variable => |variable_name| variable_name,
-        else => return "",
-    };
-    const value = parameterValue(shell, name);
+    const value = try parameterCurrentValue(shell, parameter.parameter);
     if (isParameterSet(parameter, value)) return value.?;
 
     const message = try expandWord(shell, parameter.word.?);
-    try writeExpansionDiagnostic(shell, parameter, name, message);
+    try writeExpansionDiagnostic(shell, parameter, parameterDiagnosticName(parameter.parameter), message);
     return error.ExpansionError;
+}
+
+fn parameterDiagnosticName(parameter: ast.Parameter) []const u8 {
+    return switch (parameter) {
+        .variable => |name| name,
+        .positional => "positional parameter",
+        .special => "special parameter",
+    };
+}
+
+fn parameterCurrentValue(shell: anytype, parameter: ast.Parameter) !?[]const u8 {
+    return switch (parameter) {
+        .variable => |name| parameterValue(shell, name),
+        .positional => |position| positionalValue(shell, position),
+        .special => |special| switch (special) {
+            .at => if (shell.state.positionals.len == 0) null else try joinPositionals(shell, " "),
+            .star => if (shell.state.positionals.len == 0) null else try joinPositionals(shell, ifsFirstCharacter(shell)),
+            .hash => try std.fmt.allocPrint(shell.scratchAllocator(), "{}", .{shell.state.positionals.len}),
+            .question => try formatExitStatus(shell, shell.state.last_status),
+            .hyphen => try optionFlags(shell),
+            .dollar => try std.fmt.allocPrint(shell.scratchAllocator(), "{}", .{std.c.getpid()}),
+            .bang => if (shell.state.last_background_pid) |pid|
+                try std.fmt.allocPrint(shell.scratchAllocator(), "{}", .{pid})
+            else
+                null,
+        },
+    };
 }
 
 fn expandParameterPatternRemoval(
