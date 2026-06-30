@@ -25,6 +25,7 @@ pub const Id = enum {
     false_,
     printf,
     pwd,
+    read,
     readonly,
     set,
     true_,
@@ -54,6 +55,7 @@ pub const definitions: DefinitionMap = .initComptime(.{
     .{ "false", Definition{ .name = "false", .id = .false_, .kind = .regular } },
     .{ "printf", Definition{ .name = "printf", .id = .printf, .kind = .regular } },
     .{ "pwd", Definition{ .name = "pwd", .id = .pwd, .kind = .regular } },
+    .{ "read", Definition{ .name = "read", .id = .read, .kind = .regular } },
     .{ "readonly", Definition{ .name = "readonly", .id = .readonly, .kind = .special } },
     .{ "set", Definition{ .name = "set", .id = .set, .kind = .special } },
     .{ "true", Definition{ .name = "true", .id = .true_, .kind = .regular } },
@@ -71,7 +73,7 @@ pub fn eval(shell: anytype, definition: Definition, args: []const []const u8) !r
     return switch (definition.id) {
         .colon, .true_ => .{},
         .break_ => evalBreak(args),
-        .cd, .eval, .exec, .export_, .pwd => unreachable,
+        .cd, .eval, .exec, .export_, .pwd, .read => unreachable,
         .continue_ => evalContinue(args),
         .exit => evalExit(shell, args),
         .false_ => .{ .status = 1 },
@@ -172,6 +174,7 @@ test "builtin lookup identifies null true and false utilities" {
     try std.testing.expectEqual(Id.false_, lookup("false").?.id);
     try std.testing.expectEqual(Id.printf, lookup("printf").?.id);
     try std.testing.expectEqual(Id.pwd, lookup("pwd").?.id);
+    try std.testing.expectEqual(Id.read, lookup("read").?.id);
     try std.testing.expectEqual(Id.readonly, lookup("readonly").?.id);
     try std.testing.expectEqual(@as(?Definition, null), lookup("missing"));
 }

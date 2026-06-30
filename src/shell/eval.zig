@@ -503,8 +503,9 @@ fn evalSimpleScoped(shell: anytype, command: ast.SimpleCommand) EvalError!result
             return evalExecBuiltin(shell, fields);
         }
         if (definition.id == .pwd) return evalPwdBuiltin(shell, fields);
+        if (definition.id == .read) return evalReadBuiltin(shell, fields, command.assignments);
         const args = switch (definition.id) {
-            .break_, .cd, .continue_, .eval, .exec, .export_, .exit, .printf, .pwd, .readonly, .set => fields,
+            .break_, .cd, .continue_, .eval, .exec, .export_, .exit, .printf, .pwd, .read, .readonly, .set => fields,
             else => &[_][]const u8{name},
         };
         return builtin.eval(shell, definition, args);
@@ -558,6 +559,205 @@ fn evalPwdBuiltin(shell: anytype, args: []const []const u8) EvalError!result.Eva
     const cwd = if (physical) try shell.host.currentDir(shell.scratchAllocator()) else try currentLogicalDir(shell);
     try shell.host.writeAll(.stdout, try std.fmt.allocPrint(shell.scratchAllocator(), "{s}\n", .{cwd}));
     return .{};
+}
+
+fn evalReadBuiltin(shell: anytype, args: []const []const u8, assignments: []const ast.Assignment) EvalError!result.EvalResult {
+    std.debug.assert(args.len != 0);
+    var raw = false;
+    var delimiter: u8 = '\n';
+    var index: usize = 1;
+    while (index < args.len) : (index += 1) {
+        const arg = args[index];
+        if (arg.len < 2 or arg[0] != '-') break;
+        if (std.mem.eql(u8, arg, "--")) {
+            index += 1;
+            break;
+        }
+        var option_index: usize = 1;
+        while (option_index < arg.len) : (option_index += 1) switch (arg[option_index]) {
+            'r' => raw = true,
+            'd' => {
+                if (option_index + 1 < arg.len) {
+                    delimiter = arg[option_index + 1];
+                    option_index = arg.len;
+                } else {
+                    index += 1;
+                    if (index >= args.len or args[index].len == 0) return .{ .status = 2 };
+                    delimiter = args[index][0];
+                }
+                break;
+            },
+            else => return .{ .status = 2 },
+        };
+    }
+
+    const names = if (index < args.len) args[index..] else &[_][]const u8{"REPLY"};
+    for (names) |name| if (!isAssignmentName(name)) return .{ .status = 2 };
+
+    const line_result = try readBuiltinLine(shell, raw, delimiter);
+    const saved = try saveAssignmentVariables(shell, assignments);
+    var restored_assignments = false;
+    errdefer if (!restored_assignments) restoreVariables(shell, saved);
+    try applyAssignments(shell, assignments);
+    const ifs = parameterValue(shell, "IFS") orelse " \t\n";
+    const values = try readFieldValues(shell, line_result.line, names.len, ifs);
+    restoreVariables(shell, saved);
+    restored_assignments = true;
+
+    for (names, 0..) |name, name_index| {
+        try shell.state.putVariable(.{ .name = name, .value = values[name_index] });
+    }
+    return .{ .status = if (line_result.found_delimiter) 0 else 1 };
+}
+
+const ReadLineResult = struct {
+    line: []const u8,
+    found_delimiter: bool,
+};
+
+const read_escape_marker: u8 = 0;
+
+fn readBuiltinLine(shell: anytype, raw: bool, delimiter: u8) !ReadLineResult {
+    var line: std.ArrayList(u8) = .empty;
+    var byte: [1]u8 = undefined;
+    while (true) {
+        const read_len = try shell.host.read(.stdin, &byte);
+        if (read_len == 0) return .{ .line = try line.toOwnedSlice(shell.scratchAllocator()), .found_delimiter = false };
+        if (byte[0] == delimiter) return .{ .line = try line.toOwnedSlice(shell.scratchAllocator()), .found_delimiter = true };
+        if (!raw and byte[0] == '\\') {
+            const escaped_len = try shell.host.read(.stdin, &byte);
+            if (escaped_len == 0) {
+                try line.append(shell.scratchAllocator(), '\\');
+                return .{ .line = try line.toOwnedSlice(shell.scratchAllocator()), .found_delimiter = false };
+            }
+            if (byte[0] == delimiter and delimiter == '\n') continue;
+            try line.append(shell.scratchAllocator(), read_escape_marker);
+        }
+        try line.append(shell.scratchAllocator(), byte[0]);
+    }
+}
+
+fn readFieldValues(shell: anytype, line: []const u8, count: usize, ifs: []const u8) ![]const []const u8 {
+    std.debug.assert(count != 0);
+    const values = try shell.scratchAllocator().alloc([]const u8, count);
+    @memset(values, "");
+    if (ifs.len == 0) {
+        values[0] = try cleanReadField(shell, line);
+        return values;
+    }
+    if (count == 1) {
+        const start = skipIfsWhitespace(line, 0, ifs);
+        values[0] = try cleanReadField(shell, line[start..trimTrailingIfsWhitespace(line, start, line.len, ifs)]);
+        return values;
+    }
+
+    var pos: usize = 0;
+    var value_index: usize = 0;
+    while (value_index + 1 < count) : (value_index += 1) {
+        pos = skipIfsWhitespace(line, pos, ifs);
+        const start = pos;
+        while (pos < line.len and ifsMatchAt(line, pos, ifs) == null) pos += utf8CharLen(line, pos);
+        values[value_index] = try cleanReadField(shell, line[start..pos]);
+        pos = consumeReadDelimiter(line, pos, ifs);
+    }
+
+    pos = skipIfsWhitespace(line, pos, ifs);
+    const last_start = pos;
+    var end = trimTrailingIfsWhitespace(line, last_start, line.len, ifs);
+    const starts_with_nonwhitespace_delimiter = if (ifsMatchAt(line, last_start, ifs)) |match|
+        !match.whitespace
+    else
+        false;
+    if (!starts_with_nonwhitespace_delimiter) end = trimOneTrailingIfsNonWhitespace(line, last_start, end, ifs);
+    values[value_index] = try cleanReadField(shell, line[last_start..end]);
+    return values;
+}
+
+fn cleanReadField(shell: anytype, field: []const u8) ![]const u8 {
+    if (std.mem.indexOfScalar(u8, field, read_escape_marker) == null) return field;
+    var output: std.ArrayList(u8) = .empty;
+    for (field) |byte| {
+        if (byte != read_escape_marker) try output.append(shell.scratchAllocator(), byte);
+    }
+    return output.toOwnedSlice(shell.scratchAllocator());
+}
+
+const IfsMatch = struct {
+    len: usize,
+    whitespace: bool,
+};
+
+fn ifsMatchAt(line: []const u8, pos: usize, ifs: []const u8) ?IfsMatch {
+    if (pos >= line.len) return null;
+    if (line[pos] == read_escape_marker or (pos != 0 and line[pos - 1] == read_escape_marker)) return null;
+    const line_len = utf8CharLen(line, pos);
+    var ifs_pos: usize = 0;
+    while (ifs_pos < ifs.len) {
+        const ifs_len = utf8CharLen(ifs, ifs_pos);
+        if (line_len == ifs_len and std.mem.eql(u8, line[pos..][0..line_len], ifs[ifs_pos..][0..ifs_len])) {
+            return .{ .len = line_len, .whitespace = ifs_len == 1 and isIfsWhitespace(ifs[ifs_pos]) };
+        }
+        ifs_pos += ifs_len;
+    }
+    return null;
+}
+
+fn skipIfsWhitespace(line: []const u8, pos: usize, ifs: []const u8) usize {
+    var cursor = pos;
+    while (ifsMatchAt(line, cursor, ifs)) |match| {
+        if (!match.whitespace) break;
+        cursor += match.len;
+    }
+    return cursor;
+}
+
+fn consumeReadDelimiter(line: []const u8, pos: usize, ifs: []const u8) usize {
+    const match = ifsMatchAt(line, pos, ifs) orelse return pos;
+    var cursor = pos + match.len;
+    cursor = skipIfsWhitespace(line, cursor, ifs);
+    if (match.whitespace) {
+        if (ifsMatchAt(line, cursor, ifs)) |next| {
+            if (!next.whitespace) cursor = skipIfsWhitespace(line, cursor + next.len, ifs);
+        }
+    }
+    return cursor;
+}
+
+fn trimTrailingIfsWhitespace(line: []const u8, start: usize, end: usize, ifs: []const u8) usize {
+    var cursor = end;
+    while (cursor > start) {
+        const prev = previousUtf8Start(line, start, cursor);
+        const match = ifsMatchAt(line, prev, ifs) orelse break;
+        if (!match.whitespace or prev + match.len != cursor) break;
+        cursor = prev;
+    }
+    return cursor;
+}
+
+fn trimOneTrailingIfsNonWhitespace(line: []const u8, start: usize, end: usize, ifs: []const u8) usize {
+    if (end <= start) return end;
+    const prev = previousUtf8Start(line, start, end);
+    const match = ifsMatchAt(line, prev, ifs) orelse return end;
+    return if (!match.whitespace and prev + match.len == end) prev else end;
+}
+
+fn previousUtf8Start(line: []const u8, start: usize, end: usize) usize {
+    var cursor = end - 1;
+    while (cursor > start and (line[cursor] & 0xc0) == 0x80) cursor -= 1;
+    return cursor;
+}
+
+fn utf8CharLen(bytes: []const u8, index: usize) usize {
+    const byte = bytes[index];
+    if (byte < 0x80) return 1;
+    if ((byte & 0xe0) == 0xc0 and index + 1 < bytes.len) return 2;
+    if ((byte & 0xf0) == 0xe0 and index + 2 < bytes.len) return 3;
+    if ((byte & 0xf8) == 0xf0 and index + 3 < bytes.len) return 4;
+    return 1;
+}
+
+fn isIfsWhitespace(byte: u8) bool {
+    return byte == ' ' or byte == '\t' or byte == '\n';
 }
 
 fn currentLogicalDir(shell: anytype) ![]const u8 {
