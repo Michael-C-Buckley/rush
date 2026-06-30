@@ -14,6 +14,7 @@ pub const Kind = enum {
 };
 
 pub const Id = enum {
+    alias,
     break_,
     cd,
     colon,
@@ -31,6 +32,7 @@ pub const Id = enum {
     set,
     true_,
     type,
+    unalias,
     unset,
 };
 
@@ -47,6 +49,7 @@ pub const Definition = struct {
 const DefinitionMap = std.StaticStringMap(Definition);
 
 pub const definitions: DefinitionMap = .initComptime(.{
+    .{ "alias", Definition{ .name = "alias", .id = .alias, .kind = .regular } },
     .{ "break", Definition{ .name = "break", .id = .break_, .kind = .special } },
     .{ "cd", Definition{ .name = "cd", .id = .cd, .kind = .regular } },
     .{ ":", Definition{ .name = ":", .id = .colon, .kind = .special } },
@@ -64,6 +67,7 @@ pub const definitions: DefinitionMap = .initComptime(.{
     .{ "set", Definition{ .name = "set", .id = .set, .kind = .special } },
     .{ "true", Definition{ .name = "true", .id = .true_, .kind = .regular } },
     .{ "type", Definition{ .name = "type", .id = .type, .kind = .regular } },
+    .{ "unalias", Definition{ .name = "unalias", .id = .unalias, .kind = .regular } },
     .{ "unset", Definition{ .name = "unset", .id = .unset, .kind = .special } },
 });
 
@@ -78,6 +82,7 @@ pub fn eval(shell: anytype, definition: Definition, args: []const []const u8) !r
     std.debug.assert(args.len != 0);
     return switch (definition.id) {
         .colon, .true_ => .{},
+        .alias => evalAlias(shell, args),
         .break_ => evalBreak(args),
         .cd, .command, .eval, .exec, .export_, .pwd, .read, .type => unreachable,
         .continue_ => evalContinue(args),
@@ -86,8 +91,84 @@ pub fn eval(shell: anytype, definition: Definition, args: []const []const u8) !r
         .printf => evalPrintf(shell, args),
         .readonly => evalReadonly(shell, args),
         .set => evalSet(shell, args),
+        .unalias => evalUnalias(shell, args),
         .unset => evalUnset(shell, args),
     };
+}
+
+fn evalAlias(shell: anytype, args: []const []const u8) !result.EvalResult {
+    var status: result.ExitStatus = 0;
+    if (args.len == 1) {
+        var iterator = shell.state.aliases.iterator();
+        while (iterator.next()) |entry| try writeAlias(shell, entry.value_ptr.*);
+        return .{};
+    }
+
+    for (args[1..]) |arg| {
+        if (aliasAssignment(arg)) |assignment| {
+            try shell.state.putAlias(.{ .name = assignment.name, .value = assignment.value });
+        } else if (shell.state.getAlias(arg)) |alias| {
+            try writeAlias(shell, alias);
+        } else {
+            try shell.host.writeAll(.stderr, "alias: use name=value to define an alias\n");
+            status = 1;
+        }
+    }
+    return .{ .status = status };
+}
+
+const AliasAssignment = struct {
+    name: []const u8,
+    value: []const u8,
+};
+
+fn aliasAssignment(arg: []const u8) ?AliasAssignment {
+    const equal_index = std.mem.indexOfScalar(u8, arg, '=') orelse return null;
+    const name = arg[0..equal_index];
+    if (name.len == 0 or std.mem.indexOfScalar(u8, name, '/') != null) return null;
+    return .{ .name = name, .value = arg[equal_index + 1 ..] };
+}
+
+pub fn writeAlias(shell: anytype, alias: state_mod.Alias) !void {
+    try shell.host.writeAll(.stdout, alias.name);
+    try shell.host.writeAll(.stdout, "='");
+    for (alias.value, 0..) |byte, index| {
+        if (byte == '\'') {
+            try shell.host.writeAll(.stdout, "'\\''");
+        } else {
+            try shell.host.writeAll(.stdout, alias.value[index..][0..1]);
+        }
+    }
+    try shell.host.writeAll(.stdout, "'\n");
+}
+
+fn evalUnalias(shell: anytype, args: []const []const u8) result.EvalResult {
+    var all = false;
+    var index: usize = 1;
+    while (index < args.len) : (index += 1) {
+        const arg = args[index];
+        if (std.mem.eql(u8, arg, "--")) {
+            index += 1;
+            break;
+        }
+        if (arg.len < 2 or arg[0] != '-') break;
+        for (arg[1..]) |option| switch (option) {
+            'a' => all = true,
+            else => return .{ .status = 2 },
+        };
+    }
+
+    if (all) {
+        shell.state.clearAliases();
+        return .{};
+    }
+    if (index >= args.len) return .{ .status = 2 };
+
+    var status: result.ExitStatus = 0;
+    for (args[index..]) |name| {
+        if (!shell.state.removeAlias(name)) status = 1;
+    }
+    return .{ .status = status };
 }
 
 fn evalExit(shell: anytype, args: []const []const u8) result.EvalResult {
@@ -207,6 +288,7 @@ fn isAssignmentName(name: []const u8) bool {
 }
 
 test "builtin lookup identifies null true and false utilities" {
+    try std.testing.expectEqual(Id.alias, lookup("alias").?.id);
     try std.testing.expectEqual(Id.break_, lookup("break").?.id);
     try std.testing.expectEqual(Id.cd, lookup("cd").?.id);
     try std.testing.expectEqual(Id.colon, lookup(":").?.id);
@@ -223,6 +305,7 @@ test "builtin lookup identifies null true and false utilities" {
     try std.testing.expectEqual(Id.read, lookup("read").?.id);
     try std.testing.expectEqual(Id.readonly, lookup("readonly").?.id);
     try std.testing.expectEqual(Id.type, lookup("type").?.id);
+    try std.testing.expectEqual(Id.unalias, lookup("unalias").?.id);
     try std.testing.expectEqual(Id.unset, lookup("unset").?.id);
     try std.testing.expectEqual(@as(?Definition, null), lookup("missing"));
 }

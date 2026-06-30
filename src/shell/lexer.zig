@@ -3,6 +3,7 @@
 const std = @import("std");
 
 const source_mod = @import("source.zig");
+const state_mod = @import("state.zig");
 const token = @import("token.zig");
 
 pub const LexError = error{};
@@ -11,6 +12,137 @@ pub fn lex(allocator: std.mem.Allocator, src: source_mod.Source) std.mem.Allocat
     src.validate();
     var lexer: Lexer = .{ .allocator = allocator, .source = src, .position = .{ .source_id = src.id } };
     return lexer.lex();
+}
+
+pub fn lexWithAliases(
+    allocator: std.mem.Allocator,
+    src: source_mod.Source,
+    shell_state: state_mod.State,
+) std.mem.Allocator.Error![]const token.Token {
+    const tokens = try lex(allocator, src);
+    const expanded = try aliasExpandedSource(allocator, src, tokens, shell_state) orelse return tokens;
+    const expanded_src: source_mod.Source = .{ .id = src.id, .kind = src.kind, .name = src.name, .text = expanded };
+    return lex(allocator, expanded_src);
+}
+
+fn aliasExpandedSource(
+    allocator: std.mem.Allocator,
+    src: source_mod.Source,
+    tokens: []const token.Token,
+    shell_state: state_mod.State,
+) std.mem.Allocator.Error!?[]const u8 {
+    if (shell_state.aliases.count() == 0) return null;
+
+    var output: std.ArrayList(u8) = .empty;
+    var changed = false;
+    var cursor: usize = 0;
+    var command_position = true;
+    var skip_redirection_target = false;
+
+    for (tokens) |tok| {
+        if (tok.kind == .eof) break;
+        try output.appendSlice(allocator, src.text[cursor..tok.span.start]);
+        cursor = tok.span.end;
+
+        if (skip_redirection_target and tok.kind == .word) {
+            skip_redirection_target = false;
+            try output.appendSlice(allocator, src.text[tok.span.start..tok.span.end]);
+            continue;
+        }
+
+        if (tok.kind == .word) {
+            if (tok.reserved) |reserved| {
+                command_position = reservedWordStartsCommandList(reserved);
+                try output.appendSlice(allocator, src.text[tok.span.start..tok.span.end]);
+                continue;
+            }
+            if (command_position and !tok.quoted and !isAssignmentWord(tok.text)) {
+                if (shell_state.getAlias(tok.text)) |alias| {
+                    try output.appendSlice(allocator, alias.value);
+                    command_position = aliasEndsWithBlank(alias.value);
+                    changed = true;
+                    continue;
+                }
+            }
+            if (command_position and isAssignmentWord(tok.text)) {
+                command_position = true;
+            } else {
+                command_position = false;
+            }
+            try output.appendSlice(allocator, src.text[tok.span.start..tok.span.end]);
+            continue;
+        }
+
+        if (isRedirectionOperatorKind(tok.kind)) {
+            skip_redirection_target = true;
+            try output.appendSlice(allocator, src.text[tok.span.start..tok.span.end]);
+            continue;
+        }
+
+        command_position = tokenStartsCommandPosition(tok.kind);
+        try output.appendSlice(allocator, src.text[tok.span.start..tok.span.end]);
+    }
+
+    if (!changed) return null;
+    try output.appendSlice(allocator, src.text[cursor..]);
+    const expanded: []const u8 = try output.toOwnedSlice(allocator);
+    return expanded;
+}
+
+fn reservedWordStartsCommandList(reserved: token.ReservedWord) bool {
+    return switch (reserved) {
+        .if_kw, .then_kw, .else_kw, .elif_kw, .do_kw, .while_kw, .until_kw => true,
+        else => false,
+    };
+}
+
+fn tokenStartsCommandPosition(kind: token.Kind) bool {
+    return switch (kind) {
+        .newline,
+        .semicolon,
+        .ampersand,
+        .pipe,
+        .pipe_pipe,
+        .ampersand_ampersand,
+        .bang,
+        .left_paren,
+        .left_brace,
+        => true,
+        else => false,
+    };
+}
+
+fn isRedirectionOperatorKind(kind: token.Kind) bool {
+    return switch (kind) {
+        .less,
+        .less_less,
+        .less_less_dash,
+        .less_ampersand,
+        .less_greater,
+        .greater,
+        .greater_greater,
+        .greater_ampersand,
+        .clobber,
+        => true,
+        else => false,
+    };
+}
+
+fn isAssignmentWord(text: []const u8) bool {
+    const equals_index = std.mem.indexOfScalar(u8, text, '=') orelse return false;
+    const name = text[0..equals_index];
+    if (name.len == 0) return false;
+    if (!isNameStart(name[0])) return false;
+    for (name[1..]) |byte| if (!isNameContinue(byte)) return false;
+    return true;
+}
+
+fn aliasEndsWithBlank(value: []const u8) bool {
+    if (value.len == 0) return false;
+    return switch (value[value.len - 1]) {
+        ' ', '\t', '\n' => true,
+        else => false,
+    };
 }
 
 const Lexer = struct {

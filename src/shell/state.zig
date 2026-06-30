@@ -47,12 +47,22 @@ pub const Function = struct {
     }
 };
 
+pub const Alias = struct {
+    name: []const u8,
+    value: []const u8,
+
+    pub fn validate(self: Alias) void {
+        std.debug.assert(self.name.len != 0);
+    }
+};
+
 pub const State = struct {
     allocator: std.mem.Allocator,
     definition_arena: memory.Arena,
     options: Options = .{},
     variables: std.StringHashMapUnmanaged(Variable) = .empty,
     functions: std.StringHashMapUnmanaged(Function) = .empty,
+    aliases: std.StringHashMapUnmanaged(Alias) = .empty,
     last_status: result.ExitStatus = 0,
     last_background_pid: ?host.Pid = null,
     loop_depth: usize = 0,
@@ -76,6 +86,12 @@ pub const State = struct {
         }
         self.variables.deinit(self.allocator);
         self.functions.deinit(self.allocator);
+        var alias_iterator = self.aliases.iterator();
+        while (alias_iterator.next()) |entry| {
+            self.allocator.free(entry.value_ptr.name);
+            self.allocator.free(entry.value_ptr.value);
+        }
+        self.aliases.deinit(self.allocator);
         self.freeOwnedPositionals();
         self.definition_arena.deinit();
         self.* = undefined;
@@ -161,6 +177,50 @@ pub const State = struct {
     pub fn removeFunction(self: *State, name: []const u8) void {
         std.debug.assert(name.len != 0);
         _ = self.functions.remove(name);
+    }
+
+    pub fn getAlias(self: State, name: []const u8) ?Alias {
+        std.debug.assert(name.len != 0);
+        return self.aliases.get(name);
+    }
+
+    pub fn putAlias(self: *State, alias: Alias) !void {
+        alias.validate();
+        const owned_value = try self.allocator.dupe(u8, alias.value);
+        errdefer self.allocator.free(owned_value);
+
+        if (self.aliases.getPtr(alias.name)) |existing| {
+            self.allocator.free(existing.value);
+            existing.value = owned_value;
+            return;
+        }
+
+        const owned_name = try self.allocator.dupe(u8, alias.name);
+        errdefer self.allocator.free(owned_name);
+
+        try self.aliases.put(self.allocator, owned_name, .{
+            .name = owned_name,
+            .value = owned_value,
+        });
+    }
+
+    pub fn removeAlias(self: *State, name: []const u8) bool {
+        std.debug.assert(name.len != 0);
+        if (self.aliases.fetchRemove(name)) |entry| {
+            self.allocator.free(entry.value.name);
+            self.allocator.free(entry.value.value);
+            return true;
+        }
+        return false;
+    }
+
+    pub fn clearAliases(self: *State) void {
+        var iterator = self.aliases.iterator();
+        while (iterator.next()) |entry| {
+            self.allocator.free(entry.value_ptr.name);
+            self.allocator.free(entry.value_ptr.value);
+        }
+        self.aliases.clearRetainingCapacity();
     }
 };
 

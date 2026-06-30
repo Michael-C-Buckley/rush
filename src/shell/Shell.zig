@@ -75,15 +75,56 @@ pub fn Shell(comptime Host: type) type {
 
         pub fn evalSource(self: *Self, src: source.Source) !result.EvalResult {
             src.validate();
+            if (!self.sourceNeedsAliasAwareEvaluation(src)) return self.evalSourceChunk(src, src.text);
+            if (src.text.len == 0) return self.evalSourceChunk(src, src.text);
+
+            var start: usize = 0;
+            var end: usize = 0;
+            var last: result.EvalResult = .{};
+            while (start < src.text.len) {
+                end = nextLineEnd(src.text, end);
+                const evaluated = self.evalSourceChunk(src, src.text[start..end]) catch |err| switch (err) {
+                    error.ExpectedCommand,
+                    error.ExpectedRedirectionTarget,
+                    error.UnclosedCommandSubstitution,
+                    error.UnclosedQuote,
+                    error.UnexpectedToken,
+                    => {
+                        if (end < src.text.len) continue;
+                        return err;
+                    },
+                    else => return err,
+                };
+
+                last = evaluated;
+                if (last.flow != .normal) return last;
+                start = end;
+            }
+            return last;
+        }
+
+        fn evalSourceChunk(self: *Self, src: source.Source, text: []const u8) !result.EvalResult {
             self.resetForTopLevelCommand();
 
+            const chunk_src: source.Source = .{ .id = src.id, .kind = src.kind, .name = src.name, .text = text };
+
             const ast_allocator = self.astAllocator();
-            const tokens = try lexer.lex(ast_allocator, src);
-            const program = try parser.parse(ast_allocator, src, tokens);
+            const tokens = try lexer.lexWithAliases(ast_allocator, chunk_src, self.state);
+            const program = try parser.parse(ast_allocator, chunk_src, tokens);
             program.validate();
             return eval.evalProgram(Host, self, program);
         }
+
+        fn sourceNeedsAliasAwareEvaluation(self: *Self, src: source.Source) bool {
+            return self.state.aliases.count() != 0 or std.mem.indexOf(u8, src.text, "alias") != null;
+        }
     };
+}
+
+fn nextLineEnd(text: []const u8, start: usize) usize {
+    std.debug.assert(start < text.len);
+    const newline_index = std.mem.indexOfScalar(u8, text[start..], '\n') orelse return text.len;
+    return start + newline_index + 1;
 }
 
 test "Shell caches exec environment pointer array" {

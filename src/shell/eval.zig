@@ -525,7 +525,7 @@ fn evalSimpleScoped(shell: anytype, command: ast.SimpleCommand) EvalError!result
         if (definition.id == .read) return evalReadBuiltin(shell, fields, command.assignments);
         if (definition.id == .type) return evalTypeBuiltin(shell, fields);
         const args = switch (definition.id) {
-            .cd, .command, .printf, .pwd, .read, .type => fields,
+            .alias, .cd, .command, .printf, .pwd, .read, .type, .unalias => fields,
             .false_, .true_ => &[_][]const u8{name},
             else => unreachable,
         };
@@ -666,7 +666,7 @@ fn evalCommandBuiltin(
                 restored_assignments = true;
                 return evaluated;
             },
-            .break_, .continue_, .exit, .printf, .set, .unset => {
+            .alias, .break_, .continue_, .exit, .printf, .set, .unalias, .unset => {
                 const evaluated = try builtin.eval(shell, definition, args[index..]);
                 restoreVariables(shell, saved);
                 restored_assignments = true;
@@ -712,6 +712,12 @@ fn evalCommandLookup(
 
 fn commandLookupText(shell: anytype, name: []const u8, mode: CommandLookupMode, search_path: ?[]const u8) !?[]const u8 {
     const allocator = shell.scratchAllocator();
+    if (shell.state.getAlias(name)) |alias| {
+        return if (mode == .verbose)
+            try std.fmt.allocPrint(allocator, "{s} is an alias for {s}", .{ name, alias.value })
+        else
+            try std.fmt.allocPrint(allocator, "alias {s}='{s}'", .{ name, alias.value });
+    }
     if (shell.state.getFunction(name) != null) {
         return if (mode == .verbose) try std.fmt.allocPrint(allocator, "{s} is a shell function", .{name}) else name;
     }
