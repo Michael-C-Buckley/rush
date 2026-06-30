@@ -33,6 +33,7 @@ pub const Id = enum {
     readonly,
     return_,
     set,
+    shift,
     true_,
     type,
     umask,
@@ -73,6 +74,7 @@ pub const definitions: DefinitionMap = .initComptime(.{
     .{ "readonly", Definition{ .name = "readonly", .id = .readonly, .kind = .special } },
     .{ "return", Definition{ .name = "return", .id = .return_, .kind = .special } },
     .{ "set", Definition{ .name = "set", .id = .set, .kind = .special } },
+    .{ "shift", Definition{ .name = "shift", .id = .shift, .kind = .special } },
     .{ "true", Definition{ .name = "true", .id = .true_, .kind = .regular } },
     .{ "type", Definition{ .name = "type", .id = .type, .kind = .regular } },
     .{ "umask", Definition{ .name = "umask", .id = .umask, .kind = .regular } },
@@ -103,6 +105,7 @@ pub fn eval(shell: anytype, definition: Definition, args: []const []const u8) !r
         .readonly => evalReadonly(shell, args),
         .return_ => evalReturn(shell, args),
         .set => evalSet(shell, args),
+        .shift => evalShift(shell, args),
         .umask => evalUmask(shell, args),
         .unalias => evalUnalias(shell, args),
         .unset => evalUnset(shell, args),
@@ -381,7 +384,16 @@ fn evalReturn(shell: anytype, args: []const []const u8) result.EvalResult {
 }
 
 fn parseExitStatus(text: []const u8) result.ExitStatus {
-    return std.fmt.parseInt(u8, text, 10) catch 2;
+    const value = std.fmt.parseInt(u64, text, 10) catch return 2;
+    return @truncate(value);
+}
+
+fn evalShift(shell: anytype, args: []const []const u8) !result.EvalResult {
+    if (args.len > 2) return .{ .status = 2 };
+    const count = if (args.len == 1) 1 else std.fmt.parseInt(usize, args[1], 10) catch return .{ .status = 2 };
+    if (count > shell.state.positionals.len) return .{ .status = 1 };
+    try shell.state.setPositionals(shell.state.positionals[count..]);
+    return .{};
 }
 
 fn evalBreak(args: []const []const u8) result.EvalResult {
