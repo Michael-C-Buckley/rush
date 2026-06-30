@@ -3,7 +3,7 @@
 //! Rush has tests that intentionally replace or validate fd 0/1/2 behavior.
 //! Zig's default build-runner protocol uses fd 0/1 for test control messages,
 //! which makes those tests look like hangs or corrupts the protocol. This runner
-//! always runs in terminal mode and supports substring filters directly.
+//! always runs in terminal mode.
 
 const builtin = @import("builtin");
 const std = @import("std");
@@ -18,9 +18,6 @@ var is_fuzz_test: bool = false;
 pub fn main(init: std.process.Init.Minimal) void {
     @disableInstrumentation();
     if (builtin.fuzz) @panic("fuzz tests require Zig's server runner");
-
-    var filters: std.ArrayList([]const u8) = .empty;
-    defer filters.deinit(std.heap.page_allocator);
 
     const args = init.args.toSlice(std.heap.page_allocator) catch |err| {
         std.debug.panic("unable to parse command line args: {t}", .{err});
@@ -40,23 +37,16 @@ pub fn main(init: std.process.Init.Minimal) void {
             continue;
         } else if (std.mem.eql(u8, arg, "--cache-dir")) {
             if (index + 1 < args.len) index += 1;
-        } else if (std.mem.startsWith(u8, arg, "--test-filter=")) {
-            filters.append(std.heap.page_allocator, arg["--test-filter=".len..]) catch @panic("OOM");
-        } else if (std.mem.eql(u8, arg, "--test-filter")) {
-            if (index + 1 >= args.len) @panic("missing --test-filter value");
-            index += 1;
-            filters.append(std.heap.page_allocator, args[index]) catch @panic("OOM");
         } else {
             std.debug.panic("unrecognized command line argument: {s}", .{arg});
         }
     }
 
-    runTests(init, filters.items);
+    runTests(init);
 }
 
-fn runTests(init: std.process.Init.Minimal, filters: []const []const u8) void {
+fn runTests(init: std.process.Init.Minimal) void {
     const test_fns = builtin.test_functions;
-    var selected_count: usize = 0;
     var ok_count: usize = 0;
     var skip_count: usize = 0;
     var fail_count: usize = 0;
@@ -64,9 +54,6 @@ fn runTests(init: std.process.Init.Minimal, filters: []const []const u8) void {
     var fuzz_count: usize = 0;
 
     for (test_fns, 0..) |test_fn, test_index| {
-        if (!testMatches(test_fn.name, filters)) continue;
-        selected_count += 1;
-
         std.testing.allocator_instance = .{};
         std.testing.io_instance = .init(std.testing.allocator, .{
             .argv0 = .init(init.args),
@@ -110,22 +97,10 @@ fn runTests(init: std.process.Init.Minimal, filters: []const []const u8) void {
         }
     }
 
-    if (selected_count == 0) {
-        std.debug.print("No tests matched filters.\n", .{});
-        std.process.exit(1);
-    }
     std.debug.print("{d} passed; {d} skipped; {d} failed.\n", .{ ok_count, skip_count, fail_count });
     if (leak_count != 0) std.debug.print("{d} leaked allocations.\n", .{leak_count});
     if (fuzz_count != 0) std.debug.print("{d} fuzz tests found.\n", .{fuzz_count});
     if (fail_count != 0 or leak_count != 0) std.process.exit(1);
-}
-
-fn testMatches(name: []const u8, filters: []const []const u8) bool {
-    if (filters.len == 0) return true;
-    for (filters) |filter| {
-        if (std.mem.indexOf(u8, name, filter) != null) return true;
-    }
-    return false;
 }
 
 pub fn log(

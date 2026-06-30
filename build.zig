@@ -115,11 +115,6 @@ pub fn build(b: *std.Build) void {
     run_step.dependOn(&run_cmd.step);
 
     const test_step = b.step("test", "Run unit tests");
-    const test_filter = b.option(
-        []const u8,
-        "test-filter",
-        "Only run unit tests whose name contains this substring",
-    );
     const test_no_run = b.option(
         bool,
         "test-no-run",
@@ -136,10 +131,8 @@ pub fn build(b: *std.Build) void {
         use_system_sqlite,
         .{},
     );
-    const test_filters = if (test_filter) |filter| &[_][]const u8{filter} else &[_][]const u8{};
     const exe_tests = b.addTest(.{
         .root_module = test_module,
-        .filters = test_filters,
         .test_runner = .{
             .path = b.path("tests/fd_safe_test_runner.zig"),
             .mode = .simple,
