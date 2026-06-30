@@ -345,7 +345,7 @@ fn evalSimpleScoped(shell: anytype, command: ast.SimpleCommand) EvalError!result
     if (builtin.lookup(name)) |definition| {
         if (definition.kind == .special) try applyAssignments(shell, command.assignments);
         const args = switch (definition.id) {
-            .exit, .printf, .set => fields,
+            .exit, .printf, .readonly, .set => fields,
             else => &[_][]const u8{name},
         };
         return builtin.eval(shell, definition, args);
@@ -1140,7 +1140,7 @@ fn scanArithmeticCommandSubstitution(text: []const u8, open_index: usize) !usize
     return error.InvalidArithmetic;
 }
 
-const ArithmeticError = error{InvalidArithmetic};
+const ArithmeticError = error{ InvalidArithmetic, OutOfMemory };
 
 fn ArithmeticParser(comptime ShellType: type) type {
     return struct {
@@ -1151,10 +1151,30 @@ fn ArithmeticParser(comptime ShellType: type) type {
         const Self = @This();
 
         fn parse(self: *Self) ArithmeticError!i64 {
-            const value = try self.parseAdd();
+            const value = try self.parseAssignment();
             self.skipWhitespace();
             if (self.index != self.text.len) return error.InvalidArithmetic;
             return value;
+        }
+
+        fn parseAssignment(self: *Self) ArithmeticError!i64 {
+            self.skipWhitespace();
+            const rewind = self.index;
+            if (self.parseName()) |name| {
+                self.skipWhitespace();
+                if (self.eat('=')) {
+                    const value = try self.parseAssignment();
+                    try self.assignVariable(name, value);
+                    return value;
+                }
+                if (self.eatString("+=")) {
+                    const value = try self.variableValue(name) + try self.parseAssignment();
+                    try self.assignVariable(name, value);
+                    return value;
+                }
+            }
+            self.index = rewind;
+            return self.parseAdd();
         }
 
         fn parseAdd(self: *Self) ArithmeticError!i64 {
@@ -1201,7 +1221,7 @@ fn ArithmeticParser(comptime ShellType: type) type {
         fn parsePrimary(self: *Self) ArithmeticError!i64 {
             self.skipWhitespace();
             if (self.eat('(')) {
-                const value = try self.parseAdd();
+                const value = try self.parseAssignment();
                 self.skipWhitespace();
                 if (!self.eat(')')) return error.InvalidArithmetic;
                 return value;
@@ -1249,6 +1269,14 @@ fn ArithmeticParser(comptime ShellType: type) type {
             return std.fmt.parseInt(i64, value, 10) catch error.InvalidArithmetic;
         }
 
+        fn assignVariable(self: *Self, name: []const u8, value: i64) ArithmeticError!void {
+            const text = try std.fmt.allocPrint(self.shell.scratchAllocator(), "{}", .{value});
+            self.shell.state.putVariable(.{ .name = name, .value = text }) catch |err| switch (err) {
+                error.OutOfMemory => return error.OutOfMemory,
+                error.ReadonlyVariable => return error.InvalidArithmetic,
+            };
+        }
+
         fn skipWhitespace(self: *Self) void {
             while (self.index < self.text.len and std.ascii.isWhitespace(self.text[self.index])) self.index += 1;
         }
@@ -1256,6 +1284,12 @@ fn ArithmeticParser(comptime ShellType: type) type {
         fn eat(self: *Self, byte: u8) bool {
             if (self.peek() != byte) return false;
             self.index += 1;
+            return true;
+        }
+
+        fn eatString(self: *Self, bytes: []const u8) bool {
+            if (!std.mem.startsWith(u8, self.text[self.index..], bytes)) return false;
+            self.index += bytes.len;
             return true;
         }
 

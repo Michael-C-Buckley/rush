@@ -95,7 +95,7 @@ pub const State = struct {
         errdefer self.allocator.free(owned_value);
 
         if (self.variables.getPtr(variable.name)) |existing| {
-            std.debug.assert(!existing.readonly or variable.readonly);
+            if (existing.readonly and !variable.readonly) return error.ReadonlyVariable;
             self.allocator.free(existing.value);
             existing.value = owned_value;
             existing.exported = variable.exported;

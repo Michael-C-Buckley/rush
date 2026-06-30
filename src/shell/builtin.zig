@@ -18,6 +18,7 @@ pub const Id = enum {
     exit,
     false_,
     printf,
+    readonly,
     set,
     true_,
 };
@@ -39,6 +40,7 @@ pub const definitions: DefinitionMap = .initComptime(.{
     .{ "exit", Definition{ .name = "exit", .id = .exit, .kind = .special } },
     .{ "false", Definition{ .name = "false", .id = .false_, .kind = .regular } },
     .{ "printf", Definition{ .name = "printf", .id = .printf, .kind = .regular } },
+    .{ "readonly", Definition{ .name = "readonly", .id = .readonly, .kind = .special } },
     .{ "set", Definition{ .name = "set", .id = .set, .kind = .special } },
     .{ "true", Definition{ .name = "true", .id = .true_, .kind = .regular } },
 });
@@ -57,6 +59,7 @@ pub fn eval(shell: anytype, definition: Definition, args: []const []const u8) !r
         .exit => evalExit(shell, args),
         .false_ => .{ .status = 1 },
         .printf => evalPrintf(shell, args),
+        .readonly => evalReadonly(shell, args),
         .set => evalSet(shell, args),
     };
 }
@@ -81,6 +84,18 @@ fn evalPrintf(shell: anytype, args: []const []const u8) !result.EvalResult {
     return .{ .status = status };
 }
 
+fn evalReadonly(shell: anytype, args: []const []const u8) !result.EvalResult {
+    if (args.len == 1) return .{};
+    for (args[1..]) |arg| {
+        const equal_index = std.mem.indexOfScalar(u8, arg, '=');
+        const name = if (equal_index) |index| arg[0..index] else arg;
+        if (!isAssignmentName(name)) return .{ .status = 2 };
+        const value = if (equal_index) |index| arg[index + 1 ..] else if (shell.state.getVariable(name)) |variable| variable.value else "";
+        try shell.state.putVariable(.{ .name = name, .value = value, .readonly = true });
+    }
+    return .{};
+}
+
 fn evalSet(shell: anytype, args: []const []const u8) !result.EvalResult {
     if (args.len == 1) return .{};
     if (std.mem.eql(u8, args[1], "--")) {
@@ -101,12 +116,22 @@ fn evalSet(shell: anytype, args: []const []const u8) !result.EvalResult {
     return .{};
 }
 
+fn isAssignmentName(name: []const u8) bool {
+    if (name.len == 0) return false;
+    if (!std.ascii.isAlphabetic(name[0]) and name[0] != '_') return false;
+    for (name[1..]) |byte| {
+        if (!std.ascii.isAlphanumeric(byte) and byte != '_') return false;
+    }
+    return true;
+}
+
 test "builtin lookup identifies null true and false utilities" {
     try std.testing.expectEqual(Id.colon, lookup(":").?.id);
     try std.testing.expectEqual(Id.exit, lookup("exit").?.id);
     try std.testing.expectEqual(Id.true_, lookup("true").?.id);
     try std.testing.expectEqual(Id.false_, lookup("false").?.id);
     try std.testing.expectEqual(Id.printf, lookup("printf").?.id);
+    try std.testing.expectEqual(Id.readonly, lookup("readonly").?.id);
     try std.testing.expectEqual(@as(?Definition, null), lookup("missing"));
 }
 
