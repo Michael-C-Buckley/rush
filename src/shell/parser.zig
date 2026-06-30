@@ -980,6 +980,10 @@ fn scanCommandSubstitution(text: []const u8, open_index: usize, end: usize) Pars
     var index = open_index + 1;
     var depth: usize = 1;
     while (index < end) {
+        if (startsReservedWordAt(text, index, "case")) {
+            index = try scanCaseCommandText(text, index, end);
+            continue;
+        }
         switch (text[index]) {
             '\'', '"' => |quote| {
                 index += 1;
@@ -999,6 +1003,43 @@ fn scanCommandSubstitution(text: []const u8, open_index: usize, end: usize) Pars
         index += 1;
     }
     return error.UnclosedCommandSubstitution;
+}
+
+fn scanCaseCommandText(text: []const u8, start: usize, end: usize) ParseError!usize {
+    var index = start + "case".len;
+    while (index < end) {
+        if (text[index] == '\\') {
+            index += if (index + 1 < end) 2 else 1;
+            continue;
+        }
+        if (text[index] == '\'' or text[index] == '"') {
+            const quote = text[index];
+            index += 1;
+            while (index < end and text[index] != quote) index += 1;
+            if (index >= end) return error.UnclosedQuote;
+            index += 1;
+            continue;
+        }
+        if (text[index] == '$' and index + 1 < end and text[index + 1] == '(') {
+            index = try scanCommandSubstitution(text, index + 1, end);
+            index += 1;
+            continue;
+        }
+        if (startsReservedWordAt(text, index, "esac")) {
+            index += "esac".len;
+            return index;
+        }
+        index += 1;
+    }
+    return error.UnclosedCommandSubstitution;
+}
+
+fn startsReservedWordAt(text: []const u8, index: usize, word: []const u8) bool {
+    if (index + word.len > text.len) return false;
+    if (!std.mem.eql(u8, text[index..][0..word.len], word)) return false;
+    if (index != 0 and isNameContinue(text[index - 1])) return false;
+    if (index + word.len < text.len and isNameContinue(text[index + word.len])) return false;
+    return true;
 }
 
 fn isNameStart(byte: u8) bool {

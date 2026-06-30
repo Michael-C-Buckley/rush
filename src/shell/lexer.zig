@@ -270,6 +270,10 @@ const Lexer = struct {
         var depth: usize = 1;
         var quote: ?u8 = null;
         while (!self.atEnd() and depth != 0) {
+            if (self.startsReservedWord("case")) {
+                self.skipCaseCommandText();
+                continue;
+            }
             const byte = self.peek();
             if (quote) |delimiter| {
                 if (byte == delimiter) quote = null;
@@ -290,6 +294,52 @@ const Lexer = struct {
             if (byte == ')') depth -= 1;
             self.advanceOne();
         }
+    }
+
+    fn skipCaseCommandText(self: *Lexer) void {
+        self.advanceBytes("case".len);
+        while (!self.atEnd()) {
+            if (self.startsReservedWord("esac")) {
+                self.advanceBytes("esac".len);
+                return;
+            }
+
+            const byte = self.peek();
+            if (byte == '\\') {
+                self.advanceOne();
+                if (!self.atEnd()) self.advanceOne();
+                continue;
+            }
+            if (byte == '\'' or byte == '"') {
+                const quote = byte;
+                self.advanceOne();
+                while (!self.atEnd() and self.peek() != quote) self.advanceOne();
+                if (!self.atEnd()) self.advanceOne();
+                continue;
+            }
+            if (byte == '$' and self.peekNextIs('(')) {
+                self.advanceOne();
+                self.advanceOne();
+                self.skipCommandSubstitution();
+                continue;
+            }
+            self.advanceOne();
+        }
+    }
+
+    fn startsReservedWord(self: Lexer, word: []const u8) bool {
+        const index = self.position.byte_offset;
+        const text = self.source.text;
+        if (index + word.len > text.len) return false;
+        if (!std.mem.eql(u8, text[index..][0..word.len], word)) return false;
+        if (index != 0 and isNameContinue(text[index - 1])) return false;
+        if (index + word.len < text.len and isNameContinue(text[index + word.len])) return false;
+        return true;
+    }
+
+    fn advanceBytes(self: *Lexer, count: usize) void {
+        var remaining = count;
+        while (remaining != 0) : (remaining -= 1) self.advanceOne();
     }
 
     fn skipBracedParameter(self: *Lexer) void {
@@ -336,6 +386,17 @@ fn isDigit(byte: u8) bool {
         '0'...'9' => true,
         else => false,
     };
+}
+
+fn isNameStart(byte: u8) bool {
+    return switch (byte) {
+        'A'...'Z', 'a'...'z', '_' => true,
+        else => false,
+    };
+}
+
+fn isNameContinue(byte: u8) bool {
+    return isNameStart(byte) or isDigit(byte);
 }
 
 fn isRedirectionStart(byte: u8) bool {
