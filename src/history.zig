@@ -7,9 +7,8 @@ const sqlite = @cImport({
 });
 
 const line_editor = @import("editor.zig").line;
-const shell = @import("shell.zig");
 
-const ExitStatus = shell.ExitStatus;
+const ExitStatus = u8;
 
 pub const HistoryEntry = struct {
     number: i64,
@@ -38,7 +37,7 @@ pub const History = struct {
     pub const HistoryRecord = struct {
         cmd: []const u8,
         when: i64 = 0,
-        status: shell.ExitStatus = 0,
+        status: ExitStatus = 0,
         exit_signal: ?u8 = null,
         cwd: []const u8 = "",
         duration_ms: ?i64 = null,
@@ -93,7 +92,7 @@ pub const History = struct {
         self: *History,
         io: std.Io,
         line: []const u8,
-        status: shell.ExitStatus,
+        status: ExitStatus,
         started_at: i64,
         duration_ms: i64,
     ) !void {
@@ -104,7 +103,7 @@ pub const History = struct {
         self: *History,
         io: std.Io,
         line: []const u8,
-        status: shell.ExitStatus,
+        status: ExitStatus,
         started_at: i64,
         duration_ms: i64,
     ) !void {
@@ -115,7 +114,7 @@ pub const History = struct {
         self: *History,
         io: std.Io,
         line: []const u8,
-        status: shell.ExitStatus,
+        status: ExitStatus,
         started_at: i64,
         duration_ms: i64,
         dedupe: bool,
@@ -373,7 +372,7 @@ pub const InteractiveHistoryService = struct {
         self: *InteractiveHistoryService,
         io: std.Io,
         line: []const u8,
-        status: shell.ExitStatus,
+        status: ExitStatus,
         started_at: i64,
         duration_ms: i64,
     ) !void {
@@ -424,7 +423,7 @@ pub const InteractiveHistoryService = struct {
         self: *InteractiveHistoryService,
         io: std.Io,
         line: []const u8,
-        status: shell.ExitStatus,
+        status: ExitStatus,
         started_at: i64,
         duration_ms: i64,
     ) !void {
@@ -543,7 +542,7 @@ fn applyLineHistoryRequest(session: *line_editor.LineSession, history: line_edit
 
 const HistoryDirection = enum { previous, next };
 
-fn exitSignalFromStatus(status: shell.ExitStatus) ?u8 {
+fn exitSignalFromStatus(status: ExitStatus) ?u8 {
     if (status < 128) return null;
     return status - 128;
 }
@@ -960,7 +959,7 @@ test "history can persist and reload" {
     try loaded.load(std.testing.io, path);
     try std.testing.expectEqualStrings("echo saved", loaded.suggest("echo").?);
     try std.testing.expectEqual(@as(i64, 42), loaded.records.items[0].when);
-    try std.testing.expectEqual(@as(shell.ExitStatus, 0), loaded.records.items[0].status);
+    try std.testing.expectEqual(@as(ExitStatus, 0), loaded.records.items[0].status);
     try std.testing.expectEqualStrings("/tmp", loaded.records.items[0].cwd);
 }
 
@@ -980,7 +979,7 @@ test "history writes commands through to sqlite fts" {
     defer reloaded.deinit();
     try reloaded.load(std.testing.io, path);
     try std.testing.expectEqualStrings("git checkout feature", reloaded.suggest("git").?);
-    try std.testing.expectEqual(@as(shell.ExitStatus, 130), reloaded.records.items[0].status);
+    try std.testing.expectEqual(@as(ExitStatus, 130), reloaded.records.items[0].status);
     try std.testing.expectEqual(@as(?u8, 2), reloaded.records.items[0].exit_signal);
     try std.testing.expectEqual(@as(i64, 55), reloaded.records.items[0].duration_ms.?);
 
