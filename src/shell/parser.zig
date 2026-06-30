@@ -56,6 +56,9 @@ const Parser = struct {
         right_paren,
         esac,
         done,
+        then,
+        if_branch,
+        fi,
         case_item,
     };
 
@@ -139,7 +142,9 @@ const Parser = struct {
 
     fn parseCompoundCommand(self: *Parser) ParserError!?ast.CompoundInvocation {
         var body: ast.CompoundCommand = undefined;
-        if (try self.parseForCommand()) |for_command| {
+        if (try self.parseIfCommand()) |if_command| {
+            body = .{ .if_command = if_command };
+        } else if (try self.parseForCommand()) |for_command| {
             body = .{ .for_command = for_command };
         } else if (try self.parseCaseCommand()) |case_command| {
             body = .{ .case_command = case_command };
@@ -157,6 +162,29 @@ const Parser = struct {
         const invocation: ast.CompoundInvocation = .{ .body = body, .redirections = redirections };
         invocation.validate();
         return invocation;
+    }
+
+    fn parseIfCommand(self: *Parser) ParserError!?ast.IfCommand {
+        if (self.eatReserved(.if_kw) == null) return null;
+        var branches: std.ArrayList(ast.IfBranch) = .empty;
+        errdefer branches.deinit(self.allocator);
+
+        while (true) {
+            const condition = try self.parseList(.then);
+            _ = self.eatReserved(.then_kw) orelse return error.UnexpectedToken;
+            const body = try self.parseList(.if_branch);
+            try branches.append(self.allocator, .{ .condition = condition, .body = body });
+
+            if (self.eatReserved(.elif_kw) != null) continue;
+            const else_body = if (self.eatReserved(.else_kw) != null) try self.parseList(.fi) else null;
+            _ = self.eatReserved(.fi_kw) orelse return error.UnexpectedToken;
+            const command: ast.IfCommand = .{
+                .branches = try branches.toOwnedSlice(self.allocator),
+                .else_body = else_body,
+            };
+            command.validate();
+            return command;
+        }
     }
 
     fn parseForCommand(self: *Parser) ParserError!?ast.ForCommand {
@@ -813,6 +841,9 @@ const Parser = struct {
             .right_paren => self.at(.right_paren),
             .esac => self.atReserved(.esac_kw),
             .done => self.atReserved(.done_kw),
+            .then => self.atReserved(.then_kw),
+            .if_branch => self.atReserved(.elif_kw) or self.atReserved(.else_kw) or self.atReserved(.fi_kw),
+            .fi => self.atReserved(.fi_kw),
             .case_item => self.at(.double_semicolon) or
                 self.at(.semicolon_ampersand) or
                 self.at(.double_semicolon_ampersand) or

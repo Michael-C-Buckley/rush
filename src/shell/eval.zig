@@ -187,10 +187,22 @@ fn evalCompound(shell: anytype, command: ast.CompoundInvocation) EvalError!resul
 
     return switch (command.body) {
         .brace_group => |body| evalList(shell, body),
+        .if_command => |if_command| evalIf(shell, if_command),
         .for_command => |for_command| evalFor(shell, for_command),
         .case_command => |case_command| evalCase(shell, case_command),
         else => .{ .status = 2 },
     };
+}
+
+fn evalIf(shell: anytype, command: ast.IfCommand) EvalError!result.EvalResult {
+    command.validate();
+    for (command.branches) |branch| {
+        const condition = try evalList(shell, branch.condition);
+        if (condition.flow != .normal) return condition;
+        if (condition.status == 0) return evalList(shell, branch.body);
+    }
+    if (command.else_body) |body| return evalList(shell, body);
+    return .{};
 }
 
 fn evalSubshell(shell: anytype, body: ast.List, redirections: []const ast.Redirection) EvalError!result.EvalResult {
