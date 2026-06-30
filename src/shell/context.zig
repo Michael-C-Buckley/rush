@@ -173,6 +173,7 @@ pub const EvalContext = struct {
     pub fn enterSubshell(self: EvalContext) EvalContext {
         var next = self.withTarget(.subshell);
         next.subshell_depth = checkedIncrement(next.subshell_depth);
+        next.loop_depth = 0;
         next.validate();
         return next;
     }
@@ -245,6 +246,7 @@ test "EvalContext constructors preserve target and scoped nesting invariants" {
     try std.testing.expect(loop_context.canBreakOrContinue(1));
     try std.testing.expect(loop_context.canBreakOrContinue(2));
     try std.testing.expect(!loop_context.canBreakOrContinue(3));
+    try std.testing.expect(!loop_context.enterSubshell().canBreakOrContinue(1));
 
     const function_context = root.enterFunction();
     try std.testing.expect(function_context.canReturnFromFunction());

@@ -7139,12 +7139,18 @@ fn evaluateCompoundPlanWithInput(
     );
     defer working_state.deinit();
 
-    var result = try evaluateCompoundBody(evaluator, &working_state, eval_context, plan.body, &buffers);
+    var body_context = eval_context;
+    if (creates_isolated_boundary) {
+        body_context.loop_depth = 0;
+        body_context.validate();
+    }
+
+    var result = try evaluateCompoundBody(evaluator, &working_state, body_context, plan.body, &buffers);
     if (plan.body == .subshell) {
         try appendSubshellExitTrap(
             evaluator,
             &working_state,
-            eval_context,
+            body_context,
             &result,
             &buffers,
         );
@@ -12631,7 +12637,7 @@ fn evaluateStatementPlan(
         .compound => |compound| evaluateCompoundPlanWithInput(
             evaluator,
             shell_state,
-            eval_context.withTarget(compound.target),
+            statementPlanEvalContext(eval_context, compound.target, compound.body == .subshell),
             compound,
             buffers.stdin,
             buffers.frame,
@@ -12644,8 +12650,32 @@ fn evaluateStatementPlan(
             buffers.frame,
         ),
         .source => |source| evaluateSourceStatement(evaluator, shell_state, eval_context, source, buffers),
-        .ir_source => |source| evaluateIrSourceStatement(evaluator, shell_state, eval_context, source, buffers),
+        .ir_source => |source| evaluateIrSourceStatement(
+            evaluator,
+            shell_state,
+            statementPlanEvalContext(
+                eval_context,
+                source.target,
+                source.program.statements[source.statement_index].kind == .subshell,
+            ),
+            source,
+            buffers,
+        ),
     };
+}
+
+fn statementPlanEvalContext(
+    eval_context: context.EvalContext,
+    target: context.ExecutionTarget,
+    resets_loop_context: bool,
+) context.EvalContext {
+    eval_context.validate();
+    var child_context = eval_context.withTarget(target);
+    if (resets_loop_context) {
+        child_context.loop_depth = 0;
+        child_context.validate();
+    }
+    return child_context;
 }
 
 fn evaluateSourceStatement(

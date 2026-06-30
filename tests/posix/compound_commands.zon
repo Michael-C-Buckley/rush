@@ -643,6 +643,28 @@
             .status = 0,
         },
         .{
+            .name = "subshell break does not count parent loops as enclosing loops",
+            .script =
+            \\for x in a b
+            \\do
+            \\    (
+            \\        for y in c d
+            \\        do
+            \\            break 2
+            \\        done
+            \\        printf '%s\n' "$x"
+            \\    )
+            \\done
+            ,
+            .stdout =
+            \\a
+            \\b
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "for command continue proceeds at the requested enclosing loop depth",
             .script =
             \\for outer in one two
@@ -657,6 +679,28 @@
             .stdout =
             \\one:a
             \\two:a
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "subshell continue does not count parent loops as enclosing loops",
+            .script =
+            \\for x in a b
+            \\do
+            \\    (
+            \\        for y in c d
+            \\        do
+            \\            continue 2
+            \\        done
+            \\        printf '%s\n' "$x"
+            \\    )
+            \\done
+            ,
+            .stdout =
+            \\a
+            \\b
             \\
             ,
             .stderr = "",
