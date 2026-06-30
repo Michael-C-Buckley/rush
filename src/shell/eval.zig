@@ -424,14 +424,41 @@ fn evalSimpleScoped(shell: anytype, command: ast.SimpleCommand) EvalError!result
     const name = fields[0];
     if (builtin.lookup(name)) |definition| {
         if (definition.kind == .special) try applyAssignments(shell, command.assignments);
+        if (definition.id == .eval) return evalEvalBuiltin(shell, fields);
         const args = switch (definition.id) {
-            .exit, .printf, .readonly, .set => fields,
+            .eval, .exit, .printf, .readonly, .set => fields,
             else => &[_][]const u8{name},
         };
         return builtin.eval(shell, definition, args);
     }
     if (shell.state.getFunction(name)) |function| return evalFunction(shell, function, command.assignments);
     return evalExternal(shell, fields, command.assignments);
+}
+
+fn evalEvalBuiltin(shell: anytype, args: []const []const u8) EvalError!result.EvalResult {
+    std.debug.assert(args.len != 0);
+    if (args.len == 1) return .{};
+
+    const allocator = shell.scratchAllocator();
+    var total_len: usize = args.len - 2;
+    for (args[1..]) |arg| total_len = std.math.add(usize, total_len, arg.len) catch return error.OutOfMemory;
+
+    const script = try allocator.alloc(u8, total_len);
+    var cursor: usize = 0;
+    for (args[1..], 0..) |arg, index| {
+        if (index != 0) {
+            script[cursor] = ' ';
+            cursor += 1;
+        }
+        @memcpy(script[cursor..][0..arg.len], arg);
+        cursor += arg.len;
+    }
+
+    const src: source_mod.Source = .{ .id = 0, .kind = .command_string, .name = "eval", .text = script };
+    const ast_allocator = shell.astAllocator();
+    const tokens = try lexer.lex(ast_allocator, src);
+    const program = try parser.parse(ast_allocator, src, tokens);
+    return evalProgram(@TypeOf(shell.host), shell, program);
 }
 
 const SavedVariable = struct {
