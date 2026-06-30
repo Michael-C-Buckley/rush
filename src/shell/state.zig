@@ -17,6 +17,7 @@ pub const Options = struct {
     errexit: bool = false,
     nounset: bool = false,
     noglob: bool = false,
+    noclobber: bool = false,
     noexec: bool = false,
     pipefail: bool = false,
     xtrace: bool = false,

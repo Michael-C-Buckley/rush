@@ -1747,7 +1747,7 @@ fn applyRedirection(
     switch (redirection.op) {
         .input, .output, .append, .read_write, .clobber => {
             const path = try shell.scratchAllocator().dupeZ(u8, try expandWord(shell, redirection.target));
-            const opened = try shell.host.openZ(path, openOptions(redirection.op));
+            const opened = try openRedirectionPath(shell, path, redirection.op);
             if (opened != target) {
                 defer shell.host.close(opened) catch {};
                 try shell.host.duplicateTo(opened, target);
@@ -1949,6 +1949,23 @@ fn openOptions(operator: ast.RedirectionOperator) host_mod.OpenOptions {
         .read_write => .{ .access = .read_write, .create = true },
         else => unreachable,
     };
+}
+
+fn openRedirectionPath(shell: anytype, path: [:0]const u8, operator: ast.RedirectionOperator) !host_mod.Fd {
+    if (operator != .output or !shell.state.options.noclobber) return shell.host.openZ(path, openOptions(operator));
+
+    const opened = shell.host.openZ(path, .{
+        .access = .write_only,
+        .create = true,
+        .exclusive = true,
+    }) catch |err| switch (err) {
+        error.PathAlreadyExists => {
+            if ((try shell.host.fileStatusZ(path)).kind == .file) return error.PathAlreadyExists;
+            return shell.host.openZ(path, .{ .access = .write_only });
+        },
+        else => return err,
+    };
+    return opened;
 }
 
 fn parseFd(text: []const u8) !host_mod.Fd {
@@ -3113,6 +3130,7 @@ fn positionalValue(shell: anytype, position: u32) ?[]const u8 {
 fn optionFlags(shell: anytype) ![]const u8 {
     var flags: std.ArrayList(u8) = .empty;
     const allocator = shell.scratchAllocator();
+    if (shell.state.options.noclobber) try flags.append(allocator, 'C');
     if (shell.state.options.errexit) try flags.append(allocator, 'e');
     if (shell.state.options.noglob) try flags.append(allocator, 'f');
     if (shell.state.options.monitor) try flags.append(allocator, 'm');

@@ -29,6 +29,8 @@ pub const OpenError = error{
     Unexpected,
 };
 
+pub const FileStatusError = host.FileStatusError;
+
 pub const ListDirError = host.ListDirError || std.mem.Allocator.Error;
 
 pub const ChangeDirError = host.ChangeDirError;
@@ -148,6 +150,15 @@ pub fn existsZ(path: [:0]const u8) bool {
     return switch (builtin.os.tag) {
         .linux => linuxExistsZ(path),
         .macos, .freebsd, .openbsd, .netbsd => libcExistsZ(path),
+        else => @compileError("unsupported host OS"),
+    };
+}
+
+pub fn fileStatusZ(path: [:0]const u8) FileStatusError!host.FileStatus {
+    std.debug.assert(path.len != 0);
+    return switch (builtin.os.tag) {
+        .linux => linuxFileStatusZ(path),
+        .macos, .freebsd, .openbsd, .netbsd => libcFileStatusZ(path),
         else => @compileError("unsupported host OS"),
     };
 }
@@ -463,6 +474,35 @@ fn libcExistsZ(path: [:0]const u8) bool {
     return std.c.errno(rc) == .SUCCESS;
 }
 
+fn linuxFileStatusZ(path: [:0]const u8) FileStatusError!host.FileStatus {
+    const linux = std.os.linux;
+    var status: linux.Statx = undefined;
+    const rc = linux.statx(linux.AT.FDCWD, path.ptr, 0, .{ .TYPE = true, .MODE = true }, &status);
+    switch (linux.errno(rc)) {
+        .SUCCESS => return .{ .kind = linuxFileKindFromMode(status.mode) },
+        .ACCES, .PERM => return error.AccessDenied,
+        .NOENT => return error.FileNotFound,
+        .NOTDIR => return error.NotDir,
+        .NAMETOOLONG => return error.NameTooLong,
+        .NFILE, .MFILE, .NOMEM, .NOBUFS => return error.SystemResources,
+        else => return error.Unexpected,
+    }
+}
+
+fn libcFileStatusZ(path: [:0]const u8) FileStatusError!host.FileStatus {
+    var status: std.c.Stat = undefined;
+    const rc = std.c.fstatat(std.c.AT.FDCWD, path.ptr, &status, 0);
+    switch (std.c.errno(rc)) {
+        .SUCCESS => return .{ .kind = libcFileKindFromMode(status.mode) },
+        .ACCES, .PERM => return error.AccessDenied,
+        .NOENT => return error.FileNotFound,
+        .NOTDIR => return error.NotDir,
+        .NAMETOOLONG => return error.NameTooLong,
+        .NFILE, .MFILE, .NOMEM, .NOBUFS => return error.SystemResources,
+        else => return error.Unexpected,
+    }
+}
+
 fn linuxListDir(allocator: std.mem.Allocator, path: []const u8) ListDirError!host.ListDirResult {
     const path_z = std.posix.toPosixPath(path) catch return error.NameTooLong;
     const flags: std.os.linux.O = .{ .ACCMODE = .RDONLY, .DIRECTORY = true, .CLOEXEC = true };
@@ -604,7 +644,8 @@ fn linuxCurrentDir(allocator: std.mem.Allocator) CurrentDirError![]const u8 {
 fn libcCurrentDir(allocator: std.mem.Allocator) CurrentDirError![]const u8 {
     var buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
     if (std.c.getcwd(&buffer, buffer.len)) |cwd| {
-        return allocator.dupe(u8, std.mem.span(cwd));
+        const len = std.mem.indexOfScalar(u8, buffer[0..], 0) orelse buffer.len;
+        return allocator.dupe(u8, cwd[0..len]);
     }
     return switch (std.c.errno(-1)) {
         .ACCES, .PERM => error.AccessDenied,
@@ -629,6 +670,22 @@ fn fileKindFromDirentType(kind: u8) host.FileKind {
         std.c.DT.LNK => .symlink,
         else => .other,
     };
+}
+
+fn linuxFileKindFromMode(mode: std.os.linux.mode_t) host.FileKind {
+    const S = std.os.linux.S;
+    if (S.ISREG(mode)) return .file;
+    if (S.ISDIR(mode)) return .directory;
+    if (S.ISLNK(mode)) return .symlink;
+    return .other;
+}
+
+fn libcFileKindFromMode(mode: std.c.mode_t) host.FileKind {
+    const S = std.c.S;
+    if (S.ISREG(mode)) return .file;
+    if (S.ISDIR(mode)) return .directory;
+    if (S.ISLNK(mode)) return .symlink;
+    return .other;
 }
 
 fn linuxSpawn(request: host.SpawnRequest) SpawnError!host.SpawnResult {

@@ -96,6 +96,15 @@ pub const CurrentDirError = error{
     Unexpected,
 };
 
+pub const FileStatusError = error{
+    AccessDenied,
+    FileNotFound,
+    NotDir,
+    NameTooLong,
+    SystemResources,
+    Unexpected,
+};
+
 pub const SpawnFdAction = union(enum) {
     close: Fd,
     duplicate: struct {
@@ -217,6 +226,10 @@ pub const RealHost = struct {
 
     pub fn existsZ(_: *RealHost, path: [:0]const u8) bool {
         return platform.existsZ(path);
+    }
+
+    pub fn fileStatusZ(_: *RealHost, path: [:0]const u8) platform.FileStatusError!FileStatus {
+        return platform.fileStatusZ(path);
     }
 
     pub fn listDir(_: *RealHost, allocator: std.mem.Allocator, path: []const u8) platform.ListDirError!ListDirResult {

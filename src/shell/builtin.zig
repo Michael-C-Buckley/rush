@@ -457,6 +457,7 @@ fn evalSet(shell: anytype, args: []const []const u8) !result.EvalResult {
             return .{ .status = 2 };
         }
         for (arg[1..]) |option| switch (option) {
+            'C' => shell.state.options.noclobber = enabled,
             'e' => shell.state.options.errexit = enabled,
             'f' => shell.state.options.noglob = enabled,
             'u' => shell.state.options.nounset = enabled,
