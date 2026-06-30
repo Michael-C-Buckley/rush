@@ -1011,11 +1011,149 @@ fn expandWordParts(shell: anytype, parts: []const ast.WordPart, substitution_sta
 
 fn expandWordPart(shell: anytype, part: ast.WordPart, substitution_status: ?*?result.ExitStatus) EvalError![]const u8 {
     return switch (part) {
-        .literal, .single_quoted, .arithmetic => |bytes| bytes,
+        .literal, .single_quoted => |bytes| bytes,
+        .arithmetic => |text| expandArithmetic(shell, text),
         .double_quoted => |parts| expandWordParts(shell, parts, substitution_status),
         .parameter => |parameter| expandParameter(shell, parameter),
         .command_substitution => |substitution| expandCommandSubstitution(shell, substitution, substitution_status),
     };
+}
+
+fn expandArithmetic(shell: anytype, text: []const u8) ![]const u8 {
+    var parser_state: ArithmeticParser(@TypeOf(shell)) = .{ .shell = shell, .text = text };
+    const value = try parser_state.parse();
+    return std.fmt.allocPrint(shell.scratchAllocator(), "{}", .{value});
+}
+
+const ArithmeticError = error{InvalidArithmetic};
+
+fn ArithmeticParser(comptime ShellType: type) type {
+    return struct {
+        shell: ShellType,
+        text: []const u8,
+        index: usize = 0,
+
+        const Self = @This();
+
+        fn parse(self: *Self) ArithmeticError!i64 {
+            const value = try self.parseAdd();
+            self.skipWhitespace();
+            if (self.index != self.text.len) return error.InvalidArithmetic;
+            return value;
+        }
+
+        fn parseAdd(self: *Self) ArithmeticError!i64 {
+            var value = try self.parseMul();
+            while (true) {
+                self.skipWhitespace();
+                if (self.eat('+')) {
+                    value += try self.parseMul();
+                } else if (self.eat('-')) {
+                    value -= try self.parseMul();
+                } else {
+                    return value;
+                }
+            }
+        }
+
+        fn parseMul(self: *Self) ArithmeticError!i64 {
+            var value = try self.parseUnary();
+            while (true) {
+                self.skipWhitespace();
+                if (self.eat('*')) {
+                    value *= try self.parseUnary();
+                } else if (self.eat('/')) {
+                    const rhs = try self.parseUnary();
+                    if (rhs == 0) return error.InvalidArithmetic;
+                    value = @divTrunc(value, rhs);
+                } else if (self.eat('%')) {
+                    const rhs = try self.parseUnary();
+                    if (rhs == 0) return error.InvalidArithmetic;
+                    value = @rem(value, rhs);
+                } else {
+                    return value;
+                }
+            }
+        }
+
+        fn parseUnary(self: *Self) ArithmeticError!i64 {
+            self.skipWhitespace();
+            if (self.eat('+')) return self.parseUnary();
+            if (self.eat('-')) return -(try self.parseUnary());
+            return self.parsePrimary();
+        }
+
+        fn parsePrimary(self: *Self) ArithmeticError!i64 {
+            self.skipWhitespace();
+            if (self.eat('(')) {
+                const value = try self.parseAdd();
+                self.skipWhitespace();
+                if (!self.eat(')')) return error.InvalidArithmetic;
+                return value;
+            }
+            if (self.peek() == '$') {
+                self.index += 1;
+                const name = self.parseName() orelse return error.InvalidArithmetic;
+                return self.variableValue(name);
+            }
+            if (isArithmeticNameStart(self.peek())) {
+                const name = self.parseName().?;
+                return self.variableValue(name);
+            }
+            return self.parseNumber();
+        }
+
+        fn parseNumber(self: *Self) ArithmeticError!i64 {
+            self.skipWhitespace();
+            const start = self.index;
+            while (self.index < self.text.len and std.ascii.isAlphanumeric(self.text[self.index])) self.index += 1;
+            if (start == self.index) return error.InvalidArithmetic;
+            const token = self.text[start..self.index];
+            if (std.mem.startsWith(u8, token, "0x") or std.mem.startsWith(u8, token, "0X")) {
+                return std.fmt.parseInt(i64, token[2..], 16) catch error.InvalidArithmetic;
+            }
+            if (token.len > 1 and token[0] == '0') {
+                return std.fmt.parseInt(i64, token[1..], 8) catch error.InvalidArithmetic;
+            }
+            return std.fmt.parseInt(i64, token, 10) catch error.InvalidArithmetic;
+        }
+
+        fn parseName(self: *Self) ?[]const u8 {
+            if (!isArithmeticNameStart(self.peek())) return null;
+            const start = self.index;
+            self.index += 1;
+            while (isArithmeticNameContinue(self.peek())) self.index += 1;
+            return self.text[start..self.index];
+        }
+
+        fn variableValue(self: *Self, name: []const u8) ArithmeticError!i64 {
+            const value = parameterValue(self.shell, name) orelse "0";
+            return std.fmt.parseInt(i64, value, 10) catch error.InvalidArithmetic;
+        }
+
+        fn skipWhitespace(self: *Self) void {
+            while (self.index < self.text.len and std.ascii.isWhitespace(self.text[self.index])) self.index += 1;
+        }
+
+        fn eat(self: *Self, byte: u8) bool {
+            if (self.peek() != byte) return false;
+            self.index += 1;
+            return true;
+        }
+
+        fn peek(self: Self) u8 {
+            if (self.index >= self.text.len) return 0;
+            return self.text[self.index];
+        }
+    };
+}
+
+fn isArithmeticNameStart(byte: u8) bool {
+    return std.ascii.isAlphabetic(byte) or byte == '_';
+}
+
+fn isArithmeticNameContinue(byte: u8) bool {
+    return isArithmeticNameStart(byte) or std.ascii.isDigit(byte);
 }
 
 fn expandCommandSubstitution(

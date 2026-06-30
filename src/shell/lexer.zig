@@ -222,6 +222,13 @@ const Lexer = struct {
                 if (!self.atEnd()) self.advanceOne();
                 continue;
             }
+            if (byte == '$' and self.peekNextIs('(') and self.peekByte(2) == '(') {
+                self.advanceOne();
+                self.advanceOne();
+                self.advanceOne();
+                self.skipArithmeticExpansion();
+                continue;
+            }
             if (byte == '$' and self.peekNextIs('(')) {
                 self.advanceOne();
                 self.advanceOne();
@@ -264,6 +271,48 @@ const Lexer = struct {
     fn peekNextIs(self: Lexer, byte: u8) bool {
         const next = self.position.byte_offset + 1;
         return next < self.source.text.len and self.source.text[next] == byte;
+    }
+
+    fn peekByte(self: Lexer, offset: usize) ?u8 {
+        const index = self.position.byte_offset + offset;
+        if (index >= self.source.text.len) return null;
+        return self.source.text[index];
+    }
+
+    fn skipArithmeticExpansion(self: *Lexer) void {
+        var paren_depth: usize = 0;
+        while (!self.atEnd()) {
+            const byte = self.peek();
+            if (byte == '\\') {
+                self.advanceOne();
+                if (!self.atEnd()) self.advanceOne();
+                continue;
+            }
+            if (byte == '\'' or byte == '"') {
+                const quote = byte;
+                self.advanceOne();
+                while (!self.atEnd() and self.peek() != quote) self.advanceOne();
+                if (!self.atEnd()) self.advanceOne();
+                continue;
+            }
+            if (byte == '(') {
+                paren_depth += 1;
+                self.advanceOne();
+                continue;
+            }
+            if (byte == ')') {
+                if (paren_depth != 0) {
+                    paren_depth -= 1;
+                    self.advanceOne();
+                } else {
+                    self.advanceOne();
+                    if (!self.atEnd() and self.peek() == ')') self.advanceOne();
+                    return;
+                }
+                continue;
+            }
+            self.advanceOne();
+        }
     }
 
     fn skipCommandSubstitution(self: *Lexer) void {

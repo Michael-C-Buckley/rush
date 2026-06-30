@@ -423,6 +423,14 @@ const Parser = struct {
                 },
                 '$' => {
                     const name_start = index + 1;
+                    if (name_start + 1 < end and text[name_start] == '(' and text[name_start + 1] == '(') {
+                        if (literal_start < index) try parts.append(self.allocator, .{ .literal = text[literal_start..index] });
+                        const arithmetic_end = try scanArithmeticExpansion(text, index, end);
+                        try parts.append(self.allocator, .{ .arithmetic = text[name_start + 2 .. arithmetic_end] });
+                        index = arithmetic_end + 2;
+                        literal_start = index;
+                        continue;
+                    }
                     if (name_start < end and text[name_start] == '(') {
                         if (literal_start < index) try parts.append(self.allocator, .{ .literal = text[literal_start..index] });
                         const substitution_end = try scanCommandSubstitution(text, name_start, end);
@@ -969,6 +977,41 @@ fn scanBackquoteSubstitution(text: []const u8, open_index: usize, end: usize) Pa
         }
         if (text[index] == '`') return index;
         index += 1;
+    }
+    return error.UnclosedCommandSubstitution;
+}
+
+fn scanArithmeticExpansion(text: []const u8, dollar_index: usize, end: usize) ParseError!usize {
+    std.debug.assert(dollar_index + 2 < end);
+    std.debug.assert(text[dollar_index] == '$');
+    std.debug.assert(text[dollar_index + 1] == '(');
+    std.debug.assert(text[dollar_index + 2] == '(');
+
+    var index = dollar_index + 3;
+    var paren_depth: usize = 0;
+    while (index < end) {
+        switch (text[index]) {
+            '\'', '"' => |quote| {
+                index += 1;
+                while (index < end and text[index] != quote) index += 1;
+                if (index >= end) return error.UnclosedQuote;
+                index += 1;
+            },
+            '\\' => index += if (index + 1 < end) 2 else 1,
+            '(' => {
+                paren_depth += 1;
+                index += 1;
+            },
+            ')' => if (paren_depth != 0) {
+                paren_depth -= 1;
+                index += 1;
+            } else if (index + 1 < end and text[index + 1] == ')') {
+                return index;
+            } else {
+                index += 1;
+            },
+            else => index += 1,
+        }
     }
     return error.UnclosedCommandSubstitution;
 }
