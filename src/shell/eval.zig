@@ -264,7 +264,7 @@ fn evalCompound(shell: anytype, command: ast.CompoundInvocation) EvalError!resul
 
     var redirections = applyRedirections(shell, command.redirections) catch |err| switch (err) {
         error.OutOfMemory => return err,
-        else => return .{ .status = 1 },
+        else => return redirectionFailure(shell),
     };
     defer redirections.restore(shell) catch {};
 
@@ -559,10 +559,15 @@ fn evalSimple(shell: anytype, command: ast.SimpleCommand) EvalError!result.EvalR
     };
 }
 
+fn redirectionFailure(shell: anytype) result.EvalResult {
+    shell.host.writeAll(.stderr, "redirection failed\n") catch {};
+    return .{ .status = 1 };
+}
+
 fn evalSimpleScoped(shell: anytype, command: ast.SimpleCommand) EvalError!result.EvalResult {
     var redirections = applyRedirections(shell, command.redirections) catch |err| switch (err) {
         error.OutOfMemory => return err,
-        else => return .{ .status = 1 },
+        else => return redirectionFailure(shell),
     };
     var restore_redirections = true;
     defer if (restore_redirections) redirections.restore(shell) catch {};
