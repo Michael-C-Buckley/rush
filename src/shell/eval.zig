@@ -1,6 +1,7 @@
 //! Direct evaluator for the rewritten shell core.
 
 const std = @import("std");
+const zig_builtin = @import("builtin");
 
 const ast = @import("ast.zig");
 const builtin = @import("builtin.zig");
@@ -16,9 +17,13 @@ pub const EvalError = anyerror;
 const CopyError = std.mem.Allocator.Error;
 const CommandLookupMode = enum { none, terse, verbose };
 
+fn validateAst(value: anytype) void {
+    if (zig_builtin.mode != .ReleaseFast and zig_builtin.mode != .ReleaseSmall) value.validate();
+}
+
 pub fn evalProgram(comptime Host: type, shell: anytype, program: ast.Program) EvalError!result.EvalResult {
     _ = Host;
-    program.validate();
+    validateAst(program);
     return evalList(shell, program.body);
 }
 
@@ -85,7 +90,7 @@ fn shouldApplyErrexit(shell: anytype, evaluated: result.EvalResult) bool {
 }
 
 fn evalBackgroundAndOr(shell: anytype, and_or: ast.AndOr) EvalError!result.EvalResult {
-    and_or.validate();
+    validateAst(and_or);
     if (and_or.pipelines.len == 1 and and_or.pipelines[0].pipeline.stages.len > 1) {
         return evalBackgroundPipeline(shell, and_or.pipelines[0].pipeline);
     }
@@ -144,7 +149,7 @@ fn backgroundSubshellInvocation(and_or: ast.AndOr) ?ast.CompoundInvocation {
 }
 
 fn evalBackgroundPipeline(shell: anytype, pipeline: ast.Pipeline) EvalError!result.EvalResult {
-    pipeline.validate();
+    validateAst(pipeline);
     std.debug.assert(pipeline.stages.len > 1);
     _ = shellProcessId(shell);
     _ = parentProcessId(shell);
@@ -156,7 +161,7 @@ fn evalBackgroundPipeline(shell: anytype, pipeline: ast.Pipeline) EvalError!resu
 }
 
 fn evalAndOr(shell: anytype, and_or: ast.AndOr) EvalError!result.EvalResult {
-    and_or.validate();
+    validateAst(and_or);
     var last: result.EvalResult = .{};
     for (and_or.pipelines, 0..) |pipeline, index| {
         if (index != 0) switch (pipeline.operator.?) {
@@ -176,7 +181,7 @@ fn evalAndOr(shell: anytype, and_or: ast.AndOr) EvalError!result.EvalResult {
 }
 
 fn evalPipeline(shell: anytype, pipeline: ast.Pipeline) EvalError!result.EvalResult {
-    pipeline.validate();
+    validateAst(pipeline);
     var evaluated = if (pipeline.stages.len == 1)
         try evalCommand(shell, pipeline.stages[0])
     else
@@ -351,7 +356,7 @@ fn evalCommand(shell: anytype, command: ast.Command) EvalError!result.EvalResult
 }
 
 fn evalCompound(shell: anytype, command: ast.CompoundInvocation) EvalError!result.EvalResult {
-    command.validate();
+    validateAst(command);
     if (command.body == .subshell) return evalSubshell(shell, command.body.subshell, command.redirections);
 
     const scratch = try shell.beginScratchScope();
@@ -374,7 +379,7 @@ fn evalCompound(shell: anytype, command: ast.CompoundInvocation) EvalError!resul
 }
 
 fn evalIf(shell: anytype, command: ast.IfCommand) EvalError!result.EvalResult {
-    command.validate();
+    validateAst(command);
     for (command.branches) |branch| {
         shell.state.errexit_ignore_depth += 1;
         const condition = evalList(shell, branch.condition) catch |err| {
@@ -390,7 +395,7 @@ fn evalIf(shell: anytype, command: ast.IfCommand) EvalError!result.EvalResult {
 }
 
 fn evalLoop(shell: anytype, command: ast.LoopCommand) EvalError!result.EvalResult {
-    command.validate();
+    validateAst(command);
     shell.state.loop_depth += 1;
     defer shell.state.loop_depth -= 1;
 
@@ -463,7 +468,7 @@ fn evalSubshellInCurrentProcess(
 }
 
 fn evalFor(shell: anytype, command: ast.ForCommand) EvalError!result.EvalResult {
-    command.validate();
+    validateAst(command);
     shell.state.loop_depth += 1;
     defer shell.state.loop_depth -= 1;
 
@@ -623,7 +628,7 @@ fn wordIsAtParameter(word: ast.Word) bool {
 }
 
 fn evalCase(shell: anytype, command: ast.CaseCommand) EvalError!result.EvalResult {
-    command.validate();
+    validateAst(command);
     const scratch = try shell.beginScratchScope();
     defer scratch.end();
 
@@ -653,13 +658,13 @@ fn caseArmMatches(shell: anytype, arm: ast.CaseArm, word: []const u8) EvalError!
 }
 
 fn evalFunctionDefinition(shell: anytype, definition: ast.FunctionDefinition) EvalError!result.EvalResult {
-    definition.validate();
+    validateAst(definition);
     try shell.state.putPersistentFunction(try copyFunction(shell.state.definitionAllocator(), definition));
     return .{};
 }
 
 fn evalSimple(shell: anytype, command: ast.SimpleCommand) EvalError!result.EvalResult {
-    command.validate();
+    validateAst(command);
     const scratch = try shell.beginScratchScope();
     defer scratch.end();
 
@@ -1712,7 +1717,7 @@ fn evalFunction(
     assignments: []const ast.Assignment,
     args: []const []const u8,
 ) EvalError!result.EvalResult {
-    function.validate();
+    validateAst(function);
     const saved = try saveAssignmentVariables(shell, assignments);
     defer restoreVariables(shell, saved);
 
@@ -1779,7 +1784,7 @@ fn copyFunction(allocator: std.mem.Allocator, definition: ast.FunctionDefinition
         .body = try copyCompoundCommand(allocator, definition.body),
         .redirections = try copyRedirections(allocator, definition.redirections),
     };
-    copied_definition.validate();
+    validateAst(copied_definition);
     return .{
         .name = copied_name,
         .source_text = copied_name,
@@ -2038,7 +2043,7 @@ fn applyRedirection(
     frames: *std.ArrayList(RedirectionFrame),
     here_doc_writers: *std.ArrayList(host_mod.Pid),
 ) !void {
-    redirection.validate();
+    validateAst(redirection);
     const target = redirectionFd(redirection);
     if (redirection.op == .duplicate_input or redirection.op == .duplicate_output) {
         try applyDuplicateRedirection(shell, redirection, target, frames);
@@ -3352,7 +3357,7 @@ fn expandCommandSubstitution(
     substitution: ast.CommandSubstitution,
     substitution_status: ?*?result.ExitStatus,
 ) EvalError![]const u8 {
-    substitution.validate();
+    validateAst(substitution);
     const program = if (substitution.parsed) |program| program.* else program: {
         const src: source_mod.Source = .{
             .id = 0,
@@ -3449,7 +3454,7 @@ fn readCommandSubstitutionOutput(shell: anytype, fd: host_mod.Fd) ![]const u8 {
 }
 
 fn expandParameter(shell: anytype, parameter: ast.ParameterExpansion) EvalError![]const u8 {
-    parameter.validate();
+    validateAst(parameter);
     if (parameter.length) return expandParameterLength(shell, parameter);
 
     if (parameter.op) |operator| {
