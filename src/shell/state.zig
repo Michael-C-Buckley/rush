@@ -65,6 +65,7 @@ pub const State = struct {
     variables: std.StringHashMapUnmanaged(Variable) = .empty,
     functions: std.StringHashMapUnmanaged(Function) = .empty,
     aliases: std.StringHashMapUnmanaged(Alias) = .empty,
+    signal_traps: std.StringHashMapUnmanaged([]const u8) = .empty,
     background_pids: std.ArrayListUnmanaged(host.Pid) = .empty,
     last_status: result.ExitStatus = 0,
     last_background_pid: ?host.Pid = null,
@@ -101,6 +102,9 @@ pub const State = struct {
             self.allocator.free(entry.value_ptr.value);
         }
         self.aliases.deinit(self.allocator);
+        var signal_trap_iterator = self.signal_traps.iterator();
+        while (signal_trap_iterator.next()) |entry| self.allocator.free(entry.value_ptr.*);
+        self.signal_traps.deinit(self.allocator);
         self.background_pids.deinit(self.allocator);
         self.freeOwnedPositionals();
         self.clearExitTrap();
@@ -253,6 +257,25 @@ pub const State = struct {
 
     pub fn forgetActiveExitTrap(self: *State) void {
         self.exit_trap = null;
+    }
+
+    pub fn getSignalTrap(self: State, name: []const u8) ?[]const u8 {
+        return self.signal_traps.get(name);
+    }
+
+    pub fn setSignalTrap(self: *State, name: []const u8, action: []const u8) !void {
+        const owned_action = try self.allocator.dupe(u8, action);
+        errdefer self.allocator.free(owned_action);
+        if (self.signal_traps.getPtr(name)) |existing| {
+            self.allocator.free(existing.*);
+            existing.* = owned_action;
+            return;
+        }
+        try self.signal_traps.put(self.allocator, name, owned_action);
+    }
+
+    pub fn clearSignalTrap(self: *State, name: []const u8) void {
+        if (self.signal_traps.fetchRemove(name)) |entry| self.allocator.free(entry.value);
     }
 
     pub fn addBackgroundPid(self: *State, pid: host.Pid) !void {

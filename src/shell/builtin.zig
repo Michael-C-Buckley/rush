@@ -521,6 +521,15 @@ fn evalTrap(shell: anytype, args: []const []const u8) !result.EvalResult {
                 .{action},
             ));
         }
+        for (trap_signal_names) |signal| {
+            if (shell.state.getSignalTrap(signal)) |action| {
+                try shell.host.writeAll(.stdout, try std.fmt.allocPrint(
+                    shell.scratchAllocator(),
+                    "trap -- '{s}' {s}\n",
+                    .{ action, signal },
+                ));
+            }
+        }
         return .{};
     }
 
@@ -541,23 +550,32 @@ fn evalTrap(shell: anytype, args: []const []const u8) !result.EvalResult {
             status = 1;
             continue;
         };
-        if (signal == .exit) {
-            if (reset) shell.state.clearExitTrap() else try shell.state.setExitTrap(action);
+        switch (signal) {
+            .exit => if (reset) shell.state.clearExitTrap() else try shell.state.setExitTrap(action),
+            .other => |name| if (reset) shell.state.clearSignalTrap(name) else try shell.state.setSignalTrap(name, action),
         }
     }
     return .{ .status = status };
 }
 
-const TrapSignal = enum { exit, other };
+const TrapSignal = union(enum) { exit, other: []const u8 };
+
+const trap_signal_names = [_][]const u8{ "INT", "QUIT", "PIPE", "ALRM", "TERM", "USR1", "KILL" };
 
 fn parseTrapSignal(signal: []const u8) ?TrapSignal {
     if (std.mem.eql(u8, signal, "0") or std.mem.eql(u8, signal, "EXIT")) return .exit;
-    if (std.mem.eql(u8, signal, "TERM") or std.mem.eql(u8, signal, "INT") or
-        std.mem.eql(u8, signal, "USR1") or std.mem.eql(u8, signal, "ALRM") or
-        std.mem.eql(u8, signal, "PIPE") or std.mem.eql(u8, signal, "QUIT") or
-        std.mem.eql(u8, signal, "KILL")) return .other;
-    _ = std.fmt.parseInt(u8, signal, 10) catch return null;
-    return .other;
+    for (trap_signal_names) |name| if (std.mem.eql(u8, signal, name)) return .{ .other = name };
+    const number = std.fmt.parseInt(u8, signal, 10) catch return null;
+    return switch (number) {
+        2 => .{ .other = "INT" },
+        3 => .{ .other = "QUIT" },
+        9 => .{ .other = "KILL" },
+        10 => .{ .other = "USR1" },
+        13 => .{ .other = "PIPE" },
+        14 => .{ .other = "ALRM" },
+        15 => .{ .other = "TERM" },
+        else => .{ .other = signal },
+    };
 }
 
 fn isAssignmentName(name: []const u8) bool {
