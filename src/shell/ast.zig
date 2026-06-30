@@ -139,6 +139,7 @@ pub const WordData = union(enum) {
 
 pub const WordPart = union(enum) {
     literal: []const u8,
+    escaped: []const u8,
     single_quoted: []const u8,
     double_quoted: []const WordPart,
     parameter: ParameterExpansion,
@@ -147,7 +148,7 @@ pub const WordPart = union(enum) {
 
     pub fn validate(self: WordPart) void {
         switch (self) {
-            .literal, .single_quoted, .arithmetic => {},
+            .literal, .escaped, .single_quoted, .arithmetic => {},
             .double_quoted => |parts| for (parts) |part| part.validate(),
             .parameter => |parameter| parameter.validate(),
             .command_substitution => |substitution| substitution.validate(),

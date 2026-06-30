@@ -418,11 +418,11 @@ const Parser = struct {
                     if (literal_start < index) try parts.append(self.allocator, .{ .literal = text[literal_start..index] });
                     index += 1;
                     if (index >= end) {
-                        try parts.append(self.allocator, .{ .literal = "\\" });
+                        try parts.append(self.allocator, .{ .escaped = "\\" });
                     } else if (text[index] == '\n') {
                         index += 1;
                     } else {
-                        try parts.append(self.allocator, .{ .literal = text[index .. index + 1] });
+                        try parts.append(self.allocator, .{ .escaped = text[index .. index + 1] });
                         index += 1;
                     }
                     literal_start = index;
@@ -733,6 +733,10 @@ const Parser = struct {
         var output: std.ArrayList(u8) = .empty;
         for (parts) |part| switch (part) {
             .literal => |bytes| try output.appendSlice(self.allocator, bytes),
+            .escaped => |bytes| {
+                quoted.* = true;
+                try output.appendSlice(self.allocator, bytes);
+            },
             .single_quoted => |bytes| {
                 quoted.* = true;
                 try output.appendSlice(self.allocator, bytes);
@@ -1211,10 +1215,10 @@ test "parser removes unquoted backslash escapes from word text" {
     const words = program.body.entries[0].and_or.pipelines[0].pipeline.stages[0].simple.words;
 
     try std.testing.expectEqual(@as(usize, 3), words.len);
-    try std.testing.expectEqualStrings("'", words[1].data.parts[0].literal);
+    try std.testing.expectEqualStrings("'", words[1].data.parts[0].escaped);
     try std.testing.expectEqualStrings("3", words[1].data.parts[1].literal);
     try std.testing.expectEqualStrings("a", words[2].data.parts[0].literal);
-    try std.testing.expectEqualStrings(" ", words[2].data.parts[1].literal);
+    try std.testing.expectEqualStrings(" ", words[2].data.parts[1].escaped);
     try std.testing.expectEqualStrings("b", words[2].data.parts[2].literal);
 }
 

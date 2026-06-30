@@ -250,6 +250,8 @@ fn expandForWordFields(shell: anytype, words: []const ast.Word) ![]const []const
     for (words) |word| {
         if (try appendUnquotedAtFields(shell, &fields, word) or try appendSpecialQuotedFields(shell, &fields, word)) {
             continue;
+        } else if (!wordHasDynamicExpansion(word)) {
+            try appendStaticWordField(shell, &fields, word);
         } else {
             const expanded = try expandWordTracking(shell, word, null);
             if (wordContainsQuotes(word)) {
@@ -590,6 +592,7 @@ fn copyWordParts(allocator: std.mem.Allocator, parts: []const ast.WordPart) Copy
     for (parts, 0..) |part, index| {
         copied[index] = switch (part) {
             .literal => |bytes| .{ .literal = bytes },
+            .escaped => |bytes| .{ .escaped = bytes },
             .single_quoted => |bytes| .{ .single_quoted = bytes },
             .double_quoted => |nested| .{ .double_quoted = try copyWordParts(allocator, nested) },
             .parameter => |parameter| .{ .parameter = try copyParameterExpansion(allocator, parameter) },
@@ -972,6 +975,8 @@ fn expandWordFields(
     for (words) |word| {
         if (try appendUnquotedAtFields(shell, &fields, word) or try appendSpecialQuotedFields(shell, &fields, word)) {
             continue;
+        } else if (!wordHasDynamicExpansion(word)) {
+            try appendStaticWordField(shell, &fields, word);
         } else {
             const expanded = try expandWordTracking(shell, word, substitution_status);
             if (wordContainsQuotes(word)) {
@@ -983,6 +988,70 @@ fn expandWordFields(
     }
 
     return fields.toOwnedSlice(allocator);
+}
+
+fn appendStaticWordField(shell: anytype, fields: *std.ArrayList([]const u8), word: ast.Word) !void {
+    const expanded = try expandWordTracking(shell, word, null);
+    if (wordExpandsLeadingTilde(shell, word)) {
+        try fields.append(shell.scratchAllocator(), expanded);
+    } else if (word.quoted) {
+        try appendPathnameExpandedPattern(shell, fields, try staticWordPathnamePattern(shell, word));
+    } else {
+        try appendPathnameExpandedField(shell, fields, expanded);
+    }
+}
+
+fn wordHasDynamicExpansion(word: ast.Word) bool {
+    return switch (word.data) {
+        .literal => false,
+        .parts => |parts| partsHaveDynamicExpansion(parts),
+    };
+}
+
+fn partsHaveDynamicExpansion(parts: []const ast.WordPart) bool {
+    for (parts) |part| switch (part) {
+        .parameter, .command_substitution, .arithmetic => return true,
+        .double_quoted => |nested| if (partsHaveDynamicExpansion(nested)) return true,
+        else => {},
+    };
+    return false;
+}
+
+fn staticWordPathnamePattern(shell: anytype, word: ast.Word) !PathnamePattern {
+    const allocator = shell.scratchAllocator();
+    var text: std.ArrayList(u8) = .empty;
+    var special: std.ArrayList(bool) = .empty;
+    switch (word.data) {
+        .literal => |literal| try appendPathnamePatternBytes(allocator, &text, &special, literal, true),
+        .parts => |parts| try appendStaticWordPathnameParts(allocator, &text, &special, parts, false),
+    }
+    return .{ .text = try text.toOwnedSlice(allocator), .special = try special.toOwnedSlice(allocator) };
+}
+
+fn appendStaticWordPathnameParts(
+    allocator: std.mem.Allocator,
+    text: *std.ArrayList(u8),
+    special: *std.ArrayList(bool),
+    parts: []const ast.WordPart,
+    quoted: bool,
+) !void {
+    for (parts) |part| switch (part) {
+        .literal => |bytes| try appendPathnamePatternBytes(allocator, text, special, bytes, !quoted),
+        .escaped, .single_quoted => |bytes| try appendPathnamePatternBytes(allocator, text, special, bytes, false),
+        .double_quoted => |nested| try appendStaticWordPathnameParts(allocator, text, special, nested, true),
+        .parameter, .command_substitution, .arithmetic => unreachable,
+    };
+}
+
+fn appendPathnamePatternBytes(
+    allocator: std.mem.Allocator,
+    text: *std.ArrayList(u8),
+    special: *std.ArrayList(bool),
+    bytes: []const u8,
+    are_special: bool,
+) !void {
+    try text.appendSlice(allocator, bytes);
+    try special.appendNTimes(allocator, are_special, bytes.len);
 }
 
 fn appendSplitFields(
@@ -1060,18 +1129,38 @@ fn appendMaybePathnameExpandedField(
     try appendPathnameExpandedField(shell, fields, field);
 }
 
+const PathnamePattern = struct {
+    text: []const u8,
+    special: ?[]const bool = null,
+
+    fn slice(self: PathnamePattern, start: usize, end: usize) PathnamePattern {
+        return .{
+            .text = self.text[start..end],
+            .special = if (self.special) |special| special[start..end] else null,
+        };
+    }
+
+    fn byteIsSpecial(self: PathnamePattern, index: usize) bool {
+        return self.special == null or self.special.?[index];
+    }
+};
+
 fn appendPathnameExpandedField(shell: anytype, fields: *std.ArrayList([]const u8), field: []const u8) !void {
-    if (shell.state.options.noglob or !containsPatternMeta(field)) {
-        try fields.append(shell.scratchAllocator(), field);
+    try appendPathnameExpandedPattern(shell, fields, .{ .text = field });
+}
+
+fn appendPathnameExpandedPattern(shell: anytype, fields: *std.ArrayList([]const u8), pattern: PathnamePattern) !void {
+    if (shell.state.options.noglob or !containsPatternMeta(pattern)) {
+        try fields.append(shell.scratchAllocator(), pattern.text);
         return;
     }
 
     var matches: std.ArrayList([]const u8) = .empty;
     const allocator = shell.scratchAllocator();
-    try expandPathnamePattern(shell, allocator, &matches, "", field);
+    try expandPathnamePattern(shell, allocator, &matches, "", pattern);
 
     if (matches.items.len == 0) {
-        try fields.append(allocator, field);
+        try fields.append(allocator, pattern.text);
         return;
     }
     std.mem.sort([]const u8, matches.items, {}, stringLessThan);
@@ -1083,21 +1172,24 @@ fn expandPathnamePattern(
     allocator: std.mem.Allocator,
     matches: *std.ArrayList([]const u8),
     prefix: []const u8,
-    remaining: []const u8,
+    remaining: PathnamePattern,
 ) error{OutOfMemory}!void {
-    const slash_index = std.mem.indexOfScalar(u8, remaining, '/');
-    const component = if (slash_index) |index| remaining[0..index] else remaining;
-    const rest = if (slash_index) |index| remaining[index + 1 ..] else "";
-    const trailing_slash = slash_index != null and rest.len == 0;
-    if (component.len == 0) return;
+    const slash_index = std.mem.indexOfScalar(u8, remaining.text, '/');
+    const component = if (slash_index) |index| remaining.slice(0, index) else remaining;
+    const rest = if (slash_index) |index|
+        remaining.slice(index + 1, remaining.text.len)
+    else
+        PathnamePattern{ .text = "" };
+    const trailing_slash = slash_index != null and rest.text.len == 0;
+    if (component.text.len == 0) return;
 
     if (!containsPatternMeta(component)) {
-        const candidate = try joinPathComponent(allocator, prefix, component);
+        const candidate = try joinPathComponent(allocator, prefix, component.text);
         if (trailing_slash) {
             if (try pathIsDirectory(shell, candidate, .other)) {
                 try matches.append(allocator, try std.fmt.allocPrint(allocator, "{s}/", .{candidate}));
             }
-        } else if (rest.len == 0) {
+        } else if (rest.text.len == 0) {
             try matches.append(allocator, candidate);
         } else {
             try expandPathnamePattern(shell, allocator, matches, candidate, rest);
@@ -1112,7 +1204,7 @@ fn expandPathnamePattern(
     for (directory.entries) |entry| {
         if (std.mem.eql(u8, entry.name, ".")) saw_dot = true;
         if (std.mem.eql(u8, entry.name, "..")) saw_dotdot = true;
-        if (entry.name[0] == '.' and component[0] != '.') continue;
+        if (entry.name[0] == '.' and component.text[0] != '.') continue;
         if (!globMatches(component, entry.name)) continue;
 
         const candidate = try joinPathComponent(allocator, prefix, entry.name);
@@ -1120,13 +1212,13 @@ fn expandPathnamePattern(
             if (try pathIsDirectory(shell, candidate, entry.kind)) {
                 try matches.append(allocator, try std.fmt.allocPrint(allocator, "{s}/", .{candidate}));
             }
-        } else if (rest.len == 0) {
+        } else if (rest.text.len == 0) {
             try matches.append(allocator, candidate);
         } else {
             try expandPathnamePattern(shell, allocator, matches, candidate, rest);
         }
     }
-    if (component[0] == '.') {
+    if (component.text[0] == '.') {
         if (!saw_dot) {
             try appendSyntheticDotPathnameMatch(
                 shell,
@@ -1159,8 +1251,8 @@ fn appendSyntheticDotPathnameMatch(
     allocator: std.mem.Allocator,
     matches: *std.ArrayList([]const u8),
     prefix: []const u8,
-    component: []const u8,
-    rest: []const u8,
+    component: PathnamePattern,
+    rest: PathnamePattern,
     trailing_slash: bool,
     entry_name: []const u8,
 ) error{OutOfMemory}!void {
@@ -1168,7 +1260,7 @@ fn appendSyntheticDotPathnameMatch(
     const candidate = try joinPathComponent(allocator, prefix, entry_name);
     if (trailing_slash) {
         try matches.append(allocator, try std.fmt.allocPrint(allocator, "{s}/", .{candidate}));
-    } else if (rest.len == 0) {
+    } else if (rest.text.len == 0) {
         try matches.append(allocator, candidate);
     } else {
         try expandPathnamePattern(shell, allocator, matches, candidate, rest);
@@ -1193,22 +1285,26 @@ fn stringLessThan(_: void, lhs: []const u8, rhs: []const u8) bool {
     return std.mem.lessThan(u8, lhs, rhs);
 }
 
-fn containsPatternMeta(text: []const u8) bool {
-    for (text) |byte| {
-        if (byte == '*' or byte == '?' or byte == '[') return true;
+fn containsPatternMeta(pattern: PathnamePattern) bool {
+    for (pattern.text, 0..) |byte, index| {
+        if (pattern.byteIsSpecial(index) and (byte == '*' or byte == '?' or byte == '[')) return true;
     }
     return false;
 }
 
-fn globMatches(pattern: []const u8, text: []const u8) bool {
+fn globMatches(pattern: PathnamePattern, text: []const u8) bool {
     return globMatchesFrom(pattern, 0, text, 0);
 }
 
-fn globMatchesFrom(pattern: []const u8, pattern_index: usize, text: []const u8, text_index: usize) bool {
-    if (pattern_index == pattern.len) return text_index == text.len;
-    if (pattern[pattern_index] == '*') {
+fn globMatchesFrom(pattern: PathnamePattern, pattern_index: usize, text: []const u8, text_index: usize) bool {
+    if (pattern_index == pattern.text.len) return text_index == text.len;
+    if (pattern.byteIsSpecial(pattern_index) and pattern.text[pattern_index] == '*') {
         var next_pattern = pattern_index + 1;
-        while (next_pattern < pattern.len and pattern[next_pattern] == '*') next_pattern += 1;
+        while (next_pattern < pattern.text.len and pattern.byteIsSpecial(next_pattern) and
+            pattern.text[next_pattern] == '*')
+        {
+            next_pattern += 1;
+        }
         var next_text = text_index;
         while (next_text <= text.len) : (next_text += if (next_text < text.len) utf8SequenceLength(text[next_text..]) else 1) {
             if (globMatchesFrom(pattern, next_pattern, text, next_text)) return true;
@@ -1218,17 +1314,19 @@ fn globMatchesFrom(pattern: []const u8, pattern_index: usize, text: []const u8, 
     }
     if (text_index == text.len) return false;
     const text_len = utf8SequenceLength(text[text_index..]);
-    if (pattern[pattern_index] == '?') {
+    if (pattern.byteIsSpecial(pattern_index) and pattern.text[pattern_index] == '?') {
         return globMatchesFrom(pattern, pattern_index + 1, text, text_index + text_len);
     }
-    if (pattern[pattern_index] == '[') {
+    if (pattern.byteIsSpecial(pattern_index) and pattern.text[pattern_index] == '[') {
         if (bracketExpressionMatches(pattern, pattern_index, text[text_index..][0..text_len])) |matched| {
             return matched.matched and globMatchesFrom(pattern, matched.end, text, text_index + text_len);
         }
     }
-    const pattern_len = utf8SequenceLength(pattern[pattern_index..]);
-    if (pattern_index + pattern_len > pattern.len or text_index + pattern_len > text.len) return false;
-    if (!std.mem.eql(u8, pattern[pattern_index..][0..pattern_len], text[text_index..][0..pattern_len])) return false;
+    const pattern_len = utf8SequenceLength(pattern.text[pattern_index..]);
+    if (pattern_index + pattern_len > pattern.text.len or text_index + pattern_len > text.len) return false;
+    if (!std.mem.eql(u8, pattern.text[pattern_index..][0..pattern_len], text[text_index..][0..pattern_len])) {
+        return false;
+    }
     return globMatchesFrom(pattern, pattern_index + pattern_len, text, text_index + pattern_len);
 }
 
@@ -1237,34 +1335,36 @@ const BracketMatch = struct {
     end: usize,
 };
 
-fn bracketExpressionMatches(pattern: []const u8, start: usize, character: []const u8) ?BracketMatch {
-    std.debug.assert(pattern[start] == '[');
+fn bracketExpressionMatches(pattern: PathnamePattern, start: usize, character: []const u8) ?BracketMatch {
+    std.debug.assert(pattern.text[start] == '[');
     var index = start + 1;
     var negated = false;
-    if (index < pattern.len and (pattern[index] == '!' or pattern[index] == '^')) {
+    if (index < pattern.text.len and (pattern.text[index] == '!' or pattern.text[index] == '^')) {
         negated = true;
         index += 1;
     }
     var matched = false;
     var saw_member = false;
-    while (index < pattern.len and pattern[index] != ']') {
-        const member_len = utf8SequenceLength(pattern[index..]);
-        if (index + member_len > pattern.len) return null;
-        const member = pattern[index..][0..member_len];
+    while (index < pattern.text.len and pattern.text[index] != ']') {
+        const member_len = utf8SequenceLength(pattern.text[index..]);
+        if (index + member_len > pattern.text.len) return null;
+        const member = pattern.text[index..][0..member_len];
         index += member_len;
         saw_member = true;
-        if (index < pattern.len and pattern[index] == '-' and index + 1 < pattern.len and pattern[index + 1] != ']') {
+        if (index < pattern.text.len and pattern.text[index] == '-' and index + 1 < pattern.text.len and
+            pattern.text[index + 1] != ']')
+        {
             index += 1;
-            const end_len = utf8SequenceLength(pattern[index..]);
-            if (index + end_len > pattern.len) return null;
-            const end = pattern[index..][0..end_len];
+            const end_len = utf8SequenceLength(pattern.text[index..]);
+            if (index + end_len > pattern.text.len) return null;
+            const end = pattern.text[index..][0..end_len];
             index += end_len;
             matched = matched or bracketRangeMatches(member, end, character);
         } else {
             matched = matched or std.mem.eql(u8, member, character);
         }
     }
-    if (!saw_member or index >= pattern.len or pattern[index] != ']') return null;
+    if (!saw_member or index >= pattern.text.len or pattern.text[index] != ']') return null;
     return .{ .matched = if (negated) !matched else matched, .end = index + 1 };
 }
 
@@ -1320,7 +1420,7 @@ fn wordContainsQuotes(word: ast.Word) bool {
 
 fn partsContainQuotes(parts: []const ast.WordPart) bool {
     for (parts) |part| switch (part) {
-        .single_quoted, .double_quoted => return true,
+        .escaped, .single_quoted, .double_quoted => return true,
         else => {},
     };
     return false;
@@ -1436,7 +1536,7 @@ fn expandWordParts(shell: anytype, parts: []const ast.WordPart, substitution_sta
 
 fn expandWordPart(shell: anytype, part: ast.WordPart, substitution_status: ?*?result.ExitStatus) EvalError![]const u8 {
     return switch (part) {
-        .literal, .single_quoted => |bytes| bytes,
+        .literal, .escaped, .single_quoted => |bytes| bytes,
         .arithmetic => |text| expandArithmetic(shell, text),
         .double_quoted => |parts| expandWordParts(shell, parts, substitution_status),
         .parameter => |parameter| expandParameter(shell, parameter),
@@ -2115,6 +2215,7 @@ fn expandPatternParts(shell: anytype, parts: []const ast.WordPart) ![]const u8 {
     const allocator = shell.scratchAllocator();
     for (parts) |part| switch (part) {
         .literal => |bytes| try output.appendSlice(allocator, bytes),
+        .escaped => |bytes| try appendPatternLiteral(allocator, &output, bytes),
         .single_quoted => |bytes| try appendPatternLiteral(allocator, &output, bytes),
         .double_quoted => |nested| try appendPatternLiteral(allocator, &output, try expandWordParts(shell, nested, null)),
         .parameter, .command_substitution, .arithmetic => {
