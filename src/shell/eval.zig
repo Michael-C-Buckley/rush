@@ -865,11 +865,15 @@ fn expandWordFields(
     var fields: std.ArrayList([]const u8) = .empty;
 
     for (words) |word| {
-        const expanded = try expandWordTracking(shell, word, substitution_status);
-        if (wordContainsQuotes(word)) {
-            try fields.append(allocator, expanded);
+        if (wordIsQuotedAt(word)) {
+            try fields.appendSlice(allocator, shell.state.positionals);
         } else {
-            try appendSplitFields(allocator, &fields, expanded);
+            const expanded = try expandWordTracking(shell, word, substitution_status);
+            if (wordContainsQuotes(word)) {
+                try fields.append(allocator, expanded);
+            } else {
+                try appendSplitFields(allocator, &fields, expanded);
+            }
         }
     }
 
