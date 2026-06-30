@@ -255,7 +255,7 @@ fn expandForWordFields(shell: anytype, words: []const ast.Word) ![]const []const
             if (wordContainsQuotes(word)) {
                 try fields.append(allocator, expanded);
             } else {
-                try appendSplitFields(shell, &fields, expanded);
+                try appendSplitFields(shell, &fields, expanded, !wordExpandsLeadingTilde(shell, word));
             }
         }
     }
@@ -307,7 +307,7 @@ fn appendUnquotedAtFields(shell: anytype, fields: *std.ArrayList([]const u8), wo
         if (positional.len == 0 and preserve_empty) {
             try fields.append(shell.scratchAllocator(), "");
         } else {
-            try appendSplitFields(shell, fields, positional);
+            try appendSplitFields(shell, fields, positional, true);
         }
     }
     return true;
@@ -977,7 +977,7 @@ fn expandWordFields(
             if (wordContainsQuotes(word)) {
                 try fields.append(allocator, expanded);
             } else {
-                try appendSplitFields(shell, &fields, expanded);
+                try appendSplitFields(shell, &fields, expanded, !wordExpandsLeadingTilde(shell, word));
             }
         }
     }
@@ -989,6 +989,7 @@ fn appendSplitFields(
     shell: anytype,
     fields: *std.ArrayList([]const u8),
     text: []const u8,
+    pathname_expansion: bool,
 ) !void {
     const allocator = shell.scratchAllocator();
     const ifs = parameterValue(shell, "IFS") orelse " \t\n";
@@ -1007,7 +1008,12 @@ fn appendSplitFields(
     while (index < text.len) {
         if (ifsDelimiter(ifs, text, index)) |delimiter| {
             if (delimiter.whitespace) {
-                if (field_start < index) try appendPathnameExpandedField(shell, fields, text[field_start..index]);
+                if (field_start < index) try appendMaybePathnameExpandedField(
+                    shell,
+                    fields,
+                    text[field_start..index],
+                    pathname_expansion,
+                );
                 index += delimiter.len;
                 while (ifsDelimiter(ifs, text, index)) |next| {
                     if (!next.whitespace) break;
@@ -1026,7 +1032,7 @@ fn appendSplitFields(
                 continue;
             }
 
-            try appendPathnameExpandedField(shell, fields, text[field_start..index]);
+            try appendMaybePathnameExpandedField(shell, fields, text[field_start..index], pathname_expansion);
             index += delimiter.len;
             while (ifsDelimiter(ifs, text, index)) |next| {
                 if (!next.whitespace) break;
@@ -1038,7 +1044,20 @@ fn appendSplitFields(
 
         index += utf8SequenceLength(text[index..]);
     }
-    if (field_start < text.len) try appendPathnameExpandedField(shell, fields, text[field_start..]);
+    if (field_start < text.len) try appendMaybePathnameExpandedField(shell, fields, text[field_start..], pathname_expansion);
+}
+
+fn appendMaybePathnameExpandedField(
+    shell: anytype,
+    fields: *std.ArrayList([]const u8),
+    field: []const u8,
+    pathname_expansion: bool,
+) !void {
+    if (!pathname_expansion) {
+        try fields.append(shell.scratchAllocator(), field);
+        return;
+    }
+    try appendPathnameExpandedField(shell, fields, field);
 }
 
 fn appendPathnameExpandedField(shell: anytype, fields: *std.ArrayList([]const u8), field: []const u8) !void {
@@ -1254,6 +1273,18 @@ fn expandLeadingTilde(shell: anytype, word: ast.Word, expanded: []const u8) ![]c
     const prefix_len = tildePrefixLen(literal) orelse return expanded;
     const home = homeValue(shell) orelse return expanded;
     return std.fmt.allocPrint(shell.scratchAllocator(), "{s}{s}", .{ home, expanded[prefix_len..] });
+}
+
+fn wordExpandsLeadingTilde(shell: anytype, word: ast.Word) bool {
+    if (word.quoted) return false;
+    const literal = switch (word.data) {
+        .literal => |literal| literal,
+        .parts => |parts| if (parts.len != 0) switch (parts[0]) {
+            .literal => |literal| literal,
+            else => return false,
+        } else return false,
+    };
+    return tildePrefixLen(literal) != null and homeValue(shell) != null;
 }
 
 fn tildePrefixLen(literal: []const u8) ?usize {
