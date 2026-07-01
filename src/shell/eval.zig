@@ -493,11 +493,11 @@ fn evalSubshellInCurrentProcess(
     shell.state.loop_depth = 0;
     shell.state.running_exit_trap = false;
     shell.state.forgetActiveExitTrap();
-    var applied = applyRedirections(shell, redirections) catch |err| switch (err) {
+    const applied = applyRedirections(shell, redirections) catch |err| switch (err) {
         error.OutOfMemory => return err,
         else => return redirectionFailure(shell, false),
     };
-    defer applied.restore(shell) catch {};
+    _ = applied;
     return evalList(shell, body);
 }
 

@@ -272,6 +272,19 @@
             .status = 0,
         },
         .{
+            .name = "subshell EXIT trap observes subshell redirections",
+            .script =
+            \\( trap 'printf bad' EXIT ) >/dev/null
+            \\printf 'after\n'
+            ,
+            .stdout =
+            \\after
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "subshells reset caught EXIT traps inherited from the parent",
             .script =
             \\trap 'printf "parent\n"' EXIT
