@@ -1,0 +1,304 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "direnv",
+    "description": "load and unload directory-based environments",
+    "options": [
+      {
+        "long": "version",
+        "inherit": false
+      },
+      {
+        "long": "help",
+        "inherit": false
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "allow",
+        "description": "grants direnv to load the given .envrc",
+        "arguments": {
+          "states": [
+            {
+              "name": "PATH_TO_RC",
+              "index": 0,
+              "provider": "builtin.files"
+            }
+          ]
+        }
+      },
+      {
+        "name": "deny",
+        "description": "revokes the authorization of a given .envrc",
+        "arguments": {
+          "states": [
+            {
+              "name": "PATH_TO_RC",
+              "index": 0,
+              "provider": "builtin.files"
+            }
+          ]
+        }
+      },
+      {
+        "name": "edit",
+        "description": "opens PATH_TO_RC or the current .envrc into an $EDITOR and allow the file to be loaded afterwards",
+        "arguments": {
+          "states": [
+            {
+              "name": "PATH_TO_RC",
+              "index": 0,
+              "provider": "builtin.files"
+            }
+          ]
+        }
+      },
+      {
+        "name": "exec",
+        "description": "executes a command after loading the first .envrc found in DIR",
+        "arguments": {
+          "states": [
+            {
+              "name": "DIR",
+              "provider": "builtin.directories",
+              "index": 0
+            },
+            {
+              "name": "COMMAND",
+              "provider": "builtin.executables",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "fetchurl",
+        "description": "fetches a given URL into direnv's CAS",
+        "arguments": {
+          "states": [
+            {
+              "name": "url",
+              "index": 0
+            },
+            {
+              "name": "integrity-hash",
+              "description": "check if the `integrity hash` is equal to the hash value of the file obtained from the `url`",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "help",
+        "arguments": {
+          "states": [
+            {
+              "name": "show-private",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "hook",
+        "description": "used to setup the shell hook",
+        "arguments": {
+          "states": [
+            {
+              "name": "SHELL",
+              "index": 0,
+              "provider": "direnv.shells"
+            }
+          ]
+        }
+      },
+      {
+        "name": "prune",
+        "description": "removes old allowed files"
+      },
+      {
+        "name": "reload",
+        "description": "triggers an env reload"
+      },
+      {
+        "name": "status",
+        "description": "prints some debug status information"
+      },
+      {
+        "name": "stdlib",
+        "description": "displays the stdlib available in the .envrc execution context"
+      },
+      {
+        "name": "version",
+        "arguments": {
+          "states": [
+            {
+              "name": "version-at-least",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "apply_dump",
+        "description": "accepts a filename containing `direnv dump` output and generates a series of bash export statements to apply the given env",
+        "arguments": {
+          "states": [
+            {
+              "name": "FILE",
+              "provider": "builtin.files",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "show_dump",
+        "description": "show the data inside of a dump for debugging purposes",
+        "arguments": {
+          "states": [
+            {
+              "name": "DUMP",
+              "provider": "builtin.files",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "dotenv",
+        "description": "transforms a .env file to evaluatable `export KEY=PAIR` statements",
+        "arguments": {
+          "states": [
+            {
+              "name": "SHELL",
+              "index": 0,
+              "provider": "direnv.shells"
+            },
+            {
+              "name": "PATH_TO_DOTENV",
+              "index": 1,
+              "provider": "builtin.files"
+            }
+          ]
+        }
+      },
+      {
+        "name": "dump",
+        "description": "used to export the inner bash state at the end of execution",
+        "arguments": {
+          "states": [
+            {
+              "name": "SHELL",
+              "index": 0,
+              "provider": "direnv.shells"
+            },
+            {
+              "name": "FILE",
+              "description": "overwrites by dump data",
+              "provider": "builtin.files",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "export",
+        "description": "loads an .envrc and prints the diff in terms of exports",
+        "arguments": {
+          "states": [
+            {
+              "name": "SHELL",
+              "index": 0,
+              "provider": "direnv.shells"
+            }
+          ]
+        }
+      },
+      {
+        "name": "watch",
+        "description": "adds a path to the list that direnv watches for changes",
+        "arguments": {
+          "states": [
+            {
+              "name": "SHELL",
+              "index": 0,
+              "provider": "direnv.shells"
+            },
+            {
+              "name": "PATH",
+              "provider": "builtin.files",
+              "index": 1,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "watch-dir",
+        "description": "recursively adds a directory to the list that direnv watches for changes",
+        "arguments": {
+          "states": [
+            {
+              "name": "SHELL",
+              "index": 0,
+              "provider": "direnv.shells"
+            },
+            {
+              "name": "DIR",
+              "provider": "builtin.directories",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "watch-list",
+        "description": "pipe pairs of `mtime path` to stdin to build a list of files to watch",
+        "arguments": {
+          "states": [
+            {
+              "name": "SHELL",
+              "index": 0,
+              "provider": "direnv.shells"
+            }
+          ]
+        }
+      },
+      {
+        "name": "current",
+        "description": "reports whether direnv's view of a file is current (or stale)",
+        "arguments": {
+          "states": [
+            {
+              "name": "PATH",
+              "provider": "builtin.files",
+              "index": 0
+            }
+          ]
+        }
+      }
+    ],
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.executables": {
+        "builtin": "executables"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "direnv.shells": {
+        "values": [
+          "bash",
+          "zsh",
+          "fish",
+          "tcsh",
+          "elvish"
+        ]
+      }
+    }
+  }
+}
