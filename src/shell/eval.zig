@@ -4424,8 +4424,8 @@ fn evalCommandSubstitutionInChild(
             const evaluated = if (shell.state.options.xtrace) evaluated: {
                 break :evaluated evalProgram(@TypeOf(shell.host), shell, program) catch shell.host.exit(2);
             } else evaluated: {
-                const static_request = staticExternalProgramRequest(shell, program) catch shell.host.exit(2);
-                if (static_request) |request| {
+                const external_request = commandSubstitutionExternalProgramRequest(shell, program) catch shell.host.exit(2);
+                if (external_request) |request| {
                     shell.host.exec(request) catch shell.host.exit(127);
                 }
                 break :evaluated evalProgram(@TypeOf(shell.host), shell, program) catch shell.host.exit(2);
@@ -4445,6 +4445,51 @@ fn evalCommandSubstitutionInChild(
     try shell.host.close(pipe_desc.read);
     const wait_status = try shell.host.wait(pid);
     return .{ .output = output, .status = wait_status.shellStatus() };
+}
+
+fn commandSubstitutionExternalProgramRequest(shell: anytype, program: ast.Program) !?host_mod.SpawnRequest {
+    if (try staticExternalProgramRequest(shell, program)) |request| return request;
+    return dynamicExternalProgramRequest(shell, program);
+}
+
+fn dynamicExternalProgramRequest(shell: anytype, program: ast.Program) !?host_mod.SpawnRequest {
+    if (program.body.entries.len != 1) return null;
+    const entry = program.body.entries[0];
+    if (entry.terminator == .background) return null;
+    if (entry.and_or.pipelines.len != 1) return null;
+    const pipeline = entry.and_or.pipelines[0].pipeline;
+    if (pipeline.negated or pipeline.stages.len != 1) return null;
+    const command = pipeline.stages[0];
+    if (command != .simple) return null;
+    const simple = command.simple;
+    if (simple.assignments.len != 0 or simple.redirections.len != 0 or simple.words.len == 0) return null;
+    for (simple.words) |word| if (!wordIsSafeForSpeculativeExpansion(word)) return null;
+
+    var expansion_status: ?result.ExitStatus = null;
+    const fields = try expandWordFields(shell, simple.words, &expansion_status);
+    if (expansion_status != null or fields.len == 0) return null;
+    if (builtin.lookup(fields[0]) != null or shell.state.getFunction(fields[0]) != null) return null;
+    return makeExternalSpawnRequest(shell, fields, &.{}, &.{}) catch |err| switch (err) {
+        error.OutOfMemory => return err,
+        else => return null,
+    };
+}
+
+fn wordIsSafeForSpeculativeExpansion(word: ast.Word) bool {
+    return switch (word.data) {
+        .literal => true,
+        .parts => |parts| partsAreSafeForSpeculativeExpansion(parts),
+    };
+}
+
+fn partsAreSafeForSpeculativeExpansion(parts: []const ast.WordPart) bool {
+    for (parts) |part| switch (part) {
+        .literal, .escaped, .single_quoted => {},
+        .double_quoted => |nested| if (!partsAreSafeForSpeculativeExpansion(nested)) return false,
+        .parameter => |parameter| if (parameter.op != null) return false,
+        .command_substitution, .arithmetic => return false,
+    };
+    return true;
 }
 
 fn staticExternalProgramRequest(shell: anytype, program: ast.Program) !?host_mod.SpawnRequest {
