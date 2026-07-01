@@ -1,0 +1,241 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "codesign",
+    "description": "create and verify code signatures",
+    "options": [
+      {
+        "long": "all-architectures",
+        "description": "when verifying a code signature on code that has a universal ('fat') Mach-O binary, separately verify each archi",
+        "inherit": false
+      },
+      {
+        "short": "a",
+        "long": "architecture",
+        "description": "when verifying or displaying signatures, explicitly select the Mach-O architecture given",
+        "inherit": false,
+        "value": {
+          "name": "architecture"
+        }
+      },
+      {
+        "long": "bundle-version",
+        "description": "when handling versioned bundles such as frameworks, explicitly specify the version to operate on",
+        "inherit": false,
+        "value": {
+          "name": "version-string"
+        }
+      },
+      {
+        "short": "d",
+        "long": "display",
+        "description": "display information about the code at the path(s) given",
+        "inherit": false
+      },
+      {
+        "short": "D",
+        "long": "detached",
+        "description": "when signing, designates that a detached signature should be written to the specified file",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "deep",
+        "description": "when signing a bundle, specifies that nested code content such as helpers, frameworks, and plug-ins, should be r",
+        "inherit": false
+      },
+      {
+        "long": "detached-database",
+        "description": "when signing, specifies that a detached signature should be generated as with the --detached option, but that th",
+        "inherit": false
+      },
+      {
+        "short": "f",
+        "long": "force",
+        "description": "when signing, causes codesign to replace any existing signature on the path(s) given",
+        "inherit": false
+      },
+      {
+        "short": "h",
+        "long": "hosting",
+        "description": "constructs and prints the hosting chain of a running program",
+        "inherit": false
+      },
+      {
+        "short": "i",
+        "long": "identifier",
+        "description": "during signing, explicitly specify the unique identifier string that is embedded in code signatures",
+        "inherit": false,
+        "value": {
+          "name": "identifier"
+        }
+      },
+      {
+        "short": "o",
+        "long": "options",
+        "description": "during signing, specifies a set of option flags to be embedded in the code signature",
+        "inherit": false,
+        "value": {
+          "name": "version-string",
+          "values": [
+            "runtime",
+            "library",
+            "kill",
+            "hard",
+            "host",
+            "expires",
+            "restrict",
+            "enforcement"
+          ]
+        }
+      },
+      {
+        "short": "P",
+        "long": "pagesize",
+        "description": "indicates the granularity of code signing. Pagesize must be a power of two",
+        "inherit": false,
+        "value": {
+          "name": "size"
+        }
+      },
+      {
+        "short": "r",
+        "long": "requirements",
+        "description": "during signing, indicates that internal requirements should be embedded in the code path(s) as specified",
+        "inherit": false,
+        "value": {
+          "name": "requirements",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "short": "R",
+        "long": "test-requirement",
+        "description": "during verification, indicates that the path(s) given should be verified against the code requirement specified",
+        "inherit": false,
+        "value": {
+          "name": "requirement"
+        }
+      },
+      {
+        "short": "s",
+        "long": "sign",
+        "description": "sign the code at the path(s) given using this identity",
+        "inherit": false,
+        "value": {
+          "name": "identity"
+        }
+      },
+      {
+        "short": "v",
+        "long": "verify",
+        "description": "requests verification of code signatures",
+        "inherit": false
+      },
+      {
+        "long": "continue",
+        "description": "instructs codesign to continue processing path arguments even if processing one fails",
+        "inherit": false
+      },
+      {
+        "long": "dryrun",
+        "description": "during signing, performs almost all signing operations, but does not actually write the result anywhere",
+        "inherit": false
+      },
+      {
+        "long": "entitlements",
+        "description": "when signing, take the file at the given path and embed its contents in the signature as entitlement data",
+        "inherit": false,
+        "value": {
+          "name": "path",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "extract-certificates",
+        "description": "when displaying a signature, extract the certificates in the embedded certificate chain and write them to indivi",
+        "inherit": false,
+        "value": {
+          "name": "prefix"
+        }
+      },
+      {
+        "long": "file-list",
+        "description": "when signing or displaying a signature, codesign writes to the given path a list of files that may have been mod",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "ignore-resources",
+        "description": "during static validation, do not validate the contents of the code's resources",
+        "inherit": false
+      },
+      {
+        "long": "keychain",
+        "description": "during signing, only search for the signing identity in the keychain file specified",
+        "inherit": false,
+        "value": {
+          "name": "filename",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "prefix",
+        "description": "if no explicit unique identifier is specified (using the -i option), and if the implicitly generated identifier",
+        "inherit": false,
+        "value": {
+          "name": "prefix"
+        }
+      },
+      {
+        "spellings": [
+          "--preserve-metadata=list"
+        ],
+        "description": "when re-signing code that is already signed, reuse some information from the old signature",
+        "inherit": false
+      },
+      {
+        "long": "resource-rules",
+        "description": "during signing, this option overrides the default rules for identifying and collecting bundle resources and nest",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "timestamp",
+        "description": "during signing, requests that a timestamp authority server be contacted to authenticate the time of signing",
+        "inherit": false,
+        "value": {
+          "name": "url",
+          "required": false,
+          "style": "optional"
+        }
+      }
+    ],
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      }
+    },
+    "arguments": {
+      "states": [
+        {
+          "name": "file",
+          "index": 0,
+          "description": "code object to sign or verify",
+          "provider": "builtin.files",
+          "repeatable": true
+        }
+      ]
+    }
+  }
+}
