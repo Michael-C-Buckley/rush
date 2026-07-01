@@ -113,6 +113,13 @@ fn evalBackgroundAndOr(shell: anytype, and_or: ast.AndOr) EvalError!result.EvalR
                 const status = runExitTrap(shell, evaluated.status) catch shell.host.exit(2);
                 shell.host.exit(status);
             } else {
+                if (!shell.state.options.xtrace and and_or.pipelines.len == 1) {
+                    const pipeline = and_or.pipelines[0].pipeline;
+                    if (!pipeline.negated and pipeline.stages.len == 1) {
+                        const request = dynamicExternalCommandRequest(shell, pipeline.stages[0], &.{}) catch shell.host.exit(2);
+                        if (request) |spawn_request| shell.host.exec(spawn_request) catch shell.host.exit(127);
+                    }
+                }
                 const evaluated = evalAndOr(shell, and_or) catch shell.host.exit(2);
                 shell.host.exit(evaluated.status);
             }
@@ -294,6 +301,10 @@ fn forkPipelineStage(
         .parent => |pid| pid,
         .child => {
             applyPipelineChildFdActions(shell, fd_actions) catch shell.host.exit(127);
+            if (!shell.state.options.xtrace) {
+                const request = dynamicExternalCommandRequest(shell, command, &.{}) catch shell.host.exit(2);
+                if (request) |spawn_request| shell.host.exec(spawn_request) catch shell.host.exit(127);
+            }
             const evaluated = evalCommand(shell, command) catch shell.host.exit(2);
             shell.host.exit(evaluated.status);
         },
@@ -4498,7 +4509,14 @@ fn dynamicExternalProgramRequest(shell: anytype, program: ast.Program) !?host_mo
     if (entry.and_or.pipelines.len != 1) return null;
     const pipeline = entry.and_or.pipelines[0].pipeline;
     if (pipeline.negated or pipeline.stages.len != 1) return null;
-    const command = pipeline.stages[0];
+    return dynamicExternalCommandRequest(shell, pipeline.stages[0], &.{});
+}
+
+fn dynamicExternalCommandRequest(
+    shell: anytype,
+    command: ast.Command,
+    fd_actions: []const host_mod.SpawnFdAction,
+) !?host_mod.SpawnRequest {
     if (command != .simple) return null;
     const simple = command.simple;
     if (simple.assignments.len != 0 or simple.redirections.len != 0 or simple.words.len == 0) return null;
@@ -4508,7 +4526,7 @@ fn dynamicExternalProgramRequest(shell: anytype, program: ast.Program) !?host_mo
     const fields = try expandWordFields(shell, simple.words, &expansion_status);
     if (expansion_status != null or fields.len == 0) return null;
     if (builtin.lookup(fields[0]) != null or shell.state.getFunction(fields[0]) != null) return null;
-    return makeExternalSpawnRequest(shell, fields, &.{}, &.{}) catch |err| switch (err) {
+    return makeExternalSpawnRequest(shell, fields, &.{}, fd_actions) catch |err| switch (err) {
         error.OutOfMemory => return err,
         else => return null,
     };
