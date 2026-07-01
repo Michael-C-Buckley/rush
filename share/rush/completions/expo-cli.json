@@ -1,0 +1,4578 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "expo-cli",
+    "description": "manage Expo projects",
+    "options": [
+      {
+        "short": "h",
+        "long": "help",
+        "description": "output usage information",
+        "inherit": false
+      },
+      {
+        "short": "V",
+        "long": "version",
+        "description": "output the version number",
+        "inherit": false
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "login",
+        "aliases": [
+          "signin"
+        ],
+        "description": "login to an Expo account",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          },
+          {
+            "short": "u",
+            "long": "username",
+            "description": "username",
+            "inherit": false,
+            "value": {
+              "name": "string",
+              "required": false,
+              "style": "optional"
+            }
+          },
+          {
+            "short": "p",
+            "long": "password",
+            "description": "password",
+            "inherit": false,
+            "value": {
+              "name": "string",
+              "required": false,
+              "style": "optional"
+            }
+          },
+          {
+            "long": "otp",
+            "description": "one-time password from your 2FA device",
+            "inherit": false,
+            "value": {
+              "name": "string",
+              "required": false,
+              "style": "optional"
+            }
+          }
+        ]
+      },
+      {
+        "name": "logout",
+        "description": "logout of an Expo account",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "register",
+        "description": "sign up for a new Expo account",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "whoami",
+        "aliases": [
+          "w"
+        ],
+        "description": "return the currently authenticated account",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "build:ios",
+        "aliases": [
+          "bi"
+        ],
+        "description": "build and sign a standalone IPA for the Apple App Store",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          },
+          {
+            "short": "c",
+            "long": "clear-credentials",
+            "description": "clear all credentials stored on Expo servers",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "clear-dist-cert",
+            "description": "remove Distribution Certificate stored on Expo servers",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "clear-push-key",
+            "description": "remove Push Notifications Key stored on Expo servers",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "clear-push-cert",
+            "description": "remove Push Notifications Certificate stored on Expo servers. Use of Push Notifications Certificates is deprecated",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "clear-provisioning-profile",
+            "description": "remove Provisioning Profile stored on Expo servers",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "short": "r",
+            "long": "revoke-credentials",
+            "description": "revoke credentials on developer.apple.com, select appropriate using --clear-* options",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "apple-id",
+            "description": "apple ID username (please also set the Apple ID password as EXPO_APPLE_PASSWORD environment variable)",
+            "inherit": false,
+            "value": {
+              "name": "login"
+            }
+          },
+          {
+            "short": "t",
+            "long": "type",
+            "description": "type of build: [archive|simulator]",
+            "inherit": false,
+            "value": {
+              "name": "archive|simulator",
+              "provider": {
+                "values": [
+                  {
+                    "value": "archive"
+                  },
+                  {
+                    "value": "simulator"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "release-channel",
+            "description": "pull from specified release channel",
+            "inherit": false,
+            "value": {
+              "name": "name"
+            }
+          },
+          {
+            "long": "no-publish",
+            "description": "disable automatic publishing before building",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "no-wait",
+            "description": "exit immediately after scheduling build",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "team-id",
+            "description": "apple Team ID",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "dist-p12-path",
+            "description": "path to your Distribution Certificate P12 (set password as EXPO_IOS_DIST_P12_PASSWORD environment variable)",
+            "inherit": false,
+            "value": {
+              "name": "path",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "push-id",
+            "description": "push Key ID (ex: 123AB4C56D)",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "push-p8-path",
+            "description": "path to your Push Key .p8 file",
+            "inherit": false,
+            "value": {
+              "name": "path",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "provisioning-profile-path",
+            "description": "path to your Provisioning Profile",
+            "inherit": false,
+            "value": {
+              "name": "path",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "public-url",
+            "description": "the URL of an externally hosted manifest (for self-hosted apps)",
+            "inherit": false,
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "skip-credentials-check",
+            "description": "skip checking credentials",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "skip-workflow-check",
+            "description": "skip warning about build service bare workflow limitations",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "config",
+            "description": "deprecated: Use app.config.js to switch config files instead",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "required": false,
+              "style": "optional",
+              "provider": "builtin.files"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "provider": "builtin.directories",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "build:android",
+        "aliases": [
+          "ba"
+        ],
+        "description": "build and sign a standalone APK or App Bundle for the Google Play Store",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          },
+          {
+            "short": "c",
+            "long": "clear-credentials",
+            "description": "clear stored credentials",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "release-channel",
+            "description": "pull from specified release channel",
+            "inherit": false,
+            "value": {
+              "name": "name"
+            }
+          },
+          {
+            "long": "no-publish",
+            "description": "disable automatic publishing before building",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "no-wait",
+            "description": "exit immediately after triggering build",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "keystore-path",
+            "description": "path to your Keystore: *.jks",
+            "inherit": false,
+            "value": {
+              "name": "path",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "keystore-alias",
+            "description": "keystore Alias",
+            "inherit": false,
+            "value": {
+              "name": "alias"
+            }
+          },
+          {
+            "long": "generate-keystore",
+            "description": "[deprecated] Generate Keystore if one does not exist",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "public-url",
+            "description": "the URL of an externally hosted manifest (for self-hosted apps)",
+            "inherit": false,
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "skip-workflow-check",
+            "description": "skip warning about build service bare workflow limitations",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "short": "t",
+            "long": "type",
+            "description": "type of build: [app-bundle|apk]",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "config",
+            "description": "deprecated: Use app.config.js to switch config files instead",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "required": false,
+              "style": "optional",
+              "provider": "builtin.files"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "provider": "builtin.directories",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "build:web",
+        "description": "build the web app for production",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          },
+          {
+            "short": "c",
+            "long": "clear",
+            "description": "clear all cached build files and assets",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "no-pwa",
+            "description": "prevent webpack from generating the manifest.json and injecting meta into the index.html head",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "short": "d",
+            "long": "dev",
+            "description": "turns dev flag on before bundling",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "config",
+            "description": "deprecated: Use app.config.js to switch config files instead",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "required": false,
+              "style": "optional",
+              "provider": "builtin.files"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "provider": "builtin.directories",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "build:status",
+        "aliases": [
+          "bs"
+        ],
+        "description": "get the status of the latest build for the project",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          },
+          {
+            "long": "public-url",
+            "description": "the URL of an externally hosted manifest (for self-hosted apps)",
+            "inherit": false,
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "config",
+            "description": "deprecated: Use app.config.js to switch config files instead",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "required": false,
+              "style": "optional",
+              "provider": "builtin.files"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "provider": "builtin.directories",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "client:ios",
+        "description": "deprecated in favor of Expo Dev Clients",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          },
+          {
+            "long": "apple-id",
+            "description": "apple ID username (please also set the Apple ID password as EXPO_APPLE_PASSWORD environment variable)",
+            "inherit": false,
+            "value": {
+              "name": "login"
+            }
+          },
+          {
+            "long": "config",
+            "description": "deprecated: Use app.config.js to switch config files instead",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "required": false,
+              "style": "optional",
+              "provider": "builtin.files"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "provider": "builtin.directories",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "client:install:ios",
+        "description": "install Expo Go for iOS on the simulator",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          },
+          {
+            "long": "latest",
+            "description": "install the latest version of Expo Go, ignoring the current project version",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      },
+      {
+        "name": "client:install:android",
+        "description": "install Expo Go for Android on a connected device or emulator",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          },
+          {
+            "short": "d",
+            "long": "device",
+            "description": "device name to install the client on",
+            "inherit": false,
+            "value": {
+              "name": "device",
+              "required": false,
+              "style": "optional"
+            }
+          },
+          {
+            "long": "latest",
+            "description": "install the latest version of Expo Go, ignore the current project version",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      },
+      {
+        "name": "credentials:manager",
+        "description": "manage your credentials",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          },
+          {
+            "short": "p",
+            "long": "platform",
+            "description": "platform: [android|ios]",
+            "inherit": false,
+            "value": {
+              "name": "platform",
+              "provider": {
+                "values": [
+                  {
+                    "value": "android"
+                  },
+                  {
+                    "value": "ios"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "config",
+            "description": "deprecated: Use app.config.js to switch config files instead",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "required": false,
+              "style": "optional",
+              "provider": "builtin.files"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "provider": "builtin.directories",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "customize:web",
+        "description": "eject the default web files for customization",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          },
+          {
+            "short": "f",
+            "long": "force",
+            "description": "allows replacing existing files",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "offline",
+            "description": "allows this command to run while offline",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "config",
+            "description": "deprecated: Use app.config.js to switch config files instead",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "required": false,
+              "style": "optional",
+              "provider": "builtin.files"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "provider": "builtin.directories",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "eject",
+        "description": "create native iOS and Android project files. Learn more: https://docs.expo.dev/workflow/customizing/",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          },
+          {
+            "long": "no-install",
+            "description": "skip installing npm packages and CocoaPods",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "npm",
+            "description": "use npm to install dependencies. (default when Yarn is not installed)",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "short": "p",
+            "long": "platform",
+            "description": "platforms to sync: ios, android, all. Default: all",
+            "inherit": false,
+            "value": {
+              "name": "platform",
+              "provider": {
+                "values": [
+                  {
+                    "value": "all"
+                  },
+                  {
+                    "value": "android"
+                  },
+                  {
+                    "value": "ios"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "config",
+            "description": "deprecated: Use app.config.js to switch config files instead",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "required": false,
+              "style": "optional",
+              "provider": "builtin.files"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "provider": "builtin.directories",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "prebuild",
+        "description": "create native iOS and Android project files before building natively. Learn more: https://docs.expo.dev/workflow/customizing/",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          },
+          {
+            "long": "no-install",
+            "description": "skip installing npm packages and CocoaPods",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "clean",
+            "description": "delete the native folders and regenerate them before applying changes",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "npm",
+            "description": "use npm to install dependencies. (default when Yarn is not installed)",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "template",
+            "description": "project template to clone from. File path pointing to a local tar file or a github repo",
+            "inherit": false,
+            "value": {
+              "name": "template"
+            }
+          },
+          {
+            "short": "p",
+            "long": "platform",
+            "description": "platforms to sync: ios, android, all. Default: all",
+            "inherit": false,
+            "value": {
+              "name": "platform",
+              "provider": {
+                "values": [
+                  {
+                    "value": "all"
+                  },
+                  {
+                    "value": "android"
+                  },
+                  {
+                    "value": "ios"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "skip-dependency-update",
+            "description": "preserves versions of listed packages in package.json (comma separated list)",
+            "inherit": false,
+            "value": {
+              "name": "dependencies"
+            }
+          },
+          {
+            "long": "config",
+            "description": "deprecated: Use app.config.js to switch config files instead",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "required": false,
+              "style": "optional",
+              "provider": "builtin.files"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "provider": "builtin.directories",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "bundle-assets",
+        "description": "bundle assets for a detached app. This command should be executed from xcode or gradle",
+        "hidden": true,
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          },
+          {
+            "long": "dest",
+            "description": "destination directory for assets",
+            "inherit": false,
+            "value": {
+              "name": "dest",
+              "required": false,
+              "style": "optional"
+            }
+          },
+          {
+            "long": "platform",
+            "description": "detached project platform",
+            "inherit": false,
+            "value": {
+              "name": "platform",
+              "provider": {
+                "values": [
+                  {
+                    "value": "android"
+                  },
+                  {
+                    "value": "ios"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "config",
+            "description": "deprecated: Use app.config.js to switch config files instead",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "required": false,
+              "style": "optional",
+              "provider": "builtin.files"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "provider": "builtin.directories",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "prepare-detached-build",
+        "description": "prepare a detached project for building",
+        "hidden": true,
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          },
+          {
+            "long": "platform",
+            "description": "detached project platform",
+            "inherit": false,
+            "value": {
+              "name": "platform",
+              "provider": {
+                "values": [
+                  {
+                    "value": "android"
+                  },
+                  {
+                    "value": "ios"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "skipXcodeConfig",
+            "description": "[iOS only] if true, do not configure Xcode project",
+            "inherit": false,
+            "value": {
+              "name": "bool",
+              "required": false,
+              "style": "optional"
+            }
+          },
+          {
+            "long": "config",
+            "description": "deprecated: Use app.config.js to switch config files instead",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "required": false,
+              "style": "optional",
+              "provider": "builtin.files"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "provider": "builtin.directories",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "export",
+        "description": "export the static files of the app for hosting it on a web server",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          },
+          {
+            "long": "platform",
+            "description": "platforms: android, ios, all",
+            "inherit": false,
+            "value": {
+              "name": "platform",
+              "provider": {
+                "values": [
+                  {
+                    "value": "all"
+                  },
+                  {
+                    "value": "android"
+                  },
+                  {
+                    "value": "ios"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "short": "p",
+            "long": "public-url",
+            "description": "the public url that will host the static files (required)",
+            "inherit": false,
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "short": "c",
+            "long": "clear",
+            "description": "clear the Metro bundler cache",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "output-dir",
+            "description": "the directory to export the static files to",
+            "inherit": false,
+            "value": {
+              "name": "dir",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "short": "a",
+            "long": "asset-url",
+            "description": "the absolute or relative url that will host the asset files",
+            "inherit": false,
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "short": "d",
+            "long": "dump-assetmap",
+            "description": "dump the asset map for further processing",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "dev",
+            "description": "configure static files for developing locally using a non-https server",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "short": "s",
+            "long": "dump-sourcemap",
+            "description": "dump the source map for debugging the JS bundle",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "short": "q",
+            "long": "quiet",
+            "description": "suppress verbose output",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "short": "t",
+            "long": "target",
+            "description": "target environment for which this export is intended",
+            "inherit": false,
+            "value": {
+              "name": "managed|bare",
+              "provider": {
+                "values": [
+                  {
+                    "value": "managed"
+                  },
+                  {
+                    "value": "bare"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "merge-src-dir",
+            "description": "a repeatable source dir to merge in",
+            "inherit": false,
+            "value": {
+              "name": "dir",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "merge-src-url",
+            "description": "a repeatable source tar.gz file URL to merge in",
+            "inherit": false,
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "max-workers",
+            "description": "maximum number of tasks to allow Metro to spawn",
+            "inherit": false,
+            "value": {
+              "name": "Number-of-workers"
+            }
+          },
+          {
+            "long": "experimental-bundle",
+            "description": "export bundles for use with EAS updates",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "config",
+            "description": "deprecated: Use app.config.js to switch config files instead",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "required": false,
+              "style": "optional",
+              "provider": "builtin.files"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "provider": "builtin.directories",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "fetch:ios:certs",
+        "description": "download the project's iOS standalone app signing credentials",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          },
+          {
+            "long": "config",
+            "description": "deprecated: Use app.config.js to switch config files instead",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "required": false,
+              "style": "optional",
+              "provider": "builtin.files"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "provider": "builtin.directories",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "fetch:android:keystore",
+        "description": "download the project's Android keystore",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          },
+          {
+            "long": "config",
+            "description": "deprecated: Use app.config.js to switch config files instead",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "required": false,
+              "style": "optional",
+              "provider": "builtin.files"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "provider": "builtin.directories",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "fetch:android:hashes",
+        "description": "compute and log the project's Android key hashes",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          },
+          {
+            "long": "config",
+            "description": "deprecated: Use app.config.js to switch config files instead",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "required": false,
+              "style": "optional",
+              "provider": "builtin.files"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "provider": "builtin.directories",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "fetch:android:upload-cert",
+        "description": "download the project's Android keystore",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          },
+          {
+            "long": "config",
+            "description": "deprecated: Use app.config.js to switch config files instead",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "required": false,
+              "style": "optional",
+              "provider": "builtin.files"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "provider": "builtin.directories",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "config",
+        "description": "show the project config",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          },
+          {
+            "short": "t",
+            "long": "type",
+            "description": "type of config to show",
+            "inherit": false,
+            "value": {
+              "name": "public|prebuild|introspect",
+              "provider": {
+                "values": [
+                  {
+                    "value": "public"
+                  },
+                  {
+                    "value": "prebuild"
+                  },
+                  {
+                    "value": "introspect"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "full",
+            "description": "include all project config data",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "config",
+            "description": "deprecated: Use app.config.js to switch config files instead",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "required": false,
+              "style": "optional",
+              "provider": "builtin.files"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "provider": "builtin.directories",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "diagnostics",
+        "description": "log environment info to the console",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          },
+          {
+            "long": "config",
+            "description": "deprecated: Use app.config.js to switch config files instead",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "required": false,
+              "style": "optional",
+              "provider": "builtin.files"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "provider": "builtin.directories",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "doctor",
+        "description": "diagnose issues with the project",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          },
+          {
+            "long": "config",
+            "description": "deprecated: Use app.config.js to switch config files instead",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "required": false,
+              "style": "optional",
+              "provider": "builtin.files"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "provider": "builtin.directories",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "upgrade",
+        "aliases": [
+          "update"
+        ],
+        "description": "upgrade the project packages and config for the given SDK version",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          },
+          {
+            "long": "npm",
+            "description": "use npm to install dependencies. (default when package-lock.json exists)",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "yarn",
+            "description": "use Yarn to install dependencies. (default when yarn.lock exists)",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "sdk-version",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "init",
+        "aliases": [
+          "i"
+        ],
+        "description": "create a new Expo project",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          },
+          {
+            "short": "t",
+            "long": "template",
+            "description": "specify which template to use. Valid options are \"blank\", \"tabs\", \"bare-minimum\" or a package on npm (e.g. \"expo-template-bare-minimum\") that includes an Expo p",
+            "inherit": false,
+            "value": {
+              "name": "name",
+              "required": false,
+              "style": "optional"
+            }
+          },
+          {
+            "long": "npm",
+            "description": "use npm to install dependencies. (default when Yarn is not installed)",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "yarn",
+            "description": "use Yarn to install dependencies. (default when Yarn is installed)",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "no-install",
+            "description": "skip installing npm packages or CocoaPods",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "name",
+            "description": "the name of your app visible on the home screen",
+            "inherit": false,
+            "value": {
+              "name": "name",
+              "required": false,
+              "style": "optional"
+            }
+          },
+          {
+            "long": "yes",
+            "description": "use default options. Same as \"expo init . --template blank",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "name",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "install",
+        "aliases": [
+          "add"
+        ],
+        "description": "install a module or other package to a project",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          },
+          {
+            "long": "npm",
+            "description": "use npm to install dependencies. (default when package-lock.json exists)",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "yarn",
+            "description": "use Yarn to install dependencies. (default when yarn.lock exists)",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "packages",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "publish",
+        "aliases": [
+          "p"
+        ],
+        "description": "deploy a project to Expo hosting",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          },
+          {
+            "short": "q",
+            "long": "quiet",
+            "description": "suppress verbose output from the Metro bundler",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "short": "s",
+            "long": "send-to",
+            "description": "a phone number or email address to send a link to",
+            "inherit": false,
+            "value": {
+              "name": "dest",
+              "required": false,
+              "style": "optional"
+            }
+          },
+          {
+            "short": "c",
+            "long": "clear",
+            "description": "clear the Metro bundler cache",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "short": "t",
+            "long": "target",
+            "description": "target environment for which this publish is intended. Options are `managed` or `bare`",
+            "inherit": false,
+            "value": {
+              "name": "managed|bare",
+              "provider": {
+                "values": [
+                  {
+                    "value": "managed"
+                  },
+                  {
+                    "value": "bare"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "max-workers",
+            "description": "maximum number of tasks to allow Metro to spawn",
+            "inherit": false,
+            "value": {
+              "name": "Number-of-workers"
+            }
+          },
+          {
+            "long": "release-channel",
+            "description": "the release channel to publish to. Default is 'default'",
+            "inherit": false,
+            "value": {
+              "name": "name"
+            }
+          },
+          {
+            "long": "config",
+            "description": "deprecated: Use app.config.js to switch config files instead",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "required": false,
+              "style": "optional",
+              "provider": "builtin.files"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "provider": "builtin.directories",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "publish:set",
+        "aliases": [
+          "ps"
+        ],
+        "description": "specify the channel to serve a published release",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          },
+          {
+            "short": "c",
+            "long": "release-channel",
+            "description": "the channel to set the published release. (Required)",
+            "inherit": false,
+            "value": {
+              "name": "name"
+            }
+          },
+          {
+            "short": "p",
+            "long": "publish-id",
+            "description": "the id of the published release to serve from the channel. (Required)",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "config",
+            "description": "deprecated: Use app.config.js to switch config files instead",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "required": false,
+              "style": "optional",
+              "provider": "builtin.files"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "provider": "builtin.directories",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "publish:rollback",
+        "aliases": [
+          "pr"
+        ],
+        "description": "undo an update to a channel",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          },
+          {
+            "long": "channel-id",
+            "description": "this flag is deprecated",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "short": "c",
+            "long": "release-channel",
+            "description": "the channel to rollback from. (Required)",
+            "inherit": false,
+            "value": {
+              "name": "name"
+            }
+          },
+          {
+            "short": "s",
+            "long": "sdk-version",
+            "description": "the sdk version to rollback. (Required)",
+            "inherit": false,
+            "value": {
+              "name": "version"
+            }
+          },
+          {
+            "short": "p",
+            "long": "platform",
+            "description": "the platform to rollback",
+            "inherit": false,
+            "value": {
+              "name": "platform",
+              "provider": {
+                "values": [
+                  {
+                    "value": "android"
+                  },
+                  {
+                    "value": "ios"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "config",
+            "description": "deprecated: Use app.config.js to switch config files instead",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "required": false,
+              "style": "optional",
+              "provider": "builtin.files"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "provider": "builtin.directories",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "publish:history",
+        "aliases": [
+          "ph"
+        ],
+        "description": "log the project's releases",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          },
+          {
+            "short": "c",
+            "long": "release-channel",
+            "description": "filter by release channel. If this flag is not included, the most recent publications will be shown",
+            "inherit": false,
+            "value": {
+              "name": "name"
+            }
+          },
+          {
+            "long": "count",
+            "description": "number of logs to view, maximum 100, default 5",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "short": "p",
+            "long": "platform",
+            "description": "filter by platform, android or ios. Defaults to both platforms",
+            "inherit": false,
+            "value": {
+              "name": "platform",
+              "provider": {
+                "values": [
+                  {
+                    "value": "android"
+                  },
+                  {
+                    "value": "ios"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "short": "s",
+            "long": "sdk-version",
+            "description": "filter by SDK version e.g. 35.0.0",
+            "inherit": false,
+            "value": {
+              "name": "version"
+            }
+          },
+          {
+            "short": "r",
+            "long": "raw",
+            "description": "produce some raw output",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "config",
+            "description": "deprecated: Use app.config.js to switch config files instead",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "required": false,
+              "style": "optional",
+              "provider": "builtin.files"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "provider": "builtin.directories",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "publish:details",
+        "aliases": [
+          "pd"
+        ],
+        "description": "log details of a published release",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          },
+          {
+            "long": "publish-id",
+            "description": "publication id. (Required)",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "short": "r",
+            "long": "raw",
+            "description": "produce some raw output",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "config",
+            "description": "deprecated: Use app.config.js to switch config files instead",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "required": false,
+              "style": "optional",
+              "provider": "builtin.files"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "provider": "builtin.directories",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "push:android:upload",
+        "description": "upload an FCM key for Android push notifications",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          },
+          {
+            "long": "api-key",
+            "description": "server API key for FCM",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "config",
+            "description": "deprecated: Use app.config.js to switch config files instead",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "required": false,
+              "style": "optional",
+              "provider": "builtin.files"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "provider": "builtin.directories",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "push:android:show",
+        "description": "log the value currently in use for FCM notifications for this project",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          },
+          {
+            "long": "config",
+            "description": "deprecated: Use app.config.js to switch config files instead",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "required": false,
+              "style": "optional",
+              "provider": "builtin.files"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "provider": "builtin.directories",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "push:android:clear",
+        "description": "delete a previously uploaded FCM credential",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          },
+          {
+            "long": "config",
+            "description": "deprecated: Use app.config.js to switch config files instead",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "required": false,
+              "style": "optional",
+              "provider": "builtin.files"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "provider": "builtin.directories",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "run:android",
+        "description": "run the Android app binary locally",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          },
+          {
+            "long": "no-bundler",
+            "description": "skip starting the Metro bundler",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "short": "d",
+            "long": "device",
+            "description": "device name to build the app on",
+            "inherit": false,
+            "value": {
+              "name": "device",
+              "required": false,
+              "style": "optional"
+            }
+          },
+          {
+            "short": "p",
+            "long": "port",
+            "description": "port to start the Metro bundler on. Default: 8081",
+            "inherit": false,
+            "value": {
+              "name": "port"
+            }
+          },
+          {
+            "long": "variant",
+            "description": "(Android) build variant",
+            "inherit": false,
+            "value": {
+              "name": "name",
+              "required": false,
+              "style": "optional"
+            }
+          },
+          {
+            "long": "config",
+            "description": "deprecated: Use app.config.js to switch config files instead",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "required": false,
+              "style": "optional",
+              "provider": "builtin.files"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "provider": "builtin.directories",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "run:ios",
+        "description": "run the iOS app binary locally",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          },
+          {
+            "long": "no-build-cache",
+            "description": "clear the native derived data before building",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "no-install",
+            "description": "skip installing dependencies",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "no-bundler",
+            "description": "skip starting the Metro bundler",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "short": "d",
+            "long": "device",
+            "description": "device name or UDID to build the app on",
+            "inherit": false,
+            "value": {
+              "name": "device"
+            }
+          },
+          {
+            "short": "p",
+            "long": "port",
+            "description": "port to start the Metro bundler on. Default: 8081",
+            "inherit": false,
+            "value": {
+              "name": "port"
+            }
+          },
+          {
+            "long": "scheme",
+            "description": "scheme to build",
+            "inherit": false,
+            "value": {
+              "name": "scheme",
+              "required": false,
+              "style": "optional"
+            }
+          },
+          {
+            "long": "configuration",
+            "description": "xcode configuration to use. Debug or Release. Default: Debug",
+            "inherit": false,
+            "value": {
+              "name": "configuration",
+              "provider": "expo-cli.xcode-configurations"
+            }
+          },
+          {
+            "long": "config",
+            "description": "deprecated: Use app.config.js to switch config files instead",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "required": false,
+              "style": "optional",
+              "provider": "builtin.files"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "provider": "builtin.directories",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "send",
+        "description": "share the project's URL to an email address",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          },
+          {
+            "short": "s",
+            "long": "send-to",
+            "description": "email address to send the URL to",
+            "inherit": false,
+            "value": {
+              "name": "dest",
+              "required": false,
+              "style": "optional"
+            }
+          },
+          {
+            "long": "dev-client",
+            "description": "experimental: Starts the bundler for use with the expo-development-client",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "scheme",
+            "description": "custom URI protocol to use with a development build",
+            "inherit": false,
+            "value": {
+              "name": "scheme"
+            }
+          },
+          {
+            "short": "a",
+            "long": "android",
+            "description": "opens your app in Expo Go on a connected Android device",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "short": "i",
+            "long": "ios",
+            "description": "opens your app in Expo Go in a currently running iOS simulator on your computer",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "short": "w",
+            "long": "web",
+            "description": "opens your app in a web browser",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "short": "m",
+            "long": "host",
+            "description": "lan (default), tunnel, localhost. Type of host to use. \"tunnel\" allows you to view your link on other networks",
+            "inherit": false,
+            "value": {
+              "name": "mode",
+              "required": false,
+              "style": "optional"
+            }
+          },
+          {
+            "long": "tunnel",
+            "description": "same as --host tunnel",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "lan",
+            "description": "same as --host lan",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "localhost",
+            "description": "same as --host localhost",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "config",
+            "description": "deprecated: Use app.config.js to switch config files instead",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "required": false,
+              "style": "optional",
+              "provider": "builtin.files"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "provider": "builtin.directories",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "start",
+        "aliases": [
+          "r"
+        ],
+        "description": "start a local dev server for the app",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          },
+          {
+            "short": "s",
+            "long": "send-to",
+            "description": "an email address to send a link to",
+            "inherit": false,
+            "value": {
+              "name": "dest",
+              "required": false,
+              "style": "optional"
+            }
+          },
+          {
+            "short": "c",
+            "long": "clear",
+            "description": "clear the Metro bundler cache",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "max-workers",
+            "description": "maximum number of tasks to allow Metro to spawn",
+            "inherit": false,
+            "value": {
+              "name": "Number-of-workers"
+            }
+          },
+          {
+            "long": "dev",
+            "description": "turn development mode on",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "no-dev",
+            "description": "turn development mode off",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "minify",
+            "description": "minify code",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "no-minify",
+            "description": "do not minify code",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "https",
+            "description": "to start webpack with https protocol",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "force-manifest-type",
+            "description": "override auto detection of manifest type",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "short": "p",
+            "long": "port",
+            "description": "port to start the native Metro bundler on (does not apply to web or tunnel). Default: 19000",
+            "inherit": false,
+            "value": {
+              "name": "port"
+            }
+          },
+          {
+            "long": "no-https",
+            "description": "to start webpack with http protocol",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "dev-client",
+            "description": "experimental: Starts the bundler for use with the expo-development-client",
+            "inherit": false
+          },
+          {
+            "long": "scheme",
+            "description": "custom URI protocol to use with a development build",
+            "inherit": false,
+            "value": {
+              "name": "scheme"
+            }
+          },
+          {
+            "short": "a",
+            "long": "android",
+            "description": "opens your app in Expo Go on a connected Android device",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "short": "i",
+            "long": "ios",
+            "description": "opens your app in Expo Go in a currently running iOS simulator on your computer",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "short": "w",
+            "long": "web",
+            "description": "opens your app in a web browser",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "short": "m",
+            "long": "host",
+            "description": "lan (default), tunnel, localhost. Type of host to use. \"tunnel\" allows you to view your link on other networks",
+            "inherit": false,
+            "value": {
+              "name": "mode",
+              "required": false,
+              "style": "optional"
+            }
+          },
+          {
+            "long": "tunnel",
+            "description": "same as --host tunnel",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "lan",
+            "description": "same as --host lan",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "localhost",
+            "description": "same as --host localhost",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "offline",
+            "description": "allows this command to run while offline",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "config",
+            "description": "deprecated: Use app.config.js to switch config files instead",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "required": false,
+              "style": "optional",
+              "provider": "builtin.files"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "provider": "builtin.directories",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "start:web",
+        "aliases": [
+          "web"
+        ],
+        "description": "start a Webpack dev server for the web app",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          },
+          {
+            "long": "dev",
+            "description": "turn development mode on",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "no-dev",
+            "description": "turn development mode off",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "minify",
+            "description": "minify code",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "no-minify",
+            "description": "do not minify code",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "https",
+            "description": "to start webpack with https protocol",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "no-https",
+            "description": "to start webpack with http protocol",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "force-manifest-type",
+            "description": "override auto detection of manifest type",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "short": "p",
+            "long": "port",
+            "description": "port to start the Webpack bundler on. Default: 19006",
+            "inherit": false,
+            "value": {
+              "name": "port"
+            }
+          },
+          {
+            "short": "s",
+            "long": "send-to",
+            "description": "an email address to send a link to",
+            "inherit": false,
+            "value": {
+              "name": "dest",
+              "required": false,
+              "style": "optional"
+            }
+          },
+          {
+            "long": "dev-client",
+            "description": "experimental: Starts the bundler for use with the expo-development-client",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "scheme",
+            "description": "custom URI protocol to use with a development build",
+            "inherit": false,
+            "value": {
+              "name": "scheme"
+            }
+          },
+          {
+            "short": "a",
+            "long": "android",
+            "description": "opens your app in Expo Go on a connected Android device",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "short": "i",
+            "long": "ios",
+            "description": "opens your app in Expo Go in a currently running iOS simulator on your computer",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "short": "w",
+            "long": "web",
+            "description": "opens your app in a web browser",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "short": "m",
+            "long": "host",
+            "description": "lan (default), tunnel, localhost. Type of host to use. \"tunnel\" allows you to view your link on other networks",
+            "inherit": false,
+            "value": {
+              "name": "mode",
+              "required": false,
+              "style": "optional"
+            }
+          },
+          {
+            "long": "tunnel",
+            "description": "same as --host tunnel",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "lan",
+            "description": "same as --host lan",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "localhost",
+            "description": "same as --host localhost",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "offline",
+            "description": "allows this command to run while offline",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "config",
+            "description": "deprecated: Use app.config.js to switch config files instead",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "required": false,
+              "style": "optional",
+              "provider": "builtin.files"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "provider": "builtin.directories",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "upload:android",
+        "aliases": [
+          "ua"
+        ],
+        "description": "moved to eas submit in eas-cli",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          },
+          {
+            "long": "verbose",
+            "description": "migrate to eas submit --verbose",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "latest",
+            "description": "migrate to eas submit --latest",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "id",
+            "description": "migrate to eas submit --id <id>",
+            "inherit": false,
+            "value": {
+              "name": "id"
+            }
+          },
+          {
+            "long": "path",
+            "description": "migrate to eas submit --path <path>",
+            "inherit": false,
+            "value": {
+              "name": "path",
+              "required": false,
+              "style": "optional",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "url",
+            "description": "migrate to eas submit --url <url>",
+            "inherit": false,
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "android-package",
+            "description": "migrate to eas submit (android-package is auto inferred)",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "type",
+            "description": "migrate to eas submit (type is auto inferred)",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "key",
+            "description": "migrate to eas.json's serviceAccountKeyPath property",
+            "inherit": false,
+            "value": {
+              "name": "key"
+            }
+          },
+          {
+            "long": "track",
+            "description": "migrate to eas.json's track property",
+            "inherit": false,
+            "value": {
+              "name": "track"
+            }
+          },
+          {
+            "long": "release-status",
+            "description": "migrate to eas.json's releaseStatus property",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "config",
+            "description": "deprecated: Use app.config.js to switch config files instead",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "required": false,
+              "style": "optional",
+              "provider": "builtin.files"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "provider": "builtin.directories",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "upload:ios",
+        "aliases": [
+          "ui"
+        ],
+        "description": "moved to eas submit in eas-cli",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          },
+          {
+            "long": "verbose",
+            "description": "migrate to eas submit --verbose",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "latest",
+            "description": "migrate to eas submit --latest",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "id",
+            "description": "migrate to eas submit --id <id>",
+            "inherit": false,
+            "value": {
+              "name": "id"
+            }
+          },
+          {
+            "long": "path",
+            "description": "migrate to eas submit --path <path>",
+            "inherit": false,
+            "value": {
+              "name": "path",
+              "required": false,
+              "style": "optional",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "url",
+            "description": "migrate to eas submit --url <url>",
+            "inherit": false,
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "apple-id",
+            "description": "migrate to eas.json's appleId property",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "itc-team-id",
+            "description": "migrate to eas.json's appleTeamId property",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "app-name",
+            "description": "migrate to eas.json's appName property",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "company-name",
+            "description": "migrate to eas.json's companyName property",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "sku",
+            "description": "migrate to eas.json's sku property",
+            "inherit": false,
+            "value": {
+              "name": "sku"
+            }
+          },
+          {
+            "long": "language",
+            "description": "migrate to eas.json's language property",
+            "inherit": false,
+            "value": {
+              "name": "language"
+            }
+          },
+          {
+            "long": "config",
+            "description": "deprecated: Use app.config.js to switch config files instead",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "required": false,
+              "style": "optional",
+              "provider": "builtin.files"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "provider": "builtin.directories",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "url",
+        "aliases": [
+          "u"
+        ],
+        "description": "log a URL for opening the project in Expo Go",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          },
+          {
+            "long": "dev-client",
+            "description": "experimental: Starts the bundler for use with the expo-development-client",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "scheme",
+            "description": "custom URI protocol to use with a development build",
+            "inherit": false,
+            "value": {
+              "name": "scheme"
+            }
+          },
+          {
+            "short": "a",
+            "long": "android",
+            "description": "opens your app in Expo Go on a connected Android device",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "short": "i",
+            "long": "ios",
+            "description": "opens your app in Expo Go in a currently running iOS simulator on your computer",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "short": "w",
+            "long": "web",
+            "description": "opens your app in a web browser",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "short": "m",
+            "long": "host",
+            "description": "lan (default), tunnel, localhost. Type of host to use. \"tunnel\" allows you to view your link on other networks",
+            "inherit": false,
+            "value": {
+              "name": "mode",
+              "required": false,
+              "style": "optional"
+            }
+          },
+          {
+            "long": "tunnel",
+            "description": "same as --host tunnel",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "lan",
+            "description": "same as --host lan",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "localhost",
+            "description": "same as --host localhost",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "offline",
+            "description": "allows this command to run while offline",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "config",
+            "description": "deprecated: Use app.config.js to switch config files instead",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "required": false,
+              "style": "optional",
+              "provider": "builtin.files"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "provider": "builtin.directories",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "url:ipa",
+        "description": "log the download URL for the standalone iOS binary",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          },
+          {
+            "long": "public-url",
+            "description": "the URL of an externally hosted manifest (for self-hosted apps)",
+            "inherit": false,
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "config",
+            "description": "deprecated: Use app.config.js to switch config files instead",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "required": false,
+              "style": "optional",
+              "provider": "builtin.files"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "provider": "builtin.directories",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "url:apk",
+        "description": "log the download URL for the standalone Android binary",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          },
+          {
+            "long": "public-url",
+            "description": "the URL of an externally hosted manifest (for self-hosted apps)",
+            "inherit": false,
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "config",
+            "description": "deprecated: Use app.config.js to switch config files instead",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "required": false,
+              "style": "optional",
+              "provider": "builtin.files"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "provider": "builtin.directories",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "webhooks",
+        "description": "list all webhooks for a project",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          },
+          {
+            "long": "config",
+            "description": "deprecated: Use app.config.js to switch config files instead",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "required": false,
+              "style": "optional",
+              "provider": "builtin.files"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "provider": "builtin.directories",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "webhooks:add",
+        "description": "add a webhook to a project",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          },
+          {
+            "long": "url",
+            "description": "uRL to request. (Required)",
+            "inherit": false,
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "event",
+            "description": "event type that triggers the webhook. [build] (Required)",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "secret",
+            "description": "secret used to create a hash signature of the request payload, provided in the 'Expo-Signature' header",
+            "inherit": false,
+            "value": {
+              "name": "secret"
+            }
+          },
+          {
+            "long": "config",
+            "description": "deprecated: Use app.config.js to switch config files instead",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "required": false,
+              "style": "optional",
+              "provider": "builtin.files"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "provider": "builtin.directories",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "webhooks:remove",
+        "description": "delete a webhook",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          },
+          {
+            "long": "id",
+            "description": "iD of the webhook to remove",
+            "inherit": false,
+            "value": {
+              "name": "id"
+            }
+          },
+          {
+            "long": "config",
+            "description": "deprecated: Use app.config.js to switch config files instead",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "required": false,
+              "style": "optional",
+              "provider": "builtin.files"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "provider": "builtin.directories",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "webhooks:update",
+        "description": "update an existing webhook",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          },
+          {
+            "long": "id",
+            "description": "iD of the webhook to update",
+            "inherit": false,
+            "value": {
+              "name": "id"
+            }
+          },
+          {
+            "long": "url",
+            "description": "uRL the webhook will request",
+            "inherit": false,
+            "value": {
+              "name": "url",
+              "required": false,
+              "style": "optional"
+            }
+          },
+          {
+            "long": "event",
+            "description": "event type that triggers the webhook. [build]",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "secret",
+            "description": "secret used to create a hash signature of the request payload, provided in the 'Expo-Signature' header",
+            "inherit": false,
+            "value": {
+              "name": "secret",
+              "required": false,
+              "style": "optional"
+            }
+          },
+          {
+            "long": "config",
+            "description": "deprecated: Use app.config.js to switch config files instead",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "required": false,
+              "style": "optional",
+              "provider": "builtin.files"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "provider": "builtin.directories",
+              "index": 0
+            }
+          ]
+        }
+      }
+    ],
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "expo-cli.xcode-configurations": {
+        "values": [
+          "Debug",
+          "Release"
+        ]
+      }
+    }
+  }
+}
