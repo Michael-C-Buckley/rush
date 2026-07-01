@@ -1,0 +1,101 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "act",
+    "description": "run GitHub Actions locally",
+    "providers": {
+      "builtin.files": { "builtin": "files" },
+      "builtin.directories": { "builtin": "directories" },
+      "act.events": {
+        "values": [
+          { "value": "push", "description": "run push workflows", "priority": 20 },
+          { "value": "pull_request", "description": "run pull request workflows", "priority": 15 },
+          { "value": "workflow_dispatch", "description": "run manual workflows", "priority": 10 },
+          { "value": "schedule", "description": "run scheduled workflows" },
+          { "value": "release", "description": "run release workflows" },
+          { "value": "issue_comment", "description": "run issue comment workflows" },
+          { "value": "issues", "description": "run issue workflows" },
+          { "value": "pull_request_review", "description": "run review workflows" },
+          { "value": "pull_request_target", "description": "run target pull request workflows" },
+          { "value": "repository_dispatch", "description": "run repository dispatch workflows" }
+        ]
+      }
+    },
+    "options": [
+      { "short": "a", "long": "actor", "inherit": true, "value": { "name": "actor" }, "description": "set the triggering user" },
+      { "long": "artifact-server-path", "inherit": true, "value": { "name": "path", "provider": "builtin.directories" }, "description": "set artifact server storage path" },
+      { "long": "artifact-server-port", "inherit": true, "value": { "name": "port" }, "description": "set artifact server port" },
+      { "short": "b", "long": "bind", "inherit": false, "description": "bind the working directory" },
+      { "long": "bug-report", "inherit": false, "description": "print system information" },
+      { "long": "container-architecture", "inherit": true, "value": { "name": "architecture" }, "description": "set container architecture" },
+      { "long": "container-cap-add", "repeatable": true, "inherit": false, "value": { "name": "capability" }, "description": "add container kernel capability" },
+      { "long": "container-cap-drop", "repeatable": true, "inherit": false, "value": { "name": "capability" }, "description": "drop container kernel capability" },
+      { "long": "container-daemon-socket", "inherit": true, "value": { "name": "socket", "provider": "builtin.files" }, "description": "set docker daemon socket path" },
+      { "long": "defaultbranch", "inherit": false, "value": { "name": "branch" }, "description": "set the default branch name" },
+      { "long": "detect-event", "inherit": false, "description": "use the first workflow event" },
+      { "short": "C", "long": "directory", "inherit": true, "value": { "name": "directory", "provider": "builtin.directories" }, "description": "change working directory" },
+      { "short": "n", "long": "dryrun", "inherit": true, "description": "show what would run" },
+      { "long": "env", "repeatable": true, "inherit": false, "value": { "name": "env", "style": "optional" }, "description": "set action environment variable" },
+      { "long": "env-file", "inherit": true, "value": { "name": "file", "provider": "builtin.files" }, "description": "read environment variables from file" },
+      { "short": "e", "long": "eventpath", "inherit": false, "value": { "name": "file", "provider": "builtin.files" }, "description": "read event payload from file" },
+      { "long": "github-instance", "inherit": true, "value": { "name": "host" }, "description": "set GitHub instance host" },
+      { "short": "g", "long": "graph", "inherit": false, "description": "draw workflows" },
+      { "short": "h", "long": "help", "inherit": true, "priority": 10, "description": "show help" },
+      { "long": "insecure-secrets", "inherit": true, "description": "print secrets in logs" },
+      { "short": "j", "long": "job", "inherit": false, "value": { "name": "job" }, "description": "run a workflow job" },
+      { "long": "json", "inherit": true, "description": "write logs as json" },
+      { "short": "l", "long": "list", "inherit": false, "description": "list workflows" },
+      { "long": "no-recurse", "inherit": true, "description": "skip workflows in subdirectories" },
+      { "long": "no-skip-checkout", "inherit": true, "description": "run actions/checkout" },
+      { "short": "P", "long": "platform", "repeatable": true, "inherit": false, "value": { "name": "platform" }, "description": "set image for a platform" },
+      { "long": "privileged", "inherit": false, "description": "use privileged containers" },
+      { "short": "p", "long": "pull", "inherit": false, "description": "pull docker images" },
+      { "short": "q", "long": "quiet", "inherit": true, "description": "suppress step output" },
+      { "long": "rebuild", "inherit": false, "description": "rebuild local action images" },
+      { "long": "remote-name", "inherit": false, "value": { "name": "remote" }, "description": "set git remote name" },
+      { "short": "r", "long": "reuse", "inherit": false, "description": "keep successful containers" },
+      { "long": "rm", "inherit": false, "description": "remove failed containers" },
+      { "short": "s", "long": "secret", "repeatable": true, "inherit": false, "value": { "name": "secret", "style": "optional" }, "description": "set action secret" },
+      { "long": "secret-file", "inherit": true, "value": { "name": "file", "provider": "builtin.files" }, "description": "read secrets from file" },
+      { "long": "use-gitignore", "inherit": false, "description": "respect gitignore when copying files" },
+      { "long": "userns", "inherit": false, "value": { "name": "namespace" }, "description": "set user namespace" },
+      { "short": "v", "long": "verbose", "inherit": true, "description": "enable verbose output" },
+      { "short": "w", "long": "watch", "inherit": false, "description": "rerun when files change" },
+      { "short": "W", "long": "workflows", "inherit": true, "value": { "name": "path", "provider": ["builtin.directories", "builtin.files"] }, "description": "set workflow file or directory" }
+    ],
+    "arguments": {
+      "states": [
+        { "name": "event", "index": 0, "provider": "act.events", "description": "event or action to run" }
+      ]
+    },
+    "subcommands": [
+      {
+        "name": "completion",
+        "description": "generate shell completions",
+        "subcommands": [
+          { "name": "bash", "description": "generate bash completions", "options": [{ "long": "no-descriptions", "inherit": false, "description": "omit completion descriptions" }] },
+          { "name": "fish", "description": "generate fish completions", "options": [{ "long": "no-descriptions", "inherit": false, "description": "omit completion descriptions" }] },
+          { "name": "powershell", "description": "generate powershell completions", "options": [{ "long": "no-descriptions", "inherit": false, "description": "omit completion descriptions" }] },
+          { "name": "zsh", "description": "generate zsh completions", "options": [{ "long": "no-descriptions", "inherit": false, "description": "omit completion descriptions" }] }
+        ]
+      },
+      {
+        "name": "help",
+        "description": "show help for a command",
+        "subcommands": [
+          {
+            "name": "completion",
+            "description": "show help for completions",
+            "subcommands": [
+              { "name": "bash", "description": "show bash completion help" },
+              { "name": "fish", "description": "show fish completion help" },
+              { "name": "powershell", "description": "show powershell completion help" },
+              { "name": "zsh", "description": "show zsh completion help" }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}
