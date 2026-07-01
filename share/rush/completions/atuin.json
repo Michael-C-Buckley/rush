@@ -1,0 +1,686 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "atuin",
+    "description": "manage shell history",
+    "options": [
+      {
+        "long": "help",
+        "short": "h",
+        "description": "show help",
+        "inherit": true
+      },
+      {
+        "long": "version",
+        "short": "V",
+        "description": "show version",
+        "inherit": false
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "history",
+        "description": "manipulate shell history",
+        "subcommands": [
+          {
+            "name": "start",
+            "description": "begins a new command in the history",
+            "arguments": {
+              "states": [
+                {
+                  "name": "command",
+                  "index": 0,
+                  "repeatable": true
+                }
+              ]
+            }
+          },
+          {
+            "name": "end",
+            "description": "finishes a new command in the history (adds time, exit code)",
+            "options": [
+              {
+                "long": "exit",
+                "short": "e",
+                "inherit": false,
+                "value": {
+                  "name": "exit"
+                }
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "id",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "list",
+            "description": "list all items in history",
+            "options": [
+              {
+                "long": "cwd",
+                "short": "c",
+                "inherit": false
+              },
+              {
+                "long": "session",
+                "short": "s",
+                "inherit": false
+              },
+              {
+                "long": "human",
+                "inherit": false
+              },
+              {
+                "long": "cmd-only",
+                "description": "show only the text of the command",
+                "inherit": false
+              },
+              {
+                "long": "format",
+                "short": "f",
+                "inherit": false,
+                "value": {
+                  "name": "format",
+                  "description": "Available variables: {command}, {directory}, {duration}, {user}, {host} and {time}. Example: --format \"{time} - [{duration}] - {directory}$\\t{command}\""
+                }
+              }
+            ]
+          },
+          {
+            "name": "last",
+            "description": "get the last command ran",
+            "options": [
+              {
+                "long": "human",
+                "inherit": false
+              },
+              {
+                "long": "cmd-only",
+                "description": "show only the text of the command",
+                "inherit": false
+              },
+              {
+                "long": "format",
+                "short": "f",
+                "inherit": false,
+                "value": {
+                  "name": "format",
+                  "description": "Available variables: {command}, {directory}, {duration}, {user}, {host} and {time}. Example: --format \"{time} - [{duration}] - {directory}$\\t{command}\""
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "import",
+        "description": "import shell history from file",
+        "subcommands": [
+          {
+            "name": "auto",
+            "description": "import current shell history"
+          },
+          {
+            "name": "zsh",
+            "description": "import zsh history"
+          },
+          {
+            "name": "zsh-hist-db",
+            "description": "import zsh history"
+          },
+          {
+            "name": "bash",
+            "description": "import bash history"
+          },
+          {
+            "name": "resh",
+            "description": "import resh history"
+          },
+          {
+            "name": "fish",
+            "description": "import fish history"
+          },
+          {
+            "name": "nu",
+            "description": "import nu history"
+          },
+          {
+            "name": "nu-hist-db",
+            "description": "import nu history"
+          }
+        ]
+      },
+      {
+        "name": "stats",
+        "description": "calculate statistics for your history",
+        "options": [
+          {
+            "long": "count",
+            "short": "c",
+            "description": "how many top commands to list",
+            "inherit": false,
+            "value": {
+              "name": "count"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "period",
+              "description": "Compute statistics for the specified period, leave blank for statistics since the beginning",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "search",
+        "description": "interactive history search",
+        "options": [
+          {
+            "long": "cwd",
+            "short": "c",
+            "description": "filter search result by directory",
+            "inherit": false,
+            "value": {
+              "name": "cwd"
+            }
+          },
+          {
+            "long": "exclude-cwd",
+            "description": "exclude directory from results",
+            "inherit": false,
+            "value": {
+              "name": "exclude-cwd"
+            }
+          },
+          {
+            "long": "exit",
+            "short": "e",
+            "description": "filter search result by exit code",
+            "inherit": false,
+            "value": {
+              "name": "exit"
+            }
+          },
+          {
+            "long": "exclude-exit",
+            "description": "exclude results with this exit code",
+            "inherit": false,
+            "value": {
+              "name": "exclude-exit"
+            }
+          },
+          {
+            "long": "before",
+            "short": "b",
+            "description": "only include results added before this date",
+            "inherit": false,
+            "value": {
+              "name": "before"
+            }
+          },
+          {
+            "long": "after",
+            "description": "only include results after this date",
+            "inherit": false,
+            "value": {
+              "name": "after"
+            }
+          },
+          {
+            "long": "limit",
+            "description": "how many entries to return at most",
+            "inherit": false,
+            "value": {
+              "name": "limit"
+            }
+          },
+          {
+            "long": "offset",
+            "description": "offset from the start of the results",
+            "inherit": false,
+            "value": {
+              "name": "offset"
+            }
+          },
+          {
+            "long": "interactive",
+            "short": "i",
+            "description": "open interactive search UI",
+            "inherit": false
+          },
+          {
+            "long": "filter-mode",
+            "description": "allow overriding filter mode over config",
+            "inherit": false,
+            "value": {
+              "name": "filter-mode",
+              "provider": "atuin.filter-modes"
+            }
+          },
+          {
+            "long": "search-mode",
+            "description": "allow overriding search mode over config",
+            "inherit": false,
+            "value": {
+              "name": "search-mode",
+              "provider": "atuin.search-modes"
+            }
+          },
+          {
+            "long": "human",
+            "description": "use human-readable formatting for time",
+            "inherit": false
+          },
+          {
+            "long": "cmd-only",
+            "description": "show only the text of the command",
+            "inherit": false
+          },
+          {
+            "long": "delete",
+            "description": "delete anything matching this query. Will not print out the match",
+            "inherit": false
+          },
+          {
+            "long": "delete-it-all",
+            "description": "delete EVERYTHING!",
+            "inherit": false
+          },
+          {
+            "long": "reverse",
+            "short": "r",
+            "description": "reverse the order of results, oldest first",
+            "inherit": false
+          },
+          {
+            "long": "format",
+            "short": "f",
+            "inherit": false,
+            "value": {
+              "name": "format",
+              "description": "Available variables: {command}, {directory}, {duration}, {user}, {host} and {time}. Example: --format \"{time} - [{duration}] - {directory}$\\t{command}\""
+            }
+          },
+          {
+            "long": "inline-height",
+            "description": "set the maximum number of lines Atuin's interface should take up",
+            "inherit": false,
+            "value": {
+              "name": "inline-height"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "query",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "sync",
+        "description": "sync with the configured server",
+        "options": [
+          {
+            "long": "force",
+            "short": "f",
+            "description": "force re-download everything",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "login",
+        "description": "login to the configured server",
+        "options": [
+          {
+            "long": "username",
+            "short": "u",
+            "inherit": false,
+            "value": {
+              "name": "username"
+            }
+          },
+          {
+            "long": "password",
+            "short": "p",
+            "inherit": false,
+            "value": {
+              "name": "password"
+            }
+          },
+          {
+            "long": "key",
+            "short": "k",
+            "description": "the encryption key for your account",
+            "inherit": false,
+            "value": {
+              "name": "key"
+            }
+          }
+        ]
+      },
+      {
+        "name": "logout",
+        "description": "log out"
+      },
+      {
+        "name": "register",
+        "description": "register with the configured server",
+        "options": [
+          {
+            "long": "username",
+            "short": "u",
+            "inherit": false,
+            "value": {
+              "name": "username"
+            }
+          },
+          {
+            "long": "password",
+            "short": "p",
+            "inherit": false,
+            "value": {
+              "name": "password"
+            }
+          },
+          {
+            "long": "email",
+            "short": "e",
+            "inherit": false,
+            "value": {
+              "name": "email"
+            }
+          }
+        ]
+      },
+      {
+        "name": "key",
+        "description": "print the encryption key for transfer to another machine",
+        "options": [
+          {
+            "long": "base64",
+            "description": "switch to base64 output of the key",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "status",
+        "description": "status"
+      },
+      {
+        "name": "account",
+        "subcommands": [
+          {
+            "name": "login",
+            "description": "login to the configured server",
+            "options": [
+              {
+                "long": "username",
+                "short": "u",
+                "inherit": false,
+                "value": {
+                  "name": "username"
+                }
+              },
+              {
+                "long": "password",
+                "short": "p",
+                "inherit": false,
+                "value": {
+                  "name": "password"
+                }
+              },
+              {
+                "long": "key",
+                "short": "k",
+                "description": "the encryption key for your account",
+                "inherit": false,
+                "value": {
+                  "name": "key"
+                }
+              }
+            ]
+          },
+          {
+            "name": "register",
+            "options": [
+              {
+                "long": "username",
+                "short": "u",
+                "inherit": false,
+                "value": {
+                  "name": "username"
+                }
+              },
+              {
+                "long": "password",
+                "short": "p",
+                "inherit": false,
+                "value": {
+                  "name": "password"
+                }
+              },
+              {
+                "long": "email",
+                "short": "e",
+                "inherit": false,
+                "value": {
+                  "name": "email"
+                }
+              }
+            ],
+            "description": "register"
+          },
+          {
+            "name": "logout",
+            "description": "log out"
+          },
+          {
+            "name": "delete",
+            "description": "delete"
+          }
+        ],
+        "description": "account"
+      },
+      {
+        "name": "kv",
+        "subcommands": [
+          {
+            "name": "set",
+            "options": [
+              {
+                "long": "key",
+                "short": "k",
+                "inherit": false,
+                "value": {
+                  "name": "key"
+                }
+              },
+              {
+                "long": "namespace",
+                "short": "n",
+                "inherit": false,
+                "value": {
+                  "name": "namespace"
+                }
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "value",
+                  "index": 0
+                }
+              ]
+            },
+            "description": "set"
+          },
+          {
+            "name": "get",
+            "options": [
+              {
+                "long": "namespace",
+                "short": "n",
+                "inherit": false,
+                "value": {
+                  "name": "namespace"
+                }
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "key",
+                  "index": 0
+                }
+              ]
+            },
+            "description": "get"
+          }
+        ],
+        "description": "kv"
+      },
+      {
+        "name": "server",
+        "description": "start an atuin server",
+        "subcommands": [
+          {
+            "name": "start",
+            "description": "start the server",
+            "options": [
+              {
+                "long": "host",
+                "description": "the host address to bind",
+                "inherit": false,
+                "value": {
+                  "name": "host"
+                }
+              },
+              {
+                "long": "port",
+                "short": "p",
+                "description": "the port to bind",
+                "inherit": false,
+                "value": {
+                  "name": "port"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "init",
+        "description": "output shell setup",
+        "options": [
+          {
+            "long": "disable-ctrl-r",
+            "description": "disable the binding of CTRL-R to atuin",
+            "inherit": false
+          },
+          {
+            "long": "disable-up-arrow",
+            "description": "disable the binding of the Up Arrow key to atuin",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "shell",
+              "provider": "atuin.shells",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "uuid",
+        "description": "generate a UUID"
+      },
+      {
+        "name": "contributors",
+        "description": "contributors"
+      },
+      {
+        "name": "gen-completions",
+        "description": "generate shell completions",
+        "options": [
+          {
+            "long": "shell",
+            "short": "s",
+            "description": "set the shell for generating completions",
+            "inherit": false,
+            "value": {
+              "name": "shell",
+              "provider": "atuin.completion-shells"
+            }
+          },
+          {
+            "long": "out-dir",
+            "short": "o",
+            "description": "set the output directory",
+            "inherit": false,
+            "value": {
+              "name": "out-dir",
+              "provider": {
+                "builtin": "directories"
+              }
+            }
+          }
+        ]
+      }
+    ],
+    "providers": {
+      "atuin.filter-modes": {
+        "values": [
+          "global",
+          "host",
+          "session",
+          "directory",
+          "workspace"
+        ]
+      },
+      "atuin.search-modes": {
+        "values": [
+          "prefix",
+          "full-text",
+          "fuzzy",
+          "skim"
+        ]
+      },
+      "atuin.shells": {
+        "values": [
+          "zsh",
+          "bash",
+          "fish",
+          "nu"
+        ]
+      },
+      "atuin.completion-shells": {
+        "values": [
+          "bash",
+          "elvish",
+          "fish",
+          "powershell",
+          "zsh"
+        ]
+      }
+    }
+  }
+}
