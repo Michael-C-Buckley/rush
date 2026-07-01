@@ -1,0 +1,1094 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "dog",
+    "description": "query DNS records",
+    "subcommands": [
+      {
+        "name": "A",
+        "description": "query A Record",
+        "options": [
+          {
+            "short": "q",
+            "long": "query",
+            "description": "set the host name or IP address to query",
+            "value": {
+              "name": "HOST"
+            },
+            "inherit": false
+          },
+          {
+            "short": "t",
+            "long": "type",
+            "description": "set the DNS record type",
+            "value": {
+              "name": "TYPE"
+            },
+            "inherit": false
+          },
+          {
+            "short": "n",
+            "long": "nameserver",
+            "description": "set the nameserver address",
+            "value": {
+              "name": "ADDR"
+            },
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-class"
+            ],
+            "description": "set the DNS record network class",
+            "value": {
+              "name": "CLASS"
+            },
+            "inherit": false
+          },
+          {
+            "long": "edns",
+            "description": "set EDNS handling",
+            "value": {
+              "name": "NUMBER"
+            },
+            "inherit": false
+          },
+          {
+            "long": "txid",
+            "description": "set the transaction ID",
+            "value": {
+              "name": "CLASS"
+            },
+            "inherit": false
+          },
+          {
+            "short": "Z",
+            "description": "set protocol-level tweaks",
+            "value": {
+              "name": "TWEAKS"
+            },
+            "inherit": false
+          },
+          {
+            "short": "U",
+            "long": "udp",
+            "description": "use DNS over UDP",
+            "inherit": false
+          },
+          {
+            "short": "T",
+            "long": "tcp",
+            "description": "use DNS over TCP",
+            "inherit": false
+          },
+          {
+            "short": "S",
+            "long": "tls",
+            "description": "use DNS over TLS",
+            "inherit": false
+          },
+          {
+            "short": "H",
+            "long": "https",
+            "description": "use DNS over HTTPS",
+            "inherit": false
+          },
+          {
+            "short": "1",
+            "long": "short",
+            "description": "display only the first result",
+            "inherit": false
+          },
+          {
+            "short": "J",
+            "long": "json",
+            "description": "display JSON output",
+            "inherit": false
+          },
+          {
+            "long": "color",
+            "description": "set when to colorize output",
+            "value": [
+              {
+                "name": "arguments"
+              },
+              {
+                "name": "WHEN"
+              }
+            ],
+            "inherit": false
+          },
+          {
+            "long": "seconds",
+            "description": "display durations as seconds",
+            "inherit": false
+          },
+          {
+            "long": "time",
+            "description": "print response time",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "arguments",
+              "description": "host names, nameservers, types, or classes",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "MX",
+        "description": "query MX Record",
+        "options": [
+          {
+            "short": "q",
+            "long": "query",
+            "description": "set the host name or IP address to query",
+            "value": {
+              "name": "HOST"
+            },
+            "inherit": false
+          },
+          {
+            "short": "t",
+            "long": "type",
+            "description": "set the DNS record type",
+            "value": {
+              "name": "TYPE"
+            },
+            "inherit": false
+          },
+          {
+            "short": "n",
+            "long": "nameserver",
+            "description": "set the nameserver address",
+            "value": {
+              "name": "ADDR"
+            },
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-class"
+            ],
+            "description": "set the DNS record network class",
+            "value": {
+              "name": "CLASS"
+            },
+            "inherit": false
+          },
+          {
+            "long": "edns",
+            "description": "set EDNS handling",
+            "value": {
+              "name": "NUMBER"
+            },
+            "inherit": false
+          },
+          {
+            "long": "txid",
+            "description": "set the transaction ID",
+            "value": {
+              "name": "CLASS"
+            },
+            "inherit": false
+          },
+          {
+            "short": "Z",
+            "description": "set protocol-level tweaks",
+            "value": {
+              "name": "TWEAKS"
+            },
+            "inherit": false
+          },
+          {
+            "short": "U",
+            "long": "udp",
+            "description": "use DNS over UDP",
+            "inherit": false
+          },
+          {
+            "short": "T",
+            "long": "tcp",
+            "description": "use DNS over TCP",
+            "inherit": false
+          },
+          {
+            "short": "S",
+            "long": "tls",
+            "description": "use DNS over TLS",
+            "inherit": false
+          },
+          {
+            "short": "H",
+            "long": "https",
+            "description": "use DNS over HTTPS",
+            "inherit": false
+          },
+          {
+            "short": "1",
+            "long": "short",
+            "description": "display only the first result",
+            "inherit": false
+          },
+          {
+            "short": "J",
+            "long": "json",
+            "description": "display JSON output",
+            "inherit": false
+          },
+          {
+            "long": "color",
+            "description": "set when to colorize output",
+            "value": [
+              {
+                "name": "arguments"
+              },
+              {
+                "name": "WHEN"
+              }
+            ],
+            "inherit": false
+          },
+          {
+            "long": "seconds",
+            "description": "display durations as seconds",
+            "inherit": false
+          },
+          {
+            "long": "time",
+            "description": "print response time",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "arguments",
+              "description": "host names, nameservers, types, or classes",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "CNAME",
+        "description": "query CNAME Record",
+        "options": [
+          {
+            "short": "q",
+            "long": "query",
+            "description": "set the host name or IP address to query",
+            "value": {
+              "name": "HOST"
+            },
+            "inherit": false
+          },
+          {
+            "short": "t",
+            "long": "type",
+            "description": "set the DNS record type",
+            "value": {
+              "name": "TYPE"
+            },
+            "inherit": false
+          },
+          {
+            "short": "n",
+            "long": "nameserver",
+            "description": "set the nameserver address",
+            "value": {
+              "name": "ADDR"
+            },
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-class"
+            ],
+            "description": "set the DNS record network class",
+            "value": {
+              "name": "CLASS"
+            },
+            "inherit": false
+          },
+          {
+            "long": "edns",
+            "description": "set EDNS handling",
+            "value": {
+              "name": "NUMBER"
+            },
+            "inherit": false
+          },
+          {
+            "long": "txid",
+            "description": "set the transaction ID",
+            "value": {
+              "name": "CLASS"
+            },
+            "inherit": false
+          },
+          {
+            "short": "Z",
+            "description": "set protocol-level tweaks",
+            "value": {
+              "name": "TWEAKS"
+            },
+            "inherit": false
+          },
+          {
+            "short": "U",
+            "long": "udp",
+            "description": "use DNS over UDP",
+            "inherit": false
+          },
+          {
+            "short": "T",
+            "long": "tcp",
+            "description": "use DNS over TCP",
+            "inherit": false
+          },
+          {
+            "short": "S",
+            "long": "tls",
+            "description": "use DNS over TLS",
+            "inherit": false
+          },
+          {
+            "short": "H",
+            "long": "https",
+            "description": "use DNS over HTTPS",
+            "inherit": false
+          },
+          {
+            "short": "1",
+            "long": "short",
+            "description": "display only the first result",
+            "inherit": false
+          },
+          {
+            "short": "J",
+            "long": "json",
+            "description": "display JSON output",
+            "inherit": false
+          },
+          {
+            "long": "color",
+            "description": "set when to colorize output",
+            "value": [
+              {
+                "name": "arguments"
+              },
+              {
+                "name": "WHEN"
+              }
+            ],
+            "inherit": false
+          },
+          {
+            "long": "seconds",
+            "description": "display durations as seconds",
+            "inherit": false
+          },
+          {
+            "long": "time",
+            "description": "print response time",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "arguments",
+              "description": "host names, nameservers, types, or classes",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "TXT",
+        "description": "query TXT Record",
+        "options": [
+          {
+            "short": "q",
+            "long": "query",
+            "description": "set the host name or IP address to query",
+            "value": {
+              "name": "HOST"
+            },
+            "inherit": false
+          },
+          {
+            "short": "t",
+            "long": "type",
+            "description": "set the DNS record type",
+            "value": {
+              "name": "TYPE"
+            },
+            "inherit": false
+          },
+          {
+            "short": "n",
+            "long": "nameserver",
+            "description": "set the nameserver address",
+            "value": {
+              "name": "ADDR"
+            },
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-class"
+            ],
+            "description": "set the DNS record network class",
+            "value": {
+              "name": "CLASS"
+            },
+            "inherit": false
+          },
+          {
+            "long": "edns",
+            "description": "set EDNS handling",
+            "value": {
+              "name": "NUMBER"
+            },
+            "inherit": false
+          },
+          {
+            "long": "txid",
+            "description": "set the transaction ID",
+            "value": {
+              "name": "CLASS"
+            },
+            "inherit": false
+          },
+          {
+            "short": "Z",
+            "description": "set protocol-level tweaks",
+            "value": {
+              "name": "TWEAKS"
+            },
+            "inherit": false
+          },
+          {
+            "short": "U",
+            "long": "udp",
+            "description": "use DNS over UDP",
+            "inherit": false
+          },
+          {
+            "short": "T",
+            "long": "tcp",
+            "description": "use DNS over TCP",
+            "inherit": false
+          },
+          {
+            "short": "S",
+            "long": "tls",
+            "description": "use DNS over TLS",
+            "inherit": false
+          },
+          {
+            "short": "H",
+            "long": "https",
+            "description": "use DNS over HTTPS",
+            "inherit": false
+          },
+          {
+            "short": "1",
+            "long": "short",
+            "description": "display only the first result",
+            "inherit": false
+          },
+          {
+            "short": "J",
+            "long": "json",
+            "description": "display JSON output",
+            "inherit": false
+          },
+          {
+            "long": "color",
+            "description": "set when to colorize output",
+            "value": [
+              {
+                "name": "arguments"
+              },
+              {
+                "name": "WHEN"
+              }
+            ],
+            "inherit": false
+          },
+          {
+            "long": "seconds",
+            "description": "display durations as seconds",
+            "inherit": false
+          },
+          {
+            "long": "time",
+            "description": "print response time",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "arguments",
+              "description": "host names, nameservers, types, or classes",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "NS",
+        "description": "query NS Record",
+        "options": [
+          {
+            "short": "q",
+            "long": "query",
+            "description": "set the host name or IP address to query",
+            "value": {
+              "name": "HOST"
+            },
+            "inherit": false
+          },
+          {
+            "short": "t",
+            "long": "type",
+            "description": "set the DNS record type",
+            "value": {
+              "name": "TYPE"
+            },
+            "inherit": false
+          },
+          {
+            "short": "n",
+            "long": "nameserver",
+            "description": "set the nameserver address",
+            "value": {
+              "name": "ADDR"
+            },
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-class"
+            ],
+            "description": "set the DNS record network class",
+            "value": {
+              "name": "CLASS"
+            },
+            "inherit": false
+          },
+          {
+            "long": "edns",
+            "description": "set EDNS handling",
+            "value": {
+              "name": "NUMBER"
+            },
+            "inherit": false
+          },
+          {
+            "long": "txid",
+            "description": "set the transaction ID",
+            "value": {
+              "name": "CLASS"
+            },
+            "inherit": false
+          },
+          {
+            "short": "Z",
+            "description": "set protocol-level tweaks",
+            "value": {
+              "name": "TWEAKS"
+            },
+            "inherit": false
+          },
+          {
+            "short": "U",
+            "long": "udp",
+            "description": "use DNS over UDP",
+            "inherit": false
+          },
+          {
+            "short": "T",
+            "long": "tcp",
+            "description": "use DNS over TCP",
+            "inherit": false
+          },
+          {
+            "short": "S",
+            "long": "tls",
+            "description": "use DNS over TLS",
+            "inherit": false
+          },
+          {
+            "short": "H",
+            "long": "https",
+            "description": "use DNS over HTTPS",
+            "inherit": false
+          },
+          {
+            "short": "1",
+            "long": "short",
+            "description": "display only the first result",
+            "inherit": false
+          },
+          {
+            "short": "J",
+            "long": "json",
+            "description": "display JSON output",
+            "inherit": false
+          },
+          {
+            "long": "color",
+            "description": "set when to colorize output",
+            "value": [
+              {
+                "name": "arguments"
+              },
+              {
+                "name": "WHEN"
+              }
+            ],
+            "inherit": false
+          },
+          {
+            "long": "seconds",
+            "description": "display durations as seconds",
+            "inherit": false
+          },
+          {
+            "long": "time",
+            "description": "print response time",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "arguments",
+              "description": "host names, nameservers, types, or classes",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "SOA",
+        "description": "query SOA Record",
+        "options": [
+          {
+            "short": "q",
+            "long": "query",
+            "description": "set the host name or IP address to query",
+            "value": {
+              "name": "HOST"
+            },
+            "inherit": false
+          },
+          {
+            "short": "t",
+            "long": "type",
+            "description": "set the DNS record type",
+            "value": {
+              "name": "TYPE"
+            },
+            "inherit": false
+          },
+          {
+            "short": "n",
+            "long": "nameserver",
+            "description": "set the nameserver address",
+            "value": {
+              "name": "ADDR"
+            },
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-class"
+            ],
+            "description": "set the DNS record network class",
+            "value": {
+              "name": "CLASS"
+            },
+            "inherit": false
+          },
+          {
+            "long": "edns",
+            "description": "set EDNS handling",
+            "value": {
+              "name": "NUMBER"
+            },
+            "inherit": false
+          },
+          {
+            "long": "txid",
+            "description": "set the transaction ID",
+            "value": {
+              "name": "CLASS"
+            },
+            "inherit": false
+          },
+          {
+            "short": "Z",
+            "description": "set protocol-level tweaks",
+            "value": {
+              "name": "TWEAKS"
+            },
+            "inherit": false
+          },
+          {
+            "short": "U",
+            "long": "udp",
+            "description": "use DNS over UDP",
+            "inherit": false
+          },
+          {
+            "short": "T",
+            "long": "tcp",
+            "description": "use DNS over TCP",
+            "inherit": false
+          },
+          {
+            "short": "S",
+            "long": "tls",
+            "description": "use DNS over TLS",
+            "inherit": false
+          },
+          {
+            "short": "H",
+            "long": "https",
+            "description": "use DNS over HTTPS",
+            "inherit": false
+          },
+          {
+            "short": "1",
+            "long": "short",
+            "description": "display only the first result",
+            "inherit": false
+          },
+          {
+            "short": "J",
+            "long": "json",
+            "description": "display JSON output",
+            "inherit": false
+          },
+          {
+            "long": "color",
+            "description": "set when to colorize output",
+            "value": [
+              {
+                "name": "arguments"
+              },
+              {
+                "name": "WHEN"
+              }
+            ],
+            "inherit": false
+          },
+          {
+            "long": "seconds",
+            "description": "display durations as seconds",
+            "inherit": false
+          },
+          {
+            "long": "time",
+            "description": "print response time",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "arguments",
+              "description": "host names, nameservers, types, or classes",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "TTL",
+        "description": "query TTL Record",
+        "options": [
+          {
+            "short": "q",
+            "long": "query",
+            "description": "set the host name or IP address to query",
+            "value": {
+              "name": "HOST"
+            },
+            "inherit": false
+          },
+          {
+            "short": "t",
+            "long": "type",
+            "description": "set the DNS record type",
+            "value": {
+              "name": "TYPE"
+            },
+            "inherit": false
+          },
+          {
+            "short": "n",
+            "long": "nameserver",
+            "description": "set the nameserver address",
+            "value": {
+              "name": "ADDR"
+            },
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-class"
+            ],
+            "description": "set the DNS record network class",
+            "value": {
+              "name": "CLASS"
+            },
+            "inherit": false
+          },
+          {
+            "long": "edns",
+            "description": "set EDNS handling",
+            "value": {
+              "name": "NUMBER"
+            },
+            "inherit": false
+          },
+          {
+            "long": "txid",
+            "description": "set the transaction ID",
+            "value": {
+              "name": "CLASS"
+            },
+            "inherit": false
+          },
+          {
+            "short": "Z",
+            "description": "set protocol-level tweaks",
+            "value": {
+              "name": "TWEAKS"
+            },
+            "inherit": false
+          },
+          {
+            "short": "U",
+            "long": "udp",
+            "description": "use DNS over UDP",
+            "inherit": false
+          },
+          {
+            "short": "T",
+            "long": "tcp",
+            "description": "use DNS over TCP",
+            "inherit": false
+          },
+          {
+            "short": "S",
+            "long": "tls",
+            "description": "use DNS over TLS",
+            "inherit": false
+          },
+          {
+            "short": "H",
+            "long": "https",
+            "description": "use DNS over HTTPS",
+            "inherit": false
+          },
+          {
+            "short": "1",
+            "long": "short",
+            "description": "display only the first result",
+            "inherit": false
+          },
+          {
+            "short": "J",
+            "long": "json",
+            "description": "display JSON output",
+            "inherit": false
+          },
+          {
+            "long": "color",
+            "description": "set when to colorize output",
+            "value": [
+              {
+                "name": "arguments"
+              },
+              {
+                "name": "WHEN"
+              }
+            ],
+            "inherit": false
+          },
+          {
+            "long": "seconds",
+            "description": "display durations as seconds",
+            "inherit": false
+          },
+          {
+            "long": "time",
+            "description": "print response time",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "arguments",
+              "description": "host names, nameservers, types, or classes",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      }
+    ],
+    "options": [
+      {
+        "short": "q",
+        "long": "query",
+        "description": "set the host name or IP address to query",
+        "value": {
+          "name": "HOST"
+        },
+        "inherit": false
+      },
+      {
+        "short": "t",
+        "long": "type",
+        "description": "set the DNS record type",
+        "value": {
+          "name": "TYPE"
+        },
+        "inherit": false
+      },
+      {
+        "short": "n",
+        "long": "nameserver",
+        "description": "set the nameserver address",
+        "value": {
+          "name": "ADDR"
+        },
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-class"
+        ],
+        "description": "set the DNS record network class",
+        "value": {
+          "name": "CLASS"
+        },
+        "inherit": false
+      },
+      {
+        "long": "edns",
+        "description": "set EDNS handling",
+        "value": {
+          "name": "NUMBER"
+        },
+        "inherit": false
+      },
+      {
+        "long": "txid",
+        "description": "set the transaction ID",
+        "value": {
+          "name": "CLASS"
+        },
+        "inherit": false
+      },
+      {
+        "short": "Z",
+        "description": "set protocol-level tweaks",
+        "value": {
+          "name": "TWEAKS"
+        },
+        "inherit": false
+      },
+      {
+        "short": "U",
+        "long": "udp",
+        "description": "use DNS over UDP",
+        "inherit": false
+      },
+      {
+        "short": "T",
+        "long": "tcp",
+        "description": "use DNS over TCP",
+        "inherit": false
+      },
+      {
+        "short": "S",
+        "long": "tls",
+        "description": "use DNS over TLS",
+        "inherit": false
+      },
+      {
+        "short": "H",
+        "long": "https",
+        "description": "use DNS over HTTPS",
+        "inherit": false
+      },
+      {
+        "short": "1",
+        "long": "short",
+        "description": "display only the first result",
+        "inherit": false
+      },
+      {
+        "short": "J",
+        "long": "json",
+        "description": "display JSON output",
+        "inherit": false
+      },
+      {
+        "long": "color",
+        "description": "set when to colorize output",
+        "value": [
+          {
+            "name": "arguments"
+          },
+          {
+            "name": "WHEN"
+          }
+        ],
+        "inherit": false
+      },
+      {
+        "long": "seconds",
+        "description": "display durations as seconds",
+        "inherit": false
+      },
+      {
+        "long": "time",
+        "description": "print response time",
+        "inherit": false
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "arguments",
+          "description": "host names, nameservers, types, or classes",
+          "index": 0,
+          "repeatable": true
+        }
+      ]
+    }
+  }
+}
