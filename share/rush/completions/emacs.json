@@ -1,0 +1,141 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "emacs",
+    "description": "edit files with GNU Emacs",
+    "options": [
+      {
+        "long": "batch",
+        "description": "do not do interactive display; implies -q",
+        "inherit": false
+      },
+      {
+        "long": "chdir",
+        "description": "change to directory",
+        "inherit": false,
+        "value": {
+          "name": "directory",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "daemon",
+        "aliases": [
+          "bg-daemon"
+        ],
+        "description": "start a server in the background",
+        "inherit": false
+      },
+      {
+        "long": "fg-daemon",
+        "description": "start a server in the foreground",
+        "inherit": false
+      },
+      {
+        "long": "version",
+        "description": "display Emacs version information and exit",
+        "inherit": false
+      },
+      {
+        "long": "help",
+        "description": "display help and exit",
+        "inherit": false
+      },
+      {
+        "short": "q",
+        "long": "no-init-file",
+        "description": "do not load an init file",
+        "inherit": false
+      },
+      {
+        "long": "no-shared-memory",
+        "spellings": [
+          "-nl"
+        ],
+        "description": "do not use shared memory",
+        "inherit": false
+      },
+      {
+        "long": "no-site-file",
+        "spellings": [
+          "-nsl"
+        ],
+        "description": "do not load the site-wide startup file",
+        "inherit": false
+      },
+      {
+        "long": "no-desktop",
+        "description": "do not load a saved desktop",
+        "inherit": false
+      },
+      {
+        "short": "Q",
+        "long": "quick",
+        "description": "similar to \"-q --no-site-file --no-splash\", Also, avoid processing X resources",
+        "inherit": false
+      },
+      {
+        "long": "no-splash",
+        "description": "do not display a splash screen during start-u",
+        "inherit": false
+      },
+      {
+        "long": "debug-init",
+        "description": "enable Emacs Lisp debugger during the processing of the user init file ~/.emacs. This is useful for debugging problems in the init file",
+        "inherit": false
+      },
+      {
+        "short": "u",
+        "long": "user",
+        "description": "load user's init file",
+        "inherit": false,
+        "value": {
+          "name": "user"
+        }
+      },
+      {
+        "short": "t",
+        "long": "terminal",
+        "description": "use specified file as the terminal instead of using stdin/stdout. This must be the first argument specified in the command line",
+        "inherit": false,
+        "value": {
+          "name": "value",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "file",
+        "aliases": [
+          "find-file",
+          "visit"
+        ],
+        "description": "the same as specifying file directly as an argument",
+        "inherit": false,
+        "value": {
+          "name": "value",
+          "provider": "builtin.files"
+        }
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "file",
+          "provider": "builtin.files",
+          "index": 0,
+          "description": "file to visit",
+          "repeatable": true
+        }
+      ]
+    },
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "builtin.directories": {
+        "builtin": "directories"
+      }
+    }
+  }
+}
