@@ -29,7 +29,8 @@
 
   <ul>
     <li><code>shell/builtin.history.nonposix</code>: tests <code>history</code>, <code>history -c</code>, and <code>set -o nolog</code>.</li>
-    <li><code>shell/builtin.source.nonexistent.earlyexit</code> and <code>shell/builtin.source.nonexistent</code>: <code>source</code> is a compatibility alias, not the POSIX dot utility.</li>
+    <li><code>shell/builtin.source.nonexistent.earlyexit</code>, <code>shell/builtin.source.nonexistent</code>, and <code>shell/builtin.source.setvar</code>: <code>source</code> is a compatibility alias, not the POSIX dot utility.</li>
+    <li><code>shell/builtin.test.numeric.spaces.nonposix</code>: accepts non-POSIX integer operands with leading or trailing blanks.</li>
     <li><code>shell/semantics.-h.nonposix</code>: <code>set -h</code> and command hash table contents are not a portable shell-script contract.</li>
   </ul>
 
@@ -52,8 +53,18 @@
     <li><code>shell/builtin.dot.nonexistent</code>: POSIX requires a diagnostic and abort for a non-interactive <code>.</code> failure, not a specific message.</li>
     <li><code>shell/builtin.readonly.assign.noninteractive</code>: assigning a readonly variable is fatal in a non-interactive POSIX shell; exact status and text are not normative.</li>
     <li><code>shell/builtin.special.redir.error</code> and <code>shell/semantics.redir.close</code>: bad file descriptor redirection failures must diagnose and fail; exact wording and status vary across shells.</li>
+    <li><code>shell/builtin.times.ioerror</code>: a write failure from <code>times</code> is reported as a utility error; POSIX does not require Smoosh's exact diagnostic or status.</li>
     <li><code>shell/builtin.unset</code>: unsetting a readonly variable fails with diagnostic and non-zero status; exact text is not normative.</li>
     <li><code>shell/semantics.error.noninteractive</code>: non-interactive expansion errors abort with diagnostic; Smoosh's exact message is not a requirement.</li>
+    <li><code>shell/semantics.interactive.expansion.exit</code>: an expansion error in an interactive <code>-c</code> command exits non-zero without running the following command; Dash and Bash POSIX mode behave the same.</li>
+  </ul>
+
+  <h3 id="recursive-shell-invocations"><a href="#recursive-shell-invocations">Recursive shell invocations that do not preserve mode flags</a></h3>
+
+  <p>Some Smoosh scripts invoke <code>$TEST_SHELL</code> from inside a test case. The harness applies <code>TEST_SHELL_FLAGS=--posix</code> to the outer test script, but those recursive invocations do not necessarily preserve the same flags. They can therefore exercise Rush default mode during an otherwise POSIX-mode Smoosh run.</p>
+
+  <ul>
+    <li><code>shell/parse.eval.error</code>: the inner script runs without <code>--posix</code>; Rush default mode follows Bash by keeping an <code>eval</code> syntax error non-fatal.</li>
   </ul>
 
   <h3 id="assignment-redirection-order"><a href="#assignment-redirection-order">Function assignment and redirection expansion order</a></h3>
