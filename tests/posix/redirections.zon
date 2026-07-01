@@ -1059,6 +1059,24 @@
             .status = 0,
         },
         .{
+            .name = "quoted here document in command substitution preserves backslash newline",
+            .script =
+            \\v=$(cat <<'EOF'
+            \\def \
+            \\ghi
+            \\EOF
+            \\)
+            \\printf '%s\n' "$v"
+            ,
+            .stdout =
+            \\def \
+            \\ghi
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "here document feeds a simple pipeline stage",
             .script =
             \\cat <<EOF | cat

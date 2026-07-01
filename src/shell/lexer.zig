@@ -472,6 +472,12 @@ const Lexer = struct {
                         continue;
                     }
                 }
+                if (delimiter == '"' and byte == '$' and index + 1 < raw_text.len and raw_text[index + 1] == '(') {
+                    const close_index = scanCommandSubstitutionText(raw_text, index + 1) orelse raw_text.len - 1;
+                    try output.appendSlice(self.allocator, raw_text[index .. close_index + 1]);
+                    index = close_index + 1;
+                    continue;
+                }
                 try output.append(self.allocator, byte);
                 index += 1;
                 continue;
@@ -495,10 +501,52 @@ const Lexer = struct {
                 }
                 continue;
             }
+            if (byte == '$' and index + 1 < raw_text.len and raw_text[index + 1] == '(') {
+                const close_index = scanCommandSubstitutionText(raw_text, index + 1) orelse raw_text.len - 1;
+                try output.appendSlice(self.allocator, raw_text[index .. close_index + 1]);
+                index = close_index + 1;
+                continue;
+            }
             try output.append(self.allocator, byte);
             index += 1;
         }
         return output.toOwnedSlice(self.allocator);
+    }
+
+    fn scanCommandSubstitutionText(text: []const u8, open_index: usize) ?usize {
+        std.debug.assert(text[open_index] == '(');
+        var depth: usize = 1;
+        var quote: ?u8 = null;
+        var index = open_index + 1;
+        while (index < text.len and depth != 0) {
+            const byte = text[index];
+            if (quote) |delimiter| {
+                if (byte == delimiter) quote = null;
+                index += 1;
+                continue;
+            }
+            if (byte == '\\') {
+                index += if (index + 1 < text.len) 2 else 1;
+                continue;
+            }
+            if (byte == '\'' or byte == '"') {
+                quote = byte;
+                index += 1;
+                continue;
+            }
+            if (byte == '$' and index + 1 < text.len and text[index + 1] == '(') {
+                depth += 1;
+                index += 2;
+                continue;
+            }
+            if (byte == '(') depth += 1;
+            if (byte == ')') {
+                depth -= 1;
+                if (depth == 0) return index;
+            }
+            index += 1;
+        }
+        return null;
     }
 
     fn doubleQuoteEscapes(byte: u8) bool {
