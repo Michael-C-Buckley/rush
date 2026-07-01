@@ -1,0 +1,5510 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "appwrite",
+    "description": "manage appwrite projects",
+    "options": [
+      {
+        "short": "v",
+        "long": "version",
+        "description": "output the version number",
+        "inherit": false
+      },
+      {
+        "long": "verbose",
+        "description": "show complete error log",
+        "inherit": false
+      },
+      {
+        "long": "json",
+        "description": "output in json format",
+        "inherit": false
+      },
+      {
+        "short": "h",
+        "long": "help",
+        "description": "display help for command",
+        "inherit": true
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "login",
+        "description": "the login command allows you to authenticate and manage a user account"
+      },
+      {
+        "name": "init",
+        "description": "the init command helps you initialize your appwrite project, functi...",
+        "subcommands": [
+          {
+            "name": "project",
+            "description": "initialise your appwrite project"
+          },
+          {
+            "name": "function",
+            "description": "initialise your appwrite cloud function"
+          },
+          {
+            "name": "collection",
+            "description": "initialise your appwrite collections",
+            "options": [
+              {
+                "long": "databaseId",
+                "description": "database ID",
+                "inherit": false,
+                "value": {
+                  "name": "databaseId"
+                }
+              },
+              {
+                "long": "all",
+                "description": "flag to initialize all databases",
+                "inherit": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "deploy",
+        "description": "the deploy command provides a convenient wrapper for deploying your...",
+        "subcommands": [
+          {
+            "name": "function",
+            "description": "deploy functions in the current directory",
+            "options": [
+              {
+                "long": "functionId",
+                "description": "function ID",
+                "inherit": false,
+                "value": {
+                  "name": "functionId"
+                }
+              },
+              {
+                "long": "all",
+                "description": "flag to deploy all functions",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "collection",
+            "description": "deploy collections in the current project",
+            "options": [
+              {
+                "long": "all",
+                "description": "flag to deploy all functions",
+                "inherit": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "logout",
+        "description": "the logout command allows you to logout of your appwrite account"
+      },
+      {
+        "name": "account",
+        "description": "the account command allows you to authenticate and manage a user ac...",
+        "subcommands": [
+          {
+            "name": "get",
+            "description": "get currently logged in user data as json object"
+          },
+          {
+            "name": "create",
+            "description": "use this endpoint to allow a new user to register a new account in...",
+            "options": [
+              {
+                "long": "userId",
+                "description": "unique Id. Choose your own unique ID or pass the string \"unique()\"...",
+                "inherit": false,
+                "value": {
+                  "name": "userId"
+                }
+              },
+              {
+                "long": "email",
+                "description": "user email",
+                "inherit": false,
+                "value": {
+                  "name": "email"
+                }
+              },
+              {
+                "long": "password",
+                "description": "user password. Must be at least 8 chars",
+                "inherit": false,
+                "value": {
+                  "name": "password"
+                }
+              },
+              {
+                "long": "name",
+                "description": "user name. Max length: 128 chars",
+                "inherit": false,
+                "value": {
+                  "name": "name"
+                }
+              }
+            ]
+          },
+          {
+            "name": "updateEmail",
+            "description": "update currently logged in user account email address. After changi...",
+            "options": [
+              {
+                "long": "email",
+                "description": "user email",
+                "inherit": false,
+                "value": {
+                  "name": "email"
+                }
+              },
+              {
+                "long": "password",
+                "description": "user password. Must be at least 8 chars",
+                "inherit": false,
+                "value": {
+                  "name": "password"
+                }
+              }
+            ]
+          },
+          {
+            "name": "createJWT",
+            "description": "use this endpoint to create a json Web Token. You can use the resul..."
+          },
+          {
+            "name": "getLogs",
+            "description": "get currently logged in user list of latest security activity logs....",
+            "options": [
+              {
+                "long": "limit",
+                "description": "maximum number of logs to return in response. By default will retur...",
+                "inherit": false,
+                "value": {
+                  "name": "limit"
+                }
+              },
+              {
+                "long": "offset",
+                "description": "offset value. The default value is 0. Use this value to manage pagi...",
+                "inherit": false,
+                "value": {
+                  "name": "offset"
+                }
+              }
+            ]
+          },
+          {
+            "name": "updateName",
+            "description": "update currently logged in user account name",
+            "options": [
+              {
+                "long": "name",
+                "description": "user name. Max length: 128 chars",
+                "inherit": false,
+                "value": {
+                  "name": "name"
+                }
+              }
+            ]
+          },
+          {
+            "name": "updatePassword",
+            "description": "update currently logged in user password. For validation, user is r...",
+            "options": [
+              {
+                "long": "password",
+                "description": "new user password. Must be at least 8 chars",
+                "inherit": false,
+                "value": {
+                  "name": "password"
+                }
+              },
+              {
+                "long": "oldPassword",
+                "description": "current user password. Must be at least 8 chars",
+                "inherit": false,
+                "value": {
+                  "name": "oldPassword"
+                }
+              }
+            ]
+          },
+          {
+            "name": "updatePhone",
+            "description": "update the currently logged in user's phone number. After updating...",
+            "options": [
+              {
+                "long": "number",
+                "description": "phone number. Format this number with a leading '+' and a country c...",
+                "inherit": false,
+                "value": {
+                  "name": "number"
+                }
+              },
+              {
+                "long": "password",
+                "description": "user password. Must be at least 8 chars",
+                "inherit": false,
+                "value": {
+                  "name": "password"
+                }
+              }
+            ]
+          },
+          {
+            "name": "getPrefs",
+            "description": "get currently logged in user preferences as a key-value object"
+          },
+          {
+            "name": "updatePrefs",
+            "description": "update currently logged in user account preferences. The object you...",
+            "options": [
+              {
+                "long": "prefs",
+                "description": "prefs key-value json object",
+                "inherit": false,
+                "value": {
+                  "name": "prefs"
+                }
+              }
+            ]
+          },
+          {
+            "name": "createRecovery",
+            "description": "sends the user an email with a temporary secret key for password re...",
+            "options": [
+              {
+                "long": "email",
+                "description": "user email",
+                "inherit": false,
+                "value": {
+                  "name": "email"
+                }
+              },
+              {
+                "long": "url",
+                "description": "uRL to redirect the user back to your app from the recovery email....",
+                "inherit": false,
+                "value": {
+                  "name": "url"
+                }
+              }
+            ]
+          },
+          {
+            "name": "updateRecovery",
+            "description": "use this endpoint to complete the user account password reset. Both...",
+            "options": [
+              {
+                "long": "userId",
+                "description": "user ID",
+                "inherit": false,
+                "value": {
+                  "name": "userId"
+                }
+              },
+              {
+                "long": "secret",
+                "description": "valid reset token",
+                "inherit": false,
+                "value": {
+                  "name": "secret"
+                }
+              },
+              {
+                "long": "password",
+                "description": "new user password. Must be at least 8 chars",
+                "inherit": false,
+                "value": {
+                  "name": "password"
+                }
+              },
+              {
+                "long": "passwordAgain",
+                "description": "repeat new user password. Must be at least 8 chars",
+                "inherit": false,
+                "value": {
+                  "name": "passwordAgain"
+                }
+              }
+            ]
+          },
+          {
+            "name": "getSessions",
+            "description": "get currently logged in user list of active sessions across differe..."
+          },
+          {
+            "name": "deleteSessions",
+            "description": "delete all sessions from the user account and remove any sessions c..."
+          },
+          {
+            "name": "createAnonymousSession",
+            "description": "use this endpoint to allow a new user to register an anonymous acco..."
+          },
+          {
+            "name": "createEmailSession",
+            "description": "allow the user to login into their account by providing a valid ema...",
+            "options": [
+              {
+                "long": "email",
+                "description": "user email",
+                "inherit": false,
+                "value": {
+                  "name": "email"
+                }
+              },
+              {
+                "long": "password",
+                "description": "user password. Must be at least 8 chars",
+                "inherit": false,
+                "value": {
+                  "name": "password"
+                }
+              }
+            ]
+          },
+          {
+            "name": "createMagicURLSession",
+            "description": "sends the user an email with a secret key for creating a session. W...",
+            "options": [
+              {
+                "long": "userId",
+                "description": "unique Id. Choose your own unique ID or pass the string \"unique()\"...",
+                "inherit": false,
+                "value": {
+                  "name": "userId"
+                }
+              },
+              {
+                "long": "email",
+                "description": "user email",
+                "inherit": false,
+                "value": {
+                  "name": "email"
+                }
+              },
+              {
+                "long": "url",
+                "description": "uRL to redirect the user back to your app from the magic URL login....",
+                "inherit": false,
+                "value": {
+                  "name": "url"
+                }
+              }
+            ]
+          },
+          {
+            "name": "updateMagicURLSession",
+            "description": "use this endpoint to complete creating the session with the Magic U...",
+            "options": [
+              {
+                "long": "userId",
+                "description": "user ID",
+                "inherit": false,
+                "value": {
+                  "name": "userId"
+                }
+              },
+              {
+                "long": "secret",
+                "description": "valid verification token",
+                "inherit": false,
+                "value": {
+                  "name": "secret"
+                }
+              }
+            ]
+          },
+          {
+            "name": "createOAuth2Session",
+            "description": "allow the user to login to their account using the OAuth2 provider...",
+            "options": [
+              {
+                "long": "provider",
+                "description": "oAuth2 Provider. Currently, supported providers are: amazon, apple,...",
+                "inherit": false,
+                "value": {
+                  "name": "provider"
+                }
+              },
+              {
+                "long": "success",
+                "description": "uRL to redirect back to your app after a successful login attempt....",
+                "inherit": false,
+                "value": {
+                  "name": "success"
+                }
+              },
+              {
+                "long": "failure",
+                "description": "uRL to redirect back to your app after a failed login attempt. Only...",
+                "inherit": false,
+                "value": {
+                  "name": "failure"
+                }
+              },
+              {
+                "long": "scopes",
+                "description": "a list of custom OAuth2 scopes. Check each provider internal docs f...",
+                "inherit": false,
+                "value": {
+                  "name": "scopes"
+                }
+              }
+            ]
+          },
+          {
+            "name": "createPhoneSession",
+            "description": "sends the user an SMS with a secret key for creating a session. Use...",
+            "options": [
+              {
+                "long": "userId",
+                "description": "unique Id. Choose your own unique ID or pass the string \"unique()\"...",
+                "inherit": false,
+                "value": {
+                  "name": "userId"
+                }
+              },
+              {
+                "long": "number",
+                "description": "phone number. Format this number with a leading '+' and a country c...",
+                "inherit": false,
+                "value": {
+                  "name": "number"
+                }
+              }
+            ]
+          },
+          {
+            "name": "updatePhoneSession",
+            "description": "use this endpoint to complete creating a session with SMS. Use the...",
+            "options": [
+              {
+                "long": "userId",
+                "description": "user ID",
+                "inherit": false,
+                "value": {
+                  "name": "userId"
+                }
+              },
+              {
+                "long": "secret",
+                "description": "valid verification token",
+                "inherit": false,
+                "value": {
+                  "name": "secret"
+                }
+              }
+            ]
+          },
+          {
+            "name": "getSession",
+            "description": "use this endpoint to get a logged in user's session using a Session...",
+            "options": [
+              {
+                "long": "sessionId",
+                "description": "session ID. Use the string 'current' to get the current device session",
+                "inherit": false,
+                "value": {
+                  "name": "sessionId"
+                }
+              }
+            ]
+          },
+          {
+            "name": "updateSession",
+            "description": "access tokens have limited lifespan and expire to mitigate security...",
+            "options": [
+              {
+                "long": "sessionId",
+                "description": "session ID. Use the string 'current' to update the current device s...",
+                "inherit": false,
+                "value": {
+                  "name": "sessionId"
+                }
+              }
+            ]
+          },
+          {
+            "name": "deleteSession",
+            "description": "use this endpoint to log out the currently logged in user from all...",
+            "options": [
+              {
+                "long": "sessionId",
+                "description": "session ID. Use the string 'current' to delete the current device s...",
+                "inherit": false,
+                "value": {
+                  "name": "sessionId"
+                }
+              }
+            ]
+          },
+          {
+            "name": "updateStatus",
+            "description": "block the currently logged in user account. Behind the scene, the u..."
+          },
+          {
+            "name": "createVerification",
+            "description": "use this endpoint to send a verification message to your user email...",
+            "options": [
+              {
+                "long": "url",
+                "description": "uRL to redirect the user back to your app from the verification ema...",
+                "inherit": false,
+                "value": {
+                  "name": "url"
+                }
+              }
+            ]
+          },
+          {
+            "name": "updateVerification",
+            "description": "use this endpoint to complete the user email verification process....",
+            "options": [
+              {
+                "long": "userId",
+                "description": "user ID",
+                "inherit": false,
+                "value": {
+                  "name": "userId"
+                }
+              },
+              {
+                "long": "secret",
+                "description": "valid verification token",
+                "inherit": false,
+                "value": {
+                  "name": "secret"
+                }
+              }
+            ]
+          },
+          {
+            "name": "createPhoneVerification",
+            "description": "use this endpoint to send a verification SMS to the currently logge..."
+          },
+          {
+            "name": "updatePhoneVerification",
+            "description": "use this endpoint to complete the user phone verification process....",
+            "options": [
+              {
+                "long": "secret",
+                "description": "valid verification token",
+                "inherit": false,
+                "value": {
+                  "name": "secret"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "avatars",
+        "description": "the avatars command aims to help you complete everyday tasks relate...",
+        "subcommands": [
+          {
+            "name": "getBrowser",
+            "description": "you can use this endpoint to show different browser icons to your u...",
+            "options": [
+              {
+                "long": "code",
+                "description": "browser Code",
+                "inherit": false,
+                "value": {
+                  "name": "code"
+                }
+              },
+              {
+                "long": "width",
+                "description": "image width. Pass an integer between 0 to 2000. Defaults to 100",
+                "inherit": false,
+                "value": {
+                  "name": "width"
+                }
+              },
+              {
+                "long": "height",
+                "description": "image height. Pass an integer between 0 to 2000. Defaults to 100",
+                "inherit": false,
+                "value": {
+                  "name": "height"
+                }
+              },
+              {
+                "long": "quality",
+                "description": "image quality. Pass an integer between 0 to 100. Defaults to 100",
+                "inherit": false,
+                "value": {
+                  "name": "quality"
+                }
+              },
+              {
+                "long": "destination",
+                "description": "output file path",
+                "inherit": false,
+                "value": {
+                  "name": "path"
+                }
+              }
+            ]
+          },
+          {
+            "name": "getCreditCard",
+            "description": "the credit card endpoint will return you the icon of the credit car...",
+            "options": [
+              {
+                "long": "code",
+                "description": "credit Card Code. Possible values: amex, argencard, cabal, censosud...",
+                "inherit": false,
+                "value": {
+                  "name": "code"
+                }
+              },
+              {
+                "long": "width",
+                "description": "image width. Pass an integer between 0 to 2000. Defaults to 100",
+                "inherit": false,
+                "value": {
+                  "name": "width"
+                }
+              },
+              {
+                "long": "height",
+                "description": "image height. Pass an integer between 0 to 2000. Defaults to 100",
+                "inherit": false,
+                "value": {
+                  "name": "height"
+                }
+              },
+              {
+                "long": "quality",
+                "description": "image quality. Pass an integer between 0 to 100. Defaults to 100",
+                "inherit": false,
+                "value": {
+                  "name": "quality"
+                }
+              },
+              {
+                "long": "destination",
+                "description": "output file path",
+                "inherit": false,
+                "value": {
+                  "name": "path"
+                }
+              }
+            ]
+          },
+          {
+            "name": "getFavicon",
+            "description": "use this endpoint to fetch the favorite icon (AKA favicon) of any r...",
+            "options": [
+              {
+                "long": "url",
+                "description": "website URL which you want to fetch the favicon from",
+                "inherit": false,
+                "value": {
+                  "name": "url"
+                }
+              },
+              {
+                "long": "destination",
+                "description": "output file path",
+                "inherit": false,
+                "value": {
+                  "name": "path"
+                }
+              }
+            ]
+          },
+          {
+            "name": "getFlag",
+            "description": "you can use this endpoint to show different country flags icons to...",
+            "options": [
+              {
+                "long": "code",
+                "description": "country Code. ISO Alpha-2 country code format",
+                "inherit": false,
+                "value": {
+                  "name": "code"
+                }
+              },
+              {
+                "long": "width",
+                "description": "image width. Pass an integer between 0 to 2000. Defaults to 100",
+                "inherit": false,
+                "value": {
+                  "name": "width"
+                }
+              },
+              {
+                "long": "height",
+                "description": "image height. Pass an integer between 0 to 2000. Defaults to 100",
+                "inherit": false,
+                "value": {
+                  "name": "height"
+                }
+              },
+              {
+                "long": "quality",
+                "description": "image quality. Pass an integer between 0 to 100. Defaults to 100",
+                "inherit": false,
+                "value": {
+                  "name": "quality"
+                }
+              },
+              {
+                "long": "destination",
+                "description": "output file path",
+                "inherit": false,
+                "value": {
+                  "name": "path"
+                }
+              }
+            ]
+          },
+          {
+            "name": "getImage",
+            "description": "use this endpoint to fetch a remote image URL and crop it to any im...",
+            "options": [
+              {
+                "long": "url",
+                "description": "image URL which you want to crop",
+                "inherit": false,
+                "value": {
+                  "name": "url"
+                }
+              },
+              {
+                "long": "width",
+                "description": "resize preview image width, Pass an integer between 0 to 2000. Defa...",
+                "inherit": false,
+                "value": {
+                  "name": "width"
+                }
+              },
+              {
+                "long": "height",
+                "description": "resize preview image height, Pass an integer between 0 to 2000. Def...",
+                "inherit": false,
+                "value": {
+                  "name": "height"
+                }
+              },
+              {
+                "long": "destination",
+                "description": "output file path",
+                "inherit": false,
+                "value": {
+                  "name": "path"
+                }
+              }
+            ]
+          },
+          {
+            "name": "getInitials",
+            "description": "use this endpoint to show your user initials avatar icon on your we...",
+            "options": [
+              {
+                "long": "name",
+                "description": "full Name. When empty, current user name or email will be used. Max...",
+                "inherit": false,
+                "value": {
+                  "name": "name"
+                }
+              },
+              {
+                "long": "width",
+                "description": "image width. Pass an integer between 0 to 2000. Defaults to 100",
+                "inherit": false,
+                "value": {
+                  "name": "width"
+                }
+              },
+              {
+                "long": "height",
+                "description": "image height. Pass an integer between 0 to 2000. Defaults to 100",
+                "inherit": false,
+                "value": {
+                  "name": "height"
+                }
+              },
+              {
+                "long": "color",
+                "description": "changes text color. By default a random color will be picked and st...",
+                "inherit": false,
+                "value": {
+                  "name": "color"
+                }
+              },
+              {
+                "long": "background",
+                "description": "changes background color. By default a random color will be picked...",
+                "inherit": false,
+                "value": {
+                  "name": "background"
+                }
+              },
+              {
+                "long": "destination",
+                "description": "output file path",
+                "inherit": false,
+                "value": {
+                  "name": "path"
+                }
+              }
+            ]
+          },
+          {
+            "name": "getQR",
+            "description": "converts a given plain text to a QR code image. You can use the que...",
+            "options": [
+              {
+                "long": "text",
+                "description": "plain text to be converted to QR code image",
+                "inherit": false,
+                "value": {
+                  "name": "text"
+                }
+              },
+              {
+                "long": "size",
+                "description": "qR code size. Pass an integer between 1 to 1000. Defaults to 400",
+                "inherit": false,
+                "value": {
+                  "name": "size"
+                }
+              },
+              {
+                "long": "margin",
+                "description": "margin from edge. Pass an integer between 0 to 10. Defaults to 1",
+                "inherit": false,
+                "value": {
+                  "name": "margin"
+                }
+              },
+              {
+                "long": "download",
+                "description": "return resulting image with 'Content-Disposition: attachment ' head...",
+                "inherit": false,
+                "value": {
+                  "name": "download"
+                }
+              },
+              {
+                "long": "destination",
+                "description": "output file path",
+                "inherit": false,
+                "value": {
+                  "name": "path"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "databases",
+        "description": "the databases command allows you to create structured collections o...",
+        "subcommands": [
+          {
+            "name": "list",
+            "options": [
+              {
+                "long": "search",
+                "description": "search term to filter your list results. Max length: 256 chars",
+                "inherit": false,
+                "value": {
+                  "name": "search"
+                }
+              },
+              {
+                "long": "limit",
+                "description": "maximum number of collection to return in response. By default will...",
+                "inherit": false,
+                "value": {
+                  "name": "limit"
+                }
+              },
+              {
+                "long": "offset",
+                "description": "offset value. The default value is 0. Use this param to manage pagi...",
+                "inherit": false,
+                "value": {
+                  "name": "offset"
+                }
+              },
+              {
+                "long": "cursor",
+                "description": "iD of the collection used as the starting point for the query, excl...",
+                "inherit": false,
+                "value": {
+                  "name": "cursor"
+                }
+              },
+              {
+                "long": "cursorDirection",
+                "description": "direction of the cursor, can be either 'before' or 'after'",
+                "inherit": false,
+                "value": {
+                  "name": "cursorDirection"
+                }
+              },
+              {
+                "long": "orderType",
+                "description": "order result by ASC or DESC order",
+                "inherit": false,
+                "value": {
+                  "name": "orderType"
+                }
+              }
+            ]
+          },
+          {
+            "name": "create",
+            "options": [
+              {
+                "long": "databaseId",
+                "description": "unique Id. Choose your own unique ID or pass the string \"unique()\"...",
+                "inherit": false,
+                "value": {
+                  "name": "databaseId"
+                }
+              },
+              {
+                "long": "name",
+                "description": "collection name. Max length: 128 chars",
+                "inherit": false,
+                "value": {
+                  "name": "name"
+                }
+              }
+            ]
+          },
+          {
+            "name": "getUsage",
+            "options": [
+              {
+                "long": "range",
+                "description": "'Date range",
+                "inherit": false,
+                "value": {
+                  "name": "range"
+                }
+              }
+            ]
+          },
+          {
+            "name": "get",
+            "options": [
+              {
+                "long": "databaseId",
+                "description": "database ID",
+                "inherit": false,
+                "value": {
+                  "name": "databaseId"
+                }
+              }
+            ]
+          },
+          {
+            "name": "update",
+            "options": [
+              {
+                "long": "databaseId",
+                "description": "database ID",
+                "inherit": false,
+                "value": {
+                  "name": "databaseId"
+                }
+              },
+              {
+                "long": "name",
+                "description": "collection name. Max length: 128 chars",
+                "inherit": false,
+                "value": {
+                  "name": "name"
+                }
+              }
+            ]
+          },
+          {
+            "name": "delete",
+            "options": [
+              {
+                "long": "databaseId",
+                "description": "database ID",
+                "inherit": false,
+                "value": {
+                  "name": "databaseId"
+                }
+              }
+            ]
+          },
+          {
+            "name": "listCollections",
+            "options": [
+              {
+                "long": "databaseId",
+                "description": "database ID",
+                "inherit": false,
+                "value": {
+                  "name": "databaseId"
+                }
+              },
+              {
+                "long": "search",
+                "description": "search term to filter your list results. Max length: 256 chars",
+                "inherit": false,
+                "value": {
+                  "name": "search"
+                }
+              },
+              {
+                "long": "limit",
+                "description": "maximum number of collection to return in response. By default will...",
+                "inherit": false,
+                "value": {
+                  "name": "limit"
+                }
+              },
+              {
+                "long": "offset",
+                "description": "offset value. The default value is 0. Use this param to manage pagi...",
+                "inherit": false,
+                "value": {
+                  "name": "offset"
+                }
+              },
+              {
+                "long": "cursor",
+                "description": "iD of the collection used as the starting point for the query, excl...",
+                "inherit": false,
+                "value": {
+                  "name": "cursor"
+                }
+              },
+              {
+                "long": "cursorDirection",
+                "description": "direction of the cursor, can be either 'before' or 'after'",
+                "inherit": false,
+                "value": {
+                  "name": "cursorDirection"
+                }
+              },
+              {
+                "long": "orderType",
+                "description": "order result by ASC or DESC order",
+                "inherit": false,
+                "value": {
+                  "name": "orderType"
+                }
+              }
+            ]
+          },
+          {
+            "name": "createCollection",
+            "options": [
+              {
+                "long": "databaseId",
+                "description": "database ID",
+                "inherit": false,
+                "value": {
+                  "name": "databaseId"
+                }
+              },
+              {
+                "long": "collectionId",
+                "description": "unique Id. Choose your own unique ID or pass the string \"unique()\"...",
+                "inherit": false,
+                "value": {
+                  "name": "collectionId"
+                }
+              },
+              {
+                "long": "name",
+                "description": "collection name. Max length: 128 chars",
+                "inherit": false,
+                "value": {
+                  "name": "name"
+                }
+              },
+              {
+                "long": "permission",
+                "description": "specifies the permissions model used in this collection, which acce...",
+                "inherit": false,
+                "value": {
+                  "name": "permission"
+                }
+              },
+              {
+                "long": "read",
+                "description": "an array of strings with read permissions. By default no user is gr...",
+                "inherit": false,
+                "value": {
+                  "name": "read"
+                }
+              },
+              {
+                "long": "write",
+                "description": "an array of strings with write permissions. By default no user is g...",
+                "inherit": false,
+                "value": {
+                  "name": "write"
+                }
+              }
+            ]
+          },
+          {
+            "name": "getCollection",
+            "options": [
+              {
+                "long": "databaseId",
+                "description": "database ID",
+                "inherit": false,
+                "value": {
+                  "name": "databaseId"
+                }
+              },
+              {
+                "long": "collectionId",
+                "description": "collection ID",
+                "inherit": false,
+                "value": {
+                  "name": "collectionId"
+                }
+              }
+            ]
+          },
+          {
+            "name": "updateCollection",
+            "options": [
+              {
+                "long": "databaseId",
+                "description": "database ID",
+                "inherit": false,
+                "value": {
+                  "name": "databaseId"
+                }
+              },
+              {
+                "long": "collectionId",
+                "description": "collection ID",
+                "inherit": false,
+                "value": {
+                  "name": "collectionId"
+                }
+              },
+              {
+                "long": "name",
+                "description": "collection name. Max length: 128 chars",
+                "inherit": false,
+                "value": {
+                  "name": "name"
+                }
+              },
+              {
+                "long": "permission",
+                "description": "permissions type model to use for reading documents in this collect...",
+                "inherit": false,
+                "value": {
+                  "name": "permission"
+                }
+              },
+              {
+                "long": "read",
+                "description": "an array of strings with read permissions. By default inherits the...",
+                "inherit": false,
+                "value": {
+                  "name": "read"
+                }
+              },
+              {
+                "long": "write",
+                "description": "an array of strings with write permissions. By default inherits the...",
+                "inherit": false,
+                "value": {
+                  "name": "write"
+                }
+              },
+              {
+                "long": "enabled",
+                "description": "is collection enabled?",
+                "inherit": false,
+                "value": {
+                  "name": "enabled"
+                }
+              }
+            ]
+          },
+          {
+            "name": "deleteCollection",
+            "options": [
+              {
+                "long": "databaseId",
+                "description": "database ID",
+                "inherit": false,
+                "value": {
+                  "name": "databaseId"
+                }
+              },
+              {
+                "long": "collectionId",
+                "description": "collection ID",
+                "inherit": false,
+                "value": {
+                  "name": "collectionId"
+                }
+              }
+            ]
+          },
+          {
+            "name": "listAttributes",
+            "options": [
+              {
+                "long": "databaseId",
+                "description": "database ID",
+                "inherit": false,
+                "value": {
+                  "name": "databaseId"
+                }
+              },
+              {
+                "long": "collectionId",
+                "description": "collection ID. You can create a new collection using the Database s...",
+                "inherit": false,
+                "value": {
+                  "name": "collectionId"
+                }
+              }
+            ]
+          },
+          {
+            "name": "createBooleanAttribute",
+            "options": [
+              {
+                "long": "databaseId",
+                "description": "database ID",
+                "inherit": false,
+                "value": {
+                  "name": "databaseId"
+                }
+              },
+              {
+                "long": "collectionId",
+                "description": "collection ID. You can create a new collection using the Database s...",
+                "inherit": false,
+                "value": {
+                  "name": "collectionId"
+                }
+              },
+              {
+                "long": "key",
+                "description": "attribute Key",
+                "inherit": false,
+                "value": {
+                  "name": "key"
+                }
+              },
+              {
+                "long": "required",
+                "description": "is attribute required?",
+                "inherit": false,
+                "value": {
+                  "name": "required"
+                }
+              },
+              {
+                "long": "xdefault",
+                "description": "default value for attribute when not provided. Cannot be set when a...",
+                "inherit": false,
+                "value": {
+                  "name": "xdefault"
+                }
+              },
+              {
+                "long": "array",
+                "description": "is attribute an array?",
+                "inherit": false,
+                "value": {
+                  "name": "array"
+                }
+              }
+            ]
+          },
+          {
+            "name": "createEmailAttribute",
+            "options": [
+              {
+                "long": "databaseId",
+                "description": "database ID",
+                "inherit": false,
+                "value": {
+                  "name": "databaseId"
+                }
+              },
+              {
+                "long": "collectionId",
+                "description": "collection ID. You can create a new collection using the Database s...",
+                "inherit": false,
+                "value": {
+                  "name": "collectionId"
+                }
+              },
+              {
+                "long": "key",
+                "description": "attribute Key",
+                "inherit": false,
+                "value": {
+                  "name": "key"
+                }
+              },
+              {
+                "long": "required",
+                "description": "is attribute required?",
+                "inherit": false,
+                "value": {
+                  "name": "required"
+                }
+              },
+              {
+                "long": "xdefault",
+                "description": "default value for attribute when not provided. Cannot be set when a...",
+                "inherit": false,
+                "value": {
+                  "name": "xdefault"
+                }
+              },
+              {
+                "long": "array",
+                "description": "is attribute an array?",
+                "inherit": false,
+                "value": {
+                  "name": "array"
+                }
+              }
+            ]
+          },
+          {
+            "name": "createEnumAttribute",
+            "options": [
+              {
+                "long": "databaseId",
+                "description": "database ID",
+                "inherit": false,
+                "value": {
+                  "name": "databaseId"
+                }
+              },
+              {
+                "long": "collectionId",
+                "description": "collection ID. You can create a new collection using the Database s...",
+                "inherit": false,
+                "value": {
+                  "name": "collectionId"
+                }
+              },
+              {
+                "long": "key",
+                "description": "attribute Key",
+                "inherit": false,
+                "value": {
+                  "name": "key"
+                }
+              },
+              {
+                "long": "elements",
+                "description": "array of elements in enumerated type. Uses length of longest elemen...",
+                "inherit": false,
+                "value": {
+                  "name": "elements"
+                }
+              },
+              {
+                "long": "required",
+                "description": "is attribute required?",
+                "inherit": false,
+                "value": {
+                  "name": "required"
+                }
+              },
+              {
+                "long": "xdefault",
+                "description": "default value for attribute when not provided. Cannot be set when a...",
+                "inherit": false,
+                "value": {
+                  "name": "xdefault"
+                }
+              },
+              {
+                "long": "array",
+                "description": "is attribute an array?",
+                "inherit": false,
+                "value": {
+                  "name": "array"
+                }
+              }
+            ]
+          },
+          {
+            "name": "createFloatAttribute",
+            "options": [
+              {
+                "long": "databaseId",
+                "description": "database ID",
+                "inherit": false,
+                "value": {
+                  "name": "databaseId"
+                }
+              },
+              {
+                "long": "collectionId",
+                "description": "collection ID. You can create a new collection using the Database s...",
+                "inherit": false,
+                "value": {
+                  "name": "collectionId"
+                }
+              },
+              {
+                "long": "key",
+                "description": "attribute Key",
+                "inherit": false,
+                "value": {
+                  "name": "key"
+                }
+              },
+              {
+                "long": "required",
+                "description": "is attribute required?",
+                "inherit": false,
+                "value": {
+                  "name": "required"
+                }
+              },
+              {
+                "long": "min",
+                "description": "minimum value to enforce on new documents",
+                "inherit": false,
+                "value": {
+                  "name": "min"
+                }
+              },
+              {
+                "long": "max",
+                "description": "maximum value to enforce on new documents",
+                "inherit": false,
+                "value": {
+                  "name": "max"
+                }
+              },
+              {
+                "long": "xdefault",
+                "description": "default value for attribute when not provided. Cannot be set when a...",
+                "inherit": false,
+                "value": {
+                  "name": "xdefault"
+                }
+              },
+              {
+                "long": "array",
+                "description": "is attribute an array?",
+                "inherit": false,
+                "value": {
+                  "name": "array"
+                }
+              }
+            ]
+          },
+          {
+            "name": "createIntegerAttribute",
+            "options": [
+              {
+                "long": "databaseId",
+                "description": "database ID",
+                "inherit": false,
+                "value": {
+                  "name": "databaseId"
+                }
+              },
+              {
+                "long": "collectionId",
+                "description": "collection ID. You can create a new collection using the Database s...",
+                "inherit": false,
+                "value": {
+                  "name": "collectionId"
+                }
+              },
+              {
+                "long": "key",
+                "description": "attribute Key",
+                "inherit": false,
+                "value": {
+                  "name": "key"
+                }
+              },
+              {
+                "long": "required",
+                "description": "is attribute required?",
+                "inherit": false,
+                "value": {
+                  "name": "required"
+                }
+              },
+              {
+                "long": "min",
+                "description": "minimum value to enforce on new documents",
+                "inherit": false,
+                "value": {
+                  "name": "min"
+                }
+              },
+              {
+                "long": "max",
+                "description": "maximum value to enforce on new documents",
+                "inherit": false,
+                "value": {
+                  "name": "max"
+                }
+              },
+              {
+                "long": "xdefault",
+                "description": "default value for attribute when not provided. Cannot be set when a...",
+                "inherit": false,
+                "value": {
+                  "name": "xdefault"
+                }
+              },
+              {
+                "long": "array",
+                "description": "is attribute an array?",
+                "inherit": false,
+                "value": {
+                  "name": "array"
+                }
+              }
+            ]
+          },
+          {
+            "name": "createIpAttribute",
+            "options": [
+              {
+                "long": "databaseId",
+                "description": "database ID",
+                "inherit": false,
+                "value": {
+                  "name": "databaseId"
+                }
+              },
+              {
+                "long": "collectionId",
+                "description": "collection ID. You can create a new collection using the Database s...",
+                "inherit": false,
+                "value": {
+                  "name": "collectionId"
+                }
+              },
+              {
+                "long": "key",
+                "description": "attribute Key",
+                "inherit": false,
+                "value": {
+                  "name": "key"
+                }
+              },
+              {
+                "long": "required",
+                "description": "is attribute required?",
+                "inherit": false,
+                "value": {
+                  "name": "required"
+                }
+              },
+              {
+                "long": "xdefault",
+                "description": "default value for attribute when not provided. Cannot be set when a...",
+                "inherit": false,
+                "value": {
+                  "name": "xdefault"
+                }
+              },
+              {
+                "long": "array",
+                "description": "is attribute an array?",
+                "inherit": false,
+                "value": {
+                  "name": "array"
+                }
+              }
+            ]
+          },
+          {
+            "name": "createStringAttribute",
+            "options": [
+              {
+                "long": "databaseId",
+                "description": "database ID",
+                "inherit": false,
+                "value": {
+                  "name": "databaseId"
+                }
+              },
+              {
+                "long": "collectionId",
+                "description": "collection ID. You can create a new collection using the Database s...",
+                "inherit": false,
+                "value": {
+                  "name": "collectionId"
+                }
+              },
+              {
+                "long": "key",
+                "description": "attribute Key",
+                "inherit": false,
+                "value": {
+                  "name": "key"
+                }
+              },
+              {
+                "long": "size",
+                "description": "attribute size for text attributes, in number of characters",
+                "inherit": false,
+                "value": {
+                  "name": "size"
+                }
+              },
+              {
+                "long": "required",
+                "description": "is attribute required?",
+                "inherit": false,
+                "value": {
+                  "name": "required"
+                }
+              },
+              {
+                "long": "xdefault",
+                "description": "default value for attribute when not provided. Cannot be set when a...",
+                "inherit": false,
+                "value": {
+                  "name": "xdefault"
+                }
+              },
+              {
+                "long": "array",
+                "description": "is attribute an array?",
+                "inherit": false,
+                "value": {
+                  "name": "array"
+                }
+              }
+            ]
+          },
+          {
+            "name": "createUrlAttribute",
+            "options": [
+              {
+                "long": "databaseId",
+                "description": "database ID",
+                "inherit": false,
+                "value": {
+                  "name": "databaseId"
+                }
+              },
+              {
+                "long": "collectionId",
+                "description": "collection ID. You can create a new collection using the Database s...",
+                "inherit": false,
+                "value": {
+                  "name": "collectionId"
+                }
+              },
+              {
+                "long": "key",
+                "description": "attribute Key",
+                "inherit": false,
+                "value": {
+                  "name": "key"
+                }
+              },
+              {
+                "long": "required",
+                "description": "is attribute required?",
+                "inherit": false,
+                "value": {
+                  "name": "required"
+                }
+              },
+              {
+                "long": "xdefault",
+                "description": "default value for attribute when not provided. Cannot be set when a...",
+                "inherit": false,
+                "value": {
+                  "name": "xdefault"
+                }
+              },
+              {
+                "long": "array",
+                "description": "is attribute an array?",
+                "inherit": false,
+                "value": {
+                  "name": "array"
+                }
+              }
+            ]
+          },
+          {
+            "name": "getAttribute",
+            "options": [
+              {
+                "long": "databaseId",
+                "description": "database ID",
+                "inherit": false,
+                "value": {
+                  "name": "databaseId"
+                }
+              },
+              {
+                "long": "collectionId",
+                "description": "collection ID. You can create a new collection using the Database s...",
+                "inherit": false,
+                "value": {
+                  "name": "collectionId"
+                }
+              },
+              {
+                "long": "key",
+                "description": "attribute Key",
+                "inherit": false,
+                "value": {
+                  "name": "key"
+                }
+              }
+            ]
+          },
+          {
+            "name": "deleteAttribute",
+            "options": [
+              {
+                "long": "databaseId",
+                "description": "database ID",
+                "inherit": false,
+                "value": {
+                  "name": "databaseId"
+                }
+              },
+              {
+                "long": "collectionId",
+                "description": "collection ID. You can create a new collection using the Database s...",
+                "inherit": false,
+                "value": {
+                  "name": "collectionId"
+                }
+              },
+              {
+                "long": "key",
+                "description": "attribute Key",
+                "inherit": false,
+                "value": {
+                  "name": "key"
+                }
+              }
+            ]
+          },
+          {
+            "name": "listDocuments",
+            "options": [
+              {
+                "long": "databaseId",
+                "description": "database ID",
+                "inherit": false,
+                "value": {
+                  "name": "databaseId"
+                }
+              },
+              {
+                "long": "collectionId",
+                "description": "collection ID. You can create a new collection using the Database s...",
+                "inherit": false,
+                "value": {
+                  "name": "collectionId"
+                }
+              },
+              {
+                "long": "queries",
+                "description": "array of query strings generated using the Query class provided by...",
+                "inherit": false,
+                "value": {
+                  "name": "queries"
+                }
+              },
+              {
+                "long": "limit",
+                "description": "maximum number of documents to return in response. By default will...",
+                "inherit": false,
+                "value": {
+                  "name": "limit"
+                }
+              },
+              {
+                "long": "offset",
+                "description": "offset value. The default value is 0. Use this value to manage pagi...",
+                "inherit": false,
+                "value": {
+                  "name": "offset"
+                }
+              },
+              {
+                "long": "cursor",
+                "description": "iD of the document used as the starting point for the query, exclud...",
+                "inherit": false,
+                "value": {
+                  "name": "cursor"
+                }
+              },
+              {
+                "long": "cursorDirection",
+                "description": "direction of the cursor, can be either 'before' or 'after'",
+                "inherit": false,
+                "value": {
+                  "name": "cursorDirection"
+                }
+              },
+              {
+                "long": "orderAttributes",
+                "description": "array of attributes used to sort results. Maximum of 100 order attr...",
+                "inherit": false,
+                "value": {
+                  "name": "orderAttributes"
+                }
+              },
+              {
+                "long": "orderTypes",
+                "description": "array of order directions for sorting attribtues. Possible values a...",
+                "inherit": false,
+                "value": {
+                  "name": "orderTypes"
+                }
+              }
+            ]
+          },
+          {
+            "name": "createDocument",
+            "options": [
+              {
+                "long": "databaseId",
+                "description": "database ID",
+                "inherit": false,
+                "value": {
+                  "name": "databaseId"
+                }
+              },
+              {
+                "long": "collectionId",
+                "description": "collection ID. You can create a new collection using the Database s...",
+                "inherit": false,
+                "value": {
+                  "name": "collectionId"
+                }
+              },
+              {
+                "long": "documentId",
+                "description": "document ID. Choose your own unique ID or pass the string \"unique()...",
+                "inherit": false,
+                "value": {
+                  "name": "documentId"
+                }
+              },
+              {
+                "long": "data",
+                "description": "document data as json object",
+                "inherit": false,
+                "value": {
+                  "name": "data"
+                }
+              },
+              {
+                "long": "read",
+                "description": "an array of strings with read permissions. By default only the curr...",
+                "inherit": false,
+                "value": {
+                  "name": "read"
+                }
+              },
+              {
+                "long": "write",
+                "description": "an array of strings with write permissions. By default only the cur...",
+                "inherit": false,
+                "value": {
+                  "name": "write"
+                }
+              }
+            ]
+          },
+          {
+            "name": "getDocument",
+            "options": [
+              {
+                "long": "databaseId",
+                "description": "database ID",
+                "inherit": false,
+                "value": {
+                  "name": "databaseId"
+                }
+              },
+              {
+                "long": "collectionId",
+                "description": "collection ID. You can create a new collection using the Database s...",
+                "inherit": false,
+                "value": {
+                  "name": "collectionId"
+                }
+              },
+              {
+                "long": "documentId",
+                "description": "document ID",
+                "inherit": false,
+                "value": {
+                  "name": "documentId"
+                }
+              }
+            ]
+          },
+          {
+            "name": "updateDocument",
+            "options": [
+              {
+                "long": "databaseId",
+                "description": "database ID",
+                "inherit": false,
+                "value": {
+                  "name": "databaseId"
+                }
+              },
+              {
+                "long": "collectionId",
+                "description": "collection ID",
+                "inherit": false,
+                "value": {
+                  "name": "collectionId"
+                }
+              },
+              {
+                "long": "documentId",
+                "description": "document ID",
+                "inherit": false,
+                "value": {
+                  "name": "documentId"
+                }
+              },
+              {
+                "long": "data",
+                "description": "document data as json object. Include only attribute and value pair...",
+                "inherit": false,
+                "value": {
+                  "name": "data"
+                }
+              },
+              {
+                "long": "read",
+                "description": "an array of strings with read permissions. By default inherits the...",
+                "inherit": false,
+                "value": {
+                  "name": "read"
+                }
+              },
+              {
+                "long": "write",
+                "description": "an array of strings with write permissions. By default inherits the...",
+                "inherit": false,
+                "value": {
+                  "name": "write"
+                }
+              }
+            ]
+          },
+          {
+            "name": "deleteDocument",
+            "options": [
+              {
+                "long": "databaseId",
+                "description": "database ID",
+                "inherit": false,
+                "value": {
+                  "name": "databaseId"
+                }
+              },
+              {
+                "long": "collectionId",
+                "description": "collection ID. You can create a new collection using the Database s...",
+                "inherit": false,
+                "value": {
+                  "name": "collectionId"
+                }
+              },
+              {
+                "long": "documentId",
+                "description": "document ID",
+                "inherit": false,
+                "value": {
+                  "name": "documentId"
+                }
+              }
+            ]
+          },
+          {
+            "name": "listDocumentLogs",
+            "options": [
+              {
+                "long": "databaseId",
+                "description": "database ID",
+                "inherit": false,
+                "value": {
+                  "name": "databaseId"
+                }
+              },
+              {
+                "long": "collectionId",
+                "description": "collection ID",
+                "inherit": false,
+                "value": {
+                  "name": "collectionId"
+                }
+              },
+              {
+                "long": "documentId",
+                "description": "document ID",
+                "inherit": false,
+                "value": {
+                  "name": "documentId"
+                }
+              },
+              {
+                "long": "limit",
+                "description": "maximum number of logs to return in response. By default will retur...",
+                "inherit": false,
+                "value": {
+                  "name": "limit"
+                }
+              },
+              {
+                "long": "offset",
+                "description": "offset value. The default value is 0. Use this value to manage pagi...",
+                "inherit": false,
+                "value": {
+                  "name": "offset"
+                }
+              }
+            ]
+          },
+          {
+            "name": "listIndexes",
+            "options": [
+              {
+                "long": "databaseId",
+                "description": "database ID",
+                "inherit": false,
+                "value": {
+                  "name": "databaseId"
+                }
+              },
+              {
+                "long": "collectionId",
+                "description": "collection ID. You can create a new collection using the Database s...",
+                "inherit": false,
+                "value": {
+                  "name": "collectionId"
+                }
+              }
+            ]
+          },
+          {
+            "name": "createIndex",
+            "options": [
+              {
+                "long": "databaseId",
+                "description": "database ID",
+                "inherit": false,
+                "value": {
+                  "name": "databaseId"
+                }
+              },
+              {
+                "long": "collectionId",
+                "description": "collection ID. You can create a new collection using the Database s...",
+                "inherit": false,
+                "value": {
+                  "name": "collectionId"
+                }
+              },
+              {
+                "long": "key",
+                "description": "index Key",
+                "inherit": false,
+                "value": {
+                  "name": "key"
+                }
+              },
+              {
+                "long": "type",
+                "description": "index type",
+                "inherit": false,
+                "value": {
+                  "name": "type"
+                }
+              },
+              {
+                "long": "attributes",
+                "description": "array of attributes to index. Maximum of 100 attributes are allowed...",
+                "inherit": false,
+                "value": {
+                  "name": "attributes"
+                }
+              },
+              {
+                "long": "orders",
+                "description": "array of index orders. Maximum of 100 orders are allowed",
+                "inherit": false,
+                "value": {
+                  "name": "orders"
+                }
+              }
+            ]
+          },
+          {
+            "name": "getIndex",
+            "options": [
+              {
+                "long": "databaseId",
+                "description": "database ID",
+                "inherit": false,
+                "value": {
+                  "name": "databaseId"
+                }
+              },
+              {
+                "long": "collectionId",
+                "description": "collection ID. You can create a new collection using the Database s...",
+                "inherit": false,
+                "value": {
+                  "name": "collectionId"
+                }
+              },
+              {
+                "long": "key",
+                "description": "index Key",
+                "inherit": false,
+                "value": {
+                  "name": "key"
+                }
+              }
+            ]
+          },
+          {
+            "name": "deleteIndex",
+            "options": [
+              {
+                "long": "databaseId",
+                "description": "database ID",
+                "inherit": false,
+                "value": {
+                  "name": "databaseId"
+                }
+              },
+              {
+                "long": "collectionId",
+                "description": "collection ID. You can create a new collection using the Database s...",
+                "inherit": false,
+                "value": {
+                  "name": "collectionId"
+                }
+              },
+              {
+                "long": "key",
+                "description": "index Key",
+                "inherit": false,
+                "value": {
+                  "name": "key"
+                }
+              }
+            ]
+          },
+          {
+            "name": "listCollectionLogs",
+            "options": [
+              {
+                "long": "databaseId",
+                "description": "database ID",
+                "inherit": false,
+                "value": {
+                  "name": "databaseId"
+                }
+              },
+              {
+                "long": "collectionId",
+                "description": "collection ID",
+                "inherit": false,
+                "value": {
+                  "name": "collectionId"
+                }
+              },
+              {
+                "long": "limit",
+                "description": "maximum number of logs to return in response. By default will retur...",
+                "inherit": false,
+                "value": {
+                  "name": "limit"
+                }
+              },
+              {
+                "long": "offset",
+                "description": "offset value. The default value is 0. Use this value to manage pagi...",
+                "inherit": false,
+                "value": {
+                  "name": "offset"
+                }
+              }
+            ]
+          },
+          {
+            "name": "getCollectionUsage",
+            "options": [
+              {
+                "long": "databaseId",
+                "description": "database ID",
+                "inherit": false,
+                "value": {
+                  "name": "databaseId"
+                }
+              },
+              {
+                "long": "collectionId",
+                "description": "collection ID",
+                "inherit": false,
+                "value": {
+                  "name": "collectionId"
+                }
+              },
+              {
+                "long": "range",
+                "description": "date range",
+                "inherit": false,
+                "value": {
+                  "name": "range"
+                }
+              }
+            ]
+          },
+          {
+            "name": "listLogs",
+            "options": [
+              {
+                "long": "databaseId",
+                "description": "database ID",
+                "inherit": false,
+                "value": {
+                  "name": "databaseId"
+                }
+              },
+              {
+                "long": "limit",
+                "description": "maximum number of logs to return in response. By default will retur...",
+                "inherit": false,
+                "value": {
+                  "name": "limit"
+                }
+              },
+              {
+                "long": "offset",
+                "description": "offset value. The default value is 0. Use this value to manage pagi...",
+                "inherit": false,
+                "value": {
+                  "name": "offset"
+                }
+              }
+            ]
+          },
+          {
+            "name": "getDatabaseUsage",
+            "options": [
+              {
+                "long": "databaseId",
+                "description": "database ID",
+                "inherit": false,
+                "value": {
+                  "name": "databaseId"
+                }
+              },
+              {
+                "long": "range",
+                "description": "'Date range",
+                "inherit": false,
+                "value": {
+                  "name": "range"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "functions",
+        "description": "the functions command allows you view, create and manage your Cloud...",
+        "subcommands": [
+          {
+            "name": "list",
+            "description": "get a list of all the project's functions. You can use the query pa...",
+            "options": [
+              {
+                "long": "search",
+                "description": "search term to filter your list results. Max length: 256 chars",
+                "inherit": false,
+                "value": {
+                  "name": "search"
+                }
+              },
+              {
+                "long": "limit",
+                "description": "maximum number of functions to return in response. By default will...",
+                "inherit": false,
+                "value": {
+                  "name": "limit"
+                }
+              },
+              {
+                "long": "offset",
+                "description": "offset value. The default value is 0. Use this value to manage pagi...",
+                "inherit": false,
+                "value": {
+                  "name": "offset"
+                }
+              },
+              {
+                "long": "cursor",
+                "description": "iD of the function used as the starting point for the query, exclud...",
+                "inherit": false,
+                "value": {
+                  "name": "cursor"
+                }
+              },
+              {
+                "long": "cursorDirection",
+                "description": "direction of the cursor, can be either 'before' or 'after'",
+                "inherit": false,
+                "value": {
+                  "name": "cursorDirection"
+                }
+              },
+              {
+                "long": "orderType",
+                "description": "order result by ASC or DESC order",
+                "inherit": false,
+                "value": {
+                  "name": "orderType"
+                }
+              }
+            ]
+          },
+          {
+            "name": "create",
+            "description": "create a new function. You can pass a list of [permissions](/docs/p...",
+            "options": [
+              {
+                "long": "functionId",
+                "description": "function ID. Choose your own unique ID or pass the string \"unique()...",
+                "inherit": false,
+                "value": {
+                  "name": "functionId"
+                }
+              },
+              {
+                "long": "name",
+                "description": "function name. Max length: 128 chars",
+                "inherit": false,
+                "value": {
+                  "name": "name"
+                }
+              },
+              {
+                "long": "execute",
+                "description": "an array of strings with execution permissions. By default no user...",
+                "inherit": false,
+                "value": {
+                  "name": "execute"
+                }
+              },
+              {
+                "long": "runtime",
+                "description": "execution runtime",
+                "inherit": false,
+                "value": {
+                  "name": "runtime"
+                }
+              },
+              {
+                "long": "vars",
+                "description": "key-value json object that will be passed to the function as enviro...",
+                "inherit": false,
+                "value": {
+                  "name": "vars"
+                }
+              },
+              {
+                "long": "events",
+                "description": "events list. Maximum of 100 events are allowed",
+                "inherit": false,
+                "value": {
+                  "name": "events"
+                }
+              },
+              {
+                "long": "schedule",
+                "description": "schedule CRON syntax",
+                "inherit": false,
+                "value": {
+                  "name": "schedule"
+                }
+              },
+              {
+                "long": "timeout",
+                "description": "function maximum execution time in seconds",
+                "inherit": false,
+                "value": {
+                  "name": "timeout"
+                }
+              }
+            ]
+          },
+          {
+            "name": "listRuntimes",
+            "description": "get a list of all runtimes that are currently active on your instance"
+          },
+          {
+            "name": "get",
+            "description": "get a function by its unique ID",
+            "options": [
+              {
+                "long": "functionId",
+                "description": "function ID",
+                "inherit": false,
+                "value": {
+                  "name": "functionId"
+                }
+              }
+            ]
+          },
+          {
+            "name": "update",
+            "description": "update function by its unique ID",
+            "options": [
+              {
+                "long": "functionId",
+                "description": "function ID",
+                "inherit": false,
+                "value": {
+                  "name": "functionId"
+                }
+              },
+              {
+                "long": "name",
+                "description": "function name. Max length: 128 chars",
+                "inherit": false,
+                "value": {
+                  "name": "name"
+                }
+              },
+              {
+                "long": "execute",
+                "description": "an array of strings with execution permissions. By default no user...",
+                "inherit": false,
+                "value": {
+                  "name": "execute"
+                }
+              },
+              {
+                "long": "vars",
+                "description": "key-value json object that will be passed to the function as enviro...",
+                "inherit": false,
+                "value": {
+                  "name": "vars"
+                }
+              },
+              {
+                "long": "events",
+                "description": "events list. Maximum of 100 events are allowed",
+                "inherit": false,
+                "value": {
+                  "name": "events"
+                }
+              },
+              {
+                "long": "schedule",
+                "description": "schedule CRON syntax",
+                "inherit": false,
+                "value": {
+                  "name": "schedule"
+                }
+              },
+              {
+                "long": "timeout",
+                "description": "maximum execution time in seconds",
+                "inherit": false,
+                "value": {
+                  "name": "timeout"
+                }
+              }
+            ]
+          },
+          {
+            "name": "delete",
+            "description": "delete a function by its unique ID",
+            "options": [
+              {
+                "long": "functionId",
+                "description": "function ID",
+                "inherit": false,
+                "value": {
+                  "name": "functionId"
+                }
+              }
+            ]
+          },
+          {
+            "name": "listDeployments",
+            "description": "get a list of all the project's code deployments. You can use the q...",
+            "options": [
+              {
+                "long": "functionId",
+                "description": "function ID",
+                "inherit": false,
+                "value": {
+                  "name": "functionId"
+                }
+              },
+              {
+                "long": "search",
+                "description": "search term to filter your list results. Max length: 256 chars",
+                "inherit": false,
+                "value": {
+                  "name": "search"
+                }
+              },
+              {
+                "long": "limit",
+                "description": "maximum number of deployments to return in response. By default wil...",
+                "inherit": false,
+                "value": {
+                  "name": "limit"
+                }
+              },
+              {
+                "long": "offset",
+                "description": "offset value. The default value is 0. Use this value to manage pagi...",
+                "inherit": false,
+                "value": {
+                  "name": "offset"
+                }
+              },
+              {
+                "long": "cursor",
+                "description": "iD of the deployment used as the starting point for the query, excl...",
+                "inherit": false,
+                "value": {
+                  "name": "cursor"
+                }
+              },
+              {
+                "long": "cursorDirection",
+                "description": "direction of the cursor, can be either 'before' or 'after'",
+                "inherit": false,
+                "value": {
+                  "name": "cursorDirection"
+                }
+              },
+              {
+                "long": "orderType",
+                "description": "order result by ASC or DESC order",
+                "inherit": false,
+                "value": {
+                  "name": "orderType"
+                }
+              }
+            ]
+          },
+          {
+            "name": "createDeployment",
+            "description": "create a new function code deployment. Use this endpoint to upload...",
+            "options": [
+              {
+                "long": "functionId",
+                "description": "function ID",
+                "inherit": false,
+                "value": {
+                  "name": "functionId"
+                }
+              },
+              {
+                "long": "entrypoint",
+                "description": "entrypoint File",
+                "inherit": false,
+                "value": {
+                  "name": "entrypoint"
+                }
+              },
+              {
+                "long": "code",
+                "description": "gzip file with your code package. When used with the appwrite cli,...",
+                "inherit": false,
+                "value": {
+                  "name": "code"
+                }
+              },
+              {
+                "long": "activate",
+                "description": "automatically activate the deployment when it is finished building",
+                "inherit": false,
+                "value": {
+                  "name": "activate"
+                }
+              }
+            ]
+          },
+          {
+            "name": "getDeployment",
+            "description": "get a code deployment by its unique ID",
+            "options": [
+              {
+                "long": "functionId",
+                "description": "function ID",
+                "inherit": false,
+                "value": {
+                  "name": "functionId"
+                }
+              },
+              {
+                "long": "deploymentId",
+                "description": "deployment ID",
+                "inherit": false,
+                "value": {
+                  "name": "deploymentId"
+                }
+              }
+            ]
+          },
+          {
+            "name": "updateDeployment",
+            "description": "update the function code deployment ID using the unique function ID...",
+            "options": [
+              {
+                "long": "functionId",
+                "description": "function ID",
+                "inherit": false,
+                "value": {
+                  "name": "functionId"
+                }
+              },
+              {
+                "long": "deploymentId",
+                "description": "deployment ID",
+                "inherit": false,
+                "value": {
+                  "name": "deploymentId"
+                }
+              }
+            ]
+          },
+          {
+            "name": "deleteDeployment",
+            "description": "delete a code deployment by its unique ID",
+            "options": [
+              {
+                "long": "functionId",
+                "description": "function ID",
+                "inherit": false,
+                "value": {
+                  "name": "functionId"
+                }
+              },
+              {
+                "long": "deploymentId",
+                "description": "deployment ID",
+                "inherit": false,
+                "value": {
+                  "name": "deploymentId"
+                }
+              }
+            ]
+          },
+          {
+            "name": "retryBuild",
+            "options": [
+              {
+                "long": "functionId",
+                "description": "function ID",
+                "inherit": false,
+                "value": {
+                  "name": "functionId"
+                }
+              },
+              {
+                "long": "deploymentId",
+                "description": "deployment ID",
+                "inherit": false,
+                "value": {
+                  "name": "deploymentId"
+                }
+              },
+              {
+                "long": "buildId",
+                "description": "build unique ID",
+                "inherit": false,
+                "value": {
+                  "name": "buildId"
+                }
+              }
+            ]
+          },
+          {
+            "name": "listExecutions",
+            "description": "get a list of all the current user function execution logs. You can...",
+            "options": [
+              {
+                "long": "functionId",
+                "description": "function ID",
+                "inherit": false,
+                "value": {
+                  "name": "functionId"
+                }
+              },
+              {
+                "long": "limit",
+                "description": "maximum number of executions to return in response. By default will...",
+                "inherit": false,
+                "value": {
+                  "name": "limit"
+                }
+              },
+              {
+                "long": "offset",
+                "description": "offset value. The default value is 0. Use this value to manage pagi...",
+                "inherit": false,
+                "value": {
+                  "name": "offset"
+                }
+              },
+              {
+                "long": "search",
+                "description": "search term to filter your list results. Max length: 256 chars",
+                "inherit": false,
+                "value": {
+                  "name": "search"
+                }
+              },
+              {
+                "long": "cursor",
+                "description": "iD of the execution used as the starting point for the query, exclu...",
+                "inherit": false,
+                "value": {
+                  "name": "cursor"
+                }
+              },
+              {
+                "long": "cursorDirection",
+                "description": "direction of the cursor, can be either 'before' or 'after'",
+                "inherit": false,
+                "value": {
+                  "name": "cursorDirection"
+                }
+              }
+            ]
+          },
+          {
+            "name": "createExecution",
+            "description": "trigger a function execution. The returned object will return you t...",
+            "options": [
+              {
+                "long": "functionId",
+                "description": "function ID",
+                "inherit": false,
+                "value": {
+                  "name": "functionId"
+                }
+              },
+              {
+                "long": "data",
+                "description": "string of custom data to send to function",
+                "inherit": false,
+                "value": {
+                  "name": "data"
+                }
+              },
+              {
+                "long": "async",
+                "description": "execute code asynchronously. Default value is true",
+                "inherit": false,
+                "value": {
+                  "name": "async"
+                }
+              }
+            ]
+          },
+          {
+            "name": "getExecution",
+            "description": "get a function execution log by its unique ID",
+            "options": [
+              {
+                "long": "functionId",
+                "description": "function ID",
+                "inherit": false,
+                "value": {
+                  "name": "functionId"
+                }
+              },
+              {
+                "long": "executionId",
+                "description": "execution ID",
+                "inherit": false,
+                "value": {
+                  "name": "executionId"
+                }
+              }
+            ]
+          },
+          {
+            "name": "getUsage",
+            "options": [
+              {
+                "long": "functionId",
+                "description": "function ID",
+                "inherit": false,
+                "value": {
+                  "name": "functionId"
+                }
+              },
+              {
+                "long": "range",
+                "description": "date range",
+                "inherit": false,
+                "value": {
+                  "name": "range"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "health",
+        "description": "the health command allows you to both validate and monitor your app...",
+        "subcommands": [
+          {
+            "name": "get",
+            "description": "check the appwrite HTTP server is up and responsive"
+          },
+          {
+            "name": "getAntivirus",
+            "description": "check the appwrite Antivirus server is up and connection is successful"
+          },
+          {
+            "name": "getCache",
+            "description": "check the appwrite in-memory cache server is up and connection is s..."
+          },
+          {
+            "name": "getDB",
+            "description": "check the appwrite database server is up and connection is successful"
+          },
+          {
+            "name": "getQueueCertificates",
+            "description": "get the number of certificates that are waiting to be issued agains..."
+          },
+          {
+            "name": "getQueueFunctions"
+          },
+          {
+            "name": "getQueueLogs",
+            "description": "get the number of logs that are waiting to be processed in the appw..."
+          },
+          {
+            "name": "getQueueWebhooks",
+            "description": "get the number of webhooks that are waiting to be processed in the..."
+          },
+          {
+            "name": "getStorageLocal",
+            "description": "check the appwrite local storage device is up and connection is suc..."
+          },
+          {
+            "name": "getTime",
+            "description": "check the appwrite server time is synced with Google remote NTP ser..."
+          }
+        ]
+      },
+      {
+        "name": "locale",
+        "description": "the locale command allows you to customize your app based on your u...",
+        "subcommands": [
+          {
+            "name": "get",
+            "description": "get the current user location based on IP. Returns an object with u..."
+          },
+          {
+            "name": "getContinents",
+            "description": "list of all continents. You can use the locale header to get the da..."
+          },
+          {
+            "name": "getCountries",
+            "description": "list of all countries. You can use the locale header to get the dat..."
+          },
+          {
+            "name": "getCountriesEU",
+            "description": "list of all countries that are currently members of the EU. You can..."
+          },
+          {
+            "name": "getCountriesPhones",
+            "description": "list of all countries phone codes. You can use the locale header to..."
+          },
+          {
+            "name": "getCurrencies",
+            "description": "list of all currencies, including currency symbol, name, plural, an..."
+          },
+          {
+            "name": "getLanguages",
+            "description": "list of all languages classified by ISO 639-1 including 2-letter co..."
+          }
+        ]
+      },
+      {
+        "name": "projects",
+        "description": "the projects command allows you to view, create and manage your app...",
+        "subcommands": [
+          {
+            "name": "list",
+            "options": [
+              {
+                "long": "search",
+                "description": "search term to filter your list results. Max length: 256 chars",
+                "inherit": false,
+                "value": {
+                  "name": "search"
+                }
+              },
+              {
+                "long": "limit",
+                "description": "results limit value. By default will return maximum 25 results. Max...",
+                "inherit": false,
+                "value": {
+                  "name": "limit"
+                }
+              },
+              {
+                "long": "offset",
+                "description": "results offset. The default value is 0. Use this param to manage pa...",
+                "inherit": false,
+                "value": {
+                  "name": "offset"
+                }
+              },
+              {
+                "long": "cursor",
+                "description": "iD of the project used as the starting point for the query, excludi...",
+                "inherit": false,
+                "value": {
+                  "name": "cursor"
+                }
+              },
+              {
+                "long": "cursorDirection",
+                "description": "direction of the cursor, can be either 'before' or 'after'",
+                "inherit": false,
+                "value": {
+                  "name": "cursorDirection"
+                }
+              },
+              {
+                "long": "orderType",
+                "description": "order result by ASC or DESC order",
+                "inherit": false,
+                "value": {
+                  "name": "orderType"
+                }
+              }
+            ]
+          },
+          {
+            "name": "create",
+            "options": [
+              {
+                "long": "projectId",
+                "description": "unique Id. Choose your own unique ID or pass the string \"unique()\"...",
+                "inherit": false,
+                "value": {
+                  "name": "projectId"
+                }
+              },
+              {
+                "long": "name",
+                "description": "project name. Max length: 128 chars",
+                "inherit": false,
+                "value": {
+                  "name": "name"
+                }
+              },
+              {
+                "long": "teamId",
+                "description": "team unique ID",
+                "inherit": false,
+                "value": {
+                  "name": "teamId"
+                }
+              },
+              {
+                "long": "description",
+                "description": "project description. Max length: 256 chars",
+                "inherit": false,
+                "value": {
+                  "name": "description"
+                }
+              },
+              {
+                "long": "logo",
+                "description": "project logo",
+                "inherit": false,
+                "value": {
+                  "name": "logo"
+                }
+              },
+              {
+                "long": "url",
+                "description": "project URL",
+                "inherit": false,
+                "value": {
+                  "name": "url"
+                }
+              },
+              {
+                "long": "legalName",
+                "description": "project legal Name. Max length: 256 chars",
+                "inherit": false,
+                "value": {
+                  "name": "legalName"
+                }
+              },
+              {
+                "long": "legalCountry",
+                "description": "project legal Country. Max length: 256 chars",
+                "inherit": false,
+                "value": {
+                  "name": "legalCountry"
+                }
+              },
+              {
+                "long": "legalState",
+                "description": "project legal State. Max length: 256 chars",
+                "inherit": false,
+                "value": {
+                  "name": "legalState"
+                }
+              },
+              {
+                "long": "legalCity",
+                "description": "project legal City. Max length: 256 chars",
+                "inherit": false,
+                "value": {
+                  "name": "legalCity"
+                }
+              },
+              {
+                "long": "legalAddress",
+                "description": "project legal Address. Max length: 256 chars",
+                "inherit": false,
+                "value": {
+                  "name": "legalAddress"
+                }
+              },
+              {
+                "long": "legalTaxId",
+                "description": "project legal Tax ID. Max length: 256 chars",
+                "inherit": false,
+                "value": {
+                  "name": "legalTaxId"
+                }
+              }
+            ]
+          },
+          {
+            "name": "get",
+            "options": [
+              {
+                "long": "projectId",
+                "description": "project unique ID",
+                "inherit": false,
+                "value": {
+                  "name": "projectId"
+                }
+              }
+            ]
+          },
+          {
+            "name": "update",
+            "options": [
+              {
+                "long": "projectId",
+                "description": "project unique ID",
+                "inherit": false,
+                "value": {
+                  "name": "projectId"
+                }
+              },
+              {
+                "long": "name",
+                "description": "project name. Max length: 128 chars",
+                "inherit": false,
+                "value": {
+                  "name": "name"
+                }
+              },
+              {
+                "long": "description",
+                "description": "project description. Max length: 256 chars",
+                "inherit": false,
+                "value": {
+                  "name": "description"
+                }
+              },
+              {
+                "long": "logo",
+                "description": "project logo",
+                "inherit": false,
+                "value": {
+                  "name": "logo"
+                }
+              },
+              {
+                "long": "url",
+                "description": "project URL",
+                "inherit": false,
+                "value": {
+                  "name": "url"
+                }
+              },
+              {
+                "long": "legalName",
+                "description": "project legal name. Max length: 256 chars",
+                "inherit": false,
+                "value": {
+                  "name": "legalName"
+                }
+              },
+              {
+                "long": "legalCountry",
+                "description": "project legal country. Max length: 256 chars",
+                "inherit": false,
+                "value": {
+                  "name": "legalCountry"
+                }
+              },
+              {
+                "long": "legalState",
+                "description": "project legal state. Max length: 256 chars",
+                "inherit": false,
+                "value": {
+                  "name": "legalState"
+                }
+              },
+              {
+                "long": "legalCity",
+                "description": "project legal city. Max length: 256 chars",
+                "inherit": false,
+                "value": {
+                  "name": "legalCity"
+                }
+              },
+              {
+                "long": "legalAddress",
+                "description": "project legal address. Max length: 256 chars",
+                "inherit": false,
+                "value": {
+                  "name": "legalAddress"
+                }
+              },
+              {
+                "long": "legalTaxId",
+                "description": "project legal tax ID. Max length: 256 chars",
+                "inherit": false,
+                "value": {
+                  "name": "legalTaxId"
+                }
+              }
+            ]
+          },
+          {
+            "name": "delete",
+            "options": [
+              {
+                "long": "projectId",
+                "description": "project unique ID",
+                "inherit": false,
+                "value": {
+                  "name": "projectId"
+                }
+              },
+              {
+                "long": "password",
+                "description": "your user password for confirmation. Must be at least 8 chars",
+                "inherit": false,
+                "value": {
+                  "name": "password"
+                }
+              }
+            ]
+          },
+          {
+            "name": "updateAuthLimit",
+            "options": [
+              {
+                "long": "projectId",
+                "description": "project unique ID",
+                "inherit": false,
+                "value": {
+                  "name": "projectId"
+                }
+              },
+              {
+                "long": "limit",
+                "description": "set the max number of users allowed in this project. Use 0 for unli...",
+                "inherit": false,
+                "value": {
+                  "name": "limit"
+                }
+              }
+            ]
+          },
+          {
+            "name": "updateAuthStatus",
+            "options": [
+              {
+                "long": "projectId",
+                "description": "project unique ID",
+                "inherit": false,
+                "value": {
+                  "name": "projectId"
+                }
+              },
+              {
+                "long": "method",
+                "description": "auth Method. Possible values: email-password,magic-url,anonymous,in...",
+                "inherit": false,
+                "value": {
+                  "name": "method"
+                }
+              },
+              {
+                "long": "status",
+                "description": "set the status of this auth method",
+                "inherit": false,
+                "value": {
+                  "name": "status"
+                }
+              }
+            ]
+          },
+          {
+            "name": "listDomains",
+            "options": [
+              {
+                "long": "projectId",
+                "description": "project unique ID",
+                "inherit": false,
+                "value": {
+                  "name": "projectId"
+                }
+              }
+            ]
+          },
+          {
+            "name": "createDomain",
+            "options": [
+              {
+                "long": "projectId",
+                "description": "project unique ID",
+                "inherit": false,
+                "value": {
+                  "name": "projectId"
+                }
+              },
+              {
+                "long": "domain",
+                "description": "domain name",
+                "inherit": false,
+                "value": {
+                  "name": "domain"
+                }
+              }
+            ]
+          },
+          {
+            "name": "getDomain",
+            "options": [
+              {
+                "long": "projectId",
+                "description": "project unique ID",
+                "inherit": false,
+                "value": {
+                  "name": "projectId"
+                }
+              },
+              {
+                "long": "domainId",
+                "description": "domain unique ID",
+                "inherit": false,
+                "value": {
+                  "name": "domainId"
+                }
+              }
+            ]
+          },
+          {
+            "name": "deleteDomain",
+            "options": [
+              {
+                "long": "projectId",
+                "description": "project unique ID",
+                "inherit": false,
+                "value": {
+                  "name": "projectId"
+                }
+              },
+              {
+                "long": "domainId",
+                "description": "domain unique ID",
+                "inherit": false,
+                "value": {
+                  "name": "domainId"
+                }
+              }
+            ]
+          },
+          {
+            "name": "updateDomainVerification",
+            "options": [
+              {
+                "long": "projectId",
+                "description": "project unique ID",
+                "inherit": false,
+                "value": {
+                  "name": "projectId"
+                }
+              },
+              {
+                "long": "domainId",
+                "description": "domain unique ID",
+                "inherit": false,
+                "value": {
+                  "name": "domainId"
+                }
+              }
+            ]
+          },
+          {
+            "name": "listKeys",
+            "options": [
+              {
+                "long": "projectId",
+                "description": "project unique ID",
+                "inherit": false,
+                "value": {
+                  "name": "projectId"
+                }
+              }
+            ]
+          },
+          {
+            "name": "createKey",
+            "options": [
+              {
+                "long": "projectId",
+                "description": "project unique ID",
+                "inherit": false,
+                "value": {
+                  "name": "projectId"
+                }
+              },
+              {
+                "long": "name",
+                "description": "key name. Max length: 128 chars",
+                "inherit": false,
+                "value": {
+                  "name": "name"
+                }
+              },
+              {
+                "long": "scopes",
+                "description": "key scopes list. Maximum of 100 scopes are allowed",
+                "inherit": false,
+                "value": {
+                  "name": "scopes"
+                }
+              },
+              {
+                "long": "expire",
+                "description": "key expiration time in Unix timestamp. Use 0 for unlimited expiration",
+                "inherit": false,
+                "value": {
+                  "name": "expire"
+                }
+              }
+            ]
+          },
+          {
+            "name": "getKey",
+            "options": [
+              {
+                "long": "projectId",
+                "description": "project unique ID",
+                "inherit": false,
+                "value": {
+                  "name": "projectId"
+                }
+              },
+              {
+                "long": "keyId",
+                "description": "key unique ID",
+                "inherit": false,
+                "value": {
+                  "name": "keyId"
+                }
+              }
+            ]
+          },
+          {
+            "name": "updateKey",
+            "options": [
+              {
+                "long": "projectId",
+                "description": "project unique ID",
+                "inherit": false,
+                "value": {
+                  "name": "projectId"
+                }
+              },
+              {
+                "long": "keyId",
+                "description": "key unique ID",
+                "inherit": false,
+                "value": {
+                  "name": "keyId"
+                }
+              },
+              {
+                "long": "name",
+                "description": "key name. Max length: 128 chars",
+                "inherit": false,
+                "value": {
+                  "name": "name"
+                }
+              },
+              {
+                "long": "scopes",
+                "description": "key scopes list. Maximum of 100 events are allowed",
+                "inherit": false,
+                "value": {
+                  "name": "scopes"
+                }
+              },
+              {
+                "long": "expire",
+                "description": "key expiration time in Unix timestamp. Use 0 for unlimited expiration",
+                "inherit": false,
+                "value": {
+                  "name": "expire"
+                }
+              }
+            ]
+          },
+          {
+            "name": "deleteKey",
+            "options": [
+              {
+                "long": "projectId",
+                "description": "project unique ID",
+                "inherit": false,
+                "value": {
+                  "name": "projectId"
+                }
+              },
+              {
+                "long": "keyId",
+                "description": "key unique ID",
+                "inherit": false,
+                "value": {
+                  "name": "keyId"
+                }
+              }
+            ]
+          },
+          {
+            "name": "updateOAuth2",
+            "options": [
+              {
+                "long": "projectId",
+                "description": "project unique ID",
+                "inherit": false,
+                "value": {
+                  "name": "projectId"
+                }
+              },
+              {
+                "long": "provider",
+                "description": "provider Name",
+                "inherit": false,
+                "value": {
+                  "name": "provider"
+                }
+              },
+              {
+                "long": "appId",
+                "description": "provider app ID. Max length: 256 chars",
+                "inherit": false,
+                "value": {
+                  "name": "appId"
+                }
+              },
+              {
+                "long": "secret",
+                "description": "provider secret key. Max length: 512 chars",
+                "inherit": false,
+                "value": {
+                  "name": "secret"
+                }
+              }
+            ]
+          },
+          {
+            "name": "listPlatforms",
+            "options": [
+              {
+                "long": "projectId",
+                "description": "project unique ID",
+                "inherit": false,
+                "value": {
+                  "name": "projectId"
+                }
+              }
+            ]
+          },
+          {
+            "name": "createPlatform",
+            "options": [
+              {
+                "long": "projectId",
+                "description": "project unique ID",
+                "inherit": false,
+                "value": {
+                  "name": "projectId"
+                }
+              },
+              {
+                "long": "type",
+                "description": "platform type",
+                "inherit": false,
+                "value": {
+                  "name": "type"
+                }
+              },
+              {
+                "long": "name",
+                "description": "platform name. Max length: 128 chars",
+                "inherit": false,
+                "value": {
+                  "name": "name"
+                }
+              },
+              {
+                "long": "key",
+                "description": "package name for Android or bundle ID for iOS or macOS. Max length:...",
+                "inherit": false,
+                "value": {
+                  "name": "key"
+                }
+              },
+              {
+                "long": "store",
+                "description": "app store or Google Play store ID. Max length: 256 chars",
+                "inherit": false,
+                "value": {
+                  "name": "store"
+                }
+              },
+              {
+                "long": "hostname",
+                "description": "platform client hostname. Max length: 256 chars",
+                "inherit": false,
+                "value": {
+                  "name": "hostname"
+                }
+              }
+            ]
+          },
+          {
+            "name": "getPlatform",
+            "options": [
+              {
+                "long": "projectId",
+                "description": "project unique ID",
+                "inherit": false,
+                "value": {
+                  "name": "projectId"
+                }
+              },
+              {
+                "long": "platformId",
+                "description": "platform unique ID",
+                "inherit": false,
+                "value": {
+                  "name": "platformId"
+                }
+              }
+            ]
+          },
+          {
+            "name": "updatePlatform",
+            "options": [
+              {
+                "long": "projectId",
+                "description": "project unique ID",
+                "inherit": false,
+                "value": {
+                  "name": "projectId"
+                }
+              },
+              {
+                "long": "platformId",
+                "description": "platform unique ID",
+                "inherit": false,
+                "value": {
+                  "name": "platformId"
+                }
+              },
+              {
+                "long": "name",
+                "description": "platform name. Max length: 128 chars",
+                "inherit": false,
+                "value": {
+                  "name": "name"
+                }
+              },
+              {
+                "long": "key",
+                "description": "package name for android or bundle ID for iOS. Max length: 256 chars",
+                "inherit": false,
+                "value": {
+                  "name": "key"
+                }
+              },
+              {
+                "long": "store",
+                "description": "app store or Google Play store ID. Max length: 256 chars",
+                "inherit": false,
+                "value": {
+                  "name": "store"
+                }
+              },
+              {
+                "long": "hostname",
+                "description": "platform client URL. Max length: 256 chars",
+                "inherit": false,
+                "value": {
+                  "name": "hostname"
+                }
+              }
+            ]
+          },
+          {
+            "name": "deletePlatform",
+            "options": [
+              {
+                "long": "projectId",
+                "description": "project unique ID",
+                "inherit": false,
+                "value": {
+                  "name": "projectId"
+                }
+              },
+              {
+                "long": "platformId",
+                "description": "platform unique ID",
+                "inherit": false,
+                "value": {
+                  "name": "platformId"
+                }
+              }
+            ]
+          },
+          {
+            "name": "updateServiceStatus",
+            "options": [
+              {
+                "long": "projectId",
+                "description": "project unique ID",
+                "inherit": false,
+                "value": {
+                  "name": "projectId"
+                }
+              },
+              {
+                "long": "service",
+                "description": "service name",
+                "inherit": false,
+                "value": {
+                  "name": "service"
+                }
+              },
+              {
+                "long": "status",
+                "description": "service status",
+                "inherit": false,
+                "value": {
+                  "name": "status"
+                }
+              }
+            ]
+          },
+          {
+            "name": "getUsage",
+            "options": [
+              {
+                "long": "projectId",
+                "description": "project unique ID",
+                "inherit": false,
+                "value": {
+                  "name": "projectId"
+                }
+              },
+              {
+                "long": "range",
+                "description": "date range",
+                "inherit": false,
+                "value": {
+                  "name": "range"
+                }
+              }
+            ]
+          },
+          {
+            "name": "listWebhooks",
+            "options": [
+              {
+                "long": "projectId",
+                "description": "project unique ID",
+                "inherit": false,
+                "value": {
+                  "name": "projectId"
+                }
+              }
+            ]
+          },
+          {
+            "name": "createWebhook",
+            "options": [
+              {
+                "long": "projectId",
+                "description": "project unique ID",
+                "inherit": false,
+                "value": {
+                  "name": "projectId"
+                }
+              },
+              {
+                "long": "name",
+                "description": "webhook name. Max length: 128 chars",
+                "inherit": false,
+                "value": {
+                  "name": "name"
+                }
+              },
+              {
+                "long": "events",
+                "description": "events list. Maximum of 100 events are allowed",
+                "inherit": false,
+                "value": {
+                  "name": "events"
+                }
+              },
+              {
+                "long": "url",
+                "description": "webhook URL",
+                "inherit": false,
+                "value": {
+                  "name": "url"
+                }
+              },
+              {
+                "long": "security",
+                "description": "certificate verification, false for disabled or true for enabled",
+                "inherit": false,
+                "value": {
+                  "name": "security"
+                }
+              },
+              {
+                "long": "httpUser",
+                "description": "webhook HTTP user. Max length: 256 chars",
+                "inherit": false,
+                "value": {
+                  "name": "httpUser"
+                }
+              },
+              {
+                "long": "httpPass",
+                "description": "webhook HTTP password. Max length: 256 chars",
+                "inherit": false,
+                "value": {
+                  "name": "httpPass"
+                }
+              }
+            ]
+          },
+          {
+            "name": "getWebhook",
+            "options": [
+              {
+                "long": "projectId",
+                "description": "project unique ID",
+                "inherit": false,
+                "value": {
+                  "name": "projectId"
+                }
+              },
+              {
+                "long": "webhookId",
+                "description": "webhook unique ID",
+                "inherit": false,
+                "value": {
+                  "name": "webhookId"
+                }
+              }
+            ]
+          },
+          {
+            "name": "updateWebhook",
+            "options": [
+              {
+                "long": "projectId",
+                "description": "project unique ID",
+                "inherit": false,
+                "value": {
+                  "name": "projectId"
+                }
+              },
+              {
+                "long": "webhookId",
+                "description": "webhook unique ID",
+                "inherit": false,
+                "value": {
+                  "name": "webhookId"
+                }
+              },
+              {
+                "long": "name",
+                "description": "webhook name. Max length: 128 chars",
+                "inherit": false,
+                "value": {
+                  "name": "name"
+                }
+              },
+              {
+                "long": "events",
+                "description": "events list. Maximum of 100 events are allowed",
+                "inherit": false,
+                "value": {
+                  "name": "events"
+                }
+              },
+              {
+                "long": "url",
+                "description": "webhook URL",
+                "inherit": false,
+                "value": {
+                  "name": "url"
+                }
+              },
+              {
+                "long": "security",
+                "description": "certificate verification, false for disabled or true for enabled",
+                "inherit": false,
+                "value": {
+                  "name": "security"
+                }
+              },
+              {
+                "long": "httpUser",
+                "description": "webhook HTTP user. Max length: 256 chars",
+                "inherit": false,
+                "value": {
+                  "name": "httpUser"
+                }
+              },
+              {
+                "long": "httpPass",
+                "description": "webhook HTTP password. Max length: 256 chars",
+                "inherit": false,
+                "value": {
+                  "name": "httpPass"
+                }
+              }
+            ]
+          },
+          {
+            "name": "deleteWebhook",
+            "options": [
+              {
+                "long": "projectId",
+                "description": "project unique ID",
+                "inherit": false,
+                "value": {
+                  "name": "projectId"
+                }
+              },
+              {
+                "long": "webhookId",
+                "description": "webhook unique ID",
+                "inherit": false,
+                "value": {
+                  "name": "webhookId"
+                }
+              }
+            ]
+          },
+          {
+            "name": "updateWebhookSignature",
+            "options": [
+              {
+                "long": "projectId",
+                "description": "project unique ID",
+                "inherit": false,
+                "value": {
+                  "name": "projectId"
+                }
+              },
+              {
+                "long": "webhookId",
+                "description": "webhook unique ID",
+                "inherit": false,
+                "value": {
+                  "name": "webhookId"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "storage",
+        "description": "the storage command allows you to manage your project files",
+        "subcommands": [
+          {
+            "name": "listBuckets",
+            "description": "get a list of all the storage buckets. You can use the query params...",
+            "options": [
+              {
+                "long": "search",
+                "description": "search term to filter your list results. Max length: 256 chars",
+                "inherit": false,
+                "value": {
+                  "name": "search"
+                }
+              },
+              {
+                "long": "limit",
+                "description": "results limit value. By default will return maximum 25 results. Max...",
+                "inherit": false,
+                "value": {
+                  "name": "limit"
+                }
+              },
+              {
+                "long": "offset",
+                "description": "results offset. The default value is 0. Use this param to manage pa...",
+                "inherit": false,
+                "value": {
+                  "name": "offset"
+                }
+              },
+              {
+                "long": "cursor",
+                "description": "iD of the bucket used as the starting point for the query, excludin...",
+                "inherit": false,
+                "value": {
+                  "name": "cursor"
+                }
+              },
+              {
+                "long": "cursorDirection",
+                "description": "direction of the cursor, can be either 'before' or 'after'",
+                "inherit": false,
+                "value": {
+                  "name": "cursorDirection"
+                }
+              },
+              {
+                "long": "orderType",
+                "description": "order result by ASC or DESC order",
+                "inherit": false,
+                "value": {
+                  "name": "orderType"
+                }
+              }
+            ]
+          },
+          {
+            "name": "createBucket",
+            "description": "create a new storage bucket",
+            "options": [
+              {
+                "long": "bucketId",
+                "description": "unique Id. Choose your own unique ID or pass the string 'unique()'...",
+                "inherit": false,
+                "value": {
+                  "name": "bucketId"
+                }
+              },
+              {
+                "long": "name",
+                "description": "bucket name",
+                "inherit": false,
+                "value": {
+                  "name": "name"
+                }
+              },
+              {
+                "long": "permission",
+                "description": "permissions type model to use for reading files in this bucket. You...",
+                "inherit": false,
+                "value": {
+                  "name": "permission"
+                }
+              },
+              {
+                "long": "read",
+                "description": "an array of strings with read permissions. By default no user is gr...",
+                "inherit": false,
+                "value": {
+                  "name": "read"
+                }
+              },
+              {
+                "long": "write",
+                "description": "an array of strings with write permissions. By default no user is g...",
+                "inherit": false,
+                "value": {
+                  "name": "write"
+                }
+              },
+              {
+                "long": "enabled",
+                "description": "is bucket enabled?",
+                "inherit": false,
+                "value": {
+                  "name": "enabled"
+                }
+              },
+              {
+                "long": "maximumFileSize",
+                "description": "maximum file size allowed in bytes. Maximum allowed value is 30MB....",
+                "inherit": false,
+                "value": {
+                  "name": "maximumFileSize"
+                }
+              },
+              {
+                "long": "allowedFileExtensions",
+                "description": "allowed file extensions. Maximum of 100 extensions are allowed, eac...",
+                "inherit": false,
+                "value": {
+                  "name": "allowedFileExtensions"
+                }
+              },
+              {
+                "long": "encryption",
+                "description": "is encryption enabled? For file size above 20MB encryption is skipp...",
+                "inherit": false,
+                "value": {
+                  "name": "encryption"
+                }
+              },
+              {
+                "long": "antivirus",
+                "description": "is virus scanning enabled? For file size above 20MB AntiVirus scann...",
+                "inherit": false,
+                "value": {
+                  "name": "antivirus"
+                }
+              }
+            ]
+          },
+          {
+            "name": "getBucket",
+            "description": "get a storage bucket by its unique ID. This endpoint response retur...",
+            "options": [
+              {
+                "long": "bucketId",
+                "description": "bucket unique ID",
+                "inherit": false,
+                "value": {
+                  "name": "bucketId"
+                }
+              }
+            ]
+          },
+          {
+            "name": "updateBucket",
+            "description": "update a storage bucket by its unique ID",
+            "options": [
+              {
+                "long": "bucketId",
+                "description": "bucket unique ID",
+                "inherit": false,
+                "value": {
+                  "name": "bucketId"
+                }
+              },
+              {
+                "long": "name",
+                "description": "bucket name",
+                "inherit": false,
+                "value": {
+                  "name": "name"
+                }
+              },
+              {
+                "long": "permission",
+                "description": "permissions type model to use for reading files in this bucket. You...",
+                "inherit": false,
+                "value": {
+                  "name": "permission"
+                }
+              },
+              {
+                "long": "read",
+                "description": "an array of strings with read permissions. By default inherits the...",
+                "inherit": false,
+                "value": {
+                  "name": "read"
+                }
+              },
+              {
+                "long": "write",
+                "description": "an array of strings with write permissions. By default inherits the...",
+                "inherit": false,
+                "value": {
+                  "name": "write"
+                }
+              },
+              {
+                "long": "enabled",
+                "description": "is bucket enabled?",
+                "inherit": false,
+                "value": {
+                  "name": "enabled"
+                }
+              },
+              {
+                "long": "maximumFileSize",
+                "description": "maximum file size allowed in bytes. Maximum allowed value is 30MB....",
+                "inherit": false,
+                "value": {
+                  "name": "maximumFileSize"
+                }
+              },
+              {
+                "long": "allowedFileExtensions",
+                "description": "allowed file extensions. Maximum of 100 extensions are allowed, eac...",
+                "inherit": false,
+                "value": {
+                  "name": "allowedFileExtensions"
+                }
+              },
+              {
+                "long": "encryption",
+                "description": "is encryption enabled? For file size above 20MB encryption is skipp...",
+                "inherit": false,
+                "value": {
+                  "name": "encryption"
+                }
+              },
+              {
+                "long": "antivirus",
+                "description": "is virus scanning enabled? For file size above 20MB AntiVirus scann...",
+                "inherit": false,
+                "value": {
+                  "name": "antivirus"
+                }
+              }
+            ]
+          },
+          {
+            "name": "deleteBucket",
+            "description": "delete a storage bucket by its unique ID",
+            "options": [
+              {
+                "long": "bucketId",
+                "description": "bucket unique ID",
+                "inherit": false,
+                "value": {
+                  "name": "bucketId"
+                }
+              }
+            ]
+          },
+          {
+            "name": "listFiles",
+            "description": "get a list of all the user files. You can use the query params to f...",
+            "options": [
+              {
+                "long": "bucketId",
+                "description": "storage bucket unique ID. You can create a new storage bucket using...",
+                "inherit": false,
+                "value": {
+                  "name": "bucketId"
+                }
+              },
+              {
+                "long": "search",
+                "description": "search term to filter your list results. Max length: 256 chars",
+                "inherit": false,
+                "value": {
+                  "name": "search"
+                }
+              },
+              {
+                "long": "limit",
+                "description": "maximum number of files to return in response. By default will retu...",
+                "inherit": false,
+                "value": {
+                  "name": "limit"
+                }
+              },
+              {
+                "long": "offset",
+                "description": "offset value. The default value is 0. Use this param to manage pagi...",
+                "inherit": false,
+                "value": {
+                  "name": "offset"
+                }
+              },
+              {
+                "long": "cursor",
+                "description": "iD of the file used as the starting point for the query, excluding...",
+                "inherit": false,
+                "value": {
+                  "name": "cursor"
+                }
+              },
+              {
+                "long": "cursorDirection",
+                "description": "direction of the cursor, can be either 'before' or 'after'",
+                "inherit": false,
+                "value": {
+                  "name": "cursorDirection"
+                }
+              },
+              {
+                "long": "orderType",
+                "description": "order result by ASC or DESC order",
+                "inherit": false,
+                "value": {
+                  "name": "orderType"
+                }
+              }
+            ]
+          },
+          {
+            "name": "createFile",
+            "description": "create a new file. Before using this route, you should create a new...",
+            "options": [
+              {
+                "long": "bucketId",
+                "description": "storage bucket unique ID. You can create a new storage bucket using...",
+                "inherit": false,
+                "value": {
+                  "name": "bucketId"
+                }
+              },
+              {
+                "long": "fileId",
+                "description": "file ID. Choose your own unique ID or pass the string \"unique()\" to...",
+                "inherit": false,
+                "value": {
+                  "name": "fileId"
+                }
+              },
+              {
+                "long": "file",
+                "description": "binary file",
+                "inherit": false,
+                "value": {
+                  "name": "file"
+                }
+              },
+              {
+                "long": "read",
+                "description": "an array of strings with read permissions. By default only the curr...",
+                "inherit": false,
+                "value": {
+                  "name": "read"
+                }
+              },
+              {
+                "long": "write",
+                "description": "an array of strings with write permissions. By default only the cur...",
+                "inherit": false,
+                "value": {
+                  "name": "write"
+                }
+              }
+            ]
+          },
+          {
+            "name": "getFile",
+            "description": "get a file by its unique ID. This endpoint response returns a json...",
+            "options": [
+              {
+                "long": "bucketId",
+                "description": "storage bucket unique ID. You can create a new storage bucket using...",
+                "inherit": false,
+                "value": {
+                  "name": "bucketId"
+                }
+              },
+              {
+                "long": "fileId",
+                "description": "file ID",
+                "inherit": false,
+                "value": {
+                  "name": "fileId"
+                }
+              }
+            ]
+          },
+          {
+            "name": "updateFile",
+            "description": "update a file by its unique ID. Only users with write permissions h...",
+            "options": [
+              {
+                "long": "bucketId",
+                "description": "storage bucket unique ID. You can create a new storage bucket using...",
+                "inherit": false,
+                "value": {
+                  "name": "bucketId"
+                }
+              },
+              {
+                "long": "fileId",
+                "description": "file unique ID",
+                "inherit": false,
+                "value": {
+                  "name": "fileId"
+                }
+              },
+              {
+                "long": "read",
+                "description": "an array of strings with read permissions. By default no user is gr...",
+                "inherit": false,
+                "value": {
+                  "name": "read"
+                }
+              },
+              {
+                "long": "write",
+                "description": "an array of strings with write permissions. By default no user is g...",
+                "inherit": false,
+                "value": {
+                  "name": "write"
+                }
+              }
+            ]
+          },
+          {
+            "name": "deleteFile",
+            "description": "delete a file by its unique ID. Only users with write permissions h...",
+            "options": [
+              {
+                "long": "bucketId",
+                "description": "storage bucket unique ID. You can create a new storage bucket using...",
+                "inherit": false,
+                "value": {
+                  "name": "bucketId"
+                }
+              },
+              {
+                "long": "fileId",
+                "description": "file ID",
+                "inherit": false,
+                "value": {
+                  "name": "fileId"
+                }
+              }
+            ]
+          },
+          {
+            "name": "getFileDownload",
+            "description": "get a file content by its unique ID. The endpoint response return w...",
+            "options": [
+              {
+                "long": "bucketId",
+                "description": "storage bucket ID. You can create a new storage bucket using the St...",
+                "inherit": false,
+                "value": {
+                  "name": "bucketId"
+                }
+              },
+              {
+                "long": "fileId",
+                "description": "file ID",
+                "inherit": false,
+                "value": {
+                  "name": "fileId"
+                }
+              },
+              {
+                "long": "destination",
+                "description": "output file path",
+                "inherit": false,
+                "value": {
+                  "name": "path"
+                }
+              }
+            ]
+          },
+          {
+            "name": "getFilePreview",
+            "description": "get a file preview image. Currently, this method supports preview f...",
+            "options": [
+              {
+                "long": "bucketId",
+                "description": "storage bucket unique ID. You can create a new storage bucket using...",
+                "inherit": false,
+                "value": {
+                  "name": "bucketId"
+                }
+              },
+              {
+                "long": "fileId",
+                "description": "file ID",
+                "inherit": false,
+                "value": {
+                  "name": "fileId"
+                }
+              },
+              {
+                "long": "width",
+                "description": "resize preview image width, Pass an integer between 0 to 4000",
+                "inherit": false,
+                "value": {
+                  "name": "width"
+                }
+              },
+              {
+                "long": "height",
+                "description": "resize preview image height, Pass an integer between 0 to 4000",
+                "inherit": false,
+                "value": {
+                  "name": "height"
+                }
+              },
+              {
+                "long": "gravity",
+                "description": "image crop gravity. Can be one of center,top-left,top,top-right,lef...",
+                "inherit": false,
+                "value": {
+                  "name": "gravity"
+                }
+              },
+              {
+                "long": "quality",
+                "description": "preview image quality. Pass an integer between 0 to 100. Defaults t...",
+                "inherit": false,
+                "value": {
+                  "name": "quality"
+                }
+              },
+              {
+                "long": "borderWidth",
+                "description": "preview image border in pixels. Pass an integer between 0 to 100. D...",
+                "inherit": false,
+                "value": {
+                  "name": "borderWidth"
+                }
+              },
+              {
+                "long": "borderColor",
+                "description": "preview image border color. Use a valid HEX color, no # is needed f...",
+                "inherit": false,
+                "value": {
+                  "name": "borderColor"
+                }
+              },
+              {
+                "long": "borderRadius",
+                "description": "preview image border radius in pixels. Pass an integer between 0 to...",
+                "inherit": false,
+                "value": {
+                  "name": "borderRadius"
+                }
+              },
+              {
+                "long": "opacity",
+                "description": "preview image opacity. Only works with images having an alpha chann...",
+                "inherit": false,
+                "value": {
+                  "name": "opacity"
+                }
+              },
+              {
+                "long": "rotation",
+                "description": "preview image rotation in degrees. Pass an integer between -360 and...",
+                "inherit": false,
+                "value": {
+                  "name": "rotation"
+                }
+              },
+              {
+                "long": "background",
+                "description": "preview image background color. Only works with transparent images...",
+                "inherit": false,
+                "value": {
+                  "name": "background"
+                }
+              },
+              {
+                "long": "output",
+                "description": "output format type (jpeg, jpg, png, gif and webp)",
+                "inherit": false,
+                "value": {
+                  "name": "output"
+                }
+              },
+              {
+                "long": "destination",
+                "description": "output file path",
+                "inherit": false,
+                "value": {
+                  "name": "path"
+                }
+              }
+            ]
+          },
+          {
+            "name": "getFileView",
+            "description": "get a file content by its unique ID. This endpoint is similar to th...",
+            "options": [
+              {
+                "long": "bucketId",
+                "description": "storage bucket unique ID. You can create a new storage bucket using...",
+                "inherit": false,
+                "value": {
+                  "name": "bucketId"
+                }
+              },
+              {
+                "long": "fileId",
+                "description": "file ID",
+                "inherit": false,
+                "value": {
+                  "name": "fileId"
+                }
+              },
+              {
+                "long": "destination",
+                "description": "output file path",
+                "inherit": false,
+                "value": {
+                  "name": "path"
+                }
+              }
+            ]
+          },
+          {
+            "name": "getUsage",
+            "options": [
+              {
+                "long": "range",
+                "description": "date range",
+                "inherit": false,
+                "value": {
+                  "name": "range"
+                }
+              }
+            ]
+          },
+          {
+            "name": "getBucketUsage",
+            "options": [
+              {
+                "long": "bucketId",
+                "description": "bucket ID",
+                "inherit": false,
+                "value": {
+                  "name": "bucketId"
+                }
+              },
+              {
+                "long": "range",
+                "description": "date range",
+                "inherit": false,
+                "value": {
+                  "name": "range"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "teams",
+        "description": "the teams command allows you to group users of your project and to...",
+        "subcommands": [
+          {
+            "name": "list",
+            "description": "get a list of all the teams in which the current user is a member....",
+            "options": [
+              {
+                "long": "search",
+                "description": "search term to filter your list results. Max length: 256 chars",
+                "inherit": false,
+                "value": {
+                  "name": "search"
+                }
+              },
+              {
+                "long": "limit",
+                "description": "maximum number of teams to return in response. By default will retu...",
+                "inherit": false,
+                "value": {
+                  "name": "limit"
+                }
+              },
+              {
+                "long": "offset",
+                "description": "offset value. The default value is 0. Use this param to manage pagi...",
+                "inherit": false,
+                "value": {
+                  "name": "offset"
+                }
+              },
+              {
+                "long": "cursor",
+                "description": "iD of the team used as the starting point for the query, excluding...",
+                "inherit": false,
+                "value": {
+                  "name": "cursor"
+                }
+              },
+              {
+                "long": "cursorDirection",
+                "description": "direction of the cursor, can be either 'before' or 'after'",
+                "inherit": false,
+                "value": {
+                  "name": "cursorDirection"
+                }
+              },
+              {
+                "long": "orderType",
+                "description": "order result by ASC or DESC order",
+                "inherit": false,
+                "value": {
+                  "name": "orderType"
+                }
+              }
+            ]
+          },
+          {
+            "name": "create",
+            "description": "create a new team. The user who creates the team will automatically...",
+            "options": [
+              {
+                "long": "teamId",
+                "description": "team ID. Choose your own unique ID or pass the string \"unique()\" to...",
+                "inherit": false,
+                "value": {
+                  "name": "teamId"
+                }
+              },
+              {
+                "long": "name",
+                "description": "team name. Max length: 128 chars",
+                "inherit": false,
+                "value": {
+                  "name": "name"
+                }
+              },
+              {
+                "long": "roles",
+                "description": "array of strings. Use this param to set the roles in the team for t...",
+                "inherit": false,
+                "value": {
+                  "name": "roles"
+                }
+              }
+            ]
+          },
+          {
+            "name": "get",
+            "description": "get a team by its ID. All team members have read access for this re...",
+            "options": [
+              {
+                "long": "teamId",
+                "description": "team ID",
+                "inherit": false,
+                "value": {
+                  "name": "teamId"
+                }
+              }
+            ]
+          },
+          {
+            "name": "update",
+            "description": "update a team using its ID. Only members with the owner role can up...",
+            "options": [
+              {
+                "long": "teamId",
+                "description": "team ID",
+                "inherit": false,
+                "value": {
+                  "name": "teamId"
+                }
+              },
+              {
+                "long": "name",
+                "description": "new team name. Max length: 128 chars",
+                "inherit": false,
+                "value": {
+                  "name": "name"
+                }
+              }
+            ]
+          },
+          {
+            "name": "delete",
+            "description": "delete a team using its ID. Only team members with the owner role c...",
+            "options": [
+              {
+                "long": "teamId",
+                "description": "team ID",
+                "inherit": false,
+                "value": {
+                  "name": "teamId"
+                }
+              }
+            ]
+          },
+          {
+            "name": "listLogs",
+            "description": "get the team activity logs list by its unique ID",
+            "options": [
+              {
+                "long": "teamId",
+                "description": "team ID",
+                "inherit": false,
+                "value": {
+                  "name": "teamId"
+                }
+              },
+              {
+                "long": "limit",
+                "description": "maximum number of logs to return in response. By default will retur...",
+                "inherit": false,
+                "value": {
+                  "name": "limit"
+                }
+              },
+              {
+                "long": "offset",
+                "description": "offset value. The default value is 0. Use this value to manage pagi...",
+                "inherit": false,
+                "value": {
+                  "name": "offset"
+                }
+              }
+            ]
+          },
+          {
+            "name": "getMemberships",
+            "description": "use this endpoint to list a team's members using the team's ID. All...",
+            "options": [
+              {
+                "long": "teamId",
+                "description": "team ID",
+                "inherit": false,
+                "value": {
+                  "name": "teamId"
+                }
+              },
+              {
+                "long": "search",
+                "description": "search term to filter your list results. Max length: 256 chars",
+                "inherit": false,
+                "value": {
+                  "name": "search"
+                }
+              },
+              {
+                "long": "limit",
+                "description": "maximum number of memberships to return in response. By default wil...",
+                "inherit": false,
+                "value": {
+                  "name": "limit"
+                }
+              },
+              {
+                "long": "offset",
+                "description": "offset value. The default value is 0. Use this value to manage pagi...",
+                "inherit": false,
+                "value": {
+                  "name": "offset"
+                }
+              },
+              {
+                "long": "cursor",
+                "description": "iD of the membership used as the starting point for the query, excl...",
+                "inherit": false,
+                "value": {
+                  "name": "cursor"
+                }
+              },
+              {
+                "long": "cursorDirection",
+                "description": "direction of the cursor, can be either 'before' or 'after'",
+                "inherit": false,
+                "value": {
+                  "name": "cursorDirection"
+                }
+              },
+              {
+                "long": "orderType",
+                "description": "order result by ASC or DESC order",
+                "inherit": false,
+                "value": {
+                  "name": "orderType"
+                }
+              }
+            ]
+          },
+          {
+            "name": "createMembership",
+            "description": "invite a new member to join your team. If initiated from the client...",
+            "options": [
+              {
+                "long": "teamId",
+                "description": "team ID",
+                "inherit": false,
+                "value": {
+                  "name": "teamId"
+                }
+              },
+              {
+                "long": "email",
+                "description": "email of the new team member",
+                "inherit": false,
+                "value": {
+                  "name": "email"
+                }
+              },
+              {
+                "long": "roles",
+                "description": "array of strings. Use this param to set the user roles in the team....",
+                "inherit": false,
+                "value": {
+                  "name": "roles"
+                }
+              },
+              {
+                "long": "url",
+                "description": "uRL to redirect the user back to your app from the invitation email...",
+                "inherit": false,
+                "value": {
+                  "name": "url"
+                }
+              },
+              {
+                "long": "name",
+                "description": "name of the new team member. Max length: 128 chars",
+                "inherit": false,
+                "value": {
+                  "name": "name"
+                }
+              }
+            ]
+          },
+          {
+            "name": "getMembership",
+            "description": "get a team member by the membership unique id. All team members hav...",
+            "options": [
+              {
+                "long": "teamId",
+                "description": "team ID",
+                "inherit": false,
+                "value": {
+                  "name": "teamId"
+                }
+              },
+              {
+                "long": "membershipId",
+                "description": "membership ID",
+                "inherit": false,
+                "value": {
+                  "name": "membershipId"
+                }
+              }
+            ]
+          },
+          {
+            "name": "updateMembershipRoles",
+            "description": "modify the roles of a team member. Only team members with the owner...",
+            "options": [
+              {
+                "long": "teamId",
+                "description": "team ID",
+                "inherit": false,
+                "value": {
+                  "name": "teamId"
+                }
+              },
+              {
+                "long": "membershipId",
+                "description": "membership ID",
+                "inherit": false,
+                "value": {
+                  "name": "membershipId"
+                }
+              },
+              {
+                "long": "roles",
+                "description": "an array of strings. Use this param to set the user's roles in the...",
+                "inherit": false,
+                "value": {
+                  "name": "roles"
+                }
+              }
+            ]
+          },
+          {
+            "name": "deleteMembership",
+            "description": "this endpoint allows a user to leave a team or for a team owner to...",
+            "options": [
+              {
+                "long": "teamId",
+                "description": "team ID",
+                "inherit": false,
+                "value": {
+                  "name": "teamId"
+                }
+              },
+              {
+                "long": "membershipId",
+                "description": "membership ID",
+                "inherit": false,
+                "value": {
+                  "name": "membershipId"
+                }
+              }
+            ]
+          },
+          {
+            "name": "updateMembershipStatus",
+            "description": "use this endpoint to allow a user to accept an invitation to join a...",
+            "options": [
+              {
+                "long": "teamId",
+                "description": "team ID",
+                "inherit": false,
+                "value": {
+                  "name": "teamId"
+                }
+              },
+              {
+                "long": "membershipId",
+                "description": "membership ID",
+                "inherit": false,
+                "value": {
+                  "name": "membershipId"
+                }
+              },
+              {
+                "long": "secret",
+                "description": "secret key",
+                "inherit": false,
+                "value": {
+                  "name": "secret"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "users",
+        "description": "the users command allows you to manage your project users",
+        "subcommands": [
+          {
+            "name": "list",
+            "description": "get a list of all the project's users. You can use the query params...",
+            "options": [
+              {
+                "long": "search",
+                "description": "search term to filter your list results. Max length: 256 chars",
+                "inherit": false,
+                "value": {
+                  "name": "search"
+                }
+              },
+              {
+                "long": "limit",
+                "description": "maximum number of users to return in response. By default will retu...",
+                "inherit": false,
+                "value": {
+                  "name": "limit"
+                }
+              },
+              {
+                "long": "offset",
+                "description": "offset value. The default value is 0. Use this param to manage pagi...",
+                "inherit": false,
+                "value": {
+                  "name": "offset"
+                }
+              },
+              {
+                "long": "cursor",
+                "description": "iD of the user used as the starting point for the query, excluding...",
+                "inherit": false,
+                "value": {
+                  "name": "cursor"
+                }
+              },
+              {
+                "long": "cursorDirection",
+                "description": "direction of the cursor, can be either 'before' or 'after'",
+                "inherit": false,
+                "value": {
+                  "name": "cursorDirection"
+                }
+              },
+              {
+                "long": "orderType",
+                "description": "order result by ASC or DESC order",
+                "inherit": false,
+                "value": {
+                  "name": "orderType"
+                }
+              }
+            ]
+          },
+          {
+            "name": "create",
+            "description": "create a new user",
+            "options": [
+              {
+                "long": "userId",
+                "description": "user ID. Choose your own unique ID or pass the string \"unique()\" to...",
+                "inherit": false,
+                "value": {
+                  "name": "userId"
+                }
+              },
+              {
+                "long": "email",
+                "description": "user email",
+                "inherit": false,
+                "value": {
+                  "name": "email"
+                }
+              },
+              {
+                "long": "password",
+                "description": "user password. Must be at least 8 chars",
+                "inherit": false,
+                "value": {
+                  "name": "password"
+                }
+              },
+              {
+                "long": "name",
+                "description": "user name. Max length: 128 chars",
+                "inherit": false,
+                "value": {
+                  "name": "name"
+                }
+              }
+            ]
+          },
+          {
+            "name": "getUsage",
+            "options": [
+              {
+                "long": "range",
+                "description": "date range",
+                "inherit": false,
+                "value": {
+                  "name": "range"
+                }
+              },
+              {
+                "long": "provider",
+                "description": "provider Name",
+                "inherit": false,
+                "value": {
+                  "name": "provider"
+                }
+              }
+            ]
+          },
+          {
+            "name": "get",
+            "description": "get a user by its unique ID"
+          },
+          {
+            "name": "delete",
+            "description": "delete a user by its unique ID, thereby releasing it's ID. Since ID..."
+          },
+          {
+            "name": "updateEmail",
+            "description": "update the user email by its unique ID",
+            "options": [
+              {
+                "long": "userId",
+                "description": "user ID",
+                "inherit": false,
+                "value": {
+                  "name": "userId"
+                }
+              },
+              {
+                "long": "email",
+                "description": "user email",
+                "inherit": false,
+                "value": {
+                  "name": "email"
+                }
+              }
+            ]
+          },
+          {
+            "name": "getLogs",
+            "description": "get the user activity logs list by its unique ID",
+            "options": [
+              {
+                "long": "userId",
+                "description": "user ID",
+                "inherit": false,
+                "value": {
+                  "name": "userId"
+                }
+              },
+              {
+                "long": "limit",
+                "description": "maximum number of logs to return in response. By default will retur...",
+                "inherit": false,
+                "value": {
+                  "name": "limit"
+                }
+              },
+              {
+                "long": "offset",
+                "description": "offset value. The default value is 0. Use this value to manage pagi...",
+                "inherit": false,
+                "value": {
+                  "name": "offset"
+                }
+              }
+            ]
+          },
+          {
+            "name": "getMemberships",
+            "description": "get the user membership list by its unique ID",
+            "options": [
+              {
+                "long": "userId",
+                "description": "user ID",
+                "inherit": false,
+                "value": {
+                  "name": "userId"
+                }
+              }
+            ]
+          },
+          {
+            "name": "updateName",
+            "description": "update the user name by its unique ID",
+            "options": [
+              {
+                "long": "userId",
+                "description": "user ID",
+                "inherit": false,
+                "value": {
+                  "name": "userId"
+                }
+              },
+              {
+                "long": "name",
+                "description": "user name. Max length: 128 chars",
+                "inherit": false,
+                "value": {
+                  "name": "name"
+                }
+              }
+            ]
+          },
+          {
+            "name": "updatePassword",
+            "description": "update the user password by its unique ID",
+            "options": [
+              {
+                "long": "userId",
+                "description": "user ID",
+                "inherit": false,
+                "value": {
+                  "name": "userId"
+                }
+              },
+              {
+                "long": "password",
+                "description": "new user password. Must be at least 8 chars",
+                "inherit": false,
+                "value": {
+                  "name": "password"
+                }
+              }
+            ]
+          },
+          {
+            "name": "updatePhone",
+            "description": "update the user phone by its unique ID",
+            "options": [
+              {
+                "long": "userId",
+                "description": "user ID",
+                "inherit": false,
+                "value": {
+                  "name": "userId"
+                }
+              },
+              {
+                "long": "number",
+                "description": "user phone number",
+                "inherit": false,
+                "value": {
+                  "name": "number"
+                }
+              }
+            ]
+          },
+          {
+            "name": "getPrefs",
+            "description": "get the user preferences by its unique ID",
+            "options": [
+              {
+                "long": "userId",
+                "description": "user ID",
+                "inherit": false,
+                "value": {
+                  "name": "userId"
+                }
+              }
+            ]
+          },
+          {
+            "name": "updatePrefs",
+            "description": "update the user preferences by its unique ID. The object you pass i...",
+            "options": [
+              {
+                "long": "userId",
+                "description": "user ID",
+                "inherit": false,
+                "value": {
+                  "name": "userId"
+                }
+              },
+              {
+                "long": "prefs",
+                "description": "prefs key-value json object",
+                "inherit": false,
+                "value": {
+                  "name": "prefs"
+                }
+              }
+            ]
+          },
+          {
+            "name": "getSessions",
+            "description": "get the user sessions list by its unique ID",
+            "options": [
+              {
+                "long": "userId",
+                "description": "user ID",
+                "inherit": false,
+                "value": {
+                  "name": "userId"
+                }
+              }
+            ]
+          },
+          {
+            "name": "deleteSessions",
+            "description": "delete all user's sessions by using the user's unique ID",
+            "options": [
+              {
+                "long": "userId",
+                "description": "user ID",
+                "inherit": false,
+                "value": {
+                  "name": "userId"
+                }
+              }
+            ]
+          },
+          {
+            "name": "deleteSession",
+            "description": "delete a user sessions by its unique ID",
+            "options": [
+              {
+                "long": "userId",
+                "description": "user ID",
+                "inherit": false,
+                "value": {
+                  "name": "userId"
+                }
+              },
+              {
+                "long": "sessionId",
+                "description": "session ID",
+                "inherit": false,
+                "value": {
+                  "name": "sessionId"
+                }
+              }
+            ]
+          },
+          {
+            "name": "updateStatus",
+            "description": "update the user status by its unique ID. Use this endpoint as an al...",
+            "options": [
+              {
+                "long": "userId",
+                "description": "user ID",
+                "inherit": false,
+                "value": {
+                  "name": "userId"
+                }
+              },
+              {
+                "long": "status",
+                "description": "user Status. To activate the user pass 'true' and to block the user...",
+                "inherit": false,
+                "value": {
+                  "name": "status"
+                }
+              }
+            ]
+          },
+          {
+            "name": "updateEmailVerification",
+            "description": "update the user email verification status by its unique ID",
+            "options": [
+              {
+                "long": "userId",
+                "description": "user ID",
+                "inherit": false,
+                "value": {
+                  "name": "userId"
+                }
+              },
+              {
+                "long": "emailVerification",
+                "description": "user email verification status",
+                "inherit": false,
+                "value": {
+                  "name": "emailVerification"
+                }
+              }
+            ]
+          },
+          {
+            "name": "updatePhoneVerification",
+            "description": "update the user phone verification status by its unique ID",
+            "options": [
+              {
+                "long": "userId",
+                "description": "user ID",
+                "inherit": false,
+                "value": {
+                  "name": "userId"
+                }
+              },
+              {
+                "long": "phoneVerification",
+                "description": "user phone verification status",
+                "inherit": false,
+                "value": {
+                  "name": "phoneVerification"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "client",
+        "description": "the client command allows you to configure your cli",
+        "options": [
+          {
+            "long": "selfSigned",
+            "description": "configure the cli to use a self-signed certificate ( true or false )",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "endpoint",
+            "description": "set your Apwrite server endpoint",
+            "inherit": false,
+            "value": {
+              "name": "endpoint"
+            }
+          },
+          {
+            "long": "projectId",
+            "description": "set your Apwrite project ID",
+            "inherit": false,
+            "value": {
+              "name": "projectId"
+            }
+          },
+          {
+            "long": "key",
+            "description": "set your Apwrite server's API key",
+            "inherit": false,
+            "value": {
+              "name": "key"
+            }
+          },
+          {
+            "long": "debug",
+            "description": "print cli debug information",
+            "inherit": false
+          },
+          {
+            "long": "reset",
+            "description": "reset the cli configuration",
+            "inherit": false
+          }
+        ]
+      }
+    ]
+  }
+}
