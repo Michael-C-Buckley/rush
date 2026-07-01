@@ -337,7 +337,12 @@ test "autoload caches misses until function is explicitly defined" {
 
     const name = "rush_missing_autoload_test_function";
     const missing_command = name ++ " >/dev/null 2>&1";
-    const missing_src: shell.source.Source = .{ .id = 1, .kind = .command_string, .name = "test", .text = missing_command };
+    const missing_src: shell.source.Source = .{
+        .id = 1,
+        .kind = .command_string,
+        .name = "test",
+        .text = missing_command,
+    };
     const missing = try sh.evalSource(missing_src);
     try std.testing.expectEqual(@as(shell.result.ExitStatus, 127), missing.status);
     try std.testing.expect(sh.state.isFunctionAutoloadMissed(name));
@@ -349,7 +354,12 @@ test "autoload caches misses until function is explicitly defined" {
         .data = name ++ "(){ printf autoloaded; }\n",
     });
 
-    const still_missing = try sh.evalSource(.{ .id = 2, .kind = .command_string, .name = "test", .text = missing_command });
+    const still_missing = try sh.evalSource(.{
+        .id = 2,
+        .kind = .command_string,
+        .name = "test",
+        .text = missing_command,
+    });
     try std.testing.expectEqual(@as(shell.result.ExitStatus, 127), still_missing.status);
     try std.testing.expect(sh.state.getFunction(name) == null);
 
