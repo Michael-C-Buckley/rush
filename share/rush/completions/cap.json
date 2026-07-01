@@ -1,0 +1,28 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "cap",
+    "description": "manage capacitor projects",
+    "providers": {
+      "builtin.directories": { "builtin": "directories" }
+    },
+    "options": [
+      { "short": "h", "long": "help", "description": "show help", "inherit": false },
+      { "short": "V", "long": "version", "description": "show version", "inherit": false }
+    ],
+    "subcommands": [
+      { "name": "init", "description": "initialize capacitor config" },
+      { "name": "create", "description": "create a capacitor project", "arguments": { "states": [{ "name": "directory", "index": 0, "provider": "builtin.directories" }] } },
+      { "name": "add", "description": "add a native platform", "arguments": { "states": [{ "name": "platform", "index": 0, "values": ["android", "ios"] }] } },
+      { "name": "build", "description": "build a native platform", "arguments": { "states": [{ "name": "platform", "index": 0, "values": ["android", "ios"] }] } },
+      { "name": "copy", "description": "copy web assets to native projects", "arguments": { "states": [{ "name": "platform", "index": 0, "values": ["android", "ios"] }] } },
+      { "name": "sync", "description": "sync web assets and plugins", "arguments": { "states": [{ "name": "platform", "index": 0, "values": ["android", "ios"] }] } },
+      { "name": "open", "description": "open a native project", "arguments": { "states": [{ "name": "platform", "index": 0, "values": ["android", "ios"] }] } },
+      { "name": "run", "description": "run a native project", "arguments": { "states": [{ "name": "platform", "index": 0, "values": ["android", "ios"] }] } },
+      { "name": "update", "description": "update native dependencies", "arguments": { "states": [{ "name": "platform", "index": 0, "values": ["android", "ios"] }] } },
+      { "name": "doctor", "description": "check capacitor project health" },
+      { "name": "ls", "description": "list installed platforms and plugins" }
+    ]
+  }
+}
