@@ -1,0 +1,303 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "dos2unix",
+    "description": "convert DOS text files to Unix format",
+    "options": [
+      {
+        "short": "h",
+        "long": "help",
+        "description": "show help for dos2unix",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "--"
+        ],
+        "description": "treat all following options as file names. Use this option if you want to convert files whose names start with a dash",
+        "inherit": false
+      },
+      {
+        "long": "allow-chown",
+        "description": "allow file ownership change in old file mode",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-ascii"
+        ],
+        "description": "convert only line breaks. This is the default conversion mode",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-iso"
+        ],
+        "description": "conversion between DOS and ISO-8859-1 character set",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-1252"
+        ],
+        "description": "use Windows code page 1252 (Western European)",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-437"
+        ],
+        "description": "use DOS code page 437 (US). This is the default code page used for ISO conversion",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-850"
+        ],
+        "description": "use DOS code page 850 (Western European)",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-860"
+        ],
+        "description": "use DOS code page 860 (Portuguese)",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-863"
+        ],
+        "description": "use DOS code page 863 (French Canadian)",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-865"
+        ],
+        "description": "use DOS code page 865 (Nordic)",
+        "inherit": false
+      },
+      {
+        "short": "7",
+        "description": "convert 8 bit characters to 7 bit space",
+        "inherit": false
+      },
+      {
+        "short": "b",
+        "long": "keep-bom",
+        "description": "keep Byte Order Mark (BOM). When the input file has a BOM, write a BOM in the output file",
+        "inherit": false
+      },
+      {
+        "short": "c",
+        "long": "convmode",
+        "description": "set conversion mode",
+        "inherit": false,
+        "value": {
+          "name": "CONVMODE",
+          "provider": {
+            "values": [
+              "ascii",
+              "7bit",
+              "iso",
+              "mac"
+            ]
+          }
+        }
+      },
+      {
+        "short": "D",
+        "long": "display-enc",
+        "description": "set encoding of displayed text",
+        "inherit": false,
+        "value": {
+          "name": "ENCODING",
+          "provider": {
+            "values": [
+              "ansi",
+              "unicode",
+              "unicodebom",
+              "utf8",
+              "utf8bom"
+            ]
+          }
+        }
+      },
+      {
+        "short": "f",
+        "long": "force",
+        "description": "force conversion of binary files",
+        "inherit": false
+      },
+      {
+        "long": "gb18030",
+        "spellings": [
+          "-gb"
+        ],
+        "description": "on Windows UTF-16 files are by default converted to UTF-8, regardless of the locale setting",
+        "inherit": false
+      },
+      {
+        "short": "i",
+        "description": "display file information. No conversion is done",
+        "inherit": false,
+        "value": {
+          "name": "value",
+          "style": "attached"
+        },
+        "exclusiveGroup": "dos2unix.info"
+      },
+      {
+        "long": "info",
+        "description": "display file information. No conversion is done",
+        "inherit": false,
+        "value": {
+          "name": "value",
+          "style": "detached"
+        },
+        "exclusiveGroup": "dos2unix.info"
+      },
+      {
+        "short": "k",
+        "long": "keepdate",
+        "description": "",
+        "inherit": false
+      },
+      {
+        "short": "L",
+        "long": "license",
+        "description": "display program's license",
+        "inherit": false
+      },
+      {
+        "short": "l",
+        "long": "newline",
+        "description": "add additional newline",
+        "inherit": false
+      },
+      {
+        "short": "m",
+        "long": "add-bom",
+        "description": "write a Byte Order Mark (BOM) in the output file. By default an UTF-8 BOM is written",
+        "inherit": false
+      },
+      {
+        "long": "newfile",
+        "description": "new file mode. Convert file INFILE and write output to file OUTFILE. File names must be given in pairs and wildcard names should not be used or you will lose yo",
+        "inherit": false,
+        "value": [
+          {
+            "name": "INFILE",
+            "provider": "builtin.files"
+          },
+          {
+            "name": "OUTFILE",
+            "provider": "builtin.files"
+          }
+        ]
+      },
+      {
+        "long": "no-allow-chown",
+        "description": "don't allow file ownership change in old file mode (default)",
+        "inherit": false
+      },
+      {
+        "short": "o",
+        "long": "oldfile",
+        "description": "old file mode. Convert file FILE and overwrite output to it",
+        "inherit": false,
+        "value": {
+          "name": "FILE",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "short": "q",
+        "long": "quiet",
+        "description": "quiet mode. Suppress all warnings and messages. The return value is zero. Except when wrong command-line options are used",
+        "inherit": false
+      },
+      {
+        "short": "r",
+        "long": "remove-bom",
+        "description": "remove Byte Order Mark (BOM). Do not write a BOM in the output file",
+        "inherit": false
+      },
+      {
+        "short": "s",
+        "long": "safe",
+        "description": "skip binary files (default)",
+        "inherit": false
+      },
+      {
+        "short": "u",
+        "long": "keep-utf16",
+        "description": "keep UTF-16 encoding",
+        "inherit": false
+      },
+      {
+        "long": "assume-utf16le",
+        "spellings": [
+          "-ul"
+        ],
+        "description": "assume that the input format is UTF-16LE",
+        "inherit": false
+      },
+      {
+        "long": "assume-utf16be",
+        "spellings": [
+          "-ub"
+        ],
+        "description": "assume that the input format is UTF-16BE",
+        "inherit": false
+      },
+      {
+        "short": "v",
+        "long": "verbose",
+        "description": "verbose operation",
+        "inherit": false
+      },
+      {
+        "short": "F",
+        "long": "follow-symlink",
+        "description": "follow symbolic links and convert the targets",
+        "inherit": false
+      },
+      {
+        "short": "R",
+        "long": "replace-symlink",
+        "description": "replace symbolic links with converted files",
+        "inherit": false
+      },
+      {
+        "short": "S",
+        "long": "skip-symlink",
+        "description": "keep symbolic links and targets unchanged (default)",
+        "inherit": false
+      },
+      {
+        "short": "V",
+        "long": "version",
+        "description": "display version number",
+        "inherit": false
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "file",
+          "provider": "builtin.files",
+          "index": 0,
+          "repeatable": true
+        }
+      ]
+    },
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
