@@ -1,0 +1,335 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "ansible",
+    "description": "run ansible ad hoc tasks",
+    "options": [
+      {
+        "long": "ask-vault-pass",
+        "description": "ask for vault password",
+        "inherit": false
+      },
+      {
+        "long": "list-hosts",
+        "description": "list matching hosts",
+        "inherit": false
+      },
+      {
+        "long": "playbook-dir",
+        "description": "set playbook base directory",
+        "inherit": false,
+        "value": {
+          "name": "directory",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "syntax-check",
+        "description": "check playbook syntax",
+        "inherit": false
+      },
+      {
+        "long": "vault-id",
+        "description": "set vault identity",
+        "inherit": false,
+        "value": {
+          "name": "vault-id"
+        }
+      },
+      {
+        "long": "vault-password-file",
+        "description": "use vault password file",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "version",
+        "description": "show version and paths",
+        "inherit": false
+      },
+      {
+        "long": "background",
+        "short": "B",
+        "description": "run asynchronously",
+        "inherit": false,
+        "value": {
+          "name": "seconds"
+        }
+      },
+      {
+        "long": "check",
+        "short": "C",
+        "description": "check without changing hosts",
+        "inherit": false
+      },
+      {
+        "long": "diff",
+        "short": "D",
+        "description": "show file and template diffs",
+        "inherit": false
+      },
+      {
+        "long": "module-path",
+        "short": "M",
+        "description": "prepend module library path",
+        "inherit": false,
+        "value": {
+          "name": "directory",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "poll",
+        "short": "P",
+        "description": "set async poll interval",
+        "inherit": false,
+        "value": {
+          "name": "poll-interval"
+        }
+      },
+      {
+        "long": "args",
+        "short": "a",
+        "description": "set module arguments",
+        "inherit": false,
+        "value": {
+          "name": "module-arguments"
+        }
+      },
+      {
+        "long": "extra-vars",
+        "short": "e",
+        "description": "set extra variables",
+        "inherit": false,
+        "value": {
+          "name": "extra-vars"
+        }
+      },
+      {
+        "long": "forks",
+        "short": "f",
+        "description": "set parallel process count",
+        "inherit": false,
+        "value": {
+          "name": "forks"
+        }
+      },
+      {
+        "long": "help",
+        "short": "h",
+        "description": "show help",
+        "inherit": false
+      },
+      {
+        "long": "inventory",
+        "short": "i",
+        "description": "set inventory",
+        "inherit": false,
+        "value": {
+          "name": "inventory",
+          "provider": [
+            "builtin.files",
+            "builtin.directories"
+          ]
+        }
+      },
+      {
+        "long": "limit",
+        "short": "l",
+        "description": "limit hosts by pattern",
+        "inherit": false,
+        "value": {
+          "name": "subset"
+        }
+      },
+      {
+        "long": "module-name",
+        "short": "m",
+        "description": "set module to execute",
+        "inherit": false,
+        "value": {
+          "name": "module-name"
+        }
+      },
+      {
+        "long": "one-line",
+        "short": "o",
+        "description": "condense output",
+        "inherit": false
+      },
+      {
+        "long": "tree",
+        "short": "t",
+        "description": "log output directory",
+        "inherit": false,
+        "value": {
+          "name": "directory",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "verbose",
+        "short": "v",
+        "description": "enable verbose output",
+        "inherit": false,
+        "repeatable": true
+      },
+      {
+        "spellings": [
+          "-vvv"
+        ],
+        "description": "enable very verbose output",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-vvvv"
+        ],
+        "description": "enable connection debug output",
+        "inherit": false
+      },
+      {
+        "long": "become-method",
+        "description": "set privilege escalation method",
+        "inherit": false,
+        "value": {
+          "name": "method",
+          "provider": "ansible.become-methods"
+        }
+      },
+      {
+        "long": "become-user",
+        "description": "set privilege escalation user",
+        "inherit": false,
+        "value": {
+          "name": "become-user"
+        }
+      },
+      {
+        "long": "ask-become-pass",
+        "short": "K",
+        "description": "ask for become password",
+        "inherit": false
+      },
+      {
+        "long": "become",
+        "short": "b",
+        "description": "run with become",
+        "inherit": false
+      },
+      {
+        "long": "private-key",
+        "aliases": [
+          "key-file"
+        ],
+        "description": "use private key file",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "scp-extra-args",
+        "description": "pass extra arguments to scp",
+        "inherit": false,
+        "value": {
+          "name": "scp-extra-args"
+        }
+      },
+      {
+        "long": "sftp-extra-args",
+        "description": "pass extra arguments to sftp",
+        "inherit": false,
+        "value": {
+          "name": "sftp-extra-args"
+        }
+      },
+      {
+        "spellings": [
+          "-ssh-extra-args"
+        ],
+        "description": "Extra arguments to pass to (only) ssh",
+        "inherit": false,
+        "value": {
+          "name": "ssh-extra-args"
+        }
+      },
+      {
+        "long": "ssh-common-args",
+        "description": "pass extra arguments to ssh tools",
+        "inherit": false,
+        "value": {
+          "name": "ssh-common-args"
+        }
+      },
+      {
+        "long": "timeout",
+        "short": "T",
+        "description": "set connection timeout",
+        "inherit": false,
+        "value": {
+          "name": "timeout"
+        }
+      },
+      {
+        "long": "connection",
+        "short": "c",
+        "description": "set connection type",
+        "inherit": false,
+        "value": {
+          "name": "connection-type"
+        }
+      },
+      {
+        "long": "ask-pass",
+        "short": "k",
+        "description": "ask for connection password",
+        "inherit": false
+      },
+      {
+        "long": "user",
+        "short": "u",
+        "description": "set remote user",
+        "inherit": false,
+        "value": {
+          "name": "user"
+        }
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "pattern",
+          "description": "host pattern",
+          "index": 0
+        }
+      ]
+    },
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "ansible.become-methods": {
+        "values": [
+          "sudo",
+          "su",
+          "pbrun",
+          "pfexec",
+          "doas",
+          "dzdo",
+          "ksu",
+          "runas",
+          "machinectl"
+        ]
+      }
+    }
+  }
+}
