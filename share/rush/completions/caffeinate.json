@@ -1,0 +1,69 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "caffeinate",
+    "description": "prevent system sleep",
+    "options": [
+      {
+        "short": "d",
+        "description": "create an assertion to prevent the display from sleeping",
+        "inherit": false
+      },
+      {
+        "short": "i",
+        "description": "create an assertion to prevent the system from idle sleeping",
+        "inherit": false
+      },
+      {
+        "short": "m",
+        "description": "create an assertion to prevent the disk from idle sleeping",
+        "inherit": false
+      },
+      {
+        "short": "s",
+        "description": "create an assertion to prevent the system from sleeping. This assertion is valid only when system is running on AC power",
+        "inherit": false
+      },
+      {
+        "short": "u",
+        "description": "create an assertion to declare that user is active. If the display is off, this option turns the display on and prevents the display from going into idle sleep",
+        "inherit": false
+      },
+      {
+        "short": "t",
+        "description": "specifies the timeout value in seconds for which this assertion has to be valid. The assertion is dropped after the specified timeout. Timeout value is not used",
+        "inherit": false,
+        "value": {
+          "name": "time",
+          "description": "(in seconds)"
+        }
+      },
+      {
+        "short": "w",
+        "description": "waits for the process with the specified pid to exit. Once the the process exits, the assertion is also released. This option is ignored when used with utility ",
+        "inherit": false,
+        "value": {
+          "name": "pid",
+          "description": "(in seconds)"
+        }
+      }
+    ],
+    "providers": {
+      "builtin.executables": {
+        "builtin": "executables"
+      }
+    },
+    "arguments": {
+      "states": [
+        {
+          "name": "command",
+          "index": 0,
+          "description": "command to run",
+          "provider": "builtin.executables",
+          "repeatable": true
+        }
+      ]
+    }
+  }
+}
