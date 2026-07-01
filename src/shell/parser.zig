@@ -438,6 +438,7 @@ const Parser = struct {
             if (fd_token != null) return error.UnexpectedToken;
             return null;
         };
+        if (operator_token.kind == .less_less_less and self.mode() == .posix) return error.UnexpectedToken;
         const target_token = self.eat(.word) orelse return error.ExpectedRedirectionTarget;
         const redirection: ast.Redirection = .{
             .fd = if (fd_token) |tok| try parseIoNumber(tok.text) else null,
@@ -940,6 +941,7 @@ const Parser = struct {
             .less,
             .less_less,
             .less_less_dash,
+            .less_less_less,
             .less_ampersand,
             .less_greater,
             .greater,
@@ -949,6 +951,10 @@ const Parser = struct {
             => self.eat(self.tokens[self.index].kind).?,
             else => null,
         };
+    }
+
+    fn mode(self: Parser) state_mod.Mode {
+        return if (self.alias_state) |shell_state| shell_state.options.mode else .bash;
     }
 
     const HereDocDelimiter = struct {
@@ -1085,6 +1091,7 @@ fn redirectionOperator(kind: token.Kind) ast.RedirectionOperator {
         .less => .input,
         .less_less => .here_doc,
         .less_less_dash => .here_doc_strip_tabs,
+        .less_less_less => .here_string,
         .less_ampersand => .duplicate_input,
         .less_greater => .read_write,
         .greater => .output,

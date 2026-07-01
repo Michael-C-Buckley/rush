@@ -148,6 +148,7 @@ fn isRedirectionOperatorKind(kind: token.Kind) bool {
         .less,
         .less_less,
         .less_less_dash,
+        .less_less_less,
         .less_ampersand,
         .less_greater,
         .greater,
@@ -293,6 +294,10 @@ const Lexer = struct {
             '<' => if (!self.atEnd()) switch (self.peek()) {
                 '<' => kind: {
                     self.advanceOne();
+                    if (!self.atEnd() and self.peek() == '<') {
+                        self.advanceOne();
+                        break :kind .less_less_less;
+                    }
                     if (!self.atEnd() and self.peek() == '-') {
                         self.advanceOne();
                         break :kind .less_less_dash;

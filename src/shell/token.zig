@@ -23,6 +23,7 @@ pub const Kind = enum {
     less,
     less_less,
     less_less_dash,
+    less_less_less,
     less_ampersand,
     less_greater,
     greater,

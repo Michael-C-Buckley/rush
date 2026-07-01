@@ -247,6 +247,7 @@ pub const RedirectionOperator = enum {
     duplicate_output,
     here_doc,
     here_doc_strip_tabs,
+    here_string,
     clobber,
 };
 

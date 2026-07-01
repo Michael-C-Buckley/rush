@@ -2685,6 +2685,12 @@ fn applyRedirection(
             const pid = try applyHereDocRedirection(shell, target, redirection.here_doc.?);
             try here_doc_writers.append(shell.scratchAllocator(), pid);
         },
+        .here_string => {
+            const expanded = try expandWord(shell, redirection.target);
+            const body = try std.fmt.allocPrint(shell.scratchAllocator(), "{s}\n", .{expanded});
+            const pid = try applyPipeInputRedirection(shell, target, body);
+            try here_doc_writers.append(shell.scratchAllocator(), pid);
+        },
     }
 }
 
@@ -2723,6 +2729,10 @@ fn applyDuplicateRedirection(
 
 fn applyHereDocRedirection(shell: anytype, target: host_mod.Fd, here_doc: ast.HereDoc) !host_mod.Pid {
     const body = if (here_doc.delimiter_quoted) here_doc.body else try expandHereDocBody(shell, here_doc.body);
+    return applyPipeInputRedirection(shell, target, body);
+}
+
+fn applyPipeInputRedirection(shell: anytype, target: host_mod.Fd, body: []const u8) !host_mod.Pid {
     const pipe_desc = try shell.host.pipe();
     errdefer {
         shell.host.close(pipe_desc.read) catch {};
@@ -2947,7 +2957,7 @@ fn saveFd(shell: anytype, fd: host_mod.Fd) !host_mod.Fd {
 
 fn redirectionFd(redirection: ast.Redirection) host_mod.Fd {
     return if (redirection.fd) |fd| parseKnownFd(fd) else switch (redirection.op) {
-        .input, .duplicate_input, .read_write, .here_doc, .here_doc_strip_tabs => .stdin,
+        .input, .duplicate_input, .read_write, .here_doc, .here_doc_strip_tabs, .here_string => .stdin,
         .output, .append, .duplicate_output, .clobber => .stdout,
     };
 }
