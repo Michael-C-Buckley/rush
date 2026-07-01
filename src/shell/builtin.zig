@@ -531,7 +531,7 @@ fn evalSet(shell: anytype, args: []const []const u8) !result.EvalResult {
         const enabled = arg[0] == '-';
         if (std.mem.eql(u8, arg[1..], "o")) {
             index += 1;
-            if (index >= args.len) return setUsageError(shell);
+            if (index >= args.len) return listSetOptions(shell, enabled);
             if (!setNamedOption(shell, args[index], enabled)) return setUsageError(shell);
             continue;
         }
@@ -569,6 +569,64 @@ const set_option_names = std.StaticStringMap(SetOption).initComptime(.{
     .{ "pipefail", .pipefail },
     .{ "xtrace", .xtrace },
 });
+
+const set_option_order = [_]SetOption{
+    .allexport,
+    .errexit,
+    .noclobber,
+    .noexec,
+    .noglob,
+    .nounset,
+    .pipefail,
+    .xtrace,
+};
+
+fn setOptionName(option: SetOption) []const u8 {
+    return switch (option) {
+        .allexport => "allexport",
+        .errexit => "errexit",
+        .noclobber => "noclobber",
+        .noexec => "noexec",
+        .noglob => "noglob",
+        .nounset => "nounset",
+        .pipefail => "pipefail",
+        .xtrace => "xtrace",
+    };
+}
+
+fn setOptionEnabled(shell: anytype, option: SetOption) bool {
+    return switch (option) {
+        .allexport => shell.state.options.allexport,
+        .errexit => shell.state.options.errexit,
+        .noclobber => shell.state.options.noclobber,
+        .noexec => shell.state.options.noexec,
+        .noglob => shell.state.options.noglob,
+        .nounset => shell.state.options.nounset,
+        .pipefail => shell.state.options.pipefail,
+        .xtrace => shell.state.options.xtrace,
+    };
+}
+
+fn listSetOptions(shell: anytype, table: bool) !result.EvalResult {
+    for (set_option_order) |option| {
+        const name = setOptionName(option);
+        const enabled = setOptionEnabled(shell, option);
+        if (table) {
+            try shell.host.writeAll(.stdout, try std.fmt.allocPrint(
+                shell.scratchAllocator(),
+                "{s}\t{s}\n",
+                .{ name, if (enabled) "on" else "off" },
+            ));
+        } else {
+            try shell.host.writeAll(.stdout, try std.fmt.allocPrint(
+                shell.scratchAllocator(),
+                "set {s}o {s}\n",
+                .{ if (enabled) "-" else "+", name },
+            ));
+        }
+    }
+    return .{};
+}
 
 fn setNamedOption(shell: anytype, name: []const u8, enabled: bool) bool {
     const option = set_option_names.get(name) orelse return false;

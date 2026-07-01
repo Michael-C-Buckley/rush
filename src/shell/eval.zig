@@ -2864,10 +2864,9 @@ fn appendSplitFields(
     text: []const u8,
     pathname_expansion: bool,
 ) !void {
-    const allocator = shell.scratchAllocator();
     const ifs = parameterValue(shell, "IFS") orelse " \t\n";
     if (ifs.len == 0) {
-        if (text.len != 0) try fields.append(allocator, text);
+        if (text.len != 0) try appendMaybePathnameExpandedField(shell, fields, text, pathname_expansion);
         return;
     }
 

@@ -770,6 +770,19 @@
             .status = 0,
         },
         .{
+            .name = "dollar command substitution parses escaped quotes between quoted segments",
+            .script =
+            \\printf '<%s>\n' "$(printf \
+            \\    'a'\''b')"
+            ,
+            .stdout =
+            \\<a'b>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "dollar command substitution parses case pattern closing parentheses",
             .script =
             \\printf '<%s>\n' "$(case x in x) printf case ;; esac)"
@@ -1200,6 +1213,25 @@
             .stdout =
             \\<a b>
             \\<quoted>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "empty IFS still allows pathname expansion after parameter expansion",
+            .script =
+            \\: >a.t
+            \\: >b.t
+            \\pattern='*.t'
+            \\IFS=
+            \\set -- ${pattern}
+            \\printf '<%s>\n' "$#" "$1" "$2"
+            ,
+            .stdout =
+            \\<2>
+            \\<a.t>
+            \\<b.t>
             \\
             ,
             .stderr = "",
@@ -1651,6 +1683,18 @@
             \\<foobar>
             \\
             ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "backslash newline in command substitution preserves escaped quote parsing",
+            .script =
+            \\case "a'xbc" in
+            \\( "$(printf 'a'\
+            \\\''xbc')" ) printf ok ;;
+            \\esac
+            ,
+            .stdout = "ok",
             .stderr = "",
             .status = 0,
         },

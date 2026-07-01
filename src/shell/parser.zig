@@ -1314,6 +1314,9 @@ fn scanCommandSubstitution(text: []const u8, open_index: usize, end: usize) Pars
                 while (index < end and text[index] != quote) index += 1;
                 if (index >= end) return error.UnclosedQuote;
             },
+            '\\' => if (index + 1 < end) {
+                index += 1;
+            },
             '$' => if (index + 1 < end and text[index + 1] == '(') {
                 depth += 1;
                 index += 1;

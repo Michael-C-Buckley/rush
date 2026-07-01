@@ -559,6 +559,11 @@ const Lexer = struct {
                 self.skipComment();
                 continue;
             }
+            if (byte == '\\') {
+                self.advanceOne();
+                if (!self.atEnd()) self.advanceOne();
+                continue;
+            }
             if (byte == '\'' or byte == '"') {
                 quote = byte;
                 self.advanceOne();

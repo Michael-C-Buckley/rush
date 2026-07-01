@@ -508,6 +508,23 @@
             .status = 0,
         },
         .{
+            .name = "set -o lists option states",
+            .script =
+            \\set -o nounset
+            \\set -o | grep '^nounset[[:space:]]*on' >/dev/null && printf 'nounset-on\n'
+            \\set -o | grep '^noglob[[:space:]]*off' >/dev/null && printf 'noglob-off\n'
+            \\set +o | grep '^set -o nounset$'
+            ,
+            .stdout =
+            \\nounset-on
+            \\noglob-off
+            \\set -o nounset
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "set -a exports subsequent assignments",
             .script =
             \\set -fCu +ax
