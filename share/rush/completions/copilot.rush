@@ -1,0 +1,18 @@
+__rush_complete_copilot_apps() {
+  test -f copilot/.workspace || return 0
+  sed -n 's/^[[:space:]]*application[[:space:]]*=[[:space:]]*["'"'"']\([^"'"'"']*\)["'"'"'].*/\1/p' copilot/.workspace 2>/dev/null | while IFS= read -r app; do
+    test -n "$app" && rush_complete candidate "$app" --kind plain --description app
+  done
+}
+
+__rush_complete_copilot_envs() {
+  find copilot/environments -mindepth 1 -maxdepth 1 -type d 2>/dev/null | sed 's#^copilot/environments/##' | while IFS= read -r env; do
+    test -n "$env" && rush_complete candidate "$env" --kind plain --description environment
+  done
+}
+
+__rush_complete_copilot_services() {
+  find copilot -mindepth 1 -maxdepth 1 -type d ! -name environments 2>/dev/null | sed 's#^copilot/##' | while IFS= read -r service; do
+    test -n "$service" && rush_complete candidate "$service" --kind plain --description service
+  done
+}

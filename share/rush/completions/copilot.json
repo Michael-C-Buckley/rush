@@ -1,0 +1,3289 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "copilot",
+    "description": "manage aws copilot applications",
+    "subcommands": [
+      {
+        "name": "init",
+        "description": "create a new ECS or App Runner application",
+        "options": [
+          {
+            "long": "app",
+            "short": "a",
+            "description": "name of the application",
+            "inherit": false,
+            "value": {
+              "name": "app",
+              "provider": "copilot.apps"
+            }
+          },
+          {
+            "long": "deploy",
+            "description": "deploy your service or job to a \"test\" environment",
+            "inherit": false
+          },
+          {
+            "long": "dockerfile",
+            "short": "d",
+            "description": "path to the Dockerfile",
+            "inherit": false,
+            "value": {
+              "name": "dockerfile",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "image",
+            "short": "i",
+            "description": "the location of an existing Docker image",
+            "inherit": false,
+            "value": {
+              "name": "image"
+            }
+          },
+          {
+            "long": "name",
+            "short": "n",
+            "description": "name of the service or job",
+            "inherit": false,
+            "value": {
+              "name": "name",
+              "provider": "copilot.services"
+            }
+          },
+          {
+            "long": "port",
+            "description": "the port on which your service listens",
+            "inherit": false,
+            "value": {
+              "name": "port"
+            }
+          },
+          {
+            "long": "retries",
+            "description": "optional. The number of times to try restarting the job on a failure",
+            "inherit": false,
+            "value": {
+              "name": "retries"
+            }
+          },
+          {
+            "long": "schedule",
+            "description": "the schedule on which to run this job. Accepts cron expressions of the format (M H DoM M DoW) and schedule defin",
+            "inherit": false,
+            "value": {
+              "name": "schedule"
+            }
+          },
+          {
+            "long": "tag",
+            "description": "optional. The container image tag",
+            "inherit": false,
+            "value": {
+              "name": "tag"
+            }
+          },
+          {
+            "long": "timeout",
+            "description": "optional. The total execution time for the task, including retries. Accepts valid Go duration strings. For examp",
+            "inherit": false,
+            "value": {
+              "name": "timeout"
+            }
+          },
+          {
+            "long": "type",
+            "short": "t",
+            "description": "type of job or svc to create",
+            "inherit": false,
+            "value": {
+              "name": "type",
+              "values": [
+                "Request-Driven Web Service",
+                "Load Balanced Web Service",
+                "Backend Service",
+                "Worker Service",
+                "Scheduled Job"
+              ]
+            }
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "docs",
+        "description": "open the copilot docs",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "app",
+        "description": "commands for applications. Applications are a collection of services and environments",
+        "subcommands": [
+          {
+            "name": "init",
+            "description": "creates a new empty application",
+            "options": [
+              {
+                "long": "domain",
+                "description": "optional. Your existing custom domain name",
+                "inherit": false,
+                "value": {
+                  "name": "domain"
+                }
+              },
+              {
+                "long": "resource-tags",
+                "description": "optional. Labels with a key and value separated by commas. Allows you to categorize resources",
+                "inherit": false,
+                "value": {
+                  "name": "resource-tags"
+                }
+              },
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "ls",
+            "description": "lists all the applications in your account",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "show",
+            "description": "shows info about an application",
+            "options": [
+              {
+                "long": "name",
+                "short": "n",
+                "description": "name of the application",
+                "inherit": false,
+                "value": {
+                  "name": "name",
+                  "provider": "copilot.services"
+                }
+              },
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "delete",
+            "description": "delete all resources associated with the application",
+            "options": [
+              {
+                "long": "name",
+                "short": "n",
+                "description": "name of the application",
+                "inherit": false,
+                "value": {
+                  "name": "name",
+                  "provider": "copilot.services"
+                }
+              },
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "upgrade",
+            "description": "upgrades the template of an application to the latest version",
+            "options": [
+              {
+                "long": "name",
+                "short": "n",
+                "description": "name of the application",
+                "inherit": false,
+                "value": {
+                  "name": "name",
+                  "provider": "copilot.services"
+                }
+              },
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              }
+            ]
+          }
+        ],
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "env",
+        "description": "commands for environments. Environments are deployment stages shared between services",
+        "subcommands": [
+          {
+            "name": "init",
+            "description": "creates a new environment in your application",
+            "options": [
+              {
+                "long": "aws-access-key-id",
+                "description": "optional. An aws access key",
+                "inherit": false,
+                "value": {
+                  "name": "aws-access-key-id"
+                }
+              },
+              {
+                "long": "aws-secret-access-key",
+                "description": "optional. An aws secret access key",
+                "inherit": false,
+                "value": {
+                  "name": "aws-secret-access-key"
+                }
+              },
+              {
+                "long": "aws-session-token",
+                "description": "optional. An aws session token for temporary credentials",
+                "inherit": false,
+                "value": {
+                  "name": "aws-session-token"
+                }
+              },
+              {
+                "long": "default-config",
+                "description": "optional. Skip prompting and use default environment configuration",
+                "inherit": false
+              },
+              {
+                "long": "import-private-subnets",
+                "description": "optional. Use existing private subnet IDs",
+                "inherit": false,
+                "value": {
+                  "name": "import-private-subnets"
+                }
+              },
+              {
+                "long": "import-public-subnets",
+                "description": "optional. Use existing public subnet IDs",
+                "inherit": false,
+                "value": {
+                  "name": "import-public-subnets"
+                }
+              },
+              {
+                "long": "import-vpc-id",
+                "description": "optional. Use an existing VPC ID",
+                "inherit": false,
+                "value": {
+                  "name": "import-vpc-id"
+                }
+              },
+              {
+                "long": "name",
+                "short": "n",
+                "description": "name of the environment",
+                "inherit": false,
+                "value": {
+                  "name": "name",
+                  "provider": "copilot.services"
+                }
+              },
+              {
+                "long": "override-az-names",
+                "description": "optional. Availability Zone names. (default 2 random AZs)",
+                "inherit": false,
+                "value": {
+                  "name": "override-az-names"
+                }
+              },
+              {
+                "long": "override-private-cidrs",
+                "description": "optional. CIDR to use for private subnets. (default 10.0.2.0/24,10.0.3.0/24)",
+                "inherit": false,
+                "value": {
+                  "name": "override-private-cidrs"
+                }
+              },
+              {
+                "long": "override-public-cidrs",
+                "description": "optional. CIDR to use for public subnets. (default 10.0.0.0/24,10.0.1.0/24)",
+                "inherit": false,
+                "value": {
+                  "name": "override-public-cidrs"
+                }
+              },
+              {
+                "long": "override-vpc-cidr",
+                "description": "optional. Global CIDR to use for VPC. (default 10.0.0.0/16)",
+                "inherit": false,
+                "value": {
+                  "name": "override-vpc-cidr"
+                }
+              },
+              {
+                "long": "prod",
+                "description": "if the environment contains production services",
+                "inherit": false
+              },
+              {
+                "long": "profile",
+                "description": "name of the profile",
+                "inherit": false,
+                "value": {
+                  "name": "profile",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "region",
+                "description": "optional. An aws region where the environment will be created",
+                "inherit": false,
+                "value": {
+                  "name": "region"
+                }
+              },
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "ls",
+            "description": "lists all the environments in an application",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "delete",
+            "description": "deletes an environment from your application",
+            "options": [
+              {
+                "long": "name",
+                "short": "n",
+                "description": "name of the environment",
+                "inherit": false,
+                "value": {
+                  "name": "name",
+                  "provider": "copilot.services"
+                }
+              },
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "show",
+            "description": "shows info about a deployed environment",
+            "options": [
+              {
+                "long": "name",
+                "short": "n",
+                "description": "name of the environment",
+                "inherit": false,
+                "value": {
+                  "name": "name",
+                  "provider": "copilot.services"
+                }
+              },
+              {
+                "long": "resources",
+                "description": "optional. Show the resources in your environment",
+                "inherit": false
+              },
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              }
+            ]
+          }
+        ],
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "svc",
+        "description": "commands for services. Services are long-running ECS or App Runner services",
+        "subcommands": [
+          {
+            "name": "init",
+            "description": "creates a new service in an application",
+            "options": [
+              {
+                "long": "dockerfile",
+                "short": "d",
+                "description": "path to the Dockerfile",
+                "inherit": false,
+                "value": {
+                  "name": "dockerfile",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "image",
+                "short": "i",
+                "description": "the location of an existing Docker image",
+                "inherit": false,
+                "value": {
+                  "name": "image"
+                }
+              },
+              {
+                "long": "no-subscribe",
+                "description": "optional. Turn off selection for adding subscriptions for worker services",
+                "inherit": false
+              },
+              {
+                "long": "port",
+                "description": "the port on which your service listens",
+                "inherit": false,
+                "value": {
+                  "name": "port"
+                }
+              },
+              {
+                "long": "subscribe-topics",
+                "description": "optional. SNS Topics to subscribe to from other services in your application. Must be of format '<svcName>:<topi",
+                "repeatable": true,
+                "inherit": false,
+                "value": {
+                  "name": "subscribe-topics"
+                }
+              },
+              {
+                "long": "svc-type",
+                "short": "t",
+                "description": "type of service to create",
+                "inherit": false,
+                "value": {
+                  "name": "svc-type",
+                  "values": [
+                    "Request-Driven Web Service",
+                    "Load Balanced Web Service",
+                    "Backend Service",
+                    "Worker Service"
+                  ]
+                }
+              },
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "ls",
+            "description": "lists all the services in an application",
+            "options": [
+              {
+                "long": "local",
+                "description": "only show services in the workspace",
+                "inherit": false
+              },
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "package",
+            "description": "prints the aws CloudFormation template of a service",
+            "options": [
+              {
+                "long": "output-dir",
+                "description": "optional. Writes the stack template and template configuration to a directory",
+                "inherit": false,
+                "value": {
+                  "name": "output-dir"
+                }
+              },
+              {
+                "long": "tag",
+                "description": "optional. The container image tag",
+                "inherit": false,
+                "value": {
+                  "name": "tag"
+                }
+              },
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "deploy",
+            "description": "deploys a service to an environment",
+            "options": [
+              {
+                "long": "force",
+                "description": "optional. Force a new service deployment using the existing image",
+                "inherit": false
+              },
+              {
+                "long": "resource-tags",
+                "description": "optional. Labels with a key and value separated by commas. Allows you to categorize resources",
+                "inherit": false,
+                "value": {
+                  "name": "resource-tags"
+                }
+              },
+              {
+                "long": "tag",
+                "description": "optional. The container image tag",
+                "inherit": false,
+                "value": {
+                  "name": "tag"
+                }
+              },
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "delete",
+            "description": "deletes a service from an application",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "show",
+            "description": "shows info about a deployed service per environment",
+            "options": [
+              {
+                "long": "resources",
+                "description": "optional. Show the resources in your service",
+                "inherit": false
+              },
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "status",
+            "description": "shows status of a deployed service",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "logs",
+            "description": "displays logs of a deployed service",
+            "options": [
+              {
+                "long": "end-time",
+                "description": "optional. Only return logs before a specific date (RFC3339). Defaults to all logs",
+                "inherit": false,
+                "value": {
+                  "name": "end-time"
+                }
+              },
+              {
+                "long": "follow",
+                "description": "optional. Specifies if the logs should be streamed",
+                "inherit": false
+              },
+              {
+                "long": "limit",
+                "description": "optional. The maximum number of log events returned. Default is 10 unless any time filtering flags are set",
+                "inherit": false,
+                "value": {
+                  "name": "limit"
+                }
+              },
+              {
+                "long": "log-group",
+                "description": "optional. Only return logs from specific log group",
+                "inherit": false,
+                "value": {
+                  "name": "log-group"
+                }
+              },
+              {
+                "long": "since",
+                "description": "optional. Only return logs newer than a relative duration like 5s, 2m, or 3h. Defaults to all logs",
+                "inherit": false,
+                "value": {
+                  "name": "since"
+                }
+              },
+              {
+                "long": "start-time",
+                "description": "optional. Only return logs after a specific date (RFC3339). Defaults to all logs",
+                "inherit": false,
+                "value": {
+                  "name": "start-time"
+                }
+              },
+              {
+                "long": "tasks",
+                "description": "optional. Only return logs from specific task IDs",
+                "inherit": false,
+                "value": {
+                  "name": "tasks"
+                }
+              },
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "exec",
+            "description": "execute a command in a running container part of a service",
+            "options": [
+              {
+                "long": "command",
+                "short": "c",
+                "description": "optional. The command that is passed to a running container",
+                "inherit": false,
+                "value": {
+                  "name": "command"
+                }
+              },
+              {
+                "long": "container",
+                "description": "optional. The specific container you want to exec in. By default the first essential container will be used",
+                "inherit": false,
+                "value": {
+                  "name": "container"
+                }
+              },
+              {
+                "long": "name",
+                "short": "n",
+                "description": "name of the service, job, or task group",
+                "inherit": false,
+                "value": {
+                  "name": "name",
+                  "provider": "copilot.services"
+                }
+              },
+              {
+                "long": "task-id",
+                "description": "optional. ID of the task you want to exec in",
+                "inherit": false,
+                "value": {
+                  "name": "task-id"
+                }
+              },
+              {
+                "long": "yes",
+                "description": "skip confirmation",
+                "inherit": false
+              },
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "pause",
+            "description": "pause running App Runner service",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "resume",
+            "description": "resumes a paused service",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              }
+            ]
+          }
+        ],
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "job",
+        "description": "commands for jobs. Jobs are tasks that are triggered by events",
+        "subcommands": [
+          {
+            "name": "init",
+            "description": "creates a new scheduled job in an application",
+            "options": [
+              {
+                "long": "dockerfile",
+                "short": "d",
+                "description": "path to the Dockerfile",
+                "inherit": false,
+                "value": {
+                  "name": "dockerfile",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "image",
+                "short": "i",
+                "description": "the location of an existing Docker image",
+                "inherit": false,
+                "value": {
+                  "name": "image"
+                }
+              },
+              {
+                "long": "job-type",
+                "short": "t",
+                "description": "type of job to create",
+                "inherit": false,
+                "value": {
+                  "name": "job-type",
+                  "values": [
+                    "Scheduled Job"
+                  ]
+                }
+              },
+              {
+                "long": "name",
+                "short": "n",
+                "description": "name of the job",
+                "inherit": false,
+                "value": {
+                  "name": "name",
+                  "provider": "copilot.services"
+                }
+              },
+              {
+                "long": "retries",
+                "description": "optional. The number of times to try restarting the job on a failure",
+                "inherit": false,
+                "value": {
+                  "name": "retries"
+                }
+              },
+              {
+                "long": "schedule",
+                "short": "s",
+                "description": "the schedule on which to run this job. Accepts cron expressions of the format (M H DoM M DoW) and schedule defin",
+                "inherit": false,
+                "value": {
+                  "name": "schedule"
+                }
+              },
+              {
+                "long": "timeout",
+                "description": "optional. The total execution time for the task, including retries. Accepts valid Go duration strings. For examp",
+                "inherit": false,
+                "value": {
+                  "name": "timeout"
+                }
+              },
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "ls",
+            "description": "lists all the jobs in an application",
+            "options": [
+              {
+                "long": "local",
+                "description": "only show jobs in the workspace",
+                "inherit": false
+              },
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "package",
+            "description": "prints the aws CloudFormation template of a job",
+            "options": [
+              {
+                "long": "name",
+                "short": "n",
+                "description": "name of the job",
+                "inherit": false,
+                "value": {
+                  "name": "name",
+                  "provider": "copilot.services"
+                }
+              },
+              {
+                "long": "output-dir",
+                "description": "optional. Writes the stack template and template configuration to a directory",
+                "inherit": false,
+                "value": {
+                  "name": "output-dir"
+                }
+              },
+              {
+                "long": "tag",
+                "description": "optional. The container image tag",
+                "inherit": false,
+                "value": {
+                  "name": "tag"
+                }
+              },
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "deploy",
+            "description": "deploys a job to an environment",
+            "options": [
+              {
+                "long": "name",
+                "short": "n",
+                "description": "name of the job",
+                "inherit": false,
+                "value": {
+                  "name": "name",
+                  "provider": "copilot.services"
+                }
+              },
+              {
+                "long": "resource-tags",
+                "description": "optional. Labels with a key and value separated by commas. Allows you to categorize resources",
+                "inherit": false,
+                "value": {
+                  "name": "resource-tags"
+                }
+              },
+              {
+                "long": "tag",
+                "description": "optional. The container image tag",
+                "inherit": false,
+                "value": {
+                  "name": "tag"
+                }
+              },
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "delete",
+            "description": "deletes a job from an application",
+            "options": [
+              {
+                "long": "name",
+                "short": "n",
+                "description": "name of the job",
+                "inherit": false,
+                "value": {
+                  "name": "name",
+                  "provider": "copilot.services"
+                }
+              },
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              }
+            ]
+          }
+        ],
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "task",
+        "description": "commands for tasks. One-off Amazon ECS tasks that terminate once their work is done",
+        "subcommands": [
+          {
+            "name": "run",
+            "description": "run a one-off task on Amazon ECS",
+            "options": [
+              {
+                "long": "app",
+                "description": "optional. Name of the application",
+                "inherit": false,
+                "value": {
+                  "name": "app",
+                  "provider": "copilot.apps"
+                }
+              },
+              {
+                "long": "build-context",
+                "description": "path to the Docker build context",
+                "inherit": false,
+                "value": {
+                  "name": "build-context"
+                }
+              },
+              {
+                "long": "cluster",
+                "description": "optional. The short name or full ARN of the cluster to run the task in",
+                "inherit": false,
+                "value": {
+                  "name": "cluster"
+                }
+              },
+              {
+                "long": "command",
+                "description": "optional. The command that is passed to \"docker run\" to override the default command",
+                "inherit": false,
+                "value": {
+                  "name": "command"
+                }
+              },
+              {
+                "long": "count",
+                "description": "optional. The number of tasks to set up",
+                "inherit": false,
+                "value": {
+                  "name": "count"
+                }
+              },
+              {
+                "long": "cpu",
+                "description": "optional. The number of CPU units to reserve for each task",
+                "inherit": false,
+                "value": {
+                  "name": "cpu"
+                }
+              },
+              {
+                "long": "default",
+                "description": "optional. Run tasks in default cluster and default subnets",
+                "inherit": false
+              },
+              {
+                "long": "dockerfile",
+                "description": "path to the Dockerfile",
+                "inherit": false,
+                "value": {
+                  "name": "dockerfile",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "entrypoint",
+                "description": "optional. The entrypoint that is passed to \"docker run\" to override the default entrypoint",
+                "inherit": false,
+                "value": {
+                  "name": "entrypoint"
+                }
+              },
+              {
+                "long": "env",
+                "description": "optional. Name of the environment",
+                "inherit": false,
+                "value": {
+                  "name": "env",
+                  "provider": "copilot.envs"
+                }
+              },
+              {
+                "long": "env-vars",
+                "description": "optional. Environment variables specified by key=value separated by commas",
+                "inherit": false,
+                "value": {
+                  "name": "env-vars"
+                }
+              },
+              {
+                "long": "execution-role",
+                "description": "optional. The ARN of the role that grants the container agent permission to make aws API calls",
+                "inherit": false,
+                "value": {
+                  "name": "execution-role"
+                }
+              },
+              {
+                "long": "follow",
+                "description": "optional. Specifies if the logs should be streamed",
+                "inherit": false
+              },
+              {
+                "long": "generate-cmd",
+                "description": "optional. Generate a command with a pre-filled value for each flag. To use it for an ECS service, specify --gene",
+                "inherit": false,
+                "value": {
+                  "name": "generate-cmd"
+                }
+              },
+              {
+                "long": "image",
+                "short": "i",
+                "description": "the location of an existing Docker image",
+                "inherit": false,
+                "value": {
+                  "name": "image"
+                }
+              },
+              {
+                "long": "memory",
+                "description": "optional. The amount of memory to reserve in MiB for each task",
+                "inherit": false,
+                "value": {
+                  "name": "memory"
+                }
+              },
+              {
+                "long": "platform-arch",
+                "description": "optional. Architecture of the task. Must be specified along with 'platform-os'",
+                "inherit": false,
+                "value": {
+                  "name": "platform-arch"
+                }
+              },
+              {
+                "long": "platform-os",
+                "description": "optional. Operating system of the task. Must be specified along with 'platform-arch'",
+                "inherit": false,
+                "value": {
+                  "name": "platform-os"
+                }
+              },
+              {
+                "long": "resource-tags",
+                "description": "optional. Labels with a key and value separated by commas. Allows you to categorize resources",
+                "inherit": false,
+                "value": {
+                  "name": "resource-tags"
+                }
+              },
+              {
+                "long": "secrets",
+                "description": "optional. Secrets to inject into the container. Specified by key=value separated by commas",
+                "inherit": false,
+                "value": {
+                  "name": "secrets"
+                }
+              },
+              {
+                "long": "security-groups",
+                "description": "optional. The security group IDs for the task to use. Can be specified multiple times",
+                "inherit": false,
+                "value": {
+                  "name": "security-groups"
+                }
+              },
+              {
+                "long": "subnets",
+                "description": "optional. The subnet IDs for the task to use. Can be specified multiple times",
+                "inherit": false,
+                "value": {
+                  "name": "subnets"
+                }
+              },
+              {
+                "long": "tag",
+                "description": "optional. The container image tag in addition to \"latest\"",
+                "inherit": false,
+                "value": {
+                  "name": "tag"
+                }
+              },
+              {
+                "long": "task-group-name",
+                "short": "n",
+                "description": "optional. The group name of the task. Tasks with the same group name share the same set of resources. (default d",
+                "inherit": false,
+                "value": {
+                  "name": "task-group-name"
+                }
+              },
+              {
+                "long": "task-role",
+                "description": "optional. The ARN of the role for the task to use",
+                "inherit": false,
+                "value": {
+                  "name": "task-role"
+                }
+              },
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "exec",
+            "description": "execute a command in a running container part of a task",
+            "options": [
+              {
+                "long": "command",
+                "short": "c",
+                "description": "optional. The command that is passed to a running container",
+                "inherit": false,
+                "value": {
+                  "name": "command"
+                }
+              },
+              {
+                "long": "default",
+                "description": "optional. Execute commands in running tasks in default cluster and default subnets",
+                "inherit": false
+              },
+              {
+                "long": "name",
+                "short": "n",
+                "description": "name of the service, job, or task group",
+                "inherit": false,
+                "value": {
+                  "name": "name",
+                  "provider": "copilot.services"
+                }
+              },
+              {
+                "long": "task-id",
+                "description": "optional. ID of the task you want to exec in",
+                "inherit": false,
+                "value": {
+                  "name": "task-id"
+                }
+              },
+              {
+                "long": "yes",
+                "description": "skip confirmation",
+                "inherit": false
+              },
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "delete",
+            "description": "deletes a one-off task from an application or default cluster",
+            "options": [
+              {
+                "long": "default",
+                "description": "optional. Delete a task which was launched in the default cluster and subnets",
+                "inherit": false
+              },
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              }
+            ]
+          }
+        ],
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "storage",
+        "description": "commands for working with storage and databases",
+        "subcommands": [
+          {
+            "name": "init",
+            "description": "creates a new aws CloudFormation template for a storage resource",
+            "options": [
+              {
+                "long": "engine",
+                "description": "the database engine used in the cluster. Must be either \"MySQL\" or \"PostgreSQL\"",
+                "inherit": false,
+                "value": {
+                  "name": "engine"
+                }
+              },
+              {
+                "long": "initial-db",
+                "description": "the initial database to create in the cluster",
+                "inherit": false,
+                "value": {
+                  "name": "initial-db"
+                }
+              },
+              {
+                "long": "lsi",
+                "description": "optional. Attribute to use as an alternate sort key. May be specified up to 5 times. Must be of the format '<key",
+                "repeatable": true,
+                "inherit": false,
+                "value": {
+                  "name": "lsi"
+                }
+              },
+              {
+                "long": "name",
+                "short": "n",
+                "description": "name of the storage resource to create",
+                "inherit": false,
+                "value": {
+                  "name": "name",
+                  "provider": "copilot.services"
+                }
+              },
+              {
+                "long": "no-lsi",
+                "description": "optional. Don't ask about configuring alternate sort keys",
+                "inherit": false
+              },
+              {
+                "long": "no-sort",
+                "description": "optional. Skip configuring sort keys",
+                "inherit": false
+              },
+              {
+                "long": "parameter-group",
+                "description": "optional. The name of the parameter group to associate with the cluster",
+                "inherit": false,
+                "value": {
+                  "name": "parameter-group"
+                }
+              },
+              {
+                "long": "partition-key",
+                "description": "partition key for the DDB table. Must be of the format '<keyName>:<dataType>'",
+                "inherit": false,
+                "value": {
+                  "name": "partition-key"
+                }
+              },
+              {
+                "long": "sort-key",
+                "description": "optional. Sort key for the DDB table. Must be of the format '<keyName>:<dataType>'",
+                "inherit": false,
+                "value": {
+                  "name": "sort-key"
+                }
+              },
+              {
+                "long": "storage-type",
+                "short": "t",
+                "description": "type of storage to add. Must be one of: \"DynamoDB\", \"S3\", \"Aurora\"",
+                "inherit": false,
+                "value": {
+                  "name": "storage-type"
+                }
+              },
+              {
+                "long": "workload",
+                "short": "w",
+                "description": "name of the service or job to associate with storage",
+                "inherit": false,
+                "value": {
+                  "name": "workload"
+                }
+              },
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              }
+            ]
+          }
+        ],
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "secret",
+        "description": "commands for secrets. Secrets are sensitive information that you need in your application",
+        "subcommands": [
+          {
+            "name": "init",
+            "description": "create or update secrets in SSM Parameter Store",
+            "options": [
+              {
+                "long": "cli-input-yaml",
+                "description": "optional. A YAML file in which the secret values are specified",
+                "inherit": false,
+                "value": {
+                  "name": "cli-input-yaml"
+                }
+              },
+              {
+                "long": "name",
+                "short": "n",
+                "description": "the name of the secret",
+                "inherit": false,
+                "value": {
+                  "name": "name",
+                  "provider": "copilot.services"
+                }
+              },
+              {
+                "long": "overwrite",
+                "description": "optional. Whether to overwrite an existing secret",
+                "inherit": false
+              },
+              {
+                "long": "values",
+                "description": "values of the secret in each environment. Specified as <environment>=<value> separated by commas",
+                "inherit": false,
+                "value": {
+                  "name": "values"
+                }
+              },
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              }
+            ]
+          }
+        ],
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "version",
+        "description": "print the version number",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "completion",
+        "description": "output shell completion code",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "pipeline",
+        "description": "commands for pipelines. Continuous delivery pipelines to release services",
+        "subcommands": [
+          {
+            "name": "init",
+            "description": "creates a pipeline for the services in your workspace",
+            "options": [
+              {
+                "long": "environments",
+                "short": "e",
+                "description": "environments to add to the pipeline",
+                "inherit": false,
+                "value": {
+                  "name": "environments"
+                }
+              },
+              {
+                "long": "git-branch",
+                "short": "b",
+                "description": "branch used to trigger your pipeline",
+                "inherit": false,
+                "value": {
+                  "name": "git-branch"
+                }
+              },
+              {
+                "long": "github-access-token",
+                "short": "t",
+                "description": "gitHub personal access token for your repository",
+                "inherit": false,
+                "value": {
+                  "name": "github-access-token"
+                }
+              },
+              {
+                "long": "github-url",
+                "description": "(Deprecated.) Use --url instead. Repository URL to trigger your pipeline",
+                "inherit": false,
+                "value": {
+                  "name": "github-url"
+                }
+              },
+              {
+                "long": "url",
+                "short": "u",
+                "description": "the repository URL to trigger your pipeline. Supported providers are: GitHub, CodeCommit, Bitbucket",
+                "inherit": false,
+                "value": {
+                  "name": "url"
+                }
+              },
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "update",
+            "description": "deploys a pipeline for the services in your workspace",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "delete",
+            "description": "deletes the pipeline associated with your workspace",
+            "options": [
+              {
+                "long": "delete-secret",
+                "description": "deletes aws Secrets Manager secret associated with a pipeline source repository",
+                "inherit": false
+              },
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "show",
+            "description": "shows info about a deployed pipeline for an application",
+            "options": [
+              {
+                "long": "name",
+                "short": "n",
+                "description": "name of the pipeline",
+                "inherit": false,
+                "value": {
+                  "name": "name",
+                  "provider": "copilot.services"
+                }
+              },
+              {
+                "long": "resources",
+                "description": "optional. Show the resources in your pipeline",
+                "inherit": false
+              },
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "status",
+            "description": "shows the status of a pipeline",
+            "options": [
+              {
+                "long": "name",
+                "short": "n",
+                "description": "name of the pipeline",
+                "inherit": false,
+                "value": {
+                  "name": "name",
+                  "provider": "copilot.services"
+                }
+              },
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "ls",
+            "description": "lists all the deployed pipelines in an application",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              }
+            ]
+          }
+        ],
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "deploy",
+        "description": "deploy a Copilot job or service",
+        "options": [
+          {
+            "long": "force",
+            "description": "optional. Force a new service deployment using the existing image",
+            "inherit": false
+          },
+          {
+            "long": "name",
+            "short": "n",
+            "description": "name of the service or job",
+            "inherit": false,
+            "value": {
+              "name": "name",
+              "provider": "copilot.services"
+            }
+          },
+          {
+            "long": "resource-tags",
+            "description": "optional. Labels with a key and value separated by commas. Allows you to categorize resources",
+            "inherit": false,
+            "value": {
+              "name": "resource-tags"
+            }
+          },
+          {
+            "long": "tag",
+            "description": "optional. The container image tag",
+            "inherit": false,
+            "value": {
+              "name": "tag"
+            }
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "help",
+        "description": "help about any command",
+        "subcommands": [
+          {
+            "name": "init",
+            "description": "create a new ECS or App Runner application",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "docs",
+            "description": "open the copilot docs",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "app",
+            "description": "commands for applications. Applications are a collection of services and environments",
+            "subcommands": [
+              {
+                "name": "init",
+                "description": "creates a new empty application",
+                "options": [
+                  {
+                    "long": "domain",
+                    "description": "optional. Your existing custom domain name",
+                    "inherit": false,
+                    "value": {
+                      "name": "domain"
+                    }
+                  },
+                  {
+                    "long": "resource-tags",
+                    "description": "optional. Labels with a key and value separated by commas. Allows you to categorize resources",
+                    "inherit": false,
+                    "value": {
+                      "name": "resource-tags"
+                    }
+                  },
+                  {
+                    "short": "h",
+                    "long": "help",
+                    "description": "show help",
+                    "inherit": false
+                  }
+                ]
+              },
+              {
+                "name": "ls",
+                "description": "lists all the applications in your account",
+                "options": [
+                  {
+                    "short": "h",
+                    "long": "help",
+                    "description": "show help",
+                    "inherit": false
+                  }
+                ]
+              },
+              {
+                "name": "show",
+                "description": "shows info about an application",
+                "options": [
+                  {
+                    "long": "name",
+                    "short": "n",
+                    "description": "name of the application",
+                    "inherit": false,
+                    "value": {
+                      "name": "name",
+                      "provider": "copilot.services"
+                    }
+                  },
+                  {
+                    "short": "h",
+                    "long": "help",
+                    "description": "show help",
+                    "inherit": false
+                  }
+                ]
+              },
+              {
+                "name": "delete",
+                "description": "delete all resources associated with the application",
+                "options": [
+                  {
+                    "long": "name",
+                    "short": "n",
+                    "description": "name of the application",
+                    "inherit": false,
+                    "value": {
+                      "name": "name",
+                      "provider": "copilot.services"
+                    }
+                  },
+                  {
+                    "short": "h",
+                    "long": "help",
+                    "description": "show help",
+                    "inherit": false
+                  }
+                ]
+              },
+              {
+                "name": "upgrade",
+                "description": "upgrades the template of an application to the latest version",
+                "options": [
+                  {
+                    "long": "name",
+                    "short": "n",
+                    "description": "name of the application",
+                    "inherit": false,
+                    "value": {
+                      "name": "name",
+                      "provider": "copilot.services"
+                    }
+                  },
+                  {
+                    "short": "h",
+                    "long": "help",
+                    "description": "show help",
+                    "inherit": false
+                  }
+                ]
+              }
+            ],
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "env",
+            "description": "commands for environments. Environments are deployment stages shared between services",
+            "subcommands": [
+              {
+                "name": "init",
+                "description": "creates a new environment in your application",
+                "options": [
+                  {
+                    "long": "aws-access-key-id",
+                    "description": "optional. An aws access key",
+                    "inherit": false,
+                    "value": {
+                      "name": "aws-access-key-id"
+                    }
+                  },
+                  {
+                    "long": "aws-secret-access-key",
+                    "description": "optional. An aws secret access key",
+                    "inherit": false,
+                    "value": {
+                      "name": "aws-secret-access-key"
+                    }
+                  },
+                  {
+                    "long": "aws-session-token",
+                    "description": "optional. An aws session token for temporary credentials",
+                    "inherit": false,
+                    "value": {
+                      "name": "aws-session-token"
+                    }
+                  },
+                  {
+                    "long": "default-config",
+                    "description": "optional. Skip prompting and use default environment configuration",
+                    "inherit": false
+                  },
+                  {
+                    "long": "import-private-subnets",
+                    "description": "optional. Use existing private subnet IDs",
+                    "inherit": false,
+                    "value": {
+                      "name": "import-private-subnets"
+                    }
+                  },
+                  {
+                    "long": "import-public-subnets",
+                    "description": "optional. Use existing public subnet IDs",
+                    "inherit": false,
+                    "value": {
+                      "name": "import-public-subnets"
+                    }
+                  },
+                  {
+                    "long": "import-vpc-id",
+                    "description": "optional. Use an existing VPC ID",
+                    "inherit": false,
+                    "value": {
+                      "name": "import-vpc-id"
+                    }
+                  },
+                  {
+                    "long": "name",
+                    "short": "n",
+                    "description": "name of the environment",
+                    "inherit": false,
+                    "value": {
+                      "name": "name",
+                      "provider": "copilot.services"
+                    }
+                  },
+                  {
+                    "long": "override-az-names",
+                    "description": "optional. Availability Zone names. (default 2 random AZs)",
+                    "inherit": false,
+                    "value": {
+                      "name": "override-az-names"
+                    }
+                  },
+                  {
+                    "long": "override-private-cidrs",
+                    "description": "optional. CIDR to use for private subnets. (default 10.0.2.0/24,10.0.3.0/24)",
+                    "inherit": false,
+                    "value": {
+                      "name": "override-private-cidrs"
+                    }
+                  },
+                  {
+                    "long": "override-public-cidrs",
+                    "description": "optional. CIDR to use for public subnets. (default 10.0.0.0/24,10.0.1.0/24)",
+                    "inherit": false,
+                    "value": {
+                      "name": "override-public-cidrs"
+                    }
+                  },
+                  {
+                    "long": "override-vpc-cidr",
+                    "description": "optional. Global CIDR to use for VPC. (default 10.0.0.0/16)",
+                    "inherit": false,
+                    "value": {
+                      "name": "override-vpc-cidr"
+                    }
+                  },
+                  {
+                    "long": "prod",
+                    "description": "if the environment contains production services",
+                    "inherit": false
+                  },
+                  {
+                    "long": "profile",
+                    "description": "name of the profile",
+                    "inherit": false,
+                    "value": {
+                      "name": "profile",
+                      "provider": "builtin.files"
+                    }
+                  },
+                  {
+                    "long": "region",
+                    "description": "optional. An aws region where the environment will be created",
+                    "inherit": false,
+                    "value": {
+                      "name": "region"
+                    }
+                  },
+                  {
+                    "short": "h",
+                    "long": "help",
+                    "description": "show help",
+                    "inherit": false
+                  }
+                ]
+              },
+              {
+                "name": "ls",
+                "description": "lists all the environments in an application",
+                "options": [
+                  {
+                    "short": "h",
+                    "long": "help",
+                    "description": "show help",
+                    "inherit": false
+                  }
+                ]
+              },
+              {
+                "name": "delete",
+                "description": "deletes an environment from your application",
+                "options": [
+                  {
+                    "long": "name",
+                    "short": "n",
+                    "description": "name of the environment",
+                    "inherit": false,
+                    "value": {
+                      "name": "name",
+                      "provider": "copilot.services"
+                    }
+                  },
+                  {
+                    "short": "h",
+                    "long": "help",
+                    "description": "show help",
+                    "inherit": false
+                  }
+                ]
+              },
+              {
+                "name": "show",
+                "description": "shows info about a deployed environment",
+                "options": [
+                  {
+                    "long": "name",
+                    "short": "n",
+                    "description": "name of the environment",
+                    "inherit": false,
+                    "value": {
+                      "name": "name",
+                      "provider": "copilot.services"
+                    }
+                  },
+                  {
+                    "long": "resources",
+                    "description": "optional. Show the resources in your environment",
+                    "inherit": false
+                  },
+                  {
+                    "short": "h",
+                    "long": "help",
+                    "description": "show help",
+                    "inherit": false
+                  }
+                ]
+              }
+            ],
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "svc",
+            "description": "commands for services. Services are long-running ECS or App Runner services",
+            "subcommands": [
+              {
+                "name": "init",
+                "description": "creates a new service in an application",
+                "options": [
+                  {
+                    "long": "dockerfile",
+                    "short": "d",
+                    "description": "path to the Dockerfile",
+                    "inherit": false,
+                    "value": {
+                      "name": "dockerfile",
+                      "provider": "builtin.files"
+                    }
+                  },
+                  {
+                    "long": "image",
+                    "short": "i",
+                    "description": "the location of an existing Docker image",
+                    "inherit": false,
+                    "value": {
+                      "name": "image"
+                    }
+                  },
+                  {
+                    "long": "no-subscribe",
+                    "description": "optional. Turn off selection for adding subscriptions for worker services",
+                    "inherit": false
+                  },
+                  {
+                    "long": "port",
+                    "description": "the port on which your service listens",
+                    "inherit": false,
+                    "value": {
+                      "name": "port"
+                    }
+                  },
+                  {
+                    "long": "subscribe-topics",
+                    "description": "optional. SNS Topics to subscribe to from other services in your application. Must be of format '<svcName>:<topi",
+                    "repeatable": true,
+                    "inherit": false,
+                    "value": {
+                      "name": "subscribe-topics"
+                    }
+                  },
+                  {
+                    "long": "svc-type",
+                    "short": "t",
+                    "description": "type of service to create",
+                    "inherit": false,
+                    "value": {
+                      "name": "svc-type",
+                      "values": [
+                        "Request-Driven Web Service",
+                        "Load Balanced Web Service",
+                        "Backend Service",
+                        "Worker Service"
+                      ]
+                    }
+                  },
+                  {
+                    "short": "h",
+                    "long": "help",
+                    "description": "show help",
+                    "inherit": false
+                  }
+                ]
+              },
+              {
+                "name": "ls",
+                "description": "lists all the services in an application",
+                "options": [
+                  {
+                    "long": "local",
+                    "description": "only show services in the workspace",
+                    "inherit": false
+                  },
+                  {
+                    "short": "h",
+                    "long": "help",
+                    "description": "show help",
+                    "inherit": false
+                  }
+                ]
+              },
+              {
+                "name": "package",
+                "description": "prints the aws CloudFormation template of a service",
+                "options": [
+                  {
+                    "long": "output-dir",
+                    "description": "optional. Writes the stack template and template configuration to a directory",
+                    "inherit": false,
+                    "value": {
+                      "name": "output-dir"
+                    }
+                  },
+                  {
+                    "long": "tag",
+                    "description": "optional. The container image tag",
+                    "inherit": false,
+                    "value": {
+                      "name": "tag"
+                    }
+                  },
+                  {
+                    "short": "h",
+                    "long": "help",
+                    "description": "show help",
+                    "inherit": false
+                  }
+                ]
+              },
+              {
+                "name": "deploy",
+                "description": "deploys a service to an environment",
+                "options": [
+                  {
+                    "long": "force",
+                    "description": "optional. Force a new service deployment using the existing image",
+                    "inherit": false
+                  },
+                  {
+                    "long": "resource-tags",
+                    "description": "optional. Labels with a key and value separated by commas. Allows you to categorize resources",
+                    "inherit": false,
+                    "value": {
+                      "name": "resource-tags"
+                    }
+                  },
+                  {
+                    "long": "tag",
+                    "description": "optional. The container image tag",
+                    "inherit": false,
+                    "value": {
+                      "name": "tag"
+                    }
+                  },
+                  {
+                    "short": "h",
+                    "long": "help",
+                    "description": "show help",
+                    "inherit": false
+                  }
+                ]
+              },
+              {
+                "name": "delete",
+                "description": "deletes a service from an application",
+                "options": [
+                  {
+                    "short": "h",
+                    "long": "help",
+                    "description": "show help",
+                    "inherit": false
+                  }
+                ]
+              },
+              {
+                "name": "show",
+                "description": "shows info about a deployed service per environment",
+                "options": [
+                  {
+                    "long": "resources",
+                    "description": "optional. Show the resources in your service",
+                    "inherit": false
+                  },
+                  {
+                    "short": "h",
+                    "long": "help",
+                    "description": "show help",
+                    "inherit": false
+                  }
+                ]
+              },
+              {
+                "name": "status",
+                "description": "shows status of a deployed service",
+                "options": [
+                  {
+                    "short": "h",
+                    "long": "help",
+                    "description": "show help",
+                    "inherit": false
+                  }
+                ]
+              },
+              {
+                "name": "logs",
+                "description": "displays logs of a deployed service",
+                "options": [
+                  {
+                    "long": "end-time",
+                    "description": "optional. Only return logs before a specific date (RFC3339). Defaults to all logs",
+                    "inherit": false,
+                    "value": {
+                      "name": "end-time"
+                    }
+                  },
+                  {
+                    "long": "follow",
+                    "description": "optional. Specifies if the logs should be streamed",
+                    "inherit": false
+                  },
+                  {
+                    "long": "limit",
+                    "description": "optional. The maximum number of log events returned. Default is 10 unless any time filtering flags are set",
+                    "inherit": false,
+                    "value": {
+                      "name": "limit"
+                    }
+                  },
+                  {
+                    "long": "log-group",
+                    "description": "optional. Only return logs from specific log group",
+                    "inherit": false,
+                    "value": {
+                      "name": "log-group"
+                    }
+                  },
+                  {
+                    "long": "since",
+                    "description": "optional. Only return logs newer than a relative duration like 5s, 2m, or 3h. Defaults to all logs",
+                    "inherit": false,
+                    "value": {
+                      "name": "since"
+                    }
+                  },
+                  {
+                    "long": "start-time",
+                    "description": "optional. Only return logs after a specific date (RFC3339). Defaults to all logs",
+                    "inherit": false,
+                    "value": {
+                      "name": "start-time"
+                    }
+                  },
+                  {
+                    "long": "tasks",
+                    "description": "optional. Only return logs from specific task IDs",
+                    "inherit": false,
+                    "value": {
+                      "name": "tasks"
+                    }
+                  },
+                  {
+                    "short": "h",
+                    "long": "help",
+                    "description": "show help",
+                    "inherit": false
+                  }
+                ]
+              },
+              {
+                "name": "exec",
+                "description": "execute a command in a running container part of a service",
+                "options": [
+                  {
+                    "long": "command",
+                    "short": "c",
+                    "description": "optional. The command that is passed to a running container",
+                    "inherit": false,
+                    "value": {
+                      "name": "command"
+                    }
+                  },
+                  {
+                    "long": "container",
+                    "description": "optional. The specific container you want to exec in. By default the first essential container will be used",
+                    "inherit": false,
+                    "value": {
+                      "name": "container"
+                    }
+                  },
+                  {
+                    "long": "name",
+                    "short": "n",
+                    "description": "name of the service, job, or task group",
+                    "inherit": false,
+                    "value": {
+                      "name": "name",
+                      "provider": "copilot.services"
+                    }
+                  },
+                  {
+                    "long": "task-id",
+                    "description": "optional. ID of the task you want to exec in",
+                    "inherit": false,
+                    "value": {
+                      "name": "task-id"
+                    }
+                  },
+                  {
+                    "long": "yes",
+                    "description": "skip confirmation",
+                    "inherit": false
+                  },
+                  {
+                    "short": "h",
+                    "long": "help",
+                    "description": "show help",
+                    "inherit": false
+                  }
+                ]
+              },
+              {
+                "name": "pause",
+                "description": "pause running App Runner service",
+                "options": [
+                  {
+                    "short": "h",
+                    "long": "help",
+                    "description": "show help",
+                    "inherit": false
+                  }
+                ]
+              },
+              {
+                "name": "resume",
+                "description": "resumes a paused service",
+                "options": [
+                  {
+                    "short": "h",
+                    "long": "help",
+                    "description": "show help",
+                    "inherit": false
+                  }
+                ]
+              }
+            ],
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "job",
+            "description": "commands for jobs. Jobs are tasks that are triggered by events",
+            "subcommands": [
+              {
+                "name": "init",
+                "description": "creates a new scheduled job in an application",
+                "options": [
+                  {
+                    "long": "dockerfile",
+                    "short": "d",
+                    "description": "path to the Dockerfile",
+                    "inherit": false,
+                    "value": {
+                      "name": "dockerfile",
+                      "provider": "builtin.files"
+                    }
+                  },
+                  {
+                    "long": "image",
+                    "short": "i",
+                    "description": "the location of an existing Docker image",
+                    "inherit": false,
+                    "value": {
+                      "name": "image"
+                    }
+                  },
+                  {
+                    "long": "job-type",
+                    "short": "t",
+                    "description": "type of job to create",
+                    "inherit": false,
+                    "value": {
+                      "name": "job-type",
+                      "values": [
+                        "Scheduled Job"
+                      ]
+                    }
+                  },
+                  {
+                    "long": "name",
+                    "short": "n",
+                    "description": "name of the job",
+                    "inherit": false,
+                    "value": {
+                      "name": "name",
+                      "provider": "copilot.services"
+                    }
+                  },
+                  {
+                    "long": "retries",
+                    "description": "optional. The number of times to try restarting the job on a failure",
+                    "inherit": false,
+                    "value": {
+                      "name": "retries"
+                    }
+                  },
+                  {
+                    "long": "schedule",
+                    "short": "s",
+                    "description": "the schedule on which to run this job. Accepts cron expressions of the format (M H DoM M DoW) and schedule defin",
+                    "inherit": false,
+                    "value": {
+                      "name": "schedule"
+                    }
+                  },
+                  {
+                    "long": "timeout",
+                    "description": "optional. The total execution time for the task, including retries. Accepts valid Go duration strings. For examp",
+                    "inherit": false,
+                    "value": {
+                      "name": "timeout"
+                    }
+                  },
+                  {
+                    "short": "h",
+                    "long": "help",
+                    "description": "show help",
+                    "inherit": false
+                  }
+                ]
+              },
+              {
+                "name": "ls",
+                "description": "lists all the jobs in an application",
+                "options": [
+                  {
+                    "long": "local",
+                    "description": "only show jobs in the workspace",
+                    "inherit": false
+                  },
+                  {
+                    "short": "h",
+                    "long": "help",
+                    "description": "show help",
+                    "inherit": false
+                  }
+                ]
+              },
+              {
+                "name": "package",
+                "description": "prints the aws CloudFormation template of a job",
+                "options": [
+                  {
+                    "long": "name",
+                    "short": "n",
+                    "description": "name of the job",
+                    "inherit": false,
+                    "value": {
+                      "name": "name",
+                      "provider": "copilot.services"
+                    }
+                  },
+                  {
+                    "long": "output-dir",
+                    "description": "optional. Writes the stack template and template configuration to a directory",
+                    "inherit": false,
+                    "value": {
+                      "name": "output-dir"
+                    }
+                  },
+                  {
+                    "long": "tag",
+                    "description": "optional. The container image tag",
+                    "inherit": false,
+                    "value": {
+                      "name": "tag"
+                    }
+                  },
+                  {
+                    "short": "h",
+                    "long": "help",
+                    "description": "show help",
+                    "inherit": false
+                  }
+                ]
+              },
+              {
+                "name": "deploy",
+                "description": "deploys a job to an environment",
+                "options": [
+                  {
+                    "long": "name",
+                    "short": "n",
+                    "description": "name of the job",
+                    "inherit": false,
+                    "value": {
+                      "name": "name",
+                      "provider": "copilot.services"
+                    }
+                  },
+                  {
+                    "long": "resource-tags",
+                    "description": "optional. Labels with a key and value separated by commas. Allows you to categorize resources",
+                    "inherit": false,
+                    "value": {
+                      "name": "resource-tags"
+                    }
+                  },
+                  {
+                    "long": "tag",
+                    "description": "optional. The container image tag",
+                    "inherit": false,
+                    "value": {
+                      "name": "tag"
+                    }
+                  },
+                  {
+                    "short": "h",
+                    "long": "help",
+                    "description": "show help",
+                    "inherit": false
+                  }
+                ]
+              },
+              {
+                "name": "delete",
+                "description": "deletes a job from an application",
+                "options": [
+                  {
+                    "long": "name",
+                    "short": "n",
+                    "description": "name of the job",
+                    "inherit": false,
+                    "value": {
+                      "name": "name",
+                      "provider": "copilot.services"
+                    }
+                  },
+                  {
+                    "short": "h",
+                    "long": "help",
+                    "description": "show help",
+                    "inherit": false
+                  }
+                ]
+              }
+            ],
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "task",
+            "description": "commands for tasks. One-off Amazon ECS tasks that terminate once their work is done",
+            "subcommands": [
+              {
+                "name": "run",
+                "description": "run a one-off task on Amazon ECS",
+                "options": [
+                  {
+                    "long": "app",
+                    "description": "optional. Name of the application",
+                    "inherit": false,
+                    "value": {
+                      "name": "app",
+                      "provider": "copilot.apps"
+                    }
+                  },
+                  {
+                    "long": "build-context",
+                    "description": "path to the Docker build context",
+                    "inherit": false,
+                    "value": {
+                      "name": "build-context"
+                    }
+                  },
+                  {
+                    "long": "cluster",
+                    "description": "optional. The short name or full ARN of the cluster to run the task in",
+                    "inherit": false,
+                    "value": {
+                      "name": "cluster"
+                    }
+                  },
+                  {
+                    "long": "command",
+                    "description": "optional. The command that is passed to \"docker run\" to override the default command",
+                    "inherit": false,
+                    "value": {
+                      "name": "command"
+                    }
+                  },
+                  {
+                    "long": "count",
+                    "description": "optional. The number of tasks to set up",
+                    "inherit": false,
+                    "value": {
+                      "name": "count"
+                    }
+                  },
+                  {
+                    "long": "cpu",
+                    "description": "optional. The number of CPU units to reserve for each task",
+                    "inherit": false,
+                    "value": {
+                      "name": "cpu"
+                    }
+                  },
+                  {
+                    "long": "default",
+                    "description": "optional. Run tasks in default cluster and default subnets",
+                    "inherit": false
+                  },
+                  {
+                    "long": "dockerfile",
+                    "description": "path to the Dockerfile",
+                    "inherit": false,
+                    "value": {
+                      "name": "dockerfile",
+                      "provider": "builtin.files"
+                    }
+                  },
+                  {
+                    "long": "entrypoint",
+                    "description": "optional. The entrypoint that is passed to \"docker run\" to override the default entrypoint",
+                    "inherit": false,
+                    "value": {
+                      "name": "entrypoint"
+                    }
+                  },
+                  {
+                    "long": "env",
+                    "description": "optional. Name of the environment",
+                    "inherit": false,
+                    "value": {
+                      "name": "env",
+                      "provider": "copilot.envs"
+                    }
+                  },
+                  {
+                    "long": "env-vars",
+                    "description": "optional. Environment variables specified by key=value separated by commas",
+                    "inherit": false,
+                    "value": {
+                      "name": "env-vars"
+                    }
+                  },
+                  {
+                    "long": "execution-role",
+                    "description": "optional. The ARN of the role that grants the container agent permission to make aws API calls",
+                    "inherit": false,
+                    "value": {
+                      "name": "execution-role"
+                    }
+                  },
+                  {
+                    "long": "follow",
+                    "description": "optional. Specifies if the logs should be streamed",
+                    "inherit": false
+                  },
+                  {
+                    "long": "generate-cmd",
+                    "description": "optional. Generate a command with a pre-filled value for each flag. To use it for an ECS service, specify --gene",
+                    "inherit": false,
+                    "value": {
+                      "name": "generate-cmd"
+                    }
+                  },
+                  {
+                    "long": "image",
+                    "short": "i",
+                    "description": "the location of an existing Docker image",
+                    "inherit": false,
+                    "value": {
+                      "name": "image"
+                    }
+                  },
+                  {
+                    "long": "memory",
+                    "description": "optional. The amount of memory to reserve in MiB for each task",
+                    "inherit": false,
+                    "value": {
+                      "name": "memory"
+                    }
+                  },
+                  {
+                    "long": "platform-arch",
+                    "description": "optional. Architecture of the task. Must be specified along with 'platform-os'",
+                    "inherit": false,
+                    "value": {
+                      "name": "platform-arch"
+                    }
+                  },
+                  {
+                    "long": "platform-os",
+                    "description": "optional. Operating system of the task. Must be specified along with 'platform-arch'",
+                    "inherit": false,
+                    "value": {
+                      "name": "platform-os"
+                    }
+                  },
+                  {
+                    "long": "resource-tags",
+                    "description": "optional. Labels with a key and value separated by commas. Allows you to categorize resources",
+                    "inherit": false,
+                    "value": {
+                      "name": "resource-tags"
+                    }
+                  },
+                  {
+                    "long": "secrets",
+                    "description": "optional. Secrets to inject into the container. Specified by key=value separated by commas",
+                    "inherit": false,
+                    "value": {
+                      "name": "secrets"
+                    }
+                  },
+                  {
+                    "long": "security-groups",
+                    "description": "optional. The security group IDs for the task to use. Can be specified multiple times",
+                    "inherit": false,
+                    "value": {
+                      "name": "security-groups"
+                    }
+                  },
+                  {
+                    "long": "subnets",
+                    "description": "optional. The subnet IDs for the task to use. Can be specified multiple times",
+                    "inherit": false,
+                    "value": {
+                      "name": "subnets"
+                    }
+                  },
+                  {
+                    "long": "tag",
+                    "description": "optional. The container image tag in addition to \"latest\"",
+                    "inherit": false,
+                    "value": {
+                      "name": "tag"
+                    }
+                  },
+                  {
+                    "long": "task-group-name",
+                    "short": "n",
+                    "description": "optional. The group name of the task. Tasks with the same group name share the same set of resources. (default d",
+                    "inherit": false,
+                    "value": {
+                      "name": "task-group-name"
+                    }
+                  },
+                  {
+                    "long": "task-role",
+                    "description": "optional. The ARN of the role for the task to use",
+                    "inherit": false,
+                    "value": {
+                      "name": "task-role"
+                    }
+                  },
+                  {
+                    "short": "h",
+                    "long": "help",
+                    "description": "show help",
+                    "inherit": false
+                  }
+                ]
+              },
+              {
+                "name": "exec",
+                "description": "execute a command in a running container part of a task",
+                "options": [
+                  {
+                    "long": "command",
+                    "short": "c",
+                    "description": "optional. The command that is passed to a running container",
+                    "inherit": false,
+                    "value": {
+                      "name": "command"
+                    }
+                  },
+                  {
+                    "long": "default",
+                    "description": "optional. Execute commands in running tasks in default cluster and default subnets",
+                    "inherit": false
+                  },
+                  {
+                    "long": "name",
+                    "short": "n",
+                    "description": "name of the service, job, or task group",
+                    "inherit": false,
+                    "value": {
+                      "name": "name",
+                      "provider": "copilot.services"
+                    }
+                  },
+                  {
+                    "long": "task-id",
+                    "description": "optional. ID of the task you want to exec in",
+                    "inherit": false,
+                    "value": {
+                      "name": "task-id"
+                    }
+                  },
+                  {
+                    "long": "yes",
+                    "description": "skip confirmation",
+                    "inherit": false
+                  },
+                  {
+                    "short": "h",
+                    "long": "help",
+                    "description": "show help",
+                    "inherit": false
+                  }
+                ]
+              },
+              {
+                "name": "delete",
+                "description": "deletes a one-off task from an application or default cluster",
+                "options": [
+                  {
+                    "long": "default",
+                    "description": "optional. Delete a task which was launched in the default cluster and subnets",
+                    "inherit": false
+                  },
+                  {
+                    "short": "h",
+                    "long": "help",
+                    "description": "show help",
+                    "inherit": false
+                  }
+                ]
+              }
+            ],
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "storage",
+            "description": "commands for working with storage and databases",
+            "subcommands": [
+              {
+                "name": "init",
+                "description": "creates a new aws CloudFormation template for a storage resource",
+                "options": [
+                  {
+                    "long": "engine",
+                    "description": "the database engine used in the cluster. Must be either \"MySQL\" or \"PostgreSQL\"",
+                    "inherit": false,
+                    "value": {
+                      "name": "engine"
+                    }
+                  },
+                  {
+                    "long": "initial-db",
+                    "description": "the initial database to create in the cluster",
+                    "inherit": false,
+                    "value": {
+                      "name": "initial-db"
+                    }
+                  },
+                  {
+                    "long": "lsi",
+                    "description": "optional. Attribute to use as an alternate sort key. May be specified up to 5 times. Must be of the format '<key",
+                    "repeatable": true,
+                    "inherit": false,
+                    "value": {
+                      "name": "lsi"
+                    }
+                  },
+                  {
+                    "long": "name",
+                    "short": "n",
+                    "description": "name of the storage resource to create",
+                    "inherit": false,
+                    "value": {
+                      "name": "name",
+                      "provider": "copilot.services"
+                    }
+                  },
+                  {
+                    "long": "no-lsi",
+                    "description": "optional. Don't ask about configuring alternate sort keys",
+                    "inherit": false
+                  },
+                  {
+                    "long": "no-sort",
+                    "description": "optional. Skip configuring sort keys",
+                    "inherit": false
+                  },
+                  {
+                    "long": "parameter-group",
+                    "description": "optional. The name of the parameter group to associate with the cluster",
+                    "inherit": false,
+                    "value": {
+                      "name": "parameter-group"
+                    }
+                  },
+                  {
+                    "long": "partition-key",
+                    "description": "partition key for the DDB table. Must be of the format '<keyName>:<dataType>'",
+                    "inherit": false,
+                    "value": {
+                      "name": "partition-key"
+                    }
+                  },
+                  {
+                    "long": "sort-key",
+                    "description": "optional. Sort key for the DDB table. Must be of the format '<keyName>:<dataType>'",
+                    "inherit": false,
+                    "value": {
+                      "name": "sort-key"
+                    }
+                  },
+                  {
+                    "long": "storage-type",
+                    "short": "t",
+                    "description": "type of storage to add. Must be one of: \"DynamoDB\", \"S3\", \"Aurora\"",
+                    "inherit": false,
+                    "value": {
+                      "name": "storage-type"
+                    }
+                  },
+                  {
+                    "long": "workload",
+                    "short": "w",
+                    "description": "name of the service or job to associate with storage",
+                    "inherit": false,
+                    "value": {
+                      "name": "workload"
+                    }
+                  },
+                  {
+                    "short": "h",
+                    "long": "help",
+                    "description": "show help",
+                    "inherit": false
+                  }
+                ]
+              }
+            ],
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "secret",
+            "description": "commands for secrets. Secrets are sensitive information that you need in your application",
+            "subcommands": [
+              {
+                "name": "init",
+                "description": "create or update secrets in SSM Parameter Store",
+                "options": [
+                  {
+                    "long": "cli-input-yaml",
+                    "description": "optional. A YAML file in which the secret values are specified",
+                    "inherit": false,
+                    "value": {
+                      "name": "cli-input-yaml"
+                    }
+                  },
+                  {
+                    "long": "name",
+                    "short": "n",
+                    "description": "the name of the secret",
+                    "inherit": false,
+                    "value": {
+                      "name": "name",
+                      "provider": "copilot.services"
+                    }
+                  },
+                  {
+                    "long": "overwrite",
+                    "description": "optional. Whether to overwrite an existing secret",
+                    "inherit": false
+                  },
+                  {
+                    "long": "values",
+                    "description": "values of the secret in each environment. Specified as <environment>=<value> separated by commas",
+                    "inherit": false,
+                    "value": {
+                      "name": "values"
+                    }
+                  },
+                  {
+                    "short": "h",
+                    "long": "help",
+                    "description": "show help",
+                    "inherit": false
+                  }
+                ]
+              }
+            ],
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "version",
+            "description": "print the version number",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "completion",
+            "description": "output shell completion code",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "pipeline",
+            "description": "commands for pipelines. Continuous delivery pipelines to release services",
+            "subcommands": [
+              {
+                "name": "init",
+                "description": "creates a pipeline for the services in your workspace",
+                "options": [
+                  {
+                    "long": "environments",
+                    "short": "e",
+                    "description": "environments to add to the pipeline",
+                    "inherit": false,
+                    "value": {
+                      "name": "environments"
+                    }
+                  },
+                  {
+                    "long": "git-branch",
+                    "short": "b",
+                    "description": "branch used to trigger your pipeline",
+                    "inherit": false,
+                    "value": {
+                      "name": "git-branch"
+                    }
+                  },
+                  {
+                    "long": "github-access-token",
+                    "short": "t",
+                    "description": "gitHub personal access token for your repository",
+                    "inherit": false,
+                    "value": {
+                      "name": "github-access-token"
+                    }
+                  },
+                  {
+                    "long": "github-url",
+                    "description": "(Deprecated.) Use --url instead. Repository URL to trigger your pipeline",
+                    "inherit": false,
+                    "deprecated": true,
+                    "value": {
+                      "name": "github-url"
+                    }
+                  },
+                  {
+                    "long": "url",
+                    "short": "u",
+                    "description": "the repository URL to trigger your pipeline. Supported providers are: GitHub, CodeCommit, Bitbucket",
+                    "inherit": false,
+                    "value": {
+                      "name": "url"
+                    }
+                  },
+                  {
+                    "short": "h",
+                    "long": "help",
+                    "description": "show help",
+                    "inherit": false
+                  }
+                ]
+              },
+              {
+                "name": "update",
+                "description": "deploys a pipeline for the services in your workspace",
+                "options": [
+                  {
+                    "short": "h",
+                    "long": "help",
+                    "description": "show help",
+                    "inherit": false
+                  }
+                ]
+              },
+              {
+                "name": "delete",
+                "description": "deletes the pipeline associated with your workspace",
+                "options": [
+                  {
+                    "long": "delete-secret",
+                    "description": "deletes aws Secrets Manager secret associated with a pipeline source repository",
+                    "inherit": false
+                  },
+                  {
+                    "short": "h",
+                    "long": "help",
+                    "description": "show help",
+                    "inherit": false
+                  }
+                ]
+              },
+              {
+                "name": "show",
+                "description": "shows info about a deployed pipeline for an application",
+                "options": [
+                  {
+                    "long": "name",
+                    "short": "n",
+                    "description": "name of the pipeline",
+                    "inherit": false,
+                    "value": {
+                      "name": "name",
+                      "provider": "copilot.services"
+                    }
+                  },
+                  {
+                    "long": "resources",
+                    "description": "optional. Show the resources in your pipeline",
+                    "inherit": false
+                  },
+                  {
+                    "short": "h",
+                    "long": "help",
+                    "description": "show help",
+                    "inherit": false
+                  }
+                ]
+              },
+              {
+                "name": "status",
+                "description": "shows the status of a pipeline",
+                "options": [
+                  {
+                    "long": "name",
+                    "short": "n",
+                    "description": "name of the pipeline",
+                    "inherit": false,
+                    "value": {
+                      "name": "name",
+                      "provider": "copilot.services"
+                    }
+                  },
+                  {
+                    "short": "h",
+                    "long": "help",
+                    "description": "show help",
+                    "inherit": false
+                  }
+                ]
+              },
+              {
+                "name": "ls",
+                "description": "lists all the deployed pipelines in an application",
+                "options": [
+                  {
+                    "short": "h",
+                    "long": "help",
+                    "description": "show help",
+                    "inherit": false
+                  }
+                ]
+              }
+            ],
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "deploy",
+            "description": "deploy a Copilot job or service",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              }
+            ]
+          }
+        ],
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          }
+        ]
+      }
+    ],
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "copilot.apps": {
+        "function": "__rush_complete_copilot_apps"
+      },
+      "copilot.envs": {
+        "function": "__rush_complete_copilot_envs"
+      },
+      "copilot.services": {
+        "function": "__rush_complete_copilot_services"
+      }
+    },
+    "options": [
+      {
+        "short": "h",
+        "long": "help",
+        "description": "show help",
+        "inherit": false
+      }
+    ]
+  }
+}
