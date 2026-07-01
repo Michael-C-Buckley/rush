@@ -1,0 +1,59 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "chsh",
+    "description": "change login shell",
+    "options": [
+      {
+        "short": "s",
+        "long": "shell",
+        "description": "specify login shell",
+        "inherit": false,
+        "value": {
+          "name": "shell",
+          "provider": "chsh.shells"
+        }
+      },
+      {
+        "short": "l",
+        "long": "list-shells",
+        "description": "print list of shells and exit",
+        "inherit": false
+      },
+      {
+        "short": "u",
+        "long": "help",
+        "spellings": [
+          "-h"
+        ],
+        "description": "print help message and exit",
+        "inherit": false
+      },
+      {
+        "short": "v",
+        "long": "version",
+        "description": "print version and exit",
+        "inherit": false
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "user",
+          "description": "user to modify",
+          "index": 0,
+          "provider": "chsh.users"
+        }
+      ]
+    },
+    "providers": {
+      "chsh.shells": {
+        "function": "__rush_complete_chsh_shells"
+      },
+      "chsh.users": {
+        "function": "__rush_complete_chsh_users"
+      }
+    }
+  }
+}

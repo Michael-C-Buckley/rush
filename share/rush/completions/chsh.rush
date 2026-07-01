@@ -1,0 +1,11 @@
+__rush_complete_chsh_shells() {
+  sed '/^[[:space:]]*#/d; /^[[:space:]]*$/d' /etc/shells 2>/dev/null | while IFS= read -r shell; do
+    test -n "$shell" && rush_complete candidate "$shell" --kind file --description shell
+  done
+}
+
+__rush_complete_chsh_users() {
+  cut -d: -f1 /etc/passwd 2>/dev/null | while IFS= read -r user; do
+    test -n "$user" && rush_complete candidate "$user" --kind plain --description user
+  done
+}
