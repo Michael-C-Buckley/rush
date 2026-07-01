@@ -1,0 +1,1087 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "fin",
+    "description": "manage Docksal projects",
+    "subcommands": [
+      {
+        "name": "help",
+        "description": "shows help"
+      },
+      {
+        "name": "addon",
+        "description": "addons management commands: install, remove (fin help addon)",
+        "subcommands": [
+          {
+            "name": "install",
+            "description": "install addon",
+            "arguments": {
+              "states": [
+                {
+                  "name": "Name",
+                  "description": "see available addons in the Addons Repository https://github.com/docksal/addons",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "remove",
+            "description": "remove addon",
+            "arguments": {
+              "states": [
+                {
+                  "name": "Name",
+                  "index": 0
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "alias",
+        "description": "manage aliases that allow fin @alias execution (fin help alias). Create/update alias with <alias_name> that links to <path>",
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "index": 0
+            },
+            {
+              "name": "alias_name",
+              "index": 1
+            }
+          ]
+        },
+        "subcommands": [
+          {
+            "name": "list",
+            "description": "show aliases list"
+          },
+          {
+            "name": "remove",
+            "description": "remove alias",
+            "arguments": {
+              "states": [
+                {
+                  "name": "alias_name",
+                  "index": 0
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "db",
+        "description": "manage databases (fin help db)",
+        "options": [
+          {
+            "long": "db",
+            "description": "use another database (default is the one set with 'MYSQL_DATABASE')",
+            "inherit": false,
+            "value": {
+              "name": "database"
+            }
+          },
+          {
+            "long": "db-user",
+            "description": "use another mysql username (default is 'root')",
+            "inherit": false,
+            "value": {
+              "name": "user"
+            }
+          },
+          {
+            "long": "db-password",
+            "description": "use another database password (default is the one set with 'MYSQL_ROOT_PASSWORD', see fin config)",
+            "inherit": false,
+            "value": {
+              "name": "password"
+            }
+          },
+          {
+            "long": "db-charset",
+            "description": "override charset when creating a database (default is utf8)",
+            "inherit": false,
+            "value": {
+              "name": "charset"
+            }
+          },
+          {
+            "long": "db-collation",
+            "description": "override collation when creating a database (default is utf8_general_ci)",
+            "inherit": false,
+            "value": {
+              "name": "collation"
+            }
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "import",
+            "description": "truncate the database and import from SQL dump file or stdin",
+            "options": [
+              {
+                "long": "progress",
+                "description": "show import progess (requires pv)",
+                "inherit": false
+              },
+              {
+                "long": "no-truncate",
+                "description": "do no truncate database before import",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "file",
+                  "provider": "builtin.files",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "dump",
+            "description": "dump a database into an SQL dump file or stdout",
+            "arguments": {
+              "states": [
+                {
+                  "name": "file",
+                  "provider": "builtin.files",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "list",
+            "aliases": [
+              "ls"
+            ],
+            "description": "show list of existing databases"
+          },
+          {
+            "name": "cli",
+            "description": "open command line interface to the DB server (and execute query if provided)",
+            "arguments": {
+              "states": [
+                {
+                  "name": "query",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "create",
+            "description": "create a database",
+            "arguments": {
+              "states": [
+                {
+                  "name": "name",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "drop",
+            "description": "delete a database",
+            "arguments": {
+              "states": [
+                {
+                  "name": "name",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "truncate",
+            "description": "truncate a database (defaults to the `default`)",
+            "arguments": {
+              "states": [
+                {
+                  "name": "name",
+                  "index": 0
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "hosts",
+        "description": "hosts file commands: add, remove, list (fin help hosts)",
+        "subcommands": [
+          {
+            "name": "add",
+            "description": "add hostname to hosts file. If none provided uses VIRTUAL_HOST",
+            "arguments": {
+              "states": [
+                {
+                  "name": "hostname",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "remove",
+            "description": "remove lines containing hostname from hosts file. If none provided uses VIRTUAL_HOST",
+            "arguments": {
+              "states": [
+                {
+                  "name": "hostname",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "list",
+            "description": "output hosts file"
+          }
+        ]
+      },
+      {
+        "name": "project",
+        "description": "manage project(s) (fin help project)",
+        "subcommands": [
+          {
+            "name": "start",
+            "description": "start project services (alias: fin start)"
+          },
+          {
+            "name": "up",
+            "description": "configuration re-read and start project services (alias: fin up)"
+          },
+          {
+            "name": "stop",
+            "description": "stop all or specified project services (alias: fin stop)",
+            "options": [
+              {
+                "long": "all",
+                "short": "a",
+                "description": "stop all services on all Docksal projects",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "service",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "status",
+            "description": "list project services (alias: fin ps)"
+          },
+          {
+            "name": "restart",
+            "description": "restart project services (alias: fin restart)"
+          },
+          {
+            "name": "reset",
+            "description": "recreate all or specified project services, their containers and volumes",
+            "arguments": {
+              "states": [
+                {
+                  "name": "service",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "remove",
+            "aliases": [
+              "rm"
+            ],
+            "description": "remove all project services, networks and all their volumes, or specified services only",
+            "options": [
+              {
+                "long": "force",
+                "short": "f",
+                "description": "do not ask for confirmation when deleting all project services",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "service",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "list",
+            "description": "list running Docksal projects (alias: fin pl)",
+            "options": [
+              {
+                "long": "all",
+                "short": "a",
+                "description": "list all Docksal projects (stopped as well)",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "create",
+            "description": "create a new project with a pre-configured boilerplate: Drupal, Wordpress, Magento, Laravel, Backdrop, Hugo, Gatsby, and others",
+            "options": [
+              {
+                "long": "name",
+                "description": "provide project name upfront",
+                "inherit": false,
+                "value": {
+                  "name": "name"
+                }
+              },
+              {
+                "long": "choice",
+                "description": "provide software choice number upfront",
+                "inherit": false,
+                "value": {
+                  "name": "#"
+                }
+              },
+              {
+                "long": "repo",
+                "description": "clone from a custom repo: name (--choice is set to '0' automatically)",
+                "inherit": false,
+                "value": {
+                  "name": "name"
+                }
+              },
+              {
+                "long": "branch",
+                "description": "clone from a custom repo: branch name (optional)",
+                "inherit": false,
+                "value": {
+                  "name": "name"
+                }
+              },
+              {
+                "long": "yes",
+                "short": "y",
+                "description": "avoid confirmation",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "config",
+            "description": "show project configuration"
+          },
+          {
+            "name": "build",
+            "description": "build or rebuild services (alias for 'docker-compose build')"
+          }
+        ]
+      },
+      {
+        "name": "ssh-key",
+        "description": "manage SSH keys (fin help ssh-key)",
+        "subcommands": [
+          {
+            "name": "add",
+            "description": "add a private SSH key from $HOME/.ssh by file name. Adds all default keys (id_rsa/id_dsa/id_ecdsa/id_ed25519) if no file name is given",
+            "options": [
+              {
+                "long": "quiet",
+                "description": "suppress key already loaded notifications",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "key-name",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "ls",
+            "description": "list SSH keys loaded in the docksal-ssh-agent"
+          },
+          {
+            "name": "rm",
+            "description": "remove all keys from the docksal-ssh-agent"
+          },
+          {
+            "name": "new",
+            "description": "generate a new SSH key pair",
+            "arguments": {
+              "states": [
+                {
+                  "name": "key-name",
+                  "index": 0
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "system",
+        "description": "manage Docksal state (fin help system)",
+        "subcommands": [
+          {
+            "name": "reset",
+            "description": "reset Docksal"
+          },
+          {
+            "name": "start",
+            "description": "start Docksal"
+          },
+          {
+            "name": "stop",
+            "description": "stop Docksal"
+          },
+          {
+            "name": "status",
+            "description": "check Docksal status"
+          }
+        ]
+      },
+      {
+        "name": "vm",
+        "description": "manage Docksal VM (fin help vm)",
+        "subcommands": [
+          {
+            "name": "start",
+            "description": "start the machine (create if needed)"
+          },
+          {
+            "name": "stop",
+            "description": "stop the machine"
+          },
+          {
+            "name": "kill",
+            "description": "forcibly stop the machine"
+          },
+          {
+            "name": "restart",
+            "description": "restart the machine"
+          },
+          {
+            "name": "status",
+            "description": "get the status"
+          },
+          {
+            "name": "ssh",
+            "description": "log into ssh or run a command via ssh",
+            "arguments": {
+              "states": [
+                {
+                  "name": "command",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "remove",
+            "description": "remove Docksal machine and cleanup after it"
+          },
+          {
+            "name": "ip",
+            "description": "show the machine IP address"
+          },
+          {
+            "name": "ls",
+            "description": "list all docker machines"
+          },
+          {
+            "name": "env",
+            "description": "display the commands to set up the shell for direct use of Docker client"
+          },
+          {
+            "name": "mount",
+            "description": "try remounting host filesystem (NFS on macOS, SMB on Windows)"
+          },
+          {
+            "name": "ram",
+            "description": "show memory size",
+            "arguments": {
+              "states": [
+                {
+                  "name": "megabyte",
+                  "description": "set memory size. Default is 1024 (requires vm restart)",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "hdd",
+            "description": "show disk size and usage"
+          },
+          {
+            "name": "stats",
+            "description": "show CPU and network usage"
+          },
+          {
+            "name": "regenerate-certs",
+            "description": "regenerate TLS certificates and restart the VM"
+          }
+        ]
+      },
+      {
+        "name": "bash",
+        "description": "open shell into service's container. Defaults to cli",
+        "arguments": {
+          "states": [
+            {
+              "name": "service",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "config",
+        "description": "show or change configuration (fin help config)",
+        "subcommands": [
+          {
+            "name": "show",
+            "description": "display configuration for the current project",
+            "options": [
+              {
+                "long": "show-secrets",
+                "description": "do not truncate value of SECRET_* environment vars",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "env",
+            "description": "display only environment variables section"
+          },
+          {
+            "name": "yml",
+            "description": "display static YML project config suitable for export (NOTE: SECRET_* values will not be hidden)"
+          },
+          {
+            "name": "generate",
+            "description": "generate empty Docksal configuration for the project",
+            "options": [
+              {
+                "long": "stack",
+                "description": "set non-default DOCKSAL_STACK during config generate",
+                "inherit": false,
+                "value": {
+                  "name": "stack"
+                }
+              },
+              {
+                "long": "docroot",
+                "description": "set non-default DOCROOT during config generate",
+                "inherit": false,
+                "value": {
+                  "name": "directory"
+                }
+              }
+            ]
+          },
+          {
+            "name": "set",
+            "description": "set value(s) for the variable(s) in project ENV file",
+            "options": [
+              {
+                "long": "global",
+                "description": "set for global ENV file",
+                "inherit": false
+              },
+              {
+                "long": "env",
+                "description": "set in environment specific project ENV file",
+                "inherit": false,
+                "value": {
+                  "name": "name",
+                  "provider": "builtin.files"
+                }
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "VAR=VAL",
+                  "index": 0,
+                  "repeatable": true
+                }
+              ]
+            }
+          },
+          {
+            "name": "remove",
+            "aliases": [
+              "rm"
+            ],
+            "description": "remove variable(s) from project ENV file",
+            "options": [
+              {
+                "long": "global",
+                "description": "remove from global ENV file",
+                "inherit": false
+              },
+              {
+                "long": "env",
+                "description": "remove from environment specific project ENV file",
+                "inherit": false,
+                "value": {
+                  "name": "name"
+                }
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "VAR",
+                  "index": 0,
+                  "repeatable": true
+                }
+              ]
+            }
+          },
+          {
+            "name": "get",
+            "description": "get the value of the single variable from project ENV file",
+            "options": [
+              {
+                "long": "global",
+                "description": "get value from global ENV file",
+                "inherit": false
+              },
+              {
+                "long": "env",
+                "description": "get value from environment specific project ENV file",
+                "inherit": false,
+                "value": {
+                  "name": "name",
+                  "provider": "builtin.files"
+                }
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "VAR",
+                  "index": 0
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "exec",
+        "description": "execute a command or a script in cli",
+        "arguments": {
+          "states": [
+            {
+              "name": "command|file",
+              "provider": "builtin.executables",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "exec-url",
+        "description": "download script from URL and run it on host (URL should be public)",
+        "arguments": {
+          "states": [
+            {
+              "name": "url",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "init",
+        "description": "initialize a project (override it with your own automation, see fin help init)"
+      },
+      {
+        "name": "image",
+        "description": "image management commands: registry, save, load (fin help image)",
+        "subcommands": [
+          {
+            "name": "registry",
+            "description": "show all Docksal images on Docker Hub",
+            "arguments": {
+              "states": [
+                {
+                  "name": "image-name",
+                  "description": "show all tags for a certain image",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "save",
+            "description": "save docker images into a tar archive",
+            "options": [
+              {
+                "long": "system",
+                "description": "save Docksal system images",
+                "inherit": false
+              },
+              {
+                "long": "project",
+                "description": "save current project's images",
+                "inherit": false
+              },
+              {
+                "long": "all",
+                "description": "save all images available on the host",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "load",
+            "description": "load docker images from a tar archive",
+            "arguments": {
+              "states": [
+                {
+                  "name": "file",
+                  "provider": "builtin.files",
+                  "index": 0
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "logs",
+        "description": "show service logs (e.g., Apache logs, MySQL logs) and Unison logs (fin help logs)",
+        "options": [
+          {
+            "short": "f",
+            "long": "follow",
+            "description": "follow log output",
+            "inherit": false
+          },
+          {
+            "long": "no-color",
+            "description": "produce monochrome output",
+            "inherit": false
+          },
+          {
+            "long": "no-log-prefix",
+            "description": "don't print prefix in logs",
+            "inherit": false
+          },
+          {
+            "long": "since",
+            "description": "show logs since timestamp (e.g. 2013-01-02T13:23:37Z) or relative (e.g. 42m for 42 minutes)",
+            "inherit": false,
+            "value": {
+              "name": "string"
+            }
+          },
+          {
+            "long": "tail",
+            "description": "number of lines to show from the end of the logs for each container. (default \"all\")",
+            "inherit": false,
+            "value": {
+              "name": "string"
+            }
+          },
+          {
+            "short": "t",
+            "long": "timestamps",
+            "description": "show timestamps",
+            "inherit": false
+          },
+          {
+            "long": "until",
+            "description": "show logs before a timestamp (e.g. 2013-01-02T13:23:37Z) or relative (e.g. 42m for 42 minutes)",
+            "inherit": false,
+            "value": {
+              "name": "string"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "service",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "run-cli",
+        "aliases": [
+          "rc"
+        ],
+        "description": "run a command in a standalone cli container in the current directory (fin help run-cli)",
+        "options": [
+          {
+            "long": "clean",
+            "description": "run command with a non-persistent $HOME directory",
+            "inherit": false
+          },
+          {
+            "long": "clenup",
+            "description": "clean the persistent $HOME directory and run command",
+            "inherit": false
+          },
+          {
+            "long": "debug",
+            "description": "print container debug output",
+            "inherit": false
+          },
+          {
+            "long": "image",
+            "description": "override default container image",
+            "inherit": false,
+            "value": {
+              "name": "IMAGE"
+            }
+          },
+          {
+            "short": "e",
+            "description": "pass environment variable(s) to the container",
+            "inherit": false,
+            "value": {
+              "name": "VAR=VALUE"
+            }
+          },
+          {
+            "short": "T",
+            "description": "disable pseudo-tty allocation (useful to get clean stdout)",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "command",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "share",
+        "description": "create temporary public url for current project using ngrok",
+        "options": [
+          {
+            "long": "host",
+            "description": "override a hostname for ngrok to route to (default is $VIRTUAL_HOST)",
+            "inherit": false,
+            "value": {
+              "name": "host"
+            }
+          }
+        ]
+      },
+      {
+        "name": "share-v2",
+        "description": "create a temporary public URL for the project using Cloudflare Tunnel",
+        "subcommands": [
+          {
+            "name": "start",
+            "description": "start tunnel and print public URL"
+          },
+          {
+            "name": "stop",
+            "description": "stop tunnel"
+          },
+          {
+            "name": "status",
+            "description": "prints tunnel status and public URL (if Active)"
+          },
+          {
+            "name": "url",
+            "description": "prints tunnel public URL"
+          },
+          {
+            "name": "logs",
+            "description": "prints tunnel container logs"
+          }
+        ]
+      },
+      {
+        "name": "vhosts",
+        "description": "list all virtual *.docksal hosts registered in Docksal proxy"
+      },
+      {
+        "name": "docker",
+        "aliases": [
+          "d"
+        ],
+        "description": "run Docker commands directly"
+      },
+      {
+        "name": "docker-compose",
+        "aliases": [
+          "dc"
+        ],
+        "description": "run Docker Compose commands directly"
+      },
+      {
+        "name": "docker-machine",
+        "aliases": [
+          "dm"
+        ],
+        "description": "run Docker Machine commands directly",
+        "arguments": {
+          "states": [
+            {
+              "name": "command",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "composer",
+        "description": "run Composer commands",
+        "arguments": {
+          "states": [
+            {
+              "name": "command",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "drush",
+        "description": "drush command (requires Drupal)",
+        "arguments": {
+          "states": [
+            {
+              "name": "command",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "drupal",
+        "description": "drupal Console command (requires Drupal 8)",
+        "arguments": {
+          "states": [
+            {
+              "name": "command",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "platform",
+        "description": "platform.sh's CLI (requires docksal/cli 2.3+)",
+        "arguments": {
+          "states": [
+            {
+              "name": "command",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "terminus",
+        "description": "pantheon's Terminus (requires docksal/cli 2.1+)",
+        "arguments": {
+          "states": [
+            {
+              "name": "command",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "wp",
+        "description": "wordPress CLI command (requires WordPress)",
+        "arguments": {
+          "states": [
+            {
+              "name": "command",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "cleanup",
+        "description": "remove all unused Docker images, unused Docksal volumes and containers",
+        "options": [
+          {
+            "long": "images",
+            "description": "docker images cleanup Wizard",
+            "inherit": false
+          },
+          {
+            "long": "hard",
+            "description": "remove ALL stopped containers even unrelated to Docksal (potentially destructive operation)",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "diagnose",
+        "description": "show diagnostic information for troubleshooting and bug reporting"
+      },
+      {
+        "name": "sysinfo",
+        "description": "show system information"
+      },
+      {
+        "name": "update",
+        "description": "update Docksal",
+        "options": [
+          {
+            "spellings": [
+              "DOCKSAL_VERSION"
+            ],
+            "description": "update Docksal to the latest development version",
+            "inherit": false,
+            "value": {
+              "name": "develop"
+            }
+          }
+        ]
+      },
+      {
+        "name": "version",
+        "aliases": [
+          "v"
+        ],
+        "description": "print fin version. [v, -v] prints short version"
+      }
+    ],
+    "providers": {
+      "builtin.executables": {
+        "builtin": "executables"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
