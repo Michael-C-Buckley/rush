@@ -1,0 +1,1098 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "adb",
+    "description": "android debug bridge",
+    "options": [
+      {
+        "short": "a",
+        "description": "listen on all network interfaces, not just localhost",
+        "inherit": false
+      },
+      {
+        "short": "d",
+        "description": "use usb device (error if multiple devices connected)",
+        "inherit": false
+      },
+      {
+        "short": "e",
+        "description": "use tcp/ip device (error if multiple tcp/ip devices available)",
+        "inherit": false
+      },
+      {
+        "short": "s",
+        "description": "use device with given serial (overrides $ANDROID_SERIAL)",
+        "inherit": false,
+        "value": {
+          "name": "serial"
+        }
+      },
+      {
+        "short": "t",
+        "description": "use device with given transport id",
+        "inherit": false,
+        "value": {
+          "name": "id"
+        }
+      },
+      {
+        "short": "H",
+        "description": "name of adb server host [default=localhost]",
+        "inherit": false,
+        "value": {
+          "name": "host-name"
+        }
+      },
+      {
+        "short": "P",
+        "description": "port of adb server [default=5037]",
+        "inherit": false,
+        "value": {
+          "name": "port"
+        }
+      },
+      {
+        "short": "L",
+        "description": "listen on given socket for adb server [default=tcp:localhost:5037]",
+        "inherit": false,
+        "value": {
+          "name": "socket"
+        }
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "devices",
+        "description": "list connected devices",
+        "options": [
+          {
+            "short": "l",
+            "description": "long output",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "help",
+        "description": "show this help message"
+      },
+      {
+        "name": "get-state",
+        "description": "print offline | bootloader | device"
+      },
+      {
+        "name": "get-serialno",
+        "description": "print <serial-number>"
+      },
+      {
+        "name": "get-devpath",
+        "description": "print <device-path>"
+      },
+      {
+        "name": "remount",
+        "description": "remount partitions read-write. if a reboot is required, -R will automatically reboot the device",
+        "options": [
+          {
+            "short": "R",
+            "description": "reboot device",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "jdwp",
+        "description": "list pids of processes hosting a jdwp transport"
+      },
+      {
+        "name": "root",
+        "description": "restart adbd with root permissions"
+      },
+      {
+        "name": "unroot",
+        "description": "restart adbd without root permissions"
+      },
+      {
+        "name": "usb",
+        "description": "restart adbd listening on usb"
+      },
+      {
+        "name": "sideload",
+        "description": "sideload the given full OTA package",
+        "arguments": {
+          "states": [
+            {
+              "name": "otapackage",
+              "index": 0,
+              "provider": "builtin.files"
+            }
+          ]
+        }
+      },
+      {
+        "name": "start-server",
+        "description": "ensure that there is a server running"
+      },
+      {
+        "name": "kill-server",
+        "description": "kill the server if it is running"
+      },
+      {
+        "name": "reconnect",
+        "description": "kick connection from host side to force reconnect",
+        "subcommands": [
+          {
+            "name": "device",
+            "description": "kick connection from device side to force reconnect"
+          },
+          {
+            "name": "offline",
+            "description": "reset offline/unauthorized devices to force reconnect"
+          }
+        ]
+      },
+      {
+        "name": "tcpip",
+        "description": "restart adbd listening on TCP on PORT",
+        "arguments": {
+          "states": [
+            {
+              "name": "port",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "reboot",
+        "description": "reboot the device; defaults to booting system image but supports bootloader and recovery too. sideload reboots into recovery and automatically starts sideload m",
+        "arguments": {
+          "states": [
+            {
+              "name": "type",
+              "provider": "adb.reboot-types",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "disable-verity",
+        "description": "disable dm-verity checking on userdebug builds"
+      },
+      {
+        "name": "enable-verity",
+        "description": "re-enable dm-verity checking on userdebug builds"
+      },
+      {
+        "name": "wait-for-device",
+        "description": "wait for state=device"
+      },
+      {
+        "name": "wait-for-recovery",
+        "description": "wait for state=recovery"
+      },
+      {
+        "name": "wait-for-rescue",
+        "description": "wait for state=rescue"
+      },
+      {
+        "name": "wait-for-sideload",
+        "description": "wait for state=sideload"
+      },
+      {
+        "name": "wait-for-bootloader",
+        "description": "wait for state=bootloader"
+      },
+      {
+        "name": "wait-for-disconnect",
+        "description": "wait for state=disconnect"
+      },
+      {
+        "name": "wait-for-usb-device",
+        "description": "wait for usb in state=device"
+      },
+      {
+        "name": "wait-for-usb-recovery",
+        "description": "wait for usb in state=recovery"
+      },
+      {
+        "name": "wait-for-usb-rescue",
+        "description": "wait for usb in state=rescue"
+      },
+      {
+        "name": "wait-for-usb-sideload",
+        "description": "wait for usb in state=sideload"
+      },
+      {
+        "name": "wait-for-usb-bootloader",
+        "description": "wait for usb in state=bootloader"
+      },
+      {
+        "name": "wait-for-usb-disconnect",
+        "description": "wait for usb in state=disconnect"
+      },
+      {
+        "name": "wait-for-local-device",
+        "description": "wait for local in state=device"
+      },
+      {
+        "name": "wait-for-local-recovery",
+        "description": "wait for local in state=recovery"
+      },
+      {
+        "name": "wait-for-local-rescue",
+        "description": "wait for local in state=rescue"
+      },
+      {
+        "name": "wait-for-local-sideload",
+        "description": "wait for local in state=sideload"
+      },
+      {
+        "name": "wait-for-local-bootloader",
+        "description": "wait for local in state=bootloader"
+      },
+      {
+        "name": "wait-for-local-disconnect",
+        "description": "wait for local in state=disconnect"
+      },
+      {
+        "name": "wait-for-any-device",
+        "description": "wait for any in state=device"
+      },
+      {
+        "name": "wait-for-any-recovery",
+        "description": "wait for any in state=recovery"
+      },
+      {
+        "name": "wait-for-any-rescue",
+        "description": "wait for any in state=rescue"
+      },
+      {
+        "name": "wait-for-any-sideload",
+        "description": "wait for any in state=sideload"
+      },
+      {
+        "name": "wait-for-any-bootloader",
+        "description": "wait for any in state=bootloader"
+      },
+      {
+        "name": "wait-for-any-disconnect",
+        "description": "wait for any in state=disconnect"
+      },
+      {
+        "name": "keygen",
+        "description": "generate adb public/private key; private key stored in FILE",
+        "arguments": {
+          "states": [
+            {
+              "name": "file",
+              "provider": "builtin.files",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "logcat",
+        "description": "show device log (logcat --help for more)"
+      },
+      {
+        "name": "version",
+        "description": "show version num"
+      },
+      {
+        "name": "connect",
+        "description": "connect to a device via tcp/ip [default port=5555]",
+        "arguments": {
+          "states": [
+            {
+              "name": "host-port",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "disconnect",
+        "description": "disconnect from given tcp/ip device [default port=5555], or all",
+        "arguments": {
+          "states": [
+            {
+              "name": "host-port",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "uninstall",
+        "description": "remove this app package from the device",
+        "options": [
+          {
+            "short": "k",
+            "description": "keep the data and cache directories",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "bugreport",
+        "description": "write bugreport to given PATH [default=bugreport.zip]",
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "pair",
+        "description": "pair with a device for secure tcp/ip communication",
+        "arguments": {
+          "states": [
+            {
+              "name": "host-port",
+              "index": 0
+            },
+            {
+              "name": "pairing-code",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "ppp",
+        "description": "run ppp over usb",
+        "arguments": {
+          "states": [
+            {
+              "name": "tty",
+              "index": 0
+            },
+            {
+              "name": "parameter",
+              "index": 1,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "emu",
+        "description": "run emulator console command",
+        "arguments": {
+          "states": [
+            {
+              "name": "command",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "install",
+        "description": "push a single package to the device and install it",
+        "arguments": {
+          "states": [
+            {
+              "name": "package",
+              "provider": "builtin.files",
+              "index": 0
+            }
+          ]
+        },
+        "options": [
+          {
+            "short": "l",
+            "description": "forward-lock the app",
+            "inherit": false
+          },
+          {
+            "short": "r",
+            "description": "replace existing application",
+            "inherit": false
+          },
+          {
+            "short": "t",
+            "description": "allow test packages",
+            "inherit": false
+          },
+          {
+            "short": "d",
+            "description": "allow version code downgrade",
+            "inherit": false
+          },
+          {
+            "short": "s",
+            "description": "install on sd card",
+            "inherit": false
+          },
+          {
+            "short": "g",
+            "description": "grant runtime permissions",
+            "inherit": false
+          },
+          {
+            "long": "abi",
+            "description": "override platform default abi",
+            "inherit": false,
+            "value": {
+              "name": "abi"
+            }
+          },
+          {
+            "long": "instant",
+            "description": "install as an ephemeral app",
+            "inherit": false
+          },
+          {
+            "long": "no-streaming",
+            "description": "push apk before installing",
+            "inherit": false
+          },
+          {
+            "long": "streaming",
+            "description": "stream apk directly to package manager",
+            "inherit": false
+          },
+          {
+            "long": "fastdeploy",
+            "description": "use fast deploy",
+            "inherit": false
+          },
+          {
+            "long": "no-fastdeploy",
+            "description": "disable fast deploy",
+            "inherit": false
+          },
+          {
+            "long": "force-agent",
+            "description": "force deployment agent update",
+            "inherit": false
+          },
+          {
+            "long": "date-check-agent",
+            "description": "update agent when local version is newer",
+            "inherit": false
+          },
+          {
+            "long": "version-check-agent",
+            "description": "update agent when version code differs",
+            "inherit": false
+          },
+          {
+            "long": "local-agent",
+            "description": "use locally built deployment agent",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "install-multiple",
+        "description": "push multiple APKs to the device for a single package and install them",
+        "options": [
+          {
+            "short": "p",
+            "description": "partial application install (install-multiple only)",
+            "inherit": false
+          },
+          {
+            "short": "l",
+            "description": "forward-lock the app",
+            "inherit": false
+          },
+          {
+            "short": "r",
+            "description": "replace existing application",
+            "inherit": false
+          },
+          {
+            "short": "t",
+            "description": "allow test packages",
+            "inherit": false
+          },
+          {
+            "short": "d",
+            "description": "allow version code downgrade",
+            "inherit": false
+          },
+          {
+            "short": "s",
+            "description": "install on sd card",
+            "inherit": false
+          },
+          {
+            "short": "g",
+            "description": "grant runtime permissions",
+            "inherit": false
+          },
+          {
+            "long": "abi",
+            "description": "override platform default abi",
+            "inherit": false,
+            "value": {
+              "name": "abi"
+            }
+          },
+          {
+            "long": "instant",
+            "description": "install as an ephemeral app",
+            "inherit": false
+          },
+          {
+            "long": "no-streaming",
+            "description": "push apk before installing",
+            "inherit": false
+          },
+          {
+            "long": "streaming",
+            "description": "stream apk directly to package manager",
+            "inherit": false
+          },
+          {
+            "long": "fastdeploy",
+            "description": "use fast deploy",
+            "inherit": false
+          },
+          {
+            "long": "no-fastdeploy",
+            "description": "disable fast deploy",
+            "inherit": false
+          },
+          {
+            "long": "force-agent",
+            "description": "force deployment agent update",
+            "inherit": false
+          },
+          {
+            "long": "date-check-agent",
+            "description": "update agent when local version is newer",
+            "inherit": false
+          },
+          {
+            "long": "version-check-agent",
+            "description": "update agent when version code differs",
+            "inherit": false
+          },
+          {
+            "long": "local-agent",
+            "description": "use locally built deployment agent",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "package",
+              "provider": "builtin.files",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "install-multi-package",
+        "description": "push one or more packages to the device and install them atomically",
+        "options": [
+          {
+            "short": "p",
+            "description": "partial application install (install-multiple only)",
+            "inherit": false
+          },
+          {
+            "short": "l",
+            "description": "forward-lock the app",
+            "inherit": false
+          },
+          {
+            "short": "r",
+            "description": "replace existing application",
+            "inherit": false
+          },
+          {
+            "short": "t",
+            "description": "allow test packages",
+            "inherit": false
+          },
+          {
+            "short": "d",
+            "description": "allow version code downgrade",
+            "inherit": false
+          },
+          {
+            "short": "s",
+            "description": "install on sd card",
+            "inherit": false
+          },
+          {
+            "short": "g",
+            "description": "grant runtime permissions",
+            "inherit": false
+          },
+          {
+            "long": "abi",
+            "description": "override platform default abi",
+            "inherit": false,
+            "value": {
+              "name": "abi"
+            }
+          },
+          {
+            "long": "instant",
+            "description": "install as an ephemeral app",
+            "inherit": false
+          },
+          {
+            "long": "no-streaming",
+            "description": "push apk before installing",
+            "inherit": false
+          },
+          {
+            "long": "streaming",
+            "description": "stream apk directly to package manager",
+            "inherit": false
+          },
+          {
+            "long": "fastdeploy",
+            "description": "use fast deploy",
+            "inherit": false
+          },
+          {
+            "long": "no-fastdeploy",
+            "description": "disable fast deploy",
+            "inherit": false
+          },
+          {
+            "long": "force-agent",
+            "description": "force deployment agent update",
+            "inherit": false
+          },
+          {
+            "long": "date-check-agent",
+            "description": "update agent when local version is newer",
+            "inherit": false
+          },
+          {
+            "long": "version-check-agent",
+            "description": "update agent when version code differs",
+            "inherit": false
+          },
+          {
+            "long": "local-agent",
+            "description": "use locally built deployment agent",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "package",
+              "provider": "builtin.files",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "shell",
+        "description": "run remote shell command (interactive shell if no command given)",
+        "options": [
+          {
+            "short": "e",
+            "description": "choose escape character, or none default '~'",
+            "inherit": false
+          },
+          {
+            "short": "n",
+            "description": "do not read from stdin",
+            "inherit": false
+          },
+          {
+            "short": "T",
+            "description": "disable pty allocation",
+            "inherit": false
+          },
+          {
+            "short": "t",
+            "description": "allocate a pty if on a tty",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-tt"
+            ],
+            "description": "-tt: force pty allocation",
+            "inherit": false
+          },
+          {
+            "short": "x",
+            "description": "disable remote exit codes and stdout/stderr separation",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "commands-",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "mdns",
+        "description": "mdns utils",
+        "subcommands": [
+          {
+            "name": "check",
+            "description": "check if mdns discovery is available"
+          },
+          {
+            "name": "services",
+            "description": "list all discovered services"
+          }
+        ]
+      },
+      {
+        "name": "push",
+        "description": "copy local files/directories to device",
+        "options": [
+          {
+            "long": "sync",
+            "description": "only push files that are newer on the host than the device",
+            "inherit": false
+          },
+          {
+            "short": "n",
+            "description": "dry run: push files to device without storing to the filesystem",
+            "inherit": false
+          },
+          {
+            "short": "z",
+            "description": "enable compression",
+            "inherit": false,
+            "value": {
+              "name": "algorithm",
+              "provider": "adb.compression-algorithms"
+            }
+          },
+          {
+            "short": "Z",
+            "description": "disable compression",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "local",
+              "provider": "builtin.files",
+              "index": 0,
+              "repeatable": true
+            },
+            {
+              "name": "remote",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "sync",
+        "description": "sync a local build from $ANDROID_PRODUCT_OUT to the device (default all)",
+        "options": [
+          {
+            "short": "n",
+            "description": "dry run: push files to device without storing to the filesystem",
+            "inherit": false
+          },
+          {
+            "short": "l",
+            "description": "list files that would be copied, but do not copy them",
+            "inherit": false
+          },
+          {
+            "short": "z",
+            "description": "enable compression",
+            "inherit": false,
+            "value": {
+              "name": "algorithm",
+              "provider": "adb.compression-algorithms"
+            }
+          },
+          {
+            "short": "Z",
+            "description": "disable compression",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "value",
+              "provider": "adb.partitions",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "pull",
+        "description": "copy files/dirs from device",
+        "options": [
+          {
+            "short": "a",
+            "description": "preserve file timestamp and mode",
+            "inherit": false
+          },
+          {
+            "short": "z",
+            "description": "enable compression",
+            "inherit": false,
+            "value": {
+              "name": "algorithm",
+              "provider": "adb.compression-algorithms"
+            }
+          },
+          {
+            "short": "Z",
+            "description": "disable compression",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "remote",
+              "provider": "builtin.files",
+              "index": 0,
+              "repeatable": true
+            },
+            {
+              "name": "local",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "forward",
+        "description": "forward connection",
+        "options": [
+          {
+            "long": "list",
+            "description": "list all forward socket connections",
+            "inherit": false
+          },
+          {
+            "long": "remove",
+            "description": "remove specific forward socket connection",
+            "inherit": false,
+            "value": {
+              "name": "local"
+            }
+          },
+          {
+            "long": "remove-all",
+            "description": "remove all forward socket connections",
+            "inherit": false
+          },
+          {
+            "long": "no-rebind",
+            "description": "reversal fails if the specified socket is already bound through a previous reverse command",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "local-port|domain|device|pid",
+              "index": 0,
+              "provider": "adb.forward-connections"
+            },
+            {
+              "name": "remote-port|domain|device|pid",
+              "index": 1,
+              "provider": "adb.forward-connections"
+            }
+          ]
+        }
+      },
+      {
+        "name": "reverse",
+        "description": "reverse connection",
+        "options": [
+          {
+            "long": "list",
+            "description": "list all reverse socket connections from device",
+            "inherit": false
+          },
+          {
+            "long": "remove",
+            "description": "remove specific reverse socket connection",
+            "inherit": false,
+            "value": {
+              "name": "remote"
+            }
+          },
+          {
+            "long": "remove-all",
+            "description": "remove all reverse socket connections from device",
+            "inherit": false
+          },
+          {
+            "long": "no-rebind",
+            "description": "reversal fails if the specified socket is already bound through a previous reverse command",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "remote-port|domain|device|pid",
+              "index": 0,
+              "provider": "adb.reverse-connections"
+            },
+            {
+              "name": "local-port|domain|device|pid",
+              "index": 1,
+              "provider": "adb.reverse-connections"
+            }
+          ]
+        }
+      }
+    ],
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "adb.reboot-types": {
+        "values": [
+          {
+            "value": "bootloader"
+          },
+          {
+            "value": "recovery"
+          },
+          {
+            "value": "sideload"
+          },
+          {
+            "value": "sideload-auto-reboot"
+          }
+        ]
+      },
+      "adb.partitions": {
+        "values": [
+          {
+            "value": "all"
+          },
+          {
+            "value": "data"
+          },
+          {
+            "value": "odm"
+          },
+          {
+            "value": "oem"
+          },
+          {
+            "value": "product"
+          },
+          {
+            "value": "system"
+          },
+          {
+            "value": "system_ext"
+          },
+          {
+            "value": "vendor"
+          }
+        ]
+      },
+      "adb.compression-algorithms": {
+        "values": [
+          {
+            "value": "any"
+          },
+          {
+            "value": "none"
+          },
+          {
+            "value": "brotli"
+          }
+        ]
+      },
+      "adb.forward-connections": {
+        "values": [
+          {
+            "value": "tcp:",
+            "display": "tcp",
+            "noSpace": true
+          },
+          {
+            "value": "localabstract:",
+            "display": "localabstract",
+            "noSpace": true
+          },
+          {
+            "value": "localreserved:",
+            "display": "localreserved",
+            "noSpace": true
+          },
+          {
+            "value": "localfilesystem:",
+            "display": "localfilesystem",
+            "noSpace": true
+          },
+          {
+            "value": "dev:",
+            "display": "dev",
+            "noSpace": true
+          },
+          {
+            "value": "jdwp:",
+            "display": "jdwp",
+            "noSpace": true
+          },
+          {
+            "value": "acceptfd:",
+            "display": "acceptfd",
+            "noSpace": true
+          }
+        ]
+      },
+      "adb.reverse-connections": {
+        "values": [
+          {
+            "value": "tcp:",
+            "display": "tcp",
+            "noSpace": true
+          },
+          {
+            "value": "localabstract:",
+            "display": "localabstract",
+            "noSpace": true
+          },
+          {
+            "value": "localreserved:",
+            "display": "localreserved",
+            "noSpace": true
+          },
+          {
+            "value": "localfilesystem:",
+            "display": "localfilesystem",
+            "noSpace": true
+          }
+        ]
+      }
+    }
+  }
+}
