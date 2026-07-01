@@ -1,0 +1,259 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "awsume",
+    "description": "assume aws roles",
+    "options": [
+      {
+        "long": "help",
+        "short": "h",
+        "description": "show help for awsume",
+        "inherit": false
+      },
+      {
+        "long": "version",
+        "short": "v",
+        "description": "display the current version of awsume",
+        "inherit": false
+      },
+      {
+        "long": "output-profile",
+        "short": "o",
+        "description": "a profile to output credentials to",
+        "inherit": false,
+        "value": {
+          "name": "output-profile",
+          "provider": "awsume.profiles"
+        }
+      },
+      {
+        "long": "clean",
+        "description": "clean expired output profiles",
+        "inherit": false
+      },
+      {
+        "long": "refresh",
+        "short": "r",
+        "description": "force refresh credentials",
+        "inherit": false
+      },
+      {
+        "long": "show-commands",
+        "short": "s",
+        "description": "show the commands to set the credentials",
+        "inherit": false
+      },
+      {
+        "long": "unset",
+        "short": "u",
+        "description": "unset your aws environment variables",
+        "inherit": false
+      },
+      {
+        "long": "auto-refresh",
+        "short": "a",
+        "description": "auto refresh credentials",
+        "inherit": false
+      },
+      {
+        "long": "kill-refresher",
+        "short": "k",
+        "description": "kill autoawsume",
+        "inherit": false
+      },
+      {
+        "long": "list-profiles",
+        "short": "l",
+        "description": "list profiles, \"more\" for detail (slow)",
+        "inherit": false,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "refresh-autocomplete",
+        "description": "refresh all plugin autocomplete profiles",
+        "inherit": false
+      },
+      {
+        "long": "role-arn",
+        "description": "role arn or <partition>:<account_id>:<role_name>",
+        "inherit": false,
+        "value": {
+          "name": "role-arn"
+        }
+      },
+      {
+        "long": "principal-arn",
+        "description": "principal arn or <partition>:<account_id>:<provider_name>",
+        "inherit": false,
+        "value": {
+          "name": "principal-arn"
+        }
+      },
+      {
+        "long": "source-profile",
+        "description": "source_profile to use(role-arn only)",
+        "inherit": false,
+        "value": {
+          "name": "source-profile",
+          "provider": "awsume.profiles"
+        }
+      },
+      {
+        "long": "external-id",
+        "description": "external id to pass to the assume role",
+        "inherit": false,
+        "value": {
+          "name": "external-id"
+        }
+      },
+      {
+        "long": "mfa-token",
+        "description": "your mfa token",
+        "inherit": false,
+        "value": {
+          "name": "mfa-token"
+        }
+      },
+      {
+        "long": "region",
+        "description": "the region you want to awsume into",
+        "inherit": false,
+        "value": {
+          "name": "region"
+        }
+      },
+      {
+        "long": "session-name",
+        "description": "set a custom role session name",
+        "inherit": false,
+        "value": {
+          "name": "session-name"
+        }
+      },
+      {
+        "long": "role-duration",
+        "description": "seconds to get role creds for",
+        "inherit": false,
+        "value": {
+          "name": "role-duration"
+        }
+      },
+      {
+        "long": "with-saml",
+        "description": "use SAML (requires plugin)",
+        "inherit": false
+      },
+      {
+        "long": "with-web-identity",
+        "description": "use web identity (requires plugin)",
+        "inherit": false
+      },
+      {
+        "long": "json",
+        "description": "use JSON credentials",
+        "inherit": false,
+        "value": {
+          "name": "json",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "credentials-file",
+        "description": "target a shared credentials file",
+        "inherit": false,
+        "value": {
+          "name": "credentials-file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "config-file",
+        "description": "target a config file",
+        "inherit": false,
+        "value": {
+          "name": "config-file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "config",
+        "description": "configure awsume",
+        "inherit": false,
+        "value": {
+          "name": "option"
+        }
+      },
+      {
+        "long": "list-plugins",
+        "description": "list installed plugins",
+        "inherit": false
+      },
+      {
+        "long": "info",
+        "description": "print any info logs to stderr",
+        "inherit": false
+      },
+      {
+        "long": "debug",
+        "description": "print any debug logs to stderr",
+        "inherit": false
+      },
+      {
+        "long": "console",
+        "short": "c",
+        "description": "open aws console",
+        "inherit": false
+      },
+      {
+        "long": "console-link",
+        "spellings": [
+          "-cl"
+        ],
+        "description": "get a sign-on url",
+        "inherit": false
+      },
+      {
+        "long": "console-service",
+        "spellings": [
+          "-cs"
+        ],
+        "description": "open the console to a specific service",
+        "inherit": false,
+        "value": {
+          "name": "service"
+        }
+      },
+      {
+        "spellings": [
+          "-cls",
+          "-csl"
+        ],
+        "description": "get a sign-on url to a specific service",
+        "inherit": false,
+        "value": {
+          "name": "service"
+        }
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "profile",
+          "index": 0,
+          "provider": "awsume.profiles"
+        }
+      ]
+    },
+    "providers": {
+      "awsume.profiles": {
+        "function": "__rush_complete_awsume_profiles"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
