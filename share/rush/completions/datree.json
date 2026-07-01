@@ -1,0 +1,61 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "datree",
+    "description": "run policies against Kubernetes manifests and Helm charts",
+    "options": [
+      { "short": "h", "long": "help", "description": "show help for datree", "inherit": true }
+    ],
+    "subcommands": [
+      { "name": "completion", "description": "generate shell completion scripts" },
+      {
+        "name": "config",
+        "description": "manage datree configuration",
+        "options": [{ "short": "h", "long": "help", "description": "show help for config", "inherit": false }],
+        "subcommands": [
+          { "name": "get", "description": "get a configuration value", "options": [{ "short": "h", "long": "help", "description": "show help for get", "inherit": false }] },
+          { "name": "set", "description": "set a configuration value", "options": [{ "short": "h", "long": "help", "description": "show help for set", "inherit": false }] }
+        ]
+      },
+      { "name": "help", "description": "show help for a command" },
+      {
+        "name": "kustomize",
+        "description": "generate kustomization files from manifests",
+        "options": [{ "short": "h", "long": "help", "description": "show help for kustomize", "inherit": false }],
+        "subcommands": [
+          { "name": "test", "description": "test kustomization files", "options": [
+            { "short": "h", "long": "help", "description": "show help for test", "inherit": false },
+            { "long": "ignore-missing-schemas", "description": "ignore missing schemas", "inherit": false },
+            { "long": "no-record", "description": "do not send policy metadata", "inherit": false },
+            { "long": "only-k8s-files", "description": "evaluate only valid Kubernetes YAML files", "inherit": false },
+            { "short": "o", "long": "output", "description": "set the output format", "inherit": false, "value": { "name": "output", "provider": "datree.output-formats" } },
+            { "short": "p", "long": "policy", "description": "set the policy name", "inherit": false, "value": { "name": "policy" } },
+            { "long": "policy-config", "description": "set the local policy config file", "inherit": false, "value": { "name": "file", "provider": "builtin.files" } },
+            { "long": "schema-location", "description": "add a schema search path", "inherit": false, "repeatable": true, "value": { "name": "path", "provider": "builtin.files" } },
+            { "short": "s", "long": "schema-version", "description": "set the Kubernetes schema version", "inherit": false, "value": { "name": "version" } },
+            { "long": "verbose", "description": "display how-to-fix links", "inherit": false }
+          ] }
+        ]
+      },
+      { "name": "publish", "description": "publish a policy-as-code configuration", "options": [{ "short": "h", "long": "help", "description": "show help for publish", "inherit": false }], "arguments": { "states": [{ "name": "file", "provider": "builtin.files", "index": 0 }] } },
+      { "name": "test", "description": "trigger a policy check", "arguments": { "states": [{ "name": "file", "provider": "builtin.files", "index": 0 }] }, "options": [
+        { "short": "h", "long": "help", "description": "show help for test", "inherit": false },
+        { "long": "ignore-missing-schemas", "description": "ignore missing schemas", "inherit": false },
+        { "long": "no-record", "description": "do not send policy metadata", "inherit": false },
+        { "long": "only-k8s-files", "description": "evaluate only valid Kubernetes YAML files", "inherit": false },
+        { "short": "o", "long": "output", "description": "set the output format", "inherit": false, "value": { "name": "output", "provider": "datree.output-formats" } },
+        { "short": "p", "long": "policy", "description": "set the policy name", "inherit": false, "value": { "name": "policy" } },
+        { "long": "policy-config", "description": "set the local policy config file", "inherit": false, "value": { "name": "file", "provider": "builtin.files" } },
+        { "long": "schema-location", "description": "add a schema search path", "inherit": false, "repeatable": true, "value": { "name": "path", "provider": "builtin.files" } },
+        { "short": "s", "long": "schema-version", "description": "set the Kubernetes schema version", "inherit": false, "value": { "name": "version" } },
+        { "long": "verbose", "description": "display how-to-fix links", "inherit": false }
+      ] },
+      { "name": "version", "description": "print the version number" }
+    ],
+    "providers": {
+      "builtin.files": { "builtin": "files" },
+      "datree.output-formats": { "values": ["simple", "yaml", "json", "xml", "junit"] }
+    }
+  }
+}
