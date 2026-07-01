@@ -1,0 +1,1772 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "aws",
+    "options": [
+      {
+        "long": "profile",
+        "description": "use a named profile",
+        "inherit": false,
+        "value": {
+          "name": "profile",
+          "provider": "aws.profiles"
+        }
+      },
+      {
+        "long": "region",
+        "description": "set the aws region",
+        "inherit": false,
+        "value": {
+          "name": "region"
+        }
+      },
+      {
+        "long": "output",
+        "description": "set output format",
+        "inherit": false,
+        "value": {
+          "name": "format",
+          "values": [
+            "json",
+            "text",
+            "table",
+            "yaml",
+            "yaml-stream"
+          ]
+        }
+      },
+      {
+        "long": "endpoint-url",
+        "description": "set service endpoint url",
+        "inherit": false,
+        "value": {
+          "name": "url"
+        }
+      },
+      {
+        "long": "no-verify-ssl",
+        "description": "disable ssl certificate verification",
+        "inherit": false
+      },
+      {
+        "long": "no-paginate",
+        "description": "disable automatic pagination",
+        "inherit": false
+      },
+      {
+        "long": "page-size",
+        "description": "set service page size",
+        "inherit": false,
+        "value": {
+          "name": "size"
+        }
+      },
+      {
+        "long": "max-items",
+        "description": "set maximum returned items",
+        "inherit": false,
+        "value": {
+          "name": "count"
+        }
+      },
+      {
+        "long": "starting-token",
+        "description": "set pagination starting token",
+        "inherit": false,
+        "value": {
+          "name": "token"
+        }
+      },
+      {
+        "long": "query",
+        "description": "filter response with jmespath",
+        "inherit": false,
+        "value": {
+          "name": "expression"
+        }
+      },
+      {
+        "long": "cli-input-json",
+        "description": "read parameters from json",
+        "inherit": false,
+        "value": {
+          "name": "json"
+        }
+      },
+      {
+        "long": "cli-input-yaml",
+        "description": "read parameters from yaml",
+        "inherit": false,
+        "value": {
+          "name": "yaml"
+        }
+      },
+      {
+        "long": "generate-cli-skeleton",
+        "description": "print a cli skeleton",
+        "inherit": false,
+        "value": {
+          "name": "type",
+          "values": [
+            "input",
+            "yaml-input",
+            "output"
+          ]
+        }
+      },
+      {
+        "long": "debug",
+        "description": "show debug output",
+        "inherit": false
+      },
+      {
+        "long": "version",
+        "description": "show version",
+        "inherit": false
+      },
+      {
+        "long": "help",
+        "description": "show help",
+        "inherit": false
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "accessanalyzer",
+        "description": "identity and Access Management Access Analyzer helps you to set, verify, and refine your IAM poli..."
+      },
+      {
+        "name": "account",
+        "description": "operations for aws Account Management"
+      },
+      {
+        "name": "acm",
+        "description": "certificate Manager You can use Certificate Manager (ACM) to manage SSL/TLS certificates for your..."
+      },
+      {
+        "name": "acm-pca",
+        "description": "this is the aws Private Certificate Authority API Reference"
+      },
+      {
+        "name": "amp",
+        "description": "managed Service for Prometheus is a serverless, Prometheus-compatible monitoring service for cont..."
+      },
+      {
+        "name": "amplify",
+        "description": "amplify enables developers to develop and deploy cloud-powered mobile and web apps"
+      },
+      {
+        "name": "amplifybackend",
+        "description": "aws Amplify Admin API"
+      },
+      {
+        "name": "amplifyuibuilder",
+        "description": "the Amplify UI Builder API provides a programmatic interface for creating and configuring user in..."
+      },
+      {
+        "name": "apigateway",
+        "description": "aPI Gateway API Gateway helps developers deliver robust, secure, and scalable mobile and web appl..."
+      },
+      {
+        "name": "apigatewaymanagementapi",
+        "description": "the API Gateway Management API allows you to directly manage runtime aspects of your deployed APIs"
+      },
+      {
+        "name": "apigatewayv2",
+        "description": "aPI Gateway V2"
+      },
+      {
+        "name": "appconfig",
+        "description": "appConfig feature flags and dynamic configurations help software builders quickly and securely ad..."
+      },
+      {
+        "name": "appconfigdata",
+        "description": "appConfig Data provides the data plane APIs your application uses to retrieve configuration data"
+      },
+      {
+        "name": "appfabric",
+        "description": "aws AppFabric quickly connects software as a service (SaaS) applications across your organization"
+      },
+      {
+        "name": "appflow",
+        "description": "welcome to the AppFlow API reference"
+      },
+      {
+        "name": "appintegrations",
+        "description": "appIntegrations actions AppIntegrations data types The AppIntegrations service enables you to con..."
+      },
+      {
+        "name": "application-autoscaling",
+        "description": "with Application Auto Scaling, you can configure automatic scaling for the following resources: A..."
+      },
+      {
+        "name": "application-insights",
+        "description": "cloudWatch Application Insights CloudWatch Application Insights is a service that helps you detec..."
+      },
+      {
+        "name": "application-signals",
+        "description": "use CloudWatch Application Signals for comprehensive observability of your cloud-based applications"
+      },
+      {
+        "name": "applicationcostprofiler",
+        "description": "this reference provides descriptions of the aws Application Cost Profiler API"
+      },
+      {
+        "name": "appmesh",
+        "description": "app Mesh is a service mesh based on the Envoy proxy that makes it easy to monitor and control mic..."
+      },
+      {
+        "name": "apprunner",
+        "description": "app Runner App Runner is an application service that provides a fast, simple, and cost-effective..."
+      },
+      {
+        "name": "appstream",
+        "description": "appStream 2.0 This is the AppStream 2.0 API Reference"
+      },
+      {
+        "name": "appsync",
+        "description": "appSync provides API actions for creating and interacting with data sources using GraphQL from yo..."
+      },
+      {
+        "name": "apptest",
+        "description": "aws Mainframe Modernization Application Testing provides tools and resources for automated functi..."
+      },
+      {
+        "name": "arc-zonal-shift",
+        "description": "welcome to the API Reference Guide for zonal shift and zonal autoshift in Route 53 Application Re..."
+      },
+      {
+        "name": "artifact",
+        "description": "this reference provides descriptions of the low-level aws Artifact Service API"
+      },
+      {
+        "name": "athena",
+        "description": "athena is an interactive query service that lets you use standard SQL to analyze data directly in S3"
+      },
+      {
+        "name": "auditmanager",
+        "description": "welcome to the Audit Manager API reference"
+      },
+      {
+        "name": "autoscaling",
+        "description": "eC2 Auto Scaling EC2 Auto Scaling is designed to automatically launch and terminate EC2 instances..."
+      },
+      {
+        "name": "autoscaling-plans",
+        "description": "aws Auto Scaling Use aws Auto Scaling to create scaling plans for your applications to automatica..."
+      },
+      {
+        "name": "b2bi",
+        "description": "this is the aws B2B Data Interchange API Reference"
+      },
+      {
+        "name": "backup",
+        "description": "backup Backup is a unified backup service designed to protect aws services and their associated data"
+      },
+      {
+        "name": "backup-gateway",
+        "description": "backup gateway Backup gateway connects Backup to your hypervisor, so you can create, store, and r..."
+      },
+      {
+        "name": "batch",
+        "description": "batch Using Batch, you can run batch computing workloads on the aws Cloud"
+      },
+      {
+        "name": "bcm-data-exports",
+        "description": "you can use the Data Exports API to create customized exports from multiple aws cost management a..."
+      },
+      {
+        "name": "bcm-pricing-calculator",
+        "description": "you can use the Pricing Calculator API to programmatically create estimates for your planned clou..."
+      },
+      {
+        "name": "bedrock",
+        "description": "describes the API operations for creating, managing, fine-turning, and evaluating Bedrock models"
+      },
+      {
+        "name": "bedrock-agent",
+        "description": "describes the API operations for creating and managing Bedrock agents"
+      },
+      {
+        "name": "bedrock-agent-runtime",
+        "description": "contains APIs related to model invocation and querying of knowledge bases"
+      },
+      {
+        "name": "bedrock-data-automation",
+        "description": "bedrock Keystone Build"
+      },
+      {
+        "name": "bedrock-data-automation-runtime",
+        "description": "bedrock Keystone Runtime"
+      },
+      {
+        "name": "bedrock-runtime",
+        "description": "describes the API operations for running inference using Bedrock models"
+      },
+      {
+        "name": "billing",
+        "description": "you can use the Billing API to programatically list the billing views available to you for a give..."
+      },
+      {
+        "name": "billingconductor",
+        "description": "aws Billing Conductor is a fully managed service that you can use to customize a proforma version..."
+      },
+      {
+        "name": "braket",
+        "description": "the Braket API Reference provides information about the operations and structures supported in Br..."
+      },
+      {
+        "name": "budgets",
+        "description": "use the aws Budgets API to plan your service usage, service costs, and instance reservations"
+      },
+      {
+        "name": "ce",
+        "description": "you can use the Cost Explorer API to programmatically query your cost and usage data"
+      },
+      {
+        "name": "chatbot",
+        "description": "the aws Chatbot API Reference provides descriptions, API request parameters, and the XML response..."
+      },
+      {
+        "name": "chime",
+        "description": "most of these APIs are no longer supported and will not be updated"
+      },
+      {
+        "name": "chime-sdk-identity",
+        "description": "the Chime SDK Identity APIs in this section allow software developers to create and manage unique..."
+      },
+      {
+        "name": "chime-sdk-media-pipelines",
+        "description": "the Chime SDK media pipeline APIs in this section allow software developers to create Chime SDK m..."
+      },
+      {
+        "name": "chime-sdk-meetings",
+        "description": "the Chime SDK meetings APIs in this section allow software developers to create Chime SDK meeting..."
+      },
+      {
+        "name": "chime-sdk-messaging",
+        "description": "the Chime SDK messaging APIs in this section allow software developers to send and receive messag..."
+      },
+      {
+        "name": "chime-sdk-voice",
+        "description": "the Chime SDK telephony APIs in this section enable developers to create PSTN calling solutions t..."
+      },
+      {
+        "name": "cleanrooms",
+        "description": "welcome to the Clean Rooms API Reference"
+      },
+      {
+        "name": "cleanroomsml",
+        "description": "welcome to the aws Clean Rooms ML API Reference"
+      },
+      {
+        "name": "cloud9",
+        "description": "cloud9 Cloud9 is a collection of tools that you can use to code, build, run, test, debug, and rel..."
+      },
+      {
+        "name": "cloudcontrol",
+        "description": "for more information about aws Cloud Control API, see the aws Cloud Control API User Guide"
+      },
+      {
+        "name": "clouddirectory",
+        "description": "cloud Directory Cloud Directory is a component of the aws Directory Service that simplifies the d..."
+      },
+      {
+        "name": "cloudformation",
+        "description": "cloudFormation CloudFormation allows you to create and manage aws infrastructure deployments pred..."
+      },
+      {
+        "name": "cloudfront",
+        "description": "cloudFront This is the CloudFront API Reference"
+      },
+      {
+        "name": "cloudfront-keyvaluestore",
+        "description": "cloudFront KeyValueStore Service to View and Update Data in a KVS Resource"
+      },
+      {
+        "name": "cloudhsm",
+        "description": "aws CloudHSM Service This is documentation for aws CloudHSM Classic"
+      },
+      {
+        "name": "cloudhsmv2",
+        "description": "for more information about CloudHSM, see CloudHSM and the CloudHSM User Guide"
+      },
+      {
+        "name": "cloudsearch",
+        "description": "cloudSearch Configuration Service You use the CloudSearch configuration service to create, config..."
+      },
+      {
+        "name": "cloudsearchdomain",
+        "description": "you use the AmazonCloudSearch2013 API to upload documents to a search domain and search those doc..."
+      },
+      {
+        "name": "cloudtrail",
+        "description": "cloudTrail This is the CloudTrail API Reference"
+      },
+      {
+        "name": "cloudtrail-data",
+        "description": "the CloudTrail Data Service lets you ingest events into CloudTrail from any source in your hybrid..."
+      },
+      {
+        "name": "cloudwatch",
+        "description": "cloudWatch monitors your aws (Web Services) resources and the applications you run on aws in real..."
+      },
+      {
+        "name": "codeartifact",
+        "description": "codeArtifact is a fully managed artifact repository compatible with language-native package manag..."
+      },
+      {
+        "name": "codebuild",
+        "description": "codeBuild CodeBuild is a fully managed build service in the cloud"
+      },
+      {
+        "name": "codecatalyst",
+        "description": "welcome to the CodeCatalyst API reference"
+      },
+      {
+        "name": "codecommit",
+        "description": "codeCommit This is the CodeCommit API Reference"
+      },
+      {
+        "name": "codeconnections",
+        "description": "aws CodeConnections This aws CodeConnections API Reference provides descriptions and usage exampl..."
+      },
+      {
+        "name": "codeguru-reviewer",
+        "description": "this section provides documentation for the CodeGuru Reviewer API operations"
+      },
+      {
+        "name": "codeguru-security",
+        "description": "codeGuru Security is in preview release and is subject to change"
+      },
+      {
+        "name": "codeguruprofiler",
+        "description": "this section provides documentation for the CodeGuru Profiler API operations"
+      },
+      {
+        "name": "codepipeline",
+        "description": "codePipeline Overview This is the CodePipeline API Reference"
+      },
+      {
+        "name": "codestar-connections",
+        "description": "aws CodeStar Connections This aws CodeStar Connections API Reference provides descriptions and us..."
+      },
+      {
+        "name": "codestar-notifications",
+        "description": "this aws CodeStar Notifications API Reference provides descriptions and usage examples of the ope..."
+      },
+      {
+        "name": "cognito-identity",
+        "description": "cognito Federated Identities Cognito Federated Identities is a web service that delivers scoped t..."
+      },
+      {
+        "name": "cognito-idp",
+        "description": "with the Cognito user pools API, you can configure user pools and authenticate users"
+      },
+      {
+        "name": "cognito-sync",
+        "description": "cognito Sync Cognito Sync provides an aws service and client library that enable cross-device syn..."
+      },
+      {
+        "name": "comprehend",
+        "description": "comprehend is an aws service for gaining insight into the content of documents"
+      },
+      {
+        "name": "comprehendmedical",
+        "description": "comprehend Medical extracts structured information from unstructured clinical text"
+      },
+      {
+        "name": "compute-optimizer",
+        "description": "compute Optimizer is a service that analyzes the configuration and utilization metrics of your aw..."
+      },
+      {
+        "name": "connect",
+        "description": "connect actions Connect data types Connect is a cloud-based contact center solution that you use..."
+      },
+      {
+        "name": "connect-contact-lens",
+        "description": "contact Lens actions Contact Lens data types Connect Contact Lens enables you to analyze conversa..."
+      },
+      {
+        "name": "connectcampaigns",
+        "description": "provide APIs to create and manage Connect Campaigns"
+      },
+      {
+        "name": "connectcampaignsv2",
+        "description": "provide APIs to create and manage Connect Campaigns"
+      },
+      {
+        "name": "connectcases",
+        "description": "with Connect Cases, your agents can track and manage customer issues that require multiple intera..."
+      },
+      {
+        "name": "connectparticipant",
+        "description": "connect is an easy-to-use omnichannel cloud contact center service that enables companies of any..."
+      },
+      {
+        "name": "controlcatalog",
+        "description": "welcome to the aws Control Catalog API reference"
+      },
+      {
+        "name": "controltower",
+        "description": "aws Control Tower offers application programming interface (API) operations that support programm..."
+      },
+      {
+        "name": "cost-optimization-hub",
+        "description": "you can use the Cost Optimization Hub API to programmatically identify, filter, aggregate, and qu..."
+      },
+      {
+        "name": "cur",
+        "description": "you can use the aws Cost and Usage Report API to programmatically create, query, and delete aws C..."
+      },
+      {
+        "name": "customer-profiles",
+        "description": "connect Customer Profiles Customer Profiles actions Customer Profiles data types Connect Customer..."
+      },
+      {
+        "name": "databrew",
+        "description": "glue DataBrew is a visual, cloud-scale data-preparation service"
+      },
+      {
+        "name": "dataexchange",
+        "description": "aws Data Exchange is a service that makes it easy for aws customers to exchange data in the cloud"
+      },
+      {
+        "name": "datapipeline",
+        "description": "aws Data Pipeline configures and manages a data-driven workflow called a pipeline"
+      },
+      {
+        "name": "datasync",
+        "description": "dataSync DataSync is an online data movement and discovery service that simplifies data migration..."
+      },
+      {
+        "name": "datazone",
+        "description": "dataZone is a data management service that enables you to catalog, discover, govern, share, and a..."
+      },
+      {
+        "name": "dax",
+        "description": "dAX is a managed caching service engineered for DynamoDB"
+      },
+      {
+        "name": "deadline",
+        "description": "the aws Deadline Cloud API provides infrastructure and centralized management for your projects"
+      },
+      {
+        "name": "detective",
+        "description": "detective uses machine learning and purpose-built visualizations to help you to analyze and inves..."
+      },
+      {
+        "name": "devicefarm",
+        "description": "welcome to the aws Device Farm API documentation, which contains APIs for: Testing on desktop bro..."
+      },
+      {
+        "name": "devops-guru",
+        "description": "devOps Guru is a fully managed service that helps you identify anomalous behavior in business cri..."
+      },
+      {
+        "name": "directconnect",
+        "description": "direct Connect links your internal network to an Direct Connect location over a standard Ethernet..."
+      },
+      {
+        "name": "discovery",
+        "description": "aws Application Discovery Service aws Application Discovery Service (Application Discovery Servic..."
+      },
+      {
+        "name": "dlm",
+        "description": "data Lifecycle Manager With Data Lifecycle Manager, you can manage the lifecycle of your aws reso..."
+      },
+      {
+        "name": "dms",
+        "description": "database Migration Service Database Migration Service (DMS) can migrate your data to and from the..."
+      },
+      {
+        "name": "docdb",
+        "description": "documentDB is a fast, reliable, and fully managed database service"
+      },
+      {
+        "name": "docdb-elastic",
+        "description": "documentDB elastic clusters DocumentDB elastic-clusters support workloads with millions of reads/..."
+      },
+      {
+        "name": "drs",
+        "description": "aws Elastic Disaster Recovery Service"
+      },
+      {
+        "name": "ds",
+        "description": "directory Service Directory Service is a web service that makes it easy for you to setup and run..."
+      },
+      {
+        "name": "ds-data",
+        "description": "aws Directory Service Data is an extension of Directory Service"
+      },
+      {
+        "name": "dsql",
+        "description": "this is an interface reference for Aurora DSQL"
+      },
+      {
+        "name": "dynamodb",
+        "description": "dynamoDB DynamoDB is a fully managed NoSQL database service that provides fast and predictable pe..."
+      },
+      {
+        "name": "dynamodbstreams",
+        "description": "dynamoDB DynamoDB Streams provides API actions for accessing streams and processing stream records"
+      },
+      {
+        "name": "ebs",
+        "description": "you can use the Elastic Block Store (EBS) direct APIs to create EBS snapshots, write data directl..."
+      },
+      {
+        "name": "ec2",
+        "description": "elastic Compute Cloud You can access the features of Elastic Compute Cloud (EC2) programmatically"
+      },
+      {
+        "name": "ec2-instance-connect",
+        "description": "this is the EC2 Instance Connect API Reference"
+      },
+      {
+        "name": "ecr",
+        "description": "elastic Container Registry Elastic Container Registry (ECR) is a managed container image registry..."
+      },
+      {
+        "name": "ecr-public",
+        "description": "elastic Container Registry Public Elastic Container Registry Public (ECR Public) is a managed con..."
+      },
+      {
+        "name": "ecs",
+        "description": "elastic Container Service Elastic Container Service (ECS) is a highly scalable, fast, container m..."
+      },
+      {
+        "name": "efs",
+        "description": "elastic File System Elastic File System (EFS) provides simple, scalable file storage for use with..."
+      },
+      {
+        "name": "eks",
+        "description": "elastic Kubernetes Service (EKS) is a managed service that makes it easy for you to run Kubernete..."
+      },
+      {
+        "name": "eks-auth",
+        "description": "the EKS Auth API and the AssumeRoleForPodIdentity action are only used by the EKS Pod Identity Agent"
+      },
+      {
+        "name": "elastic-inference",
+        "description": "elastic Inference is no longer available"
+      },
+      {
+        "name": "elasticache",
+        "description": "elastiCache ElastiCache is a web service that makes it easier to set up, operate, and scale a dis..."
+      },
+      {
+        "name": "elasticbeanstalk",
+        "description": "aws Elastic Beanstalk aws Elastic Beanstalk makes it easy for you to create, deploy, and manage s..."
+      },
+      {
+        "name": "elastictranscoder",
+        "description": "aws Elastic Transcoder Service The aws Elastic Transcoder Service"
+      },
+      {
+        "name": "elb",
+        "description": "elastic Load Balancing A load balancer can distribute incoming traffic across your EC2 instances"
+      },
+      {
+        "name": "elbv2",
+        "description": "elastic Load Balancing A load balancer distributes incoming traffic across targets, such as your..."
+      },
+      {
+        "name": "emr",
+        "description": "eMR is a web service that makes it easier to process large amounts of data efficiently"
+      },
+      {
+        "name": "emr-containers",
+        "description": "eMR on EKS provides a deployment option for EMR that allows you to run open-source big data frame..."
+      },
+      {
+        "name": "emr-serverless",
+        "description": "eMR Serverless is a new deployment option for EMR"
+      },
+      {
+        "name": "entityresolution",
+        "description": "welcome to the Entity Resolution API Reference"
+      },
+      {
+        "name": "es",
+        "description": "elasticsearch Configuration Service Use the Elasticsearch Configuration API to create, configure,..."
+      },
+      {
+        "name": "events",
+        "description": "eventBridge helps you to respond to state changes in your aws resources"
+      },
+      {
+        "name": "evidently",
+        "description": "you can use CloudWatch Evidently to safely validate new features by serving them to a specified p..."
+      },
+      {
+        "name": "finspace",
+        "description": "the FinSpace management service provides the APIs for managing FinSpace environments"
+      },
+      {
+        "name": "finspace-data",
+        "description": "the FinSpace APIs let you take actions inside the FinSpace"
+      },
+      {
+        "name": "firehose",
+        "description": "data Firehose Data Firehose was previously known as Kinesis Data Firehose"
+      },
+      {
+        "name": "fis",
+        "description": "aws Fault Injection Service is a managed service that enables you to perform fault injection expe..."
+      },
+      {
+        "name": "fms",
+        "description": "this is the Firewall Manager API Reference"
+      },
+      {
+        "name": "forecast",
+        "description": "provides APIs for creating and managing Forecast resources"
+      },
+      {
+        "name": "forecastquery",
+        "description": "provides APIs for creating and managing Forecast resources"
+      },
+      {
+        "name": "frauddetector",
+        "description": "this is the Fraud Detector API Reference"
+      },
+      {
+        "name": "freetier",
+        "description": "you can use the aws Free Tier API to query programmatically your Free Tier usage data"
+      },
+      {
+        "name": "fsx",
+        "description": "fSx is a fully managed service that makes it easy for storage and application administrators to l..."
+      },
+      {
+        "name": "gamelift",
+        "description": "gameLift provides solutions for hosting session-based multiplayer game servers in the cloud, incl..."
+      },
+      {
+        "name": "geo-maps",
+        "description": "integrate high-quality base map data into your applications using MapLibre"
+      },
+      {
+        "name": "geo-places",
+        "description": "the Places API enables powerful location search and geocoding capabilities for your applications,..."
+      },
+      {
+        "name": "geo-routes",
+        "description": "with the Location Routes API you can calculate routes and estimate travel time based on up-to-dat..."
+      },
+      {
+        "name": "glacier",
+        "description": "s3 Glacier (Glacier) is a storage solution for \"cold data.\" Glacier is an extremely low-cost stor..."
+      },
+      {
+        "name": "globalaccelerator",
+        "description": "global Accelerator This is the Global Accelerator API Reference"
+      },
+      {
+        "name": "glue",
+        "description": "glue Defines the public endpoint for the Glue service"
+      },
+      {
+        "name": "grafana",
+        "description": "managed Grafana is a fully managed and secure data visualization service that you can use to inst..."
+      },
+      {
+        "name": "greengrass",
+        "description": "aws IoT Greengrass seamlessly extends aws onto physical devices so they can act locally on the da..."
+      },
+      {
+        "name": "greengrassv2",
+        "description": "ioT Greengrass brings local compute, messaging, data management, sync, and ML inference capabilit..."
+      },
+      {
+        "name": "groundstation",
+        "description": "welcome to the aws Ground Station API Reference"
+      },
+      {
+        "name": "guardduty",
+        "description": "guardDuty is a continuous security monitoring service that analyzes and processes the following f..."
+      },
+      {
+        "name": "health",
+        "description": "health The Health API provides access to the Health information that appears in the Health Dashboard"
+      },
+      {
+        "name": "healthlake",
+        "description": "aws HealthLake is a HIPAA eligibile service that allows customers to store, transform, query, and..."
+      },
+      {
+        "name": "iam",
+        "description": "identity and Access Management Identity and Access Management (IAM) is a web service for securely..."
+      },
+      {
+        "name": "identitystore",
+        "description": "the Identity Store service used by IAM Identity Center provides a single place to retrieve all of..."
+      },
+      {
+        "name": "imagebuilder",
+        "description": "eC2 Image Builder is a fully managed aws service that makes it easier to automate the creation, m..."
+      },
+      {
+        "name": "importexport",
+        "description": "aws Import/Export Service aws Import/Export accelerates transferring large amounts of data betwee..."
+      },
+      {
+        "name": "inspector",
+        "description": "inspector Inspector enables you to analyze the behavior of your aws resources and to identify pot..."
+      },
+      {
+        "name": "inspector-scan",
+        "description": "inspector Scan is a vulnerability discovery service that scans a provided Software Bill of Materi..."
+      },
+      {
+        "name": "inspector2",
+        "description": "inspector is a vulnerability discovery service that automates continuous scanning for security vu..."
+      },
+      {
+        "name": "internetmonitor",
+        "description": "cloudWatch Internet Monitor provides visibility into how internet issues impact the performance a..."
+      },
+      {
+        "name": "invoicing",
+        "description": "aws Invoice Configuration You can use aws Invoice Configuration APIs to programmatically create,..."
+      },
+      {
+        "name": "iot",
+        "description": "ioT IoT provides secure, bi-directional communication between Internet-connected devices (such as..."
+      },
+      {
+        "name": "iot-data",
+        "description": "ioT data IoT data enables secure, bi-directional communication between Internet-connected things..."
+      },
+      {
+        "name": "iot-jobs-data",
+        "description": "ioT Jobs is a service that allows you to define a set of jobs u2014 remote operations that are se..."
+      },
+      {
+        "name": "iot1click-devices",
+        "description": "describes all of the aws IoT 1-Click device-related API operations for the service"
+      },
+      {
+        "name": "iot1click-projects",
+        "description": "the aws IoT 1-Click Projects API Reference"
+      },
+      {
+        "name": "iotanalytics",
+        "description": "ioT Analytics allows you to collect large amounts of device data, process messages, and store them"
+      },
+      {
+        "name": "iotdeviceadvisor",
+        "description": "aws IoT Core Device Advisor is a cloud-based, fully managed test capability for validating IoT de..."
+      },
+      {
+        "name": "iotevents",
+        "description": "aws IoT Events monitors your equipment or device fleets for failures or changes in operation, and..."
+      },
+      {
+        "name": "iotevents-data",
+        "description": "ioT Events monitors your equipment or device fleets for failures or changes in operation, and tri..."
+      },
+      {
+        "name": "iotfleethub",
+        "description": "with Fleet Hub for IoT Device Management you can build stand-alone web applications for monitorin..."
+      },
+      {
+        "name": "iotfleetwise",
+        "description": "aws IoT FleetWise is a fully managed service that you can use to collect, model, and transfer veh..."
+      },
+      {
+        "name": "iotsecuretunneling",
+        "description": "ioT Secure Tunneling IoT Secure Tunneling creates remote connections to devices deployed in the f..."
+      },
+      {
+        "name": "iotsitewise",
+        "description": "welcome to the IoT SiteWise API Reference"
+      },
+      {
+        "name": "iotthingsgraph",
+        "description": "aws IoT Things Graph aws IoT Things Graph provides an integrated set of tools that enable develop..."
+      },
+      {
+        "name": "iottwinmaker",
+        "description": "ioT TwinMaker is a service with which you can build operational digital twins of physical systems"
+      },
+      {
+        "name": "iotwireless",
+        "description": "aws IoT Wireless provides bi-directional communication between internet-connected wireless device..."
+      },
+      {
+        "name": "ivs",
+        "description": "introduction The Interactive Video Service (IVS) API is REST compatible, using a standard HTTP AP..."
+      },
+      {
+        "name": "ivs-realtime",
+        "description": "the Interactive Video Service (IVS) real-time API is REST compatible, using a standard HTTP API a..."
+      },
+      {
+        "name": "ivschat",
+        "description": "introduction The IVS Chat control-plane API enables you to create and manage IVS Chat resources"
+      },
+      {
+        "name": "kafka",
+        "description": "the operations for managing an MSK cluster"
+      },
+      {
+        "name": "kafkaconnect"
+      },
+      {
+        "name": "kendra",
+        "description": "kendra is a service for indexing large document sets"
+      },
+      {
+        "name": "kendra-ranking",
+        "description": "kendra Intelligent Ranking uses Kendra semantic search capabilities to intelligently re-rank a se..."
+      },
+      {
+        "name": "keyspaces",
+        "description": "keyspaces (for Apache Cassandra) is a scalable, highly available, and managed Apache Cassandra-co..."
+      },
+      {
+        "name": "kinesis",
+        "description": "kinesis Data Streams Service API Reference Kinesis Data Streams is a managed service that scales..."
+      },
+      {
+        "name": "kinesis-video-archived-media"
+      },
+      {
+        "name": "kinesis-video-media"
+      },
+      {
+        "name": "kinesis-video-signaling",
+        "description": "kinesis Video Streams Signaling Service is a intermediate service that establishes a communicatio..."
+      },
+      {
+        "name": "kinesis-video-webrtc-storage",
+        "description": "webrtc"
+      },
+      {
+        "name": "kinesisanalytics",
+        "description": "kinesis Analytics Overview This documentation is for version 1 of the Kinesis Data Analytics API,..."
+      },
+      {
+        "name": "kinesisanalyticsv2",
+        "description": "managed Service for Apache Flink was previously known as Kinesis Data Analytics for Apache Flink"
+      },
+      {
+        "name": "kinesisvideo"
+      },
+      {
+        "name": "kms",
+        "description": "key Management Service Key Management Service (KMS) is an encryption and key management web service"
+      },
+      {
+        "name": "lakeformation",
+        "description": "lake Formation Defines the public endpoint for the Lake Formation service"
+      },
+      {
+        "name": "lambda",
+        "description": "lambda Overview Lambda is a compute service that lets you run code without provisioning or managi..."
+      },
+      {
+        "name": "launch-wizard",
+        "description": "launch Wizard offers a guided way of sizing, configuring, and deploying aws resources for third p..."
+      },
+      {
+        "name": "lex-models",
+        "description": "lex Build-Time Actions Lex is an aws service for building conversational voice and text interfaces"
+      },
+      {
+        "name": "lex-runtime",
+        "description": "lex provides both build and runtime endpoints"
+      },
+      {
+        "name": "lexv2-models"
+      },
+      {
+        "name": "lexv2-runtime",
+        "description": "this section contains documentation for the Lex V2 Runtime V2 API operations"
+      },
+      {
+        "name": "license-manager",
+        "description": "license Manager makes it easier to manage licenses from software vendors across multiple aws acco..."
+      },
+      {
+        "name": "license-manager-linux-subscriptions",
+        "description": "with License Manager, you can discover and track your commercial Linux subscriptions on running E..."
+      },
+      {
+        "name": "license-manager-user-subscriptions",
+        "description": "with License Manager, you can create user-based subscriptions to utilize licensed software with a..."
+      },
+      {
+        "name": "lightsail",
+        "description": "lightsail is the easiest way to get started with aws (Web Services) for developers who need to bu..."
+      },
+      {
+        "name": "location",
+        "description": "\"Suite of geospatial services including Maps, Places, Routes, Tracking, and Geofencing\""
+      },
+      {
+        "name": "logs",
+        "description": "you can use CloudWatch Logs to monitor, store, and access your log files from EC2 instances, Clou..."
+      },
+      {
+        "name": "lookoutequipment",
+        "description": "lookout for Equipment is a machine learning service that uses advanced analytics to identify anom..."
+      },
+      {
+        "name": "lookoutmetrics",
+        "description": "this is the Lookout for Metrics API Reference"
+      },
+      {
+        "name": "lookoutvision",
+        "description": "this is the Lookout for Vision API Reference"
+      },
+      {
+        "name": "m2",
+        "description": "aws Mainframe Modernization provides tools and resources to help you plan and implement migration..."
+      },
+      {
+        "name": "machinelearning",
+        "description": "definition of the public APIs exposed by Machine Learning"
+      },
+      {
+        "name": "macie2",
+        "description": "macie"
+      },
+      {
+        "name": "mailmanager",
+        "description": "sES Mail Manager API The SES Mail Manager API contains operations and data types that comprise th..."
+      },
+      {
+        "name": "managedblockchain",
+        "description": "managed Blockchain is a fully managed service for creating and managing blockchain networks using..."
+      },
+      {
+        "name": "managedblockchain-query",
+        "description": "managed Blockchain (AMB) Query provides you with convenient access to multi-blockchain network da..."
+      },
+      {
+        "name": "marketplace-agreement",
+        "description": "aws Marketplace is a curated digital catalog that customers can use to find, buy, deploy, and man..."
+      },
+      {
+        "name": "marketplace-catalog",
+        "description": "catalog API actions allow you to manage your entities through list, describe, and update capabili..."
+      },
+      {
+        "name": "marketplace-deployment",
+        "description": "the aws Marketplace Deployment Service supports the Quick Launch experience, which is a deploymen..."
+      },
+      {
+        "name": "marketplace-entitlement",
+        "description": "aws Marketplace Entitlement Service This reference provides descriptions of the aws Marketplace E..."
+      },
+      {
+        "name": "marketplace-reporting",
+        "description": "the aws Marketplace GetBuyerDashboard API enables you to get a procurement insights dashboard pro..."
+      },
+      {
+        "name": "marketplacecommerceanalytics",
+        "description": "provides aws Marketplace business intelligence data on-demand"
+      },
+      {
+        "name": "mediaconnect",
+        "description": "aPI for aws Elemental MediaConnect"
+      },
+      {
+        "name": "mediaconvert",
+        "description": "aws Elemental MediaConvert"
+      },
+      {
+        "name": "medialive",
+        "description": "aPI for aws Elemental MediaLive"
+      },
+      {
+        "name": "mediapackage",
+        "description": "aws Elemental MediaPackage"
+      },
+      {
+        "name": "mediapackage-vod",
+        "description": "aws Elemental MediaPackage VOD"
+      },
+      {
+        "name": "mediapackagev2",
+        "description": "this guide is intended for creating aws Elemental MediaPackage resources in MediaPackage Version..."
+      },
+      {
+        "name": "mediastore",
+        "description": "an aws Elemental MediaStore container is a namespace that holds folders and objects"
+      },
+      {
+        "name": "mediastore-data",
+        "description": "an aws Elemental MediaStore asset is an object, similar to an object in the S3 service"
+      },
+      {
+        "name": "mediatailor",
+        "description": "use the aws Elemental MediaTailor SDKs and CLI to configure scalable ad insertion and linear chan..."
+      },
+      {
+        "name": "medical-imaging",
+        "description": "this is the aws HealthImaging API Reference"
+      },
+      {
+        "name": "memorydb",
+        "description": "memoryDB is a fully managed, Redis OSS-compatible, in-memory database that delivers ultra-fast pe..."
+      },
+      {
+        "name": "meteringmarketplace",
+        "description": "aws Marketplace Metering Service This reference provides descriptions of the low-level aws Market..."
+      },
+      {
+        "name": "mgh",
+        "description": "the aws Migration Hub API methods help to obtain server and application migration status and inte..."
+      },
+      {
+        "name": "mgn",
+        "description": "the Application Migration Service service"
+      },
+      {
+        "name": "migration-hub-refactor-spaces",
+        "description": "aws Migration Hub Refactor Spaces This API reference provides descriptions, syntax, and other det..."
+      },
+      {
+        "name": "migrationhub-config",
+        "description": "the aws Migration Hub home region APIs are available specifically for working with your Migration..."
+      },
+      {
+        "name": "migrationhuborchestrator",
+        "description": "this API reference provides descriptions, syntax, and other details about each of the actions and..."
+      },
+      {
+        "name": "migrationhubstrategy",
+        "description": "migration Hub Strategy Recommendations This API reference provides descriptions, syntax, and othe..."
+      },
+      {
+        "name": "mq",
+        "description": "mQ is a managed message broker service for Apache ActiveMQ and RabbitMQ that makes it easy to set..."
+      },
+      {
+        "name": "mturk",
+        "description": "mechanical Turk API Reference"
+      },
+      {
+        "name": "mwaa",
+        "description": "managed Workflows for Apache Airflow This section contains the Managed Workflows for Apache Airfl..."
+      },
+      {
+        "name": "neptune",
+        "description": "neptune Neptune is a fast, reliable, fully-managed graph database service that makes it easy to b..."
+      },
+      {
+        "name": "neptune-graph",
+        "description": "neptune Analytics is a new analytics database engine for Neptune that helps customers get to insi..."
+      },
+      {
+        "name": "neptunedata",
+        "description": "neptune Data API The Neptune data API provides SDK support for more than 40 of Neptune's data ope..."
+      },
+      {
+        "name": "network-firewall",
+        "description": "this is the API Reference for Network Firewall"
+      },
+      {
+        "name": "networkflowmonitor",
+        "description": "network Flow Monitor is a feature of CloudWatch Network Monitoring that provides visibility into..."
+      },
+      {
+        "name": "networkmanager",
+        "description": "aws enables you to centrally manage your aws Cloud WAN core network and your Transit Gateway netw..."
+      },
+      {
+        "name": "networkmonitor",
+        "description": "cloudWatch Network Monitor is an aws active network monitoring service that identifies if a netwo..."
+      },
+      {
+        "name": "notifications",
+        "description": "the aws User Notifications API Reference provides descriptions, API request parameters, and the J..."
+      },
+      {
+        "name": "notificationscontacts",
+        "description": "aws User Notifications Contacts is a service that allows you to create and manage email contacts..."
+      },
+      {
+        "name": "oam",
+        "description": "use CloudWatch Observability Access Manager to create and manage links between source accounts an..."
+      },
+      {
+        "name": "observabilityadmin",
+        "description": "cloudWatch Obsersavability Admin to control temletry config for your aws Organization or account"
+      },
+      {
+        "name": "omics",
+        "description": "this is the aws HealthOmics API Reference"
+      },
+      {
+        "name": "opensearch",
+        "description": "use the OpenSearch Service configuration API to create, configure, and manage OpenSearch Service..."
+      },
+      {
+        "name": "opensearchserverless",
+        "description": "use the OpenSearch Serverless API to create, configure, and manage OpenSearch Serverless collecti..."
+      },
+      {
+        "name": "opsworks",
+        "description": "opsWorks Welcome to the OpsWorks Stacks API Reference"
+      },
+      {
+        "name": "opsworkscm",
+        "description": "aws OpsWorks CM aws OpsWorks for configuration management (CM) is a service that runs and manages..."
+      },
+      {
+        "name": "organizations",
+        "description": "organizations is a web service that enables you to consolidate your multiple aws accounts into an..."
+      },
+      {
+        "name": "osis",
+        "description": "use the OpenSearch Ingestion API to create and manage ingestion pipelines"
+      },
+      {
+        "name": "outposts",
+        "description": "aws Outposts is a fully managed service that extends aws infrastructure, APIs, and tools to custo..."
+      },
+      {
+        "name": "panorama",
+        "description": "aws Panorama Overview This is the aws Panorama API Reference"
+      },
+      {
+        "name": "partnercentral-selling",
+        "description": "aws Partner Central API for Selling aws Partner Central API for Selling Reference Guide This aws..."
+      },
+      {
+        "name": "payment-cryptography",
+        "description": "aws Payment Cryptography Control Plane APIs manage encryption keys for use during payment-related..."
+      },
+      {
+        "name": "payment-cryptography-data",
+        "description": "you use the aws Payment Cryptography Data Plane to manage how encryption keys are used for paymen..."
+      },
+      {
+        "name": "pca-connector-ad",
+        "description": "aws Private CA Connector for Active Directory creates a connector between aws Private CA and Acti..."
+      },
+      {
+        "name": "pca-connector-scep",
+        "description": "connector for SCEP creates a connector between aws Private CA and your SCEP-enabled clients and d..."
+      },
+      {
+        "name": "pcs",
+        "description": "aws Parallel Computing Service (aws PCS) is a managed service that makes it easier for you to run..."
+      },
+      {
+        "name": "personalize",
+        "description": "personalize is a machine learning service that makes it easy to add individualized recommendation..."
+      },
+      {
+        "name": "personalize-events",
+        "description": "personalize can consume real-time user event data, such as stream or click data, and use it for m..."
+      },
+      {
+        "name": "personalize-runtime"
+      },
+      {
+        "name": "pi",
+        "description": "rDS Performance Insights RDS Performance Insights enables you to monitor and explore different di..."
+      },
+      {
+        "name": "pinpoint",
+        "description": "doc Engage API - Pinpoint API"
+      },
+      {
+        "name": "pinpoint-email",
+        "description": "pinpoint Email Service Welcome to the Pinpoint Email API Reference"
+      },
+      {
+        "name": "pinpoint-sms-voice",
+        "description": "pinpoint SMS and Voice Messaging public facing APIs"
+      },
+      {
+        "name": "pinpoint-sms-voice-v2",
+        "description": "welcome to the aws End User Messaging SMS and Voice, version 2 API Reference"
+      },
+      {
+        "name": "pipes",
+        "description": "eventBridge Pipes connects event sources to targets"
+      },
+      {
+        "name": "polly",
+        "description": "polly is a web service that makes it easy to synthesize speech from text"
+      },
+      {
+        "name": "pricing",
+        "description": "the aws Price List API is a centralized and convenient way to programmatically query aws for serv..."
+      },
+      {
+        "name": "privatenetworks",
+        "description": "aws Private 5G is a managed service that makes it easy to deploy, operate, and scale your own pri..."
+      },
+      {
+        "name": "proton",
+        "description": "this is the Proton Service API Reference"
+      },
+      {
+        "name": "qapps",
+        "description": "the Q Apps feature capability within Q Business allows web experience users to create lightweight..."
+      },
+      {
+        "name": "qbusiness",
+        "description": "this is the Q Business API Reference"
+      },
+      {
+        "name": "qconnect",
+        "description": "q actions Q data types Powered by Bedrock: aws implements automated abuse detection"
+      },
+      {
+        "name": "qldb",
+        "description": "the resource management API for QLDB"
+      },
+      {
+        "name": "qldb-session",
+        "description": "the transactional data APIs for QLDB Instead of interacting directly with this API, we recommend..."
+      },
+      {
+        "name": "quicksight",
+        "description": "quickSight API Reference QuickSight is a fully managed, serverless business intelligence service..."
+      },
+      {
+        "name": "ram",
+        "description": "this is the Resource Access Manager API Reference"
+      },
+      {
+        "name": "rbin",
+        "description": "this is the Recycle Bin API Reference"
+      },
+      {
+        "name": "rds",
+        "description": "relational Database Service Relational Database Service (RDS) is a web service that makes it easi..."
+      },
+      {
+        "name": "rds-data",
+        "description": "rDS Data API RDS provides an HTTP endpoint to run SQL statements on an Aurora DB cluster"
+      },
+      {
+        "name": "redshift",
+        "description": "redshift Overview This is an interface reference for Redshift"
+      },
+      {
+        "name": "redshift-data",
+        "description": "you can use the Redshift Data API to run queries on Redshift tables"
+      },
+      {
+        "name": "redshift-serverless",
+        "description": "this is an interface reference for Redshift Serverless"
+      },
+      {
+        "name": "rekognition",
+        "description": "this is the API Reference for Rekognition Image, Rekognition Custom Labels, Rekognition Stored Vi..."
+      },
+      {
+        "name": "repostspace",
+        "description": "aws re:Post Private is a private version of aws re:Post for enterprises with Enterprise Support o..."
+      },
+      {
+        "name": "resiliencehub",
+        "description": "resilience Hub helps you proactively prepare and protect your aws applications from disruptions"
+      },
+      {
+        "name": "resource-explorer-2",
+        "description": "aws Resource Explorer is a resource search and discovery service"
+      },
+      {
+        "name": "resource-groups",
+        "description": "resource Groups lets you organize aws resources such as Elastic Compute Cloud instances, Relation..."
+      },
+      {
+        "name": "resourcegroupstaggingapi",
+        "description": "resource Groups Tagging API"
+      },
+      {
+        "name": "robomaker",
+        "description": "this section provides documentation for the aws RoboMaker API operations"
+      },
+      {
+        "name": "rolesanywhere",
+        "description": "identity and Access Management Roles Anywhere provides a secure way for your workloads such as se..."
+      },
+      {
+        "name": "route53",
+        "description": "routeu00a053 is a highly available and scalable Domain Name System (DNS) web service"
+      },
+      {
+        "name": "route53-recovery-cluster",
+        "description": "welcome to the Routing Control (Recovery Cluster) API Reference Guide for Route 53 Application Re..."
+      },
+      {
+        "name": "route53-recovery-control-config",
+        "description": "recovery Control Configuration API Reference for Route 53 Application Recovery Controller"
+      },
+      {
+        "name": "route53-recovery-readiness",
+        "description": "recovery readiness"
+      },
+      {
+        "name": "route53domains",
+        "description": "route 53 API actions let you register domain names and perform related operations"
+      },
+      {
+        "name": "route53profiles",
+        "description": "with Route 53 Profiles you can share Route 53 configurations with VPCs and aws accounts"
+      },
+      {
+        "name": "route53resolver",
+        "description": "when you create a VPC using VPC, you automatically get DNS resolution within the VPC from Route 5..."
+      },
+      {
+        "name": "rum",
+        "description": "with CloudWatch RUM, you can perform real-user monitoring to collect client-side data about your..."
+      },
+      {
+        "name": "s3control",
+        "description": "aws S3 Control provides access to S3 control plane actions"
+      },
+      {
+        "name": "s3outposts",
+        "description": "s3 on Outposts provides access to S3 on Outposts operations"
+      },
+      {
+        "name": "s3tables",
+        "description": "an S3 table represents a structured dataset consisting of tabular data in Apache Parquet format a..."
+      },
+      {
+        "name": "sagemaker",
+        "description": "provides APIs for creating and managing SageMaker resources"
+      },
+      {
+        "name": "sagemaker-a2i-runtime",
+        "description": "augmented AI (A2I) adds the benefit of human judgment to any machine learning application"
+      },
+      {
+        "name": "sagemaker-edge",
+        "description": "sageMaker Edge Manager dataplane service for communicating with active agents"
+      },
+      {
+        "name": "sagemaker-featurestore-runtime",
+        "description": "contains all data plane API operations and data types for the SageMaker Feature Store"
+      },
+      {
+        "name": "sagemaker-geospatial",
+        "description": "provides APIs for creating and managing SageMaker geospatial resources"
+      },
+      {
+        "name": "sagemaker-metrics",
+        "description": "contains all data plane API operations and data types for SageMaker Metrics"
+      },
+      {
+        "name": "sagemaker-runtime",
+        "description": "the SageMaker runtime API"
+      },
+      {
+        "name": "savingsplans",
+        "description": "savings Plans are a pricing model that offer significant savings on aws usage (for example, on EC..."
+      },
+      {
+        "name": "scheduler",
+        "description": "eventBridge Scheduler is a serverless scheduler that allows you to create, run, and manage tasks..."
+      },
+      {
+        "name": "schemas",
+        "description": "eventBridge Schema Registry"
+      },
+      {
+        "name": "sdb",
+        "description": "simpleDB is a web service providing the core database functions of data indexing and querying in..."
+      },
+      {
+        "name": "secretsmanager",
+        "description": "aws Secrets Manager aws Secrets Manager provides a service to enable you to store, manage, and re..."
+      },
+      {
+        "name": "security-ir",
+        "description": "this guide provides documents the action and response elements for customer use of the service"
+      },
+      {
+        "name": "securityhub",
+        "description": "security Hub provides you with a comprehensive view of your security state in aws and helps you a..."
+      },
+      {
+        "name": "securitylake",
+        "description": "security Lake is a fully managed security data lake service"
+      },
+      {
+        "name": "serverlessrepo",
+        "description": "the aws Serverless Application Repository makes it easy for developers and enterprises to quickly..."
+      },
+      {
+        "name": "service-quotas",
+        "description": "with Service Quotas, you can view and manage your quotas easily as your aws workloads grow"
+      },
+      {
+        "name": "servicecatalog",
+        "description": "service Catalog Service Catalog enables organizations to create and manage catalogs of IT service..."
+      },
+      {
+        "name": "servicecatalog-appregistry",
+        "description": "aws Service Catalog AppRegistry enables organizations to understand the application context of th..."
+      },
+      {
+        "name": "servicediscovery",
+        "description": "cloud Map With Cloud Map, you can configure public DNS, private DNS, or HTTP namespaces that your..."
+      },
+      {
+        "name": "ses",
+        "description": "simple Email Service This document contains reference information for the Simple Email Service (S..."
+      },
+      {
+        "name": "sesv2",
+        "description": "sES API v2 SES is an aws service that you can use to send email messages to your customers"
+      },
+      {
+        "name": "shield",
+        "description": "shield Advanced This is the Shield Advanced API Reference"
+      },
+      {
+        "name": "signer",
+        "description": "aws Signer is a fully managed code-signing service to help you ensure the trust and integrity of..."
+      },
+      {
+        "name": "simspaceweaver",
+        "description": "simSpace Weaver (SimSpace Weaver) is a service that you can use to build and run large-scale spat..."
+      },
+      {
+        "name": "sms",
+        "description": "product update We recommend aws Application Migration Service (aws MGN) as the primary migration..."
+      },
+      {
+        "name": "sms-voice",
+        "description": "pinpoint SMS and Voice Messaging public facing APIs"
+      },
+      {
+        "name": "snow-device-management",
+        "description": "aws Snow Device Management documentation"
+      },
+      {
+        "name": "snowball",
+        "description": "the aws Snow Family provides a petabyte-scale data transport solution that uses secure devices to..."
+      },
+      {
+        "name": "sns",
+        "description": "simple Notification Service Simple Notification Service (SNS) is a web service that enables you t..."
+      },
+      {
+        "name": "socialmessaging",
+        "description": "aws End User Messaging Social, also referred to as Social messaging, is a messaging service that..."
+      },
+      {
+        "name": "sqs",
+        "description": "welcome to the SQS API Reference"
+      },
+      {
+        "name": "ssm",
+        "description": "aws Systems Manager is the operations hub for your aws applications and resources and a secure en..."
+      },
+      {
+        "name": "ssm-contacts",
+        "description": "systems Manager Incident Manager is an incident management console designed to help users mitigat..."
+      },
+      {
+        "name": "ssm-incidents",
+        "description": "systems Manager Incident Manager is an incident management console designed to help users mitigat..."
+      },
+      {
+        "name": "ssm-quicksetup",
+        "description": "quick Setup helps you quickly configure frequently used services and features with recommended be..."
+      },
+      {
+        "name": "ssm-sap",
+        "description": "this API reference provides descriptions, syntax, and other details about each of the actions and..."
+      },
+      {
+        "name": "sso",
+        "description": "aws IAM Identity Center (successor to aws Single Sign-On) Portal is a web service that makes it e..."
+      },
+      {
+        "name": "sso-admin",
+        "description": "iAM Identity Center (successor to Single Sign-On) helps you securely create, or connect, your wor..."
+      },
+      {
+        "name": "sso-oidc",
+        "description": "iAM Identity Center OpenID Connect (OIDC) is a web service that enables a client (such as CLI or..."
+      },
+      {
+        "name": "stepfunctions",
+        "description": "step Functions Step Functions coordinates the components of distributed applications and microser..."
+      },
+      {
+        "name": "storagegateway",
+        "description": "storage Gateway Service FSx File Gateway is no longer available to new customers"
+      },
+      {
+        "name": "sts",
+        "description": "security Token Service Security Token Service (STS) enables you to request temporary, limited-pri..."
+      },
+      {
+        "name": "supplychain",
+        "description": "aws Supply Chain is a cloud-based application that works with your enterprise resource planning (..."
+      },
+      {
+        "name": "support",
+        "description": "aws Support The aws Support API Reference is intended for programmers who need detailed informati..."
+      },
+      {
+        "name": "support-app",
+        "description": "aws Support App in Slack You can use the aws Support App in Slack API to manage your support case..."
+      },
+      {
+        "name": "swf",
+        "description": "simple Workflow Service The Simple Workflow Service (SWF) makes it easy to build applications tha..."
+      },
+      {
+        "name": "synthetics",
+        "description": "cloudWatch Synthetics You can use CloudWatch Synthetics to continually monitor your services"
+      },
+      {
+        "name": "taxsettings",
+        "description": "you can use the tax setting API to programmatically set, modify, and delete the tax registration..."
+      },
+      {
+        "name": "textract",
+        "description": "textract detects and analyzes text in documents and converts it into machine-readable text"
+      },
+      {
+        "name": "timestream-influxdb",
+        "description": "timestream for InfluxDB is a managed time-series database engine that makes it easy for applicati..."
+      },
+      {
+        "name": "timestream-query",
+        "description": "timestream Query"
+      },
+      {
+        "name": "timestream-write",
+        "description": "timestream Write Timestream is a fast, scalable, fully managed time-series database service that..."
+      },
+      {
+        "name": "tnb",
+        "description": "aws Telco Network Builder (TNB) is a network automation service that helps you deploy and manage..."
+      },
+      {
+        "name": "transcribe",
+        "description": "transcribe offers three main types of batch transcription: Standard, Medical, and Call Analytics"
+      },
+      {
+        "name": "transfer",
+        "description": "transfer Family is a fully managed service that enables the transfer of files over the File Trans..."
+      },
+      {
+        "name": "translate",
+        "description": "provides translation of the input content from the source language to the target language"
+      },
+      {
+        "name": "trustedadvisor",
+        "description": "trustedAdvisor Public API"
+      },
+      {
+        "name": "verifiedpermissions",
+        "description": "verified Permissions is a permissions management service from Web Services"
+      },
+      {
+        "name": "voice-id",
+        "description": "connect Voice ID provides real-time caller authentication and fraud risk detection, which make vo..."
+      },
+      {
+        "name": "vpc-lattice",
+        "description": "vPC Lattice is a fully managed application networking service that you use to connect, secure, an..."
+      },
+      {
+        "name": "waf",
+        "description": "this is aws WAF Classic documentation"
+      },
+      {
+        "name": "waf-regional",
+        "description": "this is aws WAF Classic Regional documentation"
+      },
+      {
+        "name": "wafv2",
+        "description": "wAF This is the latest version of the WAF API, released in November, 2019"
+      },
+      {
+        "name": "wellarchitected",
+        "description": "well-Architected Tool This is the Well-Architected Tool API Reference"
+      },
+      {
+        "name": "wisdom",
+        "description": "connect Wisdom delivers agents the information they need to solve customer issues as they're acti..."
+      },
+      {
+        "name": "workdocs",
+        "description": "the WorkDocs API is designed for the following use cases: File Migration: File migration applicat..."
+      },
+      {
+        "name": "workmail",
+        "description": "workMail is a secure, managed business email and calendaring service with support for existing de..."
+      },
+      {
+        "name": "workmailmessageflow",
+        "description": "the WorkMail Message Flow API provides access to email messages as they are being sent and receiv..."
+      },
+      {
+        "name": "workspaces",
+        "description": "workSpaces Service WorkSpaces enables you to provision virtual, cloud-based Microsoft Windows or..."
+      },
+      {
+        "name": "workspaces-thin-client",
+        "description": "workSpaces Thin Client is an affordable device built to work with aws End User Computing (EUC) vi..."
+      },
+      {
+        "name": "workspaces-web",
+        "description": "workSpaces Secure Browser is a low cost, fully managed WorkSpace built specifically to facilitate..."
+      },
+      {
+        "name": "xray",
+        "description": "aws X-Ray provides APIs for managing debug traces and retrieving service maps and other data crea..."
+      },
+      {
+        "name": "s3api"
+      },
+      {
+        "name": "s3",
+        "description": "this section explains prominent concepts and notations in the set of high-level S3 commands provided"
+      },
+      {
+        "name": "configure",
+        "description": "configure aws CLI options"
+      },
+      {
+        "name": "deploy",
+        "description": "codeDeploy is a deployment service that automates application deployments to EC2 instances, on-pr..."
+      },
+      {
+        "name": "configservice",
+        "description": "config Config provides a way to keep track of the configurations of all the aws resources associa..."
+      },
+      {
+        "name": "opsworks-cm",
+        "description": "aws OpsWorks CM aws OpsWorks for configuration management (CM) is a service that runs and manages..."
+      },
+      {
+        "name": "runtime.sagemaker",
+        "description": "the SageMaker runtime API"
+      },
+      {
+        "name": "history",
+        "description": "commands to interact with the history of aws CLI commands ran over time"
+      }
+    ],
+    "description": "manage aws services",
+    "providers": {
+      "aws.profiles": {
+        "function": "__rush_complete_aws_profiles"
+      }
+    }
+  }
+}
