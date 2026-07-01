@@ -1,0 +1,8 @@
+__rush_complete_chown_owners() {
+  cut -d: -f1 /etc/passwd 2>/dev/null | while IFS= read -r user; do
+    test -n "$user" && rush_complete candidate "$user" --kind plain --description user
+  done
+  cut -d: -f1 /etc/group 2>/dev/null | while IFS= read -r group; do
+    test -n "$group" && rush_complete candidate ":$group" --kind plain --description group
+  done
+}
