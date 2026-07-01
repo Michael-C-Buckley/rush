@@ -517,6 +517,23 @@
             .status = 0,
         },
         .{
+            .name = "hash and ulimit are regular builtins",
+            .script =
+            \\command -v hash
+            \\command -v ulimit
+            \\hash -r
+            \\ulimit -t unlimited
+            \\ulimit -c 0
+            ,
+            .stdout =
+            \\hash
+            \\ulimit
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "command -p uses a default utility path",
             .script =
             \\PATH=/no/such command -p sh -c 'printf p'
