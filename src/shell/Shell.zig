@@ -108,6 +108,15 @@ pub fn ShellWithBuiltins(comptime Host: type, comptime builtin_registry: builtin
 
         fn evalSourceWithReset(self: *Self, src: source.Source, reset_chunks: bool) !result.EvalResult {
             src.validate();
+            const previous_root_kind = self.state.root_source_kind;
+            const set_root_source = previous_root_kind == null;
+            if (set_root_source) {
+                self.state.root_source_kind = src.kind;
+            }
+            defer if (set_root_source) {
+                self.state.root_source_kind = previous_root_kind;
+            };
+
             if (!self.sourceNeedsAliasAwareEvaluation(src)) return self.evalSourceChunk(src, src.text, reset_chunks, false);
             if (src.text.len == 0) return self.evalSourceChunk(src, src.text, reset_chunks, false);
 

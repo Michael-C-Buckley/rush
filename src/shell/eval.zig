@@ -1022,8 +1022,9 @@ fn evalSimple(shell: anytype, command: ast.SimpleCommand) EvalError!result.EvalR
         error.AssignmentError => .{ .status = 1, .flow = .{ .fatal = 1 } },
         error.ExpansionError => .{ .status = 1, .flow = .{ .fatal = 1 } },
         error.FatalExpansionError => {
+            const status = bashFatalExpansionStatus(shell);
             try shell.host.writeAll(.stderr, "expansion error\n");
-            return .{ .status = 127, .flow = .{ .exit = 127 } };
+            return .{ .status = status, .flow = .{ .exit = status } };
         },
         error.InvalidArithmetic => {
             try shell.host.writeAll(.stderr, "arithmetic expansion error\n");
@@ -1032,6 +1033,12 @@ fn evalSimple(shell: anytype, command: ast.SimpleCommand) EvalError!result.EvalR
         error.BadFd, error.BrokenPipe, error.InputOutput, error.WouldBlock => .{ .status = 1 },
         else => return err,
     };
+}
+
+fn bashFatalExpansionStatus(shell: anytype) result.ExitStatus {
+    if (shell.state.options.interactive) return 1;
+    if (shell.state.root_source_kind == .command_string) return 127;
+    return 1;
 }
 
 fn redirectionFailure(shell: anytype, fatal: bool) result.EvalResult {

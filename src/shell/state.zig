@@ -6,6 +6,7 @@ const ast = @import("ast.zig");
 const host = @import("../host.zig");
 const memory = @import("memory.zig");
 const result = @import("result.zig");
+const source = @import("source.zig");
 
 pub const Mode = enum {
     posix,
@@ -112,6 +113,7 @@ pub const State = struct {
     errexit_ignore_depth: usize = 0,
     loop_depth: usize = 0,
     diagnostic_line_offset: usize = 0,
+    root_source_kind: ?source.SourceKind = null,
     exit_trap: ?[]const u8 = null,
     exit_trap_listing: ?[]const u8 = null,
     running_exit_trap: bool = false,
