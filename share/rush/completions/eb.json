@@ -1,0 +1,364 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "eb",
+    "description": "manage AWS Elastic Beanstalk applications",
+    "subcommands": [
+      {
+        "name": "init",
+        "description": "initialize a new AWS Elastic Beanstalk application",
+        "options": [
+          {
+            "short": "i",
+            "long": "interactive",
+            "description": "forces EB CLI to prompt you to provide a value for every eb init command option",
+            "inherit": false
+          },
+          {
+            "short": "k",
+            "long": "keyname",
+            "description": "the name of the AWS EC2 key pair",
+            "inherit": false,
+            "value": {
+              "name": "keyname"
+            }
+          },
+          {
+            "long": "modules",
+            "description": "list of child directories to initialize",
+            "inherit": false
+          },
+          {
+            "short": "p",
+            "long": "platform",
+            "description": "the platform version to use",
+            "inherit": false,
+            "value": {
+              "name": "plataform-version"
+            }
+          },
+          {
+            "long": "tags",
+            "description": "list of tags to apply to the application",
+            "inherit": false,
+            "value": {
+              "name": "key=value"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "name",
+              "description": "the name of the application",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "deploy",
+        "description": "deploys the application source bundle from the initialized project directory to the running application",
+        "options": [
+          {
+            "short": "l",
+            "long": "label",
+            "description": "specify a label to use for the version that the EB CLI creates",
+            "inherit": false,
+            "value": {
+              "name": "version-label",
+              "description": "the label to use for the version"
+            }
+          },
+          {
+            "long": "env-group-suffix",
+            "description": "group name to append to the environment name",
+            "inherit": false,
+            "value": {
+              "name": "groupname",
+              "description": "the group name to append to the environment name"
+            }
+          },
+          {
+            "short": "m",
+            "long": "message",
+            "description": "the description for the application version, enclosed in double quotation marks",
+            "inherit": false,
+            "value": {
+              "name": "version-description",
+              "description": "description for the application version"
+            }
+          },
+          {
+            "long": "modules",
+            "description": "list of components to update. Only for Compose Environments",
+            "inherit": false,
+            "value": {
+              "name": "component",
+              "description": "component to update"
+            }
+          },
+          {
+            "short": "p",
+            "long": "platform",
+            "description": "preprocess and validate the environment manifest and configuration files in the source bundle",
+            "inherit": false
+          },
+          {
+            "long": "source",
+            "description": "codeCommit repository and branch",
+            "inherit": false,
+            "value": {
+              "name": "repository-name/repository-branch",
+              "description": "the name of the CodeCommit repository and branch"
+            }
+          },
+          {
+            "long": "staged",
+            "description": "deploy files staged in the git index instead of the HEAD commit",
+            "inherit": false
+          },
+          {
+            "long": "timeout",
+            "description": "the number of minutes before the command times out",
+            "inherit": false,
+            "value": {
+              "name": "minutes",
+              "description": "minutes before timeout"
+            }
+          },
+          {
+            "long": "version",
+            "description": "an existing application version to deploy",
+            "inherit": false,
+            "value": {
+              "name": "version-label",
+              "description": "label of the existing version to deploy"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "environment-name",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "abort",
+        "description": "abort the current running process"
+      },
+      {
+        "name": "clone",
+        "description": "clones an environment to a new environment so that both have identical environment settings",
+        "options": [
+          {
+            "short": "n",
+            "long": "clone_name",
+            "description": "desired name for the cloned environment",
+            "inherit": false,
+            "value": {
+              "name": "string",
+              "description": "the name for the cloned environment"
+            }
+          },
+          {
+            "short": "c",
+            "long": "cname",
+            "description": "desired CNAME prefix for the cloned environment",
+            "inherit": false,
+            "value": {
+              "name": "cname",
+              "description": "cNAME prefix"
+            }
+          },
+          {
+            "long": "envvars",
+            "description": "environment properties in a comma-separated list with the format name=value",
+            "inherit": false
+          },
+          {
+            "long": "exact",
+            "description": "prevents Elastic Beanstalk from updating the solution stack version for the new clone environment to the most recent version available",
+            "inherit": false
+          },
+          {
+            "long": "scale",
+            "description": "the number of instances to run in the clone environment when it is launched",
+            "inherit": false,
+            "value": {
+              "name": "number",
+              "description": "number of instances"
+            }
+          },
+          {
+            "long": "tags",
+            "description": "tags for the resources in your environment in a comma-separated list with the format name=value",
+            "inherit": false,
+            "value": {
+              "name": "name=value",
+              "description": "tags for the resources in your environment"
+            }
+          },
+          {
+            "long": "timeout",
+            "description": "the number of minutes before the command times out",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "environment-name",
+              "description": "the name of the environment to clone",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "open",
+        "description": "opens the public URL of your website in the default browser",
+        "arguments": {
+          "states": [
+            {
+              "name": "environment-name",
+              "description": "the name of the environment to open",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "list",
+        "description": "list environments",
+        "options": [
+          {
+            "short": "a",
+            "long": "all",
+            "description": "list all environments from all applications",
+            "inherit": false
+          },
+          {
+            "short": "v",
+            "long": "verbose",
+            "description": "provides more detailed information about all environments, including instances",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "printenv",
+        "description": "prints all the environment properties in the command window",
+        "arguments": {
+          "states": [
+            {
+              "name": "environment-name",
+              "description": "the name of the environment to print",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "ssh",
+        "description": "connect to a Linux Amazon EC2 instance in your environment using Secure Shell",
+        "options": [
+          {
+            "short": "i",
+            "long": "instance",
+            "description": "the ID of the instance to connect to",
+            "inherit": false
+          },
+          {
+            "short": "n",
+            "long": "number",
+            "description": "the number of the instance to connect to by number",
+            "inherit": false
+          },
+          {
+            "short": "o",
+            "long": "keep_open",
+            "description": "leave port 22 open on the security group after the SSH session ends",
+            "inherit": false
+          },
+          {
+            "long": "command",
+            "description": "execute a shell command on the specified instance instead of starting an SSH session",
+            "inherit": false
+          },
+          {
+            "long": "custom",
+            "description": "specify an SSH command to use instead of 'ssh -i keyfile'. Do not include the remote user and hostname",
+            "inherit": false
+          },
+          {
+            "long": "setup",
+            "description": "change the key pair assigned to the environment's instances",
+            "inherit": false
+          },
+          {
+            "long": "force",
+            "description": "open port 22 to incoming traffic from 0.0.0.0/0 in the environment's security group, even if the security group is already configured for SSH",
+            "inherit": false
+          },
+          {
+            "long": "timeout",
+            "description": "set number of minutes before the command times out",
+            "inherit": false,
+            "value": {
+              "name": "minutes",
+              "description": "number of minutes before timeout"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "environment-name",
+              "description": "the name of the environment to connect to",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "use",
+        "description": "sets the specified environment as the default environment",
+        "options": [
+          {
+            "short": "r",
+            "long": "region",
+            "description": "change the region in which you create environments",
+            "inherit": false,
+            "value": {
+              "name": "region",
+              "description": "the region to use"
+            }
+          },
+          {
+            "long": "source",
+            "description": "codeCommit repository and branch",
+            "inherit": false,
+            "value": {
+              "name": "codecommit/repository-name/repository-branch",
+              "description": "the name of the CodeCommit repository and branch"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "environment-name",
+              "description": "the name of the environment to use",
+              "index": 0
+            }
+          ]
+        }
+      }
+    ]
+  }
+}
