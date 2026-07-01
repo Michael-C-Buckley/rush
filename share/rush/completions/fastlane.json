@@ -1,0 +1,284 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "fastlane",
+    "description": "automate Android and iOS deployment",
+    "options": [
+      {
+        "long": "platform",
+        "description": "only show actions available on the given platform",
+        "inherit": true,
+        "value": {
+          "name": "platform",
+          "description": "one of android, ios or mac",
+          "provider": {
+            "values": [
+              "ios",
+              "android",
+              "mac"
+            ]
+          }
+        }
+      },
+      {
+        "short": "h",
+        "long": "help",
+        "description": "show help for fastlane",
+        "inherit": true
+      },
+      {
+        "short": "v",
+        "long": "version",
+        "description": "show version information for fastlane",
+        "inherit": false
+      },
+      {
+        "long": "verbose",
+        "description": "show version information for fastlane",
+        "inherit": true
+      },
+      {
+        "long": "capture_output",
+        "description": "captures the output of the current run, and generates a markdown issue template",
+        "inherit": false
+      },
+      {
+        "long": "troubleshoot",
+        "description": "enables extended verbose mode. Use with caution, as this even includes ALL sensitive data. Cannot be used on CI",
+        "inherit": false
+      },
+      {
+        "long": "env",
+        "description": "add environment(s) to use with `dotenv`",
+        "inherit": false
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "init",
+        "description": "helps you with your initial fastlane setup",
+        "options": [
+          {
+            "short": "u",
+            "long": "user",
+            "description": "only iOS projects Your Apple ID",
+            "inherit": false,
+            "value": {
+              "name": "appleID",
+              "description": "your Apple ID"
+            }
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "swift",
+            "description": "fastlane configuration written in Swift (Beta). Swift setup is still in beta"
+          }
+        ]
+      },
+      {
+        "name": "action",
+        "description": "shows more information for a specific command",
+        "arguments": {
+          "states": [
+            {
+              "name": "tool_name",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "actions",
+        "description": "lists all available fastlane actions"
+      },
+      {
+        "name": "add_plugin",
+        "description": "add a new plugin to your fastlane setup",
+        "arguments": {
+          "states": [
+            {
+              "name": "plugin_name",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "docs",
+        "description": "generate a markdown based documentation based on the Fastfile",
+        "options": [
+          {
+            "short": "f",
+            "long": "force",
+            "description": "overwrite the existing README.md in the ./fastlane folder",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "enable_auto_complete",
+        "description": "enable tab auto completion",
+        "options": [
+          {
+            "short": "c",
+            "long": "custom",
+            "description": "add custom command(s) for which tab auto complete should be enabled too",
+            "inherit": false,
+            "value": {
+              "name": "<command1>...<commandN>"
+            }
+          }
+        ]
+      },
+      {
+        "name": "env",
+        "description": "print your fastlane environment, use this when you submit an issue on GitHub"
+      },
+      {
+        "name": "help",
+        "description": "display global or [command] help documentation"
+      },
+      {
+        "name": "install_plugins",
+        "description": "install all plugins for this project"
+      },
+      {
+        "name": "lanes",
+        "description": "lists all available lanes and shows their description"
+      },
+      {
+        "name": "list",
+        "description": "lists all available lanes without description",
+        "options": [
+          {
+            "short": "j",
+            "long": "json",
+            "description": "output the lanes in JSON instead of text",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "new_action",
+        "description": "create a new custom action for fastlane",
+        "options": [
+          {
+            "long": "name",
+            "description": "name of your new action",
+            "inherit": false,
+            "value": {
+              "name": "action_name"
+            }
+          }
+        ]
+      },
+      {
+        "name": "new_plugin",
+        "description": "create a new plugin that can be used with fastlane",
+        "arguments": {
+          "states": [
+            {
+              "name": "plugin_name",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "run",
+        "description": "run a fastlane one-off action without a full lane",
+        "arguments": {
+          "states": [
+            {
+              "name": "action",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "search_plugins",
+        "description": "search for plugins, search query is optional",
+        "arguments": {
+          "states": [
+            {
+              "name": "search_query",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "socket_server",
+        "description": "starts local socket server and enables only a single local connection",
+        "options": [
+          {
+            "short": "s",
+            "long": "stay_alive",
+            "description": "keeps socket server up even after error or disconnects, requires CTRL-C to kill",
+            "inherit": false
+          },
+          {
+            "short": "c",
+            "long": "connection_timeout",
+            "description": "sets connection established timeout",
+            "inherit": false,
+            "value": {
+              "name": "seconds",
+              "description": "connection timeout in seconds"
+            }
+          },
+          {
+            "short": "p",
+            "long": "port",
+            "description": "sets the port on localhost for the socket connection",
+            "inherit": false,
+            "value": {
+              "name": "port",
+              "description": "the port on localhost"
+            }
+          }
+        ]
+      },
+      {
+        "name": "trigger",
+        "description": "run a specific lane. Pass the lane name and optionally the platform first",
+        "options": [
+          {
+            "long": "disable_runner_upgrades",
+            "description": "prevents fastlane from attempting to update FastlaneRunner swift project",
+            "inherit": false
+          },
+          {
+            "long": "swift_server_port",
+            "description": "prevents fastlane from attempting to update FastlaneRunner swift project",
+            "inherit": false,
+            "value": {
+              "name": "port",
+              "description": "set specific port to communicate between fastlane and FastlaneRunner"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "lane",
+              "description": "specific lane to trigger",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "update_fastlane",
+        "description": "update fastlane to the latest release"
+      },
+      {
+        "name": "update_plugins",
+        "description": "update all plugin dependencies"
+      }
+    ]
+  }
+}
