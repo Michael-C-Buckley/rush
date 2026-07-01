@@ -921,11 +921,8 @@ export default function (amp: PluginAPI) {
 			delete state.currentByThread[ctx.thread.id]
 			await saveState(state)
 			const summary = summarizeState(state, ctx.thread.id, 10).counts
-			const nextMessageSent = summary.todo > 0
-			if (nextMessageSent) {
-				await ctx.thread.appendUserMessage({ type: 'user-message', content: 'pick the next command' })
-			}
-			return JSON.stringify({ ok: true, specPath, record, summary, nextMessageSent }, null, 2)
+			const more = summary.todo > 0
+			return JSON.stringify({ ok: true, specPath, record, summary, more }, null, 2)
 		},
 	})
 
