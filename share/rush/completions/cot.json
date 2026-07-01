@@ -1,0 +1,76 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "cot",
+    "description": "open files in coteditor",
+    "options": [
+      {
+        "short": "h",
+        "long": "help",
+        "description": "show help message and exit",
+        "inherit": false
+      },
+      {
+        "short": "v",
+        "long": "version",
+        "description": "show program's version number and exit",
+        "inherit": false
+      },
+      {
+        "short": "w",
+        "long": "wait",
+        "description": "wait for opened file to be closed",
+        "inherit": false
+      },
+      {
+        "short": "g",
+        "long": "background",
+        "description": "do not bring the application to the foreground",
+        "inherit": false
+      },
+      {
+        "short": "n",
+        "long": "new",
+        "description": "create a new blank document",
+        "inherit": false
+      },
+      {
+        "short": "l",
+        "long": "line",
+        "description": "jump to specific line in opened document",
+        "inherit": false,
+        "value": {
+          "name": "line"
+        }
+      },
+      {
+        "short": "c",
+        "long": "column",
+        "description": "jump to specific column in opened document",
+        "inherit": false,
+        "value": {
+          "name": "column"
+        }
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "file",
+          "provider": "builtin.files",
+          "index": 0,
+          "description": "file to open"
+        }
+      ]
+    },
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "builtin.directories": {
+        "builtin": "directories"
+      }
+    }
+  }
+}
