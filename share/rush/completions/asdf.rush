@@ -1,0 +1,37 @@
+__rush_complete_asdf_emit_lines() {
+  description=$1
+  while IFS= read -r value; do
+    value=${value#\*}
+    value=${value## }
+    test -n "$value" || continue
+    rush_complete candidate "$value" --kind plain --description "$description"
+  done
+}
+
+__rush_complete_asdf_installed_plugins() {
+  asdf plugin-list 2>/dev/null | __rush_complete_asdf_emit_lines plugin
+}
+
+__rush_complete_asdf_all_plugins() {
+  if test -d "$HOME/.asdf/repository/plugins"; then
+    ls -1 "$HOME/.asdf/repository/plugins" 2>/dev/null | __rush_complete_asdf_emit_lines plugin
+  fi
+}
+
+__rush_complete_asdf_installed_versions() {
+  plugin=$(rush_complete operand 0 2>/dev/null)
+  test -n "$plugin" || return 0
+  asdf list "$plugin" 2>/dev/null | __rush_complete_asdf_emit_lines version
+}
+
+__rush_complete_asdf_all_versions() {
+  plugin=$(rush_complete operand 0 2>/dev/null)
+  test -n "$plugin" || return 0
+  asdf list-all "$plugin" 2>/dev/null | __rush_complete_asdf_emit_lines version
+}
+
+__rush_complete_asdf_shims() {
+  if test -d "$HOME/.asdf/shims"; then
+    ls -1 "$HOME/.asdf/shims" 2>/dev/null | __rush_complete_asdf_emit_lines shim
+  fi
+}

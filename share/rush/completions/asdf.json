@@ -1,0 +1,530 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "asdf",
+    "description": "manage tool versions",
+    "options": [
+      {
+        "long": "version",
+        "description": "show version",
+        "inherit": false
+      },
+      {
+        "short": "h",
+        "long": "help",
+        "description": "show help",
+        "inherit": false
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "plugin",
+        "description": "manage plugins",
+        "subcommands": [
+          {
+            "name": "add",
+            "description": "add a plugin",
+            "arguments": {
+              "states": [
+                {
+                  "name": "name",
+                  "index": 0,
+                  "provider": "asdf.all-plugins"
+                },
+                {
+                  "name": "git-url",
+                  "index": 1
+                }
+              ]
+            }
+          },
+          {
+            "name": "list",
+            "description": "list installed plugins",
+            "options": [
+              {
+                "long": "urls",
+                "description": "show git urls",
+                "inherit": false
+              },
+              {
+                "long": "refs",
+                "description": "show git refs",
+                "inherit": false
+              }
+            ],
+            "subcommands": [
+              {
+                "name": "all",
+                "description": "list all known plugins"
+              }
+            ]
+          },
+          {
+            "name": "remove",
+            "description": "remove plugin and versions",
+            "arguments": {
+              "states": [
+                {
+                  "name": "name",
+                  "index": 0,
+                  "provider": "asdf.installed-plugins"
+                }
+              ]
+            }
+          },
+          {
+            "name": "update",
+            "description": "update plugins",
+            "options": [
+              {
+                "long": "all",
+                "description": "update all plugins",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "name",
+                  "index": 0,
+                  "provider": "asdf.installed-plugins"
+                },
+                {
+                  "name": "git-ref",
+                  "index": 1
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "plugin-add",
+        "description": "add a plugin",
+        "arguments": {
+          "states": [
+            {
+              "name": "name",
+              "index": 0,
+              "provider": "asdf.installed-plugins"
+            },
+            {
+              "name": "git-url",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "plugin-list",
+        "description": "list installed plugins",
+        "options": [
+          {
+            "long": "urls",
+            "description": "show git urls",
+            "inherit": false
+          },
+          {
+            "long": "refs",
+            "description": "show git refs",
+            "inherit": false
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "all",
+            "description": "list all known plugins"
+          }
+        ]
+      },
+      {
+        "name": "plugin-list-all",
+        "description": "list all known plugins"
+      },
+      {
+        "name": "plugin-remove",
+        "description": "remove plugin and versions",
+        "arguments": {
+          "states": [
+            {
+              "name": "name",
+              "index": 0,
+              "provider": "asdf.installed-plugins"
+            }
+          ]
+        }
+      },
+      {
+        "name": "plugin-update",
+        "description": "update plugins",
+        "options": [
+          {
+            "long": "all",
+            "description": "update all plugins",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "name",
+              "index": 0,
+              "provider": "asdf.installed-plugins"
+            },
+            {
+              "name": "git-ref",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "install",
+        "description": "Install plugin at stated version, or all from .tools-versions",
+        "arguments": {
+          "states": [
+            {
+              "name": "name",
+              "index": 0,
+              "provider": "asdf.installed-plugins"
+            },
+            {
+              "name": "version",
+              "provider": [
+                "asdf.latest",
+                "asdf.all-versions"
+              ],
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "uninstall",
+        "description": "Remove a specific version of a package",
+        "arguments": {
+          "states": [
+            {
+              "name": "name",
+              "index": 0,
+              "provider": "asdf.installed-plugins"
+            },
+            {
+              "name": "version",
+              "index": 1,
+              "provider": "asdf.installed-versions"
+            }
+          ]
+        }
+      },
+      {
+        "name": "current",
+        "description": "Display current versions for named package (else all)",
+        "arguments": {
+          "states": [
+            {
+              "name": "name",
+              "index": 0,
+              "provider": "asdf.installed-plugins"
+            }
+          ]
+        }
+      },
+      {
+        "name": "where",
+        "description": "Display install path for given package at optional specified version",
+        "arguments": {
+          "states": [
+            {
+              "name": "name",
+              "index": 0,
+              "provider": "asdf.installed-plugins"
+            },
+            {
+              "name": "version",
+              "index": 1,
+              "provider": "asdf.installed-versions"
+            }
+          ]
+        }
+      },
+      {
+        "name": "which",
+        "description": "Display path to an executable",
+        "arguments": {
+          "states": [
+            {
+              "name": "command",
+              "index": 0,
+              "provider": "asdf.shims"
+            }
+          ]
+        }
+      },
+      {
+        "name": "local",
+        "description": "Set package local version",
+        "arguments": {
+          "states": [
+            {
+              "name": "name",
+              "index": 0,
+              "provider": "asdf.installed-plugins"
+            },
+            {
+              "name": "version",
+              "index": 1,
+              "provider": "asdf.installed-versions"
+            }
+          ]
+        }
+      },
+      {
+        "name": "global",
+        "description": "Set package global version",
+        "arguments": {
+          "states": [
+            {
+              "name": "name",
+              "index": 0,
+              "provider": "asdf.installed-plugins"
+            },
+            {
+              "name": "version",
+              "index": 1,
+              "provider": "asdf.installed-versions"
+            }
+          ]
+        }
+      },
+      {
+        "name": "shell",
+        "description": "Set the package version to ASDF_${LANG}_VERSION` in the current shell",
+        "arguments": {
+          "states": [
+            {
+              "name": "name",
+              "index": 0,
+              "provider": "asdf.installed-plugins"
+            },
+            {
+              "name": "version",
+              "index": 1,
+              "provider": "asdf.installed-versions"
+            }
+          ]
+        }
+      },
+      {
+        "name": "latest",
+        "description": "Display latest version available to install for a named package",
+        "arguments": {
+          "states": [
+            {
+              "name": "name",
+              "index": 0,
+              "provider": "asdf.installed-plugins"
+            },
+            {
+              "name": "version",
+              "index": 1,
+              "provider": "asdf.installed-versions"
+            }
+          ]
+        }
+      },
+      {
+        "name": "list",
+        "description": "List installed versions of a package",
+        "arguments": {
+          "states": [
+            {
+              "name": "name",
+              "index": 0,
+              "provider": "asdf.installed-plugins"
+            }
+          ]
+        },
+        "subcommands": [
+          {
+            "name": "all",
+            "description": "list all available versions",
+            "arguments": {
+              "states": [
+                {
+                  "name": "name",
+                  "index": 0,
+                  "provider": "asdf.installed-plugins"
+                },
+                {
+                  "name": "version",
+                  "index": 1,
+                  "provider": "asdf.all-versions"
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "list-all",
+        "description": "list all available versions",
+        "arguments": {
+          "states": [
+            {
+              "name": "name",
+              "index": 0,
+              "provider": "asdf.installed-plugins"
+            },
+            {
+              "name": "version",
+              "index": 1,
+              "provider": "asdf.installed-versions"
+            }
+          ]
+        }
+      },
+      {
+        "name": "help",
+        "description": "Output documentation for plugin and tool",
+        "arguments": {
+          "states": [
+            {
+              "name": "name",
+              "index": 0,
+              "provider": "asdf.installed-plugins"
+            },
+            {
+              "name": "version",
+              "index": 1,
+              "provider": "asdf.installed-versions"
+            }
+          ]
+        }
+      },
+      {
+        "name": "exec",
+        "description": "Executes the command shim for the current version",
+        "arguments": {
+          "states": [
+            {
+              "name": "command",
+              "provider": "asdf.shims",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "env",
+        "description": "Prints or runs an executable under a command environment",
+        "arguments": {
+          "states": [
+            {
+              "name": "command",
+              "index": 0,
+              "provider": "asdf.shims"
+            }
+          ]
+        }
+      },
+      {
+        "name": "info",
+        "description": "Print os, shell and asdf debug information"
+      },
+      {
+        "name": "reshim",
+        "description": "Recreate shims for version of a package",
+        "arguments": {
+          "states": [
+            {
+              "name": "name",
+              "index": 0,
+              "provider": "asdf.installed-plugins"
+            },
+            {
+              "name": "version",
+              "index": 1,
+              "provider": "asdf.installed-versions"
+            }
+          ]
+        }
+      },
+      {
+        "name": "shim",
+        "description": "Shim management sub-commands",
+        "subcommands": [
+          {
+            "name": "versions",
+            "description": "list plugins and versions for command",
+            "arguments": {
+              "states": [
+                {
+                  "name": "command",
+                  "index": 0,
+                  "provider": "asdf.shims"
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "shim-versions",
+        "description": "list plugins and versions for command",
+        "arguments": {
+          "states": [
+            {
+              "name": "command",
+              "index": 0,
+              "provider": "asdf.shims"
+            }
+          ]
+        }
+      },
+      {
+        "name": "update",
+        "description": "Update ASDF to the latest stable release (unless --head)",
+        "options": [
+          {
+            "long": "head",
+            "description": "Using HEAD commit",
+            "priority": -10,
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "version",
+        "description": "Version for asdf"
+      }
+    ],
+    "providers": {
+      "builtin.executables": {
+        "builtin": "executables"
+      },
+      "asdf.installed-plugins": {
+        "function": "__rush_complete_asdf_installed_plugins"
+      },
+      "asdf.all-plugins": {
+        "function": "__rush_complete_asdf_all_plugins"
+      },
+      "asdf.installed-versions": {
+        "function": "__rush_complete_asdf_installed_versions"
+      },
+      "asdf.all-versions": {
+        "function": "__rush_complete_asdf_all_versions"
+      },
+      "asdf.shims": {
+        "function": "__rush_complete_asdf_shims"
+      },
+      "asdf.latest": {
+        "values": [
+          "latest"
+        ]
+      }
+    }
+  }
+}
