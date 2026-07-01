@@ -291,7 +291,7 @@ test "ShellWithBuiltins uses the supplied compile-time builtin registry" {
 
 test "Shell directory change callback reports only current-shell changes" {
     const TestHost = struct {
-        const Self = @This();
+        pub const Self = @This();
 
         pid: i32,
 
