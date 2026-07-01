@@ -1,0 +1,592 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "eza",
+    "description": "list files with enhanced output",
+    "options": [
+      {
+        "short": "?",
+        "long": "help",
+        "description": "show list of command-line options",
+        "inherit": false
+      },
+      {
+        "short": "v",
+        "long": "version",
+        "description": "show version of eza",
+        "inherit": false
+      },
+      {
+        "short": "1",
+        "long": "oneline",
+        "description": "display one entry per line",
+        "inherit": false
+      },
+      {
+        "short": "l",
+        "long": "long",
+        "description": "display extended file metadata as a table",
+        "inherit": false
+      },
+      {
+        "short": "G",
+        "long": "grid",
+        "description": "display entries as a grid (default)",
+        "inherit": false
+      },
+      {
+        "short": "x",
+        "long": "across",
+        "description": "sort the grid across, rather than downward",
+        "inherit": false
+      },
+      {
+        "short": "R",
+        "long": "recurse",
+        "description": "recurse into directories",
+        "inherit": false
+      },
+      {
+        "short": "T",
+        "long": "tree",
+        "description": "recurse into directories as a tree",
+        "inherit": false
+      },
+      {
+        "short": "X",
+        "long": "dereference",
+        "description": "dereference symbolic links when displaying information",
+        "inherit": false
+      },
+      {
+        "short": "F",
+        "long": "classify",
+        "description": "display type indicator by file names",
+        "inherit": false,
+        "value": {
+          "name": "when",
+          "provider": {
+            "values": [
+              {
+                "value": "auto",
+                "description": "Display file kind indicators only when the standard output is connected to a real terminal"
+              },
+              {
+                "value": "automatic",
+                "description": "Display file kind indicators only when the standard output is connected to a real terminal"
+              },
+              {
+                "value": "always",
+                "description": "Always display file kind indicators"
+              },
+              {
+                "value": "never",
+                "description": "Disables the use of file kind indicators"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "long": "color",
+        "aliases": [
+          "colour"
+        ],
+        "description": "when to use terminal colours",
+        "inherit": false,
+        "value": {
+          "name": "when",
+          "provider": {
+            "values": [
+              {
+                "value": "auto",
+                "description": "To colorize the output only when the standard output is connected to a real terminal"
+              },
+              {
+                "value": "automatic",
+                "description": "To colorize the output only when the standard output is connected to a real terminal"
+              },
+              {
+                "value": "always",
+                "description": "Always output terminal color"
+              },
+              {
+                "value": "never",
+                "description": "Disables the use of terminal color"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "long": "color-scale",
+        "aliases": [
+          "colour-scale"
+        ],
+        "description": "highlight levels of 'field' distinctly",
+        "inherit": false,
+        "value": {
+          "name": "field",
+          "provider": {
+            "values": [
+              "all",
+              "age",
+              "size"
+            ]
+          },
+          "style": "equals"
+        }
+      },
+      {
+        "long": "color-scale-mode",
+        "aliases": [
+          "colour-scale-mode"
+        ],
+        "description": "use gradient or fixed colors in --color-scale",
+        "inherit": false,
+        "value": {
+          "name": "mode",
+          "provider": {
+            "values": [
+              "fixed",
+              "gradient"
+            ]
+          }
+        }
+      },
+      {
+        "long": "icons",
+        "description": "when to display icons",
+        "inherit": false,
+        "value": {
+          "name": "when",
+          "provider": {
+            "values": [
+              {
+                "value": "auto",
+                "description": "Display icons only when the standard output is connected to a real terminal"
+              },
+              {
+                "value": "automatic",
+                "description": "Display icons only when the standard output is connected to a real terminal"
+              },
+              {
+                "value": "always",
+                "description": "Always display icons"
+              },
+              {
+                "value": "never",
+                "description": "Disables the use of icons"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "long": "no-quotes",
+        "description": "don't quote file names with spaces",
+        "inherit": false
+      },
+      {
+        "long": "hyperlink",
+        "description": "display entries as hyperlinks",
+        "inherit": false
+      },
+      {
+        "long": "absolute",
+        "description": "display entries with their absolute path",
+        "inherit": false,
+        "value": {
+          "name": "mode",
+          "provider": {
+            "values": [
+              "off",
+              "on",
+              "follow"
+            ]
+          }
+        }
+      },
+      {
+        "long": "follow-symlinks",
+        "description": "drill down into symbolic links that point to directories",
+        "inherit": false
+      },
+      {
+        "short": "w",
+        "long": "width",
+        "description": "set screen width in columns",
+        "inherit": false,
+        "value": {
+          "name": "columns"
+        }
+      },
+      {
+        "short": "a",
+        "long": "all",
+        "description": "show hidden and 'dot' files",
+        "inherit": false
+      },
+      {
+        "short": "A",
+        "long": "almost-all",
+        "description": "equivalent to '--all'",
+        "inherit": false
+      },
+      {
+        "short": "d",
+        "long": "list-dirs",
+        "description": "list directories like regular files",
+        "inherit": false
+      },
+      {
+        "short": "D",
+        "long": "only-dirs",
+        "description": "list only directories",
+        "inherit": false
+      },
+      {
+        "short": "f",
+        "long": "only-files",
+        "description": "list only files",
+        "inherit": false
+      },
+      {
+        "long": "show-symlinks",
+        "description": "explicitly show symbolic links",
+        "inherit": false
+      },
+      {
+        "long": "no-symlinks",
+        "description": "do not show symbolic links",
+        "inherit": false
+      },
+      {
+        "short": "L",
+        "long": "level",
+        "description": "limit the depth of recursion",
+        "inherit": false,
+        "value": {
+          "name": "depth"
+        }
+      },
+      {
+        "short": "r",
+        "long": "reverse",
+        "description": "reverse the sort order",
+        "inherit": false
+      },
+      {
+        "short": "s",
+        "long": "sort",
+        "description": "which field to sort by",
+        "inherit": false,
+        "value": {
+          "name": "field",
+          "provider": {
+            "values": [
+              {
+                "value": "name",
+                "description": "Lowercase precede UPERCASE"
+              },
+              {
+                "value": "Name",
+                "description": "UPERCASE precede lowercase"
+              },
+              {
+                "value": "extension",
+                "description": "Lowercase precede UPERCASE"
+              },
+              {
+                "value": "Extension",
+                "description": "UPERCASE precede lowercase"
+              },
+              {
+                "value": "size"
+              },
+              {
+                "value": "modified"
+              },
+              {
+                "value": "changed"
+              },
+              {
+                "value": "accessed"
+              },
+              {
+                "value": "created"
+              },
+              {
+                "value": "inode"
+              },
+              {
+                "value": "type"
+              },
+              {
+                "value": "none"
+              },
+              {
+                "value": "date"
+              },
+              {
+                "value": "time"
+              },
+              {
+                "value": "new"
+              },
+              {
+                "value": "newest"
+              },
+              {
+                "value": "age"
+              },
+              {
+                "value": "old"
+              },
+              {
+                "value": "oldest"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "long": "group-directories-first",
+        "description": "list directories before other files",
+        "inherit": false
+      },
+      {
+        "long": "group-directories-last",
+        "description": "list directories after other files",
+        "inherit": false
+      },
+      {
+        "short": "I",
+        "long": "ignore-glob",
+        "description": "glob patterns (pipe-separated) of files to ignore",
+        "inherit": false,
+        "value": {
+          "name": "globs"
+        }
+      },
+      {
+        "long": "git-ignore",
+        "description": "ignore files mentioned in '.gitignore'",
+        "inherit": false
+      },
+      {
+        "short": "b",
+        "long": "binary",
+        "description": "list file sizes with binary prefixes",
+        "inherit": false
+      },
+      {
+        "short": "B",
+        "long": "bytes",
+        "description": "list file sizes in bytes, without any prefixes",
+        "inherit": false
+      },
+      {
+        "short": "g",
+        "long": "group",
+        "description": "list each file's group",
+        "inherit": false
+      },
+      {
+        "long": "smart-group",
+        "description": "only show group if it has a different name from owner",
+        "inherit": false
+      },
+      {
+        "short": "h",
+        "long": "header",
+        "description": "add a header row to each column",
+        "inherit": false
+      },
+      {
+        "short": "H",
+        "long": "links",
+        "description": "list each file's number of hard links",
+        "inherit": false
+      },
+      {
+        "short": "i",
+        "long": "inode",
+        "description": "list each file's inode number",
+        "inherit": false
+      },
+      {
+        "short": "M",
+        "long": "mounts",
+        "description": "show mount details",
+        "inherit": false
+      },
+      {
+        "short": "n",
+        "long": "numeric",
+        "description": "list numeric user and group IDs",
+        "inherit": false
+      },
+      {
+        "short": "O",
+        "long": "flags",
+        "description": "list file flags",
+        "inherit": false
+      },
+      {
+        "short": "S",
+        "long": "blocksize",
+        "description": "show size of allocated file system blocks",
+        "inherit": false
+      },
+      {
+        "short": "t",
+        "long": "time",
+        "description": "which timestamp field to list",
+        "inherit": false,
+        "value": {
+          "name": "field",
+          "provider": {
+            "values": [
+              "modified",
+              "changed",
+              "accessed",
+              "created"
+            ]
+          }
+        }
+      },
+      {
+        "short": "m",
+        "long": "modified",
+        "description": "use the modified timestamp field",
+        "inherit": false
+      },
+      {
+        "short": "u",
+        "long": "accessed",
+        "description": "use the accessed timestamp field",
+        "inherit": false
+      },
+      {
+        "short": "U",
+        "long": "created",
+        "description": "use the created timestamp field",
+        "inherit": false
+      },
+      {
+        "long": "changed",
+        "description": "use the changed timestamp field",
+        "inherit": false
+      },
+      {
+        "long": "time-style",
+        "description": "how to format timestamps",
+        "inherit": false,
+        "value": {
+          "name": "format",
+          "provider": {
+            "values": [
+              "default",
+              "iso",
+              "long-iso",
+              "relative",
+              "+%Y-%m-%d %H:%M"
+            ]
+          }
+        }
+      },
+      {
+        "long": "total-size",
+        "description": "show the size of a directory as the size of all files and directories inside",
+        "inherit": false
+      },
+      {
+        "short": "o",
+        "long": "octal-permissions",
+        "description": "list each file's permission in octal format",
+        "inherit": false
+      },
+      {
+        "long": "no-permissions",
+        "description": "suppress the permissions field",
+        "inherit": false
+      },
+      {
+        "long": "no-filesize",
+        "description": "suppress the filesize field",
+        "inherit": false
+      },
+      {
+        "long": "no-user",
+        "description": "suppress the user field",
+        "inherit": false
+      },
+      {
+        "long": "no-time",
+        "description": "suppress the time field",
+        "inherit": false
+      },
+      {
+        "long": "stdin",
+        "description": "read file names from stdin, one per line or other separator specified in environment",
+        "inherit": false
+      },
+      {
+        "long": "git",
+        "description": "list each file's Git status, if tracked or ignored",
+        "inherit": false
+      },
+      {
+        "long": "no-git",
+        "description": "suppress Git status",
+        "inherit": false
+      },
+      {
+        "long": "git-repos",
+        "description": "list root of git-tree status",
+        "inherit": false
+      },
+      {
+        "long": "git-repos-no-status",
+        "description": "list each git-repos branch name (much faster)",
+        "inherit": false
+      },
+      {
+        "short": "@",
+        "long": "extended",
+        "description": "list each file's extended attributes and sizes",
+        "inherit": false
+      },
+      {
+        "short": "Z",
+        "long": "context",
+        "description": "list each file's security context",
+        "inherit": false
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "paths",
+          "provider": [
+            "builtin.files",
+            "builtin.directories"
+          ],
+          "index": 0,
+          "repeatable": true,
+          "description": "files or directories to list"
+        }
+      ]
+    },
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
