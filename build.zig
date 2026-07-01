@@ -106,9 +106,10 @@ pub fn build(b: *std.Build) void {
     b.installFile(default_config_path, default_config_path);
 
     const run_cmd = b.addRunArtifact(exe);
-    run_cmd.step.dependOn(b.getInstallStep());
     if (b.args) |args| {
         run_cmd.addArgs(args);
+    } else {
+        run_cmd.addArg("--help");
     }
 
     const run_step = b.step("run", "Run the application");
