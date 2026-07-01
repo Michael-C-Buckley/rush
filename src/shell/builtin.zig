@@ -532,21 +532,29 @@ fn evalJobs(shell: anytype, args: []const []const u8) !result.EvalResult {
 const JobFormat = enum { default, long, pid };
 
 fn writeJob(shell: anytype, job: state_mod.BackgroundJob, format: JobFormat) !void {
+    const status_text = jobStatusText(job.status);
     const text = switch (format) {
         .default => try std.fmt.allocPrint(
             shell.scratchAllocator(),
-            "[{}] Running {s}\n",
-            .{ job.id, job.command },
+            "[{}] {s} {s}\n",
+            .{ job.id, status_text, job.command },
         ),
         .long => try std.fmt.allocPrint(
             shell.scratchAllocator(),
-            "[{}] {} Running {s}\n",
-            .{ job.id, job.pid, job.command },
+            "[{}] {} {s} {s}\n",
+            .{ job.id, job.pid, status_text, job.command },
         ),
         .pid => try std.fmt.allocPrint(shell.scratchAllocator(), "{}\n", .{job.process_group}),
     };
     defer shell.scratchAllocator().free(text);
     try shell.host.writeAll(.stdout, text);
+}
+
+fn jobStatusText(status: state_mod.JobStatus) []const u8 {
+    return switch (status) {
+        .running => "Running",
+        .stopped => "Stopped",
+    };
 }
 
 fn jobOperand(shell: anytype, arg: []const u8) ?state_mod.BackgroundJob {
@@ -578,6 +586,7 @@ fn writeNoCurrentJob(shell: anytype, builtin_name: []const u8) !void {
 
 fn resumeBackgroundJob(shell: anytype, job: state_mod.BackgroundJob) !result.EvalResult {
     sendContinueToJob(shell, job) catch return .{ .status = 1 };
+    _ = shell.state.setBackgroundJobStatus(job.id, .running);
     const text = try std.fmt.allocPrint(shell.scratchAllocator(), "[{}] {s}\n", .{ job.id, job.command });
     defer shell.scratchAllocator().free(text);
     try shell.host.writeAll(.stdout, text);
@@ -600,11 +609,27 @@ fn foregroundJob(shell: anytype, job: state_mod.BackgroundJob) !result.EvalResul
     defer shell.scratchAllocator().free(pids);
     var status: result.ExitStatus = 0;
     for (pids) |pid| {
-        _ = shell.state.removeBackgroundPid(pid);
-        const waited = shell.host.waitInterruptible(pid) catch return .{ .status = 127 };
+        const waited = waitForegroundJobPid(shell, pid) catch return .{ .status = 127 };
         status = waited.shellStatus();
+        switch (waited) {
+            .stopped => {
+                _ = shell.state.setBackgroundJobStatusByPid(pid, .stopped);
+                return .{ .status = status };
+            },
+            else => {},
+        }
+        _ = shell.state.removeBackgroundPid(pid);
     }
     return .{ .status = status };
+}
+
+fn waitForegroundJobPid(shell: anytype, pid: host.Pid) !host.WaitStatus {
+    const HostType = switch (@typeInfo(@TypeOf(shell.host))) {
+        .pointer => |pointer| pointer.child,
+        else => @TypeOf(shell.host),
+    };
+    if (@hasDecl(HostType, "waitJobEventInterruptible")) return shell.host.waitJobEventInterruptible(pid);
+    return shell.host.waitInterruptible(pid);
 }
 
 fn giveTerminalToJob(shell: anytype, process_group: host.Pid) !?host.Pid {

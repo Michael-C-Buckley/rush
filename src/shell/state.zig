@@ -83,11 +83,17 @@ pub const CommandHash = struct {
     }
 };
 
+pub const JobStatus = enum {
+    running,
+    stopped,
+};
+
 pub const BackgroundJob = struct {
     id: usize,
     pid: host.Pid,
     process_group: host.Pid,
     pids: std.ArrayListUnmanaged(host.Pid) = .empty,
+    status: JobStatus = .running,
     command: []const u8,
 
     pub fn validate(self: BackgroundJob) void {
@@ -479,6 +485,7 @@ pub const State = struct {
             .pid = pids[pids.len - 1],
             .process_group = process_group,
             .pids = owned_pids,
+            .status = .running,
             .command = owned_command,
         };
         job.validate();
@@ -535,6 +542,26 @@ pub const State = struct {
     pub fn currentBackgroundJob(self: State) ?BackgroundJob {
         if (self.background_jobs.items.len == 0) return null;
         return self.background_jobs.items[self.background_jobs.items.len - 1];
+    }
+
+    pub fn setBackgroundJobStatusByPid(self: *State, pid: host.Pid, status: JobStatus) bool {
+        for (self.background_jobs.items) |*job| {
+            for (job.pids.items) |job_pid| {
+                if (job_pid != pid) continue;
+                job.status = status;
+                return true;
+            }
+        }
+        return false;
+    }
+
+    pub fn setBackgroundJobStatus(self: *State, job_id: usize, status: JobStatus) bool {
+        for (self.background_jobs.items) |*job| {
+            if (job.id != job_id) continue;
+            job.status = status;
+            return true;
+        }
+        return false;
     }
 
     pub fn forgetBackgroundJob(self: *State, pid: host.Pid) void {

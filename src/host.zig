@@ -236,7 +236,8 @@ pub const WaitStatus = union(enum) {
         return switch (self) {
             .exited => |status| status,
             .signaled => |signal| 128 + signal,
-            .stopped, .continued => 0,
+            .stopped => |signal| 128 + signal,
+            .continued => 0,
         };
     }
 };
@@ -380,6 +381,14 @@ pub const RealHost = struct {
 
     pub fn waitNonBlocking(_: *RealHost, pid: Pid) platform.WaitError!?WaitStatus {
         return platform.waitNonBlocking(pid);
+    }
+
+    pub fn waitJobEvent(_: *RealHost, pid: Pid) platform.WaitError!WaitStatus {
+        return platform.waitJobEvent(pid);
+    }
+
+    pub fn waitJobEventInterruptible(_: *RealHost, pid: Pid) platform.WaitError!WaitStatus {
+        return platform.waitJobEventInterruptible(pid);
     }
 
     pub fn waitInterruptible(_: *RealHost, pid: Pid) platform.WaitError!WaitStatus {

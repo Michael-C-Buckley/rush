@@ -277,6 +277,13 @@ const InteractiveSession = struct {
                 if (job_complete and self.sh.state.options.notify) {
                     try appendBackgroundJobNotification(allocator, &output, job.*, status);
                 }
+                switch (status) {
+                    .stopped => {
+                        _ = self.sh.state.setBackgroundJobStatusByPid(pid, .stopped);
+                        break;
+                    },
+                    else => {},
+                }
                 _ = self.sh.state.removeBackgroundPid(pid);
                 if (job_complete) break;
             }

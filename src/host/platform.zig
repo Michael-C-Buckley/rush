@@ -386,6 +386,22 @@ pub fn waitNonBlocking(pid: host.Pid) WaitError!?host.WaitStatus {
     };
 }
 
+pub fn waitJobEvent(pid: host.Pid) WaitError!host.WaitStatus {
+    return switch (builtin.os.tag) {
+        .linux => linuxWaitJobEvent(pid),
+        .macos, .freebsd, .openbsd, .netbsd => libcWaitJobEvent(pid),
+        else => @compileError("unsupported host OS"),
+    };
+}
+
+pub fn waitJobEventInterruptible(pid: host.Pid) WaitError!host.WaitStatus {
+    return switch (builtin.os.tag) {
+        .linux => linuxWaitJobEventInterruptible(pid),
+        .macos, .freebsd, .openbsd, .netbsd => libcWaitJobEventInterruptible(pid),
+        else => @compileError("unsupported host OS"),
+    };
+}
+
 pub fn waitInterruptible(pid: host.Pid) WaitError!host.WaitStatus {
     return switch (builtin.os.tag) {
         .linux => linuxWaitInterruptible(pid),
@@ -1102,10 +1118,36 @@ fn linuxWaitNonBlocking(pid: host.Pid) WaitError!?host.WaitStatus {
     const linux = std.os.linux;
     var status: u32 = 0;
     while (true) {
-        const wait_rc = linux.waitpid(pid, &status, linux.W.NOHANG);
+        const wait_rc = linux.waitpid(pid, &status, linux.W.NOHANG | linux.W.UNTRACED);
         switch (linux.errno(wait_rc)) {
             .SUCCESS => return if (wait_rc == 0) null else decodeWaitStatus(status),
             .INTR => continue,
+            else => return error.Unexpected,
+        }
+    }
+}
+
+fn linuxWaitJobEvent(pid: host.Pid) WaitError!host.WaitStatus {
+    const linux = std.os.linux;
+    var status: u32 = 0;
+    while (true) {
+        const wait_rc = linux.waitpid(pid, &status, linux.W.UNTRACED);
+        switch (linux.errno(wait_rc)) {
+            .SUCCESS => return decodeWaitStatus(status),
+            .INTR => continue,
+            else => return error.Unexpected,
+        }
+    }
+}
+
+fn linuxWaitJobEventInterruptible(pid: host.Pid) WaitError!host.WaitStatus {
+    const linux = std.os.linux;
+    var status: u32 = 0;
+    while (true) {
+        const wait_rc = linux.waitpid(pid, &status, linux.W.UNTRACED);
+        switch (linux.errno(wait_rc)) {
+            .SUCCESS => return decodeWaitStatus(status),
+            .INTR => if (peekPendingSignal()) |signal| return .{ .signaled = signal } else continue,
             else => return error.Unexpected,
         }
     }
@@ -1173,10 +1215,34 @@ fn libcWait(pid: host.Pid) WaitError!host.WaitStatus {
 fn libcWaitNonBlocking(pid: host.Pid) WaitError!?host.WaitStatus {
     var status: c_int = 0;
     while (true) {
-        const wait_rc = std.c.waitpid(pid, &status, std.c.W.NOHANG);
+        const wait_rc = std.c.waitpid(pid, &status, std.c.W.NOHANG | std.c.W.UNTRACED);
         switch (std.c.errno(wait_rc)) {
             .SUCCESS => return if (wait_rc == 0) null else decodeWaitStatus(@bitCast(status)),
             .INTR => continue,
+            else => return error.Unexpected,
+        }
+    }
+}
+
+fn libcWaitJobEvent(pid: host.Pid) WaitError!host.WaitStatus {
+    var status: c_int = 0;
+    while (true) {
+        const wait_rc = std.c.waitpid(pid, &status, std.c.W.UNTRACED);
+        switch (std.c.errno(wait_rc)) {
+            .SUCCESS => return decodeWaitStatus(@bitCast(status)),
+            .INTR => continue,
+            else => return error.Unexpected,
+        }
+    }
+}
+
+fn libcWaitJobEventInterruptible(pid: host.Pid) WaitError!host.WaitStatus {
+    var status: c_int = 0;
+    while (true) {
+        const wait_rc = std.c.waitpid(pid, &status, std.c.W.UNTRACED);
+        switch (std.c.errno(wait_rc)) {
+            .SUCCESS => return decodeWaitStatus(@bitCast(status)),
+            .INTR => if (peekPendingSignal()) |signal| return .{ .signaled = signal } else continue,
             else => return error.Unexpected,
         }
     }
@@ -1222,6 +1288,7 @@ fn applyLibcFdActions(actions: []const host.SpawnFdAction) void {
 }
 
 fn decodeWaitStatus(status: u32) host.WaitStatus {
+    if ((status & 0xffff) == 0xffff) return .continued;
     if ((status & 0xff) == 0x7f) return .{ .stopped = @intCast((status >> 8) & 0xff) };
     if ((status & 0x7f) == 0) return .{ .exited = @intCast((status >> 8) & 0xff) };
     return .{ .signaled = @intCast(status & 0x7f) };

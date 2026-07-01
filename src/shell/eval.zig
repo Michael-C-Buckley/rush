@@ -263,12 +263,13 @@ fn evalPipeline(shell: anytype, pipeline: ast.Pipeline) EvalError!result.EvalRes
     var evaluated = if (pipeline.stages.len == 1)
         try evalCommand(shell, pipeline.stages[0])
     else
-        try evalExternalPipeline(shell, pipeline.stages);
+        try evalExternalPipeline(shell, pipeline);
     if (pipeline.negated and evaluated.flow == .normal) evaluated.status = if (evaluated.status == 0) 1 else 0;
     return evaluated;
 }
 
-fn evalExternalPipeline(shell: anytype, stages: []const ast.Command) EvalError!result.EvalResult {
+fn evalExternalPipeline(shell: anytype, pipeline: ast.Pipeline) EvalError!result.EvalResult {
+    const stages = pipeline.stages;
     std.debug.assert(stages.len > 1);
     const pipefail = shell.state.options.pipefail;
     const pids = try spawnPipelineStages(shell, stages, false, shell.state.options.monitor);
@@ -282,8 +283,29 @@ fn evalExternalPipeline(shell: anytype, stages: []const ast.Command) EvalError!r
     defer if (foreground_restore_group) |process_group| restoreTerminalToProcessGroup(shell, process_group);
     const scratch = try shell.beginScratchScope();
     defer scratch.end();
-    const statuses = try waitPids(shell, pids);
+    const statuses = try waitForegroundPids(shell, pids);
+    if (pipelineStopped(statuses)) {
+        try shell.state.addBackgroundJobPids(pids, pids[0], try pipelineCommandText(shell, pipeline));
+        _ = shell.state.setBackgroundJobStatusByPid(pids[0], .stopped);
+        return .{ .status = stoppedPipelineStatus(statuses) };
+    }
     return .{ .status = pipelineStatus(statuses, pipefail) };
+}
+
+fn pipelineStopped(statuses: []const host_mod.WaitStatus) bool {
+    for (statuses) |status| switch (status) {
+        .stopped => return true,
+        else => {},
+    };
+    return false;
+}
+
+fn stoppedPipelineStatus(statuses: []const host_mod.WaitStatus) result.ExitStatus {
+    for (statuses) |status| switch (status) {
+        .stopped => return status.shellStatus(),
+        else => {},
+    };
+    return 0;
 }
 
 fn giveTerminalToProcessGroup(shell: anytype, process_group: host_mod.Pid) !?host_mod.Pid {
@@ -373,6 +395,28 @@ fn closePipes(shell: anytype, pipes: []const host_mod.Pipe) void {
 fn waitPids(shell: anytype, pids: []const host_mod.Pid) ![]const host_mod.WaitStatus {
     const statuses = try shell.scratchAllocator().alloc(host_mod.WaitStatus, pids.len);
     for (pids, 0..) |pid, index| statuses[index] = try shell.host.wait(pid);
+    return statuses;
+}
+
+fn waitForegroundPids(shell: anytype, pids: []const host_mod.Pid) ![]const host_mod.WaitStatus {
+    const statuses = try shell.scratchAllocator().alloc(host_mod.WaitStatus, pids.len);
+    const HostType = switch (@typeInfo(@TypeOf(shell.host))) {
+        .pointer => |pointer| pointer.child,
+        else => @TypeOf(shell.host),
+    };
+    for (pids, 0..) |pid, index| {
+        statuses[index] = if (@hasDecl(HostType, "waitJobEvent"))
+            try shell.host.waitJobEvent(pid)
+        else
+            try shell.host.wait(pid);
+        switch (statuses[index]) {
+            .stopped => |signal| {
+                for (statuses[index + 1 ..]) |*status| status.* = .{ .stopped = signal };
+                break;
+            },
+            else => {},
+        }
+    }
     return statuses;
 }
 
@@ -2004,17 +2048,30 @@ fn waitBackgroundJob(shell: anytype, job: state_mod.BackgroundJob) !result.ExitS
     defer shell.scratchAllocator().free(pids);
     var status: result.ExitStatus = 0;
     for (pids) |pid| {
-        if (!shell.state.removeBackgroundPid(pid)) {
-            status = 127;
-            continue;
-        }
-        const waited = shell.host.waitInterruptible(pid) catch {
+        const waited = waitBackgroundJobPid(shell, pid) catch {
             status = 127;
             continue;
         };
         status = waited.shellStatus();
+        switch (waited) {
+            .stopped => {
+                _ = shell.state.setBackgroundJobStatusByPid(pid, .stopped);
+                return status;
+            },
+            else => {},
+        }
+        if (!shell.state.removeBackgroundPid(pid)) status = 127;
     }
     return status;
+}
+
+fn waitBackgroundJobPid(shell: anytype, pid: host_mod.Pid) !host_mod.WaitStatus {
+    const HostType = switch (@typeInfo(@TypeOf(shell.host))) {
+        .pointer => |pointer| pointer.child,
+        else => @TypeOf(shell.host),
+    };
+    if (@hasDecl(HostType, "waitJobEventInterruptible")) return shell.host.waitJobEventInterruptible(pid);
+    return shell.host.waitInterruptible(pid);
 }
 
 fn waitOperandJob(shell: anytype, arg: []const u8) ?state_mod.BackgroundJob {
@@ -5437,11 +5494,32 @@ fn evalExternalWithSearchPath(
             return .{ .status = 1 };
         };
         defer if (foreground_restore_group) |process_group| restoreTerminalToProcessGroup(shell, process_group);
-        break :status try shell.host.wait(pid);
+        const waited = if (@hasDecl(HostType, "waitJobEvent")) try shell.host.waitJobEvent(pid) else try shell.host.wait(pid);
+        switch (waited) {
+            .stopped => {
+                try shell.state.addBackgroundJob(pid, try externalCommandText(shell, fields));
+                _ = shell.state.setBackgroundJobStatusByPid(pid, .stopped);
+                restoreVariables(shell, saved);
+                restored_assignments = true;
+                return .{ .status = waited.shellStatus() };
+            },
+            else => {},
+        }
+        break :status waited;
     } else try shell.host.spawnAndWait(request);
     restoreVariables(shell, saved);
     restored_assignments = true;
     return .{ .status = status.shellStatus() };
+}
+
+fn externalCommandText(shell: anytype, fields: []const []const u8) ![]const u8 {
+    var output: std.ArrayList(u8) = .empty;
+    const allocator = shell.scratchAllocator();
+    for (fields, 0..) |field, index| {
+        if (index != 0) try output.append(allocator, ' ');
+        try output.appendSlice(allocator, field);
+    }
+    return output.toOwnedSlice(allocator);
 }
 
 fn commandFoundButNotExecutable(shell: anytype, command: []const u8, search_path: ?[]const u8) !bool {
