@@ -1,0 +1,43 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "basename",
+    "description": "strip directory and suffix from filenames",
+    "options": [
+      {
+        "short": "a",
+        "description": "treat every argument as a string",
+        "inherit": false
+      },
+      {
+        "short": "s",
+        "description": "suffix to remove from string",
+        "inherit": false,
+        "value": {
+          "name": "suffix"
+        }
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "name",
+          "index": 0,
+          "description": "path to process",
+          "provider": "builtin.files"
+        },
+        {
+          "name": "suffix",
+          "index": 1,
+          "description": "suffix to remove"
+        }
+      ]
+    },
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
