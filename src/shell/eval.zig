@@ -536,14 +536,31 @@ fn evalFor(shell: anytype, command: ast.ForCommand) EvalError!result.EvalResult 
     const scratch = try shell.beginScratchScope();
     defer scratch.end();
 
+    if (!isAssignmentName(command.name)) {
+        try shell.host.writeAll(
+            .stderr,
+            try std.fmt.allocPrint(shell.scratchAllocator(), "`{s}': not a valid identifier\n", .{command.name}),
+        );
+        return .{ .status = 1 };
+    }
+
     const words = try snapshotFields(shell, try forCommandWords(shell, command.words));
     var status: result.ExitStatus = 0;
     for (words) |word| {
-        try shell.state.putVariable(.{
+        shell.state.putVariable(.{
             .name = command.name,
             .value = word,
             .exported = assignmentExported(shell, command.name),
-        });
+        }) catch |err| switch (err) {
+            error.ReadonlyVariable => {
+                try writeReadonlyDiagnostic(shell, command.name);
+                return .{
+                    .status = 1,
+                    .flow = if (shell.state.options.mode == .posix) .{ .fatal = 1 } else .normal,
+                };
+            },
+            else => return err,
+        };
         const evaluated = try evalList(shell, command.body);
         status = evaluated.status;
         switch (evaluated.flow) {

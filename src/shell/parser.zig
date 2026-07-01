@@ -285,7 +285,8 @@ const Parser = struct {
     fn parseForCommand(self: *Parser) ParserError!?ast.ForCommand {
         if (self.eatReserved(.for_kw) == null) return null;
         const name_token = self.eat(.word) orelse return error.UnexpectedToken;
-        if (name_token.quoted or !isAssignmentName(name_token.text)) return error.UnexpectedToken;
+        if (name_token.quoted) return error.UnexpectedToken;
+        if (!isAssignmentName(name_token.text) and self.mode() == .posix) return error.UnexpectedToken;
 
         var words: ast.ForWords = .positional_parameters;
         self.skipSeparators();
