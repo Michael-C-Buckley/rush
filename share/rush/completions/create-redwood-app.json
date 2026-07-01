@@ -1,0 +1,69 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "create-redwood-app",
+    "description": "create a Redwood project",
+    "options": [
+      {
+        "short": "h",
+        "long": "help",
+        "description": "show help",
+        "inherit": false
+      },
+      {
+        "long": "typescript",
+        "aliases": ["ts"],
+        "description": "generate a TypeScript project",
+        "inherit": false
+      },
+      {
+        "long": "overwrite",
+        "description": "create even if the target directory is not empty",
+        "inherit": false
+      },
+      {
+        "long": "telemetry",
+        "description": "send telemetry events for this create",
+        "inherit": false
+      },
+      {
+        "long": "git-init",
+        "aliases": ["git"],
+        "description": "initialize a git repository",
+        "inherit": false
+      },
+      {
+        "short": "m",
+        "long": "commit-message",
+        "description": "set the initial commit message",
+        "inherit": false,
+        "value": { "name": "message" }
+      },
+      {
+        "short": "y",
+        "long": "yes",
+        "description": "skip prompts and use defaults",
+        "inherit": false
+      },
+      {
+        "long": "version",
+        "description": "show version number",
+        "inherit": false
+      },
+      {
+        "long": "yarn-install",
+        "description": "install node modules",
+        "inherit": false
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "projectName",
+          "index": 0
+        }
+      ]
+    }
+  }
+}
