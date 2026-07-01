@@ -1,0 +1,230 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "coda",
+    "description": "develop coda packs",
+    "options": [
+      {
+        "long": "version",
+        "description": "show version number",
+        "inherit": true
+      },
+      {
+        "long": "help",
+        "description": "show help",
+        "inherit": true
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "init",
+        "description": "initialize an empty project with the recommended settings and dependencies"
+      },
+      {
+        "name": "execute",
+        "description": "execute the formula and print the output to the terminal",
+        "options": [
+          {
+            "long": "dynamicUrl",
+            "description": "to run a sync for a dynamic sync table, use this parameter to specify which URL to sync from",
+            "inherit": false,
+            "value": {
+              "name": "url",
+              "description": "The URL to sync from"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "formula",
+              "description": "Formula name to execute",
+              "index": 0
+            },
+            {
+              "name": "params",
+              "description": "Arguments to pass to the formula",
+              "index": 1,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "auth",
+        "description": "set up authentication in your development environment so that you can execute Pack formulas with authentication applied to them",
+        "arguments": {
+          "states": [
+            {
+              "name": "pack",
+              "index": 0,
+              "description": "pack directory",
+              "provider": "builtin.directories"
+            }
+          ]
+        }
+      },
+      {
+        "name": "register",
+        "description": "create a new API token or register an existing one to be used with future commands",
+        "arguments": {
+          "states": [
+            {
+              "name": "apiToken",
+              "description": "The API token to register",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "create",
+        "description": "create a new Pack on Coda\u2019s servers and get assigned a Pack ID. Run this command just once for each Pack you create",
+        "options": [
+          {
+            "long": "name",
+            "description": "specify a name for the Pack. You can always set or update the name in the Pack management UI later",
+            "inherit": false,
+            "value": {
+              "name": "name",
+              "description": "The desired Pack name"
+            }
+          },
+          {
+            "long": "description",
+            "description": "specify a description for the Pack. You can always set or update the description in the Pack management UI later",
+            "inherit": false,
+            "value": {
+              "name": "description",
+              "description": "The Pack description"
+            }
+          }
+        ]
+      },
+      {
+        "name": "upload",
+        "description": "use this command to upload a new version of your Pack based on your latest code",
+        "arguments": {
+          "states": [
+            {
+              "name": "pack",
+              "index": 0,
+              "description": "pack directory",
+              "provider": "builtin.directories"
+            }
+          ]
+        }
+      },
+      {
+        "name": "release",
+        "description": "release a Pack version and make it live for your users",
+        "arguments": {
+          "states": [
+            {
+              "name": "version",
+              "description": "The release version. Must always be greater than that of any of your previous releases",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "clone",
+        "description": "migrate the development of a Pack from the Pack Studio to a new local CLI Pack development",
+        "arguments": {
+          "states": [
+            {
+              "name": "url-or-pack-id",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "link",
+        "description": "link the development of a Pack from the Pack studio to an existing local CLI Pack development",
+        "arguments": {
+          "states": [
+            {
+              "name": "url-or-pack-id",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "whoami",
+        "description": "looks up information about the API token that is registered in this environment",
+        "arguments": {
+          "states": [
+            {
+              "name": "apiToken",
+              "description": "The API token to look up",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "build",
+        "description": "generate a bundle for your Pack"
+      },
+      {
+        "name": "validate",
+        "description": "validate your Pack definition",
+        "arguments": {
+          "states": [
+            {
+              "name": "pack",
+              "index": 0,
+              "description": "pack directory",
+              "provider": "builtin.directories"
+            }
+          ]
+        }
+      },
+      {
+        "name": "setOption",
+        "description": "set a persistent build option for the Pack. This will be used for all builds of the Pack",
+        "arguments": {
+          "states": [
+            {
+              "name": "option",
+              "description": "Currently the only supported option is 'timerStrategy'",
+              "provider": {
+                "values": [
+                  "timerStrategy"
+                ]
+              },
+              "index": 0
+            },
+            {
+              "name": "value",
+              "description": "Value to set for the option",
+              "provider": {
+                "values": [
+                  "none",
+                  "error",
+                  "fake"
+                ]
+              },
+              "index": 1
+            }
+          ]
+        }
+      }
+    ],
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "coda.formulas": {
+        "function": "__rush_complete_coda_formulas"
+      }
+    }
+  }
+}

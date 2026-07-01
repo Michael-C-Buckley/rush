@@ -1,0 +1,5 @@
+__rush_complete_coda_formulas() {
+  find . -maxdepth 3 -type f \( -name '*.ts' -o -name '*.js' \) 2>/dev/null | xargs sed -n "s/.*name:[[:space:]]*['\"]\([^'\"]*\)['\"].*/\1/p" 2>/dev/null | sort -u | while IFS= read -r formula; do
+    test -n "$formula" && rush_complete candidate "$formula" --kind plain --description formula
+  done
+}
