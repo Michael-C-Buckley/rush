@@ -1,0 +1,80 @@
+__rush_complete_cargo_manifest_values() {
+  key=$1
+  test -f Cargo.toml || return 0
+  sed -n "s/^[[:space:]]*$key[[:space:]]*=[[:space:]]*[\"']\([^\"']*\)[\"'].*/\1/p" Cargo.toml 2>/dev/null
+}
+
+__rush_complete_cargo_packages() {
+  __rush_complete_cargo_manifest_values name | while IFS= read -r package; do
+    test -n "$package" && rush_complete candidate "$package" --kind plain --description package
+  done
+}
+
+__rush_complete_cargo_features() {
+  test -f Cargo.toml || return 0
+  awk '
+    /^\[features\]/ { in_features = 1; next }
+    /^\[/ { in_features = 0 }
+    in_features && /^[A-Za-z0-9_.-]+[[:space:]]*=/ { sub(/[[:space:]]*=.*/, ""); print }
+  ' Cargo.toml 2>/dev/null | while IFS= read -r feature; do
+    test -n "$feature" && rush_complete candidate "$feature" --kind plain --description feature
+  done
+}
+
+__rush_complete_cargo_targets_named() {
+  section=$1
+  test -f Cargo.toml || return 0
+  awk -v section="$section" '
+    $0 == "[[" section "]]" { in_section = 1; next }
+    /^\[\[/ { in_section = 0 }
+    in_section && /^[[:space:]]*name[[:space:]]*=/ {
+      sub(/^[[:space:]]*name[[:space:]]*=[[:space:]]*[\"'"'"']/, "")
+      sub(/[\"'"'"'].*/, "")
+      print
+    }
+  ' Cargo.toml 2>/dev/null
+}
+
+__rush_complete_cargo_binaries_from_src() {
+  test -d src/bin || return 0
+  find src/bin -maxdepth 2 -type f -name '*.rs' 2>/dev/null | while IFS= read -r file; do
+    name=${file#src/bin/}
+    name=${name%.rs}
+    name=${name%/main}
+    printf '%s\n' "$name"
+  done
+}
+
+__rush_complete_cargo_binaries() {
+  { __rush_complete_cargo_targets_named bin; __rush_complete_cargo_binaries_from_src; } | sort -u
+}
+
+__rush_complete_cargo_benches() {
+  { __rush_complete_cargo_targets_named bench; find benches -maxdepth 1 -type f -name '*.rs' 2>/dev/null | sed 's#^benches/##; s#\.rs$##'; } | sort -u | while IFS= read -r bench; do
+    test -n "$bench" && rush_complete candidate "$bench" --kind plain --description bench
+  done
+}
+
+__rush_complete_cargo_tests() {
+  { __rush_complete_cargo_targets_named test; find tests -maxdepth 1 -type f -name '*.rs' 2>/dev/null | sed 's#^tests/##; s#\.rs$##'; } | sort -u | while IFS= read -r test_name; do
+    test -n "$test_name" && rush_complete candidate "$test_name" --kind plain --description test
+  done
+}
+
+__rush_complete_cargo_examples() {
+  { __rush_complete_cargo_targets_named example; find examples -maxdepth 1 -type f -name '*.rs' 2>/dev/null | sed 's#^examples/##; s#\.rs$##'; } | sort -u | while IFS= read -r example; do
+    test -n "$example" && rush_complete candidate "$example" --kind plain --description example
+  done
+}
+
+__rush_complete_cargo_bins() {
+  __rush_complete_cargo_binaries | while IFS= read -r bin; do
+    test -n "$bin" && rush_complete candidate "$bin" --kind plain --description binary
+  done
+}
+
+__rush_complete_cargo_installed() {
+  cargo install --list 2>/dev/null | sed -n 's/^\([^[:space:]]*\)[[:space:]].*/\1/p' | while IFS= read -r crate; do
+    test -n "$crate" && rush_complete candidate "$crate" --kind plain --description 'installed crate'
+  done
+}
