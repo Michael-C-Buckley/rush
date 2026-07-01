@@ -2926,7 +2926,12 @@ fn expandWordFields(
                     );
                 } else {
                     const expanded = try expandWordTracking(shell, word, substitution_status);
-                    try fields.append(allocator, expanded);
+                    const ifs = parameterValue(shell, "IFS") orelse " \t\n";
+                    if (ifs.len == 0) {
+                        try appendPathnameExpandedField(shell, &fields, expanded);
+                    } else {
+                        try fields.append(allocator, expanded);
+                    }
                 }
             } else {
                 const expanded = try expandWordTracking(shell, word, substitution_status);

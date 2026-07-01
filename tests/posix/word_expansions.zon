@@ -1267,6 +1267,26 @@
             .status = 0,
         },
         .{
+            .name = "empty IFS allows pathname expansion after a quoted prefix",
+            .script =
+            \\mkdir d
+            \\: >d/a.t
+            \\: >d/b.u
+            \\dir=d
+            \\pattern='*.t'
+            \\IFS=
+            \\set -- "$dir"/$pattern
+            \\printf '<%s>\n' "$#" "$1"
+            ,
+            .stdout =
+            \\<1>
+            \\<d/a.t>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "empty IFS disables splitting after command and arithmetic expansion",
             .script =
             \\IFS=
