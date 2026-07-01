@@ -512,7 +512,7 @@ fn evalReadonly(shell: anytype, args: []const []const u8) !result.EvalResult {
 }
 
 fn evalSet(shell: anytype, args: []const []const u8) !result.EvalResult {
-    if (args.len == 1) return .{};
+    if (args.len == 1) return listSetVariables(shell);
     if (std.mem.eql(u8, args[1], "--")) {
         try shell.state.setPositionals(args[2..]);
         return .{};
@@ -546,6 +546,27 @@ fn evalSet(shell: anytype, args: []const []const u8) !result.EvalResult {
         };
     }
     return .{};
+}
+
+fn listSetVariables(shell: anytype) !result.EvalResult {
+    const allocator = shell.scratchAllocator();
+    var variables: std.ArrayList(state_mod.Variable) = .empty;
+    var iterator = shell.state.variables.iterator();
+    while (iterator.next()) |entry| try variables.append(allocator, entry.value_ptr.*);
+
+    std.mem.sort(state_mod.Variable, variables.items, {}, variableLessThan);
+    for (variables.items) |variable| {
+        try shell.host.writeAll(.stdout, try std.fmt.allocPrint(
+            allocator,
+            "{s}={s}\n",
+            .{ variable.name, variable.value },
+        ));
+    }
+    return .{};
+}
+
+fn variableLessThan(_: void, lhs: state_mod.Variable, rhs: state_mod.Variable) bool {
+    return std.mem.lessThan(u8, lhs.name, rhs.name);
 }
 
 const SetOption = enum {

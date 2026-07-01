@@ -525,6 +525,21 @@
             .status = 0,
         },
         .{
+            .name = "set without operands lists shell variables",
+            .script =
+            \\zeta=last
+            \\alpha=first
+            \\set | sed -n '/^alpha=/p;/^zeta=/p' >vars
+            \\( unset alpha zeta; . ./vars; printf '<%s:%s>\n' "$alpha" "$zeta" )
+            ,
+            .stdout =
+            \\<first:last>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "set -a exports subsequent assignments",
             .script =
             \\set -fCu +ax
