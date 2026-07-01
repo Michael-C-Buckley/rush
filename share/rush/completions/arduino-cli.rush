@@ -1,0 +1,47 @@
+__rush_complete_arduino_cli_board_list() {
+  tmp=$(mktemp)
+  arduino-cli board list --format json > "$tmp" 2>/dev/null || {
+    rm -f "$tmp"
+    return 0
+  }
+  candidates=$(mktemp)
+  python3 - "$tmp" "$1" > "$candidates" <<'PY'
+import json
+import sys
+try:
+    with open(sys.argv[1], "r", encoding="utf-8") as f:
+        boards = json.load(f)
+except Exception:
+    raise SystemExit(0)
+kind = sys.argv[2]
+for entry in boards:
+    matches = entry.get("matching_boards") or []
+    if not matches:
+        continue
+    board = matches[0]
+    port = (entry.get("port") or {}).get("address") or ""
+    if kind == "fqbn":
+        value = board.get("fqbn") or ""
+        description = board.get("name") or "board"
+        if port:
+            description = f"{description} on {port}"
+    else:
+        value = port
+        description = f"{board.get('name') or 'board'} port"
+    if value:
+        print(f"{value}\t{description[:70]}")
+PY
+  while IFS='\t' read value description; do
+    test -n "$value" || continue
+    rush_complete candidate "$value" --kind plain --description "$description"
+  done < "$candidates"
+  rm -f "$tmp" "$candidates"
+}
+
+__rush_complete_arduino_cli_fqbns() {
+  __rush_complete_arduino_cli_board_list fqbn
+}
+
+__rush_complete_arduino_cli_ports() {
+  __rush_complete_arduino_cli_board_list port
+}
