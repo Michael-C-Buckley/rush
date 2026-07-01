@@ -121,8 +121,10 @@ pub const History = struct {
     ) !void {
         if (line.len == 0) return;
         var cwd_buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
-        const cwd_len = std.Io.Dir.cwd().realPath(io, &cwd_buffer) catch 0;
-        const cwd = cwd_buffer[0..cwd_len];
+        const cwd = if (self.current_cwd.len != 0) self.current_cwd else cwd: {
+            const cwd_len = std.Io.Dir.cwd().realPath(io, &cwd_buffer) catch 0;
+            break :cwd cwd_buffer[0..cwd_len];
+        };
         const record: HistoryRecord = .{
             .cmd = line,
             .when = started_at,
@@ -357,6 +359,7 @@ pub const InteractiveHistoryService = struct {
 
     pub fn lineEditorView(self: *InteractiveHistoryService, io: std.Io) line_editor.HistoryView {
         return .{
+            .entries = self.history.entries.items,
             .now = unixTimestamp(io),
             .context = self,
             .previous = previousHistoryEntry,
@@ -426,8 +429,7 @@ pub const InteractiveHistoryService = struct {
     }
 
     fn hasCurrentSessionEntry(self: *InteractiveHistoryService, allocator: std.mem.Allocator, prefix: []const u8) !bool {
-        const entry = try self.history.previousEntry(allocator, prefix, self.history.current_cwd, self.history.session_id, null);
-        if (entry) |value| {
+        if (try self.history.previousEntry(allocator, prefix, self.history.current_cwd, self.history.session_id, null)) |value| {
             value.deinit(allocator);
             return true;
         }
@@ -480,7 +482,11 @@ pub const InteractiveHistoryService = struct {
         allocator: std.mem.Allocator,
         prefix: []const u8,
     ) !?line_editor.HistoryView.HistoryEntry {
-        return self.history.suggestEntry(allocator, prefix, self.history.current_cwd);
+        if (try self.history.suggestEntry(allocator, prefix, self.history.current_cwd)) |entry| return entry;
+        if (self.history.suggest(prefix)) |entry| {
+            return .{ .id = 0, .text = try allocator.dupe(u8, entry) };
+        }
+        return null;
     }
 };
 
@@ -1124,6 +1130,31 @@ test "history navigation is scoped to current cwd" {
     const repo_b_suggestion = (try history.suggestEntry(std.testing.allocator, "echo", "/repo/b")).?;
     defer repo_b_suggestion.deinit(std.testing.allocator);
     try std.testing.expectEqualStrings("echo repo-b", repo_b_suggestion.text);
+}
+
+test "interactive history writes and reads the current cwd" {
+    const path = "rush-history-current-cwd-write-test.sqlite";
+    try deleteHistoryDbFilesIfExists(std.testing.io, path);
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path ++ "-wal") catch {};
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path ++ "-shm") catch {};
+
+    var history = History.init(std.testing.allocator);
+    defer history.deinit();
+    try history.load(std.testing.io, path);
+    history.current_cwd = "/repo";
+    history.session_id = "session-a";
+    try history.addCommand(std.testing.io, "echo hello", 0, 10, 5);
+
+    const entry = (try history.previousEntry(std.testing.allocator, "", "/repo", "session-a", null)).?;
+    defer entry.deinit(std.testing.allocator);
+    try std.testing.expectEqualStrings("echo hello", entry.text);
+    try std.testing.expect((try history.previousEntry(std.testing.allocator, "", "/other", "session-a", null)) == null);
+
+    var service = InteractiveHistoryService.init(&history);
+    const suggestion = (try service.suggestEntry(std.testing.allocator, "echo")) orelse return error.TestExpectedEqual;
+    defer suggestion.deinit(std.testing.allocator);
+    try std.testing.expectEqualStrings("echo hello", suggestion.text);
 }
 
 test "line history navigation is scoped to session and cwd" {
