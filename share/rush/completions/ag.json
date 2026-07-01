@@ -1,0 +1,506 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "ag",
+    "description": "search files recursively",
+    "options": [
+      {
+        "long": "ackmate",
+        "description": "write ackmate parseable output",
+        "inherit": false
+      },
+      {
+        "long": "affinity",
+        "description": "set thread affinity",
+        "inherit": false,
+        "exclusiveGroup": "ag.affinity"
+      },
+      {
+        "long": "noaffinity",
+        "description": "disable thread affinity",
+        "inherit": false,
+        "exclusiveGroup": "ag.affinity"
+      },
+      {
+        "short": "a",
+        "long": "all-types",
+        "description": "search all files except hidden files",
+        "inherit": false
+      },
+      {
+        "short": "A",
+        "long": "after",
+        "description": "print lines after each match",
+        "inherit": false,
+        "value": {
+          "name": "lines",
+          "description": "line count",
+          "required": false,
+          "style": "optional"
+        }
+      },
+      {
+        "short": "B",
+        "long": "before",
+        "description": "print lines before each match",
+        "inherit": false,
+        "value": {
+          "name": "lines",
+          "description": "line count",
+          "required": false,
+          "style": "optional"
+        }
+      },
+      {
+        "long": "nobreak",
+        "description": "separate matches from different files",
+        "inherit": false
+      },
+      {
+        "short": "c",
+        "long": "count",
+        "description": "print match counts per file",
+        "inherit": false
+      },
+      {
+        "long": "color",
+        "description": "print color codes",
+        "inherit": false,
+        "exclusiveGroup": "ag.color"
+      },
+      {
+        "long": "nocolor",
+        "description": "disable color output",
+        "inherit": false,
+        "exclusiveGroup": "ag.color"
+      },
+      {
+        "long": "color-line-number",
+        "description": "set line number color",
+        "inherit": false
+      },
+      {
+        "long": "color-match",
+        "description": "set match color",
+        "inherit": false
+      },
+      {
+        "long": "color-path",
+        "description": "set path color",
+        "inherit": false
+      },
+      {
+        "long": "column",
+        "description": "print column numbers",
+        "inherit": false
+      },
+      {
+        "short": "C",
+        "long": "context",
+        "description": "print context around matches",
+        "inherit": false,
+        "value": {
+          "name": "lines",
+          "description": "line count",
+          "required": false,
+          "style": "optional"
+        }
+      },
+      {
+        "short": "D",
+        "long": "debug",
+        "description": "print debug output",
+        "inherit": false
+      },
+      {
+        "long": "depth",
+        "description": "limit directory recursion depth",
+        "inherit": false,
+        "value": {
+          "name": "num",
+          "description": "directory depth",
+          "required": false,
+          "style": "optional"
+        }
+      },
+      {
+        "long": "filename",
+        "description": "print file names",
+        "inherit": false,
+        "exclusiveGroup": "ag.filename"
+      },
+      {
+        "long": "nofilename",
+        "description": "hide file names",
+        "inherit": false,
+        "exclusiveGroup": "ag.filename"
+      },
+      {
+        "short": "f",
+        "long": "follow",
+        "description": "follow symlinks",
+        "inherit": false,
+        "exclusiveGroup": "ag.follow"
+      },
+      {
+        "long": "nofollow",
+        "description": "do not follow symlinks",
+        "inherit": false,
+        "exclusiveGroup": "ag.follow"
+      },
+      {
+        "short": "F",
+        "long": "fixed-strings",
+        "description": "match pattern literally",
+        "inherit": false
+      },
+      {
+        "long": "group",
+        "description": "group matches by file",
+        "inherit": false,
+        "exclusiveGroup": "ag.group"
+      },
+      {
+        "long": "nogroup",
+        "description": "print file name on each match line",
+        "inherit": false,
+        "exclusiveGroup": "ag.group"
+      },
+      {
+        "short": "g",
+        "description": "print filenames matching pattern",
+        "inherit": false,
+        "value": {
+          "name": "pattern",
+          "description": "pattern"
+        }
+      },
+      {
+        "short": "G",
+        "long": "file-search-regex",
+        "description": "only search matching file names",
+        "inherit": false,
+        "value": {
+          "name": "pattern",
+          "description": "pattern"
+        }
+      },
+      {
+        "short": "H",
+        "long": "heading",
+        "description": "print file names above matches",
+        "inherit": false,
+        "exclusiveGroup": "ag.heading"
+      },
+      {
+        "long": "noheading",
+        "description": "do not print file headings",
+        "inherit": false,
+        "exclusiveGroup": "ag.heading"
+      },
+      {
+        "long": "hidden",
+        "description": "search hidden files",
+        "inherit": false
+      },
+      {
+        "long": "ignore",
+        "description": "ignore matching paths",
+        "inherit": false,
+        "value": {
+          "name": "pattern",
+          "description": "pattern",
+          "provider": [
+            "builtin.files",
+            "builtin.directories"
+          ]
+        }
+      },
+      {
+        "long": "ignore-dir",
+        "description": "ignore matching directories",
+        "inherit": false,
+        "value": {
+          "name": "name",
+          "description": "the directory to ignore",
+          "provider": [
+            "builtin.files",
+            "builtin.directories"
+          ]
+        }
+      },
+      {
+        "short": "i",
+        "long": "ignore-case",
+        "description": "match case-insensitively",
+        "inherit": false
+      },
+      {
+        "short": "l",
+        "long": "files-with-matches",
+        "description": "print files with matches",
+        "inherit": false
+      },
+      {
+        "short": "L",
+        "long": "files-without-matches",
+        "description": "print files without matches",
+        "inherit": false
+      },
+      {
+        "long": "list-file-types",
+        "description": "list supported file types",
+        "inherit": false
+      },
+      {
+        "short": "m",
+        "long": "max-count",
+        "description": "stop after matches per file",
+        "inherit": false,
+        "value": {
+          "name": "num",
+          "description": "match count",
+          "required": false,
+          "style": "optional"
+        }
+      },
+      {
+        "long": "mmap",
+        "description": "use memory mapped I/O",
+        "inherit": false,
+        "exclusiveGroup": "ag.mmap"
+      },
+      {
+        "long": "nommap",
+        "description": "disable memory mapped I/O",
+        "inherit": false,
+        "exclusiveGroup": "ag.mmap"
+      },
+      {
+        "long": "multiline",
+        "description": "match across newlines",
+        "inherit": false,
+        "exclusiveGroup": "ag.multiline"
+      },
+      {
+        "long": "nomultiline",
+        "description": "do not match across newlines",
+        "inherit": false,
+        "exclusiveGroup": "ag.multiline"
+      },
+      {
+        "short": "n",
+        "long": "norecurse",
+        "description": "do not recurse into directories",
+        "inherit": false,
+        "exclusiveGroup": "ag.recurse"
+      },
+      {
+        "long": "numbers",
+        "description": "print line numbers",
+        "inherit": false,
+        "exclusiveGroup": "ag.numbers"
+      },
+      {
+        "long": "nonumbers",
+        "description": "hide line numbers",
+        "inherit": false,
+        "exclusiveGroup": "ag.numbers"
+      },
+      {
+        "short": "o",
+        "long": "only-matching",
+        "description": "print only matched text",
+        "inherit": false
+      },
+      {
+        "long": "one-device",
+        "description": "stay on one device",
+        "inherit": false
+      },
+      {
+        "short": "p",
+        "long": "path-to-ignore",
+        "description": "use an ignore file",
+        "inherit": false,
+        "value": {
+          "name": "string",
+          "description": "the path to the ignore file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "pager",
+        "description": "pipe output to a pager",
+        "inherit": false,
+        "value": {
+          "name": "command",
+          "description": "the pager",
+          "provider": {
+            "values": [
+              "more",
+              "less",
+              "most"
+            ]
+          }
+        }
+      },
+      {
+        "long": "parallel",
+        "description": "read search terms from input",
+        "inherit": false
+      },
+      {
+        "long": "print-long-lines",
+        "description": "print very long matching lines",
+        "inherit": false
+      },
+      {
+        "long": "passthrough",
+        "aliases": [
+          "passthru"
+        ],
+        "description": "print nonmatching lines too",
+        "inherit": false
+      },
+      {
+        "short": "Q",
+        "long": "literal",
+        "description": "match pattern literally",
+        "inherit": false
+      },
+      {
+        "short": "r",
+        "long": "recurse",
+        "description": "recurse into directories",
+        "inherit": false,
+        "exclusiveGroup": "ag.recurse"
+      },
+      {
+        "short": "s",
+        "long": "case-sensitive",
+        "description": "match case-sensitively",
+        "inherit": false
+      },
+      {
+        "short": "S",
+        "long": "smart-case",
+        "description": "use smart case matching",
+        "inherit": false
+      },
+      {
+        "long": "search-binary",
+        "description": "search binary files",
+        "inherit": false
+      },
+      {
+        "long": "silent",
+        "description": "suppress log messages",
+        "inherit": false
+      },
+      {
+        "long": "stats",
+        "description": "print search stats",
+        "inherit": false
+      },
+      {
+        "long": "stats-only",
+        "description": "print only search stats",
+        "inherit": false
+      },
+      {
+        "short": "t",
+        "long": "all-text",
+        "description": "search all text files",
+        "inherit": false
+      },
+      {
+        "short": "u",
+        "long": "unrestricted",
+        "description": "ignore ignore files and hidden filters",
+        "inherit": false
+      },
+      {
+        "short": "U",
+        "long": "skip-vcs-ignores",
+        "description": "skip vcs ignore files",
+        "inherit": false
+      },
+      {
+        "short": "v",
+        "long": "invert-match",
+        "description": "select nonmatching lines",
+        "inherit": false
+      },
+      {
+        "short": "V",
+        "long": "version",
+        "description": "print version",
+        "inherit": false
+      },
+      {
+        "long": "vimgrep",
+        "description": "write vim grep output",
+        "inherit": false
+      },
+      {
+        "short": "w",
+        "long": "word-regexp",
+        "description": "match whole words",
+        "inherit": false
+      },
+      {
+        "long": "workers",
+        "description": "set worker thread count",
+        "inherit": false,
+        "value": {
+          "name": "num",
+          "description": "worker count",
+          "required": false,
+          "style": "optional"
+        }
+      },
+      {
+        "short": "z",
+        "long": "search-zip",
+        "description": "search compressed files",
+        "inherit": false
+      },
+      {
+        "short": "0",
+        "long": "null",
+        "aliases": [
+          "print0"
+        ],
+        "description": "separate file names with nul",
+        "inherit": false
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "pattern",
+          "index": 0
+        },
+        {
+          "name": "path",
+          "provider": [
+            "builtin.files",
+            "builtin.directories"
+          ],
+          "index": 1,
+          "repeatable": true
+        }
+      ]
+    },
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
