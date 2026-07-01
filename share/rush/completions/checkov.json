@@ -1,0 +1,554 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "checkov",
+    "description": "scan infrastructure configuration",
+    "options": [
+      {
+        "long": "help",
+        "short": "h",
+        "description": "show help for checkov",
+        "inherit": false
+      },
+      {
+        "long": "version",
+        "short": "v",
+        "description": "show the version of checkov",
+        "inherit": false
+      },
+      {
+        "long": "quiet",
+        "description": "cLI output, display only failed checks",
+        "inherit": false
+      },
+      {
+        "long": "compact",
+        "description": "cLI output, do not display code blocks",
+        "inherit": false
+      },
+      {
+        "long": "list",
+        "short": "l",
+        "description": "list checks",
+        "inherit": false
+      },
+      {
+        "long": "no-guide",
+        "description": "do not fetch bridgecrew platform IDs and guidelines for the checkov output report. Note: this prevents bridgecre",
+        "inherit": false
+      },
+      {
+        "long": "output-bc-ids",
+        "description": "print bridgecrew platform IDs (BC...) instead of checkov IDs (CKV...), if the check exists in the platform",
+        "inherit": false
+      },
+      {
+        "long": "directory",
+        "short": "d",
+        "description": "iac root directory (can not be used together with --file)",
+        "inherit": false,
+        "value": {
+          "name": "directory",
+          "provider": "builtin.directories"
+        },
+        "exclusiveGroup": "checkov.input"
+      },
+      {
+        "long": "output",
+        "short": "o",
+        "description": "report output format. Add multiple outputs by using the flag multiple times (-o sarif -o cli)",
+        "repeatable": true,
+        "inherit": false,
+        "value": {
+          "name": "format",
+          "values": [
+            "cli",
+            "cyclonedx",
+            "json",
+            "junitxml",
+            "github_failed_only",
+            "sarif"
+          ]
+        }
+      },
+      {
+        "long": "framework",
+        "description": "iac frameworks to include checks for",
+        "inherit": false,
+        "value": {
+          "name": "frameworks",
+          "values": [
+            "arm",
+            "cloudformation",
+            "dockerfile",
+            "github_configuration",
+            "gitlab_configuration",
+            "helm",
+            "json",
+            "kubernetes",
+            "kustomize",
+            "sca_package",
+            "secrets",
+            "serverless",
+            "terraform",
+            "terraform_plan",
+            "all"
+          ]
+        }
+      },
+      {
+        "long": "skip-framework",
+        "description": "iac frameworks to exclude checks for",
+        "inherit": false,
+        "value": {
+          "name": "frameworks",
+          "values": [
+            "arm",
+            "cloudformation",
+            "dockerfile",
+            "github_configuration",
+            "gitlab_configuration",
+            "helm",
+            "json",
+            "kubernetes",
+            "kustomize",
+            "sca_package",
+            "secrets",
+            "serverless",
+            "terraform",
+            "terraform_plan",
+            "all"
+          ]
+        }
+      },
+      {
+        "long": "add-check",
+        "description": "generate a new check via CLI prompt",
+        "inherit": false
+      },
+      {
+        "long": "file",
+        "short": "f",
+        "description": "iac file(can not be used together with --directory)",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        },
+        "exclusiveGroup": "checkov.input"
+      },
+      {
+        "long": "skip-path",
+        "description": "path (file or directory) to skip, using regular expression logic, relative to current working directory. Word bo",
+        "repeatable": true,
+        "inherit": false,
+        "value": {
+          "name": "skip_path",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "check",
+        "short": "c",
+        "description": "filter scan to run only on a specific check identifier (allowlist). You can specify multiple checks separated by",
+        "inherit": false,
+        "value": {
+          "name": "checks"
+        },
+        "exclusiveGroup": "checkov.check-filter"
+      },
+      {
+        "long": "skip-check",
+        "description": "filter scan to run all check except a specific check identifier (denylist). You can specify multiple checks sepa",
+        "inherit": false,
+        "value": {
+          "name": "checks"
+        },
+        "exclusiveGroup": "checkov.check-filter"
+      },
+      {
+        "long": "run-all-external-checks",
+        "description": "run all external checks (loaded via --external-checks options) even if the checks are not present in the --check",
+        "inherit": false
+      },
+      {
+        "long": "external-checks-dir",
+        "description": "directory for custom checks to be loaded. Can be repeated",
+        "repeatable": true,
+        "inherit": false,
+        "value": {
+          "name": "external_checks_dir",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "bc-api-key",
+        "description": "bridgecrew API key. You may also use the environment variable: BC_API_KEY",
+        "inherit": false,
+        "value": {
+          "name": "bc_api_key"
+        }
+      },
+      {
+        "long": "docker-image",
+        "description": "scan docker images by name or ID. Only works with --bc-api-key flag",
+        "inherit": false,
+        "value": {
+          "name": "docker_image"
+        }
+      },
+      {
+        "long": "dockerfile-path",
+        "description": "path to the Dockerfile of the scanned docker image",
+        "inherit": false,
+        "value": {
+          "name": "dockerfile_path",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "repo-id",
+        "description": "identity string of the repository, with form <repo_owner>/<repo_name>",
+        "inherit": false,
+        "value": {
+          "name": "repo_id"
+        }
+      },
+      {
+        "long": "branch",
+        "short": "b",
+        "description": "selected branch of the persisted repository. Only has effect when using the --bc-api-key flag",
+        "inherit": false,
+        "value": {
+          "name": "branch",
+          "provider": "checkov.branches"
+        }
+      },
+      {
+        "long": "skip-fixes",
+        "description": "do not download fixed resource templates from bridgecrew. Only has an effect when using the --bc-api-key flag",
+        "inherit": false
+      },
+      {
+        "long": "skip-suppressions",
+        "description": "do not download preconfigured suppressions from the bridgecrew platform. Code comment suppressions will still be",
+        "inherit": false
+      },
+      {
+        "long": "skip-policy-download",
+        "description": "do not download custom policies configured in the bridgecrew platform. Only has an effect when using the --bc-ap",
+        "inherit": false
+      },
+      {
+        "long": "download-external-modules",
+        "description": "download external terraform modules from public git repositories and terraform registry. You may also use the en",
+        "inherit": false,
+        "value": {
+          "name": "download_external_modules"
+        },
+        "exclusiveGroup": "checkov.terraform-vars"
+      },
+      {
+        "long": "var-file",
+        "description": "variable files to load in addition to the default files (see https://www.terraform.io/docs/language/values/varia",
+        "inherit": false,
+        "value": {
+          "name": "var_file",
+          "provider": "builtin.files"
+        },
+        "exclusiveGroup": "checkov.terraform-vars"
+      },
+      {
+        "long": "external-modules-download-path",
+        "description": "set the path for the download external terraform modules. You may also use the environment variable: EXTERNAL_MO",
+        "inherit": false,
+        "value": {
+          "name": "external_modules_dir",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "evaluate-variables",
+        "description": "evaluate the values of variables and locals",
+        "inherit": false,
+        "value": {
+          "name": "evaluate_variables"
+        }
+      },
+      {
+        "long": "ca-certificate",
+        "spellings": [
+          "-ca"
+        ],
+        "description": "custom CA (bundle) fila. You may also use the environment variablee: CA_CERTIFICATE",
+        "inherit": false,
+        "value": {
+          "name": "ca_certificate",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "repo-root-for-plan-enrichment",
+        "description": "directory containing the hcl code used to generate a given plan file. Use with -f FILE",
+        "inherit": false,
+        "value": {
+          "name": "repo_root_for_plan_enrichment",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "config-file",
+        "description": "path to the checkov configuration YAML file",
+        "inherit": false,
+        "value": {
+          "name": "config_file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "create-config",
+        "description": "takes the current command line args and writes them out to a config file at the given path",
+        "inherit": false,
+        "value": {
+          "name": "config_file"
+        }
+      },
+      {
+        "long": "show-config",
+        "description": "prints all arguments and config settings and where they came from (eg. commandline, config file, environment var",
+        "inherit": false
+      },
+      {
+        "long": "create-baseline",
+        "description": "save all current results to a '.checkov.baseline' file so future runs will only flag new findings. Works only wi",
+        "inherit": false
+      },
+      {
+        "long": "baseline",
+        "description": "use a '.checkov.baseline' file to compare current results with a known baseline. Report will include only failed",
+        "inherit": false,
+        "value": {
+          "name": "baseline",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "soft-fail",
+        "short": "s",
+        "description": "runs checks but suppresses the error code",
+        "inherit": false
+      },
+      {
+        "long": "soft-fail-on",
+        "description": "exits with a 0 exit code for specified checks. You can specify multiple checks separated by comma delimiter",
+        "inherit": false,
+        "value": {
+          "name": "checks"
+        }
+      },
+      {
+        "long": "hard-fail-on",
+        "description": "exits with a non-zero exit code for specified checks. You can specify multiple checks separated by comma delimiter",
+        "inherit": false,
+        "value": {
+          "name": "checks"
+        }
+      },
+      {
+        "long": "min-cve-severity",
+        "description": "set minimum severity to return a non-zero exit code",
+        "inherit": false,
+        "value": {
+          "name": "min_severity",
+          "values": [
+            "critical",
+            "high",
+            "medium",
+            "low",
+            "none"
+          ]
+        }
+      },
+      {
+        "long": "skip-cve-package",
+        "description": "ignore specific open source package when SCA scanning for CVEs in package dependencies. Can be used multiple tim",
+        "repeatable": true,
+        "inherit": false,
+        "value": {
+          "name": "skip_cve_package"
+        }
+      },
+      {
+        "long": "use-enforcement-rules",
+        "description": "use the Enforcement rules configured in the platform for hard / soft fail logic",
+        "inherit": false,
+        "value": {
+          "name": "use_enforcement_rules"
+        }
+      },
+      {
+        "long": "support",
+        "description": "enable debug logs and upload the logs to the server",
+        "inherit": false,
+        "value": {
+          "name": "support"
+        }
+      },
+      {
+        "long": "summary-position",
+        "description": "chose whether the summary will be appended on top or on bottom",
+        "inherit": false,
+        "value": {
+          "name": "summary_position",
+          "values": [
+            "top",
+            "bottom"
+          ]
+        }
+      },
+      {
+        "long": "skip-resources-without-violations",
+        "description": "exclude extra resources (resources without violations)",
+        "inherit": false,
+        "value": {
+          "name": "skip_resources_without_violations"
+        }
+      },
+      {
+        "long": "skip-download",
+        "description": "do not download any data from prisma cloud",
+        "inherit": false,
+        "value": {
+          "name": "skip_download"
+        }
+      },
+      {
+        "long": "secrets-history-timeout",
+        "description": "maximum time to run the history scan",
+        "inherit": false,
+        "value": {
+          "name": "secrets_history_timeout"
+        }
+      },
+      {
+        "long": "scan-secrets-history",
+        "description": "will scan the history of commits for secrets",
+        "inherit": false,
+        "value": {
+          "name": "scan_secrets_history"
+        }
+      },
+      {
+        "long": "prisma-api-url",
+        "description": "the prisma cloud API URL",
+        "inherit": false,
+        "value": {
+          "name": "prisma_api_url"
+        }
+      },
+      {
+        "long": "policy-metadata-filter",
+        "description": "comma separated key:value string to filter policies based on prisma cloud policy metadata",
+        "inherit": false,
+        "value": {
+          "name": "policy_metadata_filter"
+        }
+      },
+      {
+        "long": "output-file-path",
+        "description": "name of the output folder to save the chosen output formats",
+        "inherit": false,
+        "value": {
+          "name": "output_file_path",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "output-baseline-as-skipped",
+        "description": "output checks that are skipped due to baseline file presence",
+        "inherit": false,
+        "value": {
+          "name": "output_baseline_as_skipped",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "openai-api-key",
+        "description": "add an OpenAI API key to enhance finding guidelines. This will send Code to OpenAI",
+        "inherit": false,
+        "value": {
+          "name": "openai_api_key"
+        }
+      },
+      {
+        "long": "no-fail-on-crash",
+        "description": "return exit code 0 instead of 2",
+        "inherit": false,
+        "value": {
+          "name": "no_fail_on_crash"
+        }
+      },
+      {
+        "long": "mask",
+        "description": "each entry in the list will be used for masking the desired attribute",
+        "inherit": false,
+        "value": {
+          "name": "mask"
+        }
+      },
+      {
+        "long": "include-all-checkov-policies",
+        "description": "when running with an API key, checkov will omit any policies that do not exist in the bridgecrew or prisma cloud",
+        "inherit": false,
+        "value": {
+          "name": "include_all_checkov_policies"
+        }
+      },
+      {
+        "long": "external-checks-git",
+        "description": "gitHub URL of external checks to be added",
+        "inherit": false,
+        "value": {
+          "name": "external_checks_git"
+        }
+      },
+      {
+        "long": "enable-secret-scan-all-files",
+        "description": "enable secret scan for all files",
+        "inherit": false,
+        "value": {
+          "name": "enable_secret_scan_all_files",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "deep-analysis",
+        "description": "enable combine TF graph and TF Plan graph",
+        "inherit": false,
+        "value": {
+          "name": "deep_analysis"
+        }
+      },
+      {
+        "long": "block-list-secret-scan",
+        "description": "list of files to filter out from the secret scanner",
+        "inherit": false,
+        "value": {
+          "name": "block_list_secret_scan"
+        }
+      }
+    ],
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "checkov.branches": {
+        "function": "__rush_complete_checkov_branches"
+      }
+    }
+  }
+}
