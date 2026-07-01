@@ -1,0 +1,17 @@
+__rush_complete_dapr_running_apps() {
+  command -v dapr >/dev/null 2>&1 || return
+  command -v python3 >/dev/null 2>&1 || return
+  dapr list -A -o json 2>/dev/null | python3 -c '
+import json, sys
+try:
+    apps = json.load(sys.stdin)
+except Exception:
+    sys.exit(0)
+for app in apps if isinstance(apps, list) else []:
+    app_id = app.get("appId")
+    if app_id:
+        print(app_id)
+' | while IFS= read -r app_id; do
+    test -n "$app_id" && rush_complete candidate "$app_id" --kind plain --description 'Dapr app'
+  done
+}
