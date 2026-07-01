@@ -1,0 +1,267 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "bwdc",
+    "description": "manage bitwarden directory connector",
+    "options": [
+      {
+        "long": "help",
+        "description": "show help for bwdc",
+        "inherit": false
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "login",
+        "description": "log in to directory connector",
+        "options": [
+          {
+            "long": "help",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "client-id",
+              "description": "organization API client_id",
+              "index": 0
+            },
+            {
+              "name": "client-secret",
+              "description": "organization API client_secret",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "logout",
+        "description": "log out of directory connector",
+        "options": [
+          {
+            "long": "help",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "test",
+        "description": "prints a JSON formatted array of groups and users that would be synced to your bitwarden organization",
+        "options": [
+          {
+            "long": "last",
+            "description": "test only the changes since the last successful sync",
+            "inherit": false
+          },
+          {
+            "long": "help",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "sync",
+        "description": "run a live sync operation and push data to your bitwarden organization",
+        "options": [
+          {
+            "long": "help",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "last-sync",
+        "description": "the last-sync command returns an ISO 8601 timestamp for the last sync operation that was performed for user",
+        "options": [
+          {
+            "long": "help",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "object",
+              "description": "you must specify either users or groups as an <object> to run the command against",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "config",
+        "description": "the config command allows you to specify your directory settings",
+        "options": [
+          {
+            "long": "help",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "setting",
+              "description": "specify the setting to configure",
+              "index": 0
+            },
+            {
+              "name": "value",
+              "description": "specify the value assigned to the setting",
+              "index": 1
+            }
+          ]
+        },
+        "subcommands": [
+          {
+            "name": "server",
+            "description": "url of your self-hosted installation (e.g. https://my.url.com) or https://vault.bitwarden.eu",
+            "arguments": {
+              "states": [
+                {
+                  "name": "server-url",
+                  "description": "specify the server url",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "directory",
+            "description": "type of directory to use",
+            "arguments": {
+              "states": [
+                {
+                  "name": "directory-type",
+                  "index": 0,
+                  "values": [
+                    {
+                      "value": "0",
+                      "description": "Active Directory/LDAP"
+                    },
+                    {
+                      "value": "1",
+                      "description": "Azure Active Directory"
+                    },
+                    {
+                      "value": "2",
+                      "description": "Google Workspace/GSuite"
+                    },
+                    {
+                      "value": "3",
+                      "description": "Okta"
+                    },
+                    {
+                      "value": "4",
+                      "description": "OneLogin"
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "name": "ldap.password",
+            "description": "password for connection to the LDAP server",
+            "arguments": {
+              "states": [
+                {
+                  "name": "password",
+                  "description": "specify the password",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "azure.key",
+            "description": "azure AD secret key",
+            "arguments": {
+              "states": [
+                {
+                  "name": "key",
+                  "description": "specify the AD secret key",
+                  "index": 0,
+                  "provider": "builtin.files"
+                }
+              ]
+            }
+          },
+          {
+            "name": "gsuite.key",
+            "description": "google Workspace/GSuite private key",
+            "arguments": {
+              "states": [
+                {
+                  "name": "key",
+                  "description": "specify the Google Workspace/GSuite private key",
+                  "index": 0,
+                  "provider": "builtin.files"
+                }
+              ]
+            }
+          },
+          {
+            "name": "okta.token",
+            "description": "okta token",
+            "arguments": {
+              "states": [
+                {
+                  "name": "token",
+                  "description": "specify the Okta token",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "onelogin.secret",
+            "description": "oneLogin client secret",
+            "arguments": {
+              "states": [
+                {
+                  "name": "secret",
+                  "description": "specify the OneLogin client secret",
+                  "index": 0
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "data-file",
+        "description": "path to data.json database file",
+        "options": [
+          {
+            "long": "help",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "clear-cache",
+        "description": "the clear-cache command allows you to clear cached data that the application stores while performing sync o",
+        "options": [
+          {
+            "long": "help",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "update",
+        "description": "the update command allows you to check if your directory connector CLI is up-to-date"
+      }
+    ],
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "builtin.directories": {
+        "builtin": "directories"
+      }
+    }
+  }
+}
