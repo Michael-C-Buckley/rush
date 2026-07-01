@@ -1,0 +1,512 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "dpkg",
+    "description": "manage Debian packages",
+    "options": [
+      {
+        "short": "h",
+        "long": "help",
+        "description": "help for dpkg",
+        "inherit": false
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "query",
+        "description": "query the dpkg database",
+        "options": [
+          {
+            "short": "l",
+            "long": "list",
+            "description": "list packages matching a pattern",
+            "inherit": false,
+            "value": {
+              "name": "pattern"
+            }
+          },
+          {
+            "short": "s",
+            "long": "status",
+            "description": "display the status of available packages",
+            "inherit": false,
+            "value": {
+              "name": "package"
+            }
+          },
+          {
+            "short": "L",
+            "long": "listfiles",
+            "description": "list files in a package",
+            "inherit": false,
+            "value": {
+              "name": "package"
+            }
+          },
+          {
+            "short": "S",
+            "long": "search",
+            "description": "search for a package owning a file",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "short": "p",
+            "long": "print-avail",
+            "description": "display details about a package in the dpkg database",
+            "inherit": false,
+            "value": {
+              "name": "package"
+            }
+          },
+          {
+            "short": "W",
+            "long": "show",
+            "description": "show a package in the dpkg database",
+            "inherit": false,
+            "value": {
+              "name": "package"
+            }
+          }
+        ]
+      },
+      {
+        "name": "install",
+        "description": "install or upgrade packages",
+        "options": [
+          {
+            "short": "R",
+            "long": "recursive",
+            "description": "recursively handle packages",
+            "inherit": false
+          },
+          {
+            "short": "B",
+            "long": "auto-deconfigure",
+            "description": "uninstall packages that depend on the target package",
+            "inherit": false
+          },
+          {
+            "long": "skip-same-version",
+            "description": "don't upgrade if the same version is already installed",
+            "inherit": false
+          },
+          {
+            "long": "force-depends",
+            "description": "ignore dependency problems",
+            "inherit": false
+          },
+          {
+            "long": "force-confnew",
+            "description": "always install the new version of configuration files",
+            "inherit": false
+          },
+          {
+            "long": "force-confold",
+            "description": "always install the old version of configuration files",
+            "inherit": false
+          },
+          {
+            "long": "force-confdef",
+            "description": "always install the default version of configuration files",
+            "inherit": false
+          },
+          {
+            "long": "force-confmiss",
+            "description": "always install missing configuration files",
+            "inherit": false
+          },
+          {
+            "long": "no-triggers",
+            "description": "skip processing triggers",
+            "inherit": false
+          },
+          {
+            "long": "no-act",
+            "description": "simulate the action, but don't execute",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "package",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "remove",
+        "description": "remove packages",
+        "options": [
+          {
+            "short": "R",
+            "long": "recursive",
+            "description": "recursively remove packages",
+            "inherit": false
+          },
+          {
+            "short": "B",
+            "long": "auto-deconfigure",
+            "description": "uninstall packages that depend on the target package",
+            "inherit": false
+          },
+          {
+            "long": "no-act",
+            "description": "simulate the action, but don't execute",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "package",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "purge",
+        "description": "remove packages and their configuration files",
+        "options": [
+          {
+            "short": "R",
+            "long": "recursive",
+            "description": "recursively remove packages",
+            "inherit": false
+          },
+          {
+            "long": "no-act",
+            "description": "simulate the action, but don't execute",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "package",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "configure",
+        "description": "configure a package after installation",
+        "options": [
+          {
+            "long": "pending",
+            "description": "configure all unconfigured packages",
+            "inherit": false
+          },
+          {
+            "long": "no-triggers",
+            "description": "skip processing triggers",
+            "inherit": false
+          },
+          {
+            "long": "no-act",
+            "description": "simulate the action, but don't execute",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "package",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "reconfigure",
+        "description": "reconfigure a package",
+        "options": [
+          {
+            "long": "no-triggers",
+            "description": "skip processing triggers",
+            "inherit": false
+          },
+          {
+            "long": "no-act",
+            "description": "simulate the action, but don't execute",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "package",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "list",
+        "description": "list packages in the dpkg database",
+        "options": [
+          {
+            "short": "l",
+            "long": "list",
+            "description": "list packages matching a pattern",
+            "inherit": false,
+            "value": {
+              "name": "pattern"
+            }
+          },
+          {
+            "short": "s",
+            "long": "status",
+            "description": "display the status of available packages",
+            "inherit": false,
+            "value": {
+              "name": "package"
+            }
+          },
+          {
+            "short": "L",
+            "long": "listfiles",
+            "description": "list files in a package",
+            "inherit": false,
+            "value": {
+              "name": "package"
+            }
+          },
+          {
+            "short": "S",
+            "long": "search",
+            "description": "search for a package owning a file",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "short": "p",
+            "long": "print-avail",
+            "description": "display details about a package in the dpkg database",
+            "inherit": false,
+            "value": {
+              "name": "package"
+            }
+          },
+          {
+            "short": "W",
+            "long": "show",
+            "description": "show a package in the dpkg database",
+            "inherit": false,
+            "value": {
+              "name": "package"
+            }
+          },
+          {
+            "long": "installed",
+            "description": "list installed packages",
+            "inherit": false
+          },
+          {
+            "long": "avail",
+            "description": "list available packages",
+            "inherit": false
+          },
+          {
+            "long": "hold",
+            "description": "list packages on hold",
+            "inherit": false
+          },
+          {
+            "long": "deferred",
+            "description": "list deferred packages",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "builddeb",
+        "description": "build Debian package files from sources",
+        "options": [
+          {
+            "long": "unsigned",
+            "spellings": [
+              "-us"
+            ],
+            "description": "build unsigned .changes and .dsc files",
+            "inherit": false
+          },
+          {
+            "long": "unsigned-changes",
+            "spellings": [
+              "-uc"
+            ],
+            "description": "build unsigned .changes file",
+            "inherit": false
+          },
+          {
+            "long": "source",
+            "spellings": [
+              "-sa"
+            ],
+            "description": "build source package",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-rfakeroot"
+            ],
+            "description": "use fakeroot when building the package",
+            "inherit": false
+          },
+          {
+            "short": "b",
+            "long": "binary",
+            "description": "build binary package from source",
+            "inherit": false
+          },
+          {
+            "long": "force-sign",
+            "description": "force signing of changes file",
+            "inherit": false
+          },
+          {
+            "short": "m",
+            "long": "maintainer",
+            "description": "specify the package maintainer",
+            "inherit": false,
+            "value": {
+              "name": "email"
+            }
+          },
+          {
+            "short": "c",
+            "long": "changes",
+            "description": "specify the changes file to use",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "short": "v",
+            "long": "version",
+            "description": "specify the version to use",
+            "inherit": false,
+            "value": {
+              "name": "version"
+            }
+          },
+          {
+            "long": "increment",
+            "description": "increment the version number in the changelog",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "directory",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "check",
+        "description": "check the dependencies of packages",
+        "options": [
+          {
+            "short": "a",
+            "long": "all",
+            "description": "check all installed packages",
+            "inherit": false
+          },
+          {
+            "short": "d",
+            "long": "unmet",
+            "description": "check for unmet dependencies",
+            "inherit": false
+          },
+          {
+            "short": "i",
+            "long": "check-installed",
+            "description": "check installed packages",
+            "inherit": false
+          },
+          {
+            "short": "U",
+            "long": "check-unpacked",
+            "description": "check unpacked packages",
+            "inherit": false
+          },
+          {
+            "short": "c",
+            "long": "nocheck",
+            "description": "skip checking for broken dependencies",
+            "inherit": false
+          },
+          {
+            "short": "r",
+            "long": "reverse",
+            "description": "check reverse dependencies",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "package",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "compare-versions",
+        "description": "compare package versions",
+        "arguments": {
+          "states": [
+            {
+              "name": "version1",
+              "index": 0
+            },
+            {
+              "name": "relation",
+              "provider": {
+                "values": [
+                  "lt",
+                  "le",
+                  "eq",
+                  "ne",
+                  "gt",
+                  "ge"
+                ]
+              },
+              "index": 1
+            },
+            {
+              "name": "version2",
+              "index": 2
+            }
+          ]
+        }
+      }
+    ],
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "builtin.directories": {
+        "builtin": "directories"
+      }
+    }
+  }
+}
