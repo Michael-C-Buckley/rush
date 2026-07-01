@@ -1,0 +1,227 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "elm-json",
+    "description": "manage elm.json files",
+    "options": [
+      {
+        "long": "help",
+        "short": "h",
+        "description": "prints help information",
+        "inherit": false
+      },
+      {
+        "long": "offline",
+        "description": "enable offline mode, which means no HTTP traffic will happen",
+        "inherit": false
+      },
+      {
+        "long": "version",
+        "short": "V",
+        "description": "prints version information",
+        "inherit": false
+      },
+      {
+        "long": "verbose",
+        "short": "v",
+        "description": "sets the level of verbosity",
+        "inherit": false
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "help",
+        "description": "prints help information or the help of the given subcommand(s)",
+        "arguments": {
+          "states": [
+            {
+              "name": "subcommand",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "install",
+        "description": "install a package",
+        "options": [
+          {
+            "long": "help",
+            "short": "h",
+            "description": "prints help information",
+            "inherit": false
+          },
+          {
+            "long": "test",
+            "description": "install as a test-dependency",
+            "inherit": false
+          },
+          {
+            "long": "version",
+            "short": "V",
+            "description": "prints version information",
+            "inherit": false
+          },
+          {
+            "long": "yes",
+            "description": "answer \"yes\" to all questions",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "package",
+              "description": "package to install, e.g. elm/core or elm/core@1.0.2 or elm/core@1",
+              "index": 0
+            },
+            {
+              "name": "input",
+              "description": "the elm.json file to upgrade [default: elm.json]",
+              "index": 1,
+              "provider": "builtin.files"
+            }
+          ]
+        }
+      },
+      {
+        "name": "new",
+        "description": "create a new elm.json file",
+        "options": [
+          {
+            "long": "help",
+            "short": "h",
+            "description": "prints help information",
+            "inherit": false
+          },
+          {
+            "long": "version",
+            "short": "V",
+            "description": "prints version information",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "tree",
+        "description": "list entire dependency graph as a tree",
+        "options": [
+          {
+            "long": "help",
+            "short": "h",
+            "description": "prints help information",
+            "inherit": false
+          },
+          {
+            "long": "test",
+            "description": "promote test-dependencies to top-level dependencies",
+            "inherit": false
+          },
+          {
+            "long": "version",
+            "short": "V",
+            "description": "prints version information",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "package",
+              "description": "limit output to show path to some (indirect) dependency",
+              "index": 0
+            },
+            {
+              "name": "input",
+              "description": "the elm.json file to solve [default: elm.json]",
+              "index": 1,
+              "provider": "builtin.files"
+            }
+          ]
+        }
+      },
+      {
+        "name": "uninstall",
+        "description": "uninstall a package",
+        "options": [
+          {
+            "long": "help",
+            "short": "h",
+            "description": "prints help information",
+            "inherit": false
+          },
+          {
+            "long": "version",
+            "short": "V",
+            "description": "prints version information",
+            "inherit": false
+          },
+          {
+            "long": "yes",
+            "description": "answer \"yes\" to all questions",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "package",
+              "description": "package to uninstall, e.g. elm/html",
+              "index": 0
+            },
+            {
+              "name": "input",
+              "description": "the elm.json file to upgrade [default: elm.json]",
+              "index": 1,
+              "provider": "builtin.files"
+            }
+          ]
+        }
+      },
+      {
+        "name": "upgrade",
+        "description": "bring your dependencies up to date",
+        "options": [
+          {
+            "long": "help",
+            "short": "h",
+            "description": "prints help information",
+            "inherit": false
+          },
+          {
+            "long": "unsafe",
+            "description": "allow major versions bumps",
+            "inherit": false
+          },
+          {
+            "long": "version",
+            "short": "V",
+            "description": "prints version information",
+            "inherit": false
+          },
+          {
+            "long": "yes",
+            "description": "answer \"yes\" to all questions",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "input",
+              "description": "the elm.json file to upgrade [default: elm.json]",
+              "index": 0,
+              "provider": "builtin.files"
+            }
+          ]
+        }
+      }
+    ],
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
