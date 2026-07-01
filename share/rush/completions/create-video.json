@@ -1,0 +1,8 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "create-video",
+    "description": "create a Remotion video project"
+  }
+}
