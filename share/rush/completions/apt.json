@@ -1,0 +1,719 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "apt",
+    "description": "manage debian packages",
+    "options": [
+      {
+        "short": "h",
+        "long": "help",
+        "description": "show help",
+        "inherit": true
+      },
+      {
+        "short": "v",
+        "long": "version",
+        "description": "show version",
+        "inherit": true
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "update",
+        "description": "update the package database",
+        "options": [
+          {
+            "short": "y",
+            "description": "assume yes to prompts",
+            "inherit": false,
+            "exclusiveGroup": "apt.prompt-answer"
+          },
+          {
+            "long": "assume-no",
+            "description": "assume no to prompts",
+            "inherit": false,
+            "exclusiveGroup": "apt.prompt-answer"
+          }
+        ]
+      },
+      {
+        "name": "upgrade",
+        "description": "install all available upgrades",
+        "arguments": {
+          "states": [
+            {
+              "name": "package",
+              "description": "package name",
+              "index": 0,
+              "repeatable": true,
+              "provider": "apt.upgradable-packages"
+            }
+          ]
+        },
+        "options": [
+          {
+            "short": "d",
+            "long": "download-only",
+            "description": "download packages only",
+            "inherit": false
+          },
+          {
+            "long": "no-download",
+            "description": "use already downloaded packages",
+            "inherit": false
+          },
+          {
+            "short": "y",
+            "description": "assume yes to prompts",
+            "inherit": false,
+            "exclusiveGroup": "apt.prompt-answer"
+          },
+          {
+            "long": "assume-no",
+            "description": "assume no to prompts",
+            "inherit": false,
+            "exclusiveGroup": "apt.prompt-answer"
+          },
+          {
+            "short": "s",
+            "long": "simulate",
+            "description": "simulate changes",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "full-upgrade",
+        "description": "install available upgrades, removing currently installed packages if n",
+        "options": [
+          {
+            "short": "d",
+            "long": "download-only",
+            "description": "download packages only",
+            "inherit": false
+          },
+          {
+            "long": "no-download",
+            "description": "use already downloaded packages",
+            "inherit": false
+          },
+          {
+            "short": "y",
+            "description": "assume yes to prompts",
+            "inherit": false,
+            "exclusiveGroup": "apt.prompt-answer"
+          },
+          {
+            "long": "assume-no",
+            "description": "assume no to prompts",
+            "inherit": false,
+            "exclusiveGroup": "apt.prompt-answer"
+          },
+          {
+            "short": "s",
+            "long": "simulate",
+            "description": "simulate changes",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "install",
+        "description": "install package(s)",
+        "options": [
+          {
+            "short": "d",
+            "long": "download-only",
+            "description": "download packages only",
+            "inherit": false
+          },
+          {
+            "long": "no-download",
+            "description": "use already downloaded packages",
+            "inherit": false
+          },
+          {
+            "short": "y",
+            "description": "assume yes to prompts",
+            "inherit": false,
+            "exclusiveGroup": "apt.prompt-answer"
+          },
+          {
+            "long": "assume-no",
+            "description": "assume no to prompts",
+            "inherit": false,
+            "exclusiveGroup": "apt.prompt-answer"
+          },
+          {
+            "short": "s",
+            "long": "simulate",
+            "description": "simulate changes",
+            "inherit": false
+          },
+          {
+            "long": "reinstall",
+            "description": "reinstall installed package",
+            "inherit": false
+          },
+          {
+            "short": "f",
+            "long": "fix-broken",
+            "description": "fix broken packages",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "package",
+              "description": "package name",
+              "index": 0,
+              "repeatable": true,
+              "provider": [
+                "apt.packages",
+                "builtin.files"
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "name": "reinstall",
+        "description": "reinstall package(s)",
+        "arguments": {
+          "states": [
+            {
+              "name": "package",
+              "description": "package name",
+              "index": 0,
+              "repeatable": true,
+              "provider": "apt.installed-packages"
+            }
+          ]
+        },
+        "options": [
+          {
+            "short": "y",
+            "description": "assume yes to prompts",
+            "inherit": false,
+            "exclusiveGroup": "apt.prompt-answer"
+          },
+          {
+            "long": "assume-no",
+            "description": "assume no to prompts",
+            "inherit": false,
+            "exclusiveGroup": "apt.prompt-answer"
+          },
+          {
+            "short": "s",
+            "long": "simulate",
+            "description": "simulate changes",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "remove",
+        "description": "remove package(s)",
+        "options": [
+          {
+            "short": "y",
+            "description": "assume yes to prompts",
+            "inherit": false,
+            "exclusiveGroup": "apt.prompt-answer"
+          },
+          {
+            "long": "assume-no",
+            "description": "assume no to prompts",
+            "inherit": false,
+            "exclusiveGroup": "apt.prompt-answer"
+          },
+          {
+            "short": "s",
+            "long": "simulate",
+            "description": "simulate changes",
+            "inherit": false
+          },
+          {
+            "short": "f",
+            "long": "fix-broken",
+            "description": "fix broken packages",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "package",
+              "description": "package name",
+              "index": 0,
+              "repeatable": true,
+              "provider": "apt.installed-packages"
+            }
+          ]
+        }
+      },
+      {
+        "name": "purge",
+        "description": "remove package(s) and their configuration files",
+        "arguments": {
+          "states": [
+            {
+              "name": "package",
+              "description": "package name",
+              "index": 0,
+              "repeatable": true,
+              "provider": "apt.installed-packages"
+            }
+          ]
+        },
+        "options": [
+          {
+            "short": "y",
+            "description": "assume yes to prompts",
+            "inherit": false,
+            "exclusiveGroup": "apt.prompt-answer"
+          },
+          {
+            "long": "assume-no",
+            "description": "assume no to prompts",
+            "inherit": false,
+            "exclusiveGroup": "apt.prompt-answer"
+          },
+          {
+            "short": "s",
+            "long": "simulate",
+            "description": "simulate changes",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "autoremove",
+        "aliases": [
+          "auto-remove"
+        ],
+        "description": "remove unused packages",
+        "options": [
+          {
+            "short": "y",
+            "description": "assume yes to prompts",
+            "inherit": false,
+            "exclusiveGroup": "apt.prompt-answer"
+          },
+          {
+            "long": "assume-no",
+            "description": "assume no to prompts",
+            "inherit": false,
+            "exclusiveGroup": "apt.prompt-answer"
+          },
+          {
+            "short": "s",
+            "long": "simulate",
+            "description": "simulate changes",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "list",
+        "description": "list packages",
+        "options": [
+          {
+            "long": "installed",
+            "description": "List installed packages",
+            "inherit": false
+          },
+          {
+            "long": "upgradable",
+            "description": "List upgradable packages",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "search",
+        "description": "search for packages",
+        "arguments": {
+          "states": [
+            {
+              "name": "query",
+              "description": "search query",
+              "index": 0
+            }
+          ]
+        },
+        "options": [
+          {
+            "short": "y",
+            "description": "assume yes to prompts",
+            "inherit": false,
+            "exclusiveGroup": "apt.prompt-answer"
+          },
+          {
+            "long": "assume-no",
+            "description": "assume no to prompts",
+            "inherit": false,
+            "exclusiveGroup": "apt.prompt-answer"
+          }
+        ]
+      },
+      {
+        "name": "show",
+        "description": "show package details",
+        "arguments": {
+          "states": [
+            {
+              "name": "package",
+              "description": "package name",
+              "index": 0,
+              "provider": "apt.packages"
+            }
+          ]
+        }
+      },
+      {
+        "name": "satisfy",
+        "description": "satisfy package dependencies",
+        "arguments": {
+          "states": [
+            {
+              "name": "package",
+              "description": "package name",
+              "index": 0,
+              "repeatable": true,
+              "provider": "apt.packages"
+            }
+          ]
+        },
+        "options": [
+          {
+            "short": "d",
+            "long": "download-only",
+            "description": "download packages only",
+            "inherit": false
+          },
+          {
+            "long": "no-download",
+            "description": "use already downloaded packages",
+            "inherit": false
+          },
+          {
+            "short": "y",
+            "description": "assume yes to prompts",
+            "inherit": false,
+            "exclusiveGroup": "apt.prompt-answer"
+          },
+          {
+            "long": "assume-no",
+            "description": "assume no to prompts",
+            "inherit": false,
+            "exclusiveGroup": "apt.prompt-answer"
+          },
+          {
+            "short": "s",
+            "long": "simulate",
+            "description": "simulate changes",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "clean",
+        "description": "remove downloaded package files",
+        "options": [
+          {
+            "short": "y",
+            "description": "assume yes to prompts",
+            "inherit": false,
+            "exclusiveGroup": "apt.prompt-answer"
+          },
+          {
+            "long": "assume-no",
+            "description": "assume no to prompts",
+            "inherit": false,
+            "exclusiveGroup": "apt.prompt-answer"
+          },
+          {
+            "short": "s",
+            "long": "simulate",
+            "description": "simulate changes",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "edit-sources",
+        "description": "edit the list of package sources",
+        "options": [
+          {
+            "short": "y",
+            "description": "assume yes to prompts",
+            "inherit": false,
+            "exclusiveGroup": "apt.prompt-answer"
+          },
+          {
+            "long": "assume-no",
+            "description": "assume no to prompts",
+            "inherit": false,
+            "exclusiveGroup": "apt.prompt-answer"
+          }
+        ]
+      },
+      {
+        "name": "source",
+        "description": "fetch package source files",
+        "options": [
+          {
+            "short": "d",
+            "long": "download-only",
+            "description": "download packages only",
+            "inherit": false
+          },
+          {
+            "long": "no-download",
+            "description": "use already downloaded packages",
+            "inherit": false
+          },
+          {
+            "short": "y",
+            "description": "assume yes to prompts",
+            "inherit": false,
+            "exclusiveGroup": "apt.prompt-answer"
+          },
+          {
+            "long": "assume-no",
+            "description": "assume no to prompts",
+            "inherit": false,
+            "exclusiveGroup": "apt.prompt-answer"
+          },
+          {
+            "short": "s",
+            "long": "simulate",
+            "description": "simulate changes",
+            "inherit": false
+          },
+          {
+            "long": "compile",
+            "description": "compile binary package",
+            "inherit": false
+          },
+          {
+            "long": "only-source",
+            "inherit": false,
+            "description": "download source only"
+          },
+          {
+            "long": "host-architecture",
+            "description": "set host architecture",
+            "inherit": false,
+            "value": {
+              "name": "architecture"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "package",
+              "description": "package name",
+              "index": 0,
+              "repeatable": true,
+              "provider": "apt.packages"
+            }
+          ]
+        }
+      },
+      {
+        "name": "build-dep",
+        "description": "install/remove packages in an attempt to satisfy the build dependencie",
+        "options": [
+          {
+            "short": "d",
+            "long": "download-only",
+            "description": "download packages only",
+            "inherit": false
+          },
+          {
+            "long": "no-download",
+            "description": "use already downloaded packages",
+            "inherit": false
+          },
+          {
+            "short": "y",
+            "description": "assume yes to prompts",
+            "inherit": false,
+            "exclusiveGroup": "apt.prompt-answer"
+          },
+          {
+            "long": "assume-no",
+            "description": "assume no to prompts",
+            "inherit": false,
+            "exclusiveGroup": "apt.prompt-answer"
+          },
+          {
+            "short": "s",
+            "long": "simulate",
+            "description": "simulate changes",
+            "inherit": false
+          },
+          {
+            "long": "host-architecture",
+            "description": "set host architecture",
+            "inherit": false,
+            "value": {
+              "name": "architecture"
+            }
+          },
+          {
+            "long": "only-source",
+            "inherit": false,
+            "description": "download source only"
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "package",
+              "description": "package name",
+              "index": 0,
+              "provider": "apt.packages"
+            }
+          ]
+        }
+      },
+      {
+        "name": "download",
+        "description": "download package binary into the current directory",
+        "arguments": {
+          "states": [
+            {
+              "name": "package",
+              "description": "package name",
+              "index": 0,
+              "provider": "apt.packages"
+            }
+          ]
+        },
+        "options": [
+          {
+            "short": "d",
+            "long": "download-only",
+            "description": "download packages only",
+            "inherit": false
+          },
+          {
+            "long": "no-download",
+            "description": "use already downloaded packages",
+            "inherit": false
+          },
+          {
+            "short": "y",
+            "description": "assume yes to prompts",
+            "inherit": false,
+            "exclusiveGroup": "apt.prompt-answer"
+          },
+          {
+            "long": "assume-no",
+            "description": "assume no to prompts",
+            "inherit": false,
+            "exclusiveGroup": "apt.prompt-answer"
+          }
+        ]
+      },
+      {
+        "name": "autoclean",
+        "aliases": [
+          "auto-clean"
+        ],
+        "description": "like clean, but only removes package files that can no longer be downl",
+        "options": [
+          {
+            "short": "d",
+            "long": "download-only",
+            "description": "download packages only",
+            "inherit": false
+          },
+          {
+            "long": "no-download",
+            "description": "use already downloaded packages",
+            "inherit": false
+          },
+          {
+            "short": "y",
+            "description": "assume yes to prompts",
+            "inherit": false,
+            "exclusiveGroup": "apt.prompt-answer"
+          },
+          {
+            "long": "assume-no",
+            "description": "assume no to prompts",
+            "inherit": false,
+            "exclusiveGroup": "apt.prompt-answer"
+          },
+          {
+            "short": "s",
+            "long": "simulate",
+            "description": "simulate changes",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "changelog",
+        "description": "show the changelog for a package",
+        "arguments": {
+          "states": [
+            {
+              "name": "package",
+              "description": "package name",
+              "index": 0,
+              "repeatable": true,
+              "provider": "apt.packages"
+            }
+          ]
+        },
+        "options": [
+          {
+            "short": "d",
+            "long": "download-only",
+            "description": "download packages only",
+            "inherit": false
+          },
+          {
+            "long": "no-download",
+            "description": "use already downloaded packages",
+            "inherit": false
+          },
+          {
+            "short": "y",
+            "description": "assume yes to prompts",
+            "inherit": false,
+            "exclusiveGroup": "apt.prompt-answer"
+          },
+          {
+            "long": "assume-no",
+            "description": "assume no to prompts",
+            "inherit": false,
+            "exclusiveGroup": "apt.prompt-answer"
+          }
+        ]
+      }
+    ],
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "apt.packages": {
+        "function": "__rush_complete_apt_packages"
+      },
+      "apt.installed-packages": {
+        "function": "__rush_complete_apt_installed_packages"
+      },
+      "apt.upgradable-packages": {
+        "function": "__rush_complete_apt_upgradable_packages"
+      }
+    }
+  }
+}

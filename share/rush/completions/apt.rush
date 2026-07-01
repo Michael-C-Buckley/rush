@@ -1,0 +1,35 @@
+__rush_complete_apt_package_list() {
+  mode=$1
+  tmp=$(mktemp)
+  case "$mode" in
+    installed) apt list --installed > "$tmp" 2>/dev/null ;;
+    upgradable) apt list --upgradable > "$tmp" 2>/dev/null ;;
+    *) apt list > "$tmp" 2>/dev/null ;;
+  esac || {
+    rm -f "$tmp"
+    return 0
+  }
+  while IFS= read -r line; do
+    case "$line" in
+      Listing*) continue ;;
+      */*) ;;
+      *) continue ;;
+    esac
+    package=${line%%/*}
+    test -n "$package" || continue
+    rush_complete candidate "$package" --kind plain --description package
+  done < "$tmp"
+  rm -f "$tmp"
+}
+
+__rush_complete_apt_packages() {
+  __rush_complete_apt_package_list all
+}
+
+__rush_complete_apt_installed_packages() {
+  __rush_complete_apt_package_list installed
+}
+
+__rush_complete_apt_upgradable_packages() {
+  __rush_complete_apt_package_list upgradable
+}
