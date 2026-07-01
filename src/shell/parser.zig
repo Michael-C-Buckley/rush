@@ -983,20 +983,23 @@ const Parser = struct {
     fn parseHereDocBody(self: *Parser, start_offset: usize, pending: PendingHereDoc) ParserError!ParsedHereDoc {
         var body: std.ArrayList(u8) = .empty;
         var offset = start_offset;
+        var continued = false;
         while (offset <= self.source.text.len) {
             const line_start = offset;
             const newline_index = std.mem.indexOfScalarPos(u8, self.source.text, offset, '\n');
             const line_end = newline_index orelse self.source.text.len;
             const next_offset = if (newline_index) |newline| newline + 1 else self.source.text.len;
             const raw_line = self.source.text[line_start..line_end];
-            const delimiter_line = if (pending.strip_tabs) stripLeadingTabs(raw_line) else raw_line;
-            if (std.mem.eql(u8, delimiter_line, pending.delimiter)) {
+            const strip_tabs = pending.strip_tabs and !continued;
+            const delimiter_line = if (strip_tabs) stripLeadingTabs(raw_line) else raw_line;
+            if (!continued and std.mem.eql(u8, delimiter_line, pending.delimiter)) {
                 return .{ .body = try body.toOwnedSlice(self.allocator), .next_offset = next_offset };
             }
 
-            const body_line = if (pending.strip_tabs) delimiter_line else raw_line;
+            const body_line = if (strip_tabs) delimiter_line else raw_line;
             try body.appendSlice(self.allocator, body_line);
             if (newline_index != null) try body.append(self.allocator, '\n');
+            continued = !pending.delimiter_quoted and body_line.len != 0 and body_line[body_line.len - 1] == '\\';
             if (next_offset == offset) break;
             offset = next_offset;
         }

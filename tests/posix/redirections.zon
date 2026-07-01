@@ -1077,6 +1077,13 @@
             .status = 0,
         },
         .{
+            .name = "here document dash line continuation preserves continued tabs",
+            .script = "v=$(cat <<-END\n\tabc\n\tdef \x5c\n\tghi\n\tjkl\x5c\n\tEND\n\tEND\n)\nprintf '%s\\n' \"$v\"\n",
+            .stdout = "abc\ndef \tghi\njkl\tEND\n",
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "here document feeds a simple pipeline stage",
             .script =
             \\cat <<EOF | cat
