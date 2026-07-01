@@ -1,0 +1,239 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "dotenv-vault",
+    "description": "manage dotenv-vault projects",
+    "options": [
+      {
+        "long": "help",
+        "description": "Get documentation for the command",
+        "inherit": true
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "new",
+        "description": "create your project",
+        "options": [
+          {
+            "short": "y",
+            "long": "yes",
+            "description": "assume yes for prompts",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "DOTENV_VAULT",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "login",
+        "description": "log in to dotenv-vault",
+        "options": [
+          {
+            "short": "y",
+            "long": "yes",
+            "description": "assume yes for prompts",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "DOTENV_ME",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "logout",
+        "description": "log out from dotenv-vault",
+        "options": [
+          {
+            "short": "y",
+            "long": "yes",
+            "description": "assume yes for prompts",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "open",
+        "description": "opens project page in a browser",
+        "options": [
+          {
+            "short": "y",
+            "long": "yes",
+            "description": "assume yes for prompts",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "environment",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "push",
+        "description": "push .env securely",
+        "options": [
+          {
+            "short": "y",
+            "long": "yes",
+            "description": "assume yes for prompts",
+            "inherit": false
+          },
+          {
+            "short": "m",
+            "long": "dotenvMe",
+            "description": "pass the DOTENV_ME credential directly",
+            "inherit": false,
+            "value": {
+              "name": "DOTENV_ME"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "environment",
+              "index": 0
+            },
+            {
+              "name": "filename",
+              "index": 1,
+              "provider": "builtin.files"
+            }
+          ]
+        }
+      },
+      {
+        "name": "pull",
+        "description": "pull .env securely",
+        "options": [
+          {
+            "short": "y",
+            "long": "yes",
+            "description": "assume yes for prompts",
+            "inherit": false
+          },
+          {
+            "short": "m",
+            "long": "dotenvMe",
+            "description": "pass the DOTENV_ME credential directly",
+            "inherit": false,
+            "value": {
+              "name": "DOTENV_ME"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "environment",
+              "index": 0
+            },
+            {
+              "name": "filename",
+              "index": 1,
+              "provider": "builtin.files"
+            }
+          ]
+        }
+      },
+      {
+        "name": "versions",
+        "description": "list version history",
+        "options": [
+          {
+            "short": "y",
+            "long": "yes",
+            "description": "assume yes for prompts",
+            "inherit": false
+          },
+          {
+            "short": "m",
+            "long": "dotenvMe",
+            "description": "pass the DOTENV_ME credential directly",
+            "inherit": false,
+            "value": {
+              "name": "DOTENV_ME"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "environment",
+              "index": 0
+            },
+            {
+              "name": "filename",
+              "index": 1,
+              "provider": "builtin.files"
+            }
+          ]
+        }
+      },
+      {
+        "name": "whoami",
+        "description": "display the current logged in user",
+        "options": [
+          {
+            "short": "m",
+            "long": "dotenvMe",
+            "description": "pass the DOTENV_ME credential directly",
+            "inherit": false,
+            "value": {
+              "name": "DOTENV_ME"
+            }
+          }
+        ]
+      },
+      {
+        "name": "status",
+        "description": "check dotenv-operational status",
+        "options": [
+          {
+            "short": "y",
+            "long": "yes",
+            "description": "assume yes for prompts",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "help",
+        "description": "display help for dotenv-vault"
+      },
+      {
+        "name": "update",
+        "description": "update the dotenv-vault CLI",
+        "options": [
+          {
+            "short": "y",
+            "long": "yes",
+            "description": "assume yes for prompts",
+            "inherit": false
+          }
+        ]
+      }
+    ],
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
