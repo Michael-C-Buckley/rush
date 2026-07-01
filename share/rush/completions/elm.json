@@ -1,0 +1,198 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "elm",
+    "description": "run the Elm compiler and package tools",
+    "options": [
+      {
+        "long": "help",
+        "description": "show help for elm",
+        "inherit": false
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "init",
+        "description": "initialize a new Elm project",
+        "options": [
+          {
+            "long": "help",
+            "description": "show help for elm init",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "repl",
+        "description": "start an Elm repl",
+        "options": [
+          {
+            "long": "no-colors",
+            "description": "turn off colors in the repl",
+            "inherit": false
+          },
+          {
+            "long": "interpreter",
+            "description": "path to an alternate JS interpreter, such as Node or Deno",
+            "inherit": false,
+            "value": {
+              "name": "interpreter",
+              "provider": "builtin.executables"
+            }
+          },
+          {
+            "long": "help",
+            "description": "show help for elm repl",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "reactor",
+        "description": "start an Elm development server",
+        "options": [
+          {
+            "long": "port",
+            "description": "the port to access the development server on",
+            "inherit": false,
+            "value": {
+              "name": "port",
+              "description": "the port number"
+            }
+          },
+          {
+            "long": "help",
+            "description": "show help for elm reactor",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "install",
+        "description": "install an Elm dependency",
+        "options": [
+          {
+            "long": "help",
+            "description": "show help for elm install",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "package",
+              "description": "the name of the package to install",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "make",
+        "description": "build your Elm code",
+        "options": [
+          {
+            "long": "help",
+            "description": "show help for elm make",
+            "inherit": false
+          },
+          {
+            "long": "debug",
+            "description": "compile in debug mode",
+            "inherit": false
+          },
+          {
+            "long": "optimize",
+            "description": "compile in production mode",
+            "inherit": false
+          },
+          {
+            "long": "output",
+            "description": "where to output the compiled code",
+            "inherit": false,
+            "value": {
+              "name": "output-file",
+              "description": "name and location of output",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "docs",
+            "description": "generate a JSON file of documentation",
+            "inherit": false,
+            "value": {
+              "name": "output-json",
+              "description": "name and location of output",
+              "provider": "builtin.files"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "source-files",
+              "description": "the source files to compile",
+              "provider": "builtin.files",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "bump",
+        "description": "bump the version of your package",
+        "options": [
+          {
+            "long": "help",
+            "description": "show help for elm bump",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "diff",
+        "description": "see what changed between versions of a package",
+        "options": [
+          {
+            "long": "help",
+            "description": "show help for elm diff",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "package",
+              "index": 0
+            },
+            {
+              "name": "version",
+              "index": 1,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "publish",
+        "description": "publish your package",
+        "options": [
+          {
+            "long": "help",
+            "description": "show help for elm publish",
+            "inherit": false
+          }
+        ]
+      }
+    ],
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "builtin.executables": {
+        "builtin": "executables"
+      }
+    }
+  }
+}
