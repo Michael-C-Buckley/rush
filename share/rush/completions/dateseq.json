@@ -1,0 +1,112 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "dateseq",
+    "description": "generate date and time sequences",
+    "options": [
+      {
+        "long": "help",
+        "short": "h",
+        "description": "print help and exit",
+        "inherit": false
+      },
+      {
+        "long": "version",
+        "short": "V",
+        "description": "print version and exit",
+        "inherit": false
+      },
+      {
+        "long": "quiet",
+        "short": "q",
+        "description": "suppress date parse warnings",
+        "inherit": false
+      },
+      {
+        "short": "f",
+        "long": "format",
+        "description": "set the output format",
+        "inherit": false,
+        "value": {
+          "name": "string",
+          "style": "detached"
+        }
+      },
+      {
+        "short": "i",
+        "long": "input-format",
+        "description": "set an input format",
+        "inherit": false,
+        "value": {
+          "name": "input-format",
+          "style": "detached"
+        }
+      },
+      {
+        "short": "b",
+        "long": "base",
+        "description": "set the fallback base date/time",
+        "inherit": false,
+        "value": {
+          "name": "base",
+          "style": "detached"
+        }
+      },
+      {
+        "short": "e",
+        "long": "backslash-escapes",
+        "description": "interpret backslash escapes in formats",
+        "inherit": false
+      },
+      {
+        "long": "locale",
+        "description": "format results with a locale",
+        "inherit": false,
+        "value": {
+          "name": "locale"
+        }
+      },
+      {
+        "short": "s",
+        "long": "skip",
+        "description": "skip weekdays or weekday ranges",
+        "inherit": false,
+        "value": {
+          "name": "weekday"
+        }
+      },
+      {
+        "long": "alt-inc",
+        "description": "set an alternative increment for skipped dates",
+        "inherit": false,
+        "value": {
+          "name": "alternative-increment"
+        }
+      },
+      {
+        "long": "compute-from-last",
+        "description": "compute the start value from the last value",
+        "inherit": false
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "first",
+          "description": "date/time",
+          "index": 0
+        },
+        {
+          "name": "increment",
+          "index": 1
+        },
+        {
+          "name": "last",
+          "description": "date/time",
+          "index": 2
+        }
+      ]
+    }
+  }
+}
