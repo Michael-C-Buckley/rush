@@ -1,0 +1,259 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "enapter",
+    "description": "manage Enapter EMS devices and rules",
+    "options": [
+      {
+        "long": "help",
+        "short": "h",
+        "description": "show help",
+        "inherit": false
+      },
+      {
+        "long": "version",
+        "short": "v",
+        "description": "show version",
+        "inherit": false
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "devices",
+        "description": "device information and management commands",
+        "subcommands": [
+          {
+            "name": "upload",
+            "description": "upload blueprint to a device",
+            "options": [
+              {
+                "long": "hardware-id",
+                "description": "hardware ID (UCM ID) of the device; can be obtained in cloud.enapter.com",
+                "inherit": false,
+                "value": {
+                  "name": "ID"
+                }
+              },
+              {
+                "long": "blueprint-dir",
+                "description": "directory which contains blueprint file",
+                "inherit": false,
+                "value": {
+                  "name": "value",
+                  "provider": "builtin.directories"
+                }
+              },
+              {
+                "long": "timeout",
+                "description": "time to wait for blueprint uploading (default: 30s)",
+                "inherit": false,
+                "value": {
+                  "name": "timeout",
+                  "required": false,
+                  "style": "optional"
+                }
+              },
+              {
+                "long": "help",
+                "short": "h",
+                "description": "show help",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "logs",
+            "description": "stream logs from a device",
+            "options": [
+              {
+                "long": "hardware-id",
+                "description": "hardware ID (UCM ID) of the device; can be obtained in cloud.enapter.com",
+                "inherit": false,
+                "value": {
+                  "name": "ID"
+                }
+              },
+              {
+                "long": "help",
+                "short": "h",
+                "description": "show help",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "upload-logs",
+            "description": "show blueprint uploading logs",
+            "options": [
+              {
+                "long": "hardware-id",
+                "description": "hardware ID (UCM ID) of the device; can be obtained in cloud.enapter.com",
+                "inherit": false,
+                "value": {
+                  "name": "ID"
+                }
+              },
+              {
+                "long": "help",
+                "short": "h",
+                "description": "show help",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "execute",
+            "description": "execute command on device",
+            "options": [
+              {
+                "long": "hardware-id",
+                "description": "hardware ID (UCM ID) of the device; can be obtained in cloud.enapter.com",
+                "inherit": false,
+                "value": {
+                  "name": "ID"
+                }
+              },
+              {
+                "long": "command",
+                "description": "command name",
+                "inherit": false,
+                "value": {
+                  "name": "command"
+                }
+              },
+              {
+                "long": "arguments",
+                "description": "command arguments as JSON object",
+                "inherit": false,
+                "value": {
+                  "name": "arguments"
+                }
+              },
+              {
+                "long": "show-progress",
+                "description": "enable in-progress responses streaming (default: false)",
+                "inherit": false
+              },
+              {
+                "long": "help",
+                "short": "h",
+                "description": "show help",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "help",
+            "description": "help"
+          }
+        ]
+      },
+      {
+        "name": "rules",
+        "description": "rules information and management commands",
+        "subcommands": [
+          {
+            "name": "update",
+            "description": "update rule",
+            "options": [
+              {
+                "long": "rule-id",
+                "description": "rule ID; can be obtained in cloud.enapter.com",
+                "inherit": false,
+                "value": {
+                  "name": "ID"
+                }
+              },
+              {
+                "long": "rule-path",
+                "description": "path to file with rule Lua code",
+                "inherit": false,
+                "value": {
+                  "name": "value",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "execution-interval",
+                "description": "rule execution interval in milliseconds (default: chosen by the server)",
+                "inherit": false,
+                "value": {
+                  "name": "interval",
+                  "required": false,
+                  "style": "optional"
+                }
+              },
+              {
+                "long": "stdlib-version",
+                "description": "version of standard library used by the rule (default: chosen by the server)",
+                "inherit": false,
+                "value": {
+                  "name": "version",
+                  "required": false,
+                  "style": "optional"
+                }
+              },
+              {
+                "long": "timeout",
+                "description": "time to wait for rule update (default: 30s)",
+                "inherit": false,
+                "value": {
+                  "name": "timeout",
+                  "required": false,
+                  "style": "optional"
+                }
+              },
+              {
+                "long": "help",
+                "short": "h",
+                "description": "show help",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "logs",
+            "description": "stream logs from a rule",
+            "options": [
+              {
+                "long": "rule-id",
+                "description": "rule ID; can be obtained in cloud.enapter.com",
+                "inherit": false,
+                "value": {
+                  "name": "ID"
+                }
+              },
+              {
+                "long": "help",
+                "short": "h",
+                "description": "show help",
+                "inherit": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "help",
+        "description": "shows a list of commands or help for one command",
+        "arguments": {
+          "states": [
+            {
+              "name": "command",
+              "index": 0
+            }
+          ]
+        }
+      }
+    ],
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "builtin.directories": {
+        "builtin": "directories"
+      }
+    }
+  }
+}
