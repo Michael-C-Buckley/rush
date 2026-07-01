@@ -1,0 +1,85 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "create-react-app",
+    "description": "create a new React project",
+    "options": [
+      {
+        "long": "template",
+        "description": "set the project template",
+        "inherit": false,
+        "value": {
+          "name": "name-or-url"
+        }
+      },
+      {
+        "long": "use-npm",
+        "description": "install dependencies with npm",
+        "inherit": false,
+        "value": {
+          "name": "boolean",
+          "required": false,
+          "style": "optional",
+          "provider": "create-react-app.booleans"
+        }
+      },
+      {
+        "long": "use-pnp",
+        "description": "create the app with Yarn Plug'n'Play",
+        "inherit": false,
+        "value": {
+          "name": "boolean",
+          "required": false,
+          "style": "optional",
+          "provider": "create-react-app.booleans"
+        }
+      },
+      {
+        "long": "scripts-version",
+        "description": "use a custom react-scripts package",
+        "inherit": false,
+        "value": {
+          "name": "alternative-package"
+        }
+      },
+      {
+        "long": "verbose",
+        "description": "print additional logs",
+        "inherit": false
+      },
+      {
+        "short": "h",
+        "long": "help",
+        "description": "output usage information",
+        "inherit": false
+      },
+      {
+        "short": "V",
+        "long": "version",
+        "description": "output the version number",
+        "inherit": false
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "name",
+          "provider": "builtin.directories",
+          "index": 0
+        }
+      ]
+    },
+    "providers": {
+      "create-react-app.booleans": {
+        "values": [
+          "true",
+          "false"
+        ]
+      },
+      "builtin.directories": {
+        "builtin": "directories"
+      }
+    }
+  }
+}
