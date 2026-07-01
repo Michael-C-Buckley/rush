@@ -1337,7 +1337,7 @@ fn evalCommandBuiltin(
                 const evaluated = try evalDeclarationBuiltin(shell, definition.id, commandFieldsAsWords(shell, args[index + 1 ..]) catch return error.OutOfMemory);
                 restoreVariables(shell, saved);
                 restored_assignments = true;
-                return evaluated;
+                return suppressFatalFlow(evaluated);
             },
             .pwd => {
                 const evaluated = try evalPwdBuiltin(shell, args[index..]);
@@ -1980,7 +1980,10 @@ fn evalDeclarationBuiltin(shell: anytype, id: builtin.Id, words: []const ast.Wor
                 .exported = id == .export_ or (existing != null and existing.?.exported),
                 .readonly = id == .readonly or (existing != null and existing.?.readonly),
             }) catch |err| switch (err) {
-                error.ReadonlyVariable => status = 2,
+                error.ReadonlyVariable => {
+                    try writeReadonlyDiagnostic(shell, assignment.name);
+                    status = 1;
+                },
                 else => return err,
             };
             continue;
@@ -1999,7 +2002,10 @@ fn evalDeclarationBuiltin(shell: anytype, id: builtin.Id, words: []const ast.Wor
                     .exported = id == .export_ or (existing != null and existing.?.exported),
                     .readonly = id == .readonly or (existing != null and existing.?.readonly),
                 }) catch |err| switch (err) {
-                    error.ReadonlyVariable => status = 2,
+                    error.ReadonlyVariable => {
+                        try writeReadonlyDiagnostic(shell, assignment.name);
+                        status = 1;
+                    },
                     else => return err,
                 };
                 continue;
@@ -2016,7 +2022,10 @@ fn evalDeclarationBuiltin(shell: anytype, id: builtin.Id, words: []const ast.Wor
                     .exported = id == .export_ or variable.exported,
                     .readonly = id == .readonly or variable.readonly,
                 }) catch |err| switch (err) {
-                    error.ReadonlyVariable => status = 2,
+                    error.ReadonlyVariable => {
+                        try writeReadonlyDiagnostic(shell, name);
+                        status = 1;
+                    },
                     else => return err,
                 };
             } else {
@@ -2028,7 +2037,7 @@ fn evalDeclarationBuiltin(shell: anytype, id: builtin.Id, words: []const ast.Wor
             }
         }
     }
-    return .{ .status = status };
+    return .{ .status = status, .flow = if (status != 0) .{ .fatal = status } else .normal };
 }
 
 fn evalDeclarationList(shell: anytype, id: builtin.Id) !result.EvalResult {

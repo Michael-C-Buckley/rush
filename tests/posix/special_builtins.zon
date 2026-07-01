@@ -318,6 +318,17 @@
             .status_match = .nonzero,
         },
         .{
+            .name = "export assignment to readonly variable exits the shell",
+            .script =
+            \\readonly ro=value
+            \\export ro=other
+            \\printf bad
+            ,
+            .stdout = "",
+            .stderr_match = .nonempty,
+            .status_match = .nonzero,
+        },
+        .{
             .name = "export -p output can restore exported values",
             .script =
             \\export X='a b'
