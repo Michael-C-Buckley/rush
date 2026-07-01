@@ -83,11 +83,11 @@ fn enableJobControl(sh: *RushShell) void {
         sh.state.options.monitor = false;
         return;
     };
+    ignoreInteractiveJobControlSignals(sh);
     sh.host.setTerminalProcessGroup(.stdin, shell_pid) catch {
         sh.state.options.monitor = false;
         return;
     };
-    ignoreInteractiveJobControlSignals(sh);
     sh.state.options.monitor = true;
 }
 
