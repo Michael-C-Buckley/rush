@@ -1,0 +1,34 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "crontab",
+    "description": "maintain user crontab files",
+    "options": [
+      {
+        "short": "e",
+        "description": "edit the current crontab",
+        "inherit": false
+      },
+      {
+        "short": "l",
+        "description": "display the current crontab",
+        "inherit": false
+      },
+      {
+        "short": "r",
+        "description": "remove the current crontab",
+        "priority": -10,
+        "inherit": false
+      },
+      {
+        "short": "u",
+        "description": "select the crontab user",
+        "inherit": false,
+        "value": {
+          "name": "user"
+        }
+      }
+    ]
+  }
+}
