@@ -169,6 +169,31 @@
             .status = 0,
         },
         .{
+            .name = "errexit ignored status from skipped AND branch does not exit",
+            .script =
+            \\set -e
+            \\false && true
+            \\printf '<after:%s>\n' "$?"
+            ,
+            .stdout =
+            \\<after:1>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "errexit applies to final failing AND branch",
+            .script =
+            \\set -e
+            \\true && false
+            \\printf bad
+            ,
+            .stdout = "",
+            .stderr = "",
+            .status_match = .nonzero,
+        },
+        .{
             .name = "sequential list status is last executed pipeline status when last succeeds",
             .script =
             \\false; true

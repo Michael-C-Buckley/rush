@@ -82,6 +82,7 @@ pub const State = struct {
     pending_traps: std.ArrayListUnmanaged([]const u8) = .empty,
     background_pids: std.ArrayListUnmanaged(host.Pid) = .empty,
     last_status: result.ExitStatus = 0,
+    last_status_errexit_ignored: bool = false,
     last_background_pid: ?host.Pid = null,
     getopts_char_index: usize = 1,
     errexit_ignore_depth: usize = 0,

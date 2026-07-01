@@ -73,6 +73,7 @@ fn evalList(shell: anytype, list: ast.List) EvalError!result.EvalResult {
     for (list.entries) |entry| {
         const trap_result = try runPendingTrapCheckpoint(shell);
         if (trap_result.flow != .normal) return trap_result;
+        shell.state.last_status_errexit_ignored = false;
         const evaluated = switch (entry.terminator orelse .sequence) {
             .sequence => try evalAndOr(shell, entry.and_or),
             .background => try evalBackgroundAndOr(shell, entry.and_or),
@@ -87,7 +88,7 @@ fn evalList(shell: anytype, list: ast.List) EvalError!result.EvalResult {
 
 fn shouldApplyErrexit(shell: anytype, evaluated: result.EvalResult) bool {
     return shell.state.options.errexit and shell.state.errexit_ignore_depth == 0 and evaluated.flow == .normal and
-        evaluated.status != 0;
+        evaluated.status != 0 and !shell.state.last_status_errexit_ignored;
 }
 
 fn evalBackgroundAndOr(shell: anytype, and_or: ast.AndOr) EvalError!result.EvalResult {
@@ -177,9 +178,13 @@ fn evalAndOr(shell: anytype, and_or: ast.AndOr) EvalError!result.EvalResult {
     var last: result.EvalResult = .{};
     for (and_or.pipelines, 0..) |pipeline, index| {
         if (index != 0) switch (pipeline.operator.?) {
-            .and_if => if (last.status != 0) continue,
+            .and_if => if (last.status != 0) {
+                shell.state.last_status_errexit_ignored = true;
+                continue;
+            },
             .or_if => if (last.status == 0) continue,
         };
+        shell.state.last_status_errexit_ignored = false;
         const ignore_errexit = index + 1 < and_or.pipelines.len;
         if (ignore_errexit) shell.state.errexit_ignore_depth += 1;
         last = evalPipeline(shell, pipeline.pipeline) catch |err| {
