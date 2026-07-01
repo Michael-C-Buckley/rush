@@ -140,9 +140,9 @@
       <tr>
         <td>Rush</td>
         <td><code>rush --posix</code></td>
-        <td>159 / 186 passed (85.5%)</td>
-        <td>Installer gate passed</td>
-        <td>Modernish now initializes and its <code>--test -eqq</code> installer gate reports no Modernish bugs. A counted full <code>--test</code> run is still blocked by Rush script-file argument handling.</td>
+        <td>164 / 186 passed (88.2%)</td>
+        <td>370 / 389 succeeded</td>
+        <td>Modernish reported 18 skipped, 1 warning, and no failures.</td>
       </tr>
       <tr>
         <td>macOS Bash 3.2</td>
@@ -175,7 +175,7 @@
     </tbody>
   </table>
 
-  <p>Reference shell rows were measured 2026-06-28 on macOS arm64 using Smoosh <code>cc67dbe6a495</code> and Modernish <code>cde49fa37f93</code>. The Rush row was refreshed 2026-06-30 on Linux x86_64 after the Smoosh compatibility fixes. Smoosh counts are exact pass counts. Modernish separates succeeded, skipped, expected failures, warnings, and unexpected failures; counted rows report succeeded tests and summarize the rest.</p>
+  <p>Reference shell rows were measured 2026-06-28 on macOS arm64 using Smoosh <code>cc67dbe6a495</code> and Modernish <code>cde49fa37f93</code>. The Rush row was refreshed 2026-07-01 on Linux x86_64 after the Smoosh and Modernish compatibility fixes. Smoosh counts are exact pass counts. Modernish separates succeeded, skipped, expected failures, warnings, and unexpected failures; counted rows report succeeded tests and summarize the rest.</p>
 
   <p>Some third-party suite expectations need POSIX classification before they become Rush requirements. See the <a href="smoosh.html">Smoosh suite notes</a> for Rush's documented expected Smoosh failures.</p>
 
