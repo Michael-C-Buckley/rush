@@ -1,0 +1,1323 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "cci",
+    "description": "run cumulusci tasks and flows",
+    "options": [
+      {
+        "long": "help",
+        "description": "help for cci",
+        "inherit": false
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "flow",
+        "description": "commands for finding and running flows for a project",
+        "subcommands": [
+          {
+            "name": "doc",
+            "description": "exports RST format documentation for all flows",
+            "options": [
+              {
+                "long": "project",
+                "description": "include project-specific flows only",
+                "inherit": false
+              },
+              {
+                "long": "help",
+                "description": "help for flow doc",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "info",
+            "description": "displays information for a flow",
+            "options": [
+              {
+                "long": "help",
+                "description": "help for flow info",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "flow_name",
+                  "description": "name of the flow",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "list",
+            "description": "list available flows for the current context",
+            "options": [
+              {
+                "long": "plain",
+                "description": "print the table using plain ascii",
+                "inherit": false
+              },
+              {
+                "long": "json",
+                "description": "print a json string",
+                "inherit": false
+              },
+              {
+                "long": "help",
+                "description": "help for flow list",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "run",
+            "description": "runs a flow",
+            "options": [
+              {
+                "long": "org",
+                "description": "specify the target org. By default, runs against the current default org",
+                "inherit": false,
+                "value": {
+                  "name": "text",
+                  "description": "name of the target org"
+                }
+              },
+              {
+                "long": "delete-org",
+                "description": "if set, deletes the scratch org after the flow completes",
+                "inherit": false
+              },
+              {
+                "long": "debug",
+                "description": "drops into pdb, the Python debugger, on an exception",
+                "inherit": false
+              },
+              {
+                "short": "o",
+                "description": "pass task specific options for the task as '-o taskname__option value'. You can specify more than one option by",
+                "inherit": false,
+                "value": {
+                  "name": "text",
+                  "description": "task specific options"
+                }
+              },
+              {
+                "long": "no-prompt",
+                "description": "disables all prompts. Set for non-interactive mode use such as calling from scripts or CI systems",
+                "inherit": false
+              },
+              {
+                "long": "help",
+                "description": "help for flow run",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "flow_name",
+                  "description": "name of the flow to run",
+                  "index": 0
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "org",
+        "description": "commands for connecting and interacting with salesforce orgs",
+        "subcommands": [
+          {
+            "name": "browser",
+            "description": "opens a browser window and logs into the org using the stored OAuth credentials",
+            "options": [
+              {
+                "long": "org",
+                "description": "alternate way to specify the target org. By default, runs against the current default org",
+                "inherit": false,
+                "value": {
+                  "name": "text",
+                  "description": "name of the target org"
+                }
+              },
+              {
+                "short": "p",
+                "long": "path",
+                "description": "navigate to the specified page after logging in",
+                "inherit": false,
+                "value": {
+                  "name": "text",
+                  "description": "page to navigate to",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "short": "r",
+                "long": "url-only",
+                "description": "display the target URL, but don't open a browser",
+                "inherit": false
+              },
+              {
+                "long": "help",
+                "description": "help for org browser",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "orgname",
+                  "description": "name of the org",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "connect",
+            "description": "connects a new org's credentials using OAuth Web Flow",
+            "options": [
+              {
+                "long": "org",
+                "description": "alternate way to specify the target org. One of ORGNAME (see above) or --org is required",
+                "inherit": false,
+                "value": {
+                  "name": "text"
+                }
+              },
+              {
+                "long": "connected-app",
+                "description": "name of the connected_app service to use",
+                "inherit": false,
+                "value": {
+                  "name": "text"
+                }
+              },
+              {
+                "long": "sandbox",
+                "description": "if set, connects to a salesforce sandbox org",
+                "inherit": false
+              },
+              {
+                "long": "login-url",
+                "description": "if set, login to this hostname",
+                "inherit": false,
+                "value": {
+                  "name": "text"
+                }
+              },
+              {
+                "long": "default",
+                "description": "if set, sets the connected org as the new default org",
+                "inherit": false
+              },
+              {
+                "long": "global-org",
+                "description": "if set, the connected org is available to all cumulusci projects",
+                "inherit": false
+              },
+              {
+                "long": "help",
+                "description": "show this message and exit",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "orgname",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "default",
+            "description": "sets an org as the default org for tasks and flows",
+            "options": [
+              {
+                "long": "org",
+                "description": "alternate way to specify the target org. By default, runs against the current default org",
+                "inherit": false,
+                "value": {
+                  "name": "text"
+                }
+              },
+              {
+                "long": "unset",
+                "description": "unset the org as the default org leaving no default org selected",
+                "inherit": false
+              },
+              {
+                "long": "help",
+                "description": "show this message and exit",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "orgname",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "import",
+            "description": "import an org from salesforce DX",
+            "options": [
+              {
+                "long": "org",
+                "description": "alternate way to specify the target org. One of ORGNAME (see above) or --org is required",
+                "inherit": false,
+                "value": {
+                  "name": "text"
+                }
+              },
+              {
+                "long": "help",
+                "description": "show this message and exit",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "username_or_alias",
+                  "index": 0
+                },
+                {
+                  "name": "orgname",
+                  "index": 1
+                }
+              ]
+            }
+          },
+          {
+            "name": "info",
+            "description": "display information for a connected org",
+            "options": [
+              {
+                "long": "org",
+                "description": "alternate way to specify the target org. By default, runs against the current default org",
+                "inherit": false,
+                "value": {
+                  "name": "text"
+                }
+              },
+              {
+                "long": "json",
+                "description": "print as JSON. Includes access token",
+                "inherit": false
+              },
+              {
+                "long": "help",
+                "description": "show this message and exit",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "orgname",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "list",
+            "description": "lists all orgs in scope for the current project",
+            "options": [
+              {
+                "long": "plain",
+                "description": "print the table using plain ascii",
+                "inherit": false
+              },
+              {
+                "long": "json",
+                "description": "output results in JSON format",
+                "inherit": false
+              },
+              {
+                "long": "help",
+                "description": "show this message and exit",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "prune",
+            "description": "removes all expired scratch orgs from the current project",
+            "options": [
+              {
+                "long": "include-active",
+                "description": "remove all scratch orgs, regardless of expiry",
+                "inherit": false
+              },
+              {
+                "long": "help",
+                "description": "show this message and exit",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "remove",
+            "description": "removes an org from the keychain",
+            "options": [
+              {
+                "long": "org",
+                "description": "alternate way to specify the target org. One of ORGNAME (see above) or --org is required",
+                "inherit": false,
+                "value": {
+                  "name": "text"
+                }
+              },
+              {
+                "long": "global-org",
+                "description": "set this option to force remove a global org. Default behavior is to error if you attempt to delete a global org",
+                "inherit": false
+              },
+              {
+                "long": "help",
+                "description": "show this message and exit",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "orgname",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "scratch",
+            "description": "connects a salesforce DX Scratch Org to the keychain",
+            "options": [
+              {
+                "long": "org",
+                "description": "alternate way to specify the target org. One of ORGNAME (see above) or --org is required",
+                "inherit": false,
+                "value": {
+                  "name": "text"
+                }
+              },
+              {
+                "long": "default",
+                "description": "if set, sets the connected org as the new default org",
+                "inherit": false
+              },
+              {
+                "long": "devhub",
+                "description": "if provided, overrides the devhub used to create the scratch org",
+                "inherit": false,
+                "value": {
+                  "name": "text"
+                }
+              },
+              {
+                "long": "days",
+                "description": "if provided, overrides the scratch config default days value for how many days the scratch org should persist",
+                "inherit": false,
+                "value": {
+                  "name": "text"
+                }
+              },
+              {
+                "long": "no-password",
+                "description": "if set, don't set a password for the org",
+                "inherit": false
+              },
+              {
+                "long": "help",
+                "description": "show this message and exit",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "config_name",
+                  "index": 0
+                },
+                {
+                  "name": "orgname",
+                  "index": 1
+                }
+              ]
+            }
+          },
+          {
+            "name": "scratch_delete",
+            "description": "deletes a salesforce DX Scratch Org leaving the config in the keychain for regeneration",
+            "options": [
+              {
+                "long": "org",
+                "description": "alternate way to specify the target org. One of ORGNAME (see above) or --org is required",
+                "inherit": false,
+                "value": {
+                  "name": "text"
+                }
+              },
+              {
+                "long": "help",
+                "description": "show this message and exit",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "orgname",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "shell",
+            "description": "drop into a Python shell with a simple_salesforce connection in `sf`, as well as the `org_config` and `project_c",
+            "options": [
+              {
+                "long": "org",
+                "description": "alternate way to specify the target org. By default, runs against the current default org",
+                "inherit": false,
+                "value": {
+                  "name": "text"
+                }
+              },
+              {
+                "long": "script",
+                "description": "path to a script to run",
+                "inherit": false,
+                "value": {
+                  "name": "path",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "python",
+                "description": "python code to run directly",
+                "inherit": false,
+                "value": {
+                  "name": "text"
+                }
+              },
+              {
+                "long": "help",
+                "description": "show this message and exit",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "orgname",
+                  "index": 0
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "plan",
+        "description": "commands for getting information about MetaDeploy plans",
+        "subcommands": [
+          {
+            "name": "info",
+            "description": "displays information for a MetaDeploy plan",
+            "options": [
+              {
+                "long": "messages",
+                "description": "show only plan messages",
+                "inherit": false
+              },
+              {
+                "long": "help",
+                "description": "help for plan info",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "plan_name",
+                  "description": "name of the plan",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "list",
+            "description": "list available plans for the current context",
+            "options": [
+              {
+                "long": "json",
+                "description": "return the list of plans in JSON format",
+                "inherit": false
+              },
+              {
+                "long": "help",
+                "description": "help for plan list",
+                "inherit": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "robot",
+        "description": "commands for working with Robot Framework",
+        "subcommands": [
+          {
+            "name": "install_playwright",
+            "description": "install libraries necessary to use playwright with robot framework",
+            "options": [
+              {
+                "short": "n",
+                "long": "dry_run",
+                "description": "dry run",
+                "inherit": false
+              },
+              {
+                "long": "help",
+                "description": "help for install_playwright",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "uninstall_playwright",
+            "description": "uninstalls the robotframework-browser package and node modules",
+            "options": [
+              {
+                "long": "help",
+                "description": "help for uninstall_playwright",
+                "inherit": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "service",
+        "description": "commands for connecting services to the keychain",
+        "subcommands": [
+          {
+            "name": "connect",
+            "description": "connect an external service to cumulusci",
+            "subcommands": [
+              {
+                "name": "connected_app",
+                "description": "connect a Connected App service to cumulusci",
+                "options": [
+                  {
+                    "long": "login_url",
+                    "description": "default salesforce Login URL to be used with this Connected App",
+                    "inherit": false,
+                    "value": {
+                      "name": "login_url"
+                    }
+                  },
+                  {
+                    "long": "callback_url",
+                    "description": "callback URL configured on the Connected App",
+                    "inherit": false,
+                    "value": {
+                      "name": "callback_url"
+                    }
+                  },
+                  {
+                    "long": "client_id",
+                    "description": "client ID/Consumer Key from the Connected App",
+                    "inherit": false,
+                    "value": {
+                      "name": "client_id"
+                    }
+                  },
+                  {
+                    "long": "client_secret",
+                    "description": "client Secret/Consumer Secret from the Connected App",
+                    "inherit": false,
+                    "value": {
+                      "name": "client_secret"
+                    }
+                  },
+                  {
+                    "long": "default",
+                    "description": "set this service as the global default",
+                    "inherit": false
+                  },
+                  {
+                    "long": "help",
+                    "description": "help for cci service connect connected_app",
+                    "inherit": false
+                  }
+                ],
+                "arguments": {
+                  "states": [
+                    {
+                      "name": "service_name",
+                      "index": 0
+                    }
+                  ]
+                }
+              },
+              {
+                "name": "devhub",
+                "description": "connect a DevHub service to cumulusci",
+                "options": [
+                  {
+                    "long": "username",
+                    "description": "username or alias of the SFDX org to use as a Dev Hub",
+                    "inherit": false,
+                    "value": {
+                      "name": "text"
+                    }
+                  },
+                  {
+                    "long": "default",
+                    "description": "set this service as the global default",
+                    "inherit": false
+                  },
+                  {
+                    "long": "help",
+                    "description": "show this message and exit",
+                    "inherit": false
+                  }
+                ],
+                "arguments": {
+                  "states": [
+                    {
+                      "name": "service_name",
+                      "index": 0
+                    }
+                  ]
+                }
+              },
+              {
+                "name": "github",
+                "description": "connect a GitHub service to cumulusci",
+                "options": [
+                  {
+                    "long": "username",
+                    "description": "the Github username to use for tasks",
+                    "inherit": false,
+                    "value": {
+                      "name": "text"
+                    }
+                  },
+                  {
+                    "long": "email",
+                    "description": "the email address to used by Github tasks when an operation requires an email address",
+                    "inherit": false,
+                    "value": {
+                      "name": "text"
+                    }
+                  },
+                  {
+                    "long": "token",
+                    "description": "personal Access Token for GitHub. Leave blank to log in via browser",
+                    "inherit": false,
+                    "value": {
+                      "name": "text"
+                    }
+                  },
+                  {
+                    "long": "default",
+                    "description": "set this service as the global default",
+                    "inherit": false
+                  },
+                  {
+                    "long": "help",
+                    "description": "show this message and exit",
+                    "inherit": false
+                  }
+                ],
+                "arguments": {
+                  "states": [
+                    {
+                      "name": "service_name",
+                      "index": 0
+                    }
+                  ]
+                }
+              },
+              {
+                "name": "github_enterprise",
+                "description": "connect a GitHub Enterprise service to cumulusci",
+                "options": [
+                  {
+                    "long": "username",
+                    "description": "the GitHub Enterprise username to use for tasks",
+                    "inherit": false,
+                    "value": {
+                      "name": "text"
+                    }
+                  },
+                  {
+                    "long": "email",
+                    "description": "the email address to used by GitHub tasks when an operation requires an email address",
+                    "inherit": false,
+                    "value": {
+                      "name": "text"
+                    }
+                  },
+                  {
+                    "long": "server_domain",
+                    "description": "gitHub Enterprise domain (Example: git.ent.domain.com)",
+                    "inherit": false,
+                    "value": {
+                      "name": "text"
+                    }
+                  },
+                  {
+                    "long": "token",
+                    "description": "personal Access Token",
+                    "inherit": false,
+                    "value": {
+                      "name": "text"
+                    }
+                  },
+                  {
+                    "long": "default",
+                    "description": "set this service as the global default",
+                    "inherit": false
+                  },
+                  {
+                    "long": "help",
+                    "description": "show this message and exit",
+                    "inherit": false
+                  }
+                ],
+                "arguments": {
+                  "states": [
+                    {
+                      "name": "service_name",
+                      "index": 0
+                    }
+                  ]
+                }
+              },
+              {
+                "name": "marketing_cloud",
+                "description": "connect a Marketing Cloud service to cumulusci",
+                "options": [
+                  {
+                    "long": "oauth2_client",
+                    "description": "the name of the oauth2_client service with which to establish a connection to Marketing Cloud",
+                    "inherit": false,
+                    "value": {
+                      "name": "text"
+                    }
+                  },
+                  {
+                    "long": "default",
+                    "description": "set this service as the global default",
+                    "inherit": false
+                  },
+                  {
+                    "long": "help",
+                    "description": "show this message and exit",
+                    "inherit": false
+                  }
+                ],
+                "arguments": {
+                  "states": [
+                    {
+                      "name": "service_name",
+                      "index": 0
+                    }
+                  ]
+                }
+              },
+              {
+                "name": "metaci",
+                "description": "connect a MetaCI service to cumulusci",
+                "options": [
+                  {
+                    "long": "app_name",
+                    "description": "the Heroku app name",
+                    "inherit": false,
+                    "value": {
+                      "name": "text"
+                    }
+                  },
+                  {
+                    "long": "url",
+                    "description": "the main url to the MetaCI site",
+                    "inherit": false,
+                    "value": {
+                      "name": "text"
+                    }
+                  },
+                  {
+                    "long": "token",
+                    "description": "your API token to the MetaCI site (get from SITE_URL/api/token)",
+                    "inherit": false,
+                    "value": {
+                      "name": "text"
+                    }
+                  },
+                  {
+                    "long": "default",
+                    "description": "set this service as the global default",
+                    "inherit": false
+                  },
+                  {
+                    "long": "help",
+                    "description": "show this message and exit",
+                    "inherit": false
+                  }
+                ],
+                "arguments": {
+                  "states": [
+                    {
+                      "name": "service_name",
+                      "index": 0
+                    }
+                  ]
+                }
+              },
+              {
+                "name": "metadeploy",
+                "description": "connect a MetaDeploy service to cumulusci",
+                "options": [
+                  {
+                    "long": "url",
+                    "description": "the main url for your MetaDeploy instance",
+                    "inherit": false,
+                    "value": {
+                      "name": "text"
+                    }
+                  },
+                  {
+                    "long": "token",
+                    "description": "your API token to the MetaDeploy site (get from SITE_URL/admin/authtoken/token)",
+                    "inherit": false,
+                    "value": {
+                      "name": "text"
+                    }
+                  },
+                  {
+                    "long": "default",
+                    "description": "set this service as the global default",
+                    "inherit": false
+                  },
+                  {
+                    "long": "help",
+                    "description": "show this message and exit",
+                    "inherit": false
+                  }
+                ],
+                "arguments": {
+                  "states": [
+                    {
+                      "name": "service_name",
+                      "index": 0
+                    }
+                  ]
+                }
+              },
+              {
+                "name": "oauth2_client",
+                "description": "connect an OAuth2 Client service to cumulusci",
+                "options": [
+                  {
+                    "long": "client_id",
+                    "description": "the client Id",
+                    "inherit": false,
+                    "value": {
+                      "name": "text"
+                    }
+                  },
+                  {
+                    "long": "client_secret",
+                    "description": "the client secret",
+                    "inherit": false,
+                    "value": {
+                      "name": "text"
+                    }
+                  },
+                  {
+                    "long": "auth_uri",
+                    "description": "the URI for where users are directed to login",
+                    "inherit": false,
+                    "value": {
+                      "name": "text"
+                    }
+                  },
+                  {
+                    "long": "token_uri",
+                    "description": "the URI for where we request an access token",
+                    "inherit": false,
+                    "value": {
+                      "name": "text"
+                    }
+                  },
+                  {
+                    "long": "callback_url",
+                    "description": "the URL that the auth server will callback to after authentication of the user",
+                    "inherit": false,
+                    "value": {
+                      "name": "text"
+                    }
+                  },
+                  {
+                    "long": "default",
+                    "description": "set this service as the global default",
+                    "inherit": false
+                  },
+                  {
+                    "long": "help",
+                    "description": "show this message and exit",
+                    "inherit": false
+                  }
+                ],
+                "arguments": {
+                  "states": [
+                    {
+                      "name": "service_name",
+                      "index": 0
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "name": "default",
+            "description": "set the default service for a given service type",
+            "options": [
+              {
+                "long": "project",
+                "description": "sets the service as the default for the current project",
+                "inherit": false
+              },
+              {
+                "long": "help",
+                "description": "help for cci service default",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "service_type",
+                  "index": 0
+                },
+                {
+                  "name": "service_name",
+                  "index": 1
+                }
+              ]
+            }
+          },
+          {
+            "name": "info",
+            "description": "show the details of a connected service",
+            "options": [
+              {
+                "long": "json",
+                "description": "print a json string",
+                "inherit": false
+              },
+              {
+                "long": "help",
+                "description": "help for cci service info",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "service_type",
+                  "index": 0
+                },
+                {
+                  "name": "service_name",
+                  "index": 1
+                }
+              ]
+            }
+          },
+          {
+            "name": "list",
+            "description": "list services available for configuration and use",
+            "options": [
+              {
+                "long": "plain",
+                "description": "print the table using plain ascii",
+                "inherit": false
+              },
+              {
+                "long": "json",
+                "description": "print a json string",
+                "inherit": false
+              },
+              {
+                "long": "help",
+                "description": "help for cci service list",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "remove",
+            "description": "remove a service",
+            "options": [
+              {
+                "long": "help",
+                "description": "help for cci service remove",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "service_type",
+                  "index": 0
+                },
+                {
+                  "name": "service_name",
+                  "index": 1
+                }
+              ]
+            }
+          },
+          {
+            "name": "rename",
+            "description": "rename a service",
+            "options": [
+              {
+                "long": "help",
+                "description": "help for cci service remove",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "service_type",
+                  "index": 0
+                },
+                {
+                  "name": "service_name",
+                  "index": 1
+                },
+                {
+                  "name": "new_name",
+                  "index": 2
+                }
+              ]
+            }
+          },
+          {
+            "name": "update",
+            "description": "allow users to update attribute values of a particular service",
+            "options": [
+              {
+                "short": "s",
+                "long": "attribute",
+                "description": "provide values to update the service with directly. Using `--attribute foo var` will set the 'foo' attribute to",
+                "inherit": false,
+                "value": {
+                  "name": "text-text"
+                }
+              },
+              {
+                "long": "help",
+                "description": "help for cci service remove",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "service_type",
+                  "index": 0
+                },
+                {
+                  "name": "service_name",
+                  "index": 1
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "shell",
+        "description": "drop into a Python shell",
+        "options": [
+          {
+            "long": "script",
+            "description": "path to a script to run",
+            "inherit": false,
+            "value": {
+              "name": "path",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "python",
+            "description": "python code to run directly",
+            "inherit": false,
+            "value": {
+              "name": "text"
+            }
+          },
+          {
+            "long": "help",
+            "description": "show this message and exit",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "task",
+        "description": "commands for finding and running tasks for a project",
+        "options": [
+          {
+            "long": "help",
+            "description": "show this message and exit",
+            "inherit": false
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "doc",
+            "description": "exports RST format documentation for all tasks"
+          },
+          {
+            "name": "info",
+            "description": "displays information for a task",
+            "arguments": {
+              "states": [
+                {
+                  "name": "task_name",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "list",
+            "description": "list available tasks for the current context"
+          },
+          {
+            "name": "run",
+            "description": "runs a task",
+            "arguments": {
+              "states": [
+                {
+                  "name": "task_name",
+                  "index": 0
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "version",
+        "description": "print the current version of cumulusci",
+        "options": [
+          {
+            "long": "help",
+            "description": "show this message and exit",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "error",
+        "description": "get or share information about an error",
+        "options": [
+          {
+            "long": "help",
+            "description": "show this message and exit",
+            "inherit": false
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "gist",
+            "description": "creates a GitHub gist from the latest logfile"
+          },
+          {
+            "name": "info",
+            "description": "outputs the most recent traceback (if one exists in the most recent logfile)"
+          }
+        ]
+      },
+      {
+        "name": "project",
+        "description": "commands for interacting with project repository configurations",
+        "subcommands": [
+          {
+            "name": "dependencies",
+            "description": "displays the current dependencies for the project. If the dependencies section has references to other github re",
+            "options": [
+              {
+                "long": "resolution-strategy",
+                "description": "the resolution strategy to use. Defaults to production",
+                "inherit": false,
+                "value": {
+                  "name": "text"
+                }
+              },
+              {
+                "long": "help",
+                "description": "show this message and exit",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "info",
+            "description": "display information about the current project's configuration",
+            "options": [
+              {
+                "long": "help",
+                "description": "show this message and exit",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "init",
+            "description": "initialize a new project for use with the cumulusci toolbelt",
+            "options": [
+              {
+                "long": "help",
+                "description": "show this message and exit",
+                "inherit": false
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "builtin.directories": {
+        "builtin": "directories"
+      }
+    }
+  }
+}
