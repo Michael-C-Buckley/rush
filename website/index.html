@@ -15,32 +15,105 @@
     </nav>
   </header>
 
-  <h1 id="rush"><a href="#rush">rush</a></h1>
+  <main>
+    <section class="hero" aria-labelledby="rush">
+      <div class="hero-copy">
+        <p class="eyebrow">POSIX where it matters. Friendly where you live.</p>
+        <h1 id="rush"><a href="#rush">rush</a></h1>
 
-  <p>Rush is a POSIX shell for users who want standard shell semantics, selected Bash-compatible conveniences, and a better interactive experience.</p>
+        <p class="lede">Rush is a POSIX shell with dash-class speed, Bash-shaped conveniences, async prompts, autosuggestions, and a modern interactive editor.</p>
 
-  <p>It aims to be boring where scripts need portability and pleasant where humans spend time: command lines, prompts, completions, history, jobs, and terminal UI.</p>
+        <p>Keep portable scripts boring. Make daily command lines pleasant: Unicode-aware editing, fast searchable history, structured completions, non-blocking prompt data, and terminal-native rendering.</p>
 
-  <pre><span class="prompt">$</span> <span class="cmd">rush</span>
-<span class="comment"># familiar shell language, friendlier interactive editor</span></pre>
+        <p class="actions">
+          <a class="button primary" href="#install">Install Rush</a>
+          <a class="button" href="docs/index.html">Read the docs</a>
+        </p>
+      </div>
 
-  <h2 id="what-rush-is"><a href="#what-rush-is">What Rush is</a></h2>
+      <pre class="terminal-card" aria-label="Rush terminal example"><span class="prompt">~/src/rush main *</span> <span class="cmd">git</span> switch -c nicer-homepage
+<span class="comment">Switched to a new branch</span>
 
-  <p>Rush is built around three goals:</p>
+<span class="prompt">~/src/rush nicer-homepage *</span> <span class="cmd">printf</span> <span class="str">'hello, 🌎\n'</span>
+hello, 🌎
 
-  <ul>
-    <li><strong>A POSIX shell.</strong> <code>rush --posix</code> targets POSIX.1-2024 / Issue 8 shell language, expansion, redirection, job control, and builtins.</li>
-    <li><strong>Practical compatibility.</strong> Default Rush keeps valid POSIX scripts meaningful while accepting selected Bash-shaped extensions and familiar interactive workflows.</li>
-    <li><strong>Better UX.</strong> The interactive shell has history search, emacs/vi editing modes, styled diagnostics, async prompts, structured completions, and modern terminal protocol support.</li>
-  </ul>
+<span class="prompt">~/src/rush nicer-homepage *</span> <span class="cmd">rush</span> <span class="opt">--posix</span> <span class="opt">-c</span> <span class="str">'set -eu; echo portable'</span>
+portable</pre>
+    </section>
 
-  <p>Rush targets POSIX-like systems first: Linux, macOS, and BSDs.</p>
+    <section class="proof-strip" aria-label="Highlights">
+      <div><strong>POSIX.1-2024</strong><span><code>rush --posix</code> targets Issue 8 shell semantics.</span></div>
+      <div><strong>Dash-class fast</strong><span>Built to stay small and quick for scripts and startup.</span></div>
+      <div><strong>Async prompt</strong><span>Slow prompt segments run in the background and cache results.</span></div>
+      <div><strong>Autosuggestions</strong><span>Inline suggestions come from relevant command history.</span></div>
+      <div><strong>SQLite history</strong><span>Persistent, searchable, cwd-aware command history.</span></div>
+    </section>
 
-  <h2 id="status"><a href="#status">Status</a></h2>
+    <h2 id="why-rush"><a href="#why-rush">Why Rush</a></h2>
 
-  <p>Rush is effectively POSIX-compliant for the shell behavior covered by its conformance suite. It is not a certified POSIX implementation, and compatibility notes document intentional choices where POSIX, Bash, and system shells disagree.</p>
+    <section class="feature-grid" aria-label="Rush features">
+      <article>
+        <h3>Portable scripts stay portable</h3>
+        <p><code>rush --posix</code> targets POSIX.1-2024 / Issue 8: shell language, expansion, redirection, job control, and builtins.</p>
+      </article>
 
-  <p>See the <a href="docs/conformance.html">conformance policy</a>, <a href="docs/compatibility.html">compatibility notes</a>, and <a href="docs/builtins/">builtin reference</a> for details.</p>
+      <article>
+        <h3>Bashisms when they help</h3>
+        <p>Default Rush keeps valid POSIX scripts meaningful while accepting selected Bash-shaped extensions for migration and interactive use.</p>
+      </article>
+
+      <article>
+        <h3>User friendly by default</h3>
+        <p>Emacs and vi editing modes, styled diagnostics, fish-style abbreviations, and structured completions are built in.</p>
+      </article>
+
+      <article>
+        <h3>Async prompts stay responsive</h3>
+        <p>Prompt segments can fetch Git state, tool versions, or project metadata in the background while Rush keeps the editor usable.</p>
+      </article>
+
+      <article>
+        <h3>Autosuggestions from real history</h3>
+        <p>Rush suggests likely commands inline from SQLite history, using current-directory context before falling back to global matches.</p>
+      </article>
+
+      <article>
+        <h3>Modern terminal native</h3>
+        <p>Rush probes capabilities and uses synchronized output, Unicode grapheme widths, bracketed paste, modern keys, and color-scheme reports when available.</p>
+      </article>
+
+      <article>
+        <h3>XDG clean</h3>
+        <p>Configuration, autoloaded functions, and state live in XDG locations, with sensible <code>$HOME</code> fallbacks for systems that do not set them.</p>
+      </article>
+
+      <article>
+        <h3>History worth searching</h3>
+        <p>Command history is stored in SQLite with FTS-backed search, timestamps, status, duration, hostname, session, and current-directory context.</p>
+      </article>
+    </section>
+
+    <section class="split-section" aria-labelledby="shell-for-both">
+      <div>
+        <h2 id="shell-for-both"><a href="#shell-for-both">One shell for scripts and humans</a></h2>
+        <p>Rush is intentionally conservative at the script boundary and intentionally comfortable at the prompt. That means a strict POSIX mode for conformance work, plus a default mode that feels familiar to Bash users without giving up the portable core.</p>
+
+        <p>Rush targets POSIX-like systems first: Linux, macOS, and BSDs.</p>
+      </div>
+
+      <pre><span class="comment"># strict script mode</span>
+<span class="cmd">rush</span> <span class="opt">--posix</span> script.sh
+
+<span class="comment"># friendly interactive mode</span>
+<span class="cmd">rush</span>
+<span class="comment"># completions, autosuggestions, history search, async prompt, terminal UI</span></pre>
+    </section>
+
+    <h2 id="status"><a href="#status">Status</a></h2>
+
+    <p>Rush is effectively POSIX-compliant for the shell behavior covered by its conformance suite. It is not a certified POSIX implementation, and compatibility notes document intentional choices where POSIX, Bash, and system shells disagree.</p>
+
+    <p>See the <a href="docs/conformance.html">conformance policy</a>, <a href="docs/compatibility.html">compatibility notes</a>, and <a href="docs/builtins/">builtin reference</a> for details.</p>
 
   <h2 id="install"><a href="#install">Build and install</a></h2>
 
@@ -62,5 +135,6 @@
   <h2 id="license"><a href="#license">License</a></h2>
 
   <p>MIT.</p>
+  </main>
 </body>
 </html>
