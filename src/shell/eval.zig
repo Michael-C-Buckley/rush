@@ -2160,6 +2160,7 @@ fn evalEvalBuiltin(shell: anytype, args: []const []const u8) EvalError!result.Ev
     return shell.evalSourceNested(src) catch |err| switch (err) {
         error.ExpectedCommand,
         error.ExpectedRedirectionTarget,
+        error.InvalidParameterExpansion,
         error.UnclosedCommandSubstitution,
         error.UnclosedQuote,
         error.UnexpectedToken,

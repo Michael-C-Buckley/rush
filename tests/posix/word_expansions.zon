@@ -53,6 +53,16 @@
             .status = 0,
         },
         .{
+            .name = "empty braced parameter expansion is an error",
+            .script =
+            \\: ${}
+            \\printf bad
+            ,
+            .stdout = "",
+            .stderr_match = .nonempty,
+            .status_match = .nonzero,
+        },
+        .{
             .name = "parameter expansion removes backslash newline in default word",
             .script = "unset A; printf '<%s>\\n' ${A:-o\\\nk}\n",
             .stdout =
