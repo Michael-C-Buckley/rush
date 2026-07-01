@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>rush — experimental POSIX-facing shell</title>
+  <title>rush — POSIX shell with modern interactive UX</title>
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
@@ -17,24 +17,30 @@
 
   <h1 id="rush"><a href="#rush">rush</a></h1>
 
-  <p>Rush is an experimental, POSIX-facing shell with Bash compatibility and interactive UX improvements.</p>
+  <p>Rush is a POSIX shell for users who want standard shell semantics, selected Bash-compatible conveniences, and a better interactive experience.</p>
 
-  <p>It is early software: the implementation moves quickly, APIs may change, and POSIX compatibility is a work in progress rather than a certification claim.</p>
+  <p>It aims to be boring where scripts need portability and pleasant where humans spend time: command lines, prompts, completions, history, jobs, and terminal UI.</p>
 
   <pre><span class="prompt">$</span> <span class="cmd">rush</span>
 <span class="comment"># familiar shell language, friendlier interactive editor</span></pre>
 
-  <h2 id="start-here"><a href="#start-here">Start here</a></h2>
+  <h2 id="what-rush-is"><a href="#what-rush-is">What Rush is</a></h2>
 
-  <p>Current focus:</p>
+  <p>Rush is built around three goals:</p>
 
   <ul>
-    <li>POSIX shell execution, expansion, redirection, job-control, and builtins.</li>
-    <li>Incremental Bash-compatible features; Rush defaults to POSIX-facing behavior.</li>
-    <li>A terminal line editor with history search, emacs/vi editing modes, styled diagnostics, and modern terminal protocol support.</li>
+    <li><strong>A POSIX shell.</strong> <code>rush --posix</code> targets POSIX.1-2024 / Issue 8 shell language, expansion, redirection, job control, and builtins.</li>
+    <li><strong>Practical compatibility.</strong> Default Rush keeps valid POSIX scripts meaningful while accepting selected Bash-shaped extensions and familiar interactive workflows.</li>
+    <li><strong>Better UX.</strong> The interactive shell has history search, emacs/vi editing modes, styled diagnostics, async prompts, structured completions, and modern terminal protocol support.</li>
   </ul>
 
   <p>Rush targets POSIX-like systems first: Linux, macOS, and BSDs.</p>
+
+  <h2 id="status"><a href="#status">Status</a></h2>
+
+  <p>Rush is effectively POSIX-compliant for the shell behavior covered by its conformance suite. It is not a certified POSIX implementation, and compatibility notes document intentional choices where POSIX, Bash, and system shells disagree.</p>
+
+  <p>See the <a href="docs/conformance.html">conformance policy</a>, <a href="docs/compatibility.html">compatibility notes</a>, and <a href="docs/builtins/">builtin reference</a> for details.</p>
 
   <h2 id="install"><a href="#install">Build and install</a></h2>
 
@@ -51,11 +57,7 @@
 <span class="cmd">zig</span> build run <span class="opt">--</span> <span class="opt">--posix</span> <span class="opt">-c</span> <span class="str">'echo hello'</span>
 ./zig-out/bin/rush <span class="opt">--help</span></pre>
 
-  <p><code>--posix</code> selects POSIX mode with stricter syntax diagnostics for non-interactive execution. There is not currently a user-facing Bash-mode CLI flag.</p>
-
-  <h2 id="status"><a href="#status">Status</a></h2>
-
-  <p>Early software. Expect missing features, behavior changes, and incomplete POSIX/Bash compatibility.</p>
+  <p><code>--posix</code> selects strict POSIX mode. Default Rush starts from the same POSIX core and enables selected compatibility and interactive features.</p>
 
   <h2 id="license"><a href="#license">License</a></h2>
 
