@@ -103,6 +103,7 @@ fn evalBackgroundAndOr(shell: anytype, and_or: ast.AndOr) EvalError!result.EvalR
         .child => {
             const scratch = shell.beginScratchScope() catch shell.host.exit(2);
             defer scratch.end();
+            resetCaughtSignalTrapsForAsyncChild(shell);
             if (!shell.state.options.monitor) ignoreAsynchronousJobSignals(shell) catch shell.host.exit(2);
             if (background_subshell) |subshell| {
                 const evaluated = evalSubshellInCurrentProcess(shell, subshell.body.subshell, subshell.redirections) catch shell.host.exit(2);
@@ -122,6 +123,16 @@ fn evalBackgroundAndOr(shell: anytype, and_or: ast.AndOr) EvalError!result.EvalR
 fn ignoreAsynchronousJobSignals(shell: anytype) !void {
     try shell.host.setSignalIgnored(2);
     try shell.host.setSignalIgnored(3);
+}
+
+fn resetCaughtSignalTrapsForAsyncChild(shell: anytype) void {
+    var iterator = shell.state.signal_traps.iterator();
+    while (iterator.next()) |entry| {
+        const number = builtin.signalNumber(entry.key_ptr.*) orelse continue;
+        shell.host.setSignalDefault(number) catch {};
+    }
+    shell.state.running_signal_trap = false;
+    shell.state.clearSignalTraps();
 }
 
 fn shellProcessId(shell: anytype) host_mod.Pid {

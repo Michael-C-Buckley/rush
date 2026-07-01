@@ -552,6 +552,27 @@
             .status = 0,
         },
         .{
+            .name = "background shell commands do not run inherited PIPE traps",
+            .script =
+            \\tmp=$(mktemp -d "${TMPDIR:-/tmp}/rush-pipe.XXXXXX") || exit 2
+            \\mkfifo "$tmp/p" || exit 2
+            \\trap 'rm -rf "$tmp"; printf pipe-trap' PIPE
+            \\{ while :; do printf x || exit; done >"$tmp/p"; } &
+            \\pid=$!
+            \\dd bs=1 count=1 <"$tmp/p" >/dev/null 2>&1
+            \\wait "$pid" 2>/dev/null
+            \\[ -d "$tmp" ] && printf 'exists\n' || printf 'missing\n'
+            \\rm -rf "$tmp"
+            \\trap - PIPE
+            ,
+            .stdout =
+            \\exists
+            \\
+            ,
+            .stderr_match = .any,
+            .status = 0,
+        },
+        .{
             .name = "asynchronous commands inherit ignored SIGINT when job control is disabled",
             .script =
             \\sh -c 'kill -INT $$; printf "<survived>\n"' &

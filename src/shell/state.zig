@@ -336,6 +336,13 @@ pub const State = struct {
         if (self.signal_traps.fetchRemove(name)) |entry| self.allocator.free(entry.value);
     }
 
+    pub fn clearSignalTraps(self: *State) void {
+        var iterator = self.signal_traps.iterator();
+        while (iterator.next()) |entry| self.allocator.free(entry.value_ptr.*);
+        self.signal_traps.clearRetainingCapacity();
+        self.pending_traps.clearRetainingCapacity();
+    }
+
     pub fn queueTrap(self: *State, name: []const u8) !void {
         try self.pending_traps.append(self.allocator, name);
     }
