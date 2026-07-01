@@ -726,6 +726,18 @@
             .status = 0,
         },
         .{
+            .name = "backquote command substitution can contain double quotes inside double quotes",
+            .script =
+            \\printf '<%s>\n' "`: "("`"
+            ,
+            .stdout =
+            \\<>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "backquote command substitution supports escaped nested backquotes",
             .script =
             \\printf '<%s>\n' "`printf '[%s]' \`printf inner\``"
