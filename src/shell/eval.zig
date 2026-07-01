@@ -576,6 +576,7 @@ fn appendSpecialQuotedFields(shell: anytype, fields: *std.ArrayList([]const u8),
         try fields.appendSlice(shell.scratchAllocator(), shell.state.positionals);
         return true;
     }
+    if (try appendParameterOperatorAtFields(shell, fields, word)) return true;
     const parameter = singleDoubleQuotedParameter(word) orelse return false;
     if (parameter.parameter != .special or parameter.parameter.special != .at or parameter.op == null) return false;
 
@@ -594,6 +595,22 @@ fn appendSpecialQuotedFields(shell: anytype, fields: *std.ArrayList([]const u8),
         },
         else => return false,
     }
+}
+
+fn appendParameterOperatorAtFields(shell: anytype, fields: *std.ArrayList([]const u8), word: ast.Word) !bool {
+    const parameter = singleParameterWord(word) orelse return false;
+    if (parameter.op == null or parameter.word == null or !wordIsAtParameter(parameter.word.?)) return false;
+
+    const is_set = isParameterSet(parameter, try parameterCurrentValue(shell, parameter.parameter));
+    const selected = switch (parameter.op.?) {
+        .default_value => !is_set,
+        .alternate_value => is_set,
+        else => false,
+    };
+    if (!selected) return false;
+
+    try fields.appendSlice(shell.scratchAllocator(), shell.state.positionals);
+    return true;
 }
 
 fn appendEmbeddedQuotedAtFields(shell: anytype, fields: *std.ArrayList([]const u8), word: ast.Word) !bool {
@@ -644,6 +661,20 @@ fn singleDoubleQuotedParameter(word: ast.Word) ?ast.ParameterExpansion {
     return switch (word.data) {
         .literal => null,
         .parts => |parts| if (parts.len == 1) switch (parts[0]) {
+            .double_quoted => |quoted| if (quoted.len == 1) switch (quoted[0]) {
+                .parameter => |parameter| parameter,
+                else => null,
+            } else null,
+            else => null,
+        } else null,
+    };
+}
+
+fn singleParameterWord(word: ast.Word) ?ast.ParameterExpansion {
+    return switch (word.data) {
+        .literal => null,
+        .parts => |parts| if (parts.len == 1) switch (parts[0]) {
+            .parameter => |parameter| parameter,
             .double_quoted => |quoted| if (quoted.len == 1) switch (quoted[0]) {
                 .parameter => |parameter| parameter,
                 else => null,

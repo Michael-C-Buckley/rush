@@ -82,6 +82,30 @@
             .status = 0,
         },
         .{
+            .name = "parameter operators preserve quoted at fields",
+            .script =
+            \\set -- abc 'def ghi' jkl
+            \\IFS=
+            \\set ${1+"$@"}
+            \\printf 'a:%s|%s|%s|%s\n' "$#" "$1" "$2" "$3"
+            \\set -- abc 'def ghi' jkl
+            \\set "${1+$@}"
+            \\printf 'b:%s|%s|%s|%s\n' "$#" "$1" "$2" "$3"
+            \\set -- abc 'def ghi' jkl
+            \\unset novar
+            \\set ${novar-"$@"}
+            \\printf 'c:%s|%s|%s|%s\n' "$#" "$1" "$2" "$3"
+            ,
+            .stdout =
+            \\a:3|abc|def ghi|jkl
+            \\b:3|abc|def ghi|jkl
+            \\c:3|abc|def ghi|jkl
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "embedded double-quoted at joins the first and last generated fields",
             .script =
             \\set -- A B
