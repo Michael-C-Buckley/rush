@@ -1,0 +1,139 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "cliff-jumper",
+    "description": "generate changelog releases with git-cliff",
+    "options": [
+      {
+        "long": "help",
+        "short": "h",
+        "description": "display help for command",
+        "inherit": true
+      },
+      {
+        "long": "name",
+        "short": "n",
+        "description": "the package name to release",
+        "inherit": true,
+        "value": {
+          "name": "name"
+        }
+      },
+      {
+        "long": "package-path",
+        "short": "p",
+        "description": "the path to the current package. For non-monorepos this is just \".\"",
+        "inherit": true,
+        "value": {
+          "name": "path",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "dry-run",
+        "description": "whether the package should be bumped or not. When this is set no actions will be taken and only the release strategy will be logged",
+        "inherit": false
+      },
+      {
+        "long": "first-release",
+        "description": "whether this is the first release (skips bumping the version)'",
+        "inherit": false
+      },
+      {
+        "long": "mono-repo",
+        "inherit": false,
+        "description": "treat repository as a monorepo",
+        "exclusiveGroup": "cliff-jumper.monorepo"
+      },
+      {
+        "long": "no-mono-repo",
+        "inherit": false,
+        "description": "disable monorepo mode",
+        "exclusiveGroup": "cliff-jumper.monorepo"
+      },
+      {
+        "long": "org",
+        "short": "o",
+        "description": "the NPM org scope that should be used. This should be WITHOUT \"@\" sign or trailing \"/\"",
+        "inherit": false,
+        "value": {
+          "name": "organisation"
+        }
+      },
+      {
+        "long": "preid",
+        "description": "the \"prerelease identifier\" to use as a prefix for the \"prerelease\" part of a semver",
+        "inherit": false,
+        "value": {
+          "name": "id"
+        }
+      },
+      {
+        "long": "commit-message-template",
+        "short": "c",
+        "inherit": false,
+        "value": {
+          "name": "template"
+        },
+        "description": "set option"
+      },
+      {
+        "long": "tag-template",
+        "inherit": false,
+        "value": {
+          "name": "template"
+        },
+        "description": "set option"
+      },
+      {
+        "long": "install",
+        "short": "i",
+        "description": "whether to run npm install (or your package manager's equivalent) after bumping the version but before committing and creating a git tag. This is useful when yo",
+        "inherit": false
+      },
+      {
+        "long": "skip-changelog",
+        "inherit": false,
+        "description": "skip changelog generation",
+        "exclusiveGroup": "cliff-jumper.changelog"
+      },
+      {
+        "long": "no-skip-changelog",
+        "inherit": false,
+        "description": "generate changelog",
+        "exclusiveGroup": "cliff-jumper.changelog"
+      },
+      {
+        "long": "skip-tag",
+        "short": "t",
+        "inherit": false,
+        "description": "skip git tag creation",
+        "exclusiveGroup": "cliff-jumper.tag"
+      },
+      {
+        "long": "no-skip-tag",
+        "inherit": false,
+        "description": "create git tag",
+        "exclusiveGroup": "cliff-jumper.tag"
+      },
+      {
+        "long": "verbose",
+        "short": "v",
+        "description": "whether to print verbose information",
+        "inherit": false
+      },
+      {
+        "long": "version",
+        "short": "V",
+        "description": "output the version number",
+        "inherit": false
+      }
+    ],
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      }
+    }
+  }
+}
