@@ -1,0 +1,374 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "asr",
+    "description": "copy disk images to volumes",
+    "platforms": [
+      "macos"
+    ],
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "asr.formats": {
+        "values": [
+          "HFS+",
+          "HFSX"
+        ]
+      },
+      "asr.timeouts": {
+        "values": [
+          "0"
+        ]
+      }
+    },
+    "options": [
+      {
+        "long": "buffers",
+        "description": "set buffer count",
+        "inherit": false,
+        "value": {
+          "name": "count"
+        }
+      },
+      {
+        "long": "buffersize",
+        "description": "set buffer size",
+        "inherit": false,
+        "value": {
+          "name": "size"
+        }
+      },
+      {
+        "long": "csumbuffers",
+        "description": "set checksum buffer count",
+        "inherit": false,
+        "value": {
+          "name": "count"
+        }
+      },
+      {
+        "long": "csumbuffersize",
+        "description": "set checksum buffer size",
+        "inherit": false,
+        "value": {
+          "name": "size"
+        }
+      },
+      {
+        "long": "verbose",
+        "description": "enable verbose output",
+        "inherit": false
+      },
+      {
+        "long": "debug",
+        "description": "enable debug output",
+        "inherit": false
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "help",
+        "description": "show help"
+      },
+      {
+        "name": "version",
+        "description": "show version"
+      },
+      {
+        "name": "restore",
+        "description": "restore image or volume",
+        "options": [
+          {
+            "long": "source",
+            "description": "set source image or volume",
+            "inherit": false,
+            "value": {
+              "name": "source",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "target",
+            "description": "set target device or mountpoint",
+            "inherit": false,
+            "value": {
+              "name": "target",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "file",
+            "description": "set multicast restore file",
+            "inherit": false,
+            "value": {
+              "name": "source",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "erase",
+            "description": "erase target before restore",
+            "inherit": false
+          },
+          {
+            "long": "format",
+            "description": "set destination filesystem format",
+            "inherit": false,
+            "value": {
+              "name": "format",
+              "provider": "asr.formats"
+            }
+          },
+          {
+            "long": "noprompt",
+            "description": "suppress target prompt",
+            "inherit": false
+          },
+          {
+            "long": "timeout",
+            "description": "set multicast client timeout",
+            "inherit": false,
+            "value": {
+              "name": "seconds",
+              "provider": "asr.timeouts"
+            }
+          },
+          {
+            "long": "puppetstrings",
+            "description": "write parseable progress",
+            "inherit": false
+          },
+          {
+            "long": "noverify",
+            "description": "skip restore verification",
+            "inherit": false
+          },
+          {
+            "long": "allowfragmentedcatalog",
+            "description": "allow fragmented source catalog",
+            "inherit": false
+          },
+          {
+            "long": "SHA256",
+            "description": "force sha-256 verification",
+            "inherit": false
+          },
+          {
+            "long": "sourcevolumename",
+            "description": "set source volume name",
+            "inherit": false,
+            "value": {
+              "name": "name"
+            }
+          },
+          {
+            "long": "sourcevolumeUUID",
+            "description": "set source volume uuid",
+            "inherit": false,
+            "value": {
+              "name": "uuid"
+            }
+          },
+          {
+            "long": "useReplication",
+            "description": "use apfs replication",
+            "inherit": false
+          },
+          {
+            "long": "useInverter",
+            "description": "use apfs inverter",
+            "inherit": false
+          },
+          {
+            "long": "toSnapshot",
+            "description": "set destination snapshot",
+            "inherit": false,
+            "value": {
+              "name": "snapshot"
+            }
+          },
+          {
+            "long": "fromSnapshot",
+            "description": "set source snapshot",
+            "inherit": false,
+            "value": {
+              "name": "snapshot"
+            }
+          }
+        ]
+      },
+      {
+        "name": "restoreexact",
+        "description": "restore and resize target partition",
+        "options": [
+          {
+            "long": "source",
+            "description": "set source image or volume",
+            "inherit": false,
+            "value": {
+              "name": "source",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "target",
+            "description": "set target device or mountpoint",
+            "inherit": false,
+            "value": {
+              "name": "target",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "file",
+            "description": "set multicast restore file",
+            "inherit": false,
+            "value": {
+              "name": "source",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "erase",
+            "description": "erase target before restore",
+            "inherit": false
+          },
+          {
+            "long": "format",
+            "description": "set destination filesystem format",
+            "inherit": false,
+            "value": {
+              "name": "format",
+              "provider": "asr.formats"
+            }
+          },
+          {
+            "long": "noprompt",
+            "description": "suppress target prompt",
+            "inherit": false
+          },
+          {
+            "long": "timeout",
+            "description": "set multicast client timeout",
+            "inherit": false,
+            "value": {
+              "name": "seconds",
+              "provider": "asr.timeouts"
+            }
+          },
+          {
+            "long": "puppetstrings",
+            "description": "write parseable progress",
+            "inherit": false
+          },
+          {
+            "long": "noverify",
+            "description": "skip restore verification",
+            "inherit": false
+          },
+          {
+            "long": "allowfragmentedcatalog",
+            "description": "allow fragmented source catalog",
+            "inherit": false
+          },
+          {
+            "long": "SHA256",
+            "description": "force sha-256 verification",
+            "inherit": false
+          },
+          {
+            "long": "sourcevolumename",
+            "description": "set source volume name",
+            "inherit": false,
+            "value": {
+              "name": "name"
+            }
+          },
+          {
+            "long": "sourcevolumeUUID",
+            "description": "set source volume uuid",
+            "inherit": false,
+            "value": {
+              "name": "uuid"
+            }
+          },
+          {
+            "long": "useReplication",
+            "description": "use apfs replication",
+            "inherit": false
+          },
+          {
+            "long": "useInverter",
+            "description": "use apfs inverter",
+            "inherit": false
+          },
+          {
+            "long": "toSnapshot",
+            "description": "set destination snapshot",
+            "inherit": false,
+            "value": {
+              "name": "snapshot"
+            }
+          },
+          {
+            "long": "fromSnapshot",
+            "description": "set source snapshot",
+            "inherit": false,
+            "value": {
+              "name": "snapshot"
+            }
+          }
+        ]
+      },
+      {
+        "name": "server",
+        "description": "multicast source over network",
+        "options": [
+          {
+            "long": "source",
+            "description": "set source disk image",
+            "inherit": false,
+            "value": {
+              "name": "source",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "interface",
+            "description": "set network interface",
+            "inherit": false,
+            "value": {
+              "name": "interface"
+            }
+          },
+          {
+            "long": "config",
+            "description": "set plist configuration file",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          }
+        ]
+      },
+      {
+        "name": "imagescan",
+        "description": "calculate image checksums"
+      },
+      {
+        "name": "info",
+        "description": "show image metadata",
+        "options": [
+          {
+            "long": "plist",
+            "description": "write plist output",
+            "inherit": false
+          }
+        ]
+      }
+    ]
+  }
+}
