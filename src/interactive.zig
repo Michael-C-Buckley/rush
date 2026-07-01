@@ -92,6 +92,7 @@ const InteractiveSession = struct {
             return 2;
         };
         defer terminal.deinit();
+        self.sh.extensions.configurePromptAsync(self.io, terminal.promptRedrawWakeFd());
 
         while (true) {
             const line_result = self.readLine(&terminal) catch |err| switch (err) {
@@ -118,6 +119,10 @@ const InteractiveSession = struct {
     fn readLine(self: *InteractiveSession, terminal: *editor.driver.TerminalSession) ReadLineError!editor.driver.ReadLineResult {
         const prompt_text = self.renderPrompt() catch try prompt(self.allocator, self.sh);
         defer self.allocator.free(prompt_text);
+        self.dispatchPromptAsyncLifecycleEvents(self.allocator) catch |err| switch (err) {
+            error.OutOfMemory => return error.OutOfMemory,
+            else => {},
+        };
 
         const current_cwd = self.sh.host.currentDir(self.allocator) catch try self.allocator.dupe(u8, "");
         defer self.allocator.free(current_cwd);
@@ -158,6 +163,22 @@ const InteractiveSession = struct {
             self.sh.state.last_status,
             self.last_command_duration_ms,
         );
+    }
+
+    fn dispatchPromptAsyncLifecycleEvents(self: *InteractiveSession, allocator: std.mem.Allocator) !void {
+        const events = self.sh.extensions.takePromptAsyncLifecycleEvents();
+        for (0..events.start_count) |_| {
+            var dispatched = try self.events.runEvent(allocator, self.io, "prompt.async.start", &.{ "prompt", "1" });
+            defer dispatched.deinit(allocator);
+            if (dispatched.exit_status) |status| pendingEventExit(self, status);
+            if (dispatched.output.len != 0) try self.sh.host.writeAll(.stderr, dispatched.output);
+        }
+        for (0..events.end_count) |_| {
+            var dispatched = try self.events.runEvent(allocator, self.io, "prompt.async.end", &.{ "prompt", "0" });
+            defer dispatched.deinit(allocator);
+            if (dispatched.exit_status) |status| pendingEventExit(self, status);
+            if (dispatched.output.len != 0) try self.sh.host.writeAll(.stderr, dispatched.output);
+        }
     }
 
     fn evaluateSubmittedLine(
@@ -211,6 +232,7 @@ const InteractiveSession = struct {
 
 fn runInteractiveHooks(context: *anyopaque, allocator: std.mem.Allocator, io: std.Io) !editor.driver.HookResult {
     const session: *InteractiveSession = @ptrCast(@alignCast(context));
+    try session.dispatchPromptAsyncLifecycleEvents(allocator);
     var dispatched = try session.events.runDueTimers(allocator, io);
     if (dispatched.exit_status) |status| pendingEventExit(session, status);
     return dispatched.hookResult();
@@ -237,6 +259,7 @@ fn runInteractiveActivityEvent(
 fn refreshInteractivePrompt(context: *anyopaque, allocator: std.mem.Allocator, io: std.Io) ![]const u8 {
     _ = io;
     const session: *InteractiveSession = @ptrCast(@alignCast(context));
+    try session.dispatchPromptAsyncLifecycleEvents(allocator);
     return session.renderPrompt() catch try prompt(allocator, session.sh);
 }
 

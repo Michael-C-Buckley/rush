@@ -104,6 +104,14 @@ pub const State = struct {
     allocator: std.mem.Allocator,
     abbreviations: std.StringHashMapUnmanaged([]const u8) = .empty,
     event_handlers: std.StringHashMapUnmanaged(EventHandler) = .empty,
+    prompt_async_entries: std.ArrayListUnmanaged(*PromptAsyncEntry) = .empty,
+    prompt_async_mutex: std.atomic.Mutex = .unlocked,
+    prompt_async_io: ?std.Io = null,
+    prompt_async_redraw_fd: ?host.Fd = null,
+    prompt_async_active_count: usize = 0,
+    prompt_async_pending_start_events: usize = 0,
+    prompt_async_pending_end_events: usize = 0,
+    prompt_async_render_started: bool = false,
     prompt_buffer: std.ArrayListUnmanaged(u8) = .empty,
     building_prompt: bool = false,
     previous_duration_ms: ?i64 = null,
@@ -128,6 +136,11 @@ pub const State = struct {
             self.allocator.free(entry.value_ptr.action);
         }
         self.event_handlers.deinit(self.allocator);
+        for (self.prompt_async_entries.items) |entry| {
+            if (entry.thread) |thread| thread.join();
+        }
+        for (self.prompt_async_entries.items) |entry| entry.deinit(self.allocator);
+        self.prompt_async_entries.deinit(self.allocator);
         self.prompt_buffer.deinit(self.allocator);
         self.* = undefined;
     }
@@ -235,12 +248,68 @@ pub const State = struct {
 
     pub fn clearPrompt(self: *State) void {
         self.prompt_buffer.clearRetainingCapacity();
+        self.prompt_async_render_started = false;
     }
 
     fn appendPrompt(self: *State, bytes: []const u8) !void {
         try self.prompt_buffer.appendSlice(self.allocator, bytes);
     }
+
+    pub fn configurePromptAsync(self: *State, io: std.Io, redraw_fd: std.posix.fd_t) void {
+        self.prompt_async_io = io;
+        self.prompt_async_redraw_fd = @enumFromInt(redraw_fd);
+    }
+
+    pub fn promptAsyncPending(self: *State) bool {
+        lockPromptAsync(self);
+        defer unlockPromptAsync(self);
+        return self.prompt_async_render_started or self.prompt_async_active_count != 0;
+    }
+
+    pub fn takePromptAsyncLifecycleEvents(self: *State) PromptAsyncLifecycleEvents {
+        lockPromptAsync(self);
+        defer unlockPromptAsync(self);
+        const events: PromptAsyncLifecycleEvents = .{
+            .start_count = self.prompt_async_pending_start_events,
+            .end_count = self.prompt_async_pending_end_events,
+        };
+        self.prompt_async_pending_start_events = 0;
+        self.prompt_async_pending_end_events = 0;
+        return events;
+    }
 };
+
+pub const PromptAsyncLifecycleEvents = struct {
+    start_count: usize = 0,
+    end_count: usize = 0,
+};
+
+const PromptAsyncEntry = struct {
+    state: *State,
+    key: []const u8,
+    cwd: []const u8,
+    stdout: []const u8,
+    updated_ms: u64 = 0,
+    refreshing: bool = false,
+    thread: ?std.Thread = null,
+    pid: host.Pid = 0,
+    read_fd: host.Fd = .stdin,
+
+    fn deinit(self: *PromptAsyncEntry, allocator: std.mem.Allocator) void {
+        allocator.free(self.key);
+        allocator.free(self.cwd);
+        allocator.free(self.stdout);
+        allocator.destroy(self);
+    }
+};
+
+fn lockPromptAsync(state: *State) void {
+    while (!state.prompt_async_mutex.tryLock()) std.Thread.yield() catch {};
+}
+
+fn unlockPromptAsync(state: *State) void {
+    state.prompt_async_mutex.unlock();
+}
 
 fn evalAbbr(state: *State, sh: anytype, args: []const []const u8) !result.EvalResult {
     if (args.len == 1) return listAbbreviations(state, sh);
@@ -463,7 +532,7 @@ fn isFunctionName(name: []const u8) bool {
 
 fn evalPrompt(state: *State, args: []const []const u8) !result.EvalResult {
     if (args.len < 2) return .{ .status = 2 };
-    if (std.mem.eql(u8, args[1], "async-pending")) return .{ .status = 1 };
+    if (std.mem.eql(u8, args[1], "async-pending")) return .{ .status = if (state.promptAsyncPending()) 0 else 1 };
     if (!state.building_prompt) return .{};
     if (std.mem.eql(u8, args[1], "text")) {
         if (args.len < 3) return .{ .status = 2 };
@@ -524,25 +593,210 @@ fn appendStyledPromptText(state: *State, style: editor_render.UiStyle, args: []c
 }
 
 fn evalPromptAsync(sh: anytype, args: []const []const u8) !result.EvalResult {
-    if (args.len < 2) return .{ .status = 2 };
-    var index: usize = 2;
-    while (index < args.len and !std.mem.eql(u8, args[index], "--")) : (index += 1) {
-        if (std.mem.eql(u8, args[index], "--ttl")) index += 1;
-        if (index >= args.len) return .{ .status = 2 };
+    const parsed = parsePromptAsync(args) orelse return .{ .status = 2 };
+    const io = sh.extensions.prompt_async_io orelse return .{};
+    const entry = try promptAsyncEntry(&sh.extensions, sh, parsed.key);
+
+    lockPromptAsync(&sh.extensions);
+    const cached_stdout = try sh.scratchAllocator().dupe(u8, entry.stdout);
+    const should_refresh = !entry.refreshing and
+        (entry.updated_ms == 0 or monotonicMillis(io) >= entry.updated_ms +| parsed.ttl_ms);
+    if (should_refresh) {
+        entry.refreshing = true;
+        if (sh.extensions.prompt_async_active_count == 0) sh.extensions.prompt_async_pending_start_events += 1;
+        sh.extensions.prompt_async_active_count += 1;
+        sh.extensions.prompt_async_render_started = true;
     }
-    if (index >= args.len or !std.mem.eql(u8, args[index], "--")) return .{ .status = 2 };
-    index += 1;
-    if (index >= args.len) return .{ .status = 2 };
+    unlockPromptAsync(&sh.extensions);
 
-    const ShellType = switch (@typeInfo(@TypeOf(sh))) {
-        .pointer => |pointer| pointer.child,
-        else => @TypeOf(sh),
+    if (cached_stdout.len != 0) try sh.host.writeAll(.stdout, cached_stdout);
+    if (should_refresh) {
+        const HostType = switch (@typeInfo(@TypeOf(sh.host))) {
+            .pointer => |pointer| pointer.child,
+            else => @TypeOf(sh.host),
+        };
+        if (@hasDecl(HostType, "forkProcess")) {
+            startPromptAsyncRefresh(sh, entry, parsed.command) catch |err| {
+                promptAsyncRefreshFailed(&sh.extensions, entry);
+                if (err == error.OutOfMemory) return error.OutOfMemory;
+            };
+        } else promptAsyncRefreshFailed(&sh.extensions, entry);
+    }
+    return .{};
+}
+
+const PromptAsyncOptions = struct {
+    key: []const u8,
+    ttl_ms: u64,
+    command: []const []const u8,
+};
+
+fn parsePromptAsync(args: []const []const u8) ?PromptAsyncOptions {
+    if (args.len < 6) return null;
+    var options: PromptAsyncOptions = .{ .key = args[1], .ttl_ms = 0, .command = &.{} };
+    var index: usize = 2;
+    while (index < args.len) {
+        if (std.mem.eql(u8, args[index], "--")) {
+            index += 1;
+            if (index >= args.len) return null;
+            options.command = args[index..];
+            return options;
+        }
+        if (std.mem.eql(u8, args[index], "--ttl")) {
+            index += 1;
+            if (index >= args.len) return null;
+            options.ttl_ms = std.fmt.parseInt(u64, args[index], 10) catch return null;
+            index += 1;
+            continue;
+        }
+        return null;
+    }
+    return null;
+}
+
+test "prompt_async parser requires ttl separator and command" {
+    const parsed = parsePromptAsync(&.{ "prompt_async", "git", "--ttl", "2000", "--", "rush_prompt_git" }).?;
+    try std.testing.expectEqualStrings("git", parsed.key);
+    try std.testing.expectEqual(@as(u64, 2000), parsed.ttl_ms);
+    try std.testing.expectEqual(@as(usize, 1), parsed.command.len);
+    try std.testing.expectEqualStrings("rush_prompt_git", parsed.command[0]);
+
+    try std.testing.expectEqual(null, parsePromptAsync(&.{ "prompt_async", "git", "--ttl", "bad", "--", "cmd" }));
+    try std.testing.expectEqual(null, parsePromptAsync(&.{ "prompt_async", "git", "--ttl", "2000" }));
+    try std.testing.expectEqual(null, parsePromptAsync(&.{ "prompt_async", "git", "--ttl", "2000", "--" }));
+}
+
+test "prompt async lifecycle events are drained once" {
+    var state = State.init(std.testing.allocator);
+    defer state.deinit();
+
+    lockPromptAsync(&state);
+    state.prompt_async_active_count = 1;
+    state.prompt_async_pending_start_events = 1;
+    state.prompt_async_pending_end_events = 2;
+    unlockPromptAsync(&state);
+
+    try std.testing.expect(state.promptAsyncPending());
+    try std.testing.expectEqual(
+        PromptAsyncLifecycleEvents{ .start_count = 1, .end_count = 2 },
+        state.takePromptAsyncLifecycleEvents(),
+    );
+    try std.testing.expectEqual(PromptAsyncLifecycleEvents{}, state.takePromptAsyncLifecycleEvents());
+}
+
+fn promptAsyncEntry(state: *State, sh: anytype, key: []const u8) !*PromptAsyncEntry {
+    const cwd = if (sh.state.getVariable("PWD")) |variable| variable.value else shellEnvValue(sh, "PWD") orelse
+        try sh.host.currentDir(sh.scratchAllocator());
+    lockPromptAsync(state);
+    defer unlockPromptAsync(state);
+    for (state.prompt_async_entries.items) |entry| {
+        if (std.mem.eql(u8, entry.key, key) and std.mem.eql(u8, entry.cwd, cwd)) return entry;
+    }
+    const entry = try state.allocator.create(PromptAsyncEntry);
+    errdefer state.allocator.destroy(entry);
+    entry.* = .{
+        .state = state,
+        .key = try state.allocator.dupe(u8, key),
+        .cwd = try state.allocator.dupe(u8, cwd),
+        .stdout = try state.allocator.dupe(u8, ""),
     };
-    if (!@hasDecl(ShellType, "evalSourceNested")) return .{ .status = 1 };
+    errdefer state.allocator.free(entry.key);
+    errdefer state.allocator.free(entry.cwd);
+    errdefer state.allocator.free(entry.stdout);
+    try state.prompt_async_entries.append(state.allocator, entry);
+    return entry;
+}
 
-    const command = try shellCommand(sh.scratchAllocator(), args[index..]);
-    const src: shell.source.Source = .{ .id = 0, .kind = .command_string, .name = "prompt_async", .text = command };
-    return sh.evalSourceNested(src);
+fn startPromptAsyncRefresh(sh: anytype, entry: *PromptAsyncEntry, command_args: []const []const u8) !void {
+    if (entry.thread) |thread| {
+        thread.join();
+        entry.thread = null;
+    }
+    const command = try shellCommand(sh.scratchAllocator(), command_args);
+    const pipe_desc = try sh.host.pipe();
+    var read_open = true;
+    var write_open = true;
+    errdefer {
+        if (read_open) sh.host.close(pipe_desc.read) catch {};
+        if (write_open) sh.host.close(pipe_desc.write) catch {};
+    }
+    switch (try sh.host.forkProcess()) {
+        .child => {
+            sh.host.close(pipe_desc.read) catch {};
+            read_open = false;
+            sh.host.duplicateTo(pipe_desc.write, .stdout) catch sh.host.exit(127);
+            sh.host.close(pipe_desc.write) catch {};
+            write_open = false;
+            if (sh.host.openZ("/dev/null", .{ .access = .write_only })) |null_fd| {
+                sh.host.duplicateTo(null_fd, .stderr) catch {};
+                sh.host.close(null_fd) catch {};
+            } else |_| {}
+            const src: shell.source.Source = .{
+                .id = 0,
+                .kind = .command_string,
+                .name = "prompt_async",
+                .text = command,
+            };
+            const evaluated = sh.evalSourceNested(src) catch sh.host.exit(2);
+            sh.host.exit(evaluated.status);
+        },
+        .parent => |pid| {
+            sh.host.close(pipe_desc.write) catch {};
+            write_open = false;
+            entry.pid = pid;
+            entry.read_fd = pipe_desc.read;
+            entry.thread = std.Thread.spawn(.{}, promptAsyncReaderMain, .{entry}) catch |err| {
+                sh.host.close(pipe_desc.read) catch {};
+                read_open = false;
+                _ = sh.host.wait(pid) catch {};
+                return err;
+            };
+            read_open = false;
+        },
+    }
+}
+
+fn promptAsyncRefreshFailed(state: *State, entry: *PromptAsyncEntry) void {
+    lockPromptAsync(state);
+    entry.refreshing = false;
+    std.debug.assert(state.prompt_async_active_count != 0);
+    state.prompt_async_active_count -= 1;
+    if (state.prompt_async_active_count == 0) state.prompt_async_pending_end_events += 1;
+    unlockPromptAsync(state);
+}
+
+fn promptAsyncReaderMain(entry: *PromptAsyncEntry) void {
+    const state = entry.state;
+    var output: std.ArrayList(u8) = .empty;
+    defer output.deinit(state.allocator);
+    var buffer: [4096]u8 = undefined;
+    while (true) {
+        const read_len = host.platform.read(entry.read_fd, &buffer) catch break;
+        if (read_len == 0) break;
+        output.appendSlice(state.allocator, buffer[0..read_len]) catch break;
+    }
+    host.platform.close(entry.read_fd) catch {};
+    _ = host.platform.wait(entry.pid) catch {};
+
+    const owned_stdout = output.toOwnedSlice(state.allocator) catch null;
+    lockPromptAsync(state);
+    if (owned_stdout) |stdout| {
+        state.allocator.free(entry.stdout);
+        entry.stdout = stdout;
+        entry.updated_ms = if (state.prompt_async_io) |io| monotonicMillis(io) else 0;
+    }
+    entry.refreshing = false;
+    std.debug.assert(state.prompt_async_active_count != 0);
+    state.prompt_async_active_count -= 1;
+    if (state.prompt_async_active_count == 0) state.prompt_async_pending_end_events += 1;
+    const redraw_fd = state.prompt_async_redraw_fd;
+    unlockPromptAsync(state);
+
+    if (redraw_fd) |fd| host.platform.writeAll(fd, "p") catch {};
+}
+
+fn monotonicMillis(io: std.Io) u64 {
+    return @intCast(std.Io.Clock.Timestamp.now(io, .awake).raw.toMilliseconds());
 }
 
 fn evalPromptPwd(sh: anytype, args: []const []const u8) !result.EvalResult {
