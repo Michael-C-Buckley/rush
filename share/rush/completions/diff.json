@@ -1,0 +1,382 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "diff",
+    "description": "compare files line by line",
+    "options": [
+      {
+        "short": "i",
+        "long": "ignore-case",
+        "description": "ignore case differences in file contents",
+        "inherit": false
+      },
+      {
+        "long": "ignore-file-name-case",
+        "description": "ignore case when comparing file names",
+        "inherit": false,
+        "exclusiveGroup": "diff.filename-case"
+      },
+      {
+        "long": "no-ignore-file-name-case",
+        "description": "consider case when comparing file names",
+        "inherit": false,
+        "exclusiveGroup": "diff.filename-case"
+      },
+      {
+        "short": "E",
+        "long": "ignore-tab-expansion",
+        "description": "ignore changes due to tab expansion",
+        "inherit": false
+      },
+      {
+        "short": "b",
+        "long": "ignore-space-change",
+        "description": "ignore changes in the amount of white space",
+        "inherit": false
+      },
+      {
+        "short": "w",
+        "long": "ignore-all-space",
+        "description": "ignore all white space",
+        "inherit": false
+      },
+      {
+        "short": "B",
+        "long": "ignore-blank-lines",
+        "description": "ignore changes whose lines are all blank",
+        "inherit": false
+      },
+      {
+        "short": "I",
+        "long": "ignore-matching-lines",
+        "description": "ignore changes whose lines all match RE",
+        "inherit": false,
+        "value": {
+          "name": "RE"
+        }
+      },
+      {
+        "long": "strip-trailing-cr",
+        "description": "strip trailing carriage return on input",
+        "inherit": false
+      },
+      {
+        "short": "a",
+        "long": "text",
+        "description": "treat all files as text",
+        "inherit": false
+      },
+      {
+        "short": "c",
+        "long": "context",
+        "spellings": [
+          "-C"
+        ],
+        "description": "output NUM lines of copied context",
+        "inherit": false,
+        "value": {
+          "name": "NUM"
+        }
+      },
+      {
+        "short": "u",
+        "long": "unified",
+        "spellings": [
+          "-U"
+        ],
+        "description": "output NUM lines of unified context",
+        "inherit": false,
+        "value": {
+          "name": "NUM"
+        }
+      },
+      {
+        "long": "label",
+        "description": "use LABEL instead of file name",
+        "inherit": false,
+        "value": {
+          "name": "LABEL"
+        }
+      },
+      {
+        "short": "p",
+        "long": "show-c-function",
+        "description": "show which C function each change is in",
+        "inherit": false
+      },
+      {
+        "short": "F",
+        "long": "show-function-line",
+        "description": "show the most recent line matching RE",
+        "inherit": false,
+        "value": {
+          "name": "RE"
+        }
+      },
+      {
+        "short": "q",
+        "long": "brief",
+        "description": "output only whether files differ",
+        "inherit": false
+      },
+      {
+        "short": "e",
+        "long": "ed",
+        "description": "output an ed script",
+        "inherit": false
+      },
+      {
+        "long": "normal",
+        "description": "output a normal diff",
+        "inherit": false
+      },
+      {
+        "short": "n",
+        "long": "rcs",
+        "description": "output an RCS format diff",
+        "inherit": false
+      },
+      {
+        "short": "y",
+        "long": "side-by-side",
+        "description": "output in two columns",
+        "inherit": false
+      },
+      {
+        "short": "W",
+        "long": "width",
+        "description": "output at most NUM (default 130) print columns",
+        "inherit": false,
+        "value": {
+          "name": "NUM"
+        }
+      },
+      {
+        "long": "left-column",
+        "description": "output only the left column of common lines",
+        "inherit": false
+      },
+      {
+        "long": "suppress-common-lines",
+        "description": "do not output common lines",
+        "inherit": false
+      },
+      {
+        "short": "D",
+        "long": "ifdef",
+        "description": "output merged file to show `#ifdef NAME' diffs",
+        "inherit": false,
+        "value": {
+          "name": "NAME"
+        }
+      },
+      {
+        "short": "l",
+        "long": "paginate",
+        "description": "pass the output through `pr' to paginate it",
+        "inherit": false
+      },
+      {
+        "short": "t",
+        "long": "expand-tabs",
+        "description": "expand tabs to spaces in output",
+        "inherit": false
+      },
+      {
+        "short": "T",
+        "long": "initial-tab",
+        "description": "make tabs line up by prepending a tab",
+        "inherit": false
+      },
+      {
+        "short": "r",
+        "long": "recursive",
+        "description": "recursively compare any subdirectories found",
+        "inherit": false
+      },
+      {
+        "short": "N",
+        "long": "new-file",
+        "description": "treat absent files as empty",
+        "inherit": false
+      },
+      {
+        "long": "unidirectional-new-file",
+        "description": "treat absent first files as empty",
+        "inherit": false
+      },
+      {
+        "short": "s",
+        "long": "report-identical-files",
+        "description": "report when two files are the same",
+        "inherit": false
+      },
+      {
+        "short": "x",
+        "long": "exclude",
+        "description": "exclude files that match PAT",
+        "inherit": false,
+        "value": {
+          "name": "PAT"
+        }
+      },
+      {
+        "short": "X",
+        "long": "exclude-from",
+        "description": "exclude files that match any pattern in FILE",
+        "inherit": false,
+        "value": {
+          "name": "FILE",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "short": "S",
+        "long": "starting-file",
+        "description": "start with FILE when comparing directories",
+        "inherit": false,
+        "value": {
+          "name": "FILE",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "from-file",
+        "description": "compare FILE1 to all operands. FILE1 can be a directory",
+        "inherit": false,
+        "value": {
+          "name": "FILE1",
+          "provider": [
+            "builtin.files",
+            "builtin.directories"
+          ]
+        }
+      },
+      {
+        "long": "to-file",
+        "description": "compare all operands to FILE2. FILE2 can be a directory",
+        "inherit": false,
+        "value": {
+          "name": "FILE2",
+          "provider": [
+            "builtin.files",
+            "builtin.directories"
+          ]
+        }
+      },
+      {
+        "long": "horizon-lines",
+        "description": "keep NUM lines of the common prefix and suffix",
+        "inherit": false,
+        "value": {
+          "name": "NUM"
+        }
+      },
+      {
+        "short": "d",
+        "long": "minimal",
+        "description": "try hard to find a smaller set of changes",
+        "inherit": false
+      },
+      {
+        "long": "speed-large-files",
+        "description": "assume large files and many scattered small changes",
+        "inherit": false
+      },
+      {
+        "short": "v",
+        "long": "version",
+        "description": "output version info",
+        "inherit": false
+      },
+      {
+        "long": "help",
+        "description": "show help",
+        "inherit": false
+      },
+      {
+        "long": "line-format",
+        "description": "format all input lines with LFMT",
+        "inherit": false,
+        "value": {
+          "name": "LFTM"
+        }
+      },
+      {
+        "long": "old-group-format",
+        "description": "format old input groups",
+        "inherit": false,
+        "value": {
+          "name": "GFMT"
+        }
+      },
+      {
+        "long": "new-group-format",
+        "description": "format new input groups",
+        "inherit": false,
+        "value": {
+          "name": "GFMT"
+        }
+      },
+      {
+        "long": "unchanged-group-format",
+        "description": "format unchanged input groups",
+        "inherit": false,
+        "value": {
+          "name": "GFMT"
+        }
+      },
+      {
+        "long": "changed-group-format",
+        "description": "format changed input groups",
+        "inherit": false,
+        "value": {
+          "name": "GFMT"
+        }
+      },
+      {
+        "long": "old-line-format",
+        "description": "format old input lines",
+        "inherit": false,
+        "value": {
+          "name": "LFMT"
+        }
+      },
+      {
+        "long": "new-line-format",
+        "description": "format new input lines",
+        "inherit": false,
+        "value": {
+          "name": "LFMT"
+        }
+      },
+      {
+        "long": "unchanged-line-format",
+        "description": "format unchanged input lines",
+        "inherit": false,
+        "value": {
+          "name": "LFMT"
+        }
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "file",
+          "provider": "builtin.files",
+          "index": 0,
+          "repeatable": true
+        }
+      ]
+    },
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
