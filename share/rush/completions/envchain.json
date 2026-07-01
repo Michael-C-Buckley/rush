@@ -1,0 +1,81 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "envchain",
+    "description": "run commands with secrets from envchain",
+    "arguments": {
+      "states": [
+        {
+          "name": "namespace",
+          "index": 0,
+          "description": "secret namespace"
+        },
+        {
+          "name": "cmd",
+          "provider": "builtin.executables",
+          "index": 1,
+          "description": "command to run"
+        }
+      ]
+    },
+    "subcommands": [
+      {
+        "name": [
+          "-s",
+          "--set"
+        ],
+        "description": "set environment variables for a namespace",
+        "options": [
+          {
+            "short": "n",
+            "long": "noecho",
+            "description": "do not echo user input",
+            "inherit": false
+          },
+          {
+            "short": "p",
+            "long": "require-passphrase",
+            "description": "always ask for keychain passphrase",
+            "inherit": false,
+            "exclusiveGroup": "envchain.passphrase"
+          },
+          {
+            "short": "P",
+            "long": "no-require-passphrase",
+            "description": "do not ask for keychain passphrase",
+            "inherit": false,
+            "exclusiveGroup": "envchain.passphrase"
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "namespace",
+              "index": 0,
+              "description": "secret namespace"
+            },
+            {
+              "name": "env",
+              "index": 1,
+              "repeatable": true,
+              "description": "environment variable name"
+            }
+          ]
+        }
+      },
+      {
+        "name": [
+          "-l",
+          "--list"
+        ],
+        "description": "list created namespaces"
+      }
+    ],
+    "providers": {
+      "builtin.executables": {
+        "builtin": "executables"
+      }
+    }
+  }
+}
