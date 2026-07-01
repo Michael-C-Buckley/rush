@@ -109,6 +109,7 @@ pub fn run(
 
                 const started_at = unixTimestamp(io);
                 const evaluated = sh.evalSource(src) catch {
+                    sh.state.last_status = 2;
                     try sh.host.writeAll(.stderr, "rush: shell error\n");
                     terminal.finishSemanticCommand(2) catch {};
                     try terminal.enterEditorMode();
@@ -166,6 +167,7 @@ fn runPromptedStdin(
         source_id.* +%= 1;
 
         const evaluated = sh.evalSource(src) catch {
+            sh.state.last_status = 2;
             try sh.host.writeAll(.stderr, "rush: shell error\n");
             continue;
         };
