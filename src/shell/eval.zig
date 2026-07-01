@@ -2670,7 +2670,7 @@ fn expandHereDocParameter(shell: anytype, body: []const u8, index: *usize) EvalE
         const content_start = parameter_start + 1;
         const content_end = scanArithmeticBracedParameterEnd(body, content_start) orelse return null;
         const content = body[content_start..content_end];
-        const parameter = parseArithmeticBracedParameter(content) orelse return null;
+        const parameter = try parser.parseBracedParameterExpansion(shell.astAllocator(), content, .{}) orelse return null;
         index.* = content_end + 1;
         return try expandParameter(shell, parameter);
     }

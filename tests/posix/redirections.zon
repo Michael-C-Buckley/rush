@@ -893,6 +893,43 @@
             .status = 0,
         },
         .{
+            .name = "here document parameter operators remove quote syntax from words",
+            .script =
+            \\unset U
+            \\S=set
+            \\cat <<EOF
+            \\${U-"1"}${U:-"2"}${S+"3"}${S:+"4"}
+            \\EOF
+            ,
+            .stdout =
+            \\1234
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "here document pattern removals honor quoted pattern literals",
+            .script =
+            \\v=ababcdcd
+            \\cat <<EOF
+            \\${v#*ab},${v##*ab},${v%cd*},${v%%cd*}
+            \\${v#*\a\b},${v##*\ab},${v%c\d*},${v%%\c\d*}
+            \\${v#*"ab"},${v##*"a"b},${v%c"d"*},${v%%"cd"*}
+            \\${v#*'ab'},${v##*'a'b},${v%c'd'*},${v%%'cd'*}
+            \\EOF
+            ,
+            .stdout =
+            \\abcdcd,cdcd,ababcd,abab
+            \\abcdcd,cdcd,ababcd,abab
+            \\abcdcd,cdcd,ababcd,abab
+            \\abcdcd,cdcd,ababcd,abab
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "here document expansion stderr sees earlier redirections",
             .script =
             \\cat 2>err <<EOF

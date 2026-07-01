@@ -36,6 +36,16 @@ pub fn parseWithAliases(
     return parseWithAliasState(allocator, src, tokens, shell_state);
 }
 
+pub fn parseBracedParameterExpansion(
+    allocator: std.mem.Allocator,
+    raw_content: []const u8,
+    span: source_mod.Span,
+) ParserError!?ast.ParameterExpansion {
+    const src: source_mod.Source = .{ .id = 0, .kind = .command_string, .name = "${}", .text = raw_content };
+    var parser_state: Parser = .{ .allocator = allocator, .source = src, .tokens = &.{}, .alias_state = null };
+    return parser_state.parseBracedParameter(raw_content, span);
+}
+
 fn parseWithAliasState(
     allocator: std.mem.Allocator,
     src: source_mod.Source,
