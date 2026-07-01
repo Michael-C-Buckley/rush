@@ -1183,6 +1183,22 @@
             .status = 0,
         },
         .{
+            .name = "embedded unquoted positional star preserves empty IFS fields",
+            .script =
+            \\IFS=
+            \\set -- a 'b  e   e' c
+            \\printf '<%s>\n' HI$*BYE
+            ,
+            .stdout =
+            \\<HIa>
+            \\<b  e   e>
+            \\<cBYE>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "quoted parameter default with unquoted star joins with first IFS character",
             .script =
             \\set -- 'abc' 'def ghi' 'jkl'

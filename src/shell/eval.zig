@@ -558,6 +558,7 @@ fn expandForWordFields(shell: anytype, words: []const ast.Word) ![]const []const
     for (words) |word| {
         if (try appendUnquotedAtFields(shell, &fields, word) or
             try appendUnquotedStarFields(shell, &fields, word) or
+            try appendEmbeddedUnquotedPositionalFields(shell, &fields, word) or
             try appendSpecialQuotedFields(shell, &fields, word))
         {
             continue;
@@ -747,6 +748,49 @@ fn appendUnquotedStarFields(shell: anytype, fields: *std.ArrayList([]const u8), 
     if (!wordIsUnquotedStar(word)) return false;
     try appendUnquotedPositionalFields(shell, fields);
     return true;
+}
+
+fn appendEmbeddedUnquotedPositionalFields(shell: anytype, fields: *std.ArrayList([]const u8), word: ast.Word) !bool {
+    const parts = switch (word.data) {
+        .literal => return false,
+        .parts => |parts| parts,
+    };
+    if (parts.len < 2) return false;
+
+    var has_positional = false;
+    for (parts) |part| switch (part) {
+        .literal => {},
+        .parameter => |parameter| {
+            if (!isUnquotedPositionalListParameter(parameter)) return false;
+            has_positional = true;
+        },
+        else => return false,
+    };
+    if (!has_positional) return false;
+
+    const allocator = shell.scratchAllocator();
+    var logical_fields: std.ArrayList([]const u8) = .empty;
+    try logical_fields.append(allocator, "");
+    for (parts) |part| switch (part) {
+        .literal => |literal| try appendTextToLastField(shell, &logical_fields, literal),
+        .parameter => {
+            const positionals = shell.state.positionals;
+            if (positionals.len == 0) continue;
+            try appendTextToLastField(shell, &logical_fields, positionals[0]);
+            if (positionals.len > 1) try logical_fields.appendSlice(allocator, positionals[1..]);
+        },
+        else => unreachable,
+    };
+
+    for (logical_fields.items) |field| try appendSplitFields(shell, fields, field, true);
+    return true;
+}
+
+fn isUnquotedPositionalListParameter(parameter: ast.ParameterExpansion) bool {
+    return parameter.op == null and parameter.parameter == .special and switch (parameter.parameter.special) {
+        .at, .star => true,
+        else => false,
+    };
 }
 
 fn appendUnquotedPositionalFields(shell: anytype, fields: *std.ArrayList([]const u8)) !void {
@@ -2942,6 +2986,7 @@ fn expandWordFields(
     for (words) |word| {
         if (try appendUnquotedAtFields(shell, &fields, word) or
             try appendUnquotedStarFields(shell, &fields, word) or
+            try appendEmbeddedUnquotedPositionalFields(shell, &fields, word) or
             try appendSpecialQuotedFields(shell, &fields, word))
         {
             continue;
