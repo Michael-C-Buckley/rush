@@ -378,6 +378,12 @@
             \\case $lookup in if) printf '<%s>\n' terse-if ;; *) printf '<%s>\n' bad ;; esac
             \\lookup=$(command -v in)
             \\case $lookup in in) printf '<%s>\n' terse-in ;; *) printf '<%s>\n' bad ;; esac
+            \\lookup=$(command -v !)
+            \\case $lookup in !) printf '<%s>\n' terse-bang ;; *) printf '<%s>\n' bad ;; esac
+            \\lookup=$(command -v "{")
+            \\case $lookup in "{") printf '<%s>\n' terse-left-brace ;; *) printf '<%s>\n' bad ;; esac
+            \\lookup=$(command -v "}")
+            \\case $lookup in "}") printf '<%s>\n' terse-right-brace ;; *) printf '<%s>\n' bad ;; esac
             \\lookup=$(command -V while)
             \\case $lookup in *while*keyword*|*while*reserved*) printf '<%s>\n' verbose ;;
             \\    *) printf '<%s>\n' bad ;;
@@ -387,6 +393,9 @@
             .stdout =
             \\<terse-if>
             \\<terse-in>
+            \\<terse-bang>
+            \\<terse-left-brace>
+            \\<terse-right-brace>
             \\<verbose>
             \\
             ,

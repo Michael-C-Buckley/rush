@@ -1461,7 +1461,7 @@ fn commandLookupText(shell: anytype, name: []const u8, mode: CommandLookupMode, 
     if (shell.state.getFunction(name) != null) {
         return if (mode == .verbose) try std.fmt.allocPrint(allocator, "{s} is a shell function", .{name}) else name;
     }
-    if (token_mod.lookupReservedWord(name) != null) {
+    if (isCommandLookupReservedWord(name)) {
         return if (mode == .verbose) try std.fmt.allocPrint(allocator, "{s} is a shell reserved word", .{name}) else name;
     }
     if (builtin.lookup(name) != null) {
@@ -1471,6 +1471,16 @@ fn commandLookupText(shell: anytype, name: []const u8, mode: CommandLookupMode, 
         return if (mode == .verbose) try std.fmt.allocPrint(allocator, "{s} is {s}", .{ name, path }) else path;
     }
     return null;
+}
+
+const command_lookup_operator_reserved_words = std.StaticStringMap(void).initComptime(.{
+    .{ "!", {} },
+    .{ "{", {} },
+    .{ "}", {} },
+});
+
+fn isCommandLookupReservedWord(name: []const u8) bool {
+    return token_mod.lookupReservedWord(name) != null or command_lookup_operator_reserved_words.has(name);
 }
 
 fn commandFieldsAsWords(shell: anytype, fields: []const []const u8) ![]const ast.Word {
