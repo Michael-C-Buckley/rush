@@ -333,6 +333,18 @@
             .status = 0,
         },
         .{
+            .name = "unset removes export attribute from unset variable",
+            .script =
+            \\unset X
+            \\export X
+            \\unset X
+            \\case $(export -p) in *' X'|*' X='*) printf bad ;; *) printf ok ;; esac
+            ,
+            .stdout = "ok",
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "readonly without assignment does not set an unset variable",
             .script =
             \\unset X

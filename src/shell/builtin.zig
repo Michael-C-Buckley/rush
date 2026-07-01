@@ -721,6 +721,8 @@ fn evalUnset(shell: anytype, args: []const []const u8) !result.EvalResult {
             if (attributes.readonly) {
                 try shell.host.writeAll(.stderr, try std.fmt.allocPrint(shell.scratchAllocator(), "{s}: readonly variable\n", .{name}));
                 status = 1;
+            } else {
+                shell.state.removeVariableAttributes(name);
             }
         }
     }
