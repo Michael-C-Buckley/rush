@@ -92,6 +92,7 @@ pub const BackgroundJob = struct {
     id: usize,
     pid: host.Pid,
     process_group: host.Pid,
+    job_control: bool,
     pids: std.ArrayListUnmanaged(host.Pid) = .empty,
     status: JobStatus = .running,
     command: []const u8,
@@ -463,8 +464,8 @@ pub const State = struct {
         try self.background_pids.append(self.allocator, pid);
     }
 
-    pub fn addBackgroundJob(self: *State, pid: host.Pid, command: []const u8) !void {
-        try self.addBackgroundJobPids(&.{pid}, pid, command);
+    pub fn addBackgroundJob(self: *State, pid: host.Pid, command: []const u8, job_control: bool) !void {
+        try self.addBackgroundJobPids(&.{pid}, pid, command, job_control);
     }
 
     pub fn addBackgroundJobPids(
@@ -472,6 +473,7 @@ pub const State = struct {
         pids: []const host.Pid,
         process_group: host.Pid,
         command: []const u8,
+        job_control: bool,
     ) !void {
         std.debug.assert(pids.len != 0);
         std.debug.assert(process_group != 0);
@@ -484,6 +486,7 @@ pub const State = struct {
             .id = self.nextAvailableJobId(),
             .pid = pids[pids.len - 1],
             .process_group = process_group,
+            .job_control = job_control,
             .pids = owned_pids,
             .status = .running,
             .command = owned_command,
@@ -539,9 +542,80 @@ pub const State = struct {
         return null;
     }
 
+    pub fn resolveJobSpec(self: State, spec: []const u8) ?BackgroundJob {
+        if (spec.len < 2 or spec[0] != '%') return null;
+        const selector = spec[1..];
+        if (std.mem.eql(u8, selector, "%") or std.mem.eql(u8, selector, "+")) return self.currentBackgroundJob();
+        if (std.mem.eql(u8, selector, "-")) return self.previousBackgroundJob();
+        if (std.fmt.parseInt(usize, selector, 10)) |job_id| {
+            return self.backgroundJob(job_id);
+        } else |_| {}
+        if (selector[0] == '?') {
+            if (selector.len == 1) return null;
+            return self.findBackgroundJobContaining(selector[1..]);
+        }
+        return self.findBackgroundJobStartingWith(selector);
+    }
+
     pub fn currentBackgroundJob(self: State) ?BackgroundJob {
         if (self.background_jobs.items.len == 0) return null;
+        if (self.recentBackgroundJobWithStatus(.stopped, null)) |job| return job;
         return self.background_jobs.items[self.background_jobs.items.len - 1];
+    }
+
+    pub fn previousBackgroundJob(self: State) ?BackgroundJob {
+        const current = self.currentBackgroundJob() orelse return null;
+        if (self.recentBackgroundJobWithStatus(.stopped, current.id)) |job| return job;
+        var index = self.background_jobs.items.len;
+        while (index > 0) {
+            index -= 1;
+            const job = self.background_jobs.items[index];
+            if (job.id != current.id) return job;
+        }
+        return null;
+    }
+
+    pub fn backgroundJobMarker(self: State, job_id: usize) u8 {
+        if (self.currentBackgroundJob()) |job| {
+            if (job.id == job_id) return '+';
+        }
+        if (self.previousBackgroundJob()) |job| {
+            if (job.id == job_id) return '-';
+        }
+        return ' ';
+    }
+
+    fn recentBackgroundJobWithStatus(self: State, status: JobStatus, excluded_id: ?usize) ?BackgroundJob {
+        var index = self.background_jobs.items.len;
+        while (index > 0) {
+            index -= 1;
+            const job = self.background_jobs.items[index];
+            if (excluded_id != null and job.id == excluded_id.?) continue;
+            if (job.status == status) return job;
+        }
+        return null;
+    }
+
+    fn findBackgroundJobStartingWith(self: State, prefix: []const u8) ?BackgroundJob {
+        if (prefix.len == 0) return null;
+        var index = self.background_jobs.items.len;
+        while (index > 0) {
+            index -= 1;
+            const job = self.background_jobs.items[index];
+            if (std.mem.startsWith(u8, job.command, prefix)) return job;
+        }
+        return null;
+    }
+
+    fn findBackgroundJobContaining(self: State, needle: []const u8) ?BackgroundJob {
+        std.debug.assert(needle.len != 0);
+        var index = self.background_jobs.items.len;
+        while (index > 0) {
+            index -= 1;
+            const job = self.background_jobs.items[index];
+            if (std.mem.indexOf(u8, job.command, needle) != null) return job;
+        }
+        return null;
     }
 
     pub fn setBackgroundJobStatusByPid(self: *State, pid: host.Pid, status: JobStatus) bool {

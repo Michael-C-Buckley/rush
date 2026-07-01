@@ -463,7 +463,8 @@ fn evalKill(shell: anytype, args: []const []const u8) !result.EvalResult {
     var status: result.ExitStatus = 0;
     while (index < args.len) : (index += 1) {
         if (killOperandJob(shell, args[index])) |job| {
-            shell.host.sendSignal(-job.process_group, kill_signal.number) catch {
+            const target = if (job.job_control) -job.process_group else job.pid;
+            shell.host.sendSignal(target, kill_signal.number) catch {
                 status = 1;
                 continue;
             };
@@ -494,7 +495,6 @@ fn killOperandPid(shell: anytype, arg: []const u8) ?host.Pid {
 }
 
 fn killOperandJob(shell: anytype, arg: []const u8) ?state_mod.BackgroundJob {
-    if (!shell.state.options.monitor) return null;
     return jobOperand(shell, arg);
 }
 
@@ -533,18 +533,23 @@ const JobFormat = enum { default, long, pid };
 
 fn writeJob(shell: anytype, job: state_mod.BackgroundJob, format: JobFormat) !void {
     const status_text = jobStatusText(job.status);
+    const marker = shell.state.backgroundJobMarker(job.id);
     const text = switch (format) {
         .default => try std.fmt.allocPrint(
             shell.scratchAllocator(),
-            "[{}] {s} {s}\n",
-            .{ job.id, status_text, job.command },
+            "[{}] {c} {s} {s}\n",
+            .{ job.id, marker, status_text, job.command },
         ),
         .long => try std.fmt.allocPrint(
             shell.scratchAllocator(),
-            "[{}] {} {s} {s}\n",
-            .{ job.id, job.pid, status_text, job.command },
+            "[{}] {c} {} {s} {s}\n",
+            .{ job.id, marker, job.pid, status_text, job.command },
         ),
-        .pid => try std.fmt.allocPrint(shell.scratchAllocator(), "{}\n", .{job.process_group}),
+        .pid => try std.fmt.allocPrint(
+            shell.scratchAllocator(),
+            "{}\n",
+            .{if (job.job_control) job.process_group else job.pid},
+        ),
     };
     defer shell.scratchAllocator().free(text);
     try shell.host.writeAll(.stdout, text);
@@ -558,9 +563,7 @@ fn jobStatusText(status: state_mod.JobStatus) []const u8 {
 }
 
 fn jobOperand(shell: anytype, arg: []const u8) ?state_mod.BackgroundJob {
-    if (arg.len < 2 or arg[0] != '%') return null;
-    const job_id = std.fmt.parseInt(usize, arg[1..], 10) catch return null;
-    return shell.state.backgroundJob(job_id);
+    return shell.state.resolveJobSpec(arg);
 }
 
 fn jobOperandOrCurrent(shell: anytype, arg: ?[]const u8) ?state_mod.BackgroundJob {
@@ -677,6 +680,10 @@ fn sendContinueToJob(shell: anytype, job: state_mod.BackgroundJob) !void {
 }
 
 fn evalBg(shell: anytype, args: []const []const u8) !result.EvalResult {
+    if (!shell.state.options.monitor) {
+        try shell.host.writeAll(.stderr, "bg: job control disabled\n");
+        return .{ .status = 1 };
+    }
     if (args.len == 1) {
         const job = shell.state.currentBackgroundJob() orelse {
             try writeNoCurrentJob(shell, "bg");
@@ -700,6 +707,10 @@ fn evalBg(shell: anytype, args: []const []const u8) !result.EvalResult {
 
 fn evalFg(shell: anytype, args: []const []const u8) !result.EvalResult {
     if (args.len > 2) return .{ .status = 2 };
+    if (!shell.state.options.monitor) {
+        try shell.host.writeAll(.stderr, "fg: job control disabled\n");
+        return .{ .status = 1 };
+    }
     const job = jobOperandOrCurrent(shell, if (args.len == 2) args[1] else null) orelse {
         if (args.len == 2) {
             try writeNoSuchJob(shell, "fg");
@@ -1451,9 +1462,9 @@ test "jobs builtin filters jobs and prints pids" {
     defer shell.state.deinit();
     defer shell.host.deinit();
     try shell.state.addBackgroundPid(111);
-    try shell.state.addBackgroundJob(111, "sleep 1");
+    try shell.state.addBackgroundJob(111, "sleep 1", true);
     try shell.state.addBackgroundPid(222);
-    try shell.state.addBackgroundJob(222, "sleep 2");
+    try shell.state.addBackgroundJob(222, "sleep 2", true);
 
     const jobs_definition = lookup("jobs").?;
     try std.testing.expectEqual(

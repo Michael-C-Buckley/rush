@@ -694,13 +694,12 @@
             .status = 0,
         },
         .{
-            .name = "kill accepts job operands when monitor mode is enabled",
+            .name = "kill accepts job operands for background jobs",
             .script =
             \\sleep 2 &
             \\pid=$!
             \\kill %1 2>/dev/null
-            \\printf 'no-monitor:<%s>\n' "$?"
-            \\kill "$pid" 2>/dev/null
+            \\printf 'no-monitor-job:<%s>\n' "$?"
             \\wait "$pid" 2>/dev/null || :
             \\set -m
             \\sleep 2 &
@@ -713,7 +712,7 @@
             \\wait 2>/dev/null || :
             ,
             .stdout =
-            \\no-monitor:<1>
+            \\no-monitor-job:<0>
             \\jobs-l:<0>
             \\kill-job:<0>
             \\

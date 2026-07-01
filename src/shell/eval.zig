@@ -137,7 +137,7 @@ fn evalBackgroundAndOr(shell: anytype, and_or: ast.AndOr) EvalError!result.EvalR
     try shell.state.addBackgroundPid(pid);
     const job_scratch = try shell.beginScratchScope();
     defer job_scratch.end();
-    try shell.state.addBackgroundJob(pid, try backgroundAndOrCommandText(shell, and_or));
+    try shell.state.addBackgroundJob(pid, try backgroundAndOrCommandText(shell, and_or), shell.state.options.monitor);
     return .{ .status = 0 };
 }
 
@@ -192,7 +192,7 @@ fn evalBackgroundPipeline(shell: anytype, pipeline: ast.Pipeline) EvalError!resu
     shell.state.last_background_pid = pids[pids.len - 1];
     const job_scratch = try shell.beginScratchScope();
     defer job_scratch.end();
-    try shell.state.addBackgroundJobPids(pids, pids[0], try pipelineCommandText(shell, pipeline));
+    try shell.state.addBackgroundJobPids(pids, pids[0], try pipelineCommandText(shell, pipeline), shell.state.options.monitor);
     return .{ .status = 0 };
 }
 
@@ -291,7 +291,7 @@ fn evalExternalPipeline(shell: anytype, pipeline: ast.Pipeline) EvalError!result
     defer scratch.end();
     const statuses = try waitForegroundPids(shell, pids);
     if (pipelineStopped(statuses)) {
-        try shell.state.addBackgroundJobPids(pids, pids[0], try pipelineCommandText(shell, pipeline));
+        try shell.state.addBackgroundJobPids(pids, pids[0], try pipelineCommandText(shell, pipeline), shell.state.options.monitor);
         _ = shell.state.setBackgroundJobStatusByPid(pids[0], .stopped);
         return .{ .status = stoppedPipelineStatus(statuses) };
     }
@@ -2087,9 +2087,7 @@ fn waitBackgroundJobPid(shell: anytype, pid: host_mod.Pid) !host_mod.WaitStatus 
 }
 
 fn waitOperandJob(shell: anytype, arg: []const u8) ?state_mod.BackgroundJob {
-    if (arg.len < 2 or arg[0] != '%') return null;
-    const job_id = std.fmt.parseInt(usize, arg[1..], 10) catch return null;
-    return shell.state.backgroundJob(job_id);
+    return shell.state.resolveJobSpec(arg);
 }
 
 fn waitOperandPid(shell: anytype, arg: []const u8) ?host_mod.Pid {
@@ -5509,7 +5507,7 @@ fn evalExternalWithSearchPath(
         const waited = if (@hasDecl(HostType, "waitJobEvent")) try shell.host.waitJobEvent(pid) else try shell.host.wait(pid);
         switch (waited) {
             .stopped => {
-                try shell.state.addBackgroundJob(pid, try externalCommandText(shell, fields));
+                try shell.state.addBackgroundJob(pid, try externalCommandText(shell, fields), true);
                 _ = shell.state.setBackgroundJobStatusByPid(pid, .stopped);
                 restoreVariables(shell, saved);
                 restored_assignments = true;

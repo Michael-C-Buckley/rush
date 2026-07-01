@@ -1,0 +1,179 @@
+.{
+    .name = "Interactive POSIX job control",
+    .mode = .posix,
+    .cases = .{
+        .{
+            .name = "stopped foreground command stays visible and waitable",
+            .script =
+            \\set -m
+            \\sh -c 'kill -TSTP $$'
+            \\printf 'after-stop:%s\n' "$?"
+            \\jobs
+            \\bg %1
+            \\wait %1
+            \\printf 'after-wait:%s\n' "$?"
+            ,
+            .stdout =
+            \\after-stop:148
+            \\[1] + Stopped sh -c kill -TSTP $$
+            \\[1] sh -c kill -TSTP $$
+            \\after-wait:0
+            \\
+            ,
+        },
+        .{
+            .name = "stopped foreground pipeline stays visible and waitable",
+            .script =
+            \\set -m
+            \\sh -c 'kill -TSTP $$' | cat
+            \\printf 'after-stop:%s\n' "$?"
+            \\jobs
+            \\bg %1
+            \\wait %1
+            \\printf 'after-wait:%s\n' "$?"
+            ,
+            .stdout =
+            \\after-stop:148
+            \\[1] + Stopped sh -c kill -TSTP $$ | cat
+            \\[1] sh -c kill -TSTP $$ | cat
+            \\after-wait:0
+            \\
+            ,
+        },
+        .{
+            .name = "bg resumes the current suspended job by default",
+            .script =
+            \\set -m
+            \\sh -c 'kill -TSTP $$'
+            \\bg
+            \\wait %1
+            \\printf 'status:%s\n' "$?"
+            ,
+            .stdout =
+            \\[1] sh -c kill -TSTP $$
+            \\status:0
+            \\
+            ,
+        },
+        .{
+            .name = "fg moves a background job to the foreground and removes it from jobs",
+            .script =
+            \\set -m
+            \\sh -c 'exit 7' &
+            \\fg %1
+            \\printf 'fg-status:%s\n' "$?"
+            \\jobs
+            ,
+            .stdout =
+            \\sh -c exit 7
+            \\fg-status:7
+            \\
+            ,
+        },
+        .{
+            .name = "wait job operand returns the last pipeline status",
+            .script =
+            \\set -m
+            \\sh -c 'exit 3' | sh -c 'exit 7' &
+            \\wait %1
+            \\printf 'status:%s\n' "$?"
+            ,
+            .stdout = "status:7\n",
+        },
+        .{
+            .name = "jobs operands and formats identify job-control background jobs",
+            .script =
+            \\set -m
+            \\sleep 10 | cat &
+            \\jobs %1 >jobs.out
+            \\jobs -p %1 >pid.out
+            \\jobs -l %1 >long.out
+            \\grep '\[1\]' jobs.out >/dev/null && grep 'Running' jobs.out >/dev/null && grep 'sleep 10 | cat' jobs.out >/dev/null
+            \\printf 'jobs:%s\n' "$?"
+            \\grep '^[0-9][0-9]*$' pid.out >/dev/null
+            \\printf 'jobs-p:%s\n' "$?"
+            \\grep '\[1\]' long.out >/dev/null && grep '[0-9][0-9]*' long.out >/dev/null && grep 'sleep 10 | cat' long.out >/dev/null
+            \\printf 'jobs-l:%s\n' "$?"
+            \\kill %1
+            \\wait %1
+            \\printf 'status:%s\n' "$?"
+            ,
+            .stdout =
+            \\jobs:0
+            \\jobs-p:0
+            \\jobs-l:0
+            \\status:143
+            \\
+            ,
+        },
+        .{
+            .name = "job ids resolve current previous prefix and contains forms",
+            .script =
+            \\set -m
+            \\sleep 10 &
+            \\sleep 11 &
+            \\jobs %% >current.out
+            \\jobs %- >previous.out
+            \\jobs %sleep >prefix.out
+            \\jobs %?11 >contains.out
+            \\grep '\[2\]' current.out >/dev/null && grep 'sleep 11' current.out >/dev/null
+            \\printf 'current:%s\n' "$?"
+            \\grep '\[1\]' previous.out >/dev/null && grep 'sleep 10' previous.out >/dev/null
+            \\printf 'previous:%s\n' "$?"
+            \\grep '\[2\]' prefix.out >/dev/null && grep 'sleep 11' prefix.out >/dev/null
+            \\printf 'prefix:%s\n' "$?"
+            \\grep '\[2\]' contains.out >/dev/null && grep 'sleep 11' contains.out >/dev/null
+            \\printf 'contains:%s\n' "$?"
+            \\kill %1 %2
+            \\wait %1 %2 || :
+            ,
+            .stdout =
+            \\current:0
+            \\previous:0
+            \\prefix:0
+            \\contains:0
+            \\
+            ,
+        },
+        .{
+            .name = "kill job operand signals the background process group",
+            .script =
+            \\set -m
+            \\sleep 10 | cat &
+            \\kill %1
+            \\wait %1
+            \\printf 'status:%s\n' "$?"
+            ,
+            .stdout = "status:143\n",
+        },
+        .{
+            .name = "kill job operands still work after disabling monitor mode",
+            .script =
+            \\set -m
+            \\sleep 10 | cat &
+            \\set +m
+            \\kill %1
+            \\wait %1
+            \\printf 'status:%s\n' "$?"
+            ,
+            .stdout = "status:143\n",
+        },
+        .{
+            .name = "bg and fg fail while job control is disabled",
+            .script =
+            \\sleep 10 &
+            \\bg %1 2>/dev/null
+            \\printf 'bg:%s\n' "$?"
+            \\fg %1 2>/dev/null
+            \\printf 'fg:%s\n' "$?"
+            \\kill %1
+            \\wait %1 || :
+            ,
+            .stdout =
+            \\bg:1
+            \\fg:1
+            \\
+            ,
+        },
+    },
+}
