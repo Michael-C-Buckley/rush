@@ -4330,11 +4330,21 @@ fn ArithmeticParser(comptime ShellType: type) type {
 
         fn parseUnary(self: *Self) ArithmeticError!i64 {
             self.skipWhitespace();
+            if (self.shell.state.options.mode == .bash and self.eatString("++")) return self.parsePrefixUpdate(1);
+            if (self.shell.state.options.mode == .bash and self.eatString("--")) return self.parsePrefixUpdate(-1);
             if (self.eat('+')) return self.parseUnary();
             if (self.eat('-')) return -(try self.parseUnary());
             if (self.eat('!')) return if (try self.parseUnary() == 0) 1 else 0;
             if (self.eat('~')) return ~(try self.parseUnary());
             return self.parsePrimary();
+        }
+
+        fn parsePrefixUpdate(self: *Self, delta: i64) ArithmeticError!i64 {
+            self.skipWhitespace();
+            const name = self.parseName() orelse return error.InvalidArithmetic;
+            const value = try self.variableValue(name) + delta;
+            try self.assignVariable(name, value);
+            return value;
         }
 
         fn parsePrimary(self: *Self) ArithmeticError!i64 {
