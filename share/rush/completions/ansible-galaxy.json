@@ -1,0 +1,1001 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "ansible-galaxy",
+    "description": "manage ansible roles and collections",
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "ansible-galaxy.collections": {
+        "values": [
+          "amazon.aws",
+          "ansible.builtin",
+          "ansible.netcommon",
+          "ansible.posix",
+          "ansible.utils",
+          "ansible.windows",
+          "awx.awx",
+          "azure.azcollection",
+          "cisco.ios",
+          "cisco.nxos",
+          "community.aws",
+          "community.crypto",
+          "community.docker",
+          "community.general",
+          "community.kubernetes",
+          "community.mysql",
+          "community.postgresql",
+          "community.vmware",
+          "containers.podman",
+          "google.cloud",
+          "kubernetes.core",
+          "openstack.cloud",
+          "vmware.vmware_rest",
+          "vyos.vyos"
+        ]
+      },
+      "ansible-galaxy.import-timeouts": {
+        "values": [
+          "60",
+          "300",
+          "600",
+          "900"
+        ]
+      },
+      "ansible-galaxy.list-formats": {
+        "values": [
+          "human",
+          "yaml",
+          "json"
+        ]
+      },
+      "ansible-galaxy.role-types": {
+        "values": [
+          "container",
+          "apb",
+          "network"
+        ]
+      },
+      "ansible-galaxy.branches": {
+        "values": [
+          "master",
+          "main",
+          "develop"
+        ]
+      }
+    },
+    "options": [
+      {
+        "long": "help",
+        "short": "h",
+        "description": "show help",
+        "inherit": true
+      },
+      {
+        "long": "verbose",
+        "description": "enable verbose output",
+        "inherit": true,
+        "exclusiveGroup": "ansible-galaxy.verbosity"
+      },
+      {
+        "short": "v",
+        "description": "enable verbose output",
+        "inherit": true,
+        "repeatable": true,
+        "exclusiveGroup": "ansible-galaxy.verbosity"
+      },
+      {
+        "long": "version",
+        "description": "show version and paths",
+        "inherit": true
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "collection",
+        "description": "operate on collections",
+        "subcommands": [
+          {
+            "name": "download",
+            "description": "download collections",
+            "options": [
+              {
+                "description": "set galaxy api server",
+                "inherit": false,
+                "long": "server",
+                "short": "s",
+                "value": {
+                  "name": "api-server"
+                }
+              },
+              {
+                "description": "set galaxy api key",
+                "inherit": false,
+                "long": "token",
+                "aliases": [
+                  "api-key"
+                ],
+                "value": {
+                  "name": "api-key"
+                }
+              },
+              {
+                "description": "ignore ssl certificate errors",
+                "inherit": false,
+                "long": "ignore-certs",
+                "short": "c"
+              },
+              {
+                "description": "clear response cache",
+                "inherit": false,
+                "long": "clear-response-cache"
+              },
+              {
+                "description": "disable response cache",
+                "inherit": false,
+                "long": "no-cache"
+              },
+              {
+                "description": "skip collection dependencies",
+                "inherit": false,
+                "long": "no-deps",
+                "short": "n"
+              },
+              {
+                "description": "set download directory",
+                "inherit": false,
+                "long": "download-path",
+                "short": "p",
+                "value": {
+                  "name": "directory",
+                  "provider": "builtin.directories"
+                }
+              },
+              {
+                "description": "read requirements file",
+                "inherit": false,
+                "long": "requirements-file",
+                "short": "r",
+                "value": {
+                  "name": "requirements",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "description": "include pre-release versions",
+                "inherit": false,
+                "long": "pre"
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "collection",
+                  "index": 0,
+                  "description": "collection name",
+                  "provider": "ansible-galaxy.collections",
+                  "repeatable": true
+                }
+              ]
+            }
+          },
+          {
+            "name": "init",
+            "description": "initialize a collection",
+            "options": [
+              {
+                "description": "set galaxy api server",
+                "inherit": false,
+                "long": "server",
+                "short": "s",
+                "value": {
+                  "name": "api-server"
+                }
+              },
+              {
+                "description": "set galaxy api key",
+                "inherit": false,
+                "long": "token",
+                "aliases": [
+                  "api-key"
+                ],
+                "value": {
+                  "name": "api-key"
+                }
+              },
+              {
+                "description": "ignore ssl certificate errors",
+                "inherit": false,
+                "long": "ignore-certs",
+                "short": "c"
+              },
+              {
+                "description": "overwrite existing collection",
+                "inherit": false,
+                "long": "force",
+                "short": "f"
+              },
+              {
+                "description": "set skeleton output path",
+                "inherit": false,
+                "long": "init-path",
+                "value": {
+                  "name": "directory",
+                  "provider": "builtin.directories"
+                }
+              },
+              {
+                "description": "use collection skeleton",
+                "inherit": false,
+                "long": "collection-skeleton",
+                "value": {
+                  "name": "directory",
+                  "provider": "builtin.directories"
+                }
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "collection-name",
+                  "index": 0,
+                  "description": "collection name"
+                }
+              ]
+            }
+          },
+          {
+            "name": "build",
+            "description": "build collections",
+            "options": [
+              {
+                "description": "set galaxy api server",
+                "inherit": false,
+                "long": "server",
+                "short": "s",
+                "value": {
+                  "name": "api-server"
+                }
+              },
+              {
+                "description": "set galaxy api key",
+                "inherit": false,
+                "long": "token",
+                "aliases": [
+                  "api-key"
+                ],
+                "value": {
+                  "name": "api-key"
+                }
+              },
+              {
+                "description": "ignore ssl certificate errors",
+                "inherit": false,
+                "long": "ignore-certs",
+                "short": "c"
+              },
+              {
+                "description": "overwrite existing collection",
+                "inherit": false,
+                "long": "force",
+                "short": "f"
+              },
+              {
+                "description": "set build output path",
+                "inherit": false,
+                "long": "output-path",
+                "value": {
+                  "name": "directory",
+                  "provider": "builtin.directories"
+                }
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "collection",
+                  "index": 0,
+                  "description": "collection directory",
+                  "provider": "builtin.directories"
+                }
+              ]
+            }
+          },
+          {
+            "name": "publish",
+            "description": "publish a collection",
+            "options": [
+              {
+                "description": "set galaxy api server",
+                "inherit": false,
+                "long": "server",
+                "short": "s",
+                "value": {
+                  "name": "api-server"
+                }
+              },
+              {
+                "description": "set galaxy api key",
+                "inherit": false,
+                "long": "token",
+                "aliases": [
+                  "api-key"
+                ],
+                "value": {
+                  "name": "api-key"
+                }
+              },
+              {
+                "description": "ignore ssl certificate errors",
+                "inherit": false,
+                "long": "ignore-certs",
+                "short": "c"
+              },
+              {
+                "description": "skip import validation wait",
+                "inherit": false,
+                "long": "no-wait"
+              },
+              {
+                "description": "set import timeout",
+                "inherit": false,
+                "long": "import-timeout",
+                "value": {
+                  "name": "seconds",
+                  "provider": "ansible-galaxy.import-timeouts"
+                }
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "collection-path",
+                  "index": 0,
+                  "description": "collection artifact",
+                  "provider": "builtin.files"
+                }
+              ]
+            }
+          },
+          {
+            "name": "list",
+            "description": "list collections",
+            "options": [
+              {
+                "description": "set galaxy api server",
+                "inherit": false,
+                "long": "server",
+                "short": "s",
+                "value": {
+                  "name": "api-server"
+                }
+              },
+              {
+                "description": "set galaxy api key",
+                "inherit": false,
+                "long": "token",
+                "aliases": [
+                  "api-key"
+                ],
+                "value": {
+                  "name": "api-key"
+                }
+              },
+              {
+                "description": "ignore ssl certificate errors",
+                "inherit": false,
+                "long": "ignore-certs",
+                "short": "c"
+              },
+              {
+                "description": "set collections search path",
+                "inherit": false,
+                "long": "collections-path",
+                "short": "p",
+                "value": {
+                  "name": "collections-path",
+                  "provider": "builtin.directories"
+                }
+              },
+              {
+                "description": "set list output format",
+                "inherit": false,
+                "long": "format",
+                "value": {
+                  "name": "format",
+                  "provider": "ansible-galaxy.list-formats"
+                }
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "collection",
+                  "index": 0,
+                  "description": "collection name",
+                  "provider": "ansible-galaxy.collections"
+                }
+              ]
+            }
+          },
+          {
+            "name": "verify",
+            "description": "verify collections",
+            "options": [
+              {
+                "description": "set galaxy api server",
+                "inherit": false,
+                "long": "server",
+                "short": "s",
+                "value": {
+                  "name": "api-server"
+                }
+              },
+              {
+                "description": "set galaxy api key",
+                "inherit": false,
+                "long": "token",
+                "aliases": [
+                  "api-key"
+                ],
+                "value": {
+                  "name": "api-key"
+                }
+              },
+              {
+                "description": "ignore ssl certificate errors",
+                "inherit": false,
+                "long": "ignore-certs",
+                "short": "c"
+              },
+              {
+                "description": "set collections search path",
+                "inherit": false,
+                "long": "collections-path",
+                "short": "p",
+                "value": {
+                  "name": "collections-path",
+                  "provider": "builtin.directories"
+                }
+              },
+              {
+                "description": "continue after verification errors",
+                "inherit": false,
+                "long": "ignore-errors",
+                "short": "i"
+              },
+              {
+                "description": "read requirements file",
+                "inherit": false,
+                "long": "requirements-file",
+                "short": "r",
+                "value": {
+                  "name": "requirements",
+                  "provider": "builtin.files"
+                }
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "collection-name",
+                  "index": 0,
+                  "description": "collection name",
+                  "provider": "ansible-galaxy.collections"
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "role",
+        "description": "operate on roles",
+        "subcommands": [
+          {
+            "name": "init",
+            "description": "initialize a role",
+            "options": [
+              {
+                "description": "set galaxy api server",
+                "inherit": false,
+                "long": "server",
+                "short": "s",
+                "value": {
+                  "name": "api-server"
+                }
+              },
+              {
+                "description": "set galaxy api key",
+                "inherit": false,
+                "long": "token",
+                "aliases": [
+                  "api-key"
+                ],
+                "value": {
+                  "name": "api-key"
+                }
+              },
+              {
+                "description": "ignore ssl certificate errors",
+                "inherit": false,
+                "long": "ignore-certs",
+                "short": "c"
+              },
+              {
+                "description": "overwrite existing role",
+                "inherit": false,
+                "long": "force",
+                "short": "f"
+              },
+              {
+                "description": "skip galaxy api queries",
+                "inherit": false,
+                "long": "offline"
+              },
+              {
+                "description": "set skeleton output path",
+                "inherit": false,
+                "long": "init-path",
+                "value": {
+                  "name": "directory",
+                  "provider": "builtin.directories"
+                }
+              },
+              {
+                "description": "use role skeleton",
+                "inherit": false,
+                "long": "role-skeleton",
+                "value": {
+                  "name": "directory",
+                  "provider": "builtin.directories"
+                }
+              },
+              {
+                "description": "set role type",
+                "inherit": false,
+                "long": "type",
+                "value": {
+                  "name": "role-type",
+                  "provider": "ansible-galaxy.role-types"
+                }
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "role-name",
+                  "index": 0,
+                  "description": "role name"
+                }
+              ]
+            }
+          },
+          {
+            "name": "remove",
+            "description": "remove roles",
+            "options": [
+              {
+                "description": "set galaxy api server",
+                "inherit": false,
+                "long": "server",
+                "short": "s",
+                "value": {
+                  "name": "api-server"
+                }
+              },
+              {
+                "description": "set galaxy api key",
+                "inherit": false,
+                "long": "token",
+                "aliases": [
+                  "api-key"
+                ],
+                "value": {
+                  "name": "api-key"
+                }
+              },
+              {
+                "description": "ignore ssl certificate errors",
+                "inherit": false,
+                "long": "ignore-certs",
+                "short": "c"
+              },
+              {
+                "description": "set roles path",
+                "inherit": false,
+                "long": "roles-path",
+                "aliases": [
+                  "role-path"
+                ],
+                "value": {
+                  "name": "roles-path",
+                  "provider": "builtin.directories"
+                }
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "role-name",
+                  "index": 0,
+                  "description": "role name"
+                }
+              ]
+            }
+          },
+          {
+            "name": "list",
+            "description": "list roles",
+            "options": [
+              {
+                "description": "set galaxy api server",
+                "inherit": false,
+                "long": "server",
+                "short": "s",
+                "value": {
+                  "name": "api-server"
+                }
+              },
+              {
+                "description": "set galaxy api key",
+                "inherit": false,
+                "long": "token",
+                "aliases": [
+                  "api-key"
+                ],
+                "value": {
+                  "name": "api-key"
+                }
+              },
+              {
+                "description": "ignore ssl certificate errors",
+                "inherit": false,
+                "long": "ignore-certs",
+                "short": "c"
+              },
+              {
+                "description": "set roles path",
+                "inherit": false,
+                "long": "roles-path",
+                "aliases": [
+                  "role-path"
+                ],
+                "value": {
+                  "name": "roles-path",
+                  "provider": "builtin.directories"
+                }
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "role",
+                  "index": 0,
+                  "description": "role name"
+                }
+              ]
+            }
+          },
+          {
+            "name": "search",
+            "description": "search roles",
+            "options": [
+              {
+                "description": "set galaxy api server",
+                "inherit": false,
+                "long": "server",
+                "short": "s",
+                "value": {
+                  "name": "api-server"
+                }
+              },
+              {
+                "description": "set galaxy api key",
+                "inherit": false,
+                "long": "token",
+                "aliases": [
+                  "api-key"
+                ],
+                "value": {
+                  "name": "api-key"
+                }
+              },
+              {
+                "description": "ignore ssl certificate errors",
+                "inherit": false,
+                "long": "ignore-certs",
+                "short": "c"
+              },
+              {
+                "description": "filter by platforms",
+                "inherit": false,
+                "long": "platforms",
+                "value": {
+                  "name": "platforms"
+                }
+              },
+              {
+                "description": "filter by galaxy tags",
+                "inherit": false,
+                "long": "galaxy-tags",
+                "value": {
+                  "name": "tags"
+                }
+              },
+              {
+                "description": "filter by github user",
+                "inherit": false,
+                "long": "author",
+                "value": {
+                  "name": "user"
+                }
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "search-term",
+                  "index": 0,
+                  "description": "search term"
+                }
+              ]
+            }
+          },
+          {
+            "name": "import",
+            "description": "import a role",
+            "options": [
+              {
+                "description": "set galaxy api server",
+                "inherit": false,
+                "long": "server",
+                "short": "s",
+                "value": {
+                  "name": "api-server"
+                }
+              },
+              {
+                "description": "set galaxy api key",
+                "inherit": false,
+                "long": "token",
+                "aliases": [
+                  "api-key"
+                ],
+                "value": {
+                  "name": "api-key"
+                }
+              },
+              {
+                "description": "ignore ssl certificate errors",
+                "inherit": false,
+                "long": "ignore-certs",
+                "short": "c"
+              },
+              {
+                "description": "set branch to import",
+                "inherit": false,
+                "long": "branch",
+                "value": {
+                  "name": "branch",
+                  "provider": "ansible-galaxy.branches"
+                }
+              },
+              {
+                "description": "set imported role name",
+                "inherit": false,
+                "long": "role-name",
+                "value": {
+                  "name": "role-name"
+                }
+              },
+              {
+                "description": "check recent import status",
+                "inherit": false,
+                "long": "status"
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "github-user",
+                  "description": "github user",
+                  "index": 0
+                },
+                {
+                  "name": "github-repo",
+                  "description": "github repository",
+                  "index": 1
+                }
+              ]
+            }
+          },
+          {
+            "name": "setup",
+            "description": "set up role integrations",
+            "options": [
+              {
+                "description": "set galaxy api server",
+                "inherit": false,
+                "long": "server",
+                "short": "s",
+                "value": {
+                  "name": "api-server"
+                }
+              },
+              {
+                "description": "set galaxy api key",
+                "inherit": false,
+                "long": "token",
+                "aliases": [
+                  "api-key"
+                ],
+                "value": {
+                  "name": "api-key"
+                }
+              },
+              {
+                "description": "ignore ssl certificate errors",
+                "inherit": false,
+                "long": "ignore-certs",
+                "short": "c"
+              },
+              {
+                "description": "set roles path",
+                "inherit": false,
+                "long": "roles-path",
+                "aliases": [
+                  "role-path"
+                ],
+                "value": {
+                  "name": "roles-path",
+                  "provider": "builtin.directories"
+                }
+              },
+              {
+                "description": "remove integration by id",
+                "inherit": false,
+                "long": "remove",
+                "value": {
+                  "name": "id"
+                },
+                "exclusiveGroup": "ansible-galaxy.role-setup-action"
+              },
+              {
+                "description": "list integrations",
+                "inherit": false,
+                "long": "list",
+                "exclusiveGroup": "ansible-galaxy.role-setup-action"
+              }
+            ]
+          },
+          {
+            "name": "info",
+            "description": "show role information",
+            "options": [
+              {
+                "description": "set galaxy api server",
+                "inherit": false,
+                "long": "server",
+                "short": "s",
+                "value": {
+                  "name": "api-server"
+                }
+              },
+              {
+                "description": "set galaxy api key",
+                "inherit": false,
+                "long": "token",
+                "aliases": [
+                  "api-key"
+                ],
+                "value": {
+                  "name": "api-key"
+                }
+              },
+              {
+                "description": "ignore ssl certificate errors",
+                "inherit": false,
+                "long": "ignore-certs",
+                "short": "c"
+              },
+              {
+                "description": "set roles path",
+                "inherit": false,
+                "long": "roles-path",
+                "aliases": [
+                  "role-path"
+                ],
+                "value": {
+                  "name": "roles-path",
+                  "provider": "builtin.directories"
+                }
+              },
+              {
+                "description": "skip galaxy api queries",
+                "inherit": false,
+                "long": "offline"
+              }
+            ]
+          },
+          {
+            "name": "install",
+            "description": "install roles",
+            "options": [
+              {
+                "description": "set galaxy api server",
+                "inherit": false,
+                "long": "server",
+                "short": "s",
+                "value": {
+                  "name": "api-server"
+                }
+              },
+              {
+                "description": "set galaxy api key",
+                "inherit": false,
+                "long": "token",
+                "aliases": [
+                  "api-key"
+                ],
+                "value": {
+                  "name": "api-key"
+                }
+              },
+              {
+                "description": "ignore ssl certificate errors",
+                "inherit": false,
+                "long": "ignore-certs",
+                "short": "c"
+              },
+              {
+                "description": "set roles path",
+                "inherit": false,
+                "long": "roles-path",
+                "aliases": [
+                  "role-path"
+                ],
+                "value": {
+                  "name": "roles-path",
+                  "provider": "builtin.directories"
+                }
+              },
+              {
+                "description": "skip role dependencies",
+                "inherit": false,
+                "long": "no-deps",
+                "short": "n"
+              },
+              {
+                "description": "overwrite role and dependencies",
+                "inherit": false,
+                "long": "force-with-deps"
+              },
+              {
+                "description": "read requirements file",
+                "inherit": false,
+                "long": "requirements-file",
+                "short": "r",
+                "value": {
+                  "name": "requirements",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "description": "preserve scm metadata",
+                "inherit": false,
+                "long": "keep-scm-meta",
+                "short": "g"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}
