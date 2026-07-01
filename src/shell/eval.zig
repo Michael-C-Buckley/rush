@@ -1349,6 +1349,11 @@ fn evalCommandBuiltin(
                 return evaluated;
             },
             .alias, .break_, .continue_, .exit, .getopts, .hash, .kill, .printf, .return_, .set, .shift, .times, .trap, .ulimit, .umask, .unalias, .unset => {
+                if ((definition.id == .break_ or definition.id == .continue_) and shell.state.loop_depth == 0) {
+                    restoreVariables(shell, saved);
+                    restored_assignments = true;
+                    return .{};
+                }
                 const evaluated = try builtin.eval(shell, definition, args[index..]);
                 restoreVariables(shell, saved);
                 restored_assignments = true;

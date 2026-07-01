@@ -557,6 +557,39 @@
             .status = 0,
         },
         .{
+            .name = "command suppresses fatal errors from declaration builtins",
+            .script =
+            \\readonly v=foo
+            \\if command export v=baz 2>/dev/null; then printf '<bad-export-status>\n'; fi
+            \\case $v in foo) : ;; *) printf '<bad-export:%s>\n' "$v" ;; esac
+            \\if command readonly v=bar 2>/dev/null; then printf '<bad-readonly-status>\n'; fi
+            \\case $v in foo) : ;; *) printf '<bad-readonly:%s>\n' "$v" ;; esac
+            \\printf '<after>\n'
+            ,
+            .stdout =
+            \\<after>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "command break and continue outside loops do not abort",
+            .script =
+            \\command break
+            \\printf '<break:%s>\n' "$?"
+            \\command continue
+            \\printf '<continue:%s>\n' "$?"
+            ,
+            .stdout =
+            \\<break:0>
+            \\<continue:0>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "command -p uses a default utility path",
             .script =
             \\PATH=/no/such command -p sh -c 'printf p'

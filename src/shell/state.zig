@@ -151,13 +151,13 @@ pub const State = struct {
         variable.validate();
         const attributes = self.getVariableAttributes(variable.name);
         if (attributes) |attribute| {
-            if (attribute.readonly and !variable.readonly) return error.ReadonlyVariable;
+            if (attribute.readonly) return error.ReadonlyVariable;
         }
         const owned_value = try self.allocator.dupe(u8, variable.value);
         errdefer self.allocator.free(owned_value);
 
         if (self.variables.getPtr(variable.name)) |existing| {
-            if (existing.readonly and !variable.readonly) return error.ReadonlyVariable;
+            if (existing.readonly and !std.mem.eql(u8, existing.value, variable.value)) return error.ReadonlyVariable;
             self.allocator.free(existing.value);
             existing.value = owned_value;
             existing.exported = variable.exported or (attributes != null and attributes.?.exported);
