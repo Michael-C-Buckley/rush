@@ -1,0 +1,324 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "dprint",
+    "description": "format code with dprint",
+    "options": [
+      {
+        "short": "c",
+        "long": "config",
+        "description": "path or url to JSON configuration file. Defaults to dprint.json or .dprint.json in current or ancestor directory when not provided",
+        "inherit": true,
+        "value": {
+          "name": "config",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "short": "h",
+        "long": "help",
+        "description": "prints help information",
+        "inherit": true
+      },
+      {
+        "long": "plugins",
+        "description": "list of urls or file paths of plugins to use. This overrides what is specified in the config file",
+        "repeatable": true,
+        "inherit": true,
+        "value": {
+          "name": "urls/files",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "verbose",
+        "description": "prints additional diagnostic information",
+        "inherit": true
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "init",
+        "description": "initializes a configuration file in the current directory"
+      },
+      {
+        "name": "fmt",
+        "description": "formats the source files and writes the result to the file system",
+        "options": [
+          {
+            "long": "diff",
+            "description": "Outputs a check-like diff of every formatted file",
+            "inherit": false
+          },
+          {
+            "long": "stdin",
+            "description": "Format stdin and output the result to stdout. Provide an absolute file path to apply the inclusion and exclusion rules or an extension or file name to always fo",
+            "inherit": false,
+            "value": {
+              "name": "extension/file-name/file-path",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "incremental",
+            "description": "only format files when they change",
+            "inherit": false,
+            "value": {
+              "name": "incremental",
+              "required": false,
+              "style": "optional",
+              "provider": "dprint.booleans"
+            }
+          },
+          {
+            "long": "excludes",
+            "description": "exclude file patterns or directories",
+            "repeatable": true,
+            "inherit": false,
+            "value": {
+              "name": "pattern",
+              "provider": [
+                "builtin.files",
+                "builtin.directories"
+              ]
+            }
+          },
+          {
+            "long": "allow-node-modules",
+            "description": "allow traversing node_modules directories",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "files",
+              "description": "file patterns to format",
+              "provider": "builtin.files",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "check",
+        "description": "checks for any files that haven't been formatted",
+        "arguments": {
+          "states": [
+            {
+              "name": "files",
+              "description": "file patterns to format",
+              "provider": "builtin.files",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        },
+        "options": [
+          {
+            "long": "incremental",
+            "description": "only format files when they change",
+            "inherit": false,
+            "value": {
+              "name": "incremental",
+              "required": false,
+              "style": "optional",
+              "provider": "dprint.booleans"
+            }
+          },
+          {
+            "long": "excludes",
+            "description": "exclude file patterns or directories",
+            "repeatable": true,
+            "inherit": false,
+            "value": {
+              "name": "pattern",
+              "provider": [
+                "builtin.files",
+                "builtin.directories"
+              ]
+            }
+          },
+          {
+            "long": "allow-node-modules",
+            "description": "allow traversing node_modules directories",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "config",
+        "description": "functionality related to the configuration file",
+        "subcommands": [
+          {
+            "name": "add",
+            "description": "Adds a plugin to the configuration file",
+            "arguments": {
+              "states": [
+                {
+                  "name": "url-or-plugin-name",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "init",
+            "description": "Initializes a configuration file in the current directory"
+          },
+          {
+            "name": "update",
+            "description": "Updates the plugins in the configuration file",
+            "options": [
+              {
+                "short": "y",
+                "long": "yes",
+                "description": "Upgrade process plugins without prompting to confirm checksums",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "help",
+            "description": "print help for a subcommand",
+            "arguments": {
+              "states": [
+                {
+                  "name": "subcommand",
+                  "index": 0,
+                  "repeatable": true
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "output-file-paths",
+        "description": "prints the resolved file paths for the plugins based on the args and configuration",
+        "arguments": {
+          "states": [
+            {
+              "name": "files",
+              "description": "file patterns to format",
+              "provider": "builtin.files",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        },
+        "options": [
+          {
+            "long": "excludes",
+            "description": "exclude file patterns or directories",
+            "repeatable": true,
+            "inherit": false,
+            "value": {
+              "name": "pattern",
+              "provider": [
+                "builtin.files",
+                "builtin.directories"
+              ]
+            }
+          },
+          {
+            "long": "allow-node-modules",
+            "description": "allow traversing node_modules directories",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "output-resolved-config",
+        "description": "prints the resolved configuration for the plugins based on the args and configuration"
+      },
+      {
+        "name": "output-format-times",
+        "description": "prints the amount of time it takes to format each file. Use this for debugging",
+        "arguments": {
+          "states": [
+            {
+              "name": "files",
+              "description": "file patterns to format",
+              "provider": "builtin.files",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        },
+        "options": [
+          {
+            "long": "incremental",
+            "description": "only format files when they change",
+            "inherit": false,
+            "value": {
+              "name": "incremental",
+              "required": false,
+              "style": "optional",
+              "provider": "dprint.booleans"
+            }
+          },
+          {
+            "long": "excludes",
+            "description": "exclude file patterns or directories",
+            "repeatable": true,
+            "inherit": false,
+            "value": {
+              "name": "pattern",
+              "provider": [
+                "builtin.files",
+                "builtin.directories"
+              ]
+            }
+          },
+          {
+            "long": "allow-node-modules",
+            "description": "allow traversing node_modules directories",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "clear-cache",
+        "description": "deletes the plugin cache directory"
+      },
+      {
+        "name": "upgrade",
+        "description": "upgrades the dprint executable"
+      },
+      {
+        "name": "license",
+        "description": "outputs the software license"
+      },
+      {
+        "name": "help",
+        "description": "print help for a subcommand",
+        "arguments": {
+          "states": [
+            {
+              "name": "subcommand",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      }
+    ],
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "dprint.booleans": {
+        "values": [
+          "true",
+          "false"
+        ]
+      }
+    }
+  }
+}
