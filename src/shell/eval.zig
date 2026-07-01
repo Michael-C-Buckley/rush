@@ -2633,6 +2633,17 @@ fn expandHereDocBody(shell: anytype, body: []const u8) EvalError![]const u8 {
                 try output.append(shell.scratchAllocator(), '$');
                 index += 1;
             },
+            '`' => {
+                const close_index = scanHereDocBackquoteSubstitution(body, index) orelse {
+                    try output.append(shell.scratchAllocator(), '`');
+                    index += 1;
+                    continue;
+                };
+                const source_text = try hereDocBackquoteSourceText(shell, body[index + 1 .. close_index]);
+                const expanded = try expandCommandSubstitution(shell, .{ .source_text = source_text }, null);
+                try output.appendSlice(shell.scratchAllocator(), expanded);
+                index = close_index + 1;
+            },
             else => {
                 try output.append(shell.scratchAllocator(), body[index]);
                 index += 1;
@@ -2675,6 +2686,50 @@ fn expandHereDocSpecialParameter(shell: anytype, special: ast.SpecialParameter) 
         .star, .at => try joinPositionals(shell, ifsFirstCharacter(shell)),
         else => expandParameter(shell, .{ .parameter = .{ .special = special } }),
     };
+}
+
+fn scanHereDocBackquoteSubstitution(body: []const u8, open_index: usize) ?usize {
+    std.debug.assert(body[open_index] == '`');
+    var index = open_index + 1;
+    while (index < body.len) {
+        if (body[index] == '\\' and index + 1 < body.len) {
+            index += 2;
+            continue;
+        }
+        if (body[index] == '`') return index;
+        index += 1;
+    }
+    return null;
+}
+
+fn hereDocBackquoteSourceText(shell: anytype, raw: []const u8) EvalError![]const u8 {
+    var output: std.ArrayList(u8) = .empty;
+    const allocator = shell.scratchAllocator();
+    var index: usize = 0;
+    while (index < raw.len) {
+        if (raw[index] == '\\' and index + 1 < raw.len) {
+            switch (raw[index + 1]) {
+                '`' => {
+                    try output.append(allocator, '`');
+                    index += 2;
+                },
+                '\\' => {
+                    try output.append(allocator, '\\');
+                    index += 2;
+                },
+                '\n' => index += 2,
+                else => {
+                    try output.append(allocator, raw[index]);
+                    try output.append(allocator, raw[index + 1]);
+                    index += 2;
+                },
+            }
+        } else {
+            try output.append(allocator, raw[index]);
+            index += 1;
+        }
+    }
+    return output.toOwnedSlice(allocator);
 }
 
 fn scanHereDocCommandSubstitution(body: []const u8, open_index: usize) ?usize {

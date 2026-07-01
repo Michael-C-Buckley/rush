@@ -865,6 +865,34 @@
             .status = 0,
         },
         .{
+            .name = "here document expands backquote command substitutions",
+            .script =
+            \\v=$(cat <<EOF
+            \\one
+            \\
+            \\`printf 'two\n\n'`
+            \\three
+            \\
+            \\` : `
+            \\x
+            \\EOF
+            \\)
+            \\printf '<%s>\n' "$v"
+            ,
+            .stdout =
+            \\<one
+            \\
+            \\two
+            \\three
+            \\
+            \\
+            \\x>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "here document expansion stderr sees earlier redirections",
             .script =
             \\cat 2>err <<EOF
