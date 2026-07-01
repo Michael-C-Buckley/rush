@@ -1,0 +1,205 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "ditto",
+    "description": "copy directory hierarchies and archives",
+    "options": [
+      {
+        "long": "help",
+        "description": "show help for ditto",
+        "inherit": false
+      },
+      {
+        "short": "h",
+        "description": "print full usage",
+        "inherit": false
+      },
+      {
+        "short": "X",
+        "description": "when copying one or more source directories, do not descend into directories that have a different device ID",
+        "inherit": false
+      },
+      {
+        "short": "c",
+        "description": "create an archive at the destination path",
+        "inherit": false
+      },
+      {
+        "short": "z",
+        "description": "create compressed CPIO archives, using gzip(1) compression",
+        "inherit": false
+      },
+      {
+        "short": "j",
+        "description": "create compressed CPIO archives, using bzip2(1) compression",
+        "inherit": false
+      },
+      {
+        "short": "v",
+        "description": "print a line of output to stderr for each source directory copied",
+        "inherit": false
+      },
+      {
+        "short": "V",
+        "description": "print a line of output to stderr for every file, symbolic link, and device copied",
+        "inherit": false
+      },
+      {
+        "short": "x",
+        "description": "extract the archives given as source arguments",
+        "inherit": false
+      },
+      {
+        "short": "k",
+        "description": "create or extract from a PKZip archive instead of the default CPIO",
+        "inherit": false
+      },
+      {
+        "long": "keepParent",
+        "description": "when creating an archive, embed the parent directory name src in dst_archive",
+        "inherit": false
+      },
+      {
+        "long": "arch",
+        "description": "thin Universal binaries to the specified architecture. If multiple --arch options are specified then the resulting destination file will contain each of the spe",
+        "repeatable": true,
+        "inherit": false,
+        "value": {
+          "name": "arch"
+        }
+      },
+      {
+        "long": "bom",
+        "description": "copy only files, links, devices, and directories that are present in the specified BOM",
+        "inherit": false,
+        "value": {
+          "name": "bom"
+        }
+      },
+      {
+        "spellings": [
+          "-rsrc"
+        ],
+        "description": "preserve resource forks and HFS meta-data. ditto will store this data in Carbon-compatible ._ AppleDouble files on filesystems that do not natively support reso",
+        "inherit": false,
+        "exclusiveGroup": "ditto.rsrc"
+      },
+      {
+        "long": "norsrc",
+        "description": "do not preserve resource forks and HFS meta-data. If both --norsrc and --rsrc are passed, whichever is passed last will take precedence. Both options override D",
+        "inherit": false,
+        "exclusiveGroup": "ditto.rsrc"
+      },
+      {
+        "long": "extattr",
+        "description": "preserve extended attributes (requires --rsrc). As of Mac OS X 10.5, --extattr is the default",
+        "inherit": false,
+        "exclusiveGroup": "ditto.extattr"
+      },
+      {
+        "long": "noextattr",
+        "description": "do not preserve extended attributes (requires --norsrc)",
+        "inherit": false,
+        "exclusiveGroup": "ditto.extattr"
+      },
+      {
+        "long": "qtn",
+        "description": "preserve quarantine information. As of Mac OS X 10.5, --qtn is the default",
+        "inherit": false,
+        "exclusiveGroup": "ditto.qtn"
+      },
+      {
+        "long": "noqtn",
+        "description": "do not preserve quarantine information",
+        "inherit": false,
+        "exclusiveGroup": "ditto.qtn"
+      },
+      {
+        "long": "acl",
+        "description": "preserve Access Control Lists (ACLs). As of Mac OS X 10.5, --acl is the default",
+        "inherit": false,
+        "exclusiveGroup": "ditto.acl"
+      },
+      {
+        "long": "noacl",
+        "description": "do not preserve ACLs",
+        "inherit": false,
+        "exclusiveGroup": "ditto.acl"
+      },
+      {
+        "long": "nocache",
+        "description": "do not perform copies using the Mac OS X Unified Buffer Cache. Files read and written will not be cached, although if the file is already present in the cache, ",
+        "inherit": false
+      },
+      {
+        "long": "hfsCompression",
+        "description": "when copying files or extracting content from an archive, if the destination is an HFS+ volume that supports compression, all the content will be compressed if ",
+        "inherit": false,
+        "exclusiveGroup": "ditto.hfs-compression"
+      },
+      {
+        "long": "nohfsCompression",
+        "description": "do not compress files with HFS+ compression when copying or extracting content from an archive unless the content is already compressed with HFS+ compression. T",
+        "inherit": false,
+        "exclusiveGroup": "ditto.hfs-compression"
+      },
+      {
+        "long": "preserveHFSCompression",
+        "description": "when copying files to an HFS+ volume that supports compression, ditto will preserve the compression of any source files that were using HFS+ compression. This f",
+        "inherit": false,
+        "exclusiveGroup": "ditto.preserve-hfs-compression"
+      },
+      {
+        "long": "nopreserveHFSCompression",
+        "description": "do not preserve HFS+ compression when copying files that are already compressed with HFS+ compression. This is only supported on Mac OS X 10.6 or later",
+        "inherit": false,
+        "exclusiveGroup": "ditto.preserve-hfs-compression"
+      },
+      {
+        "long": "sequesterRsrc",
+        "description": "when creating a PKZip archive, preserve resource forks and HFS meta-data in the subdirectory __MACOSX. PKZip extraction will automatically find these resources",
+        "inherit": false
+      },
+      {
+        "long": "zlibCompressionLevel",
+        "description": "sets the compression level to use when creating a PKZip archive. The compression level can be set from 0 to 9, where 0 represents no compression, and 9 represen",
+        "inherit": false,
+        "value": {
+          "name": "compression-level"
+        }
+      },
+      {
+        "long": "password",
+        "description": "when extracting a password-encrypted ZIP archive, you must specify --password to allow ditto to prompt for a password to use to extract the contents of the file",
+        "inherit": false
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "source",
+          "provider": [
+            "builtin.files",
+            "builtin.directories"
+          ],
+          "index": 0,
+          "repeatable": true
+        },
+        {
+          "name": "dest",
+          "provider": "builtin.directories",
+          "index": 1
+        }
+      ]
+    },
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
