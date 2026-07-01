@@ -719,6 +719,7 @@ const Lexer = struct {
                 self.advanceBytes(index + 1 - self.position.byte_offset);
                 return true;
             }
+            if (isWordTerminator(byte)) return false;
             if (byte == '\n' or byte == '\r') return false;
             saw_member = true;
             index += 1;

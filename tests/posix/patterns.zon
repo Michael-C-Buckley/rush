@@ -288,6 +288,22 @@
             .status = 0,
         },
         .{
+            .name = "case empty bracket expressions do not consume separators",
+            .script =
+            \\case ']' in
+            \\    [] | []) printf '<%s>\n' bad ;;
+            \\    []]) printf '<%s>\n' right-bracket ;;
+            \\    *) printf '<%s>\n' star ;;
+            \\esac
+            ,
+            .stdout =
+            \\<right-bracket>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "case quoted bracket expression members are literal",
             .script =
             \\t=']-!^cd'
