@@ -1,0 +1,52 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "create-vite",
+    "description": "create a new Vite project",
+    "options": [
+      {
+        "long": "template",
+        "description": "choose the project template",
+        "inherit": false,
+        "value": {
+          "name": "template",
+          "provider": "create-vite.templates"
+        }
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "projectName",
+          "description": "project name",
+          "index": 0
+        }
+      ]
+    },
+    "providers": {
+      "create-vite.templates": {
+        "values": [
+          "vanilla",
+          "vanilla-ts",
+          "vue",
+          "vue-ts",
+          "react",
+          "react-ts",
+          "react-swc",
+          "react-swc-ts",
+          "preact",
+          "preact-ts",
+          "lit",
+          "lit-ts",
+          "svelte",
+          "svelte-ts",
+          "solid",
+          "solid-ts",
+          "qwik",
+          "qwik-ts"
+        ]
+      }
+    }
+  }
+}
