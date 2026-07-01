@@ -1,0 +1,203 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "doggo",
+    "description": "DNS client for humans",
+    "options": [
+      {
+        "long": "version",
+        "description": "output version",
+        "inherit": false
+      },
+      {
+        "long": "help",
+        "short": "h",
+        "description": "output help",
+        "inherit": false
+      },
+      {
+        "short": "q",
+        "long": "query",
+        "description": "hostname to query the DNS records for (e.g., example.com)",
+        "inherit": false,
+        "value": {
+          "name": "domain"
+        }
+      },
+      {
+        "short": "t",
+        "long": "type",
+        "description": "type of the DNS Record (A, MX, NS, etc.)",
+        "inherit": false,
+        "value": {
+          "name": "type"
+        }
+      },
+      {
+        "short": "n",
+        "long": "nameserver",
+        "description": "address of a specific nameserver to send queries to (e.g., 9.9.9.9, 8.8.8.8)",
+        "inherit": false,
+        "value": {
+          "name": "nameserver"
+        }
+      },
+      {
+        "short": "c",
+        "long": "class",
+        "description": "network class of the DNS record (IN, CH, HS, etc.)",
+        "inherit": false,
+        "value": {
+          "name": "class"
+        }
+      },
+      {
+        "short": "x",
+        "long": "reverse",
+        "description": "performs a reverse DNS lookup for an IPv4 or IPv6 address",
+        "inherit": false,
+        "value": {
+          "name": "address"
+        }
+      },
+      {
+        "long": "any",
+        "description": "query all supported DNS record types (A, AAAA, CNAME, MX, NS, PTR, SOA, SRV, TXT, CAA)",
+        "inherit": false
+      },
+      {
+        "long": "strategy",
+        "description": "specify strategy to query nameservers (all, random, first)",
+        "inherit": false,
+        "value": {
+          "name": "strategy",
+          "style": "detached"
+        }
+      },
+      {
+        "long": "ndots",
+        "description": "specify ndots parameter",
+        "inherit": false,
+        "value": {
+          "name": "ndots",
+          "style": "detached"
+        }
+      },
+      {
+        "long": "search",
+        "description": "use the search list defined in resolv.conf (default: true)",
+        "inherit": false
+      },
+      {
+        "long": "timeout",
+        "description": "specify timeout (in seconds) for the resolver to return a response",
+        "inherit": false,
+        "value": {
+          "name": "seconds"
+        }
+      },
+      {
+        "short": "4",
+        "long": "ipv4",
+        "description": "use IPv4 only",
+        "inherit": false
+      },
+      {
+        "short": "6",
+        "long": "ipv6",
+        "description": "use IPv4 only",
+        "inherit": false
+      },
+      {
+        "long": "tls-hostname",
+        "description": "provide a hostname for TLS certificate verification",
+        "inherit": false,
+        "value": {
+          "name": "hostname",
+          "style": "detached"
+        }
+      },
+      {
+        "long": "skip-hostname-verification",
+        "description": "skip TLS Hostname Verification for DoT lookups",
+        "inherit": false
+      },
+      {
+        "long": "aa",
+        "description": "set Authoritative Answer flag",
+        "inherit": false
+      },
+      {
+        "long": "ad",
+        "description": "set Authenticated Data flag",
+        "inherit": false
+      },
+      {
+        "long": "cd",
+        "description": "set Checking Disabled flag",
+        "inherit": false
+      },
+      {
+        "long": "rd",
+        "description": "set Recursion Desired flag (default: true)",
+        "inherit": false
+      },
+      {
+        "long": "z",
+        "description": "set Z flag (reserved for future use)",
+        "inherit": false
+      },
+      {
+        "long": "do",
+        "description": "set DNSSEC OK flag",
+        "inherit": false
+      },
+      {
+        "short": "J",
+        "long": "json",
+        "description": "format the output as JSON",
+        "inherit": false
+      },
+      {
+        "long": "short",
+        "description": "short output format (shows only the response section)",
+        "inherit": false
+      },
+      {
+        "long": "color",
+        "description": "enable/disable colored output (default: true)",
+        "inherit": false
+      },
+      {
+        "long": "debug",
+        "description": "enable debug logging",
+        "inherit": false
+      },
+      {
+        "long": "time",
+        "description": "show query response time",
+        "inherit": false
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "domain",
+          "description": "hostname to query the DNS records for (e.g., example.com)",
+          "index": 0
+        },
+        {
+          "name": "type",
+          "description": "type of the DNS Record (A, MX, NS, etc.)",
+          "index": 1
+        },
+        {
+          "name": "nameserver",
+          "description": "address of a specific nameserver to send queries to (e.g., 9.9.9.9, 8.8.8.8)",
+          "index": 2
+        }
+      ]
+    }
+  }
+}
