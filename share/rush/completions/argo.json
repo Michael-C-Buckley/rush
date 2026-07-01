@@ -1,0 +1,2389 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "argo",
+    "description": "manage argo workflows",
+    "subcommands": [
+      {
+        "name": "archive",
+        "description": "manage the workflow archive",
+        "subcommands": [
+          {
+            "name": "delete",
+            "description": "delete a workflow in the archive",
+            "arguments": {
+              "states": [
+                {
+                  "name": "uid",
+                  "index": 0,
+                  "description": "workflow uid"
+                }
+              ]
+            }
+          },
+          {
+            "name": "get",
+            "description": "get a workflow in the archive",
+            "options": [
+              {
+                "long": "output",
+                "short": "o",
+                "description": "output format. One of: json|yaml|wide (default \"wide\")",
+                "inherit": false,
+                "value": {
+                  "name": "string"
+                }
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "uid",
+                  "index": 0,
+                  "description": "workflow uid"
+                }
+              ]
+            }
+          },
+          {
+            "name": "list",
+            "description": "list workflows in the archive",
+            "options": [
+              {
+                "long": "chunk-size",
+                "description": "return large lists in chunks rather than all at once. Pass 0 to dis...",
+                "inherit": false,
+                "value": {
+                  "name": "int"
+                }
+              },
+              {
+                "long": "help",
+                "short": "h",
+                "description": "show help",
+                "inherit": false
+              },
+              {
+                "long": "output",
+                "short": "o",
+                "description": "output format. One of: json|yaml|wide (default \"wide\")",
+                "inherit": false,
+                "value": {
+                  "name": "string"
+                }
+              },
+              {
+                "long": "selector",
+                "short": "l",
+                "description": "selector (label query) to filter on not including uninitialized one...",
+                "inherit": false,
+                "value": {
+                  "name": "string"
+                }
+              }
+            ]
+          },
+          {
+            "name": "list-label-keys",
+            "description": "list workflows label keys in the archive"
+          },
+          {
+            "name": "list-label-values",
+            "description": "get workflow label values in the archive",
+            "options": [
+              {
+                "long": "help",
+                "short": "h",
+                "description": "show help",
+                "inherit": false
+              },
+              {
+                "long": "selector",
+                "short": "l",
+                "inherit": false,
+                "value": {
+                  "name": "string"
+                }
+              }
+            ]
+          },
+          {
+            "name": "resubmit",
+            "description": "resubmit one or more workflows",
+            "options": [
+              {
+                "long": "field-selector",
+                "description": "selector (field query) to filter on supports '=' '==' and '!='.(e.g...",
+                "inherit": false,
+                "value": {
+                  "name": "string"
+                }
+              },
+              {
+                "long": "help",
+                "short": "h",
+                "description": "show help",
+                "inherit": false
+              },
+              {
+                "long": "log",
+                "description": "log the workflow until it completes",
+                "inherit": false
+              },
+              {
+                "long": "memoized",
+                "description": "re-use successful steps & outputs from the previous run",
+                "inherit": false
+              },
+              {
+                "long": "output",
+                "short": "o",
+                "description": "output format. One of: name|json|yaml|wide",
+                "inherit": false,
+                "value": {
+                  "name": "string"
+                }
+              },
+              {
+                "long": "parameter",
+                "short": "p",
+                "description": "input parameter to override on the original workflow spec",
+                "inherit": false,
+                "value": {
+                  "name": "value"
+                }
+              },
+              {
+                "long": "priority",
+                "description": "workflow priority",
+                "inherit": false,
+                "value": {
+                  "name": "number"
+                }
+              },
+              {
+                "long": "selector",
+                "short": "l",
+                "description": "selector (label query) to filter on not including uninitialized one...",
+                "inherit": false,
+                "value": {
+                  "name": "string"
+                }
+              },
+              {
+                "long": "wait",
+                "short": "w",
+                "description": "wait for the workflow to complete only works when a single workflow...",
+                "inherit": false
+              },
+              {
+                "long": "watch",
+                "description": "watch the workflow until it completes only works when a single work...",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "uid",
+                  "index": 0,
+                  "description": "workflow uid"
+                }
+              ]
+            }
+          },
+          {
+            "name": "retry",
+            "description": "retry zero or more workflows",
+            "options": [
+              {
+                "long": "field-selector",
+                "description": "selector (field query) to filter on, supports '='",
+                "inherit": false,
+                "value": {
+                  "name": "string"
+                }
+              },
+              {
+                "long": "help",
+                "short": "h",
+                "description": "show help",
+                "inherit": false
+              },
+              {
+                "long": "log",
+                "description": "log the workflow until it completes",
+                "inherit": false
+              },
+              {
+                "long": "node-field-selector",
+                "description": "selector of nodes to reset eg: --node-field-selector inputs.paramat...",
+                "inherit": false,
+                "value": {
+                  "name": "string"
+                }
+              },
+              {
+                "long": "output",
+                "short": "o",
+                "description": "output format. One of: name|json|yaml|wide",
+                "inherit": false,
+                "value": {
+                  "name": "string"
+                }
+              },
+              {
+                "long": "parameter",
+                "short": "p",
+                "description": "input parameter to override on the original workflow spec",
+                "inherit": false,
+                "value": {
+                  "name": "value"
+                }
+              },
+              {
+                "long": "restart-successful",
+                "description": "indicates to restart successful nodes matching the --node-field-sel...",
+                "inherit": false
+              },
+              {
+                "long": "selector",
+                "short": "l",
+                "description": "selector (label query) to filter on not including uninitialized one...",
+                "inherit": false,
+                "value": {
+                  "name": "string"
+                }
+              },
+              {
+                "long": "wait",
+                "short": "w",
+                "description": "wait for the workflow to complete only works when a single workflow...",
+                "inherit": false
+              },
+              {
+                "long": "watch",
+                "description": "watch the workflow until it completes only works when a single work...",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "uid",
+                  "index": 0,
+                  "description": "workflow uid"
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "auth",
+        "description": "manage authentication settings",
+        "subcommands": [
+          {
+            "name": "token",
+            "description": "print the auth token"
+          }
+        ]
+      },
+      {
+        "name": "cluster-template",
+        "aliases": [
+          "cwftmpl",
+          "cwft"
+        ],
+        "description": "manipulate cluster workflow templates",
+        "subcommands": [
+          {
+            "name": "create",
+            "description": "create a cluster workflow template",
+            "options": [
+              {
+                "long": "help",
+                "short": "h",
+                "description": "show help",
+                "inherit": false
+              },
+              {
+                "long": "output",
+                "short": "o",
+                "description": "output format. One of: name|json|yaml|wide",
+                "inherit": false,
+                "value": {
+                  "name": "string"
+                }
+              },
+              {
+                "long": "strict",
+                "description": "perform strict workflow validation (default true)",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "files",
+                  "index": 0,
+                  "provider": "builtin.files"
+                }
+              ]
+            }
+          },
+          {
+            "name": "delete",
+            "description": "delete a cluster workflow template",
+            "options": [
+              {
+                "long": "all",
+                "description": "delete all cluster workflow templates",
+                "inherit": false
+              },
+              {
+                "long": "help",
+                "short": "h",
+                "description": "show help",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "workflow-template",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "get",
+            "description": "display details about a cluster workflow template",
+            "options": [
+              {
+                "long": "help",
+                "short": "h",
+                "description": "show help",
+                "inherit": false
+              },
+              {
+                "long": "output",
+                "short": "o",
+                "description": "output format. One of: json|yaml|wide",
+                "inherit": false,
+                "value": {
+                  "name": "string"
+                }
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "cluster",
+                  "index": 0
+                },
+                {
+                  "name": "workflow-template",
+                  "index": 1
+                }
+              ]
+            }
+          },
+          {
+            "name": "lint",
+            "description": "validate files or directories of cluster workflow template manifests",
+            "options": [
+              {
+                "long": "help",
+                "short": "h",
+                "description": "show help",
+                "inherit": false
+              },
+              {
+                "long": "output",
+                "short": "o",
+                "description": "linting results output format. One of: pretty|simple (default \"pret...",
+                "inherit": false,
+                "value": {
+                  "name": "string"
+                }
+              },
+              {
+                "long": "strict",
+                "description": "perform strict workflow validation (default true)",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "file",
+                  "index": 0,
+                  "provider": "builtin.files"
+                }
+              ]
+            }
+          },
+          {
+            "name": "list",
+            "description": "list cluster workflow templates",
+            "options": [
+              {
+                "long": "help",
+                "short": "h",
+                "description": "show help",
+                "inherit": false
+              },
+              {
+                "long": "output",
+                "short": "o",
+                "description": "output format. One of: wide|name",
+                "inherit": false,
+                "value": {
+                  "name": "string"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "completion",
+        "description": "output shell completion code for the specified shell (bash or zsh)",
+        "options": [
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "shell",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "cp",
+        "description": "copy artifacts from workflow",
+        "options": [
+          {
+            "long": "artifact-name",
+            "description": "name of output artifact in workflow",
+            "inherit": false,
+            "value": {
+              "name": "string"
+            }
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help",
+            "inherit": false
+          },
+          {
+            "long": "node-id",
+            "description": "id of node in workflow",
+            "inherit": false,
+            "value": {
+              "name": "string"
+            }
+          },
+          {
+            "long": "path",
+            "description": "use variables {workflowName} {nodeId} {templateName} {artifactName}...",
+            "inherit": false,
+            "value": {
+              "name": "string"
+            }
+          },
+          {
+            "long": "template-name",
+            "description": "name of template in workflow",
+            "inherit": false,
+            "value": {
+              "name": "string"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "my-wf",
+              "index": 0
+            },
+            {
+              "name": "output-directory",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "cron",
+        "description": "manage cron workflows",
+        "options": [
+          {
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "create",
+            "description": "create a cron workflow",
+            "options": [
+              {
+                "long": "entrypoint",
+                "description": "override entrypoint",
+                "inherit": false,
+                "value": {
+                  "name": "string"
+                }
+              },
+              {
+                "long": "generate-name",
+                "description": "override metadata.generateName",
+                "inherit": false,
+                "value": {
+                  "name": "string"
+                }
+              },
+              {
+                "long": "help",
+                "short": "h",
+                "description": "show help",
+                "inherit": false
+              },
+              {
+                "long": "labels",
+                "short": "l",
+                "description": "comma separated labels to apply to the workflow. Will override prev...",
+                "inherit": false,
+                "value": {
+                  "name": "string"
+                }
+              },
+              {
+                "long": "name",
+                "description": "override metadata.name",
+                "inherit": false,
+                "value": {
+                  "name": "string"
+                }
+              },
+              {
+                "long": "output",
+                "short": "o",
+                "description": "output format. One of: name|json|yaml|wide",
+                "inherit": false,
+                "value": {
+                  "name": "string"
+                }
+              },
+              {
+                "long": "parameter",
+                "short": "p",
+                "description": "pass an input parameter",
+                "inherit": false,
+                "value": {
+                  "name": "value"
+                }
+              },
+              {
+                "long": "parameter-file",
+                "short": "f",
+                "description": "pass a file containing all input parameters",
+                "inherit": false,
+                "value": {
+                  "name": "string"
+                }
+              },
+              {
+                "long": "schedule",
+                "description": "override cron workflow schedule",
+                "inherit": false,
+                "value": {
+                  "name": "string"
+                }
+              },
+              {
+                "long": "serviceaccount",
+                "description": "run all pods in the workflow using specified serviceaccount",
+                "inherit": false,
+                "value": {
+                  "name": "string"
+                }
+              },
+              {
+                "long": "strict",
+                "description": "perform strict workflow validation (default true)",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "file1-file2...",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "delete",
+            "description": "delete a cron workflow",
+            "options": [
+              {
+                "long": "all",
+                "description": "delete all cron workflows",
+                "inherit": false
+              },
+              {
+                "long": "help",
+                "short": "h",
+                "description": "show help",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "[cron-workflow...-|---all]",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "get",
+            "description": "display details about a cron workflow",
+            "options": [
+              {
+                "long": "help",
+                "short": "h",
+                "description": "show help",
+                "inherit": false
+              },
+              {
+                "long": "output",
+                "short": "o",
+                "description": "output format. One of: json|yaml|wide",
+                "inherit": false,
+                "value": {
+                  "name": "string"
+                }
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "cron-workflow",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "lint",
+            "description": "validate files or directories of cron workflow manifests",
+            "options": [
+              {
+                "long": "help",
+                "short": "h",
+                "description": "show help",
+                "inherit": false
+              },
+              {
+                "long": "output",
+                "short": "o",
+                "description": "linting results output format. One of: pretty|simple (default \"pret...",
+                "inherit": false,
+                "value": {
+                  "name": "string"
+                }
+              },
+              {
+                "long": "strict",
+                "description": "perform strict validation (default true)",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "file",
+                  "index": 0,
+                  "provider": "builtin.files"
+                }
+              ]
+            }
+          },
+          {
+            "name": "list",
+            "description": "list cron workflows",
+            "options": [
+              {
+                "long": "all-namespaces",
+                "short": "A",
+                "description": "show workflows from all namespaces",
+                "inherit": false
+              },
+              {
+                "long": "chunk-size",
+                "description": "return large lists in chunks rather than all at once. Pass 0 to dis...",
+                "inherit": false,
+                "value": {
+                  "name": "int"
+                }
+              },
+              {
+                "long": "completed",
+                "description": "show completed workflows. Mutually exclusive with --running",
+                "inherit": false
+              },
+              {
+                "long": "field-selector",
+                "description": "selector (field query) to filter on. Supports '=' '==' and '!='.(e....",
+                "inherit": false,
+                "value": {
+                  "name": "string"
+                }
+              },
+              {
+                "long": "help",
+                "short": "h",
+                "description": "show help",
+                "inherit": false
+              },
+              {
+                "long": "no-headers",
+                "description": "don't print headers (default print headers)",
+                "inherit": false
+              },
+              {
+                "long": "older",
+                "description": "list completed workflows finished before the specified duration (e....",
+                "inherit": false,
+                "value": {
+                  "name": "string"
+                }
+              },
+              {
+                "long": "output",
+                "short": "o",
+                "description": "output format. One of: name|wide|yaml|json",
+                "inherit": false,
+                "value": {
+                  "name": "string"
+                }
+              },
+              {
+                "long": "prefix",
+                "description": "filter workflows by prefix",
+                "inherit": false,
+                "value": {
+                  "name": "string"
+                }
+              },
+              {
+                "long": "resubmitted",
+                "description": "show resubmitted workflows",
+                "inherit": false
+              },
+              {
+                "long": "running",
+                "description": "show running workflows. Mutually exclusive with --completed",
+                "inherit": false
+              },
+              {
+                "long": "selector",
+                "short": "l",
+                "description": "selector (label query) to filter on",
+                "inherit": false,
+                "value": {
+                  "name": "string"
+                }
+              },
+              {
+                "long": "since",
+                "description": "show only workflows created after than a relative duration",
+                "inherit": false,
+                "value": {
+                  "name": "string"
+                }
+              },
+              {
+                "long": "status",
+                "description": "filter by status (comma separated)",
+                "inherit": false,
+                "value": {
+                  "name": "strings"
+                }
+              }
+            ]
+          },
+          {
+            "name": "resume",
+            "description": "resume zero or more cron workflows",
+            "arguments": {
+              "states": [
+                {
+                  "name": "cron-workflow",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "suspend",
+            "description": "suspend zero or more cron workflows",
+            "arguments": {
+              "states": [
+                {
+                  "name": "cron-workflow",
+                  "index": 0
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "delete",
+        "description": "delete workflows",
+        "options": [
+          {
+            "long": "all",
+            "description": "delete all workflows",
+            "inherit": false
+          },
+          {
+            "long": "all-namespaces",
+            "short": "A",
+            "description": "delete workflows from all namespaces",
+            "inherit": false
+          },
+          {
+            "long": "completed",
+            "description": "delete completed workflows",
+            "inherit": false
+          },
+          {
+            "long": "dry-run",
+            "description": "do not delete the workflow only print what would happen",
+            "inherit": false
+          },
+          {
+            "long": "field-selector",
+            "description": "selector (field query) to filter on supports '=' '==' and '!='.(e.g...",
+            "inherit": false,
+            "value": {
+              "name": "string"
+            }
+          },
+          {
+            "long": "force",
+            "description": "force delete workflows by removing finalizers",
+            "inherit": false
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help",
+            "inherit": false
+          },
+          {
+            "long": "older",
+            "description": "delete completed workflows finished before the specified duration (...",
+            "inherit": false,
+            "value": {
+              "name": "string"
+            }
+          },
+          {
+            "long": "prefix",
+            "description": "delete workflows by prefix",
+            "inherit": false,
+            "value": {
+              "name": "string"
+            }
+          },
+          {
+            "long": "resubmitted",
+            "description": "delete resubmitted workflows",
+            "inherit": false
+          },
+          {
+            "long": "selector",
+            "short": "l",
+            "description": "selector (label query) to filter on not including uninitialized one...",
+            "inherit": false,
+            "value": {
+              "name": "string"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "workflow",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "executor-plugin",
+        "description": "manage executor plugins",
+        "subcommands": [
+          {
+            "name": "build",
+            "description": "build an executor plugin",
+            "arguments": {
+              "states": [
+                {
+                  "name": "dir",
+                  "index": 0
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "get",
+        "description": "display details about a workflow",
+        "options": [
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help",
+            "inherit": false
+          },
+          {
+            "long": "no-color",
+            "description": "disable colorized output",
+            "inherit": false
+          },
+          {
+            "long": "no-utf8",
+            "description": "use plain 7-bits ascii characters",
+            "inherit": false
+          },
+          {
+            "long": "node-field-selector",
+            "description": "selector of node to display, Eg: --node-field-selector phase=abc",
+            "inherit": false,
+            "value": {
+              "name": "string"
+            }
+          },
+          {
+            "long": "output",
+            "short": "o",
+            "description": "output format. One of: json|yaml|short|wide",
+            "inherit": false,
+            "value": {
+              "name": "string"
+            }
+          },
+          {
+            "long": "status",
+            "description": "filter by status (Pending, Running, Succeeded, Skipped, Failed, Error)",
+            "inherit": false,
+            "value": {
+              "name": "string"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "workflow",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "help",
+        "description": "help about any command"
+      },
+      {
+        "name": "lint",
+        "description": "validate files or directories of manifests",
+        "options": [
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help",
+            "inherit": false
+          },
+          {
+            "long": "kinds",
+            "description": "which kinds will be linted. Can be: workflows|workflowtemplates|cro...",
+            "inherit": false,
+            "value": {
+              "name": "strings"
+            }
+          },
+          {
+            "long": "offline",
+            "description": "perform offline linting",
+            "inherit": false
+          },
+          {
+            "long": "output",
+            "short": "o",
+            "description": "linting results output format. One of: pretty|simple (default \"pret...",
+            "inherit": false,
+            "value": {
+              "name": "string"
+            }
+          },
+          {
+            "long": "strict",
+            "description": "perform strict workflow validation (default true)",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "file",
+              "index": 0,
+              "provider": "builtin.files"
+            }
+          ]
+        }
+      },
+      {
+        "name": "list",
+        "description": "list workflows",
+        "options": [
+          {
+            "long": "all-namespaces",
+            "short": "A",
+            "description": "show workflows from all namespaces",
+            "inherit": false
+          },
+          {
+            "long": "chunk-size",
+            "description": "return large lists in chunks rather than all at once. Pass 0 to dis...",
+            "inherit": false,
+            "value": {
+              "name": "int"
+            }
+          },
+          {
+            "long": "completed",
+            "description": "show completed workflows. Mutually exclusive with --running",
+            "inherit": false
+          },
+          {
+            "long": "field-selector",
+            "description": "selector (field query) to filter on supports '=' '==' and '!='.(e.g...",
+            "inherit": false,
+            "value": {
+              "name": "string"
+            }
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help",
+            "inherit": false
+          },
+          {
+            "long": "no-headers",
+            "description": "don't print headers (default print headers)",
+            "inherit": false
+          },
+          {
+            "long": "older",
+            "description": "list completed workflows finished before the specified duration (e....",
+            "inherit": false,
+            "value": {
+              "name": "string"
+            }
+          },
+          {
+            "long": "output",
+            "short": "o",
+            "description": "output format. One of: name|wide|yaml|json",
+            "inherit": false,
+            "value": {
+              "name": "string"
+            }
+          },
+          {
+            "long": "prefix",
+            "description": "filter workflows by prefix",
+            "inherit": false,
+            "value": {
+              "name": "string"
+            }
+          },
+          {
+            "long": "resubmitted",
+            "description": "show resubmitted workflows",
+            "inherit": false
+          },
+          {
+            "long": "running",
+            "description": "show running workflows. Mutually exclusive with --completed",
+            "inherit": false
+          },
+          {
+            "long": "selector",
+            "short": "l",
+            "description": "selector (label query) to filter on not including uninitialized one...",
+            "inherit": false,
+            "value": {
+              "name": "string"
+            }
+          },
+          {
+            "long": "since",
+            "description": "show only workflows created after than a relative duration",
+            "inherit": false,
+            "value": {
+              "name": "string"
+            }
+          },
+          {
+            "long": "status",
+            "description": "filter by status (comma separated)",
+            "inherit": false,
+            "value": {
+              "name": "strings"
+            }
+          }
+        ]
+      },
+      {
+        "name": "logs",
+        "description": "view logs of a pod or workflow",
+        "options": [
+          {
+            "long": "container",
+            "short": "c",
+            "description": "print the logs of this container (default \"main\")",
+            "inherit": false,
+            "value": {
+              "name": "string"
+            }
+          },
+          {
+            "long": "follow",
+            "short": "f",
+            "description": "specify if the logs should be streamed",
+            "inherit": false
+          },
+          {
+            "long": "grep",
+            "description": "grep for lines",
+            "inherit": false,
+            "value": {
+              "name": "string"
+            }
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help",
+            "inherit": false
+          },
+          {
+            "long": "no-color",
+            "description": "disable colorized output",
+            "inherit": false
+          },
+          {
+            "long": "previous",
+            "short": "p",
+            "description": "specify if the previously terminated container logs should be returned",
+            "inherit": false
+          },
+          {
+            "long": "selector",
+            "short": "l",
+            "description": "log selector for some pod",
+            "inherit": false,
+            "value": {
+              "name": "string"
+            }
+          },
+          {
+            "long": "since",
+            "description": "only return logs newer than a relative duration like 5s 2m or 3h. D...",
+            "inherit": false,
+            "value": {
+              "name": "duration"
+            }
+          },
+          {
+            "long": "since-time",
+            "description": "only return logs after a specific date (RFC3339). Defaults to all l...",
+            "inherit": false,
+            "value": {
+              "name": "string"
+            }
+          },
+          {
+            "long": "tail",
+            "description": "if set the number of lines from the end of the logs to show. If not...",
+            "inherit": false,
+            "value": {
+              "name": "int"
+            }
+          },
+          {
+            "long": "timestamps",
+            "description": "include timestamps on each line in the log output",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "workfow",
+              "index": 0
+            },
+            {
+              "name": "pod",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "node",
+        "description": "perform action on a node in a workflow",
+        "options": [
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help",
+            "inherit": false
+          },
+          {
+            "long": "message",
+            "short": "m",
+            "description": "set the message of a node eg: --message \"Hello World\"",
+            "inherit": false,
+            "value": {
+              "name": "string"
+            }
+          },
+          {
+            "long": "node-field-selector",
+            "description": "selector of node to set eg: --node-field-selector inputs.paramaters...",
+            "inherit": false,
+            "value": {
+              "name": "string"
+            }
+          },
+          {
+            "long": "output-parameter",
+            "short": "p",
+            "description": "set a \"supplied\" output parameter of node eg: --output-parameter pa...",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "phase",
+            "description": "phase to set the node to eg: --phase Succeeded",
+            "inherit": false,
+            "value": {
+              "name": "string"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "action",
+              "index": 0
+            },
+            {
+              "name": "workflow",
+              "index": 1
+            },
+            {
+              "name": "flags",
+              "index": 2
+            }
+          ]
+        }
+      },
+      {
+        "name": "resubmit",
+        "description": "resubmit one or more workflows",
+        "options": [
+          {
+            "long": "field-selector",
+            "description": "selector (field query) to filter on: supports '=' '==' and '!='.(e....",
+            "inherit": false,
+            "value": {
+              "name": "string"
+            }
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help",
+            "inherit": false
+          },
+          {
+            "long": "log",
+            "description": "log the workflow until it completes",
+            "inherit": false
+          },
+          {
+            "long": "memoized",
+            "description": "re-use successful steps & outputs from the previous run",
+            "inherit": false
+          },
+          {
+            "long": "output",
+            "short": "o",
+            "description": "output format. One of: name|json|yaml|wide",
+            "inherit": false,
+            "value": {
+              "name": "string"
+            }
+          },
+          {
+            "long": "parameter",
+            "short": "p",
+            "description": "input parameter to override on the original workflow spec",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "priority",
+            "description": "workflow priority",
+            "inherit": false,
+            "value": {
+              "name": "number"
+            }
+          },
+          {
+            "long": "selector",
+            "short": "l",
+            "description": "selector (label query) to filter on",
+            "inherit": false,
+            "value": {
+              "name": "string"
+            }
+          },
+          {
+            "long": "wait",
+            "short": "w",
+            "description": "wait for the workflow to complete - only works when a single workfl...",
+            "inherit": false
+          },
+          {
+            "long": "watch",
+            "description": "watch the workflow until it completes - only works when a single wo...",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "workflow...",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "resume",
+        "description": "resume zero or more workflows",
+        "options": [
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help",
+            "inherit": false
+          },
+          {
+            "long": "node-field-selector",
+            "description": "selector of node to resume, Eg: --node-field-selector inputs.parama...",
+            "inherit": false,
+            "value": {
+              "name": "string"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "workflow1",
+              "index": 0
+            },
+            {
+              "name": "workflow2...",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "retry",
+        "description": "retry zero or more workflows",
+        "options": [
+          {
+            "long": "field-selector",
+            "description": "selector (field query) to filter on, Supports '='; '=='; and '!='.(...",
+            "inherit": false,
+            "value": {
+              "name": "string"
+            }
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help",
+            "inherit": false
+          },
+          {
+            "long": "log",
+            "description": "log the workflow until it completes",
+            "inherit": false
+          },
+          {
+            "long": "node-field-selector",
+            "description": "selector of nodes to reset; eg: --node-field-selector inputs.parama...",
+            "inherit": false,
+            "value": {
+              "name": "string"
+            }
+          },
+          {
+            "long": "output",
+            "short": "o",
+            "description": "output format. One of: name|json|yaml|wide",
+            "inherit": false,
+            "value": {
+              "name": "string"
+            }
+          },
+          {
+            "long": "parameter",
+            "short": "p",
+            "description": "input parameter to override on the original workflow spec",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "restart-successful",
+            "description": "indicates to restart successful nodes matching the --node-field-sel...",
+            "inherit": false
+          },
+          {
+            "long": "selector",
+            "short": "l",
+            "description": "selector (label query) to filter on; not including uninitialized on...",
+            "inherit": false,
+            "value": {
+              "name": "string"
+            }
+          },
+          {
+            "long": "wait",
+            "short": "w",
+            "description": "wait for the workflow to complete only works when a single workflow...",
+            "inherit": false
+          },
+          {
+            "long": "watch",
+            "description": "watch the workflow until it completes only works when a single work...",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "workflow...",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "server",
+        "description": "start the Argo Server",
+        "options": [
+          {
+            "long": "access-control-allow-origin",
+            "description": "set Access-Control-Allow-Origin header in HTTP responses",
+            "inherit": false,
+            "value": {
+              "name": "string"
+            }
+          },
+          {
+            "long": "allowed-link-protocol",
+            "description": "allowed link protocol in configMap. Used if the allowed configMap l...",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "api-rate-limit",
+            "description": "set limit per IP for api ratelimiter (default 1000)",
+            "inherit": false,
+            "value": {
+              "name": "uint"
+            }
+          },
+          {
+            "long": "auth-mode",
+            "description": "aPI server authentication mode. Any 1 or more length permutation of...",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "basehref",
+            "description": "value for base href in index.html. Used if the server is running be...",
+            "inherit": false,
+            "value": {
+              "name": "string"
+            }
+          },
+          {
+            "short": "b",
+            "long": "browser",
+            "description": "enable automatic launching of the browser [local mode]",
+            "inherit": false
+          },
+          {
+            "long": "configmap",
+            "description": "name of K8s configmap to retrieve workflow controller configuration...",
+            "inherit": false,
+            "value": {
+              "name": "string"
+            }
+          },
+          {
+            "long": "event-async-dispatch",
+            "description": "dispatch event async",
+            "inherit": false
+          },
+          {
+            "long": "event-operation-queue-size",
+            "description": "how many events operations that can be queued at once (default 16)",
+            "inherit": false,
+            "value": {
+              "name": "int"
+            }
+          },
+          {
+            "long": "event-worker-count",
+            "description": "how many event workers to run (default 4)",
+            "inherit": false,
+            "value": {
+              "name": "int"
+            }
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          },
+          {
+            "long": "hsts",
+            "description": "whether or not we should add a HTTP Secure Transport Security heade...",
+            "inherit": false
+          },
+          {
+            "long": "log-format",
+            "description": "the formatter to use for logs. One of: text|json (default \"text\")",
+            "inherit": false,
+            "value": {
+              "name": "string"
+            }
+          },
+          {
+            "long": "managed-namespace",
+            "description": "namespace that watches default to the installation namespace",
+            "inherit": false,
+            "value": {
+              "name": "string"
+            }
+          },
+          {
+            "long": "namespaced",
+            "description": "run as namespaced mode",
+            "inherit": false
+          },
+          {
+            "short": "p",
+            "long": "port",
+            "description": "port to listen on (default 2746)",
+            "inherit": false,
+            "value": {
+              "name": "string"
+            }
+          },
+          {
+            "long": "tls-certificate-secret-name",
+            "description": "the name of a Kubernetes secret that contains the server certificates",
+            "inherit": false,
+            "value": {
+              "name": "string"
+            }
+          },
+          {
+            "long": "x-frame-options",
+            "description": "set X-Frame-Options header in HTTP responses. (default \"DENY\")",
+            "inherit": false,
+            "value": {
+              "name": "string"
+            }
+          }
+        ]
+      },
+      {
+        "name": "stop",
+        "description": "stop zero or more workflows allowing all exit handlers to run",
+        "options": [
+          {
+            "long": "dry-run",
+            "description": "if true, only stop the workflows that would be stopped, without sto...",
+            "inherit": false
+          },
+          {
+            "long": "field-selector",
+            "description": "selector (field query) to filter on supports '=' '==' and '!='.(e.g...",
+            "inherit": false,
+            "value": {
+              "name": "string"
+            }
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          },
+          {
+            "long": "message",
+            "description": "message to add to previously running nodes",
+            "inherit": false,
+            "value": {
+              "name": "string"
+            }
+          },
+          {
+            "long": "node-field-selector",
+            "description": "selector of node to stop eg: --node-field-selector inputs.paramater...",
+            "inherit": false,
+            "value": {
+              "name": "string"
+            }
+          },
+          {
+            "short": "l",
+            "long": "selector",
+            "description": "selector (label query) to filter on not including uninitialized one...",
+            "inherit": false,
+            "value": {
+              "name": "string"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "workflow1",
+              "index": 0
+            },
+            {
+              "name": "workflow2...",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "submit",
+        "description": "submit a workflow",
+        "options": [
+          {
+            "long": "dry-run",
+            "description": "modify the workflow on the client-side without creating it",
+            "inherit": false
+          },
+          {
+            "long": "entrypoint",
+            "description": "override entrypoint",
+            "inherit": false,
+            "value": {
+              "name": "string"
+            }
+          },
+          {
+            "long": "from",
+            "description": "submit from an existing kind/name E.g. --from=cronwf/hello-world-cwf",
+            "inherit": false,
+            "value": {
+              "name": "kind/name"
+            }
+          },
+          {
+            "long": "generate-name",
+            "description": "override metadata.generateName",
+            "inherit": false,
+            "value": {
+              "name": "string"
+            }
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          },
+          {
+            "short": "l",
+            "long": "labels",
+            "description": "comma separated labels to apply to the workflow. Will override prev...",
+            "inherit": false,
+            "value": {
+              "name": "string"
+            }
+          },
+          {
+            "long": "log",
+            "description": "log the workflow until it completes",
+            "inherit": false
+          },
+          {
+            "long": "name",
+            "description": "override metadata.name",
+            "inherit": false,
+            "value": {
+              "name": "string"
+            }
+          },
+          {
+            "long": "node-field-selector",
+            "description": "selector of node to display eg: --node-field-selector phase=abc",
+            "inherit": false,
+            "value": {
+              "name": "string"
+            }
+          },
+          {
+            "short": "o",
+            "long": "output",
+            "description": "output format. One of: name|json|yaml|wide",
+            "inherit": false,
+            "value": {
+              "name": "string"
+            }
+          },
+          {
+            "short": "p",
+            "long": "parameter",
+            "description": "pass an input parameter",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "short": "f",
+            "long": "parameter-file",
+            "description": "pass a file containing all input parameters",
+            "inherit": false,
+            "value": {
+              "name": "string"
+            }
+          },
+          {
+            "long": "priority",
+            "description": "workflow priority",
+            "inherit": false,
+            "value": {
+              "name": "number"
+            }
+          },
+          {
+            "long": "scheduled-time",
+            "description": "override the workflow's scheduledTime parameter (useful for backfil...",
+            "inherit": false,
+            "value": {
+              "name": "string"
+            }
+          },
+          {
+            "long": "server-dry-run",
+            "description": "send request to server with dry-run flag which will modify the work...",
+            "inherit": false
+          },
+          {
+            "long": "serviceaccount",
+            "description": "run all pods in the workflow using specified serviceaccount",
+            "inherit": false,
+            "value": {
+              "name": "string"
+            }
+          },
+          {
+            "long": "status",
+            "description": "filter by status (Pending Running Succeeded Skipped Failed Error)....",
+            "inherit": false,
+            "value": {
+              "name": "string"
+            }
+          },
+          {
+            "long": "strict",
+            "description": "perform strict workflow validation (default true)",
+            "inherit": false
+          },
+          {
+            "short": "w",
+            "long": "wait",
+            "description": "wait for the workflow to complete",
+            "inherit": false
+          },
+          {
+            "long": "watch",
+            "description": "watch the workflow until it completes",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "file...",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "suspend",
+        "description": "suspend zero or more workflow",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "workflow1",
+              "index": 0
+            },
+            {
+              "name": "workflow2...",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "template",
+        "description": "manipulate workflow templates",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "create",
+            "description": "create a workflow template",
+            "options": [
+              {
+                "long": "help",
+                "short": "h",
+                "description": "show help",
+                "inherit": false
+              },
+              {
+                "long": "output",
+                "short": "o",
+                "description": "output format. One of: name|json|yaml|wide",
+                "inherit": false,
+                "value": {
+                  "name": "string"
+                }
+              },
+              {
+                "long": "strict",
+                "description": "perform strict workflow validation (default true)",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "file1",
+                  "index": 0
+                },
+                {
+                  "name": "file2...",
+                  "index": 1
+                }
+              ]
+            }
+          },
+          {
+            "name": "delete",
+            "description": "delete a workflow template",
+            "options": [
+              {
+                "long": "all",
+                "description": "delete all workflow templates",
+                "inherit": false
+              },
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "workflow-template",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "get",
+            "description": "display details about a workflow template",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              },
+              {
+                "short": "o",
+                "long": "output",
+                "description": "output format. One of: json|yaml|wide",
+                "inherit": false,
+                "value": {
+                  "name": "string"
+                }
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "workflow-template",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "lint",
+            "description": "validate a file or directory of workflow template manifests",
+            "options": [
+              {
+                "long": "help",
+                "short": "h",
+                "description": "show help",
+                "inherit": false
+              },
+              {
+                "long": "output",
+                "short": "o",
+                "description": "linting results output format. One of: pretty|simple (default \"pret...",
+                "inherit": false,
+                "value": {
+                  "name": "string"
+                }
+              },
+              {
+                "long": "strict",
+                "description": "perform strict workflow validation (default true)",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "directory",
+                  "index": 0
+                },
+                {
+                  "name": "file1-file2-file3...",
+                  "index": 1
+                }
+              ]
+            }
+          },
+          {
+            "name": "list",
+            "description": "list workflow templates",
+            "options": [
+              {
+                "long": "all-namespaces",
+                "short": "A",
+                "description": "show workflows from all namespaces",
+                "inherit": false
+              },
+              {
+                "long": "help",
+                "short": "h",
+                "description": "show help",
+                "inherit": false
+              },
+              {
+                "long": "output",
+                "short": "o",
+                "description": "output format. One of: wide|name",
+                "inherit": false,
+                "value": {
+                  "name": "string"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "terminate",
+        "description": "terminate zero or more workflows immediately",
+        "options": [
+          {
+            "long": "dry-run",
+            "description": "do not terminate the workflow only print what would happen",
+            "inherit": false
+          },
+          {
+            "long": "field-selector",
+            "description": "selector (field query) to filter on supports '=' '==' and '!='.(e.g...",
+            "inherit": false,
+            "value": {
+              "name": "string"
+            }
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          },
+          {
+            "short": "l",
+            "long": "selector",
+            "description": "selector (label query) to filter on not including uninitialized one...",
+            "inherit": false,
+            "value": {
+              "name": "string"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "workfloow-workflow2...",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "version",
+        "description": "print version information",
+        "options": [
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help",
+            "inherit": false
+          },
+          {
+            "long": "short",
+            "description": "print just the version number",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "wait",
+        "description": "waits for workflows to complete",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          },
+          {
+            "long": "ignore-not-found",
+            "description": "ignore the wait if the workflow is not found",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "[workflow...]",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "watch",
+        "description": "watch a workflow until it completes",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          },
+          {
+            "long": "node-field-selector",
+            "description": "selector of node to display eg: --node-field-selector phase=abc",
+            "inherit": false,
+            "value": {
+              "name": "string"
+            }
+          },
+          {
+            "long": "status",
+            "description": "filter by status (Pending, Running, Succeeded, Skipped, Failed, Error)",
+            "inherit": false,
+            "value": {
+              "name": "string"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "workflow",
+              "index": 0
+            }
+          ]
+        }
+      }
+    ],
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "argo.log-levels": {
+        "values": [
+          "debug",
+          "info",
+          "warn",
+          "error"
+        ]
+      }
+    },
+    "options": [
+      {
+        "long": "argo-base-href",
+        "description": "set argo base href",
+        "inherit": true,
+        "value": {
+          "name": "path"
+        }
+      },
+      {
+        "long": "argo-http1",
+        "description": "use http1 client",
+        "inherit": true
+      },
+      {
+        "long": "argo-server",
+        "short": "s",
+        "description": "set argo api server",
+        "inherit": true,
+        "value": {
+          "name": "host-port"
+        }
+      },
+      {
+        "long": "as",
+        "description": "impersonate user",
+        "inherit": true,
+        "value": {
+          "name": "user"
+        }
+      },
+      {
+        "long": "as-group",
+        "description": "impersonate group",
+        "inherit": true,
+        "repeatable": true,
+        "value": {
+          "name": "group"
+        }
+      },
+      {
+        "long": "as-uid",
+        "description": "impersonate uid",
+        "inherit": true,
+        "value": {
+          "name": "uid"
+        }
+      },
+      {
+        "long": "certificate-authorityk",
+        "description": "use certificate authority file",
+        "inherit": true,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "client-certificate",
+        "description": "use client certificate file",
+        "inherit": true,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "client-key",
+        "description": "use client key file",
+        "inherit": true,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "cluster",
+        "description": "use kubeconfig cluster",
+        "inherit": true,
+        "value": {
+          "name": "cluster"
+        }
+      },
+      {
+        "long": "context",
+        "description": "use kubeconfig context",
+        "inherit": true,
+        "value": {
+          "name": "context"
+        }
+      },
+      {
+        "long": "gloglevel",
+        "description": "set glog level",
+        "inherit": true,
+        "value": {
+          "name": "level"
+        }
+      },
+      {
+        "long": "header",
+        "short": "H",
+        "description": "add request header",
+        "inherit": true,
+        "repeatable": true,
+        "value": {
+          "name": "header"
+        }
+      },
+      {
+        "long": "help",
+        "short": "h",
+        "description": "show help",
+        "inherit": true
+      },
+      {
+        "long": "insecure-skip-tls-verify",
+        "description": "skip tls verification",
+        "inherit": true
+      },
+      {
+        "long": "insecure-skip-verify",
+        "short": "k",
+        "description": "skip argo server verification",
+        "inherit": true
+      },
+      {
+        "long": "instanceid",
+        "description": "set controller instance id",
+        "inherit": true,
+        "value": {
+          "name": "id"
+        }
+      },
+      {
+        "long": "kubeconfig",
+        "description": "use kubeconfig file",
+        "inherit": true,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "loglevel",
+        "description": "set log level",
+        "inherit": true,
+        "value": {
+          "name": "level",
+          "provider": "argo.log-levels"
+        }
+      },
+      {
+        "long": "namespace",
+        "short": "n",
+        "description": "set namespace",
+        "inherit": true,
+        "value": {
+          "name": "namespace"
+        }
+      },
+      {
+        "long": "password",
+        "description": "set api password",
+        "inherit": true,
+        "value": {
+          "name": "password"
+        }
+      }
+    ]
+  }
+}
