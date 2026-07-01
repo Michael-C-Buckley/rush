@@ -1,0 +1,120 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "eleventy",
+    "description": "build static sites with Eleventy",
+    "options": [
+      {
+        "short": "h",
+        "long": "help",
+        "description": "show help message and exit",
+        "inherit": false
+      },
+      {
+        "short": "v",
+        "long": "version",
+        "description": "show program's version number and exit",
+        "inherit": false
+      },
+      {
+        "long": "quiet",
+        "description": "don\u2019t print all written files",
+        "inherit": false
+      },
+      {
+        "long": "watch",
+        "description": "wait for files to change and automatically rewrite",
+        "inherit": false
+      },
+      {
+        "long": "dryrun",
+        "description": "don\u2019t write any files",
+        "inherit": false
+      },
+      {
+        "long": "input",
+        "description": "input template files",
+        "inherit": false,
+        "value": {
+          "name": "Template-File",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "output",
+        "description": "write HTML output to this folder",
+        "inherit": false,
+        "value": {
+          "name": "value",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "serve",
+        "description": "run web server on port and watch them too",
+        "inherit": false
+      },
+      {
+        "long": "port",
+        "description": "run Web Server on specified port",
+        "inherit": false,
+        "value": {
+          "name": "port",
+          "description": "default: 8080"
+        }
+      },
+      {
+        "long": "formats",
+        "description": "whitelist only certain template types",
+        "inherit": false,
+        "value": {
+          "name": "Template-Names-Separated-by-,",
+          "provider": {
+            "values": [
+              "md",
+              "html",
+              "ejs"
+            ]
+          }
+        }
+      },
+      {
+        "long": "config",
+        "description": "override the eleventy config file path",
+        "inherit": false,
+        "value": {
+          "name": "Config-File",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "pathprefix",
+        "description": "change all url template filters to use this subdirectory",
+        "inherit": false,
+        "value": {
+          "name": "Subdirectory",
+          "provider": "builtin.directories"
+        }
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "directory",
+          "provider": "builtin.directories",
+          "index": 0,
+          "description": "input directory"
+        }
+      ]
+    },
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
