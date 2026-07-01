@@ -1,0 +1,174 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "ddosify",
+    "description": "run HTTP load tests",
+    "options": [
+      {
+        "short": "t",
+        "description": "set the target URL",
+        "inherit": false,
+        "value": {
+          "name": "URL"
+        }
+      },
+      {
+        "short": "n",
+        "description": "set the total request count",
+        "inherit": false,
+        "value": {
+          "name": "RequestCount"
+        }
+      },
+      {
+        "short": "d",
+        "description": "set the test duration in seconds",
+        "inherit": false,
+        "value": {
+          "name": "Duration"
+        }
+      },
+      {
+        "short": "l",
+        "description": "set the request type",
+        "inherit": false,
+        "value": {
+          "name": "RequestType",
+          "provider": "ddosify.request-types"
+        }
+      },
+      {
+        "short": "m",
+        "description": "set the HTTP method",
+        "inherit": false,
+        "value": {
+          "name": "HTTPMethod",
+          "provider": "ddosify.methods"
+        }
+      },
+      {
+        "short": "b",
+        "description": "set the request body",
+        "inherit": false,
+        "value": {
+          "name": "Body"
+        }
+      },
+      {
+        "short": "a",
+        "description": "set basic authentication",
+        "inherit": false,
+        "value": {
+          "name": "BasicAuth",
+          "provider": "ddosify.auth-examples"
+        }
+      },
+      {
+        "short": "h",
+        "description": "add a request header",
+        "repeatable": true,
+        "inherit": false,
+        "value": {
+          "name": "header",
+          "provider": "ddosify.headers"
+        }
+      },
+      {
+        "short": "T",
+        "description": "set the timeout in seconds",
+        "inherit": false,
+        "value": {
+          "name": "Timeout"
+        }
+      },
+      {
+        "short": "P",
+        "description": "set the proxy address",
+        "inherit": false,
+        "value": {
+          "name": "Proxy",
+          "provider": "ddosify.proxy-examples"
+        }
+      },
+      {
+        "short": "o",
+        "description": "set the output format",
+        "inherit": false,
+        "value": {
+          "name": "OutputFormat",
+          "provider": "ddosify.output-formats"
+        }
+      },
+      {
+        "long": "config",
+        "description": "set the config file",
+        "inherit": false,
+        "value": {
+          "name": "ConfigFile",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "version",
+        "description": "print version information",
+        "inherit": false
+      },
+      {
+        "long": "debug",
+        "description": "run the scenario once with verbose output",
+        "inherit": false
+      },
+      {
+        "long": "help",
+        "description": "print CLI flags",
+        "inherit": false
+      }
+    ],
+    "providers": {
+      "ddosify.request-types": {
+        "values": [
+          "linear",
+          "incremental",
+          "waved"
+        ]
+      },
+      "ddosify.methods": {
+        "values": [
+          "GET",
+          "POST",
+          "PUT",
+          "DELETE",
+          "HEAD",
+          "PATCH",
+          "OPTIONS"
+        ]
+      },
+      "ddosify.auth-examples": {
+        "values": [
+          "username:password"
+        ]
+      },
+      "ddosify.headers": {
+        "values": [
+          "Content-Type: application/json",
+          "User-Agent: DdosifyLoadGenerator/0.8.1"
+        ]
+      },
+      "ddosify.proxy-examples": {
+        "values": [
+          "http://user:pass@proxy_host.com:port"
+        ]
+      },
+      "ddosify.output-formats": {
+        "values": [
+          "stdout",
+          "stdout-json"
+        ]
+      },
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
