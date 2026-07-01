@@ -22,6 +22,7 @@ pub const Options = struct {
     noclobber: bool = false,
     noexec: bool = false,
     pipefail: bool = false,
+    notify: bool = false,
     expand_aliases: bool = false,
     xtrace: bool = false,
     monitor: bool = false,
@@ -85,11 +86,22 @@ pub const CommandHash = struct {
 pub const BackgroundJob = struct {
     id: usize,
     pid: host.Pid,
+    process_group: host.Pid,
+    pids: std.ArrayListUnmanaged(host.Pid) = .empty,
     command: []const u8,
 
     pub fn validate(self: BackgroundJob) void {
         std.debug.assert(self.id != 0);
+        std.debug.assert(self.pid != 0);
+        std.debug.assert(self.process_group != 0);
+        std.debug.assert(self.pids.items.len != 0);
         std.debug.assert(self.command.len != 0);
+    }
+
+    fn deinit(self: *BackgroundJob, allocator: std.mem.Allocator) void {
+        self.pids.deinit(allocator);
+        allocator.free(self.command);
+        self.* = undefined;
     }
 };
 
@@ -164,7 +176,7 @@ pub const State = struct {
         self.signal_traps.deinit(self.allocator);
         self.pending_traps.deinit(self.allocator);
         self.background_pids.deinit(self.allocator);
-        for (self.background_jobs.items) |job| self.allocator.free(job.command);
+        for (self.background_jobs.items) |*job| job.deinit(self.allocator);
         self.background_jobs.deinit(self.allocator);
         self.freeOwnedPositionals();
         self.clearExitTrap();
@@ -446,9 +458,29 @@ pub const State = struct {
     }
 
     pub fn addBackgroundJob(self: *State, pid: host.Pid, command: []const u8) !void {
+        try self.addBackgroundJobPids(&.{pid}, pid, command);
+    }
+
+    pub fn addBackgroundJobPids(
+        self: *State,
+        pids: []const host.Pid,
+        process_group: host.Pid,
+        command: []const u8,
+    ) !void {
+        std.debug.assert(pids.len != 0);
+        std.debug.assert(process_group != 0);
         const owned_command = try self.allocator.dupe(u8, command);
         errdefer self.allocator.free(owned_command);
-        const job: BackgroundJob = .{ .id = self.nextAvailableJobId(), .pid = pid, .command = owned_command };
+        var owned_pids: std.ArrayListUnmanaged(host.Pid) = .empty;
+        errdefer owned_pids.deinit(self.allocator);
+        try owned_pids.appendSlice(self.allocator, pids);
+        const job: BackgroundJob = .{
+            .id = self.nextAvailableJobId(),
+            .pid = pids[pids.len - 1],
+            .process_group = process_group,
+            .pids = owned_pids,
+            .command = owned_command,
+        };
         job.validate();
         try self.background_jobs.append(self.allocator, job);
     }
@@ -463,11 +495,29 @@ pub const State = struct {
     }
 
     pub fn removeBackgroundPid(self: *State, pid: host.Pid) bool {
+        var removed = false;
         for (self.background_pids.items, 0..) |known, index| {
             if (known != pid) continue;
             _ = self.background_pids.orderedRemove(index);
-            self.forgetBackgroundJob(pid);
-            return true;
+            removed = true;
+            break;
+        }
+        return self.removePidFromBackgroundJobs(pid) or removed;
+    }
+
+    fn removePidFromBackgroundJobs(self: *State, pid: host.Pid) bool {
+        for (self.background_jobs.items, 0..) |*job, job_index| {
+            for (job.pids.items, 0..) |job_pid, pid_index| {
+                if (job_pid != pid) continue;
+                _ = job.pids.orderedRemove(pid_index);
+                if (job.pids.items.len == 0) {
+                    var removed_job = self.background_jobs.orderedRemove(job_index);
+                    removed_job.deinit(self.allocator);
+                } else if (job.pid == pid) {
+                    job.pid = job.pids.items[job.pids.items.len - 1];
+                }
+                return true;
+            }
         }
         return false;
     }
@@ -477,23 +527,28 @@ pub const State = struct {
         return null;
     }
 
+    pub fn backgroundJob(self: State, job_id: usize) ?BackgroundJob {
+        for (self.background_jobs.items) |job| if (job.id == job_id) return job;
+        return null;
+    }
+
     pub fn currentBackgroundJob(self: State) ?BackgroundJob {
         if (self.background_jobs.items.len == 0) return null;
         return self.background_jobs.items[self.background_jobs.items.len - 1];
     }
 
     pub fn forgetBackgroundJob(self: *State, pid: host.Pid) void {
-        for (self.background_jobs.items, 0..) |job, index| {
+        for (self.background_jobs.items, 0..) |*job, index| {
             if (job.pid != pid) continue;
-            self.allocator.free(job.command);
-            _ = self.background_jobs.orderedRemove(index);
+            var removed_job = self.background_jobs.orderedRemove(index);
+            removed_job.deinit(self.allocator);
             return;
         }
     }
 
     pub fn clearBackgroundPids(self: *State) void {
         self.background_pids.clearRetainingCapacity();
-        for (self.background_jobs.items) |job| self.allocator.free(job.command);
+        for (self.background_jobs.items) |*job| job.deinit(self.allocator);
         self.background_jobs.clearRetainingCapacity();
     }
 };

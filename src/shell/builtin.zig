@@ -462,6 +462,13 @@ fn evalKill(shell: anytype, args: []const []const u8) !result.EvalResult {
 
     var status: result.ExitStatus = 0;
     while (index < args.len) : (index += 1) {
+        if (killOperandJob(shell, args[index])) |job| {
+            shell.host.sendSignal(-job.process_group, kill_signal.number) catch {
+                status = 1;
+                continue;
+            };
+            continue;
+        }
         const pid = killOperandPid(shell, args[index]) orelse {
             status = 1;
             continue;
@@ -476,82 +483,206 @@ fn evalKill(shell: anytype, args: []const []const u8) !result.EvalResult {
             status = 1;
             continue;
         };
-        if (killSignalRemovesJob(kill_signal.number)) shell.state.forgetBackgroundJob(pid);
     }
     return .{ .status = status };
 }
 
-fn killSignalRemovesJob(signal: u8) bool {
-    return signal == signalNumber("TERM").? or signal == signalNumber("KILL").?;
-}
-
 fn killOperandPid(shell: anytype, arg: []const u8) ?host.Pid {
-    if (arg.len >= 2 and arg[0] == '%') {
-        if (!shell.state.options.monitor) return null;
-        const job_id = std.fmt.parseInt(usize, arg[1..], 10) catch return null;
-        return shell.state.backgroundJobPid(job_id);
-    }
+    _ = shell;
+    if (arg.len >= 1 and arg[0] == '%') return null;
     return std.fmt.parseInt(host.Pid, arg, 10) catch null;
 }
 
+fn killOperandJob(shell: anytype, arg: []const u8) ?state_mod.BackgroundJob {
+    if (!shell.state.options.monitor) return null;
+    return jobOperand(shell, arg);
+}
+
 fn evalJobs(shell: anytype, args: []const []const u8) !result.EvalResult {
-    var long = false;
-    for (args[1..]) |arg| {
+    var format: JobFormat = .default;
+    var first_operand: usize = 1;
+    while (first_operand < args.len) : (first_operand += 1) {
+        const arg = args[first_operand];
         if (std.mem.eql(u8, arg, "-l")) {
-            long = true;
-        } else {
-            return .{ .status = 2 };
-        }
+            if (format != .default) return .{ .status = 2 };
+            format = .long;
+        } else if (std.mem.eql(u8, arg, "-p")) {
+            if (format != .default) return .{ .status = 2 };
+            format = .pid;
+        } else break;
     }
 
-    for (shell.state.background_jobs.items) |job| {
-        if (long) {
-            try shell.host.writeAll(
-                .stdout,
-                try std.fmt.allocPrint(shell.scratchAllocator(), "[{}] {} Running {s}\n", .{ job.id, job.pid, job.command }),
-            );
-        } else {
-            try shell.host.writeAll(
-                .stdout,
-                try std.fmt.allocPrint(shell.scratchAllocator(), "[{}] Running {s}\n", .{ job.id, job.command }),
-            );
-        }
+    if (first_operand == args.len) {
+        for (shell.state.background_jobs.items) |job| try writeJob(shell, job, format);
+        return .{};
     }
-    return .{};
+
+    var status: result.ExitStatus = 0;
+    for (args[first_operand..]) |arg| {
+        const job = jobOperand(shell, arg) orelse {
+            try shell.host.writeAll(.stderr, "jobs: no such job\n");
+            status = 1;
+            continue;
+        };
+        try writeJob(shell, job, format);
+    }
+    return .{ .status = status };
 }
 
-fn evalBg(shell: anytype, args: []const []const u8) !result.EvalResult {
-    if (args.len > 1) return .{ .status = 2 };
-    const job = shell.state.currentBackgroundJob() orelse {
-        try shell.host.writeAll(.stderr, "bg: no current job\n");
-        return .{ .status = 1 };
+const JobFormat = enum { default, long, pid };
+
+fn writeJob(shell: anytype, job: state_mod.BackgroundJob, format: JobFormat) !void {
+    const text = switch (format) {
+        .default => try std.fmt.allocPrint(
+            shell.scratchAllocator(),
+            "[{}] Running {s}\n",
+            .{ job.id, job.command },
+        ),
+        .long => try std.fmt.allocPrint(
+            shell.scratchAllocator(),
+            "[{}] {} Running {s}\n",
+            .{ job.id, job.pid, job.command },
+        ),
+        .pid => try std.fmt.allocPrint(shell.scratchAllocator(), "{}\n", .{job.process_group}),
     };
-    const cont = signalNumber("CONT") orelse return .{ .status = 2 };
-    shell.host.sendSignal(job.pid, cont) catch return .{ .status = 1 };
+    defer shell.scratchAllocator().free(text);
+    try shell.host.writeAll(.stdout, text);
+}
+
+fn jobOperand(shell: anytype, arg: []const u8) ?state_mod.BackgroundJob {
+    if (arg.len < 2 or arg[0] != '%') return null;
+    const job_id = std.fmt.parseInt(usize, arg[1..], 10) catch return null;
+    return shell.state.backgroundJob(job_id);
+}
+
+fn jobOperandOrCurrent(shell: anytype, arg: ?[]const u8) ?state_mod.BackgroundJob {
+    if (arg) |job_spec| {
+        return jobOperand(shell, job_spec);
+    }
+    return shell.state.currentBackgroundJob();
+}
+
+fn writeNoSuchJob(shell: anytype, builtin_name: []const u8) !void {
     try shell.host.writeAll(
-        .stdout,
-        try std.fmt.allocPrint(shell.scratchAllocator(), "[{}] {s}\n", .{ job.id, job.command }),
+        .stderr,
+        try std.fmt.allocPrint(shell.scratchAllocator(), "{s}: no such job\n", .{builtin_name}),
     );
+}
+
+fn writeNoCurrentJob(shell: anytype, builtin_name: []const u8) !void {
+    try shell.host.writeAll(
+        .stderr,
+        try std.fmt.allocPrint(shell.scratchAllocator(), "{s}: no current job\n", .{builtin_name}),
+    );
+}
+
+fn resumeBackgroundJob(shell: anytype, job: state_mod.BackgroundJob) !result.EvalResult {
+    sendContinueToJob(shell, job) catch return .{ .status = 1 };
+    const text = try std.fmt.allocPrint(shell.scratchAllocator(), "[{}] {s}\n", .{ job.id, job.command });
+    defer shell.scratchAllocator().free(text);
+    try shell.host.writeAll(.stdout, text);
     return .{};
 }
 
-fn evalFg(shell: anytype, args: []const []const u8) !result.EvalResult {
-    if (args.len > 1) return .{ .status = 2 };
-    const job = shell.state.currentBackgroundJob() orelse {
-        try shell.host.writeAll(.stderr, "fg: no current job\n");
-        return .{ .status = 1 };
-    };
-    const cont = signalNumber("CONT") orelse return .{ .status = 2 };
-    shell.host.sendSignal(job.pid, cont) catch return .{ .status = 1 };
-    try shell.host.writeAll(.stdout, try std.fmt.allocPrint(shell.scratchAllocator(), "{s}\n", .{job.command}));
+fn foregroundJob(shell: anytype, job: state_mod.BackgroundJob) !result.EvalResult {
+    sendContinueToJob(shell, job) catch return .{ .status = 1 };
+    const text = try std.fmt.allocPrint(shell.scratchAllocator(), "{s}\n", .{job.command});
+    defer shell.scratchAllocator().free(text);
+    try shell.host.writeAll(.stdout, text);
+    const foreground_restore_group = giveTerminalToJob(shell, job.process_group) catch return .{ .status = 1 };
+    defer if (foreground_restore_group) |process_group| restoreTerminalToShell(shell, process_group);
     const HostType = switch (@typeInfo(@TypeOf(shell.host))) {
         .pointer => |pointer| pointer.child,
         else => @TypeOf(shell.host),
     };
     if (!@hasDecl(HostType, "waitInterruptible")) return .{ .status = 1 };
-    _ = shell.state.removeBackgroundPid(job.pid);
-    const waited = shell.host.waitInterruptible(job.pid) catch return .{ .status = 127 };
-    return .{ .status = waited.shellStatus() };
+    const pids = try shell.scratchAllocator().dupe(host.Pid, job.pids.items);
+    defer shell.scratchAllocator().free(pids);
+    var status: result.ExitStatus = 0;
+    for (pids) |pid| {
+        _ = shell.state.removeBackgroundPid(pid);
+        const waited = shell.host.waitInterruptible(pid) catch return .{ .status = 127 };
+        status = waited.shellStatus();
+    }
+    return .{ .status = status };
+}
+
+fn giveTerminalToJob(shell: anytype, process_group: host.Pid) !?host.Pid {
+    if (!shell.state.options.monitor) return null;
+    const HostType = switch (@typeInfo(@TypeOf(shell.host))) {
+        .pointer => |pointer| pointer.child,
+        else => @TypeOf(shell.host),
+    };
+    if (!@hasDecl(HostType, "terminalProcessGroup") or
+        !@hasDecl(HostType, "setTerminalProcessGroup")) return null;
+    const shell_process_group = shell.host.terminalProcessGroup(.stdin) catch |err| switch (err) {
+        error.NotATerminal => return null,
+        else => return err,
+    };
+    shell.host.setTerminalProcessGroup(.stdin, process_group) catch |err| switch (err) {
+        error.NotATerminal => return null,
+        else => return err,
+    };
+    return shell_process_group;
+}
+
+fn restoreTerminalToShell(shell: anytype, process_group: host.Pid) void {
+    const HostType = switch (@typeInfo(@TypeOf(shell.host))) {
+        .pointer => |pointer| pointer.child,
+        else => @TypeOf(shell.host),
+    };
+    if (!@hasDecl(HostType, "setTerminalProcessGroup")) return;
+    shell.host.setTerminalProcessGroup(.stdin, process_group) catch {};
+}
+
+fn sendContinueToJob(shell: anytype, job: state_mod.BackgroundJob) !void {
+    const cont = signalNumber("CONT") orelse return error.InvalidSignal;
+    if (shell.state.options.monitor) {
+        try shell.host.sendSignal(-job.process_group, cont);
+        return;
+    }
+    var failed = false;
+    for (job.pids.items) |pid| {
+        shell.host.sendSignal(pid, cont) catch {
+            failed = true;
+        };
+    }
+    if (failed) return error.SignalFailed;
+}
+
+fn evalBg(shell: anytype, args: []const []const u8) !result.EvalResult {
+    if (args.len == 1) {
+        const job = shell.state.currentBackgroundJob() orelse {
+            try writeNoCurrentJob(shell, "bg");
+            return .{ .status = 1 };
+        };
+        return resumeBackgroundJob(shell, job);
+    }
+
+    var status: result.ExitStatus = 0;
+    for (args[1..]) |arg| {
+        const job = jobOperandOrCurrent(shell, arg) orelse {
+            try writeNoSuchJob(shell, "bg");
+            status = 1;
+            continue;
+        };
+        const evaluated = try resumeBackgroundJob(shell, job);
+        if (evaluated.status != 0) status = evaluated.status;
+    }
+    return .{ .status = status };
+}
+
+fn evalFg(shell: anytype, args: []const []const u8) !result.EvalResult {
+    if (args.len > 2) return .{ .status = 2 };
+    const job = jobOperandOrCurrent(shell, if (args.len == 2) args[1] else null) orelse {
+        if (args.len == 2) {
+            try writeNoSuchJob(shell, "fg");
+        } else {
+            try writeNoCurrentJob(shell, "fg");
+        }
+        return .{ .status = 1 };
+    };
+    return foregroundJob(shell, job);
 }
 
 fn evalKillList(shell: anytype, operands: []const []const u8) !result.EvalResult {
@@ -889,7 +1020,7 @@ fn setOptionEnabled(shell: anytype, option: SetOption) bool {
         .noclobber => shell.state.options.noclobber,
         .noexec => shell.state.options.noexec,
         .noglob => shell.state.options.noglob,
-        .notify => false,
+        .notify => shell.state.options.notify,
         .nounset => shell.state.options.nounset,
         .pipefail => shell.state.options.pipefail,
         .xtrace => shell.state.options.xtrace,
@@ -925,7 +1056,7 @@ fn setNamedOption(shell: anytype, name: []const u8, enabled: bool) bool {
         .noclobber => shell.state.options.noclobber = enabled,
         .noexec => shell.state.options.noexec = enabled,
         .noglob => shell.state.options.noglob = enabled,
-        .notify => {},
+        .notify => shell.state.options.notify = enabled,
         .nounset => shell.state.options.nounset = enabled,
         .pipefail => shell.state.options.pipefail = enabled,
         .xtrace => shell.state.options.xtrace = enabled,
@@ -1199,6 +1330,119 @@ test "builtin eval returns utility status" {
 
     try std.testing.expectEqual(@as(result.ExitStatus, 0), (try eval(&shell, true_definition, &.{"true"})).status);
     try std.testing.expectEqual(@as(result.ExitStatus, 1), (try eval(&shell, false_definition, &.{"false"})).status);
+}
+
+test "set -o notify toggles notify option" {
+    const TestHost = struct {
+        pub fn writeAll(_: *@This(), _: host.Fd, _: []const u8) !void {}
+
+        pub fn setFileCreationMask(_: *@This(), mask: u32) u32 {
+            return mask;
+        }
+
+        pub fn currentProcessId(_: *@This()) host.Pid {
+            return 1;
+        }
+
+        pub fn sendSignal(_: *@This(), _: host.Pid, _: u8) !void {}
+
+        pub fn setSignalDefault(_: *@This(), _: u8) !void {}
+
+        pub fn setSignalIgnored(_: *@This(), _: u8) !void {}
+
+        pub fn installSignalTrap(_: *@This(), _: u8) !void {}
+    };
+    const TestShell = struct {
+        host: TestHost = .{},
+        state: state_mod.State,
+
+        fn scratchAllocator(_: *@This()) std.mem.Allocator {
+            return std.testing.allocator;
+        }
+    };
+
+    var shell: TestShell = .{ .state = state_mod.State.init(std.testing.allocator, .{}) };
+    defer shell.state.deinit();
+    const set_definition = lookup("set").?;
+
+    try std.testing.expect(!shell.state.options.notify);
+    try std.testing.expectEqual(
+        @as(result.ExitStatus, 0),
+        (try eval(&shell, set_definition, &.{ "set", "-o", "notify" })).status,
+    );
+    try std.testing.expect(shell.state.options.notify);
+    try std.testing.expectEqual(
+        @as(result.ExitStatus, 0),
+        (try eval(&shell, set_definition, &.{ "set", "+o", "notify" })).status,
+    );
+    try std.testing.expect(!shell.state.options.notify);
+}
+
+test "jobs builtin filters jobs and prints pids" {
+    const TestHost = struct {
+        stdout: std.ArrayList(u8) = .empty,
+        stderr: std.ArrayList(u8) = .empty,
+
+        fn deinit(self: *@This()) void {
+            self.stdout.deinit(std.testing.allocator);
+            self.stderr.deinit(std.testing.allocator);
+        }
+
+        pub fn writeAll(self: *@This(), fd: host.Fd, bytes: []const u8) !void {
+            switch (fd) {
+                .stdout => try self.stdout.appendSlice(std.testing.allocator, bytes),
+                .stderr => try self.stderr.appendSlice(std.testing.allocator, bytes),
+                else => unreachable,
+            }
+        }
+
+        pub fn setFileCreationMask(_: *@This(), mask: u32) u32 {
+            return mask;
+        }
+
+        pub fn currentProcessId(_: *@This()) host.Pid {
+            return 1;
+        }
+
+        pub fn sendSignal(_: *@This(), _: host.Pid, _: u8) !void {}
+
+        pub fn setSignalDefault(_: *@This(), _: u8) !void {}
+
+        pub fn setSignalIgnored(_: *@This(), _: u8) !void {}
+
+        pub fn installSignalTrap(_: *@This(), _: u8) !void {}
+    };
+    const TestShell = struct {
+        host: TestHost = .{},
+        state: state_mod.State,
+
+        fn scratchAllocator(_: *@This()) std.mem.Allocator {
+            return std.testing.allocator;
+        }
+    };
+
+    var shell: TestShell = .{ .state = state_mod.State.init(std.testing.allocator, .{}) };
+    defer shell.state.deinit();
+    defer shell.host.deinit();
+    try shell.state.addBackgroundPid(111);
+    try shell.state.addBackgroundJob(111, "sleep 1");
+    try shell.state.addBackgroundPid(222);
+    try shell.state.addBackgroundJob(222, "sleep 2");
+
+    const jobs_definition = lookup("jobs").?;
+    try std.testing.expectEqual(
+        @as(result.ExitStatus, 0),
+        (try eval(&shell, jobs_definition, &.{ "jobs", "-p", "%2" })).status,
+    );
+    try std.testing.expectEqualStrings("222\n", shell.host.stdout.items);
+
+    shell.host.stdout.clearRetainingCapacity();
+    try std.testing.expectEqual(
+        @as(result.ExitStatus, 1),
+        (try eval(&shell, jobs_definition, &.{ "jobs", "%3" })).status,
+    );
+    try std.testing.expectEqualStrings("", shell.host.stdout.items);
+    try std.testing.expectEqualStrings("jobs: no such job\n", shell.host.stderr.items);
 }
 
 test "exit builtin returns requested exit flow" {

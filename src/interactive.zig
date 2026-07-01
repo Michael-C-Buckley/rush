@@ -39,6 +39,7 @@ pub fn run(
     sh.setFunctionAutoload(autoloadRushFunction);
 
     const prompted_stdin = !sh.host.isTerminalFd(.stdin);
+    if (!prompted_stdin) enableJobControl(&sh);
 
     var source_id: shell.source.SourceId = 1;
     if (try startup.source(&sh, &source_id, options.login, !prompted_stdin)) |status| return status;
@@ -73,6 +74,20 @@ pub fn run(
         .events = .{ .sh = &sh },
     };
     return session.runTerminal();
+}
+
+fn enableJobControl(sh: *RushShell) void {
+    const shell_pid = sh.host.currentProcessId();
+    sh.state.shell_pid = shell_pid;
+    sh.host.setProcessGroup(0, shell_pid) catch {
+        sh.state.options.monitor = false;
+        return;
+    };
+    sh.host.setTerminalProcessGroup(.stdin, shell_pid) catch {
+        sh.state.options.monitor = false;
+        return;
+    };
+    sh.state.options.monitor = true;
 }
 
 const InteractiveSession = struct {
@@ -117,6 +132,13 @@ const InteractiveSession = struct {
     const ReadLineError = error{EditorFailure} || error{OutOfMemory};
 
     fn readLine(self: *InteractiveSession, terminal: *editor.driver.TerminalSession) ReadLineError!editor.driver.ReadLineResult {
+        const job_output = self.reapBackgroundJobsAndDispatch(self.allocator) catch |err| switch (err) {
+            error.OutOfMemory => return error.OutOfMemory,
+            else => try self.allocator.dupe(u8, ""),
+        };
+        defer self.allocator.free(job_output);
+        if (job_output.len != 0) self.sh.host.writeAll(.stderr, job_output) catch {};
+
         const prompt_text = self.renderPrompt() catch try prompt(self.allocator, self.sh);
         defer self.allocator.free(prompt_text);
         self.dispatchPromptAsyncLifecycleEvents(self.allocator) catch |err| switch (err) {
@@ -196,6 +218,7 @@ const InteractiveSession = struct {
         };
         self.source_id.* +%= 1;
 
+        const background_jobs_before = self.sh.state.background_jobs.items.len;
         const started_at = unixTimestamp(self.io);
         const evaluated = self.sh.evalSource(src) catch {
             self.sh.state.last_status = 2;
@@ -208,6 +231,13 @@ const InteractiveSession = struct {
         self.last_command_duration_ms = duration_ms;
         self.history_service.addCommand(self.io, line, evaluated.status, started_at, duration_ms) catch {};
         terminal.finishSemanticCommand(evaluated.status) catch {};
+        const job_event_output = try self.dispatchJobLifecycleEvents(
+            self.allocator,
+            background_jobs_before,
+            self.sh.state.background_jobs.items.len,
+        );
+        defer self.allocator.free(job_event_output);
+        if (job_event_output.len != 0) try self.sh.host.writeAll(.stderr, job_event_output);
 
         switch (evaluated.flow) {
             .exit => |status| return self.exit(status),
@@ -216,6 +246,75 @@ const InteractiveSession = struct {
                 return null;
             },
         }
+    }
+
+    fn reapBackgroundJobsAndDispatch(self: *InteractiveSession, allocator: std.mem.Allocator) ![]const u8 {
+        const HostType = switch (@typeInfo(@TypeOf(self.sh.host))) {
+            .pointer => |pointer| pointer.child,
+            else => @TypeOf(self.sh.host),
+        };
+        if (!@hasDecl(HostType, "waitNonBlocking")) return allocator.dupe(u8, "");
+
+        const background_jobs_before = self.sh.state.background_jobs.items.len;
+        var output: std.ArrayList(u8) = .empty;
+        errdefer output.deinit(allocator);
+
+        var index: usize = 0;
+        while (index < self.sh.state.background_jobs.items.len) {
+            const job = &self.sh.state.background_jobs.items[index];
+            var pid_index: usize = 0;
+            while (pid_index < job.pids.items.len) {
+                const pid = job.pids.items[pid_index];
+                const waited = self.sh.host.waitNonBlocking(pid) catch {
+                    pid_index += 1;
+                    continue;
+                };
+                const status = waited orelse {
+                    pid_index += 1;
+                    continue;
+                };
+                const job_complete = job.pids.items.len == 1;
+                if (job_complete and self.sh.state.options.notify) {
+                    try appendBackgroundJobNotification(allocator, &output, job.*, status);
+                }
+                _ = self.sh.state.removeBackgroundPid(pid);
+                if (job_complete) break;
+            }
+            if (index < self.sh.state.background_jobs.items.len and
+                self.sh.state.background_jobs.items[index].pids.items.len != 0)
+            {
+                index += 1;
+            }
+        }
+
+        const job_event_output = try self.dispatchJobLifecycleEvents(
+            allocator,
+            background_jobs_before,
+            self.sh.state.background_jobs.items.len,
+        );
+        defer allocator.free(job_event_output);
+        try output.appendSlice(allocator, job_event_output);
+        return output.toOwnedSlice(allocator);
+    }
+
+    fn dispatchJobLifecycleEvents(
+        self: *InteractiveSession,
+        allocator: std.mem.Allocator,
+        previous_count: usize,
+        current_count: usize,
+    ) ![]const u8 {
+        if (previous_count == current_count) return allocator.dupe(u8, "");
+
+        var output: std.ArrayList(u8) = .empty;
+        errdefer output.deinit(allocator);
+        const event_name = if (current_count > previous_count) "job.start" else "job.end";
+        var count_buffer: [32]u8 = undefined;
+        const active_count = try std.fmt.bufPrint(&count_buffer, "{d}", .{current_count});
+        var dispatched = try self.events.runEvent(allocator, self.io, event_name, &.{ "job", active_count });
+        defer dispatched.deinit(allocator);
+        if (dispatched.exit_status) |status| pendingEventExit(self, status);
+        try output.appendSlice(allocator, dispatched.output);
+        return output.toOwnedSlice(allocator);
     }
 
     fn exitWithLastStatus(self: *InteractiveSession) u8 {
@@ -232,10 +331,23 @@ const InteractiveSession = struct {
 
 fn runInteractiveHooks(context: *anyopaque, allocator: std.mem.Allocator, io: std.Io) !editor.driver.HookResult {
     const session: *InteractiveSession = @ptrCast(@alignCast(context));
+    var output: std.ArrayList(u8) = .empty;
+    errdefer output.deinit(allocator);
+
+    const job_output = try session.reapBackgroundJobsAndDispatch(allocator);
+    defer allocator.free(job_output);
+    try output.appendSlice(allocator, job_output);
+
     try session.dispatchPromptAsyncLifecycleEvents(allocator);
     var dispatched = try session.events.runDueTimers(allocator, io);
+    defer dispatched.deinit(allocator);
     if (dispatched.exit_status) |status| pendingEventExit(session, status);
-    return dispatched.hookResult();
+    try output.appendSlice(allocator, dispatched.output);
+    return .{
+        .output = try output.toOwnedSlice(allocator),
+        .refresh_prompt = true,
+        .stop = dispatched.exit_status != null,
+    };
 }
 
 fn nextInteractiveHookIntervalMs(context: *anyopaque, io: std.Io) !?u64 {
@@ -265,6 +377,51 @@ fn refreshInteractivePrompt(context: *anyopaque, allocator: std.mem.Allocator, i
 
 fn pendingEventExit(session: *InteractiveSession, status: u8) void {
     session.pending_event_exit_status = status;
+}
+
+fn appendBackgroundJobNotification(
+    allocator: std.mem.Allocator,
+    output: *std.ArrayList(u8),
+    job: shell.state.BackgroundJob,
+    status: host.WaitStatus,
+) !void {
+    const label = switch (status) {
+        .exited => |code| if (code == 0) "Done" else "Exit",
+        .signaled => "Terminated",
+        .stopped => "Stopped",
+        .continued => "Continued",
+    };
+    switch (status) {
+        .exited => |code| if (code == 0) {
+            try appendPrint(allocator, output, "[{d}] {s} {s}\n", .{ job.id, label, job.command });
+        } else {
+            try appendPrint(allocator, output, "[{d}] {s} {d} {s}\n", .{ job.id, label, code, job.command });
+        },
+        .signaled => |signal| try appendPrint(
+            allocator,
+            output,
+            "[{d}] {s} {d} {s}\n",
+            .{ job.id, label, signal, job.command },
+        ),
+        .stopped => |signal| try appendPrint(
+            allocator,
+            output,
+            "[{d}] {s} {d} {s}\n",
+            .{ job.id, label, signal, job.command },
+        ),
+        .continued => try appendPrint(allocator, output, "[{d}] {s} {s}\n", .{ job.id, label, job.command }),
+    }
+}
+
+fn appendPrint(
+    allocator: std.mem.Allocator,
+    output: *std.ArrayList(u8),
+    comptime fmt: []const u8,
+    args: anytype,
+) !void {
+    const bytes = try std.fmt.allocPrint(allocator, fmt, args);
+    defer allocator.free(bytes);
+    try output.appendSlice(allocator, bytes);
 }
 
 fn autoloadRushFunction(sh: *RushShell, name: []const u8) !bool {

@@ -106,6 +106,7 @@ fn evalBackgroundAndOr(shell: anytype, and_or: ast.AndOr) EvalError!result.EvalR
         .child => {
             const scratch = shell.beginScratchScope() catch shell.host.exit(2);
             defer scratch.end();
+            if (shell.state.options.monitor) setChildProcessGroup(shell, 0) catch shell.host.exit(2);
             resetCaughtSignalTrapsForAsyncChild(shell);
             if (!shell.state.options.monitor) ignoreAsynchronousJobSignals(shell) catch shell.host.exit(2);
             if (background_subshell) |subshell| {
@@ -125,6 +126,7 @@ fn evalBackgroundAndOr(shell: anytype, and_or: ast.AndOr) EvalError!result.EvalR
             }
         },
     };
+    if (shell.state.options.monitor) setParentProcessGroup(shell, pid, pid) catch {};
     shell.state.last_background_pid = pid;
     try shell.state.addBackgroundPid(pid);
     const job_scratch = try shell.beginScratchScope();
@@ -178,13 +180,13 @@ fn evalBackgroundPipeline(shell: anytype, pipeline: ast.Pipeline) EvalError!resu
     std.debug.assert(pipeline.stages.len > 1);
     _ = shellProcessId(shell);
     _ = parentProcessId(shell);
-    const pids = try spawnPipelineStages(shell, pipeline.stages, true);
+    const pids = try spawnPipelineStages(shell, pipeline.stages, true, shell.state.options.monitor);
     defer shell.allocator.free(pids);
     for (pids) |pid| try shell.state.addBackgroundPid(pid);
     shell.state.last_background_pid = pids[pids.len - 1];
     const job_scratch = try shell.beginScratchScope();
     defer job_scratch.end();
-    try shell.state.addBackgroundJob(pids[pids.len - 1], try pipelineCommandText(shell, pipeline));
+    try shell.state.addBackgroundJobPids(pids, pids[0], try pipelineCommandText(shell, pipeline));
     return .{ .status = 0 };
 }
 
@@ -269,12 +271,47 @@ fn evalPipeline(shell: anytype, pipeline: ast.Pipeline) EvalError!result.EvalRes
 fn evalExternalPipeline(shell: anytype, stages: []const ast.Command) EvalError!result.EvalResult {
     std.debug.assert(stages.len > 1);
     const pipefail = shell.state.options.pipefail;
-    const pids = try spawnPipelineStages(shell, stages, false);
+    const pids = try spawnPipelineStages(shell, stages, false, shell.state.options.monitor);
     defer shell.allocator.free(pids);
+    const foreground_restore_group = giveTerminalToProcessGroup(shell, pids[0]) catch {
+        const scratch = try shell.beginScratchScope();
+        defer scratch.end();
+        _ = waitPids(shell, pids) catch {};
+        return .{ .status = 1 };
+    };
+    defer if (foreground_restore_group) |process_group| restoreTerminalToProcessGroup(shell, process_group);
     const scratch = try shell.beginScratchScope();
     defer scratch.end();
     const statuses = try waitPids(shell, pids);
     return .{ .status = pipelineStatus(statuses, pipefail) };
+}
+
+fn giveTerminalToProcessGroup(shell: anytype, process_group: host_mod.Pid) !?host_mod.Pid {
+    if (!shell.state.options.monitor) return null;
+    const HostType = switch (@typeInfo(@TypeOf(shell.host))) {
+        .pointer => |pointer| pointer.child,
+        else => @TypeOf(shell.host),
+    };
+    if (!@hasDecl(HostType, "terminalProcessGroup") or
+        !@hasDecl(HostType, "setTerminalProcessGroup")) return null;
+    const shell_process_group = shell.host.terminalProcessGroup(.stdin) catch |err| switch (err) {
+        error.NotATerminal => return null,
+        else => return err,
+    };
+    shell.host.setTerminalProcessGroup(.stdin, process_group) catch |err| switch (err) {
+        error.NotATerminal => return null,
+        else => return err,
+    };
+    return shell_process_group;
+}
+
+fn restoreTerminalToProcessGroup(shell: anytype, process_group: host_mod.Pid) void {
+    const HostType = switch (@typeInfo(@TypeOf(shell.host))) {
+        .pointer => |pointer| pointer.child,
+        else => @TypeOf(shell.host),
+    };
+    if (!@hasDecl(HostType, "setTerminalProcessGroup")) return;
+    shell.host.setTerminalProcessGroup(.stdin, process_group) catch {};
 }
 
 fn pipelineStatus(statuses: []const host_mod.WaitStatus, pipefail: bool) result.ExitStatus {
@@ -288,7 +325,12 @@ fn pipelineStatus(statuses: []const host_mod.WaitStatus, pipefail: bool) result.
     return 0;
 }
 
-fn spawnPipelineStages(shell: anytype, stages: []const ast.Command, direct_static_externals: bool) EvalError![]const host_mod.Pid {
+fn spawnPipelineStages(
+    shell: anytype,
+    stages: []const ast.Command,
+    direct_static_externals: bool,
+    create_process_group: bool,
+) EvalError![]const host_mod.Pid {
     std.debug.assert(stages.len > 1);
     const scratch = try shell.beginScratchScope();
     defer scratch.end();
@@ -311,7 +353,8 @@ fn spawnPipelineStages(shell: anytype, stages: []const ast.Command, direct_stati
     }
 
     for (stages, 0..) |stage, index| {
-        pids[index] = try forkPipelineStage(shell, stage, pipes, index, direct_static_externals);
+        const process_group: ?host_mod.Pid = if (!create_process_group) null else if (index == 0) 0 else pids[0];
+        pids[index] = try forkPipelineStage(shell, stage, pipes, index, direct_static_externals, process_group);
         spawned += 1;
     }
 
@@ -339,16 +382,25 @@ fn forkPipelineStage(
     pipes: []const host_mod.Pipe,
     stage_index: usize,
     direct_static_external: bool,
+    process_group: ?host_mod.Pid,
 ) !host_mod.Pid {
     const fd_actions = try pipelineFdActions(shell, pipes, stage_index);
     if (direct_static_external) {
         if (try staticExternalPipelineStageRequest(shell, command, fd_actions)) |request| {
-            return (try shell.host.spawn(request)).pid;
+            var grouped_request = request;
+            grouped_request.process_group = process_group;
+            const pid = (try shell.host.spawn(grouped_request)).pid;
+            if (process_group) |pgid| try setParentProcessGroup(shell, pid, if (pgid == 0) pid else pgid);
+            return pid;
         }
     }
     return switch (try shell.host.forkProcess()) {
-        .parent => |pid| pid,
+        .parent => |pid| {
+            if (process_group) |pgid| try setParentProcessGroup(shell, pid, if (pgid == 0) pid else pgid);
+            return pid;
+        },
         .child => {
+            if (process_group) |pgid| setChildProcessGroup(shell, pgid) catch shell.host.exit(2);
             applyPipelineChildFdActions(shell, fd_actions) catch shell.host.exit(127);
             if (!shell.state.options.xtrace) {
                 const request = dynamicExternalCommandRequest(shell, command, &.{}) catch shell.host.exit(2);
@@ -358,6 +410,27 @@ fn forkPipelineStage(
             shell.host.exit(evaluated.status);
         },
     };
+}
+
+fn setParentProcessGroup(shell: anytype, pid: host_mod.Pid, process_group: host_mod.Pid) !void {
+    const HostType = switch (@typeInfo(@TypeOf(shell.host))) {
+        .pointer => |pointer| pointer.child,
+        else => @TypeOf(shell.host),
+    };
+    if (!@hasDecl(HostType, "setProcessGroup")) return;
+    shell.host.setProcessGroup(pid, process_group) catch |err| switch (err) {
+        error.AccessDenied => return,
+        else => return err,
+    };
+}
+
+fn setChildProcessGroup(shell: anytype, process_group: host_mod.Pid) !void {
+    const HostType = switch (@typeInfo(@TypeOf(shell.host))) {
+        .pointer => |pointer| pointer.child,
+        else => @TypeOf(shell.host),
+    };
+    if (!@hasDecl(HostType, "setProcessGroup")) return;
+    try shell.host.setProcessGroup(0, process_group);
 }
 
 fn staticExternalPipelineStageRequest(
@@ -1903,6 +1976,10 @@ fn evalWaitBuiltin(shell: anytype, args: []const []const u8) !result.EvalResult 
 
     var status: result.ExitStatus = 0;
     for (args[1..]) |arg| {
+        if (waitOperandJob(shell, arg)) |job| {
+            status = try waitBackgroundJob(shell, job);
+            continue;
+        }
         const pid = waitOperandPid(shell, arg) orelse {
             try shell.host.writeAll(.stderr, "wait: invalid pid\n");
             status = 1;
@@ -1922,12 +1999,32 @@ fn evalWaitBuiltin(shell: anytype, args: []const []const u8) !result.EvalResult 
     return .{ .status = status };
 }
 
-fn waitOperandPid(shell: anytype, arg: []const u8) ?host_mod.Pid {
-    if (arg.len >= 2 and arg[0] == '%') {
-        const job_id = std.fmt.parseInt(usize, arg[1..], 10) catch return null;
-        if (job_id == 0 or job_id > shell.state.background_pids.items.len) return null;
-        return shell.state.background_pids.items[job_id - 1];
+fn waitBackgroundJob(shell: anytype, job: state_mod.BackgroundJob) !result.ExitStatus {
+    const pids = try shell.scratchAllocator().dupe(host_mod.Pid, job.pids.items);
+    defer shell.scratchAllocator().free(pids);
+    var status: result.ExitStatus = 0;
+    for (pids) |pid| {
+        if (!shell.state.removeBackgroundPid(pid)) {
+            status = 127;
+            continue;
+        }
+        const waited = shell.host.waitInterruptible(pid) catch {
+            status = 127;
+            continue;
+        };
+        status = waited.shellStatus();
     }
+    return status;
+}
+
+fn waitOperandJob(shell: anytype, arg: []const u8) ?state_mod.BackgroundJob {
+    if (arg.len < 2 or arg[0] != '%') return null;
+    const job_id = std.fmt.parseInt(usize, arg[1..], 10) catch return null;
+    return shell.state.backgroundJob(job_id);
+}
+
+fn waitOperandPid(shell: anytype, arg: []const u8) ?host_mod.Pid {
+    _ = shell;
     return parseWaitPid(arg);
 }
 
@@ -5324,8 +5421,24 @@ fn evalExternalWithSearchPath(
         return .{ .status = 127 };
     };
     try rememberCommandHash(shell, fields[0], command_path, search_path);
-    const request = try makeExternalSpawnRequestWithSearchPath(shell, fields, assignments, &.{}, search_path);
-    const status = try shell.host.spawnAndWait(request);
+    var request = try makeExternalSpawnRequestWithSearchPath(shell, fields, assignments, &.{}, search_path);
+    const HostType = switch (@typeInfo(@TypeOf(shell.host))) {
+        .pointer => |pointer| pointer.child,
+        else => @TypeOf(shell.host),
+    };
+    const status = if (@hasDecl(HostType, "spawn") and @hasDecl(HostType, "wait") and shell.state.options.monitor) status: {
+        request.process_group = 0;
+        const pid = (try shell.host.spawn(request)).pid;
+        try setParentProcessGroup(shell, pid, pid);
+        const foreground_restore_group = giveTerminalToProcessGroup(shell, pid) catch {
+            _ = shell.host.wait(pid) catch {};
+            restoreVariables(shell, saved);
+            restored_assignments = true;
+            return .{ .status = 1 };
+        };
+        defer if (foreground_restore_group) |process_group| restoreTerminalToProcessGroup(shell, process_group);
+        break :status try shell.host.wait(pid);
+    } else try shell.host.spawnAndWait(request);
     restoreVariables(shell, saved);
     restored_assignments = true;
     return .{ .status = status.shellStatus() };

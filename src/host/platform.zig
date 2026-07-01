@@ -6,6 +6,8 @@ const builtin = @import("builtin");
 const host = @import("../host.zig");
 
 extern "c" fn readdir(dir: *std.c.DIR) ?*std.c.dirent;
+extern "c" fn tcgetpgrp(fd: c_int) c_int;
+extern "c" fn tcsetpgrp(fd: c_int, pgrp: c_int) c_int;
 
 var pending_signal_bits: std.atomic.Value(u64) = .init(0);
 
@@ -59,6 +61,10 @@ pub const WaitError = error{
 };
 
 pub const KillError = host.KillError;
+
+pub const ProcessGroupError = host.ProcessGroupError;
+
+pub const TerminalProcessGroupError = host.TerminalProcessGroupError;
 
 pub const SignalDispositionError = host.SignalDispositionError;
 
@@ -182,6 +188,39 @@ pub fn sendSignal(pid: host.Pid, signal: u8) KillError!void {
         .macos, .freebsd, .openbsd, .netbsd => libcSendSignal(pid, signal),
         else => @compileError("unsupported host OS"),
     };
+}
+
+pub fn setProcessGroup(pid: host.Pid, process_group: host.Pid) ProcessGroupError!void {
+    return switch (builtin.os.tag) {
+        .linux => linuxSetProcessGroup(pid, process_group),
+        .macos, .freebsd, .openbsd, .netbsd => libcSetProcessGroup(pid, process_group),
+        else => @compileError("unsupported host OS"),
+    };
+}
+
+pub fn terminalProcessGroup(fd: host.Fd) TerminalProcessGroupError!host.Pid {
+    while (true) {
+        const process_group = tcgetpgrp(fd.raw());
+        if (process_group >= 0) return @intCast(process_group);
+        switch (std.c.errno(process_group)) {
+            .INTR => continue,
+            .NOTTY => return error.NotATerminal,
+            else => return error.Unexpected,
+        }
+    }
+}
+
+pub fn setTerminalProcessGroup(fd: host.Fd, process_group: host.Pid) TerminalProcessGroupError!void {
+    while (true) {
+        const rc = tcsetpgrp(fd.raw(), @intCast(process_group));
+        switch (std.c.errno(rc)) {
+            .SUCCESS => return,
+            .INTR => continue,
+            .NOTTY => return error.NotATerminal,
+            .PERM => return error.NotAPgrpMember,
+            else => return error.Unexpected,
+        }
+    }
 }
 
 pub fn setSignalIgnored(signal: u8) SignalDispositionError!void {
@@ -335,6 +374,14 @@ pub fn wait(pid: host.Pid) WaitError!host.WaitStatus {
     return switch (builtin.os.tag) {
         .linux => linuxWait(pid),
         .macos, .freebsd, .openbsd, .netbsd => libcWait(pid),
+        else => @compileError("unsupported host OS"),
+    };
+}
+
+pub fn waitNonBlocking(pid: host.Pid) WaitError!?host.WaitStatus {
+    return switch (builtin.os.tag) {
+        .linux => linuxWaitNonBlocking(pid),
+        .macos, .freebsd, .openbsd, .netbsd => libcWaitNonBlocking(pid),
         else => @compileError("unsupported host OS"),
     };
 }
@@ -666,6 +713,16 @@ fn linuxSendSignal(pid: host.Pid, signal: u8) KillError!void {
     }
 }
 
+fn linuxSetProcessGroup(pid: host.Pid, process_group: host.Pid) ProcessGroupError!void {
+    const rc = std.os.linux.setpgid(pid, process_group);
+    switch (std.os.linux.errno(rc)) {
+        .SUCCESS => return,
+        .ACCES, .PERM => return error.AccessDenied,
+        .SRCH => return error.NoSuchProcess,
+        else => return error.Unexpected,
+    }
+}
+
 fn libcIsExecutableZ(path: [:0]const u8) bool {
     const rc = std.c.access(path.ptr, std.c.X_OK);
     return std.c.errno(rc) == .SUCCESS;
@@ -683,6 +740,16 @@ fn libcSendSignal(pid: host.Pid, signal: u8) KillError!void {
         .PERM => return error.AccessDenied,
         .SRCH => return error.NoSuchProcess,
         .INVAL => return error.InvalidSignal,
+        else => return error.Unexpected,
+    }
+}
+
+fn libcSetProcessGroup(pid: host.Pid, process_group: host.Pid) ProcessGroupError!void {
+    const rc = std.c.setpgid(@intCast(pid), @intCast(process_group));
+    switch (std.c.errno(rc)) {
+        .SUCCESS => return,
+        .ACCES, .PERM => return error.AccessDenied,
+        .SRCH => return error.NoSuchProcess,
         else => return error.Unexpected,
     }
 }
@@ -995,6 +1062,7 @@ fn linuxSpawn(request: host.SpawnRequest) SpawnError!host.SpawnResult {
 
     const pid: i32 = @intCast(fork_rc);
     if (pid == 0) {
+        if (request.process_group) |process_group| linuxSetProcessGroup(0, process_group) catch linux.exit(127);
         applyLinuxFdActions(request.fd_actions);
         const exec_rc = linux.execve(request.path.ptr, request.argv.ptr, request.envp.ptr);
         if (linux.errno(exec_rc) == .NOEXEC) {
@@ -1008,6 +1076,7 @@ fn linuxSpawn(request: host.SpawnRequest) SpawnError!host.SpawnResult {
 
 fn linuxExec(request: host.SpawnRequest) SpawnError!void {
     const linux = std.os.linux;
+    if (request.process_group) |process_group| linuxSetProcessGroup(0, process_group) catch return error.Unexpected;
     applyLinuxFdActions(request.fd_actions);
     const exec_rc = linux.execve(request.path.ptr, request.argv.ptr, request.envp.ptr);
     if (linux.errno(exec_rc) == .NOEXEC) {
@@ -1023,6 +1092,19 @@ fn linuxWait(pid: host.Pid) WaitError!host.WaitStatus {
         const wait_rc = linux.waitpid(pid, &status, 0);
         switch (linux.errno(wait_rc)) {
             .SUCCESS => return decodeWaitStatus(status),
+            .INTR => continue,
+            else => return error.Unexpected,
+        }
+    }
+}
+
+fn linuxWaitNonBlocking(pid: host.Pid) WaitError!?host.WaitStatus {
+    const linux = std.os.linux;
+    var status: u32 = 0;
+    while (true) {
+        const wait_rc = linux.waitpid(pid, &status, linux.W.NOHANG);
+        switch (linux.errno(wait_rc)) {
+            .SUCCESS => return if (wait_rc == 0) null else decodeWaitStatus(status),
             .INTR => continue,
             else => return error.Unexpected,
         }
@@ -1052,6 +1134,7 @@ fn libcSpawn(request: host.SpawnRequest) SpawnError!host.SpawnResult {
 
     const pid: i32 = @intCast(fork_rc);
     if (pid == 0) {
+        if (request.process_group) |process_group| libcSetProcessGroup(0, process_group) catch std.c._exit(127);
         applyLibcFdActions(request.fd_actions);
         const exec_rc = std.c.execve(request.path.ptr, request.argv.ptr, request.envp.ptr);
         if (std.c.errno(exec_rc) == .NOEXEC) {
@@ -1064,6 +1147,7 @@ fn libcSpawn(request: host.SpawnRequest) SpawnError!host.SpawnResult {
 }
 
 fn libcExec(request: host.SpawnRequest) SpawnError!void {
+    if (request.process_group) |process_group| libcSetProcessGroup(0, process_group) catch return error.Unexpected;
     applyLibcFdActions(request.fd_actions);
     const exec_rc = std.c.execve(request.path.ptr, request.argv.ptr, request.envp.ptr);
     if (std.c.errno(exec_rc) == .NOEXEC) {
@@ -1080,6 +1164,18 @@ fn libcWait(pid: host.Pid) WaitError!host.WaitStatus {
         const wait_rc = std.c.waitpid(pid, &status, 0);
         switch (std.c.errno(wait_rc)) {
             .SUCCESS => return decodeWaitStatus(@bitCast(status)),
+            .INTR => continue,
+            else => return error.Unexpected,
+        }
+    }
+}
+
+fn libcWaitNonBlocking(pid: host.Pid) WaitError!?host.WaitStatus {
+    var status: c_int = 0;
+    while (true) {
+        const wait_rc = std.c.waitpid(pid, &status, std.c.W.NOHANG);
+        switch (std.c.errno(wait_rc)) {
+            .SUCCESS => return if (wait_rc == 0) null else decodeWaitStatus(@bitCast(status)),
             .INTR => continue,
             else => return error.Unexpected,
         }

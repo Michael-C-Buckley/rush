@@ -146,6 +146,18 @@ pub const KillError = error{
     Unexpected,
 };
 
+pub const ProcessGroupError = error{
+    AccessDenied,
+    NoSuchProcess,
+    Unexpected,
+};
+
+pub const TerminalProcessGroupError = error{
+    NotATerminal,
+    NotAPgrpMember,
+    Unexpected,
+};
+
 pub const SignalDispositionError = error{
     InvalidSignal,
     Unexpected,
@@ -326,6 +338,18 @@ pub const RealHost = struct {
         try platform.sendSignal(pid, signal);
     }
 
+    pub fn setProcessGroup(_: *RealHost, pid: Pid, process_group: Pid) platform.ProcessGroupError!void {
+        try platform.setProcessGroup(pid, process_group);
+    }
+
+    pub fn terminalProcessGroup(_: *RealHost, fd: Fd) platform.TerminalProcessGroupError!Pid {
+        return platform.terminalProcessGroup(fd);
+    }
+
+    pub fn setTerminalProcessGroup(_: *RealHost, fd: Fd, process_group: Pid) platform.TerminalProcessGroupError!void {
+        try platform.setTerminalProcessGroup(fd, process_group);
+    }
+
     pub fn setSignalIgnored(_: *RealHost, signal: u8) platform.SignalDispositionError!void {
         try platform.setSignalIgnored(signal);
     }
@@ -352,6 +376,10 @@ pub const RealHost = struct {
 
     pub fn wait(_: *RealHost, pid: Pid) platform.WaitError!WaitStatus {
         return platform.wait(pid);
+    }
+
+    pub fn waitNonBlocking(_: *RealHost, pid: Pid) platform.WaitError!?WaitStatus {
+        return platform.waitNonBlocking(pid);
     }
 
     pub fn waitInterruptible(_: *RealHost, pid: Pid) platform.WaitError!WaitStatus {
