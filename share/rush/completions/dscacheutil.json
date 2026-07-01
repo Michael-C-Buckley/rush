@@ -1,0 +1,36 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "dscacheutil",
+    "description": "manage the Directory Service cache",
+    "options": [
+      { "short": "h", "description": "list options", "inherit": false },
+      {
+        "short": "q",
+        "description": "query the Directory Service cache",
+        "inherit": false,
+        "value": { "name": "category", "provider": "dscacheutil.categories" }
+      },
+      {
+        "short": "a",
+        "description": "query an attribute",
+        "inherit": false,
+        "value": [
+          { "name": "attribute-key", "provider": "dscacheutil.attribute-keys" },
+          { "name": "attribute-value" }
+        ]
+      },
+      { "spellings": ["-cachedump"], "description": "dump cache information", "inherit": false },
+      { "spellings": ["-buckets"], "description": "show cache bucket overview", "inherit": false },
+      { "spellings": ["-entries"], "description": "dump detailed cache entries", "inherit": false, "value": { "name": "entry", "provider": "dscacheutil.categories" } },
+      { "spellings": ["-configuration"], "description": "show current configuration", "inherit": false },
+      { "spellings": ["-flushcache"], "description": "flush the entire cache", "inherit": false },
+      { "spellings": ["-statistics"], "description": "show cache statistics", "inherit": false }
+    ],
+    "providers": {
+      "dscacheutil.categories": { "values": ["group", "host", "mount", "protocol", "rpc", "service", "user"] },
+      "dscacheutil.attribute-keys": { "values": ["name", "gid", "ip_address", "number", "port", "uid"] }
+    }
+  }
+}
