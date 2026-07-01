@@ -1,0 +1,72 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "create-next-app",
+    "options": [
+      {
+        "short": "V",
+        "long": "version",
+        "description": "output the version number",
+        "inherit": false
+      },
+      {
+        "long": "ts",
+        "aliases": [
+          "typescript"
+        ],
+        "description": "initialize as a TypeScript project",
+        "inherit": false
+      },
+      {
+        "long": "use-npm",
+        "description": "bootstrap the app using npm",
+        "inherit": false
+      },
+      {
+        "long": "use-pnpm",
+        "description": "bootstrap the app using pnpm",
+        "inherit": false
+      },
+      {
+        "short": "e",
+        "long": "example",
+        "description": "bootstrap from an example name or GitHub URL",
+        "inherit": false,
+        "value": {
+          "name": "name-or-github-url"
+        }
+      },
+      {
+        "long": "example-path",
+        "description": "path to the example when the GitHub branch name contains a slash",
+        "inherit": false,
+        "value": {
+          "name": "path-to-example",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "short": "h",
+        "long": "help",
+        "description": "display help for command",
+        "inherit": false
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "project-directory",
+          "provider": "builtin.directories",
+          "index": 0
+        }
+      ]
+    },
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      }
+    },
+    "description": "create a Next.js app"
+  }
+}
