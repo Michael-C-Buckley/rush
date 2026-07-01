@@ -1,0 +1,37 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "echo",
+    "description": "write arguments to standard output",
+    "options": [
+      {
+        "short": "n",
+        "description": "do not print the trailing newline character",
+        "inherit": false
+      },
+      {
+        "short": "e",
+        "description": "interpret escape sequences",
+        "inherit": false,
+        "exclusiveGroup": "echo.escapes"
+      },
+      {
+        "short": "E",
+        "description": "disable escape sequences",
+        "inherit": false,
+        "exclusiveGroup": "echo.escapes"
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "string",
+          "index": 0,
+          "repeatable": true,
+          "description": "text to write"
+        }
+      ]
+    }
+  }
+}
