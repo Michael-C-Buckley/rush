@@ -87,6 +87,36 @@
             .status = 0,
         },
         .{
+            .name = "escaped backslash before double quoted newline preserves the newline",
+            .script =
+            \\eval "v='\\
+            \\X'"
+            \\printf '<%s>\n' "$v"
+            ,
+            .stdout =
+            \\<\
+            \\X>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "escaped single quote does not expose later single quoted newline",
+            .script =
+            \\v='a'\''\\\
+            \\Z'
+            \\printf '<%s>\n' "$v"
+            ,
+            .stdout =
+            \\<a'\\\
+            \\Z>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "double quotes do not give dollar-single-quotes special meaning",
             .script =
             \\printf '<%s>\n' "$'a\n'"

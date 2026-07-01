@@ -459,9 +459,18 @@ const Lexer = struct {
             const byte = raw_text[index];
             if (quote) |delimiter| {
                 if (byte == delimiter) quote = null;
-                if (delimiter == '"' and byte == '\\' and index + 1 < raw_text.len and raw_text[index + 1] == '\n') {
-                    index += 2;
-                    continue;
+                if (delimiter == '"' and byte == '\\' and index + 1 < raw_text.len) {
+                    const escaped = raw_text[index + 1];
+                    if (escaped == '\n') {
+                        index += 2;
+                        continue;
+                    }
+                    if (doubleQuoteEscapes(escaped)) {
+                        try output.append(self.allocator, byte);
+                        try output.append(self.allocator, escaped);
+                        index += 2;
+                        continue;
+                    }
                 }
                 try output.append(self.allocator, byte);
                 index += 1;
@@ -473,14 +482,30 @@ const Lexer = struct {
                 index += 1;
                 continue;
             }
-            if (byte == '\\' and index + 1 < raw_text.len and raw_text[index + 1] == '\n') {
-                index += 2;
+            if (byte == '\\') {
+                if (index + 1 < raw_text.len and raw_text[index + 1] == '\n') {
+                    index += 2;
+                    continue;
+                }
+                try output.append(self.allocator, byte);
+                index += 1;
+                if (index < raw_text.len) {
+                    try output.append(self.allocator, raw_text[index]);
+                    index += 1;
+                }
                 continue;
             }
             try output.append(self.allocator, byte);
             index += 1;
         }
         return output.toOwnedSlice(self.allocator);
+    }
+
+    fn doubleQuoteEscapes(byte: u8) bool {
+        return switch (byte) {
+            '$', '`', '"', '\\', '\n' => true,
+            else => false,
+        };
     }
 
     fn startsIoNumber(self: Lexer) bool {
@@ -896,6 +921,40 @@ test "lexer removes line continuations inside word tokens" {
     try std.testing.expectEqualStrings("f", tokens[0].text);
     try std.testing.expect(!tokens[0].quoted);
     try std.testing.expectEqual(token.Kind.left_paren, tokens[1].kind);
+}
+
+test "lexer preserves escaped backslash before double quoted newline" {
+    var arena: std.heap.ArenaAllocator = .init(std.testing.allocator);
+    defer arena.deinit();
+
+    const src: source_mod.Source = .{
+        .id = 1,
+        .kind = .command_string,
+        .name = "-c",
+        .text = "printf \"\\\\\n\"",
+    };
+    const tokens = try lex(arena.allocator(), src);
+
+    try std.testing.expectEqual(token.Kind.word, tokens[1].kind);
+    try std.testing.expectEqualStrings("\"\\\\\n\"", tokens[1].text);
+    try std.testing.expect(tokens[1].quoted);
+}
+
+test "lexer preserves single quoted newline after escaped single quote" {
+    var arena: std.heap.ArenaAllocator = .init(std.testing.allocator);
+    defer arena.deinit();
+
+    const src: source_mod.Source = .{
+        .id = 1,
+        .kind = .command_string,
+        .name = "-c",
+        .text = "v='a'\\''\\\\\\\nZ'",
+    };
+    const tokens = try lex(arena.allocator(), src);
+
+    try std.testing.expectEqual(token.Kind.word, tokens[0].kind);
+    try std.testing.expectEqualStrings("v='a'\\''\\\\\\\nZ'", tokens[0].text);
+    try std.testing.expect(tokens[0].quoted);
 }
 
 test "lexer keeps dollar single quoted words separate" {
