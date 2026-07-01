@@ -17,8 +17,10 @@ pub const HistoryEntry = struct {
 
 pub const CommandHistory = struct {
     context: *anyopaque,
+    io: std.Io,
     list: *const fn (*anyopaque, std.mem.Allocator) anyerror![]HistoryEntry,
     append: ?*const fn (*anyopaque, std.Io, []const u8, ExitStatus, i64, i64) anyerror!void = null,
+    suppress_next_append: ?*const fn (*anyopaque) void = null,
 };
 
 fn unixTimestamp(io: std.Io) i64 {
@@ -371,6 +373,16 @@ pub const InteractiveHistoryService = struct {
         };
     }
 
+    pub fn commandHistory(self: *InteractiveHistoryService, io: std.Io) CommandHistory {
+        return .{
+            .context = self,
+            .io = io,
+            .list = listFcEntries,
+            .append = appendFcCommand,
+            .suppress_next_append = suppressNextFcAppend,
+        };
+    }
+
     pub fn addCommand(
         self: *InteractiveHistoryService,
         io: std.Io,
@@ -448,15 +460,26 @@ pub const InteractiveHistoryService = struct {
         return self.history.fcEntries(allocator);
     }
 
+    fn listFcEntries(context: *anyopaque, allocator: std.mem.Allocator) ![]HistoryEntry {
+        const history_service: *InteractiveHistoryService = @ptrCast(@alignCast(context));
+        return history_service.fcEntries(allocator);
+    }
+
     fn appendFcCommand(
-        self: *InteractiveHistoryService,
+        context: *anyopaque,
         io: std.Io,
         line: []const u8,
         status: ExitStatus,
         started_at: i64,
         duration_ms: i64,
     ) !void {
-        try self.history.appendCommand(io, line, status, started_at, duration_ms);
+        const history_service: *InteractiveHistoryService = @ptrCast(@alignCast(context));
+        try history_service.history.appendCommand(io, line, status, started_at, duration_ms);
+    }
+
+    fn suppressNextFcAppend(context: *anyopaque) void {
+        const history_service: *InteractiveHistoryService = @ptrCast(@alignCast(context));
+        history_service.suppressNextAppend();
     }
 
     fn searchEntry(

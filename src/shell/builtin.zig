@@ -3,6 +3,7 @@
 const std = @import("std");
 
 const host = @import("../host.zig");
+const history_mod = @import("../history.zig");
 const output = @import("output.zig");
 const printf = @import("printf.zig");
 const result = @import("result.zig");
@@ -30,12 +31,15 @@ pub const Id = enum {
     dot,
     command,
     continue_,
+    echo,
+    env,
     event,
     eval,
     exec,
     export_,
     exit,
     false_,
+    fc,
     fg,
     getopts,
     hash,
@@ -91,11 +95,14 @@ pub const core_definitions: DefinitionMap = .initComptime(.{
     .{ ".", Definition{ .name = ".", .id = .dot, .kind = .special } },
     .{ "command", Definition{ .name = "command", .id = .command, .kind = .regular } },
     .{ "continue", Definition{ .name = "continue", .id = .continue_, .kind = .special } },
+    .{ "echo", Definition{ .name = "echo", .id = .echo, .kind = .regular } },
+    .{ "env", Definition{ .name = "env", .id = .env, .kind = .regular } },
     .{ "eval", Definition{ .name = "eval", .id = .eval, .kind = .special } },
     .{ "exec", Definition{ .name = "exec", .id = .exec, .kind = .special } },
     .{ "export", Definition{ .name = "export", .id = .export_, .kind = .special } },
     .{ "exit", Definition{ .name = "exit", .id = .exit, .kind = .special } },
     .{ "false", Definition{ .name = "false", .id = .false_, .kind = .regular } },
+    .{ "fc", Definition{ .name = "fc", .id = .fc, .kind = .regular } },
     .{ "fg", Definition{ .name = "fg", .id = .fg, .kind = .regular } },
     .{ "getopts", Definition{ .name = "getopts", .id = .getopts, .kind = .regular } },
     .{ "hash", Definition{ .name = "hash", .id = .hash, .kind = .regular } },
@@ -187,8 +194,10 @@ pub fn eval(shell: anytype, definition: Definition, args: []const []const u8) !r
         .break_ => evalBreak(args),
         .bracket, .cd, .command, .dot, .eval, .exec, .export_, .pwd, .read, .test_, .type, .wait => unreachable,
         .continue_ => evalContinue(args),
+        .echo => evalEcho(shell, args),
         .exit => evalExit(shell, args),
         .false_ => .{ .status = 1 },
+        .fc => evalFc(shell, args),
         .fg => evalFg(shell, args),
         .getopts => evalGetopts(shell, args),
         .hash => evalHash(shell, args),
@@ -204,11 +213,11 @@ pub fn eval(shell: anytype, definition: Definition, args: []const []const u8) !r
         .source => unreachable,
         .times => evalTimes(shell, args),
         .trap => evalTrap(shell, args),
-        .ulimit => .{},
+        .ulimit => evalUlimit(shell, args),
         .umask => evalUmask(shell, args),
         .unalias => evalUnalias(shell, args),
         .unset => evalUnset(shell, args),
-        .abbr, .color, .event, .prompt, .prompt_duration, .prompt_pwd, .rush_complete, .rush_env => unreachable,
+        .abbr, .color, .env, .event, .prompt, .prompt_duration, .prompt_pwd, .rush_complete, .rush_env => unreachable,
     };
 }
 
@@ -297,6 +306,8 @@ fn evalUnalias(shell: anytype, args: []const []const u8) result.EvalResult {
 }
 
 fn evalShopt(shell: anytype, args: []const []const u8) result.EvalResult {
+    var print_reusable = false;
+    var query = false;
     var set_value: ?bool = null;
     var index: usize = 1;
     while (index < args.len) : (index += 1) {
@@ -307,13 +318,22 @@ fn evalShopt(shell: anytype, args: []const []const u8) result.EvalResult {
         }
         if (arg.len < 2 or arg[0] != '-') break;
         for (arg[1..]) |option| switch (option) {
+            'p' => print_reusable = true,
+            'q' => query = true,
             's' => set_value = true,
             'u' => set_value = false,
             else => return .{ .status = 2 },
         };
     }
 
-    if (set_value == null or index >= args.len) return .{ .status = 2 };
+    if ((print_reusable and query) or (query and set_value != null) or (print_reusable and set_value != null)) {
+        return .{ .status = 2 };
+    }
+
+    if (index >= args.len and set_value != null) return .{ .status = 2 };
+    if (index >= args.len) return printShopt(shell, print_reusable, null, query);
+
+    if (set_value == null) return printShopt(shell, print_reusable, args[index..], query);
 
     var status: result.ExitStatus = 0;
     for (args[index..]) |name| {
@@ -322,6 +342,28 @@ fn evalShopt(shell: anytype, args: []const []const u8) result.EvalResult {
         } else {
             status = 1;
         }
+    }
+    return .{ .status = status };
+}
+
+fn printShopt(shell: anytype, reusable: bool, names: ?[]const []const u8, query: bool) result.EvalResult {
+    const operands = names orelse &[_][]const u8{"expand_aliases"};
+    var status: result.ExitStatus = 0;
+    for (operands) |name| {
+        if (!std.mem.eql(u8, name, "expand_aliases")) {
+            status = 1;
+            continue;
+        }
+        const enabled = shell.state.options.expand_aliases;
+        if (!enabled) status = 1;
+        if (query) continue;
+        const text = if (reusable)
+            if (enabled) "shopt -s expand_aliases\n" else "shopt -u expand_aliases\n"
+        else if (enabled)
+            "expand_aliases\ton\n"
+        else
+            "expand_aliases\toff\n";
+        shell.host.writeAll(.stdout, text) catch return .{ .status = 1 };
     }
     return .{ .status = status };
 }
@@ -341,7 +383,20 @@ fn evalHash(shell: anytype, args: []const []const u8) !result.EvalResult {
         };
     }
 
-    if (index < args.len) return .{ .status = 2 };
+    if (index < args.len) {
+        var status: result.ExitStatus = 0;
+        for (args[index..]) |utility| {
+            if (try findHashPath(shell, utility)) |path| {
+                try shell.state.putCommandHash(.{ .name = utility, .path = path });
+            } else {
+                status = 1;
+                try shell.host.writeAll(.stderr, "hash: ");
+                try shell.host.writeAll(.stderr, utility);
+                try shell.host.writeAll(.stderr, ": not found\n");
+            }
+        }
+        return .{ .status = status };
+    }
 
     var iterator = shell.state.command_hashes.iterator();
     while (iterator.next()) |entry| {
@@ -349,6 +404,53 @@ fn evalHash(shell: anytype, args: []const []const u8) !result.EvalResult {
         try shell.host.writeAll(.stdout, "\n");
     }
     return .{};
+}
+
+fn findHashPath(shell: anytype, utility: []const u8) !?[]const u8 {
+    const HostType = switch (@typeInfo(@TypeOf(shell.host))) {
+        .pointer => |pointer| pointer.child,
+        else => @TypeOf(shell.host),
+    };
+    if (!@hasDecl(HostType, "isExecutableZ")) return null;
+
+    const allocator = shell.scratchAllocator();
+    if (std.mem.indexOfScalar(u8, utility, '/') != null) {
+        const utility_z = try allocator.dupeZ(u8, utility);
+        return if (shell.host.isExecutableZ(utility_z)) utility else null;
+    }
+
+    const path = if (shell.state.getVariable("PATH")) |variable| variable.value else envPath(shell.env) orelse defaultUtilityPath();
+    var candidate_buffer: std.ArrayList(u8) = .empty;
+    var iterator = std.mem.splitScalar(u8, path, ':');
+    while (iterator.next()) |directory| {
+        candidate_buffer.clearRetainingCapacity();
+        const prefix = if (directory.len == 0) "." else directory;
+        try candidate_buffer.appendSlice(allocator, prefix);
+        if (!std.mem.endsWith(u8, prefix, "/")) try candidate_buffer.append(allocator, '/');
+        try candidate_buffer.appendSlice(allocator, utility);
+        try candidate_buffer.append(allocator, 0);
+        const candidate = candidate_buffer.items[0 .. candidate_buffer.items.len - 1 :0];
+        if (shell.host.isExecutableZ(candidate)) return candidate;
+    }
+    return null;
+}
+
+fn defaultUtilityPath() []const u8 {
+    return "/bin:/usr/bin";
+}
+
+fn envPath(env: []const [*:0]const u8) ?[]const u8 {
+    return envValue(env, "PATH");
+}
+
+fn envValue(env: []const [*:0]const u8, name: []const u8) ?[]const u8 {
+    for (env) |entry_z| {
+        const entry = std.mem.span(entry_z);
+        if (entry.len > name.len and entry[name.len] == '=' and std.mem.eql(u8, entry[0..name.len], name)) {
+            return entry[name.len + 1 ..];
+        }
+    }
+    return null;
 }
 
 fn evalGetopts(shell: anytype, args: []const []const u8) !result.EvalResult {
@@ -678,6 +780,246 @@ fn sendContinueToJob(shell: anytype, job: state_mod.BackgroundJob) !void {
     if (failed) return error.SignalFailed;
 }
 
+fn evalFc(shell: anytype, args: []const []const u8) !result.EvalResult {
+    const command_history = shellCommandHistory(shell) orelse {
+        try shell.host.writeAll(.stderr, "fc: history not active\n");
+        return .{ .status = 1 };
+    };
+
+    var list = false;
+    var no_numbers = false;
+    var reverse = false;
+    var reexecute = false;
+
+    var index: usize = 1;
+    while (index < args.len and isFcOptionArg(args[index])) : (index += 1) {
+        const arg = args[index];
+        if (std.mem.eql(u8, arg, "--")) {
+            index += 1;
+            break;
+        }
+        var option_index: usize = 1;
+        while (option_index < arg.len) : (option_index += 1) switch (arg[option_index]) {
+            'l' => list = true,
+            'n' => no_numbers = true,
+            'r' => reverse = true,
+            's' => reexecute = true,
+            'e' => {
+                try shell.host.writeAll(.stderr, "fc: editor form is not implemented\n");
+                return .{ .status = 2 };
+            },
+            else => return fcUsageError(shell),
+        };
+    }
+
+    if (list and reexecute) return fcUsageError(shell);
+    if (!list and !reexecute) {
+        try shell.host.writeAll(.stderr, "fc: editor form is not implemented\n");
+        return .{ .status = 2 };
+    }
+
+    const allocator = shell.scratchAllocator();
+    const entries = command_history.list(command_history.context, allocator) catch return fcHistoryError(shell);
+    defer freeFcEntries(allocator, entries);
+
+    if (reexecute) return evalFcReexecute(shell, command_history, entries, args[index..]);
+    return evalFcList(shell, entries, args[index..], no_numbers, reverse);
+}
+
+fn isFcOptionArg(arg: []const u8) bool {
+    return arg.len > 1 and arg[0] == '-' and !std.ascii.isDigit(arg[1]);
+}
+
+fn shellCommandHistory(shell: anytype) ?*history_mod.CommandHistory {
+    const ShellType = switch (@typeInfo(@TypeOf(shell))) {
+        .pointer => |pointer| pointer.child,
+        else => @TypeOf(shell),
+    };
+    if (!@hasField(ShellType, "command_history")) return null;
+    if (shell.command_history) |*command_history| return command_history;
+    return null;
+}
+
+fn freeFcEntries(allocator: std.mem.Allocator, entries: []history_mod.HistoryEntry) void {
+    for (entries) |entry| allocator.free(entry.command);
+    allocator.free(entries);
+}
+
+fn evalFcList(
+    shell: anytype,
+    entries: []const history_mod.HistoryEntry,
+    operands: []const []const u8,
+    no_numbers: bool,
+    reverse: bool,
+) !result.EvalResult {
+    if (entries.len == 0) return .{};
+    if (operands.len > 2) return fcUsageError(shell);
+
+    const last_entry_index = entries.len - 1;
+    const first_index = if (operands.len >= 1)
+        fcEntryIndex(entries, operands[0]) orelse return fcNoHistoryMatch(shell)
+    else if (entries.len > 16)
+        entries.len - 16
+    else
+        0;
+    const last_index = if (operands.len >= 2)
+        fcEntryIndex(entries, operands[1]) orelse return fcNoHistoryMatch(shell)
+    else
+        last_entry_index;
+
+    const descending_range = first_index > last_index;
+    const output_reverse = reverse != descending_range;
+    const start = @min(first_index, last_index);
+    const end = @max(first_index, last_index);
+
+    if (output_reverse) {
+        var index = end + 1;
+        while (index > start) {
+            index -= 1;
+            try writeFcEntry(shell, entries[index], no_numbers);
+        }
+    } else {
+        var index = start;
+        while (index <= end) : (index += 1) try writeFcEntry(shell, entries[index], no_numbers);
+    }
+    return .{};
+}
+
+fn evalFcReexecute(
+    shell: anytype,
+    command_history: *history_mod.CommandHistory,
+    entries: []const history_mod.HistoryEntry,
+    operands: []const []const u8,
+) !result.EvalResult {
+    const ShellType = switch (@typeInfo(@TypeOf(shell))) {
+        .pointer => |pointer| pointer.child,
+        else => @TypeOf(shell),
+    };
+    if (!@hasDecl(ShellType, "evalSourceNested")) {
+        try shell.host.writeAll(.stderr, "fc: re-execution unavailable\n");
+        return .{ .status = 2 };
+    }
+    if (entries.len == 0) return fcNoHistoryMatch(shell);
+
+    var replacement: ?FcReplacement = null;
+    var selector: ?[]const u8 = null;
+    if (operands.len >= 1) {
+        if (fcReplacement(operands[0])) |parsed| {
+            replacement = parsed;
+            if (operands.len >= 2) selector = operands[1];
+            if (operands.len > 2) return fcUsageError(shell);
+        } else {
+            selector = operands[0];
+            if (operands.len > 1) return fcUsageError(shell);
+        }
+    }
+
+    const entry_index = if (selector) |operand|
+        fcEntryIndex(entries, operand) orelse return fcNoHistoryMatch(shell)
+    else
+        entries.len - 1;
+    const command = try fcReexecuteCommand(shell.scratchAllocator(), entries[entry_index].command, replacement);
+    defer if (command.owned) shell.scratchAllocator().free(command.text);
+
+    if (command_history.suppress_next_append) |suppress| suppress(command_history.context);
+
+    const started_at = std.Io.Clock.real.now(command_history.io).toSeconds();
+    const evaluated = try shell.evalSourceNested(.{
+        .id = 0,
+        .kind = .interactive,
+        .name = "fc",
+        .text = command.text,
+    });
+    const duration_ms = @max(std.Io.Clock.real.now(command_history.io).toSeconds() - started_at, 0) * 1000;
+    if (command_history.append) |append| {
+        append(command_history.context, command_history.io, command.text, evaluated.status, started_at, duration_ms) catch {};
+    }
+    return evaluated;
+}
+
+fn fcEntryIndex(entries: []const history_mod.HistoryEntry, selector: []const u8) ?usize {
+    if (selector.len == 0) return null;
+    if (selector[0] == '-') {
+        const offset = std.fmt.parseInt(usize, selector[1..], 10) catch return null;
+        if (offset == 0 or offset > entries.len) return null;
+        return entries.len - offset;
+    }
+    if (std.ascii.isDigit(selector[0]) or selector[0] == '+') {
+        const number_text = if (selector[0] == '+') selector[1..] else selector;
+        const number = std.fmt.parseInt(i64, number_text, 10) catch return null;
+        for (entries, 0..) |entry, index| if (entry.number == number) return index;
+        return null;
+    }
+
+    var index = entries.len;
+    while (index > 0) {
+        index -= 1;
+        if (std.mem.startsWith(u8, entries[index].command, selector)) return index;
+    }
+    return null;
+}
+
+fn writeFcEntry(shell: anytype, entry: history_mod.HistoryEntry, no_numbers: bool) !void {
+    var lines = std.mem.splitScalar(u8, entry.command, '\n');
+    var first = true;
+    while (lines.next()) |line| {
+        if (first and !no_numbers) {
+            try shell.host.writeAll(.stdout, try std.fmt.allocPrint(shell.scratchAllocator(), "{}\t", .{entry.number}));
+        } else {
+            try shell.host.writeAll(.stdout, "\t");
+        }
+        try shell.host.writeAll(.stdout, line);
+        try shell.host.writeAll(.stdout, "\n");
+        first = false;
+    }
+}
+
+const FcReplacement = struct {
+    old: []const u8,
+    new: []const u8,
+};
+
+const FcCommand = struct {
+    text: []const u8,
+    owned: bool = false,
+};
+
+fn fcReplacement(operand: []const u8) ?FcReplacement {
+    const equals = std.mem.indexOfScalar(u8, operand, '=') orelse return null;
+    return .{ .old = operand[0..equals], .new = operand[equals + 1 ..] };
+}
+
+fn fcReexecuteCommand(
+    allocator: std.mem.Allocator,
+    command: []const u8,
+    replacement: ?FcReplacement,
+) !FcCommand {
+    const parsed = replacement orelse return .{ .text = command };
+    if (parsed.old.len == 0) return .{ .text = command };
+    const match = std.mem.indexOf(u8, command, parsed.old) orelse return .{ .text = command };
+
+    var command_output: std.ArrayList(u8) = .empty;
+    try command_output.appendSlice(allocator, command[0..match]);
+    try command_output.appendSlice(allocator, parsed.new);
+    try command_output.appendSlice(allocator, command[match + parsed.old.len ..]);
+    return .{ .text = try command_output.toOwnedSlice(allocator), .owned = true };
+}
+
+fn fcUsageError(shell: anytype) !result.EvalResult {
+    try shell.host.writeAll(.stderr, "fc: invalid option or operand\n");
+    return .{ .status = 2 };
+}
+
+fn fcNoHistoryMatch(shell: anytype) !result.EvalResult {
+    try shell.host.writeAll(.stderr, "fc: no command found\n");
+    return .{ .status = 1 };
+}
+
+fn fcHistoryError(shell: anytype) !result.EvalResult {
+    try shell.host.writeAll(.stderr, "fc: history error\n");
+    return .{ .status = 1 };
+}
+
 fn evalBg(shell: anytype, args: []const []const u8) !result.EvalResult {
     if (!shell.state.options.monitor) {
         try shell.host.writeAll(.stderr, "bg: job control disabled\n");
@@ -737,6 +1079,147 @@ fn evalKillList(shell: anytype, operands: []const []const u8) !result.EvalResult
     try shell.host.writeAll(.stdout, name);
     try shell.host.writeAll(.stdout, "\n");
     return .{};
+}
+
+const UlimitResource = struct {
+    option: u8,
+    kind: host.ResourceLimitKind,
+    units: u64,
+    label: []const u8,
+};
+
+const ulimit_resources = [_]UlimitResource{
+    .{ .option = 'c', .kind = .core, .units = 512, .label = "core file size" },
+    .{ .option = 'd', .kind = .data, .units = 1024, .label = "data seg size" },
+    .{ .option = 'f', .kind = .file_size, .units = 512, .label = "file size" },
+    .{ .option = 'n', .kind = .open_files, .units = 1, .label = "open files" },
+    .{ .option = 's', .kind = .stack, .units = 1024, .label = "stack size" },
+    .{ .option = 't', .kind = .cpu_time, .units = 1, .label = "cpu time" },
+    .{ .option = 'v', .kind = .address_space, .units = 1024, .label = "address space" },
+};
+
+const UlimitSelection = enum {
+    soft,
+    hard,
+    both,
+};
+
+fn evalUlimit(shell: anytype, args: []const []const u8) !result.EvalResult {
+    const HostType = switch (@typeInfo(@TypeOf(shell.host))) {
+        .pointer => |pointer| pointer.child,
+        else => @TypeOf(shell.host),
+    };
+    if (!@hasDecl(HostType, "getResourceLimit") or !@hasDecl(HostType, "setResourceLimit")) {
+        try shell.host.writeAll(.stderr, "ulimit: resource limits unavailable\n");
+        return .{ .status = 2 };
+    }
+
+    var selection: UlimitSelection = .soft;
+    var resource: ?UlimitResource = null;
+    var all = false;
+    var index: usize = 1;
+    while (index < args.len and isUlimitOption(args[index])) : (index += 1) {
+        const arg = args[index];
+        for (arg[1..]) |option| switch (option) {
+            'H' => selection = .hard,
+            'S' => selection = .soft,
+            'a' => all = true,
+            else => resource = ulimitResource(option) orelse return ulimitUsageError(shell),
+        };
+    }
+
+    if (all and index < args.len) return ulimitUsageError(shell);
+    if (all) return printAllResourceLimits(shell, selection);
+
+    const selected_resource = resource orelse ulimitResource('f').?;
+    if (index == args.len) return printResourceLimit(shell, selected_resource, selection, false);
+    if (index + 1 != args.len) return ulimitUsageError(shell);
+
+    const native_value = parseUlimitValue(args[index], selected_resource.units) catch return ulimitUsageError(shell);
+    const current = shell.host.getResourceLimit(selected_resource.kind) catch return ulimitResourceError(shell);
+    const new_limit: host.ResourceLimit = switch (selection) {
+        .soft => .{ .soft = native_value, .hard = current.hard },
+        .hard => .{ .soft = current.soft, .hard = native_value },
+        .both => unreachable,
+    };
+
+    const set_both = !sawHardOrSoft(args[1..index]);
+    const effective_limit: host.ResourceLimit = if (set_both) .{ .soft = native_value, .hard = native_value } else new_limit;
+    shell.host.setResourceLimit(selected_resource.kind, effective_limit) catch return ulimitResourceError(shell);
+    return .{};
+}
+
+fn isUlimitOption(arg: []const u8) bool {
+    return arg.len > 1 and arg[0] == '-';
+}
+
+fn sawHardOrSoft(args: []const []const u8) bool {
+    for (args) |arg| {
+        if (!isUlimitOption(arg)) return false;
+        for (arg[1..]) |option| if (option == 'H' or option == 'S') return true;
+    }
+    return false;
+}
+
+fn ulimitResource(option: u8) ?UlimitResource {
+    for (ulimit_resources) |resource| if (resource.option == option) return resource;
+    return null;
+}
+
+const ParseUlimitValueError = error{Invalid};
+
+fn parseUlimitValue(text: []const u8, units: u64) ParseUlimitValueError!?u64 {
+    if (std.mem.eql(u8, text, "unlimited")) return null;
+    const value = std.fmt.parseInt(u64, text, 10) catch return error.Invalid;
+    return std.math.mul(u64, value, units) catch error.Invalid;
+}
+
+fn printAllResourceLimits(shell: anytype, selection: UlimitSelection) !result.EvalResult {
+    for (ulimit_resources) |resource| {
+        const limit = shell.host.getResourceLimit(resource.kind) catch return ulimitResourceError(shell);
+        try shell.host.writeAll(.stdout, resource.label);
+        try shell.host.writeAll(.stdout, " ");
+        try shell.host.writeAll(.stdout, try std.fmt.allocPrint(shell.scratchAllocator(), "(-{c}) ", .{resource.option}));
+        try writeUlimitValue(shell, selectedLimitValue(limit, selection), resource.units);
+    }
+    return .{};
+}
+
+fn printResourceLimit(
+    shell: anytype,
+    resource: UlimitResource,
+    selection: UlimitSelection,
+    _: bool,
+) !result.EvalResult {
+    const limit = shell.host.getResourceLimit(resource.kind) catch return ulimitResourceError(shell);
+    try writeUlimitValue(shell, selectedLimitValue(limit, selection), resource.units);
+    return .{};
+}
+
+fn selectedLimitValue(limit: host.ResourceLimit, selection: UlimitSelection) ?u64 {
+    return switch (selection) {
+        .soft => limit.soft,
+        .hard => limit.hard,
+        .both => unreachable,
+    };
+}
+
+fn writeUlimitValue(shell: anytype, value: ?u64, units: u64) !void {
+    if (value) |native_value| {
+        try shell.host.writeAll(.stdout, try std.fmt.allocPrint(shell.scratchAllocator(), "{}\n", .{native_value / units}));
+    } else {
+        try shell.host.writeAll(.stdout, "unlimited\n");
+    }
+}
+
+fn ulimitUsageError(shell: anytype) !result.EvalResult {
+    try shell.host.writeAll(.stderr, "ulimit: invalid option or operand\n");
+    return .{ .status = 2 };
+}
+
+fn ulimitResourceError(shell: anytype) !result.EvalResult {
+    try shell.host.writeAll(.stderr, "ulimit: resource limit error\n");
+    return .{ .status = 1 };
 }
 
 fn evalUmask(shell: anytype, args: []const []const u8) !result.EvalResult {
@@ -872,6 +1355,20 @@ fn evalTimes(shell: anytype, args: []const []const u8) !result.EvalResult {
     return .{};
 }
 
+fn evalEcho(shell: anytype, args: []const []const u8) !result.EvalResult {
+    for (args[1..], 0..) |arg, index| {
+        if (index != 0) shell.host.writeAll(.stdout, " ") catch return echoWriteFailed(shell);
+        shell.host.writeAll(.stdout, arg) catch return echoWriteFailed(shell);
+    }
+    shell.host.writeAll(.stdout, "\n") catch return echoWriteFailed(shell);
+    return .{};
+}
+
+fn echoWriteFailed(shell: anytype) result.EvalResult {
+    shell.host.writeAll(.stderr, "echo: write failed\n") catch {};
+    return .{ .status = 1 };
+}
+
 fn evalBreak(args: []const []const u8) result.EvalResult {
     const count = parseLoopControlCount(args) orelse return .{ .status = 2 };
     return .{ .flow = .{ .break_ = count } };
@@ -901,6 +1398,11 @@ fn evalPrintf(shell: anytype, args: []const []const u8) !result.EvalResult {
 }
 
 fn evalLocal(shell: anytype, args: []const []const u8) !result.EvalResult {
+    if (!shell.state.hasLocalFrame()) {
+        try shell.host.writeAll(.stderr, "local: can only be used in a function\n");
+        return .{ .status = 1 };
+    }
+
     var status: result.ExitStatus = 0;
     for (args[1..]) |arg| {
         const equal_index = std.mem.indexOfScalar(u8, arg, '=');
@@ -913,8 +1415,8 @@ fn evalLocal(shell: anytype, args: []const []const u8) !result.EvalResult {
             status = 1;
             continue;
         }
-        const value = if (equal_index) |index| arg[index + 1 ..] else if (shell.state.getVariable(name)) |variable| variable.value else "";
-        shell.state.putVariable(.{ .name = name, .value = value }) catch |err| switch (err) {
+        const value = if (equal_index) |index| arg[index + 1 ..] else null;
+        shell.state.declareLocal(name, value) catch |err| switch (err) {
             error.ReadonlyVariable => {
                 try shell.host.writeAll(
                     .stderr,
@@ -966,11 +1468,15 @@ fn evalSet(shell: anytype, args: []const []const u8) !result.EvalResult {
         }
         for (arg[1..]) |option| switch (option) {
             'a' => shell.state.options.allexport = enabled,
+            'b' => shell.state.options.notify = enabled,
             'C' => shell.state.options.noclobber = enabled,
             'e' => shell.state.options.errexit = enabled,
             'f' => shell.state.options.noglob = enabled,
+            'h' => shell.state.options.hashall = enabled,
             'm' => shell.state.options.monitor = enabled,
+            'n' => shell.state.options.noexec = enabled,
             'u' => shell.state.options.nounset = enabled,
+            'v' => shell.state.options.verbose = enabled,
             'x' => shell.state.options.xtrace = enabled,
             else => return setUsageError(shell),
         };
@@ -1002,36 +1508,42 @@ fn variableLessThan(_: void, lhs: state_mod.Variable, rhs: state_mod.Variable) b
 const SetOption = enum {
     allexport,
     errexit,
+    hashall,
     noclobber,
     noexec,
     noglob,
     notify,
     nounset,
     pipefail,
+    verbose,
     xtrace,
 };
 
 const set_option_names = std.StaticStringMap(SetOption).initComptime(.{
     .{ "allexport", .allexport },
     .{ "errexit", .errexit },
+    .{ "hashall", .hashall },
     .{ "noclobber", .noclobber },
     .{ "noexec", .noexec },
     .{ "noglob", .noglob },
     .{ "notify", .notify },
     .{ "nounset", .nounset },
     .{ "pipefail", .pipefail },
+    .{ "verbose", .verbose },
     .{ "xtrace", .xtrace },
 });
 
 const set_option_order = [_]SetOption{
     .allexport,
     .errexit,
+    .hashall,
     .noclobber,
     .noexec,
     .noglob,
     .notify,
     .nounset,
     .pipefail,
+    .verbose,
     .xtrace,
 };
 
@@ -1039,12 +1551,14 @@ fn setOptionName(option: SetOption) []const u8 {
     return switch (option) {
         .allexport => "allexport",
         .errexit => "errexit",
+        .hashall => "hashall",
         .noclobber => "noclobber",
         .noexec => "noexec",
         .noglob => "noglob",
         .notify => "notify",
         .nounset => "nounset",
         .pipefail => "pipefail",
+        .verbose => "verbose",
         .xtrace => "xtrace",
     };
 }
@@ -1053,12 +1567,14 @@ fn setOptionEnabled(shell: anytype, option: SetOption) bool {
     return switch (option) {
         .allexport => shell.state.options.allexport,
         .errexit => shell.state.options.errexit,
+        .hashall => shell.state.options.hashall,
         .noclobber => shell.state.options.noclobber,
         .noexec => shell.state.options.noexec,
         .noglob => shell.state.options.noglob,
         .notify => shell.state.options.notify,
         .nounset => shell.state.options.nounset,
         .pipefail => shell.state.options.pipefail,
+        .verbose => shell.state.options.verbose,
         .xtrace => shell.state.options.xtrace,
     };
 }
@@ -1089,12 +1605,14 @@ fn setNamedOption(shell: anytype, name: []const u8, enabled: bool) bool {
     switch (option) {
         .allexport => shell.state.options.allexport = enabled,
         .errexit => shell.state.options.errexit = enabled,
+        .hashall => shell.state.options.hashall = enabled,
         .noclobber => shell.state.options.noclobber = enabled,
         .noexec => shell.state.options.noexec = enabled,
         .noglob => shell.state.options.noglob = enabled,
         .notify => shell.state.options.notify = enabled,
         .nounset => shell.state.options.nounset = enabled,
         .pipefail => shell.state.options.pipefail = enabled,
+        .verbose => shell.state.options.verbose = enabled,
         .xtrace => shell.state.options.xtrace = enabled,
     }
     return true;
@@ -1311,6 +1829,7 @@ test "builtin lookup identifies null true and false utilities" {
     try std.testing.expectEqual(Id.exec, lookup("exec").?.id);
     try std.testing.expectEqual(Id.export_, lookup("export").?.id);
     try std.testing.expectEqual(Id.exit, lookup("exit").?.id);
+    try std.testing.expectEqual(Id.fc, lookup("fc").?.id);
     try std.testing.expectEqual(Id.getopts, lookup("getopts").?.id);
     try std.testing.expectEqual(Id.kill, lookup("kill").?.id);
     try std.testing.expectEqual(Id.true_, lookup("true").?.id);
@@ -1328,6 +1847,132 @@ test "builtin lookup identifies null true and false utilities" {
     try std.testing.expectEqual(Id.unset, lookup("unset").?.id);
     try std.testing.expectEqual(Id.wait, lookup("wait").?.id);
     try std.testing.expectEqual(@as(?Definition, null), lookup("missing"));
+}
+
+test "fc lists and re-executes attached command history" {
+    const TestHost = struct {
+        stdout: std.ArrayList(u8) = .empty,
+        stderr: std.ArrayList(u8) = .empty,
+
+        fn deinit(self: *@This()) void {
+            self.stdout.deinit(std.testing.allocator);
+            self.stderr.deinit(std.testing.allocator);
+        }
+
+        pub fn writeAll(self: *@This(), fd: host.Fd, bytes: []const u8) !void {
+            switch (fd) {
+                .stdout => try self.stdout.appendSlice(std.testing.allocator, bytes),
+                .stderr => try self.stderr.appendSlice(std.testing.allocator, bytes),
+                else => unreachable,
+            }
+        }
+
+        pub fn setFileCreationMask(_: *@This(), mask: u32) u32 {
+            return mask;
+        }
+
+        pub fn currentProcessId(_: *@This()) host.Pid {
+            return 1;
+        }
+
+        pub fn sendSignal(_: *@This(), _: host.Pid, _: u8) !void {}
+
+        pub fn setSignalDefault(_: *@This(), _: u8) !void {}
+
+        pub fn setSignalIgnored(_: *@This(), _: u8) !void {}
+
+        pub fn installSignalTrap(_: *@This(), _: u8) !void {}
+    };
+    const TestContext = struct {
+        entries: []const history_mod.HistoryEntry,
+        appended: std.ArrayList(u8) = .empty,
+        suppress_next_append: bool = false,
+
+        fn deinit(self: *@This()) void {
+            self.appended.deinit(std.testing.allocator);
+        }
+
+        fn list(context: *anyopaque, allocator: std.mem.Allocator) ![]history_mod.HistoryEntry {
+            const self: *@This() = @ptrCast(@alignCast(context));
+            const entries = try allocator.alloc(history_mod.HistoryEntry, self.entries.len);
+            for (self.entries, 0..) |entry, index| {
+                entries[index] = .{ .number = entry.number, .command = try allocator.dupe(u8, entry.command) };
+            }
+            return entries;
+        }
+
+        fn append(
+            context: *anyopaque,
+            _: std.Io,
+            line: []const u8,
+            _: u8,
+            _: i64,
+            _: i64,
+        ) !void {
+            const self: *@This() = @ptrCast(@alignCast(context));
+            try self.appended.appendSlice(std.testing.allocator, line);
+        }
+
+        fn suppress(context: *anyopaque) void {
+            const self: *@This() = @ptrCast(@alignCast(context));
+            self.suppress_next_append = true;
+        }
+    };
+    const TestShell = struct {
+        host: TestHost = .{},
+        state: state_mod.State,
+        command_history: ?history_mod.CommandHistory = null,
+
+        fn deinit(self: *@This()) void {
+            self.host.deinit();
+            self.state.deinit();
+        }
+
+        fn scratchAllocator(_: *@This()) std.mem.Allocator {
+            return std.testing.allocator;
+        }
+
+        pub fn evalSourceNested(self: *@This(), src: anytype) !result.EvalResult {
+            try self.host.writeAll(.stdout, "RUN:");
+            try self.host.writeAll(.stdout, src.text);
+            try self.host.writeAll(.stdout, "\n");
+            return .{};
+        }
+    };
+
+    const entries = [_]history_mod.HistoryEntry{
+        .{ .number = 1, .command = "printf one" },
+        .{ .number = 2, .command = "echo two" },
+        .{ .number = 3, .command = "echo three" },
+    };
+    var context: TestContext = .{ .entries = &entries };
+    defer context.deinit();
+
+    var shell: TestShell = .{ .state = state_mod.State.init(std.testing.allocator, .{}) };
+    defer shell.deinit();
+    shell.command_history = .{
+        .context = &context,
+        .io = std.testing.io,
+        .list = TestContext.list,
+        .append = TestContext.append,
+        .suppress_next_append = TestContext.suppress,
+    };
+
+    const fc_definition = lookup("fc").?;
+    try std.testing.expectEqual(
+        @as(result.ExitStatus, 0),
+        (try eval(&shell, fc_definition, &.{ "fc", "-ln", "2", "3" })).status,
+    );
+    try std.testing.expectEqualStrings("\techo two\n\techo three\n", shell.host.stdout.items);
+
+    shell.host.stdout.clearRetainingCapacity();
+    try std.testing.expectEqual(
+        @as(result.ExitStatus, 0),
+        (try eval(&shell, fc_definition, &.{ "fc", "-s", "two=deux", "2" })).status,
+    );
+    try std.testing.expectEqualStrings("RUN:echo deux\n", shell.host.stdout.items);
+    try std.testing.expectEqualStrings("echo deux", context.appended.items);
+    try std.testing.expect(context.suppress_next_append);
 }
 
 test "builtin eval returns utility status" {

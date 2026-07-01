@@ -58,6 +58,7 @@ pub fn run(
     }
     command_history.session_id = history.sessionId(allocator, io) catch "";
     var history_service = history.InteractiveHistoryService.init(&command_history);
+    sh.setCommandHistory(history_service.commandHistory(io));
 
     if (prompted_stdin) {
         return runPromptedStdin(allocator, &sh, &source_id);
@@ -270,7 +271,9 @@ const InteractiveSession = struct {
         };
         const duration_ms = @max(unixTimestamp(self.io) - started_at, 0) * 1000;
         self.last_command_duration_ms = duration_ms;
-        self.history_service.addCommand(self.io, line, evaluated.status, started_at, duration_ms) catch {};
+        if (!self.history_service.consumeSuppressNextAppend()) {
+            self.history_service.addCommand(self.io, line, evaluated.status, started_at, duration_ms) catch {};
+        }
         terminal.finishSemanticCommand(evaluated.status) catch {};
         const job_event_output = try self.dispatchJobLifecycleEvents(
             self.allocator,

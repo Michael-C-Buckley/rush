@@ -163,6 +163,27 @@ pub const SignalDispositionError = error{
     Unexpected,
 };
 
+pub const ResourceLimitKind = enum {
+    core,
+    data,
+    file_size,
+    open_files,
+    stack,
+    cpu_time,
+    address_space,
+};
+
+pub const ResourceLimit = struct {
+    soft: ?u64,
+    hard: ?u64,
+};
+
+pub const ResourceLimitError = error{
+    PermissionDenied,
+    LimitTooBig,
+    Unexpected,
+};
+
 pub const SpawnFdAction = union(enum) {
     close: Fd,
     duplicate: struct {
@@ -371,6 +392,14 @@ pub const RealHost = struct {
 
     pub fn consumePendingSignal(_: *RealHost, signal: u8) bool {
         return platform.consumePendingSignal(signal);
+    }
+
+    pub fn getResourceLimit(_: *RealHost, kind: ResourceLimitKind) platform.ResourceLimitError!ResourceLimit {
+        return platform.getResourceLimit(kind);
+    }
+
+    pub fn setResourceLimit(_: *RealHost, kind: ResourceLimitKind, limit: ResourceLimit) platform.ResourceLimitError!void {
+        try platform.setResourceLimit(kind, limit);
     }
 
     pub fn spawn(_: *RealHost, request: SpawnRequest) platform.SpawnError!SpawnResult {

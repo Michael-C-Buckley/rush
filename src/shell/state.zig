@@ -17,12 +17,14 @@ pub const Options = struct {
     mode: Mode = .bash,
     allexport: bool = false,
     errexit: bool = false,
+    hashall: bool = false,
     nounset: bool = false,
     noglob: bool = false,
     noclobber: bool = false,
     noexec: bool = false,
     pipefail: bool = false,
     notify: bool = false,
+    verbose: bool = false,
     expand_aliases: bool = false,
     xtrace: bool = false,
     monitor: bool = false,
@@ -48,6 +50,37 @@ pub const VariableAttributes = struct {
     pub fn validate(self: VariableAttributes) void {
         std.debug.assert(self.name.len != 0);
         std.debug.assert(self.exported or self.readonly);
+    }
+};
+
+const SavedLocalBinding = struct {
+    name: []const u8,
+    variable: ?Variable = null,
+    attributes: ?VariableAttributes = null,
+
+    fn deinit(self: SavedLocalBinding, allocator: std.mem.Allocator) void {
+        allocator.free(self.name);
+        if (self.variable) |variable| {
+            allocator.free(variable.name);
+            allocator.free(variable.value);
+        }
+        if (self.attributes) |attributes| allocator.free(attributes.name);
+    }
+};
+
+const LocalFrame = struct {
+    saved: std.StringHashMapUnmanaged(SavedLocalBinding) = .empty,
+    assignment_prefixes: std.StringHashMapUnmanaged(void) = .empty,
+
+    fn deinit(self: *LocalFrame, allocator: std.mem.Allocator) void {
+        var saved_iterator = self.saved.iterator();
+        while (saved_iterator.next()) |entry| entry.value_ptr.deinit(allocator);
+        self.saved.deinit(allocator);
+
+        var prefix_iterator = self.assignment_prefixes.iterator();
+        while (prefix_iterator.next()) |entry| allocator.free(entry.key_ptr.*);
+        self.assignment_prefixes.deinit(allocator);
+        self.* = undefined;
     }
 };
 
@@ -118,6 +151,7 @@ pub const State = struct {
     options: Options = .{},
     variables: std.StringHashMapUnmanaged(Variable) = .empty,
     variable_attributes: std.StringHashMapUnmanaged(VariableAttributes) = .empty,
+    local_frames: std.ArrayListUnmanaged(LocalFrame) = .empty,
     functions: std.StringHashMapUnmanaged(Function) = .empty,
     suppressed_autoload_functions: std.StringHashMapUnmanaged(void) = .empty,
     aliases: std.StringHashMapUnmanaged(Alias) = .empty,
@@ -162,6 +196,8 @@ pub const State = struct {
         var attributes_iterator = self.variable_attributes.iterator();
         while (attributes_iterator.next()) |entry| self.allocator.free(entry.value_ptr.name);
         self.variable_attributes.deinit(self.allocator);
+        for (self.local_frames.items) |*frame| frame.deinit(self.allocator);
+        self.local_frames.deinit(self.allocator);
         self.functions.deinit(self.allocator);
         var suppressed_iterator = self.suppressed_autoload_functions.iterator();
         while (suppressed_iterator.next()) |entry| self.allocator.free(entry.key_ptr.*);
@@ -268,6 +304,108 @@ pub const State = struct {
 
     pub fn removeVariableAttributes(self: *State, name: []const u8) void {
         if (self.variable_attributes.fetchRemove(name)) |entry| self.allocator.free(entry.value.name);
+    }
+
+    pub fn pushLocalFrame(self: *State, assignment_prefixes: []const []const u8) !void {
+        var frame: LocalFrame = .{};
+        errdefer frame.deinit(self.allocator);
+
+        for (assignment_prefixes) |name| {
+            if (frame.assignment_prefixes.contains(name)) continue;
+            const owned_name = try self.allocator.dupe(u8, name);
+            errdefer self.allocator.free(owned_name);
+            try frame.assignment_prefixes.put(self.allocator, owned_name, {});
+        }
+
+        try self.local_frames.append(self.allocator, frame);
+    }
+
+    pub fn popLocalFrame(self: *State) void {
+        std.debug.assert(self.local_frames.items.len != 0);
+        var frame = self.local_frames.pop().?;
+        defer frame.deinit(self.allocator);
+
+        var entries: std.ArrayList(SavedLocalBinding) = .empty;
+        defer entries.deinit(self.allocator);
+
+        var iterator = frame.saved.iterator();
+        while (iterator.next()) |entry| entries.append(self.allocator, entry.value_ptr.*) catch unreachable;
+
+        var index = entries.items.len;
+        while (index != 0) {
+            index -= 1;
+            const binding = entries.items[index];
+            self.removeVariable(binding.name);
+            self.removeVariableAttributes(binding.name);
+            if (binding.variable) |variable| {
+                self.putVariable(variable) catch unreachable;
+            } else if (binding.attributes) |attributes| {
+                self.putVariableAttributes(attributes) catch unreachable;
+            }
+        }
+    }
+
+    pub fn hasLocalFrame(self: State) bool {
+        return self.local_frames.items.len != 0;
+    }
+
+    pub fn declareLocal(self: *State, name: []const u8, value: ?[]const u8) !void {
+        std.debug.assert(name.len != 0);
+        if (self.getVariable(name)) |variable| if (variable.readonly) return error.ReadonlyVariable;
+        if (self.getVariableAttributes(name)) |attributes| if (attributes.readonly) return error.ReadonlyVariable;
+        const frame = self.currentLocalFrame();
+        try self.saveLocalBinding(frame, name);
+
+        if (value) |local_value| {
+            try self.putVariable(.{ .name = name, .value = local_value });
+        } else if (!frame.assignment_prefixes.contains(name)) {
+            self.removeVariable(name);
+        }
+    }
+
+    fn currentLocalFrame(self: *State) *LocalFrame {
+        std.debug.assert(self.local_frames.items.len != 0);
+        return &self.local_frames.items[self.local_frames.items.len - 1];
+    }
+
+    fn saveLocalBinding(self: *State, frame: *LocalFrame, name: []const u8) !void {
+        if (frame.saved.contains(name)) return;
+        const owned_name = try self.allocator.dupe(u8, name);
+        errdefer self.allocator.free(owned_name);
+
+        const variable = if (self.getVariable(name)) |existing| variable: {
+            const owned_variable_name = try self.allocator.dupe(u8, existing.name);
+            errdefer self.allocator.free(owned_variable_name);
+            const owned_value = try self.allocator.dupe(u8, existing.value);
+            errdefer self.allocator.free(owned_value);
+            break :variable Variable{
+                .name = owned_variable_name,
+                .value = owned_value,
+                .exported = existing.exported,
+                .readonly = existing.readonly,
+            };
+        } else null;
+        errdefer if (variable) |saved_variable| {
+            self.allocator.free(saved_variable.name);
+            self.allocator.free(saved_variable.value);
+        };
+
+        const attributes = if (self.getVariableAttributes(name)) |existing| attributes: {
+            const owned_attributes_name = try self.allocator.dupe(u8, existing.name);
+            errdefer self.allocator.free(owned_attributes_name);
+            break :attributes VariableAttributes{
+                .name = owned_attributes_name,
+                .exported = existing.exported,
+                .readonly = existing.readonly,
+            };
+        } else null;
+        errdefer if (attributes) |saved_attributes| self.allocator.free(saved_attributes.name);
+
+        try frame.saved.put(self.allocator, owned_name, .{
+            .name = owned_name,
+            .variable = variable,
+            .attributes = attributes,
+        });
     }
 
     pub fn setPositionals(self: *State, positionals: []const []const u8) !void {

@@ -546,6 +546,30 @@
             .status = 0,
         },
         .{
+            .name = "set accepts notify and hashall option flags",
+            .script =
+            \\set -bh
+            \\case $- in *b*) printf 'notify-on\n' ;; *) printf 'bad-notify:%s\n' "$-" ;; esac
+            \\case $- in *h*) printf 'hashall-on\n' ;; *) printf 'bad-hashall:%s\n' "$-" ;; esac
+            \\set +bh
+            \\case $- in *b*|*h*) printf 'bad-off:%s\n' "$-" ;; *) printf 'flags-off\n' ;; esac
+            \\set -o hashall
+            \\case $- in *h*) printf 'named-hashall-on\n' ;; *) printf 'bad-named:%s\n' "$-" ;; esac
+            \\set +o hashall
+            \\case $- in *h*) printf 'bad-named-off:%s\n' "$-" ;; *) printf 'named-hashall-off\n' ;; esac
+            ,
+            .stdout =
+            \\notify-on
+            \\hashall-on
+            \\flags-off
+            \\named-hashall-on
+            \\named-hashall-off
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "set -o lists option states",
             .script =
             \\set -o nounset

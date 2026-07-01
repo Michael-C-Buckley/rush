@@ -66,5 +66,114 @@
             .stderr = "",
             .status = 0,
         },
+        .{
+            .name = "local variables restore function caller bindings",
+            .script =
+            \\x=global
+            \\f() {
+            \\    local x=inner
+            \\    printf 'inside=<%s>\n' "$x"
+            \\    x=changed
+            \\}
+            \\f
+            \\printf 'after=<%s>\n' "$x"
+            ,
+            .stdout =
+            \\inside=<inner>
+            \\after=<global>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "local without assignment shadows globals as unset",
+            .script =
+            \\x=global
+            \\f() {
+            \\    local x
+            \\    printf 'inside=<%s>:<%s>\n' "$x" "${x-unset}"
+            \\}
+            \\f
+            \\printf 'after=<%s>\n' "$x"
+            ,
+            .stdout =
+            \\inside=<>:<unset>
+            \\after=<global>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "local keeps function assignment-prefix values",
+            .script =
+            \\x=global
+            \\f() {
+            \\    local x
+            \\    printf 'inside=<%s>:<%s>\n' "$x" "${x-unset}"
+            \\}
+            \\x=prefix f
+            \\printf 'after=<%s>\n' "$x"
+            ,
+            .stdout =
+            \\inside=<prefix>:<prefix>
+            \\after=<global>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "local outside functions fails",
+            .script =
+            \\local x=bad
+            \\printf 'status=<%s>:<%s>\n' "$?" "${x-unset}"
+            ,
+            .stdout =
+            \\status=<1>:<unset>
+            \\
+            ,
+            .stderr_match = .nonempty,
+            .status = 0,
+        },
+        .{
+            .name = "shopt lists queries and updates expand_aliases",
+            .script =
+            \\shopt -q expand_aliases
+            \\printf 'query-before=<%s>\n' "$?"
+            \\shopt -s expand_aliases
+            \\shopt -q expand_aliases
+            \\printf 'query-after=<%s>\n' "$?"
+            \\shopt -p expand_aliases
+            ,
+            .stdout =
+            \\query-before=<1>
+            \\query-after=<0>
+            \\shopt -s expand_aliases
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "type supports path kind and all-match options",
+            .script =
+            \\type -t cd
+            \\type -p ls >/dev/null; printf 'path=<%s>\n' "$?"
+            \\type -P printf >/dev/null; printf 'force-path=<%s>\n' "$?"
+            \\type -a printf | sed -n '1,2p'
+            ,
+            .stdout =
+            \\builtin
+            \\path=<0>
+            \\force-path=<0>
+            \\printf is a shell builtin
+            \\printf is /usr/bin/printf
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
     },
 }

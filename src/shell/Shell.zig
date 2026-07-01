@@ -4,6 +4,7 @@ const std = @import("std");
 
 const builtin = @import("builtin.zig");
 const eval = @import("eval.zig");
+const history = @import("../history.zig");
 const lexer = @import("lexer.zig");
 const memory = @import("memory.zig");
 const parser = @import("parser.zig");
@@ -31,6 +32,7 @@ pub fn ShellWithBuiltins(comptime Host: type, comptime builtin_registry: builtin
         state: state.State,
         extensions: builtin_registry.ExtensionState,
         arenas: memory.Arenas,
+        command_history: ?history.CommandHistory = null,
         function_autoload: ?*const fn (*Self, []const u8) anyerror!bool = null,
         autoloading_function: ?[]const u8 = null,
 
@@ -94,6 +96,10 @@ pub fn ShellWithBuiltins(comptime Host: type, comptime builtin_registry: builtin
 
         pub fn setFunctionAutoload(self: *Self, autoload: *const fn (*Self, []const u8) anyerror!bool) void {
             self.function_autoload = autoload;
+        }
+
+        pub fn setCommandHistory(self: *Self, command_history: history.CommandHistory) void {
+            self.command_history = command_history;
         }
 
         pub fn tryAutoloadFunction(self: *Self, name: []const u8) !bool {

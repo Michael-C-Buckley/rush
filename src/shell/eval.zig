@@ -1308,6 +1308,7 @@ fn evalSimpleScoped(shell: anytype, command: ast.SimpleCommand) EvalError!result
             return evalCommandBuiltin(shell, fields, command.assignments, &redirections, &restore_redirections);
         }
         if (definition.id == .source) return evalDotBuiltin(shell, fields);
+        if (definition.id == .env) return evalEnvBuiltin(shell, fields, command.assignments);
         if (definition.id == .pwd) return evalPwdBuiltin(shell, fields);
         if (definition.id == .read) return evalReadBuiltin(shell, fields, command.assignments);
         if (definition.id == .test_ or definition.id == .bracket) {
@@ -1322,7 +1323,9 @@ fn evalSimpleScoped(shell: anytype, command: ast.SimpleCommand) EvalError!result
             .cd,
             .color,
             .command,
+            .echo,
             .event,
+            .fc,
             .fg,
             .getopts,
             .hash,
@@ -1700,6 +1703,12 @@ fn evalCommandBuiltin(
                 restored_assignments = true;
                 return evaluated;
             },
+            .env => {
+                const evaluated = try evalEnvBuiltin(shell, args[index..], assignments);
+                restoreVariables(shell, saved);
+                restored_assignments = true;
+                return evaluated;
+            },
             .eval => {
                 const evaluated = try evalEvalBuiltin(shell, args[index..]);
                 restoreVariables(shell, saved);
@@ -1754,8 +1763,10 @@ fn evalCommandBuiltin(
             .break_,
             .color,
             .continue_,
+            .echo,
             .event,
             .exit,
+            .fc,
             .fg,
             .getopts,
             .hash,
@@ -2043,8 +2054,207 @@ fn commandFieldsAsWords(shell: anytype, fields: []const []const u8) ![]const ast
 
 fn evalTypeBuiltin(shell: anytype, args: []const []const u8) !result.EvalResult {
     std.debug.assert(args.len != 0);
-    if (args.len == 1) return .{ .status = 2 };
-    return evalCommandLookup(shell, args[1..], .verbose, null);
+    const parsed = parseTypeOptions(args) orelse return .{ .status = 2 };
+    if (parsed.index >= args.len) return .{ .status = 2 };
+
+    var status: result.ExitStatus = 0;
+    for (args[parsed.index..]) |name| {
+        const found = try typeLookup(shell, name, parsed.options);
+        if (!found) status = 1;
+    }
+    return .{ .status = status };
+}
+
+fn evalEnvBuiltin(shell: anytype, args: []const []const u8, assignments: []const ast.Assignment) EvalError!result.EvalResult {
+    std.debug.assert(args.len != 0);
+    var index: usize = 1;
+    if (index < args.len and std.mem.eql(u8, args[index], "--")) index += 1;
+
+    const first_env_operand = index;
+    while (index < args.len and envOperandAssignment(args[index]) != null) index += 1;
+    const env_operands = args[first_env_operand..index];
+
+    if (index < args.len and args[index].len != 0 and args[index][0] == '-') return .{ .status = 2 };
+
+    const env_entries = try makeEnvBuiltinEntries(shell, assignments, env_operands);
+    const envp = try makeEnvpFromEntries(shell, env_entries);
+    if (index >= args.len) {
+        for (envp) |maybe_entry| {
+            const entry = std.mem.span(maybe_entry.?);
+            try shell.host.writeAll(.stdout, entry);
+            try shell.host.writeAll(.stdout, "\n");
+        }
+        return .{};
+    }
+
+    const fields = args[index..];
+    if (fields[0].len == 0) return .{ .status = 127 };
+    const search_path = envEntriesPath(env_entries) orelse if (shell.state.getVariable("PATH")) |variable| variable.value else envPath(shell.env) orelse defaultUtilityPath();
+    const command_path = try findCommandPath(shell, fields[0], search_path) orelse {
+        try shell.host.writeAll(.stderr, try std.fmt.allocPrint(shell.scratchAllocator(), "{s}: not found\n", .{fields[0]}));
+        return .{ .status = 127 };
+    };
+    const argv = try makeExecArgv(shell, fields);
+    const command_text = std.mem.span(argv[0].?);
+    const command = argv[0].?[0..command_text.len :0];
+    const path = if (std.mem.indexOfScalar(u8, command, '/') != null)
+        command
+    else
+        try shell.scratchAllocator().dupeZ(u8, command_path);
+    const request: host_mod.SpawnRequest = .{
+        .path = path,
+        .argv = argv,
+        .fallback_argv = try makeShellFallbackArgv(shell, path, fields[1..]),
+        .envp = envp,
+        .default_signals = if (shell.state.options.monitor) &job_control_signals else &.{},
+    };
+    const waited = try shell.host.spawnAndWait(request);
+    return .{ .status = waited.shellStatus() };
+}
+
+fn makeEnvBuiltinEntries(
+    shell: anytype,
+    assignments: []const ast.Assignment,
+    env_operands: []const []const u8,
+) ![]const AssignmentEnvEntry {
+    const allocator = shell.scratchAllocator();
+    const exported_count = countExportedVariables(shell);
+    const entries = try allocator.alloc(AssignmentEnvEntry, exported_count + assignments.len + env_operands.len);
+    var entry_count: usize = 0;
+    var variable_iterator = shell.state.variables.iterator();
+    while (variable_iterator.next()) |entry| {
+        const variable = entry.value_ptr.*;
+        if (!variable.exported) continue;
+        entries[entry_count] = .{ .name = variable.name, .value = variable.value };
+        entry_count += 1;
+    }
+    for (assignments) |assignment| {
+        entries[entry_count] = .{
+            .name = assignment.name,
+            .value = try expandAssignmentWordTracking(shell, assignment.value, null),
+        };
+        entry_count += 1;
+    }
+    for (env_operands) |operand| {
+        const env_assignment = envOperandAssignment(operand).?;
+        entries[entry_count] = env_assignment;
+        entry_count += 1;
+    }
+    std.debug.assert(entry_count == entries.len);
+    return entries;
+}
+
+fn envOperandAssignment(operand: []const u8) ?AssignmentEnvEntry {
+    const equals = std.mem.indexOfScalar(u8, operand, '=') orelse return null;
+    return .{ .name = operand[0..equals], .value = operand[equals + 1 ..] };
+}
+
+fn envEntriesPath(entries: []const AssignmentEnvEntry) ?[]const u8 {
+    var index = entries.len;
+    while (index != 0) {
+        index -= 1;
+        if (std.mem.eql(u8, entries[index].name, "PATH")) return entries[index].value;
+    }
+    return null;
+}
+
+const TypeOptions = struct {
+    all: bool = false,
+    no_functions: bool = false,
+    path_only: bool = false,
+    force_path: bool = false,
+    kind_only: bool = false,
+};
+
+const ParsedTypeOptions = struct {
+    options: TypeOptions,
+    index: usize,
+};
+
+fn parseTypeOptions(args: []const []const u8) ?ParsedTypeOptions {
+    var options: TypeOptions = .{};
+    var index: usize = 1;
+    while (index < args.len) : (index += 1) {
+        const arg = args[index];
+        if (std.mem.eql(u8, arg, "--")) {
+            index += 1;
+            break;
+        }
+        if (arg.len < 2 or arg[0] != '-') break;
+        for (arg[1..]) |option| switch (option) {
+            'a' => options.all = true,
+            'f' => options.no_functions = true,
+            'p' => options.path_only = true,
+            'P' => options.force_path = true,
+            't' => options.kind_only = true,
+            else => return null,
+        };
+    }
+    return .{ .options = options, .index = index };
+}
+
+fn typeLookup(shell: anytype, name: []const u8, options: TypeOptions) !bool {
+    var found = false;
+    const skip_shell_constructs = options.path_only or options.force_path;
+
+    if (!skip_shell_constructs) {
+        if (shell.state.getAlias(name)) |alias| {
+            try writeTypeAlias(shell, name, alias.value, options.kind_only);
+            found = true;
+            if (!options.all) return true;
+        }
+        if (!options.no_functions and shell.state.getFunction(name) != null) {
+            try writeTypeMatch(shell, name, "function", "shell function", options.kind_only);
+            found = true;
+            if (!options.all) return true;
+        }
+        if (isCommandLookupReservedWord(name)) {
+            try writeTypeMatch(shell, name, "keyword", "shell reserved word", options.kind_only);
+            found = true;
+            if (!options.all) return true;
+        }
+        if (lookupBuiltin(shell, name) != null) {
+            try writeTypeMatch(shell, name, "builtin", "shell builtin", options.kind_only);
+            found = true;
+            if (!options.all) return true;
+        }
+    }
+
+    if (try findCommandPath(shell, name, null)) |path| {
+        if (options.kind_only) {
+            try shell.host.writeAll(.stdout, "file\n");
+        } else if (options.path_only or options.force_path) {
+            try shell.host.writeAll(.stdout, path);
+            try shell.host.writeAll(.stdout, "\n");
+        } else {
+            try shell.host.writeAll(.stdout, try std.fmt.allocPrint(shell.scratchAllocator(), "{s} is {s}\n", .{ name, path }));
+        }
+        found = true;
+    }
+    return found;
+}
+
+fn writeTypeAlias(shell: anytype, name: []const u8, value: []const u8, kind_only: bool) !void {
+    if (kind_only) {
+        try shell.host.writeAll(.stdout, "alias\n");
+        return;
+    }
+    try shell.host.writeAll(
+        .stdout,
+        try std.fmt.allocPrint(shell.scratchAllocator(), "{s} is aliased to `{s}'\n", .{ name, value }),
+    );
+}
+
+fn writeTypeMatch(shell: anytype, name: []const u8, kind: []const u8, verbose_kind: []const u8, kind_only: bool) !void {
+    if (kind_only) {
+        try shell.host.writeAll(.stdout, kind);
+        try shell.host.writeAll(.stdout, "\n");
+        return;
+    }
+    try shell.host.writeAll(
+        .stdout,
+        try std.fmt.allocPrint(shell.scratchAllocator(), "{s} is a {s}\n", .{ name, verbose_kind }),
+    );
 }
 
 fn evalWaitBuiltin(shell: anytype, args: []const []const u8) !result.EvalResult {
@@ -2665,6 +2875,8 @@ fn evalFunction(
     errdefer if (!restored_positionals) restorePositionals(shell, saved_positionals) catch {};
 
     try applyExportedAssignments(shell, assignments);
+    try pushFunctionLocalFrame(shell, assignments);
+    defer shell.state.popLocalFrame();
     try shell.state.setPositionals(args);
     const saved_loop_depth = shell.state.loop_depth;
     shell.state.loop_depth = 0;
@@ -2682,6 +2894,12 @@ fn evalFunction(
         return .{ .status = evaluated.status };
     }
     return evaluated;
+}
+
+fn pushFunctionLocalFrame(shell: anytype, assignments: []const ast.Assignment) !void {
+    const names = try shell.scratchAllocator().alloc([]const u8, assignments.len);
+    for (assignments, 0..) |assignment, index| names[index] = assignment.name;
+    try shell.state.pushLocalFrame(names);
 }
 
 fn saveAssignmentVariables(shell: anytype, assignments: []const ast.Assignment) ![]const SavedVariable {
@@ -5201,11 +5419,15 @@ fn optionFlags(shell: anytype) ![]const u8 {
     var flags: std.ArrayList(u8) = .empty;
     const allocator = shell.scratchAllocator();
     if (shell.state.options.allexport) try flags.append(allocator, 'a');
+    if (shell.state.options.notify) try flags.append(allocator, 'b');
     if (shell.state.options.noclobber) try flags.append(allocator, 'C');
     if (shell.state.options.errexit) try flags.append(allocator, 'e');
     if (shell.state.options.noglob) try flags.append(allocator, 'f');
+    if (shell.state.options.hashall) try flags.append(allocator, 'h');
     if (shell.state.options.monitor) try flags.append(allocator, 'm');
+    if (shell.state.options.noexec) try flags.append(allocator, 'n');
     if (shell.state.options.nounset) try flags.append(allocator, 'u');
+    if (shell.state.options.verbose) try flags.append(allocator, 'v');
     if (shell.state.options.xtrace) try flags.append(allocator, 'x');
     return flags.toOwnedSlice(allocator);
 }
@@ -5700,6 +5922,11 @@ fn makeExecEnvp(shell: anytype, assignments: []const ast.Assignment) ![:null]con
     }
     std.debug.assert(entry_count == assignment_entries.len);
 
+    return makeEnvpFromEntries(shell, assignment_entries);
+}
+
+fn makeEnvpFromEntries(shell: anytype, assignment_entries: []const AssignmentEnvEntry) ![:null]const ?[*:0]const u8 {
+    const allocator = shell.scratchAllocator();
     var env_len: usize = countBaseEnv(shell.env, assignment_entries);
     for (assignment_entries, 0..) |entry, index| {
         if (lastAssignmentIndex(assignment_entries, entry.name) == index) env_len += 1;

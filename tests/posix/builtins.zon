@@ -517,8 +517,23 @@
             .status = 0,
         },
         .{
-            .name = "hash and ulimit are regular builtins",
+            .name = "echo and env resolve as regular builtins",
             .script =
+            \\command -v echo
+            \\command -v env
+            ,
+            .stdout =
+            \\echo
+            \\env
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "fc hash and ulimit are regular builtins",
+            .script =
+            \\command -v fc
             \\command -v hash
             \\command -v ulimit
             \\hash -r
@@ -526,8 +541,44 @@
             \\ulimit -c 0
             ,
             .stdout =
+            \\fc
             \\hash
             \\ulimit
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "hash resolves utility operands",
+            .script =
+            \\hash -r
+            \\hash ls
+            \\hash | grep '/ls$' >/dev/null && printf 'hashed\n'
+            \\hash missing-rush-command >/dev/null 2>&1
+            \\printf '<%s>\n' "$?"
+            ,
+            .stdout =
+            \\hashed
+            \\<1>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "ulimit reports and updates soft file limit",
+            .script =
+            \\saved=$(ulimit -S -f)
+            \\ulimit -S -f 0
+            \\printf '<%s>\n' "$(ulimit -S -f)"
+            \\ulimit -S -f "$saved"
+            \\ulimit -a >/dev/null
+            \\printf '<all:%s>\n' "$?"
+            ,
+            .stdout =
+            \\<0>
+            \\<all:0>
             \\
             ,
             .stderr = "",

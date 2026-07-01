@@ -69,6 +69,8 @@ pub const TerminalProcessGroupError = host.TerminalProcessGroupError;
 
 pub const SignalDispositionError = host.SignalDispositionError;
 
+pub const ResourceLimitError = host.ResourceLimitError;
+
 pub fn read(fd: host.Fd, buffer: []u8) ReadError!usize {
     if (buffer.len == 0) return 0;
     return switch (builtin.os.tag) {
@@ -245,6 +247,26 @@ pub fn consumePendingSignal(signal: u8) bool {
     if (signal >= 64) return false;
     const mask = @as(u64, 1) << @intCast(signal);
     return (pending_signal_bits.fetchAnd(~mask, .seq_cst) & mask) != 0;
+}
+
+pub fn getResourceLimit(kind: host.ResourceLimitKind) ResourceLimitError!host.ResourceLimit {
+    const limit = std.posix.getrlimit(resourceLimitKind(kind)) catch return error.Unexpected;
+    return .{
+        .soft = resourceLimitFromNative(limit.cur),
+        .hard = resourceLimitFromNative(limit.max),
+    };
+}
+
+pub fn setResourceLimit(kind: host.ResourceLimitKind, limit: host.ResourceLimit) ResourceLimitError!void {
+    const native: std.posix.rlimit = .{
+        .cur = try resourceLimitToNative(limit.soft),
+        .max = try resourceLimitToNative(limit.hard),
+    };
+    std.posix.setrlimit(resourceLimitKind(kind), native) catch |err| return switch (err) {
+        error.PermissionDenied => error.PermissionDenied,
+        error.LimitTooBig => error.LimitTooBig,
+        error.Unexpected => error.Unexpected,
+    };
 }
 
 fn setSignalAction(signal: u8, handler: ?std.posix.Sigaction.handler_fn) !void {
@@ -1298,6 +1320,28 @@ fn applyLibcFdActions(actions: []const host.SpawnFdAction) void {
             if (std.c.errno(rc) != .SUCCESS) std.c._exit(127);
         },
     };
+}
+
+fn resourceLimitKind(kind: host.ResourceLimitKind) std.posix.rlimit_resource {
+    return switch (kind) {
+        .core => .CORE,
+        .data => .DATA,
+        .file_size => .FSIZE,
+        .open_files => .NOFILE,
+        .stack => .STACK,
+        .cpu_time => .CPU,
+        .address_space => .AS,
+    };
+}
+
+fn resourceLimitFromNative(value: @TypeOf(std.posix.RLIM.INFINITY)) ?u64 {
+    if (value == std.posix.RLIM.INFINITY) return null;
+    return @intCast(value);
+}
+
+fn resourceLimitToNative(value: ?u64) ResourceLimitError!@TypeOf(std.posix.RLIM.INFINITY) {
+    const native = value orelse return std.posix.RLIM.INFINITY;
+    return std.math.cast(@TypeOf(std.posix.RLIM.INFINITY), native) orelse error.LimitTooBig;
 }
 
 fn decodeWaitStatus(status: u32) host.WaitStatus {
