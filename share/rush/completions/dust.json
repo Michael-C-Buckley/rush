@@ -1,0 +1,173 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "dust",
+    "description": "show disk usage as a tree",
+    "options": [
+      {
+        "long": "help",
+        "short": "h",
+        "description": "show help for dust",
+        "inherit": false
+      },
+      {
+        "long": "version",
+        "short": "V",
+        "description": "print version information",
+        "inherit": false
+      },
+      {
+        "long": "no-percent-bars",
+        "short": "b",
+        "description": "no percent bars or percentages will be displayed",
+        "inherit": false
+      },
+      {
+        "long": "no-colors",
+        "short": "c",
+        "description": "no colors will be printed (Useful for commands like: watch)",
+        "inherit": false
+      },
+      {
+        "long": "depth",
+        "short": "d",
+        "description": "depth to show",
+        "inherit": false,
+        "value": {
+          "name": "depth"
+        }
+      },
+      {
+        "long": "filter",
+        "short": "e",
+        "description": "only include filepaths matching this regex. For png files type: -e \"\\.png$\"",
+        "inherit": false,
+        "value": {
+          "name": "filter"
+        }
+      },
+      {
+        "long": "filecount",
+        "short": "f",
+        "description": "directory 'size' is number of child files/dirs not disk size",
+        "inherit": false
+      },
+      {
+        "long": "si",
+        "short": "H",
+        "description": "print sizes in powers of 1000 (e.g., 1.1G)",
+        "inherit": false
+      },
+      {
+        "long": "ignore_hidden",
+        "short": "i",
+        "description": "do not display hidden files",
+        "inherit": false
+      },
+      {
+        "long": "number-of-lines",
+        "short": "n",
+        "description": "number of lines of output to show. (Default is terminal_height - 10)",
+        "inherit": false,
+        "value": {
+          "name": "number_of_lines"
+        }
+      },
+      {
+        "long": "full-paths",
+        "short": "p",
+        "description": "subdirectories will not have their path shortened",
+        "inherit": false
+      },
+      {
+        "long": "reverse",
+        "short": "r",
+        "description": "print tree upside down (biggest highest)",
+        "inherit": false
+      },
+      {
+        "long": "apparent-size",
+        "short": "s",
+        "description": "use file length instead of blocks",
+        "inherit": false
+      },
+      {
+        "long": "skip-total",
+        "description": "no total row will be displayed",
+        "inherit": false
+      },
+      {
+        "long": "file_types",
+        "short": "t",
+        "description": "show only these file types",
+        "inherit": false
+      },
+      {
+        "long": "invert-filter",
+        "short": "v",
+        "description": "exclude filepaths matching this regex. To ignore png files type: -v \"\\.png$\"",
+        "inherit": false,
+        "value": {
+          "name": "invert_filter"
+        }
+      },
+      {
+        "long": "terminal_width",
+        "short": "w",
+        "description": "specify width of output overriding the auto detection of terminal width",
+        "inherit": false,
+        "value": {
+          "name": "width"
+        }
+      },
+      {
+        "long": "limit-filesystem",
+        "short": "x",
+        "description": "only count the files and directories on the same filesystem as the supplied directory",
+        "inherit": false
+      },
+      {
+        "long": "ignore-directory",
+        "short": "X",
+        "description": "exclude any file or directory with this name",
+        "inherit": false,
+        "value": {
+          "name": "ignore_directory",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "min-size",
+        "short": "z",
+        "description": "minimum size file to include in output",
+        "inherit": false,
+        "value": {
+          "name": "min_size"
+        }
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "inputs",
+          "provider": [
+            "builtin.files",
+            "builtin.directories"
+          ],
+          "index": 0,
+          "description": "files or directories to inspect",
+          "repeatable": true
+        }
+      ]
+    },
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
