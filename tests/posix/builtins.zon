@@ -1122,6 +1122,24 @@
             .status = 0,
         },
         .{
+            .name = "alias-aware parsing waits for complete here-document bodies",
+            .script =
+            \\cat > a <<EOF
+            \\file
+            \\EOF
+            \\cat < a
+            \\alias a='printf "%s\n" alive'
+            \\a
+            ,
+            .stdout =
+            \\file
+            \\alive
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "echo reports failure when stdout is closed",
             .script =
             \\echo hidden >&-

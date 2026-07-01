@@ -12,6 +12,7 @@ const token = @import("token.zig");
 pub const ParseError = error{
     ExpectedCommand,
     ExpectedRedirectionTarget,
+    IncompleteHereDoc,
     UnclosedCommandSubstitution,
     UnclosedQuote,
     UnexpectedToken,
@@ -36,6 +37,15 @@ pub fn parseWithAliases(
     return parseWithAliasState(allocator, src, tokens, shell_state);
 }
 
+pub fn parseWithAliasesRequiringCompleteHereDocs(
+    allocator: std.mem.Allocator,
+    src: source_mod.Source,
+    tokens: []const token.Token,
+    shell_state: state_mod.State,
+) ParserError!ast.Program {
+    return parseWithAliasStateOptions(allocator, src, tokens, shell_state, .{ .require_complete_here_docs = true });
+}
+
 pub fn parseBracedParameterExpansion(
     allocator: std.mem.Allocator,
     raw_content: []const u8,
@@ -52,9 +62,29 @@ fn parseWithAliasState(
     tokens: []const token.Token,
     alias_state: ?state_mod.State,
 ) ParserError!ast.Program {
+    return parseWithAliasStateOptions(allocator, src, tokens, alias_state, .{});
+}
+
+const ParseOptions = struct {
+    require_complete_here_docs: bool = false,
+};
+
+fn parseWithAliasStateOptions(
+    allocator: std.mem.Allocator,
+    src: source_mod.Source,
+    tokens: []const token.Token,
+    alias_state: ?state_mod.State,
+    options: ParseOptions,
+) ParserError!ast.Program {
     src.validate();
     std.debug.assert(tokens.len != 0);
-    var parser: Parser = .{ .allocator = allocator, .source = src, .tokens = tokens, .alias_state = alias_state };
+    var parser: Parser = .{
+        .allocator = allocator,
+        .source = src,
+        .tokens = tokens,
+        .alias_state = alias_state,
+        .require_complete_here_docs = options.require_complete_here_docs,
+    };
     return parser.parseProgram();
 }
 
@@ -63,6 +93,7 @@ const Parser = struct {
     source: source_mod.Source,
     tokens: []const token.Token,
     alias_state: ?state_mod.State,
+    require_complete_here_docs: bool = false,
     index: usize = 0,
     pending_here_docs: std.ArrayList(PendingHereDoc) = .empty,
 
@@ -982,6 +1013,7 @@ const Parser = struct {
 
     fn parseHereDocBody(self: *Parser, start_offset: usize, pending: PendingHereDoc) ParserError!ParsedHereDoc {
         var body: std.ArrayList(u8) = .empty;
+        errdefer body.deinit(self.allocator);
         var offset = start_offset;
         var continued = false;
         while (offset <= self.source.text.len) {
@@ -993,7 +1025,10 @@ const Parser = struct {
             const strip_tabs = pending.strip_tabs and !continued;
             const delimiter_line = if (strip_tabs) stripLeadingTabs(raw_line) else raw_line;
             if (!continued and std.mem.eql(u8, delimiter_line, pending.delimiter)) {
-                return .{ .body = try body.toOwnedSlice(self.allocator), .next_offset = next_offset };
+                return .{
+                    .body = try body.toOwnedSlice(self.allocator),
+                    .next_offset = next_offset,
+                };
             }
 
             const body_line = if (strip_tabs) delimiter_line else raw_line;
@@ -1003,7 +1038,11 @@ const Parser = struct {
             if (next_offset == offset) break;
             offset = next_offset;
         }
-        return .{ .body = try body.toOwnedSlice(self.allocator), .next_offset = offset };
+        if (self.require_complete_here_docs) return error.IncompleteHereDoc;
+        return .{
+            .body = try body.toOwnedSlice(self.allocator),
+            .next_offset = offset,
+        };
     }
 
     fn at(self: Parser, kind: token.Kind) bool {

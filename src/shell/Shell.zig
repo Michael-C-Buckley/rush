@@ -84,17 +84,24 @@ pub fn Shell(comptime Host: type) type {
 
         fn evalSourceWithReset(self: *Self, src: source.Source, reset_chunks: bool) !result.EvalResult {
             src.validate();
-            if (!self.sourceNeedsAliasAwareEvaluation(src)) return self.evalSourceChunk(src, src.text, reset_chunks);
-            if (src.text.len == 0) return self.evalSourceChunk(src, src.text, reset_chunks);
+            if (!self.sourceNeedsAliasAwareEvaluation(src)) return self.evalSourceChunk(src, src.text, reset_chunks, false);
+            if (src.text.len == 0) return self.evalSourceChunk(src, src.text, reset_chunks, false);
 
             var start: usize = 0;
             var end: usize = 0;
             var last: result.EvalResult = .{};
             while (start < src.text.len) {
                 end = nextLineEnd(src.text, end);
-                const evaluated = self.evalSourceChunk(src, src.text[start..end], reset_chunks) catch |err| switch (err) {
+                const require_complete_here_docs = end < src.text.len;
+                const evaluated = self.evalSourceChunk(
+                    src,
+                    src.text[start..end],
+                    reset_chunks,
+                    require_complete_here_docs,
+                ) catch |err| switch (err) {
                     error.ExpectedCommand,
                     error.ExpectedRedirectionTarget,
+                    error.IncompleteHereDoc,
                     error.UnclosedCommandSubstitution,
                     error.UnclosedQuote,
                     error.UnexpectedToken,
@@ -116,14 +123,23 @@ pub fn Shell(comptime Host: type) type {
             return last;
         }
 
-        fn evalSourceChunk(self: *Self, src: source.Source, text: []const u8, reset: bool) !result.EvalResult {
+        fn evalSourceChunk(
+            self: *Self,
+            src: source.Source,
+            text: []const u8,
+            reset: bool,
+            require_complete_here_docs: bool,
+        ) !result.EvalResult {
             if (reset) self.resetForTopLevelCommand();
 
             const chunk_src: source.Source = .{ .id = src.id, .kind = src.kind, .name = src.name, .text = text };
 
             const ast_allocator = self.astAllocator();
             const lexed = try lexer.lexWithAliasesSource(ast_allocator, chunk_src, self.state);
-            const program = try parser.parseWithAliases(ast_allocator, lexed.source, lexed.tokens, self.state);
+            const program = if (require_complete_here_docs)
+                try parser.parseWithAliasesRequiringCompleteHereDocs(ast_allocator, lexed.source, lexed.tokens, self.state)
+            else
+                try parser.parseWithAliases(ast_allocator, lexed.source, lexed.tokens, self.state);
             program.validate();
             return eval.evalProgram(Host, self, program);
         }
