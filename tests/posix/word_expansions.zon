@@ -1678,6 +1678,22 @@
             .status = 0,
         },
         .{
+            .name = "pathname expansion traverses redundant slash separators",
+            .script =
+            \\mkdir dir
+            \\: >dir/a
+            \\: >dir/b
+            \\printf '<%s>\n' dir//*
+            ,
+            .stdout =
+            \\<dir//a>
+            \\<dir//b>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "pathname expansion trailing slash matches directories and preserves slash",
             .script =
             \\mkdir d

@@ -3279,6 +3279,8 @@ fn expandPathnamePattern(
     if (component.text.len == 0) {
         if (prefix.len == 0 and slash_index == 0 and rest.text.len != 0) {
             try expandPathnamePattern(shell, allocator, matches, "/", rest);
+        } else if (slash_index != null and rest.text.len != 0) {
+            try expandPathnamePattern(shell, allocator, matches, try std.fmt.allocPrint(allocator, "{s}/", .{prefix}), rest);
         }
         return;
     }
