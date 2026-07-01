@@ -1,0 +1,217 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "ansible-lint",
+    "description": "lint ansible content",
+    "options": [
+      {
+        "long": "help",
+        "short": "h",
+        "description": "show help",
+        "inherit": false
+      },
+      {
+        "long": "list-rules",
+        "short": "L",
+        "description": "list rules",
+        "inherit": false,
+        "exclusiveGroup": "ansible-lint.list-mode"
+      },
+      {
+        "long": "list-tags",
+        "short": "T",
+        "description": "list tags",
+        "inherit": false,
+        "exclusiveGroup": "ansible-lint.list-mode"
+      },
+      {
+        "long": "format",
+        "short": "f",
+        "description": "set output format",
+        "inherit": false,
+        "value": {
+          "name": "format",
+          "provider": "ansible-lint.formats"
+        }
+      },
+      {
+        "short": "q",
+        "description": "decrease verbosity",
+        "inherit": false,
+        "repeatable": true
+      },
+      {
+        "short": "p",
+        "description": "write pep8 parseable output",
+        "inherit": false
+      },
+      {
+        "long": "progressive",
+        "description": "compare violations with previous commit",
+        "inherit": false
+      },
+      {
+        "long": "project-dir",
+        "description": "set project directory",
+        "inherit": false,
+        "value": {
+          "name": "directory",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "rules-dir",
+        "short": "r",
+        "description": "add custom rule directory",
+        "inherit": false,
+        "value": {
+          "name": "directory",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "short": "R",
+        "description": "keep embedded rules",
+        "inherit": false
+      },
+      {
+        "long": "write",
+        "description": "apply rule transforms",
+        "inherit": false,
+        "value": {
+          "name": "rule-list",
+          "provider": "ansible-lint.write-values"
+        }
+      },
+      {
+        "long": "show-relpath",
+        "description": "show relative paths",
+        "inherit": false
+      },
+      {
+        "long": "tags",
+        "short": "t",
+        "description": "only check matching tags",
+        "inherit": false,
+        "value": {
+          "name": "tag-list"
+        }
+      },
+      {
+        "short": "v",
+        "description": "increase verbosity",
+        "inherit": false,
+        "repeatable": true
+      },
+      {
+        "long": "skip-list",
+        "short": "x",
+        "description": "skip matching rules or tags",
+        "inherit": false,
+        "value": {
+          "name": "rule-list"
+        }
+      },
+      {
+        "long": "warn-list",
+        "short": "w",
+        "description": "warn for matching rules or tags",
+        "inherit": false,
+        "value": {
+          "name": "rule-list"
+        }
+      },
+      {
+        "long": "enable-list",
+        "description": "enable optional rules",
+        "inherit": false,
+        "value": {
+          "name": "rule-list"
+        }
+      },
+      {
+        "long": "nocolor",
+        "description": "disable color output",
+        "inherit": false
+      },
+      {
+        "long": "force-color",
+        "description": "force color output",
+        "inherit": false
+      },
+      {
+        "long": "exclude-paths",
+        "description": "exclude paths",
+        "inherit": false,
+        "value": {
+          "name": "path",
+          "provider": [
+            "builtin.files",
+            "builtin.directories"
+          ]
+        },
+        "repeatable": true
+      },
+      {
+        "long": "config-file",
+        "description": "use configuration file",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "offline",
+        "description": "disable requirements install",
+        "inherit": false
+      },
+      {
+        "long": "version",
+        "description": "show version",
+        "inherit": false
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "path",
+          "description": "file to lint",
+          "provider": [
+            "builtin.files",
+            "builtin.directories"
+          ],
+          "index": 0,
+          "repeatable": true
+        }
+      ]
+    },
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "ansible-lint.formats": {
+        "values": [
+          "rich",
+          "plain",
+          "md",
+          "json",
+          "codeclimate",
+          "quiet",
+          "pep8",
+          "sarif"
+        ]
+      },
+      "ansible-lint.write-values": {
+        "values": [
+          "all",
+          "none"
+        ]
+      }
+    }
+  }
+}
