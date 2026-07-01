@@ -1,0 +1,362 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "autocannon",
+    "description": "benchmark http servers",
+    "options": [
+      {
+        "short": "c",
+        "long": "connections",
+        "description": "The number of concurrent connections to use",
+        "inherit": false,
+        "value": {
+          "name": "num"
+        }
+      },
+      {
+        "short": "p",
+        "long": "pipelining",
+        "description": "The number of pipelined requests to use",
+        "inherit": false,
+        "value": {
+          "name": "num"
+        }
+      },
+      {
+        "short": "d",
+        "long": "duration",
+        "description": "The number of seconds to run the autocannon",
+        "inherit": false,
+        "value": {
+          "name": "sec"
+        },
+        "exclusiveGroup": "autocannon.limit"
+      },
+      {
+        "short": "a",
+        "long": "amount",
+        "description": "The number of requests to make before exiting the benchmark",
+        "inherit": false,
+        "value": {
+          "name": "num"
+        },
+        "exclusiveGroup": "autocannon.limit"
+      },
+      {
+        "short": "L",
+        "description": "The number of milliseconds to elapse between taking samples. This c...",
+        "inherit": false,
+        "value": {
+          "name": "num"
+        }
+      },
+      {
+        "short": "S",
+        "long": "socketPath",
+        "description": "A path to a Unix Domain Socket or a Windows Named Pipe. A URL is st...",
+        "inherit": false,
+        "value": {
+          "name": "path"
+        }
+      },
+      {
+        "short": "w",
+        "long": "workers",
+        "description": "Number of worker threads to use to fire requests",
+        "inherit": false,
+        "value": {
+          "name": "num"
+        }
+      },
+      {
+        "short": "W",
+        "long": "warmup",
+        "description": "set warmup connections and duration",
+        "inherit": false,
+        "value": [
+          {
+            "name": "connections"
+          },
+          {
+            "name": "duration"
+          }
+        ]
+      },
+      {
+        "long": "on-port",
+        "description": "Start the command listed after -- on the command line. When it star...",
+        "inherit": false,
+        "value": {
+          "name": "port"
+        }
+      },
+      {
+        "short": "m",
+        "long": "method",
+        "description": "The HTTP method to use",
+        "inherit": false,
+        "value": {
+          "name": "method",
+          "provider": "autocannon.methods"
+        }
+      },
+      {
+        "short": "t",
+        "long": "timeout",
+        "description": "The number of seconds before timing out and resetting a connection",
+        "inherit": false,
+        "value": {
+          "name": "num"
+        }
+      },
+      {
+        "short": "T",
+        "long": "title",
+        "description": "The title to place in the results for identification",
+        "inherit": false,
+        "value": {
+          "name": "title"
+        }
+      },
+      {
+        "short": "b",
+        "long": "body",
+        "description": "The body of the request",
+        "inherit": false,
+        "value": {
+          "name": "body"
+        }
+      },
+      {
+        "short": "F",
+        "long": "form",
+        "inherit": false,
+        "value": {
+          "name": "form"
+        }
+      },
+      {
+        "short": "i",
+        "long": "input",
+        "description": "The body of the request",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "short": "H",
+        "long": "headers",
+        "description": "The request headers",
+        "repeatable": true,
+        "inherit": false,
+        "value": {
+          "name": "header"
+        }
+      },
+      {
+        "long": "har",
+        "description": "When provided, Autocannon will use requests from the HAR file",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "short": "B",
+        "long": "bailout",
+        "description": "The number of failures before initiating a bailout",
+        "inherit": false,
+        "value": {
+          "name": "num"
+        }
+      },
+      {
+        "short": "M",
+        "long": "maxConnectionRequests",
+        "description": "The max number of requests to make per connection to the server",
+        "inherit": false,
+        "value": {
+          "name": "num"
+        }
+      },
+      {
+        "short": "O",
+        "long": "maxOverallRequests",
+        "description": "The max number of requests to make overall to the server",
+        "inherit": false,
+        "value": {
+          "name": "num"
+        }
+      },
+      {
+        "short": "r",
+        "long": "connectionRate",
+        "description": "The max number of requests to make per second from an individual co...",
+        "inherit": false,
+        "value": {
+          "name": "num"
+        }
+      },
+      {
+        "short": "R",
+        "long": "overallRate",
+        "description": "The max number of requests to make per second from all connections",
+        "inherit": false,
+        "value": {
+          "name": "num"
+        }
+      },
+      {
+        "short": "C",
+        "long": "ignoreCoordinatedOmission",
+        "description": "Ignore the coordinated omission issue when requests should be sent...",
+        "inherit": false
+      },
+      {
+        "short": "D",
+        "long": "reconnectRate",
+        "description": "The number of requests to make before resetting a connections conne...",
+        "inherit": false,
+        "value": {
+          "name": "num"
+        }
+      },
+      {
+        "short": "n",
+        "long": "no-progress",
+        "description": "Don't render the progress bar. default: false",
+        "inherit": false
+      },
+      {
+        "short": "l",
+        "long": "latency",
+        "description": "Print all the latency data. default: false",
+        "inherit": false
+      },
+      {
+        "short": "I",
+        "long": "idReplacement",
+        "description": "Enable replacement of [<id>] with a randomly generated ID within th...",
+        "inherit": false
+      },
+      {
+        "short": "j",
+        "long": "jsonPath",
+        "description": "Print the output as newline delimited JSON. This will cause the pro...",
+        "inherit": false
+      },
+      {
+        "short": "f",
+        "long": "forever",
+        "description": "Run the benchmark forever. Efficiently restarts the benchmark on co...",
+        "inherit": false
+      },
+      {
+        "short": "s",
+        "long": "servername",
+        "description": "Server name for the SNI (Server Name Indication) TLS extension. Def...",
+        "inherit": false
+      },
+      {
+        "short": "x",
+        "long": "excludeErrorStats",
+        "description": "Exclude error statistics (non-2xx HTTP responses) from the final la...",
+        "inherit": false
+      },
+      {
+        "short": "E",
+        "long": "expectBody",
+        "description": "Ensure the body matches this value. If enabled, mismatches count to...",
+        "inherit": false,
+        "value": {
+          "name": "expected"
+        }
+      },
+      {
+        "long": "renderStatusCodes",
+        "description": "Print status codes and their respective statistics",
+        "inherit": false
+      },
+      {
+        "long": "cert",
+        "description": "Path to cert chain in pem format",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "key",
+        "description": "Path to private key for specified cert in pem format",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "ca",
+        "description": "Path to trusted ca certificates for the test. This argument accepts...",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "debug",
+        "description": "Print connection errors to stderr",
+        "inherit": false
+      },
+      {
+        "short": "v",
+        "long": "version",
+        "description": "Print the version number",
+        "inherit": false
+      },
+      {
+        "short": "V",
+        "long": "verbose",
+        "description": "Print the table with results (default: true)",
+        "inherit": false
+      },
+      {
+        "short": "h",
+        "long": "help",
+        "description": "Print help",
+        "inherit": false
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "url",
+          "description": "url to benchmark",
+          "index": 0
+        }
+      ]
+    },
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "autocannon.methods": {
+        "values": [
+          "GET",
+          "POST",
+          "PUT",
+          "DELETE",
+          "PATCH",
+          "HEAD",
+          "OPTIONS",
+          "TRACE"
+        ]
+      }
+    }
+  }
+}
