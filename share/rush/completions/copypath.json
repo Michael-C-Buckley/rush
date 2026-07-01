@@ -1,0 +1,23 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "copypath",
+    "description": "copy a path to the clipboard",
+    "arguments": {
+      "states": [
+        {
+          "name": "path",
+          "provider": "builtin.files",
+          "index": 0,
+          "description": "path to copy"
+        }
+      ]
+    },
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
