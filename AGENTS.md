@@ -7,6 +7,11 @@ paper over bugs, weaken tests, hard-code narrow cases, or choose expedient
 workarounds when a sound fix is within scope; take the time to preserve the
 intended semantics and verify the change appropriately.
 
+Prefer the implementation path that leads to the highest quality code over the
+shortest path to a working change. When a quick fix would make later design,
+ownership, or semantic boundaries worse, choose the more durable approach and
+keep the scope focused on the requested outcome.
+
 ## Zig Development
 
 Use `zigdoc` to discover current APIs for the Zig standard library and any third-party dependencies before coding.
