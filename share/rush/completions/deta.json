@@ -1,0 +1,519 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "deta",
+    "description": "manage Deta Micros",
+    "options": [
+      {
+        "short": "h",
+        "description": "show help for deta",
+        "inherit": false
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "login",
+        "description": "trigger the login process for the Deta CLI",
+        "options": [
+          {
+            "short": "h",
+            "description": "show help for login",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "version",
+        "description": "print the Deta version",
+        "options": [
+          {
+            "short": "h",
+            "description": "show help for version",
+            "inherit": false
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "upgrade",
+            "description": "upgrade Deta CLI version",
+            "options": [
+              {
+                "short": "h",
+                "description": "show help for upgrade",
+                "inherit": false
+              },
+              {
+                "short": "v",
+                "description": "upgrade CLI to specific version",
+                "inherit": false,
+                "value": {
+                  "name": "Version-number"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "projects",
+        "description": "list Deta projects",
+        "options": [
+          {
+            "short": "h",
+            "description": "show help for projects",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "new",
+        "description": "create a new Deta Micro",
+        "options": [
+          {
+            "short": "h",
+            "description": "show help for new",
+            "inherit": false
+          },
+          {
+            "short": "n",
+            "description": "create a micro with Node (node14.x) runtime",
+            "inherit": false
+          },
+          {
+            "short": "p",
+            "description": "create a micro with Python (python 3.9) runtime",
+            "inherit": false
+          },
+          {
+            "long": "name",
+            "description": "set the name of the new micro",
+            "inherit": false,
+            "value": {
+              "name": "name",
+              "description": "Name of the new micro"
+            }
+          },
+          {
+            "long": "project",
+            "description": "set the project under which the micro is created",
+            "inherit": false,
+            "value": {
+              "name": "project",
+              "description": "Name of the existing project"
+            }
+          },
+          {
+            "long": "runtime",
+            "description": "create a micro with a specified runtime",
+            "inherit": false,
+            "value": {
+              "name": "runtime",
+              "description": "The selected runtime",
+              "provider": "deta.runtimes"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "description": "Path to new directory for the micro",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "deploy",
+        "description": "deploy new code to a Deta Micro",
+        "options": [
+          {
+            "short": "h",
+            "description": "show help for deploy",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "description": "Path to project directory",
+              "provider": "builtin.directories",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "details",
+        "description": "get detailed information about a specific Deta micro",
+        "options": [
+          {
+            "short": "h",
+            "description": "show help for details",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "description": "Path to project directory",
+              "provider": "builtin.directories",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "watch",
+        "description": "auto-deploy locally saved changes in real time to your Deta micro",
+        "options": [
+          {
+            "short": "h",
+            "description": "show help for watch",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "description": "Path to project directory",
+              "provider": "builtin.directories",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "auth",
+        "description": "change auth settings for a Deta Micro",
+        "options": [
+          {
+            "short": "h",
+            "description": "show help for auth",
+            "inherit": false
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "disable",
+            "description": "disable HTTP Auth for a Deta Micro",
+            "options": [
+              {
+                "short": "h",
+                "description": "show help for auth disable",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "enable",
+            "description": "enable HTTP Auth for a Deta Micro",
+            "options": [
+              {
+                "short": "h",
+                "description": "show help for auth enable",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "create-api-key",
+            "description": "create an API key for a Deta Micro",
+            "options": [
+              {
+                "short": "h",
+                "description": "show help for auth create-api-key",
+                "inherit": false
+              },
+              {
+                "short": "d",
+                "description": "set the api-key description",
+                "inherit": false,
+                "value": {
+                  "name": "description",
+                  "description": "The api-key description"
+                }
+              },
+              {
+                "short": "n",
+                "description": "set the api-key name",
+                "inherit": false,
+                "value": {
+                  "name": "name",
+                  "description": "The api-key name"
+                }
+              },
+              {
+                "short": "o",
+                "description": "set the api-key output file",
+                "inherit": false,
+                "value": {
+                  "name": "outfile",
+                  "description": "The api-key output file",
+                  "provider": "builtin.files"
+                }
+              }
+            ]
+          },
+          {
+            "name": "delete-api-key",
+            "description": "delete an API key for a Deta Micro",
+            "options": [
+              {
+                "short": "h",
+                "description": "show help for auth delete-api-key",
+                "inherit": false
+              },
+              {
+                "short": "n",
+                "description": "set the api-key name",
+                "inherit": false,
+                "value": {
+                  "name": "name",
+                  "description": "The api-key name"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "pull",
+        "description": "pull the latest deployed code of a Deta Micro to your local machine",
+        "options": [
+          {
+            "short": "h",
+            "description": "show help for pull",
+            "inherit": false
+          },
+          {
+            "short": "f",
+            "description": "force the overwrite of existing files",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "clone",
+        "description": "clone a Deta Micro",
+        "options": [
+          {
+            "short": "h",
+            "description": "show help for clone",
+            "inherit": false
+          },
+          {
+            "short": "n",
+            "description": "the name of the micro to be cloned",
+            "inherit": false,
+            "value": {
+              "name": "name",
+              "description": "Name of the micro"
+            }
+          },
+          {
+            "short": "p",
+            "description": "the name of the project with the micro to be cloned",
+            "inherit": false,
+            "value": {
+              "name": "project",
+              "description": "Name of the project"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "description": "Path to new directory for the clone",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "update",
+        "description": "update a Deta Micro's name or environment variables",
+        "options": [
+          {
+            "short": "h",
+            "description": "show help for pull",
+            "inherit": false
+          },
+          {
+            "short": "n",
+            "description": "the new name of the micro",
+            "inherit": false,
+            "value": {
+              "name": "name",
+              "description": "New name for the micro"
+            }
+          },
+          {
+            "short": "r",
+            "description": "the new runtime of the micro",
+            "inherit": false,
+            "value": {
+              "name": "runtime",
+              "description": "New runtime for the micro"
+            }
+          },
+          {
+            "short": "e",
+            "description": "the new env file of the micro",
+            "inherit": false,
+            "value": {
+              "name": "env",
+              "description": "Path to env file",
+              "provider": "builtin.files"
+            }
+          }
+        ]
+      },
+      {
+        "name": "visor",
+        "description": "change the Visor settings for a Deta Micro",
+        "options": [
+          {
+            "short": "h",
+            "description": "show help for visor",
+            "inherit": false
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "open",
+            "description": "open Micro's visor page in the browser",
+            "options": [
+              {
+                "short": "h",
+                "description": "show help for visor open",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "enable",
+            "description": "enable Visor for a Deta Micro",
+            "options": [
+              {
+                "short": "h",
+                "description": "show help for visor enable",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "disable",
+            "description": "disable Visor for a Deta Micro",
+            "options": [
+              {
+                "short": "h",
+                "description": "show help for visor disable",
+                "inherit": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "run",
+        "description": "run a Deta Micro from the CLI",
+        "options": [
+          {
+            "short": "h",
+            "description": "show help for run",
+            "inherit": false
+          },
+          {
+            "short": "l",
+            "description": "show the micro logs",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "action",
+              "description": "The action to be performed on the micro. See docs for full examples and details",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "cron",
+        "description": "change cron settings for a Deta Micro",
+        "options": [
+          {
+            "short": "h",
+            "description": "show help for cron",
+            "inherit": false
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "set",
+            "description": "set Deta Micro to run on a schedule",
+            "options": [
+              {
+                "short": "h",
+                "description": "show help for cron set",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "expression",
+                  "description": "The cron expression to be set",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "remove",
+            "description": "remove a schedule from a Deta Micro",
+            "options": [
+              {
+                "short": "h",
+                "description": "show help for cron remove",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "expression",
+                  "description": "The cron expression to be removed",
+                  "index": 0
+                }
+              ]
+            }
+          }
+        ]
+      }
+    ],
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "deta.runtimes": {
+        "values": [
+          "node12",
+          "node14",
+          "python3.7",
+          "python3.9"
+        ]
+      }
+    }
+  }
+}
