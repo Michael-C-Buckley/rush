@@ -1,0 +1,325 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "babel",
+    "options": [
+      {
+        "short": "f",
+        "long": "filename",
+        "description": "the filename to use when reading from stdin. This will be used in source-maps, errors etc",
+        "inherit": false,
+        "value": {
+          "name": "filename"
+        }
+      },
+      {
+        "long": "presets",
+        "description": "a comma-separated list of preset names",
+        "inherit": false,
+        "value": {
+          "name": "list"
+        }
+      },
+      {
+        "long": "plugins",
+        "description": "a comma-separated list of plugin names",
+        "inherit": false,
+        "value": {
+          "name": "list"
+        }
+      },
+      {
+        "long": "config-file",
+        "description": "path to a .babelrc file to use",
+        "inherit": false,
+        "value": {
+          "name": "path",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "env-name",
+        "description": "the name of the 'env' to use when loading configs and plugins. Defaults to the value of BABEL_ENV, or else NODE_ENV, or else 'development'",
+        "inherit": false,
+        "value": {
+          "name": "env",
+          "values": [
+            "production",
+            "development"
+          ]
+        }
+      },
+      {
+        "long": "root-mode",
+        "description": "the project-root resolution mode",
+        "inherit": false,
+        "value": {
+          "name": "mode",
+          "values": [
+            {
+              "value": "root",
+              "description": "Passes the \"root\" value through as unchanged"
+            },
+            {
+              "value": "upward",
+              "description": "Walks upward from the \"root\" directory, looking for a directory containing a babel.config.json file, and throws an error if a babel.config.json is not found"
+            },
+            {
+              "value": "upward-optional",
+              "description": "Walk upward from the \"root\" directory, looking for a directory containing a babel.config.json file, and falls back to \"root\" if a babel.config.json is not found"
+            }
+          ]
+        }
+      },
+      {
+        "long": "source-type",
+        "inherit": false,
+        "value": {
+          "name": "type",
+          "values": [
+            "script",
+            "module"
+          ]
+        }
+      },
+      {
+        "long": "no-babelrc",
+        "description": "whether or not to look up .babelrc and .babelignore files",
+        "inherit": false
+      },
+      {
+        "long": "ignore",
+        "description": "list of glob paths to not compile",
+        "inherit": false,
+        "value": {
+          "name": "list"
+        }
+      },
+      {
+        "long": "only",
+        "description": "list of glob paths to only compile",
+        "inherit": false,
+        "value": {
+          "name": "list"
+        }
+      },
+      {
+        "long": "no-highlight-code",
+        "description": "enable or disable ansi syntax highlighting of code frames",
+        "inherit": false
+      },
+      {
+        "long": "no-comments",
+        "description": "write comments to generated output",
+        "inherit": false
+      },
+      {
+        "long": "retain-lines",
+        "description": "retain line numbers. This will result in really ugly code",
+        "inherit": false
+      },
+      {
+        "long": "compact",
+        "description": "do not include superfluous whitespace characters and line terminators",
+        "inherit": false,
+        "value": {
+          "name": "mode",
+          "values": [
+            "true",
+            "false",
+            "auto"
+          ]
+        }
+      },
+      {
+        "long": "minified",
+        "description": "save as many bytes when printing. (false by default)",
+        "inherit": false
+      },
+      {
+        "long": "auxiliary-comment-before",
+        "description": "print a comment before any injected non-user code",
+        "inherit": false,
+        "value": {
+          "name": "comment"
+        }
+      },
+      {
+        "long": "auxiliary-comment-after",
+        "description": "print a comment after any injected non-user code",
+        "inherit": false,
+        "value": {
+          "name": "comment"
+        }
+      },
+      {
+        "short": "s",
+        "long": "source-maps",
+        "inherit": false,
+        "value": {
+          "name": "mode",
+          "values": [
+            "true",
+            "false",
+            "inline",
+            "both"
+          ]
+        }
+      },
+      {
+        "long": "source-map-target",
+        "description": "set file on returned source map",
+        "inherit": false,
+        "value": {
+          "name": "string"
+        }
+      },
+      {
+        "long": "source-file-name",
+        "description": "set sources[0] on returned source map",
+        "inherit": false,
+        "value": {
+          "name": "string"
+        }
+      },
+      {
+        "long": "source-root",
+        "description": "the root from which all sources are relative",
+        "inherit": false,
+        "value": {
+          "name": "filename"
+        }
+      },
+      {
+        "short": "x",
+        "long": "extensions",
+        "description": "comma separated list of extensions to compile when a directory has been the input. [js,ts,jsx,tsx]",
+        "inherit": false,
+        "value": {
+          "name": "extensions"
+        }
+      },
+      {
+        "long": "keep-file-extension",
+        "description": "preserve the file extensions of the input files",
+        "inherit": false
+      },
+      {
+        "short": "w",
+        "long": "watch",
+        "description": "recompile files on changes",
+        "inherit": false
+      },
+      {
+        "long": "skip-initial-build",
+        "description": "do not compile files before watching",
+        "inherit": false
+      },
+      {
+        "short": "o",
+        "long": "out-file",
+        "description": "compile all input files into a single file",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "short": "d",
+        "long": "out-dir",
+        "description": "compile an input directory of modules into an output directory",
+        "inherit": false,
+        "value": {
+          "name": "directory",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "relative",
+        "description": "write output paths relative to the input",
+        "inherit": false
+      },
+      {
+        "short": "D",
+        "long": "copy-files",
+        "description": "when compiling a directory copy over non-compilable files",
+        "inherit": false
+      },
+      {
+        "long": "include-dotfiles",
+        "description": "include dotfiles when compiling and copying non-compilable files",
+        "inherit": false
+      },
+      {
+        "long": "no-copy-ignored",
+        "description": "exclude ignored files when copying non-compilable files",
+        "inherit": false
+      },
+      {
+        "long": "verbose",
+        "description": "log everything. This option conflicts with --quiet",
+        "inherit": false,
+        "exclusiveGroup": "babel.logging"
+      },
+      {
+        "long": "quiet",
+        "description": "don't log anything. This option conflicts with --verbose",
+        "inherit": false,
+        "exclusiveGroup": "babel.logging"
+      },
+      {
+        "long": "delete-dir-on-start",
+        "description": "delete the out directory before compilation",
+        "inherit": false
+      },
+      {
+        "long": "out-file-extension",
+        "description": "use a specific extension for the output files",
+        "inherit": false,
+        "value": {
+          "name": "extension",
+          "values": [
+            ".es6",
+            ".js",
+            ".es",
+            ".jsx",
+            ".mjs"
+          ]
+        }
+      },
+      {
+        "short": "V",
+        "long": "version",
+        "description": "output the version number",
+        "inherit": false
+      },
+      {
+        "short": "h",
+        "long": "help",
+        "description": "output usage information",
+        "inherit": false
+      }
+    ],
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      }
+    },
+    "description": "compile javascript with babel",
+    "arguments": {
+      "states": [
+        {
+          "name": "file",
+          "index": 0,
+          "provider": "builtin.files",
+          "repeatable": true
+        }
+      ]
+    }
+  }
+}
