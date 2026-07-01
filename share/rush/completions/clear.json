@@ -1,0 +1,28 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "clear",
+    "description": "clear the terminal screen",
+    "options": [
+      {
+        "short": "T",
+        "description": "indicates the type of terminal",
+        "inherit": false,
+        "value": {
+          "name": "type"
+        }
+      },
+      {
+        "short": "V",
+        "description": "reports version of ncurses used in this program, and exits",
+        "inherit": false
+      },
+      {
+        "short": "x",
+        "description": "do not attempt to clear terminal's scrollback buffer using the extended E3 capability",
+        "inherit": false
+      }
+    ]
+  }
+}
