@@ -136,6 +136,17 @@
             .status = 0,
         },
         .{
+            .name = "pending trap from final command observes errexit",
+            .script =
+            \\set -e
+            \\trap 'false; printf bad' TERM
+            \\kill -s TERM $$
+            ,
+            .stdout = "",
+            .stderr = "",
+            .status_match = .nonzero,
+        },
+        .{
             .name = "pending USR1 trap uses the platform signal number",
             .script =
             \\trap 'printf "trap\n"' USR1

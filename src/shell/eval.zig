@@ -83,6 +83,8 @@ fn evalList(shell: anytype, list: ast.List) EvalError!result.EvalResult {
         if (evaluated.flow != .normal) return evaluated;
         if (shouldApplyErrexit(shell, evaluated)) return .{ .status = status, .flow = .{ .exit = status } };
     }
+    const trap_result = try runPendingTrapCheckpoint(shell);
+    if (trap_result.flow != .normal) return trap_result;
     return .{ .status = status };
 }
 
