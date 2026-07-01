@@ -1,0 +1,75 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "autojump",
+    "description": "jump to frequent directories",
+    "options": [
+      {
+        "short": "h",
+        "long": "help",
+        "description": "show help",
+        "inherit": false
+      },
+      {
+        "short": "a",
+        "long": "add",
+        "description": "add path",
+        "inherit": false,
+        "value": {
+          "name": "directory",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "short": "i",
+        "long": "increase",
+        "description": "increase directory weight",
+        "inherit": false,
+        "value": {
+          "name": "weight",
+          "required": false,
+          "style": "optional"
+        }
+      },
+      {
+        "short": "d",
+        "long": "decrease",
+        "description": "decrease directory weight",
+        "inherit": false,
+        "value": {
+          "name": "weight",
+          "required": false,
+          "style": "optional"
+        }
+      },
+      {
+        "long": "complete",
+        "description": "complete database entries",
+        "inherit": false
+      },
+      {
+        "long": "purge",
+        "description": "remove missing paths",
+        "inherit": false
+      },
+      {
+        "short": "s",
+        "long": "stat",
+        "description": "show database entries",
+        "inherit": false
+      },
+      {
+        "short": "v",
+        "long": "version",
+        "description": "show version",
+        "inherit": false
+      }
+    ],
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      }
+    }
+  }
+}
