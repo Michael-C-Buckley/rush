@@ -1,0 +1,500 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "dtm",
+    "description": "manage DevOps toolchains",
+    "options": [
+      {
+        "long": "debug",
+        "description": "debug level log",
+        "inherit": true
+      },
+      {
+        "long": "help",
+        "short": "h",
+        "description": "display help",
+        "inherit": true
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "apply",
+        "description": "apply a DevStream configuration",
+        "options": [
+          {
+            "long": "config-file",
+            "short": "f",
+            "description": "config file",
+            "inherit": false,
+            "value": {
+              "name": "config-file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "plugin-dir",
+            "short": "d",
+            "description": "plugins directory",
+            "inherit": false,
+            "value": {
+              "name": "plugin-dir",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "yes",
+            "short": "y",
+            "description": "apply directly without confirmation",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "completion",
+        "description": "generate shell completion scripts",
+        "subcommands": [
+          {
+            "name": "bash",
+            "description": "generate bash completion script"
+          },
+          {
+            "name": "fish",
+            "description": "generate fish completion script"
+          },
+          {
+            "name": "powershell",
+            "description": "generate powershell completion script"
+          },
+          {
+            "name": "zsh",
+            "description": "generate zsh completion script"
+          }
+        ]
+      },
+      {
+        "name": "delete",
+        "description": "delete tools from a DevStream configuration",
+        "options": [
+          {
+            "long": "config-file",
+            "short": "f",
+            "description": "config file",
+            "inherit": false,
+            "value": {
+              "name": "config-file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "force",
+            "description": "force delete by config",
+            "inherit": false
+          },
+          {
+            "long": "plugin-dir",
+            "short": "d",
+            "description": "plugins directory",
+            "inherit": false,
+            "value": {
+              "name": "plugin-dir",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "yes",
+            "short": "y",
+            "description": "delete directly without confirmation",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "destroy",
+        "description": "destroy tools from configuration and state",
+        "options": [
+          {
+            "long": "config-file",
+            "short": "f",
+            "description": "config file",
+            "inherit": false,
+            "value": {
+              "name": "config-file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "force",
+            "description": "force destroy by config",
+            "inherit": false
+          },
+          {
+            "long": "plugin-dir",
+            "short": "d",
+            "description": "plugins directory",
+            "inherit": false,
+            "value": {
+              "name": "plugin-dir",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "yes",
+            "short": "y",
+            "description": "destroy directly without confirmation",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "develop",
+        "description": "develop plugins",
+        "subcommands": [
+          {
+            "name": "create-plugin",
+            "description": "create a new plugin",
+            "options": [
+              {
+                "long": "name",
+                "short": "n",
+                "description": "specify name of the plugin to be created",
+                "inherit": true,
+                "value": {
+                  "name": "name"
+                }
+              }
+            ]
+          },
+          {
+            "name": "validate-plugin",
+            "description": "validate a plugin",
+            "options": [
+              {
+                "long": "all",
+                "short": "a",
+                "description": "validate all plugins",
+                "inherit": true
+              },
+              {
+                "long": "name",
+                "short": "n",
+                "description": "specify name of the plugin to be validated",
+                "inherit": true,
+                "value": {
+                  "name": "name"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "init",
+        "description": "download required plugins",
+        "options": [
+          {
+            "long": "all",
+            "short": "a",
+            "description": "download all plugins",
+            "inherit": false
+          },
+          {
+            "long": "arch",
+            "description": "download plugins for specific arch",
+            "inherit": false,
+            "value": {
+              "name": "arch"
+            }
+          },
+          {
+            "long": "config-file",
+            "short": "f",
+            "description": "config file",
+            "inherit": false,
+            "value": {
+              "name": "config-file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "download-only",
+            "description": "download plugins only",
+            "inherit": false
+          },
+          {
+            "long": "os",
+            "description": "download plugins for specific os",
+            "inherit": false,
+            "value": {
+              "name": "os"
+            }
+          },
+          {
+            "long": "plugin-dir",
+            "short": "d",
+            "description": "plugins directory",
+            "inherit": false,
+            "value": {
+              "name": "plugin-dir",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "plugins",
+            "short": "p",
+            "description": "the plugins to be downloaded",
+            "inherit": false,
+            "value": {
+              "name": "plugins"
+            }
+          }
+        ]
+      },
+      {
+        "name": "list",
+        "description": "list resources",
+        "subcommands": [
+          {
+            "name": "plugins",
+            "description": "list all plugins",
+            "options": [
+              {
+                "long": "filter",
+                "short": "r",
+                "description": "filter plugin by regex",
+                "inherit": true,
+                "value": {
+                  "name": "filter"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "show",
+        "description": "show plugin configuration or status",
+        "subcommands": [
+          {
+            "name": "config",
+            "description": "show configuration information",
+            "options": [
+              {
+                "long": "plugin",
+                "short": "p",
+                "description": "specify name with the plugin",
+                "inherit": false,
+                "value": {
+                  "name": "plugin"
+                }
+              },
+              {
+                "long": "template",
+                "short": "t",
+                "description": "print a template config, e.g. quickstart/gitops/",
+                "inherit": false,
+                "value": {
+                  "name": "template"
+                }
+              }
+            ]
+          },
+          {
+            "name": "status",
+            "description": "show status information",
+            "options": [
+              {
+                "long": "all",
+                "short": "a",
+                "description": "show all instances of all plugins status",
+                "inherit": false
+              },
+              {
+                "long": "config-file",
+                "short": "f",
+                "description": "config file",
+                "inherit": false,
+                "value": {
+                  "name": "config-file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "id",
+                "short": "i",
+                "description": "specify id with the plugin instance",
+                "inherit": false,
+                "value": {
+                  "name": "id"
+                }
+              },
+              {
+                "long": "plugin",
+                "short": "p",
+                "description": "specify name with the plugin",
+                "inherit": false,
+                "value": {
+                  "name": "plugin"
+                }
+              },
+              {
+                "long": "plugin-dir",
+                "short": "d",
+                "description": "plugins directory",
+                "inherit": false,
+                "value": {
+                  "name": "plugin-dir",
+                  "provider": "builtin.directories"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "upgrade",
+        "description": "upgrade dtm to the latest release version",
+        "options": [
+          {
+            "long": "yes",
+            "short": "y",
+            "description": "upgrade directly without confirmation",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "verify",
+        "description": "verify tools from configuration and state",
+        "options": [
+          {
+            "long": "config-file",
+            "short": "f",
+            "description": "config file",
+            "inherit": false,
+            "value": {
+              "name": "config-file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "plugin-dir",
+            "short": "d",
+            "description": "plugins directory",
+            "inherit": false,
+            "value": {
+              "name": "plugin-dir",
+              "provider": "builtin.directories"
+            }
+          }
+        ]
+      },
+      {
+        "name": "version",
+        "description": "print version information"
+      },
+      {
+        "name": "help",
+        "description": "show help for a command",
+        "subcommands": [
+          {
+            "name": "apply",
+            "description": "apply a DevStream configuration"
+          },
+          {
+            "name": "completion",
+            "description": "generate shell completion scripts",
+            "subcommands": [
+              {
+                "name": "bash",
+                "description": "generate bash completion script"
+              },
+              {
+                "name": "fish",
+                "description": "generate fish completion script"
+              },
+              {
+                "name": "powershell",
+                "description": "generate powershell completion script"
+              },
+              {
+                "name": "zsh",
+                "description": "generate zsh completion script"
+              }
+            ]
+          },
+          {
+            "name": "delete",
+            "description": "delete tools from a DevStream configuration"
+          },
+          {
+            "name": "destroy",
+            "description": "destroy tools from configuration and state"
+          },
+          {
+            "name": "develop",
+            "description": "develop plugins",
+            "subcommands": [
+              {
+                "name": "create-plugin",
+                "description": "create a new plugin"
+              },
+              {
+                "name": "validate-plugin",
+                "description": "validate a plugin"
+              }
+            ]
+          },
+          {
+            "name": "init",
+            "description": "download required plugins"
+          },
+          {
+            "name": "list",
+            "description": "list resources",
+            "subcommands": [
+              {
+                "name": "plugins",
+                "description": "list all plugins"
+              }
+            ]
+          },
+          {
+            "name": "show",
+            "description": "show plugin configuration or status",
+            "subcommands": [
+              {
+                "name": "config",
+                "description": "show configuration information"
+              },
+              {
+                "name": "status",
+                "description": "show status information"
+              }
+            ]
+          },
+          {
+            "name": "upgrade",
+            "description": "upgrade dtm to the latest release version"
+          },
+          {
+            "name": "verify",
+            "description": "verify tools from configuration and state"
+          },
+          {
+            "name": "version",
+            "description": "print version information"
+          }
+        ]
+      }
+    ],
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
