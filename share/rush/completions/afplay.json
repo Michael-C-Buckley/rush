@@ -1,0 +1,81 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "afplay",
+    "description": "play audio files",
+    "platforms": ["macos"],
+    "providers": {
+      "builtin.files": { "builtin": "files" }
+    },
+    "options": [
+      {
+        "short": "v",
+        "long": "volume",
+        "description": "set playback volume",
+        "inherit": false,
+        "value": {
+          "name": "volume",
+          "description": "0 silent, 1 normal, up to 255 loud"
+        }
+      },
+      {
+        "short": "h",
+        "long": "help",
+        "description": "show help",
+        "inherit": false
+      },
+      {
+        "long": "leaks",
+        "description": "run leaks analysis",
+        "inherit": false
+      },
+      {
+        "short": "t",
+        "long": "time",
+        "description": "play for seconds",
+        "inherit": false,
+        "value": {
+          "name": "seconds",
+          "description": "duration to play"
+        }
+      },
+      {
+        "short": "r",
+        "long": "rate",
+        "description": "set playback rate",
+        "inherit": false,
+        "value": {
+          "name": "rate",
+          "description": "about 0.4 to 3.0"
+        }
+      },
+      {
+        "short": "q",
+        "long": "rQuality",
+        "description": "set rate scaling quality",
+        "inherit": false,
+        "value": {
+          "name": "quality",
+          "description": "0 low, 1 high"
+        }
+      },
+      {
+        "short": "d",
+        "long": "debug",
+        "description": "print debug output",
+        "inherit": false
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "audio-file",
+          "provider": "builtin.files",
+          "index": 0,
+          "description": "audio file to play"
+        }
+      ]
+    }
+  }
+}
