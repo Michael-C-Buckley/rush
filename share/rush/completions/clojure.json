@@ -1,0 +1,227 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "clojure",
+    "description": "run clojure programs",
+    "options": [
+      {
+        "spellings": [
+          "-A"
+        ],
+        "description": "use aliases to modify classpath",
+        "inherit": false,
+        "value": {
+          "name": "aliases",
+          "style": "adjacent"
+        }
+      },
+      {
+        "spellings": [
+          "-X"
+        ],
+        "description": "invoke a function with aliases",
+        "inherit": false,
+        "value": {
+          "name": "aliases",
+          "style": "adjacent"
+        }
+      },
+      {
+        "spellings": [
+          "-T"
+        ],
+        "description": "invoke a tool by name or aliases",
+        "inherit": false,
+        "value": {
+          "name": "name-or-aliases",
+          "style": "adjacent"
+        }
+      },
+      {
+        "spellings": [
+          "-M"
+        ],
+        "description": "use aliases and main options",
+        "inherit": false,
+        "value": {
+          "name": "args",
+          "style": "adjacent"
+        }
+      },
+      {
+        "short": "P",
+        "description": "prepare deps - download libs, cache classpath, but don't exec",
+        "inherit": false
+      },
+      {
+        "short": "J",
+        "description": "pass opt through in java_opts",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-Sdeps"
+        ],
+        "description": "pass the deps data on the command line",
+        "inherit": false,
+        "value": {
+          "name": "edn",
+          "description": "The deps data in edn"
+        }
+      },
+      {
+        "spellings": [
+          "-Spath"
+        ],
+        "description": "compute classpath and echo to stdout only",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-Scp"
+        ],
+        "description": "use specified classpath instead of cached or computed one",
+        "inherit": false,
+        "value": {
+          "name": "cp",
+          "description": "The classpath to use"
+        }
+      },
+      {
+        "spellings": [
+          "-Sdescribe"
+        ],
+        "description": "print environment and command parsing information as data",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-Sforce"
+        ],
+        "description": "ignore classpath cache and force recomputation",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-Spom"
+        ],
+        "description": "generate (or update) pom.xml with deps and paths",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-Srepro"
+        ],
+        "description": "ignore the ~/.clojure/deps.edn config file",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-Sthreads"
+        ],
+        "description": "set the number of threads to use when downloading dependencies",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-Strace"
+        ],
+        "description": "write a trace.edn file that traces deps expansion",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-Stree"
+        ],
+        "description": "print dependency tree",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-Sverbose"
+        ],
+        "description": "print all path locations",
+        "inherit": false
+      },
+      {
+        "long": "version",
+        "spellings": [
+          "-version"
+        ],
+        "description": "print the Clojure CLI version",
+        "inherit": false
+      },
+      {
+        "short": "i",
+        "long": "init",
+        "description": "load a file or resource",
+        "inherit": false,
+        "value": {
+          "name": "path",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "short": "e",
+        "long": "eval",
+        "description": "evaluate expressions in string; print non-nil values",
+        "inherit": false,
+        "value": {
+          "name": "string"
+        }
+      },
+      {
+        "long": "report",
+        "description": "report uncaught exceptions",
+        "inherit": false,
+        "value": {
+          "name": "target",
+          "description": "Where to report",
+          "values": [
+            "file",
+            "stderr",
+            "none"
+          ]
+        }
+      },
+      {
+        "short": "m",
+        "long": "main",
+        "description": "call the -main function from a namespace with args",
+        "inherit": false,
+        "value": [
+          {
+            "name": "ns-name",
+            "description": "The namespace of the -main function",
+            "provider": "builtin.files"
+          },
+          {
+            "name": "args",
+            "description": "The arguments to pass to the -main function"
+          }
+        ]
+      },
+      {
+        "short": "r",
+        "long": "repl",
+        "description": "run a REPL",
+        "inherit": false
+      },
+      {
+        "short": "h",
+        "long": "help",
+        "spellings": [
+          "-?"
+        ],
+        "description": "show help for clojure",
+        "inherit": false
+      }
+    ],
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
