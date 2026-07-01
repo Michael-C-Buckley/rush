@@ -545,7 +545,10 @@ fn expandForWordFields(shell: anytype, words: []const ast.Word) ![]const []const
     const allocator = shell.scratchAllocator();
     var fields: std.ArrayList([]const u8) = .empty;
     for (words) |word| {
-        if (try appendUnquotedAtFields(shell, &fields, word) or try appendSpecialQuotedFields(shell, &fields, word)) {
+        if (try appendUnquotedAtFields(shell, &fields, word) or
+            try appendUnquotedStarFields(shell, &fields, word) or
+            try appendSpecialQuotedFields(shell, &fields, word))
+        {
             continue;
         } else if (!wordHasDynamicExpansion(word)) {
             try appendStaticWordField(shell, &fields, word);
@@ -715,6 +718,17 @@ fn singleParameterWord(word: ast.Word) ?ast.ParameterExpansion {
 
 fn appendUnquotedAtFields(shell: anytype, fields: *std.ArrayList([]const u8), word: ast.Word) !bool {
     if (!wordIsUnquotedAt(word)) return false;
+    try appendUnquotedPositionalFields(shell, fields);
+    return true;
+}
+
+fn appendUnquotedStarFields(shell: anytype, fields: *std.ArrayList([]const u8), word: ast.Word) !bool {
+    if (!wordIsUnquotedStar(word)) return false;
+    try appendUnquotedPositionalFields(shell, fields);
+    return true;
+}
+
+fn appendUnquotedPositionalFields(shell: anytype, fields: *std.ArrayList([]const u8)) !void {
     const preserve_empty = ifsHasNonWhitespaceDelimiter(parameterValue(shell, "IFS") orelse " \t\n");
     for (shell.state.positionals) |positional| {
         if (positional.len == 0 and preserve_empty) {
@@ -723,7 +737,6 @@ fn appendUnquotedAtFields(shell: anytype, fields: *std.ArrayList([]const u8), wo
             try appendSplitFields(shell, fields, positional, true);
         }
     }
-    return true;
 }
 
 fn wordIsUnquotedAt(word: ast.Word) bool {
@@ -732,6 +745,17 @@ fn wordIsUnquotedAt(word: ast.Word) bool {
         .parts => |parts| parts.len == 1 and switch (parts[0]) {
             .parameter => |parameter| parameter.op == null and parameter.parameter == .special and
                 parameter.parameter.special == .at,
+            else => false,
+        },
+    };
+}
+
+fn wordIsUnquotedStar(word: ast.Word) bool {
+    return switch (word.data) {
+        .literal => false,
+        .parts => |parts| parts.len == 1 and switch (parts[0]) {
+            .parameter => |parameter| parameter.op == null and parameter.parameter == .special and
+                parameter.parameter.special == .star,
             else => false,
         },
     };
@@ -2798,7 +2822,10 @@ fn expandWordFields(
     var fields: std.ArrayList([]const u8) = .empty;
 
     for (words) |word| {
-        if (try appendUnquotedAtFields(shell, &fields, word) or try appendSpecialQuotedFields(shell, &fields, word)) {
+        if (try appendUnquotedAtFields(shell, &fields, word) or
+            try appendUnquotedStarFields(shell, &fields, word) or
+            try appendSpecialQuotedFields(shell, &fields, word))
+        {
             continue;
         } else if (!wordHasDynamicExpansion(word)) {
             try appendStaticWordField(shell, &fields, word);
