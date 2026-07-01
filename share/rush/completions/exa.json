@@ -1,0 +1,363 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "exa",
+    "description": "list files with enhanced output",
+    "options": [
+      {
+        "short": "?",
+        "long": "help",
+        "description": "show list of command-line options",
+        "inherit": false
+      },
+      {
+        "short": "v",
+        "long": "version",
+        "description": "show version of exa",
+        "inherit": false
+      },
+      {
+        "short": "1",
+        "long": "oneline",
+        "description": "display one entry per line",
+        "inherit": false
+      },
+      {
+        "short": "l",
+        "long": "long",
+        "description": "display extended file metadata as a table",
+        "inherit": false
+      },
+      {
+        "short": "G",
+        "long": "grid",
+        "description": "display entries as a grid (default)",
+        "inherit": false
+      },
+      {
+        "short": "x",
+        "long": "across",
+        "description": "sort the grid across, rather than downwards",
+        "inherit": false
+      },
+      {
+        "short": "R",
+        "long": "recurse",
+        "description": "recurse into directories",
+        "inherit": false
+      },
+      {
+        "short": "T",
+        "long": "tree",
+        "description": "recurse into directories as a tree",
+        "inherit": false
+      },
+      {
+        "short": "F",
+        "long": "classify",
+        "description": "display type indicator by file names",
+        "inherit": false
+      },
+      {
+        "long": "colour",
+        "aliases": [
+          "color"
+        ],
+        "description": "when to use terminal colours (always, auto, never)",
+        "inherit": false,
+        "value": {
+          "name": "when",
+          "provider": {
+            "values": [
+              {
+                "value": "always"
+              },
+              {
+                "value": "auto"
+              },
+              {
+                "value": "never"
+              }
+            ]
+          },
+          "style": "attached"
+        }
+      },
+      {
+        "long": "colour-scale",
+        "aliases": [
+          "color-scale"
+        ],
+        "description": "highlight levels of file sizes distinctly",
+        "inherit": false
+      },
+      {
+        "short": "a",
+        "long": "all",
+        "description": "show hidden and 'dot' files",
+        "inherit": false
+      },
+      {
+        "short": "d",
+        "long": "list-dirs",
+        "description": "list directories like regular files",
+        "inherit": false
+      },
+      {
+        "short": "L",
+        "long": "level",
+        "description": "limit the depth of recursion",
+        "inherit": false,
+        "value": {
+          "name": "DEPTH"
+        }
+      },
+      {
+        "short": "r",
+        "long": "reverse",
+        "description": "reverse the sort order",
+        "inherit": false
+      },
+      {
+        "short": "s",
+        "long": "sort",
+        "description": "which field to sort by",
+        "inherit": false,
+        "value": {
+          "name": "sort-field",
+          "provider": {
+            "values": [
+              {
+                "value": "name"
+              },
+              {
+                "value": "Name"
+              },
+              {
+                "value": "extension"
+              },
+              {
+                "value": "Extension"
+              },
+              {
+                "value": "size"
+              },
+              {
+                "value": "type"
+              },
+              {
+                "value": "modified"
+              },
+              {
+                "value": "accessed"
+              },
+              {
+                "value": "created"
+              },
+              {
+                "value": "inode"
+              },
+              {
+                "value": "none"
+              },
+              {
+                "value": "date"
+              },
+              {
+                "value": "time"
+              },
+              {
+                "value": "old"
+              },
+              {
+                "value": "new"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "long": "group-directories-first",
+        "description": "list directories before other files",
+        "inherit": false
+      },
+      {
+        "short": "D",
+        "long": "only-dirs",
+        "description": "list only directories",
+        "inherit": false
+      },
+      {
+        "short": "I",
+        "long": "ignore-glob",
+        "description": "glob patterns (pipe-separated) of files to ignore",
+        "inherit": false,
+        "value": {
+          "name": "GLOB"
+        }
+      },
+      {
+        "long": "git-ignore",
+        "description": "ignore files mentioned in '.gitignore'",
+        "inherit": false
+      },
+      {
+        "short": "b",
+        "long": "binary",
+        "description": "list file sizes with binary prefixes",
+        "inherit": false
+      },
+      {
+        "short": "B",
+        "long": "bytes",
+        "description": "list file sizes in bytes, without any prefixes",
+        "inherit": false
+      },
+      {
+        "short": "g",
+        "long": "group",
+        "description": "list each file's group",
+        "inherit": false
+      },
+      {
+        "short": "h",
+        "long": "header",
+        "description": "add a header row to each column",
+        "inherit": false
+      },
+      {
+        "short": "H",
+        "long": "links",
+        "description": "list each file's number of hard links",
+        "inherit": false
+      },
+      {
+        "short": "i",
+        "long": "inode",
+        "description": "list each file's inode number",
+        "inherit": false
+      },
+      {
+        "short": "m",
+        "long": "modified",
+        "description": "use the modified timestamp field",
+        "inherit": false
+      },
+      {
+        "short": "S",
+        "long": "blocks",
+        "description": "show number of file system blocks",
+        "inherit": false
+      },
+      {
+        "short": "t",
+        "long": "time",
+        "description": "which timestamp field to list (modified, accessed, created)",
+        "inherit": false,
+        "value": {
+          "name": "FIELD",
+          "provider": {
+            "values": [
+              {
+                "value": "modified"
+              },
+              {
+                "value": "accessed"
+              },
+              {
+                "value": "created"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "short": "u",
+        "long": "accessed",
+        "description": "use the accessed timestamp field",
+        "inherit": false
+      },
+      {
+        "short": "U",
+        "long": "created",
+        "description": "use the created timestamp field",
+        "inherit": false
+      },
+      {
+        "long": "time-style",
+        "description": "how to format timestamps (default, iso, long-iso, full-iso)",
+        "inherit": false,
+        "value": {
+          "name": "style",
+          "provider": {
+            "values": [
+              {
+                "value": "default"
+              },
+              {
+                "value": "iso"
+              },
+              {
+                "value": "long-iso"
+              },
+              {
+                "value": "full-iso"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "long": "git",
+        "description": "list each file's Git status, if tracked or ignored",
+        "inherit": false
+      },
+      {
+        "short": "@",
+        "long": "extended",
+        "description": "list each file's extended attributes and sizes",
+        "inherit": false
+      },
+      {
+        "long": "icons",
+        "description": "shows icons before each folder or file",
+        "inherit": false,
+        "exclusiveGroup": "exa.icons"
+      },
+      {
+        "long": "no-icons",
+        "description": "does not display icons",
+        "inherit": false,
+        "exclusiveGroup": "exa.icons"
+      },
+      {
+        "long": "changed",
+        "description": "displays when a file or folder got changed instead of modified in the header",
+        "inherit": false
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "files",
+          "provider": [
+            "builtin.files",
+            "builtin.directories"
+          ],
+          "index": 0,
+          "repeatable": true,
+          "description": "files or directories to list"
+        }
+      ]
+    },
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "builtin.directories": {
+        "builtin": "directories"
+      }
+    }
+  }
+}
