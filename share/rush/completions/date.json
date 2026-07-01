@@ -1,0 +1,88 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "date",
+    "description": "display or set date and time",
+    "options": [
+      {
+        "short": "d",
+        "description": "set daylight saving time value",
+        "inherit": false,
+        "value": {
+          "name": "dst"
+        }
+      },
+      {
+        "short": "f",
+        "description": "parse input using a format",
+        "inherit": false,
+        "value": [
+          {
+            "name": "input_fmt",
+            "description": "the format with which to parse the new date value"
+          },
+          {
+            "name": "new_date",
+            "description": "the new date to set"
+          }
+        ]
+      },
+      {
+        "short": "j",
+        "description": "do not set the date",
+        "inherit": false
+      },
+      {
+        "short": "n",
+        "description": "set time only on this machine",
+        "inherit": false
+      },
+      {
+        "short": "R",
+        "description": "use RFC 2822 output format",
+        "inherit": false
+      },
+      {
+        "short": "r",
+        "description": "print time from seconds since the Epoch",
+        "inherit": false,
+        "value": {
+          "name": "seconds",
+          "description": "number of seconds since the Epoch (00:00:00 UTC, January 1, 1970)"
+        }
+      },
+      {
+        "short": "t",
+        "description": "set minutes west of GMT",
+        "inherit": false,
+        "value": {
+          "name": "minutes_west"
+        }
+      },
+      {
+        "short": "u",
+        "description": "use UTC time",
+        "inherit": false
+      },
+      {
+        "short": "v",
+        "description": "adjust the displayed date or time",
+        "inherit": false,
+        "value": {
+          "name": "val",
+          "description": "[+|-]val[ymwdHMS]"
+        }
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "new-time-or-output-format",
+          "description": "new time or +format output string",
+          "index": 0
+        }
+      ]
+    }
+  }
+}
