@@ -395,7 +395,16 @@ pub const InteractiveHistoryService = struct {
         prefix: []const u8,
         before: ?i64,
     ) !?line_editor.HistoryView.HistoryEntry {
-        return self.history.previousEntry(allocator, prefix, self.history.current_cwd, self.history.session_id, before);
+        if (try self.history.previousEntry(
+            allocator,
+            prefix,
+            self.history.current_cwd,
+            self.history.session_id,
+            before,
+        )) |entry| return entry;
+        if (self.history.session_id.len == 0) return null;
+        if (try self.hasCurrentSessionEntry(allocator, prefix)) return null;
+        return self.history.previousEntry(allocator, prefix, self.history.current_cwd, "", before);
     }
 
     fn nextEntry(
@@ -404,7 +413,25 @@ pub const InteractiveHistoryService = struct {
         prefix: []const u8,
         after: i64,
     ) !?line_editor.HistoryView.HistoryEntry {
-        return self.history.nextEntry(allocator, prefix, self.history.current_cwd, self.history.session_id, after);
+        if (try self.history.nextEntry(
+            allocator,
+            prefix,
+            self.history.current_cwd,
+            self.history.session_id,
+            after,
+        )) |entry| return entry;
+        if (self.history.session_id.len == 0) return null;
+        if (try self.hasCurrentSessionEntry(allocator, prefix)) return null;
+        return self.history.nextEntry(allocator, prefix, self.history.current_cwd, "", after);
+    }
+
+    fn hasCurrentSessionEntry(self: *InteractiveHistoryService, allocator: std.mem.Allocator, prefix: []const u8) !bool {
+        const entry = try self.history.previousEntry(allocator, prefix, self.history.current_cwd, self.history.session_id, null);
+        if (entry) |value| {
+            value.deinit(allocator);
+            return true;
+        }
+        return false;
     }
 
     fn numberedEntry(
@@ -1197,6 +1224,64 @@ test "line history navigation is scoped to session and cwd" {
     try session_b.handleKey(.{ .key = .down });
     try applyLineHistoryRequest(&session_b, history_view_b);
     try std.testing.expectEqualStrings("", session_b.editor.buffer.text());
+}
+
+test "line history falls back to persisted cwd history for new sessions" {
+    const path = "rush-history-session-fallback-test.sqlite";
+    try deleteHistoryDbFilesIfExists(std.testing.io, path);
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path ++ "-wal") catch {};
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path ++ "-shm") catch {};
+
+    var stored_history = History.init(std.testing.allocator);
+    defer stored_history.deinit();
+    try stored_history.load(std.testing.io, path);
+    try insertHistoryRecord(stored_history.db.?, .{
+        .cmd = "echo older",
+        .cwd = "/repo",
+        .when = 10,
+        .session_id = "old-session",
+    });
+    try insertHistoryRecord(stored_history.db.?, .{
+        .cmd = "git status",
+        .cwd = "/repo",
+        .when = 20,
+        .session_id = "old-session",
+    });
+    try insertHistoryRecord(stored_history.db.?, .{
+        .cmd = "echo elsewhere",
+        .cwd = "/other",
+        .when = 30,
+        .session_id = "old-session",
+    });
+
+    var new_history = History.init(std.testing.allocator);
+    defer new_history.deinit();
+    try new_history.load(std.testing.io, path);
+    new_history.current_cwd = "/repo";
+    new_history.session_id = "new-session";
+    var history_service = InteractiveHistoryService.init(&new_history);
+    const history_view: line_editor.HistoryView = .{
+        .context = &history_service,
+        .previous = previousHistoryEntry,
+        .next = nextHistoryEntry,
+    };
+    var session = try line_editor.LineSession.initWithOptions(
+        std.testing.allocator,
+        .{ .bytes = "$ " },
+        history_view,
+    );
+    defer session.deinit();
+
+    try session.handleKey(.{ .key = .up });
+    try applyLineHistoryRequest(&session, history_view);
+    try std.testing.expectEqualStrings("git status", session.editor.buffer.text());
+    try session.handleKey(.{ .key = .up });
+    try applyLineHistoryRequest(&session, history_view);
+    try std.testing.expectEqualStrings("echo older", session.editor.buffer.text());
+    try session.handleKey(.{ .key = .down });
+    try applyLineHistoryRequest(&session, history_view);
+    try std.testing.expectEqualStrings("git status", session.editor.buffer.text());
 }
 
 test "history path follows XDG state home then HOME fallback" {
