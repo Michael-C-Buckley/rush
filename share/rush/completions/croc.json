@@ -1,0 +1,289 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "croc",
+    "description": "transfer files and folders securely",
+    "options": [
+      {
+        "long": "help",
+        "short": "h",
+        "description": "show help",
+        "inherit": true
+      },
+      {
+        "long": "internal-dns",
+        "description": "use the built-in DNS stub resolver",
+        "inherit": false
+      },
+      {
+        "long": "remember",
+        "description": "save settings for next time",
+        "inherit": false
+      },
+      {
+        "long": "debug",
+        "description": "enable debug mode",
+        "inherit": false
+      },
+      {
+        "long": "yes",
+        "description": "automatically agree to prompts",
+        "inherit": false
+      },
+      {
+        "long": "stdout",
+        "description": "write the received file to stdout",
+        "inherit": false
+      },
+      {
+        "long": "no-compress",
+        "description": "disable compression",
+        "inherit": false
+      },
+      {
+        "long": "ask",
+        "description": "prompt both sender and recipient",
+        "inherit": false
+      },
+      {
+        "long": "local",
+        "description": "use only local connections",
+        "inherit": false
+      },
+      {
+        "long": "ignore-stdin",
+        "description": "ignore piped stdin",
+        "inherit": false
+      },
+      {
+        "long": "overwrite",
+        "description": "overwrite without prompting",
+        "inherit": false
+      },
+      {
+        "long": "curve",
+        "description": "choose an encryption curve",
+        "inherit": false,
+        "value": {
+          "name": "curve",
+          "provider": "croc.curves"
+        }
+      },
+      {
+        "long": "ip",
+        "description": "set the sender IP address",
+        "inherit": false,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "relay",
+        "description": "set the relay IPv4 address",
+        "inherit": false,
+        "value": {
+          "name": "ipv4-address"
+        }
+      },
+      {
+        "long": "relay6",
+        "description": "set the relay IPv6 address",
+        "inherit": false,
+        "value": {
+          "name": "ipv6-address"
+        }
+      },
+      {
+        "long": "out",
+        "description": "set the output folder",
+        "inherit": false,
+        "value": {
+          "name": "output-folder",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "pass",
+        "description": "set the relay password",
+        "inherit": false,
+        "value": {
+          "name": "password"
+        }
+      },
+      {
+        "long": "socks5",
+        "description": "set a SOCKS5 proxy",
+        "inherit": false,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "throttleUpload",
+        "description": "throttle upload speed",
+        "inherit": false,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "version",
+        "short": "v",
+        "description": "print the version",
+        "inherit": false
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "secret-code",
+          "description": "receive a file using a code",
+          "index": 0
+        }
+      ]
+    },
+    "subcommands": [
+      {
+        "name": "send",
+        "description": "send files or folders",
+        "options": [
+          {
+            "long": "code",
+            "short": "c",
+            "description": "set the relay codephrase",
+            "inherit": false,
+            "value": {
+              "name": "codephrase"
+            }
+          },
+          {
+            "long": "hash",
+            "description": "choose the hash algorithm",
+            "inherit": false,
+            "value": {
+              "name": "hash",
+              "provider": "croc.hashes"
+            }
+          },
+          {
+            "long": "text",
+            "short": "t",
+            "description": "send text",
+            "inherit": false,
+            "value": {
+              "name": "text"
+            }
+          },
+          {
+            "long": "no-local",
+            "description": "disable local relay when sending",
+            "inherit": false
+          },
+          {
+            "long": "no-multi",
+            "description": "disable multiplexing",
+            "inherit": false
+          },
+          {
+            "long": "ports",
+            "description": "set local relay ports",
+            "inherit": false,
+            "value": {
+              "name": "ports"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "file-or-folder",
+              "provider": [
+                "builtin.files",
+                "builtin.directories"
+              ],
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "relay",
+        "description": "start a relay",
+        "options": [
+          {
+            "long": "host",
+            "description": "set the relay host",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "ports",
+            "description": "set relay ports",
+            "inherit": false,
+            "value": {
+              "name": "ports"
+            }
+          }
+        ]
+      },
+      {
+        "name": "help",
+        "aliases": [
+          "h"
+        ],
+        "description": "show help for a command",
+        "arguments": {
+          "states": [
+            {
+              "name": "command",
+              "index": 0,
+              "provider": "croc.commands"
+            }
+          ]
+        }
+      }
+    ],
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "croc.curves": {
+        "values": [
+          "p521",
+          "p256",
+          "p384",
+          "siec"
+        ]
+      },
+      "croc.hashes": {
+        "values": [
+          "xxhash",
+          "imohash",
+          "md5"
+        ]
+      },
+      "croc.commands": {
+        "values": [
+          {
+            "value": "send",
+            "description": "send files or folders"
+          },
+          {
+            "value": "relay",
+            "description": "start a relay"
+          },
+          {
+            "value": "help",
+            "description": "show help"
+          }
+        ]
+      }
+    }
+  }
+}
