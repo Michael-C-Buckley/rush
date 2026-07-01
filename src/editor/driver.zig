@@ -369,6 +369,10 @@ pub const TerminalSession = struct {
         return self.prompt_redraw.write.handle;
     }
 
+    pub fn ttyFd(self: TerminalSession) std.posix.fd_t {
+        return self.tty.fd.handle;
+    }
+
     pub fn trapSignalWakeFd(self: TerminalSession) std.posix.fd_t {
         return self.trap_signal.write.handle;
     }
@@ -938,7 +942,10 @@ pub const TerminalSession = struct {
 
     fn processTtyInput(self: *TerminalSession) !void {
         var buffer: [read_chunk_size]u8 = undefined;
-        const n = try rawRead(self.tty.fd.handle, &buffer);
+        const n = rawRead(self.tty.fd.handle, &buffer) catch |err| switch (err) {
+            error.WouldBlock => return,
+            else => return err,
+        };
         const bytes = buffer[0..n];
         const old_len = self.events.items.len;
         try self.terminal_parser.feed(bytes, &self.events);
@@ -959,7 +966,10 @@ pub const TerminalSession = struct {
 
     fn processPromptRedraw(self: *TerminalSession) !void {
         var buffer: [32]u8 = undefined;
-        _ = try rawRead(self.prompt_redraw.read.handle, &buffer);
+        _ = rawRead(self.prompt_redraw.read.handle, &buffer) catch |err| switch (err) {
+            error.WouldBlock => return,
+            else => return err,
+        };
         try self.events.append(self.allocator, .prompt_redraw);
     }
 

@@ -15,7 +15,6 @@ pub const definitions = [_]builtin.Definition{
     builtin.extensionDefinition("color", .color),
     builtin.extensionDefinition("event", .event),
     builtin.extensionDefinition("prompt", .prompt),
-    builtin.extensionDefinition("prompt_async", .prompt_async),
     builtin.extensionDefinition("prompt_duration", .prompt_duration),
     builtin.extensionDefinition("prompt_pwd", .prompt_pwd),
     builtin.extensionDefinition("rush_complete", .rush_complete),
@@ -155,8 +154,7 @@ pub const State = struct {
             .abbr => evalAbbr(self, sh, args),
             .color => evalColor(sh, args),
             .event => evalEvent(self, sh, args),
-            .prompt => evalPrompt(self, args),
-            .prompt_async => evalPromptAsync(sh, args),
+            .prompt => evalPrompt(self, sh, args),
             .prompt_duration => evalPromptDuration(self, sh, args),
             .prompt_pwd => evalPromptPwd(sh, args),
             .rush_complete => evalRushComplete(self, sh, args),
@@ -530,7 +528,7 @@ fn isFunctionName(name: []const u8) bool {
     return true;
 }
 
-fn evalPrompt(state: *State, args: []const []const u8) !result.EvalResult {
+fn evalPrompt(state: *State, sh: anytype, args: []const []const u8) !result.EvalResult {
     if (args.len < 2) return .{ .status = 2 };
     if (std.mem.eql(u8, args[1], "async-pending")) return .{ .status = if (state.promptAsyncPending()) 0 else 1 };
     if (!state.building_prompt) return .{};
@@ -548,29 +546,56 @@ fn evalPrompt(state: *State, args: []const []const u8) !result.EvalResult {
         var style: editor_render.UiStyle = .{};
         var index: usize = 2;
         while (index < args.len) {
-            const arg = args[index];
-            if (std.mem.eql(u8, arg, "--fg")) {
-                index += 1;
-                if (index >= args.len) return .{ .status = 2 };
-                style.fg = editor_render.parseUiColor(args[index]) orelse return .{ .status = 2 };
-                index += 1;
-                continue;
-            }
-            if (std.mem.eql(u8, arg, "--bg")) {
-                index += 1;
-                if (index >= args.len) return .{ .status = 2 };
-                style.bg = editor_render.parseUiColor(args[index]) orelse return .{ .status = 2 };
-                index += 1;
-                continue;
-            }
-            if (std.mem.eql(u8, arg, "--bold")) style.bold = true else if (std.mem.eql(u8, arg, "--dim")) style.dim = true else if (std.mem.eql(u8, arg, "--italic")) style.italic = true else if (std.mem.eql(u8, arg, "--underline")) style.ul = .single else if (std.mem.eql(u8, arg, "--reverse")) style.reverse = true else if (std.mem.eql(u8, arg, "--strikethrough")) style.strike = true else break;
-            index += 1;
+            if (!(parsePromptStyleOption(args, &index, &style) catch return .{ .status = 2 })) break;
         }
         if (index >= args.len) return .{ .status = 2 };
         try appendStyledPromptText(state, style, args[index..]);
         return .{};
     }
+    if (std.mem.eql(u8, args[1], "async")) {
+        const parsed = (try parsePromptAsyncSegment(args)) orelse return .{ .status = 2 };
+        const cached_stdout = try promptAsyncCachedOutput(state, parsed.async, sh);
+        const display_stdout = std.mem.trimEnd(u8, cached_stdout, "\n");
+        if (display_stdout.len != 0) {
+            if (parsed.prefix) |prefix| try state.appendPrompt(prefix);
+            try appendStyledPromptText(state, parsed.style, &.{display_stdout});
+        }
+        return .{};
+    }
     return .{ .status = 2 };
+}
+
+fn parsePromptStyleOption(args: []const []const u8, index: *usize, style: *editor_render.UiStyle) !bool {
+    const arg = args[index.*];
+    if (std.mem.eql(u8, arg, "--fg")) {
+        index.* += 1;
+        if (index.* >= args.len) return error.InvalidPromptStyle;
+        style.fg = editor_render.parseUiColor(args[index.*]) orelse return error.InvalidPromptStyle;
+        index.* += 1;
+        return true;
+    }
+    if (std.mem.eql(u8, arg, "--bg")) {
+        index.* += 1;
+        if (index.* >= args.len) return error.InvalidPromptStyle;
+        style.bg = editor_render.parseUiColor(args[index.*]) orelse return error.InvalidPromptStyle;
+        index.* += 1;
+        return true;
+    }
+    if (std.mem.eql(u8, arg, "--bold")) {
+        style.bold = true;
+    } else if (std.mem.eql(u8, arg, "--dim")) {
+        style.dim = true;
+    } else if (std.mem.eql(u8, arg, "--italic")) {
+        style.italic = true;
+    } else if (std.mem.eql(u8, arg, "--underline")) {
+        style.ul = .single;
+    } else if (std.mem.eql(u8, arg, "--reverse")) {
+        style.reverse = true;
+    } else if (std.mem.eql(u8, arg, "--strikethrough")) {
+        style.strike = true;
+    } else return false;
+    index.* += 1;
+    return true;
 }
 
 fn appendPromptText(state: *State, args: []const []const u8) !void {
@@ -592,24 +617,22 @@ fn appendStyledPromptText(state: *State, style: editor_render.UiStyle, args: []c
     try state.appendPrompt(styled.items);
 }
 
-fn evalPromptAsync(sh: anytype, args: []const []const u8) !result.EvalResult {
-    const parsed = parsePromptAsync(args) orelse return .{ .status = 2 };
-    const io = sh.extensions.prompt_async_io orelse return .{};
-    const entry = try promptAsyncEntry(&sh.extensions, sh, parsed.key);
+fn promptAsyncCachedOutput(state: *State, parsed: PromptAsyncOptions, sh: anytype) ![]const u8 {
+    const io = state.prompt_async_io orelse return "";
+    const entry = try promptAsyncEntry(state, sh, parsed.key);
 
-    lockPromptAsync(&sh.extensions);
+    lockPromptAsync(state);
     const cached_stdout = try sh.scratchAllocator().dupe(u8, entry.stdout);
     const should_refresh = !entry.refreshing and
         (entry.updated_ms == 0 or monotonicMillis(io) >= entry.updated_ms +| parsed.ttl_ms);
     if (should_refresh) {
         entry.refreshing = true;
-        if (sh.extensions.prompt_async_active_count == 0) sh.extensions.prompt_async_pending_start_events += 1;
-        sh.extensions.prompt_async_active_count += 1;
-        sh.extensions.prompt_async_render_started = true;
+        if (state.prompt_async_active_count == 0) state.prompt_async_pending_start_events += 1;
+        state.prompt_async_active_count += 1;
+        state.prompt_async_render_started = true;
     }
-    unlockPromptAsync(&sh.extensions);
+    unlockPromptAsync(state);
 
-    if (cached_stdout.len != 0) try sh.host.writeAll(.stdout, cached_stdout);
     if (should_refresh) {
         const HostType = switch (@typeInfo(@TypeOf(sh.host))) {
             .pointer => |pointer| pointer.child,
@@ -622,7 +645,7 @@ fn evalPromptAsync(sh: anytype, args: []const []const u8) !result.EvalResult {
             };
         } else promptAsyncRefreshFailed(&sh.extensions, entry);
     }
-    return .{};
+    return cached_stdout;
 }
 
 const PromptAsyncOptions = struct {
@@ -631,39 +654,65 @@ const PromptAsyncOptions = struct {
     command: []const []const u8,
 };
 
-fn parsePromptAsync(args: []const []const u8) ?PromptAsyncOptions {
-    if (args.len < 6) return null;
-    var options: PromptAsyncOptions = .{ .key = args[1], .ttl_ms = 0, .command = &.{} };
-    var index: usize = 2;
+const PromptAsyncSegmentOptions = struct {
+    async: PromptAsyncOptions,
+    style: editor_render.UiStyle = .{},
+    prefix: ?[]const u8 = null,
+};
+
+fn parsePromptAsyncSegment(args: []const []const u8) !?PromptAsyncSegmentOptions {
+    if (args.len < 7) return null;
+    var parsed: PromptAsyncSegmentOptions = .{
+        .async = .{ .key = args[2], .ttl_ms = 0, .command = &.{} },
+    };
+    var index: usize = 3;
     while (index < args.len) {
         if (std.mem.eql(u8, args[index], "--")) {
             index += 1;
             if (index >= args.len) return null;
-            options.command = args[index..];
-            return options;
+            parsed.async.command = args[index..];
+            return parsed;
         }
         if (std.mem.eql(u8, args[index], "--ttl")) {
             index += 1;
             if (index >= args.len) return null;
-            options.ttl_ms = std.fmt.parseInt(u64, args[index], 10) catch return null;
+            parsed.async.ttl_ms = std.fmt.parseInt(u64, args[index], 10) catch return null;
             index += 1;
             continue;
         }
+        if (std.mem.eql(u8, args[index], "--prefix")) {
+            index += 1;
+            if (index >= args.len) return null;
+            parsed.prefix = args[index];
+            index += 1;
+            continue;
+        }
+        if ((parsePromptStyleOption(args, &index, &parsed.style) catch return null)) continue;
         return null;
     }
     return null;
 }
 
-test "prompt_async parser requires ttl separator and command" {
-    const parsed = parsePromptAsync(&.{ "prompt_async", "git", "--ttl", "2000", "--", "rush_prompt_git" }).?;
-    try std.testing.expectEqualStrings("git", parsed.key);
-    try std.testing.expectEqual(@as(u64, 2000), parsed.ttl_ms);
-    try std.testing.expectEqual(@as(usize, 1), parsed.command.len);
-    try std.testing.expectEqualStrings("rush_prompt_git", parsed.command[0]);
-
-    try std.testing.expectEqual(null, parsePromptAsync(&.{ "prompt_async", "git", "--ttl", "bad", "--", "cmd" }));
-    try std.testing.expectEqual(null, parsePromptAsync(&.{ "prompt_async", "git", "--ttl", "2000" }));
-    try std.testing.expectEqual(null, parsePromptAsync(&.{ "prompt_async", "git", "--ttl", "2000", "--" }));
+test "prompt async segment parser accepts style and prefix" {
+    const parsed = (try parsePromptAsyncSegment(&.{
+        "prompt",
+        "async",
+        "git",
+        "--ttl",
+        "2000",
+        "--prefix",
+        " ",
+        "--fg",
+        "yellow",
+        "--",
+        "rush_prompt_git",
+    })).?;
+    try std.testing.expectEqualStrings("git", parsed.async.key);
+    try std.testing.expectEqual(@as(u64, 2000), parsed.async.ttl_ms);
+    try std.testing.expectEqualStrings(" ", parsed.prefix.?);
+    try std.testing.expectEqual(editor_render.parseUiColor("yellow").?, parsed.style.fg.?);
+    try std.testing.expectEqual(@as(usize, 1), parsed.async.command.len);
+    try std.testing.expectEqualStrings("rush_prompt_git", parsed.async.command[0]);
 }
 
 test "prompt async lifecycle events are drained once" {
@@ -727,6 +776,8 @@ fn startPromptAsyncRefresh(sh: anytype, entry: *PromptAsyncEntry, command_args: 
             sh.host.duplicateTo(pipe_desc.write, .stdout) catch sh.host.exit(127);
             sh.host.close(pipe_desc.write) catch {};
             write_open = false;
+            sh.state.options.monitor = false;
+            sh.state.shell_pid = null;
             if (sh.host.openZ("/dev/null", .{ .access = .write_only })) |null_fd| {
                 sh.host.duplicateTo(null_fd, .stderr) catch {};
                 sh.host.close(null_fd) catch {};
@@ -734,7 +785,7 @@ fn startPromptAsyncRefresh(sh: anytype, entry: *PromptAsyncEntry, command_args: 
             const src: shell.source.Source = .{
                 .id = 0,
                 .kind = .command_string,
-                .name = "prompt_async",
+                .name = "prompt async",
                 .text = command,
             };
             const evaluated = sh.evalSourceNested(src) catch sh.host.exit(2);
@@ -1441,4 +1492,8 @@ fn eventKey(allocator: std.mem.Allocator, event: []const u8, name: []const u8) !
 test "Rush extension registry exposes abbr as an extension" {
     const abbr = registry.lookup("abbr") orelse return error.TestExpectedEqual;
     try std.testing.expectEqual(builtin.Origin.extension, abbr.origin);
+}
+
+test "Rush extension registry does not expose legacy prompt_async command" {
+    try std.testing.expectEqual(null, registry.lookup("prompt_async"));
 }

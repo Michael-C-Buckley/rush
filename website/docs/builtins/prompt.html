@@ -25,6 +25,7 @@
 
   <pre><span class="cmd">prompt</span> <span class="kw">text</span> <span class="var">text</span>...
 <span class="cmd">prompt</span> <span class="kw">segment</span> [<span class="opt">--fg</span> <span class="var">color</span>] [<span class="opt">--bg</span> <span class="var">color</span>] [<span class="opt">--bold</span>] [<span class="opt">--dim</span>] [<span class="opt">--italic</span>] [<span class="opt">--underline</span>] [<span class="opt">--reverse</span>] [<span class="opt">--strikethrough</span>] <span class="var">text</span>...
+<span class="cmd">prompt</span> <span class="kw">async</span> <span class="var">key</span> <span class="opt">--ttl</span> <span class="var">milliseconds</span> [<span class="opt">--prefix</span> <span class="var">text</span>] [<span class="opt">--fg</span> <span class="var">color</span>] [<span class="opt">--bg</span> <span class="var">color</span>] [<span class="opt">--bold</span>] [<span class="opt">--dim</span>] [<span class="opt">--italic</span>] [<span class="opt">--underline</span>] [<span class="opt">--reverse</span>] [<span class="opt">--strikethrough</span>] <span class="opt">--</span> <span class="var">command</span>...
 <span class="cmd">prompt</span> <span class="kw">newline</span>
 <span class="cmd">prompt</span> <span class="kw">async-pending</span></pre>
 
@@ -32,17 +33,21 @@
 
   <p><code>prompt</code> appends content to the prompt currently being rendered by <code>rush_prompt</code>. It is only available while Rush is rendering the interactive prompt.</p>
 
-  <p><code>prompt text</code> appends plain text. <code>prompt segment</code> appends styled text. <code>prompt newline</code> starts a new prompt line. <code>prompt async-pending</code> exits successfully when a <code>prompt_async</code> refresh is currently running, and exits non-zero otherwise.</p>
+  <p><code>prompt text</code> appends plain text. <code>prompt segment</code> appends styled text. <code>prompt async</code> appends cached command output and refreshes stale values in the background. <code>prompt newline</code> starts a new prompt line. <code>prompt async-pending</code> exits successfully when a prompt async refresh is currently running, and exits non-zero otherwise.</p>
+
+  <p><code>prompt async</code> is for prompt data that may be slow to compute, such as Git state. It appends cached standard output immediately. If the cache is missing or older than the requested TTL, Rush starts <var>command</var> as a hidden refresh and uses the old cached value, or appends nothing if no value has been cached yet. When the hidden command exits, Rush automatically requests a safe prompt redraw.</p>
+
+  <p>Cache entries are keyed by the current directory plus <var>key</var>. Duplicate refreshes for the same cache entry are coalesced. Standard error from hidden refreshes is suppressed, and refreshes do not change the interactive shell's last status.</p>
 
   <p>Colors accept the same values as Rush editor styles: <code>default</code>, ANSI color names, bright color names, 256-color indexes, and <code>#rrggbb</code> truecolor values.</p>
 
   <h2 id="exit-status"><a href="#exit-status">EXIT STATUS</a></h2>
 
-  <p>Zero on success, one when <code>prompt async-pending</code> has no running refresh, and two for usage errors or invalid style options.</p>
+  <p>Zero on success or when <code>prompt async</code> starts a refresh, one when <code>prompt async-pending</code> has no running refresh, and two for usage errors or invalid style options. Hidden command failures do not directly become the status of <code>prompt async</code>.</p>
 
   <h2 id="see-also"><a href="#see-also">SEE ALSO</a></h2>
 
-  <p><a href="index.html">rush-builtins(7)</a>, <a href="prompt_async.html">prompt_async(1)</a>, <a href="prompt_duration.html">prompt_duration(1)</a>, <a href="prompt_pwd.html">prompt_pwd(1)</a>, <a href="../configuration.html">rush configuration</a>.</p>
+  <p><a href="index.html">rush-builtins(7)</a>, <a href="prompt_duration.html">prompt_duration(1)</a>, <a href="prompt_pwd.html">prompt_pwd(1)</a>, <a href="../configuration.html">rush configuration</a>.</p>
 
 </body>
 </html>

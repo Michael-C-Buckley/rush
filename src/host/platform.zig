@@ -6,6 +6,7 @@ const builtin = @import("builtin");
 const host = @import("../host.zig");
 
 extern "c" fn readdir(dir: *std.c.DIR) ?*std.c.dirent;
+extern "c" fn getpgrp() c_int;
 extern "c" fn tcgetpgrp(fd: c_int) c_int;
 extern "c" fn tcsetpgrp(fd: c_int, pgrp: c_int) c_int;
 
@@ -172,6 +173,10 @@ pub fn currentProcessId() host.Pid {
         .macos, .freebsd, .openbsd, .netbsd => @intCast(std.c.getpid()),
         else => @compileError("unsupported host OS"),
     };
+}
+
+pub fn currentProcessGroup() host.Pid {
+    return @intCast(getpgrp());
 }
 
 pub fn currentParentProcessId() host.Pid {

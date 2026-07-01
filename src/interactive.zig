@@ -39,7 +39,6 @@ pub fn run(
     sh.setFunctionAutoload(autoloadRushFunction);
 
     const prompted_stdin = !sh.host.isTerminalFd(.stdin);
-    if (!prompted_stdin) enableJobControl(&sh);
 
     var source_id: shell.source.SourceId = 1;
     if (try startup.source(&sh, &source_id, options.login, !prompted_stdin)) |status| return status;
@@ -76,19 +75,36 @@ pub fn run(
     return session.runTerminal();
 }
 
-fn enableJobControl(sh: *RushShell) void {
+fn enableJobControl(sh: *RushShell, tty_fd: host.Fd) ?host.Pid {
+    const original_process_group = sh.host.currentProcessGroup();
+    const original_terminal_group = sh.host.terminalProcessGroup(tty_fd) catch return null;
+
     const shell_pid = sh.host.currentProcessId();
     sh.state.shell_pid = shell_pid;
+    ignoreInteractiveJobControlSignals(sh);
     sh.host.setProcessGroup(0, shell_pid) catch {
         sh.state.options.monitor = false;
-        return;
+        return null;
     };
-    ignoreInteractiveJobControlSignals(sh);
-    sh.host.setTerminalProcessGroup(.stdin, shell_pid) catch {
+    sh.host.setTerminalProcessGroup(tty_fd, shell_pid) catch {
+        sh.host.setProcessGroup(0, original_process_group) catch {};
         sh.state.options.monitor = false;
-        return;
+        return null;
     };
+    const foreground_group = sh.host.terminalProcessGroup(tty_fd) catch {
+        sh.host.setTerminalProcessGroup(tty_fd, original_terminal_group) catch {};
+        sh.host.setProcessGroup(0, original_process_group) catch {};
+        sh.state.options.monitor = false;
+        return null;
+    };
+    if (foreground_group != shell_pid) {
+        sh.host.setTerminalProcessGroup(tty_fd, original_terminal_group) catch {};
+        sh.host.setProcessGroup(0, original_process_group) catch {};
+        sh.state.options.monitor = false;
+        return null;
+    }
     sh.state.options.monitor = true;
+    return original_terminal_group;
 }
 
 fn ignoreInteractiveJobControlSignals(sh: *RushShell) void {
@@ -107,6 +123,7 @@ const InteractiveSession = struct {
     command_history: *history.History,
     history_service: *history.InteractiveHistoryService,
     events: interactive_event.Dispatcher(RushShell),
+    restore_terminal_pgrp: ?host.Pid = null,
     last_command_duration_ms: ?i64 = null,
     pending_event_exit_status: ?u8 = null,
 
@@ -115,7 +132,9 @@ const InteractiveSession = struct {
             try self.sh.host.writeAll(.stderr, "rush: cannot initialize terminal\n");
             return 2;
         };
+        defer self.restoreTerminalProcessGroup();
         defer terminal.deinit();
+        self.restore_terminal_pgrp = enableJobControl(self.sh, @enumFromInt(terminal.ttyFd()));
         self.sh.extensions.configurePromptAsync(self.io, terminal.promptRedrawWakeFd());
 
         while (true) {
@@ -138,6 +157,12 @@ const InteractiveSession = struct {
         }
     }
 
+    fn restoreTerminalProcessGroup(self: *InteractiveSession) void {
+        if (self.restore_terminal_pgrp) |process_group| {
+            self.sh.host.setTerminalProcessGroup(.stdin, process_group) catch {};
+        }
+    }
+
     const ReadLineError = error{EditorFailure} || error{OutOfMemory};
 
     fn readLine(self: *InteractiveSession, terminal: *editor.driver.TerminalSession) ReadLineError!editor.driver.ReadLineResult {
@@ -150,7 +175,7 @@ const InteractiveSession = struct {
 
         const prompt_text = self.renderPrompt() catch try prompt(self.allocator, self.sh);
         defer self.allocator.free(prompt_text);
-        self.dispatchPromptAsyncLifecycleEvents(self.allocator) catch |err| switch (err) {
+        _ = self.dispatchPromptAsyncLifecycleEvents(self.allocator) catch |err| switch (err) {
             error.OutOfMemory => return error.OutOfMemory,
             else => {},
         };
@@ -175,8 +200,14 @@ const InteractiveSession = struct {
             .run_activity_event = runInteractiveActivityEvent,
             .prompt_context = self,
             .refresh_prompt = refreshInteractivePrompt,
-        }) catch {
-            self.sh.host.writeAll(.stderr, "rush: editor error\n") catch {};
+        }) catch |err| {
+            var message_buffer: [128]u8 = undefined;
+            const message = std.fmt.bufPrint(
+                &message_buffer,
+                "rush: editor error: {s}\n",
+                .{@errorName(err)},
+            ) catch "rush: editor error\n";
+            self.sh.host.writeAll(.stderr, message) catch {};
             return error.EditorFailure;
         };
     }
@@ -196,7 +227,7 @@ const InteractiveSession = struct {
         );
     }
 
-    fn dispatchPromptAsyncLifecycleEvents(self: *InteractiveSession, allocator: std.mem.Allocator) !void {
+    fn dispatchPromptAsyncLifecycleEvents(self: *InteractiveSession, allocator: std.mem.Allocator) !bool {
         const events = self.sh.extensions.takePromptAsyncLifecycleEvents();
         for (0..events.start_count) |_| {
             var dispatched = try self.events.runEvent(allocator, self.io, "prompt.async.start", &.{ "prompt", "1" });
@@ -210,6 +241,7 @@ const InteractiveSession = struct {
             if (dispatched.exit_status) |status| pendingEventExit(self, status);
             if (dispatched.output.len != 0) try self.sh.host.writeAll(.stderr, dispatched.output);
         }
+        return events.start_count != 0 or events.end_count != 0;
     }
 
     fn evaluateSubmittedLine(
@@ -354,14 +386,14 @@ fn runInteractiveHooks(context: *anyopaque, allocator: std.mem.Allocator, io: st
     defer allocator.free(job_output);
     try output.appendSlice(allocator, job_output);
 
-    try session.dispatchPromptAsyncLifecycleEvents(allocator);
+    const prompt_async_event_ran = try session.dispatchPromptAsyncLifecycleEvents(allocator);
     var dispatched = try session.events.runDueTimers(allocator, io);
     defer dispatched.deinit(allocator);
     if (dispatched.exit_status) |status| pendingEventExit(session, status);
     try output.appendSlice(allocator, dispatched.output);
     return .{
         .output = try output.toOwnedSlice(allocator),
-        .refresh_prompt = true,
+        .refresh_prompt = prompt_async_event_ran or dispatched.ran_count != 0 or dispatched.output.len != 0,
         .stop = dispatched.exit_status != null,
     };
 }
@@ -387,7 +419,7 @@ fn runInteractiveActivityEvent(
 fn refreshInteractivePrompt(context: *anyopaque, allocator: std.mem.Allocator, io: std.Io) ![]const u8 {
     _ = io;
     const session: *InteractiveSession = @ptrCast(@alignCast(context));
-    try session.dispatchPromptAsyncLifecycleEvents(allocator);
+    _ = try session.dispatchPromptAsyncLifecycleEvents(allocator);
     return session.renderPrompt() catch try prompt(allocator, session.sh);
 }
 

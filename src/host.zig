@@ -333,6 +333,10 @@ pub const RealHost = struct {
         return platform.currentProcessId();
     }
 
+    pub fn currentProcessGroup(_: *RealHost) Pid {
+        return platform.currentProcessGroup();
+    }
+
     pub fn currentParentProcessId(_: *RealHost) Pid {
         return platform.currentParentProcessId();
     }

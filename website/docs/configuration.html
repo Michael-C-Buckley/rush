@@ -185,10 +185,11 @@ each <span class="var">$XDG_DATA_DIRS</span> entry + /rush/functions
 
   <pre><span class="cmd">prompt</span> text TEXT...
 <span class="cmd">prompt</span> segment [OPTIONS] TEXT...
+<span class="cmd">prompt</span> async KEY <span class="opt">--ttl</span> MS [OPTIONS] [<span class="opt">--prefix</span> TEXT] <span class="opt">--</span> COMMAND...
 <span class="cmd">prompt</span> newline
 <span class="cmd">prompt</span> async-pending</pre>
 
-  <p>Use <code>prompt text</code> for plain text, <code>prompt segment</code> for styled text, <code>prompt newline</code> for a new line, and <code>prompt async-pending</code> to test active async prompt work.</p>
+  <p>Use <code>prompt text</code> for plain text, <code>prompt segment</code> for styled text, <code>prompt async</code> for cached background prompt data, <code>prompt newline</code> for a new line, and <code>prompt async-pending</code> to test active async prompt work.</p>
 
   <h2 id="segment-options"><a href="#segment-options">Segment options</a></h2>
 
@@ -230,22 +231,18 @@ index:236
 
   <h2 id="async-prompt"><a href="#async-prompt">Async prompt updates</a></h2>
 
-  <p>Keep prompts fast. Use <code>prompt_async</code> for slow data such as Git status. Use <code>timer.tick</code> hooks for values that change while the editor is idle.</p>
+  <p>Keep prompts fast. Use <code>prompt async</code> for slow data such as Git status. Use <code>timer.tick</code> hooks for values that change while the editor is idle.</p>
 
-  <pre><span class="cmd">prompt_async</span> KEY <span class="opt">--ttl</span> MS <span class="opt">--</span> COMMAND...</pre>
+  <pre><span class="cmd">prompt</span> async KEY <span class="opt">--ttl</span> MS [OPTIONS] [<span class="opt">--prefix</span> TEXT] <span class="opt">--</span> COMMAND...</pre>
 
-  <p><code>prompt_async</code> returns cached stdout immediately. When the cache is missing or stale, Rush starts <code>COMMAND</code> hidden and returns the old value, or nothing. When the command exits, Rush redraws the prompt. Cache keys include the current directory and explicit key.</p>
+  <p><code>prompt async</code> appends cached stdout immediately, using the same style options as <code>prompt segment</code>. When the cache is missing or stale, Rush starts <code>COMMAND</code> hidden and keeps rendering from the old value, or nothing. When the command exits, Rush redraws the prompt. Cache keys include the current directory and explicit key.</p>
 
   <p>For animations, store the frame in a shell variable and advance it from a <code>timer.tick</code> hook while activity is active.</p>
 
   <pre><span class="cmd">rush_prompt</span>() {
   <span class="cmd">prompt</span> segment <span class="opt">--fg</span> bright-blue <span class="str">"$(prompt_pwd)"</span>
 
-  <span class="var">git_branch</span>=<span class="str">"$(prompt_async git-branch --ttl 5000 -- git branch --show-current)"</span>
-  <span class="kw">if</span> test <span class="str">"$git_branch"</span> != <span class="str">""</span>; <span class="kw">then</span>
-    <span class="cmd">prompt</span> text <span class="str">' '</span>
-    <span class="cmd">prompt</span> segment <span class="opt">--fg</span> green <span class="str">"$git_branch"</span>
-  <span class="kw">fi</span>
+  <span class="cmd">prompt</span> async git-branch <span class="opt">--ttl</span> 5000 <span class="opt">--prefix</span> <span class="str">' '</span> <span class="opt">--fg</span> green <span class="opt">--</span> git branch --show-current
 
   <span class="cmd">prompt</span> text <span class="str">' ● '</span>
 }</pre>
@@ -305,7 +302,7 @@ index:236
 
   <p>Common recipes: register project environment hooks on <code>directory.change</code>, precompute prompt variables in <code>prompt.prepare</code>, and use <code>timer.tick</code> for clocks.</p>
 
-  <p>Prefer <code>prompt_async</code>, timers, and hooks over slow command substitutions in <code>rush_prompt</code>.</p>
+  <p>Prefer <code>prompt async</code>, timers, and hooks over slow command substitutions in <code>rush_prompt</code>.</p>
 
   <h2 id="ps1"><a href="#ps1">PS1 fallback</a></h2>
 

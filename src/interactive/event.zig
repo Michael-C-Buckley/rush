@@ -35,12 +35,13 @@ pub fn Dispatcher(comptime ShellType: type) type {
                     .exit, .fatal => return .{
                         .output = try output.toOwnedSlice(allocator),
                         .exit_status = evaluated.status,
+                        .ran_count = calls.len,
                     },
                     else => {},
                 }
             }
             self.sh.state.last_status = visible_status;
-            return .{ .output = try output.toOwnedSlice(allocator) };
+            return .{ .output = try output.toOwnedSlice(allocator), .ran_count = calls.len };
         }
 
         pub fn runDueTimers(
@@ -64,12 +65,13 @@ pub fn Dispatcher(comptime ShellType: type) type {
                     .exit, .fatal => return .{
                         .output = try output.toOwnedSlice(allocator),
                         .exit_status = evaluated.status,
+                        .ran_count = calls.len,
                     },
                     else => {},
                 }
             }
             self.sh.state.last_status = visible_status;
-            return .{ .output = try output.toOwnedSlice(allocator) };
+            return .{ .output = try output.toOwnedSlice(allocator), .ran_count = calls.len };
         }
 
         pub fn nextTimerDelayMs(self: *Self, io: std.Io) ?u64 {
@@ -175,6 +177,7 @@ pub fn Dispatcher(comptime ShellType: type) type {
 pub const DispatchResult = struct {
     output: []const u8,
     exit_status: ?shell.result.ExitStatus = null,
+    ran_count: usize = 0,
 
     pub fn deinit(self: *DispatchResult, allocator: std.mem.Allocator) void {
         allocator.free(self.output);
@@ -184,7 +187,7 @@ pub const DispatchResult = struct {
     pub fn hookResult(self: DispatchResult) editor.driver.HookResult {
         return .{
             .output = self.output,
-            .refresh_prompt = true,
+            .refresh_prompt = self.ran_count != 0 or self.output.len != 0,
             .stop = self.exit_status != null,
         };
     }
@@ -338,4 +341,31 @@ test "event dispatch captures output while preserving visible status" {
     try std.testing.expectEqualStrings("7:prompt.prepare:prep:arg", sh.state.getVariable("PREPARED").?.value);
     try std.testing.expectEqual(@as(?shell.state.Variable, null), sh.state.getVariable("RUSH_EVENT"));
     try std.testing.expectEqual(@as(?shell.state.Variable, null), sh.state.getVariable("RUSH_EVENT_HOOK"));
+}
+
+test "event hook result refreshes only when work ran" {
+    const extensions = @import("../extensions.zig");
+    const TestShell = shell.ShellWithBuiltins(host.RealHost, extensions.rush.registry);
+
+    var sh = TestShell.init(std.testing.allocator, .{}, .{});
+    defer sh.deinit();
+    var dispatcher: Dispatcher(TestShell) = .{ .sh = &sh };
+
+    var idle = try dispatcher.runEvent(std.testing.allocator, std.testing.io, "prompt.prepare", &.{});
+    defer idle.deinit(std.testing.allocator);
+    try std.testing.expect(!idle.hookResult().refresh_prompt);
+
+    const src: shell.source.Source = .{
+        .id = 1,
+        .kind = .command_string,
+        .name = "test",
+        .text = "on_prepare(){ PROMPT_PREPARED=1; }",
+    };
+    const defined = try sh.evalSource(src);
+    try std.testing.expectEqual(@as(shell.result.ExitStatus, 0), defined.status);
+
+    try sh.extensions.putEventHandler("prompt.prepare", "prep", "on_prepare", 0, null);
+    var ran = try dispatcher.runEvent(std.testing.allocator, std.testing.io, "prompt.prepare", &.{});
+    defer ran.deinit(std.testing.allocator);
+    try std.testing.expect(ran.hookResult().refresh_prompt);
 }

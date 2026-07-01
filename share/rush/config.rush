@@ -119,11 +119,7 @@ rush_prompt() {
   rush_prompt_status=$?
   prompt segment --fg blue "$(prompt_pwd)"
   # Run git status asynchronously so slow repositories do not block editing.
-  rush_prompt_git_info="$(prompt_async git --ttl 2000 -- rush_prompt_git)"
-  if test "$rush_prompt_git_info" != ""; then
-    prompt text ' '
-    prompt segment --fg yellow "$rush_prompt_git_info"
-  fi
+  prompt async git --ttl 2000 --prefix ' ' --fg yellow -- rush_prompt_git
   if prompt async-pending || \
      test "${rush_prompt_activity_prompt:-0}" != 0 || \
      test "${rush_prompt_activity_completion:-0}" != 0; then
