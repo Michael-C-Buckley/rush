@@ -1,0 +1,181 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "dd",
+    "description": "convert and copy a file",
+    "options": [
+      {
+        "spellings": [
+          "bs"
+        ],
+        "description": "set input and output block size",
+        "inherit": false,
+        "value": {
+          "name": "size",
+          "style": "equals"
+        }
+      },
+      {
+        "spellings": [
+          "cbs"
+        ],
+        "description": "set the conversion record size",
+        "inherit": false,
+        "value": {
+          "name": "size",
+          "style": "equals"
+        }
+      },
+      {
+        "spellings": [
+          "count"
+        ],
+        "description": "copy this many input blocks",
+        "inherit": false,
+        "value": {
+          "name": "number",
+          "style": "equals"
+        }
+      },
+      {
+        "spellings": [
+          "files"
+        ],
+        "description": "copy this many files before terminating",
+        "inherit": false,
+        "value": {
+          "name": "number",
+          "style": "equals"
+        }
+      },
+      {
+        "spellings": [
+          "ibs"
+        ],
+        "description": "set the input block size",
+        "inherit": false,
+        "value": {
+          "name": "size",
+          "style": "equals"
+        }
+      },
+      {
+        "spellings": [
+          "if"
+        ],
+        "description": "read an input file instead of stdin",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files",
+          "style": "equals"
+        }
+      },
+      {
+        "spellings": [
+          "iseek"
+        ],
+        "description": "seek this many blocks on the input file",
+        "inherit": false,
+        "value": {
+          "name": "blocks",
+          "style": "equals"
+        }
+      },
+      {
+        "spellings": [
+          "obs"
+        ],
+        "description": "set the output block size",
+        "inherit": false,
+        "value": {
+          "name": "size",
+          "style": "equals"
+        }
+      },
+      {
+        "spellings": [
+          "of"
+        ],
+        "description": "write to an output file instead of stdout",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files",
+          "style": "equals"
+        }
+      },
+      {
+        "spellings": [
+          "oseek"
+        ],
+        "description": "seek this many blocks on the output file",
+        "inherit": false,
+        "value": {
+          "name": "blocks",
+          "style": "equals"
+        }
+      },
+      {
+        "spellings": [
+          "seek"
+        ],
+        "description": "seek this many blocks from the beginning of the output before copying",
+        "inherit": false,
+        "value": {
+          "name": "blocks",
+          "style": "equals"
+        }
+      },
+      {
+        "spellings": [
+          "skip"
+        ],
+        "description": "skip this many blocks from the beginning of the input before copying",
+        "inherit": false,
+        "value": {
+          "name": "blocks",
+          "style": "equals"
+        }
+      },
+      {
+        "spellings": [
+          "conv"
+        ],
+        "description": "convert input data (comma-separated list)",
+        "inherit": false,
+        "value": {
+          "name": "value",
+          "style": "equals",
+          "provider": "dd.conversions"
+        }
+      }
+    ],
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "dd.conversions": {
+        "values": [
+          "ascii",
+          "oldascii",
+          "block",
+          "ebcdic",
+          "ibm",
+          "oldebcdic",
+          "oldibm",
+          "lcase",
+          "noerror",
+          "notrunc",
+          "osync",
+          "sparse",
+          "swab",
+          "sync",
+          "ucase",
+          "unblock"
+        ]
+      }
+    }
+  }
+}
