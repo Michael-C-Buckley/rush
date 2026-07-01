@@ -1,0 +1,94 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "aftman",
+    "description": "manage project toolchains",
+    "providers": {
+      "builtin.directories": { "builtin": "directories" }
+    },
+    "options": [
+      {
+        "long": "help",
+        "short": "h",
+        "description": "show help",
+        "inherit": false
+      },
+      {
+        "long": "version",
+        "short": "V",
+        "description": "show version",
+        "inherit": false
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "init",
+        "description": "create an aftman manifest",
+        "arguments": {
+          "states": [
+            {
+              "name": "directory",
+              "description": "directory to initialize",
+              "provider": "builtin.directories",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "add",
+        "description": "add and install a tool",
+        "options": [
+          {
+            "long": "global",
+            "description": "install globally",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "tool",
+              "description": "tool and version to install",
+              "index": 0
+            },
+            {
+              "name": "alias",
+              "description": "tool command alias",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "install",
+        "description": "install tools from manifests",
+        "options": [
+          {
+            "long": "no-trust-check",
+            "description": "skip trust checks",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "self-install",
+        "description": "install aftman on this system"
+      },
+      {
+        "name": "trust",
+        "description": "trust a tool",
+        "arguments": {
+          "states": [
+            {
+              "name": "tool",
+              "description": "tool to trust",
+              "index": 0
+            }
+          ]
+        }
+      }
+    ]
+  }
+}
