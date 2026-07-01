@@ -1,0 +1,359 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "eslint",
+    "description": "lint JavaScript and TypeScript files",
+    "options": [
+      {
+        "long": "no-eslintrc",
+        "description": "disable use of configuration from .eslintrc.*",
+        "inherit": false
+      },
+      {
+        "short": "c",
+        "long": "config",
+        "description": "use this configuration, overriding .eslintrc.* config options if present",
+        "inherit": false,
+        "value": {
+          "name": "value",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "env",
+        "description": "specify environments",
+        "inherit": false,
+        "value": {
+          "name": "value",
+          "provider": "eslint.environments"
+        },
+        "repeatable": true
+      },
+      {
+        "long": "ext",
+        "description": "specify JavaScript file extensions",
+        "inherit": false,
+        "value": {
+          "name": "Extension"
+        }
+      },
+      {
+        "long": "global",
+        "description": "define global variables",
+        "inherit": false,
+        "value": {
+          "name": "Variables"
+        }
+      },
+      {
+        "long": "parser",
+        "description": "specify the parser to be used",
+        "inherit": false,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "parser-options",
+        "description": "specify parser options",
+        "inherit": false,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "resolve-plugins-relative-to",
+        "description": "a folder where plugins should be resolved from",
+        "inherit": false,
+        "value": {
+          "name": "value",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "rulesdir",
+        "description": "use additional rules from this directory",
+        "inherit": false,
+        "value": {
+          "name": "value",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "plugin",
+        "description": "specify plugins",
+        "inherit": false,
+        "value": {
+          "name": "Plugin"
+        }
+      },
+      {
+        "long": "rule",
+        "description": "specify rules",
+        "inherit": false,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "fix",
+        "description": "automatically fix problems",
+        "inherit": false
+      },
+      {
+        "long": "fix-dry-run",
+        "description": "automatically fix problems without saving the changes to the file system",
+        "inherit": false
+      },
+      {
+        "long": "fix-type",
+        "description": "specify the types of fixes to apply with --fix or --fix-dry-run",
+        "inherit": false,
+        "value": {
+          "name": "value",
+          "provider": {
+            "values": [
+              "problem",
+              "suggestion",
+              "layout"
+            ]
+          }
+        }
+      },
+      {
+        "long": "ignore-path",
+        "description": "specify path of ignore file",
+        "inherit": false,
+        "value": {
+          "name": "value",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "no-ignore",
+        "description": "disable use of ignore files and patterns",
+        "inherit": false
+      },
+      {
+        "long": "ignore-pattern",
+        "description": "pattern of files to ignore (in addition to those in .eslintignore)",
+        "inherit": false,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "stdin",
+        "description": "lint code provided on <STDIN>",
+        "inherit": false
+      },
+      {
+        "long": "stdin-filename",
+        "description": "specify filename to process STDIN as",
+        "inherit": false,
+        "value": {
+          "name": "value",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "quiet",
+        "description": "report errors only",
+        "inherit": false
+      },
+      {
+        "long": "max-warnings",
+        "description": "number of warnings to trigger nonzero exit code",
+        "inherit": false,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "short": "o",
+        "long": "output-file",
+        "description": "specify file to write report to",
+        "inherit": false,
+        "value": {
+          "name": "value",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "short": "f",
+        "long": "format",
+        "description": "use a specific output format",
+        "inherit": false,
+        "value": {
+          "name": "value",
+          "provider": {
+            "values": [
+              "checkstyle",
+              "codeframe",
+              "compact",
+              "html",
+              "jslint-xml",
+              "json",
+              "junit",
+              "stylish",
+              "table",
+              "tap",
+              "unix",
+              "visualstudio"
+            ]
+          }
+        }
+      },
+      {
+        "long": "color",
+        "description": "force enabling of color",
+        "inherit": false,
+        "exclusiveGroup": "eslint.color"
+      },
+      {
+        "long": "no-color",
+        "description": "force disabling of color",
+        "inherit": false,
+        "exclusiveGroup": "eslint.color"
+      },
+      {
+        "long": "no-inline-config",
+        "description": "prevent comments from changing config or rules",
+        "inherit": false
+      },
+      {
+        "long": "report-unused-disable-directives",
+        "description": "adds reported errors for unused eslint-disable-directives",
+        "inherit": false
+      },
+      {
+        "long": "cache",
+        "description": "only check changed files",
+        "inherit": false
+      },
+      {
+        "long": "cache-location",
+        "description": "path to the cache file or directory",
+        "inherit": false,
+        "value": {
+          "name": "value",
+          "provider": [
+            "builtin.files",
+            "builtin.directories"
+          ]
+        }
+      },
+      {
+        "long": "cache-strategy",
+        "description": "strategy to use for detecting changed files",
+        "inherit": false,
+        "value": {
+          "name": "value",
+          "provider": {
+            "values": [
+              "metadata",
+              "content"
+            ]
+          }
+        }
+      },
+      {
+        "long": "init",
+        "description": "run config initialization wizard",
+        "inherit": false
+      },
+      {
+        "long": "env-info",
+        "description": "output execution environment information",
+        "inherit": false
+      },
+      {
+        "long": "no-error-on-unmatched-pattern",
+        "description": "prevent errors when pattern is unmatched",
+        "inherit": false
+      },
+      {
+        "long": "debug",
+        "description": "output debugging information",
+        "inherit": false
+      },
+      {
+        "short": "h",
+        "long": "help",
+        "description": "show help",
+        "inherit": false
+      },
+      {
+        "short": "v",
+        "long": "version",
+        "description": "output the version number",
+        "inherit": false
+      },
+      {
+        "long": "print-config",
+        "description": "print the configuration for the give file",
+        "inherit": false,
+        "value": {
+          "name": "value",
+          "provider": "builtin.files"
+        }
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "file|dir|glob",
+          "description": "files, directories, or globs to lint",
+          "provider": [
+            "builtin.files",
+            "builtin.directories"
+          ],
+          "index": 0,
+          "repeatable": true
+        }
+      ]
+    },
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "eslint.environments": {
+        "values": [
+          "browser",
+          "node",
+          "commonjs",
+          "shared-node-browser",
+          "es6",
+          "ecmaVersion",
+          "es2017",
+          "es2020",
+          "es2021",
+          "worker",
+          "amd",
+          "mocha",
+          "jasmine",
+          "jest",
+          "phantomjs",
+          "protractor",
+          "qunit",
+          "jquery",
+          "prototypejs",
+          "shelljs",
+          "meteor",
+          "mongo",
+          "applescript",
+          "nashorn",
+          "servicerworker",
+          "atomtest",
+          "embertest",
+          "webextensions",
+          "greasemonkey"
+        ]
+      }
+    }
+  }
+}
