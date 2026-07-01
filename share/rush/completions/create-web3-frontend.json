@@ -1,0 +1,48 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "create-web3-frontend",
+    "description": "create a Next.js web3 frontend",
+    "options": [
+      {
+        "long": "ts",
+        "aliases": [
+          "typescript"
+        ],
+        "description": "initialize as a TypeScript project",
+        "inherit": false
+      },
+      {
+        "long": "use-npm",
+        "description": "bootstrap the app using npm",
+        "inherit": false
+      },
+      {
+        "long": "use-pnpm",
+        "description": "bootstrap the app using pnpm",
+        "inherit": false
+      },
+      {
+        "short": "h",
+        "long": "help",
+        "description": "display help for command",
+        "inherit": false
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "project-directory",
+          "provider": "builtin.directories",
+          "index": 0
+        }
+      ]
+    },
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      }
+    }
+  }
+}
