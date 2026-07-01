@@ -48,5 +48,21 @@
             .stderr_match = .nonempty,
             .status = 0,
         },
+        .{
+            .name = "function keyword defines shell functions",
+            .script =
+            \\function one { printf 'one:%s\n' "$1"; }
+            \\function two() { printf 'two:%s\n' "$1"; }
+            \\one a
+            \\two b
+            ,
+            .stdout =
+            \\one:a
+            \\two:b
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
     },
 }

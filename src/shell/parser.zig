@@ -186,6 +186,8 @@ const Parser = struct {
     }
 
     fn parseFunctionDefinition(self: *Parser) ParserError!?ast.FunctionDefinition {
+        if (self.atReserved(.function_kw)) return self.parseBashFunctionDefinition();
+
         if (!self.at(.word)) return null;
         const name_token = self.tokens[self.index];
         if (name_token.quoted or !isAssignmentName(name_token.text)) return null;
@@ -197,6 +199,29 @@ const Parser = struct {
         }
 
         self.index += 3;
+        self.skipSeparators();
+        const compound = (try self.parseCompoundCommand()) orelse return error.ExpectedCommand;
+
+        const definition: ast.FunctionDefinition = .{
+            .name = name_token.text,
+            .body = compound.body,
+            .redirections = compound.redirections,
+        };
+        if (self.canValidateHereDocs()) definition.validate();
+        return definition;
+    }
+
+    fn parseBashFunctionDefinition(self: *Parser) ParserError!?ast.FunctionDefinition {
+        if (self.mode() == .posix) return null;
+        _ = self.eatReserved(.function_kw).?;
+        self.skipSeparators();
+
+        const name_token = self.eat(.word) orelse return error.UnexpectedToken;
+        if (name_token.quoted or !isAssignmentName(name_token.text)) return error.UnexpectedToken;
+
+        if (self.eat(.left_paren) != null) {
+            try self.expect(.right_paren);
+        }
         self.skipSeparators();
         const compound = (try self.parseCompoundCommand()) orelse return error.ExpectedCommand;
 
