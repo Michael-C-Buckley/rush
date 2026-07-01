@@ -680,10 +680,10 @@ const Parser = struct {
         const content = try self.removeBackslashNewlines(raw_content);
         if (parseBracedSimpleParameter(content)) |parameter| return .{ .parameter = parameter, .span = span };
         if (content.len >= 2 and content[0] == '#') {
-            const name_end = scanParameterName(content, 1, content.len);
-            if (name_end == 1 or name_end != content.len) return null;
+            const length_prefix = parseBracedParameterPrefix(content[1..]) orelse return null;
+            if (length_prefix.end != content.len - 1) return null;
             return .{
-                .parameter = .{ .variable = content[1..name_end] },
+                .parameter = length_prefix.parameter,
                 .length = true,
                 .span = span,
             };

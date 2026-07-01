@@ -49,6 +49,21 @@
             .status = 0,
         },
         .{
+            .name = "parameter expansion length accepts positional parameters",
+            .script =
+            \\set -- a bc def ghij
+            \\printf '<%s>\n' "${#1}" "${#4}" "${#12}"
+            ,
+            .stdout =
+            \\<1>
+            \\<4>
+            \\<0>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "double-quoted at expands positional parameters as separate fields",
             .script =
             \\set -- a 'b c' ''

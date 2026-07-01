@@ -4271,10 +4271,7 @@ fn joinPositionals(shell: anytype, separator: []const u8) ![]const u8 {
 }
 
 fn expandParameterLength(shell: anytype, parameter: ast.ParameterExpansion) EvalError![]const u8 {
-    const value = switch (parameter.parameter) {
-        .variable => |name| parameterValue(shell, name) orelse "",
-        else => "",
-    };
+    const value = (try parameterCurrentValue(shell, parameter.parameter)) orelse "";
     const length = std.unicode.utf8CountCodepoints(value) catch value.len;
     return std.fmt.allocPrint(shell.scratchAllocator(), "{}", .{length});
 }
