@@ -1,0 +1,397 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "csdx",
+    "description": "Contentstack CLI",
+    "options": [
+      {
+        "long": "help",
+        "short": "h",
+        "description": "show help",
+        "inherit": true
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "login",
+        "description": "log in to Contentstack",
+        "options": [
+          {
+            "short": "u",
+            "long": "username",
+            "description": "set the account email address",
+            "inherit": false,
+            "value": {
+              "name": "email-address"
+            }
+          },
+          {
+            "short": "p",
+            "long": "password",
+            "description": "set the account password",
+            "inherit": false,
+            "value": {
+              "name": "password"
+            }
+          }
+        ]
+      },
+      {
+        "name": "auth:tokens:add",
+        "description": "add a saved authentication token",
+        "options": [
+          {
+            "short": "a",
+            "long": "alias",
+            "description": "set the token alias",
+            "inherit": false,
+            "value": {
+              "name": "alias"
+            }
+          },
+          {
+            "long": "management",
+            "description": "add a management token",
+            "inherit": false
+          },
+          {
+            "long": "delivery",
+            "description": "add a delivery token",
+            "inherit": false
+          },
+          {
+            "short": "k",
+            "long": "stack-api-key",
+            "description": "set the stack API key",
+            "inherit": false,
+            "value": {
+              "name": "stack-api-key"
+            }
+          },
+          {
+            "long": "token",
+            "description": "set the token value",
+            "inherit": false,
+            "value": {
+              "name": "token"
+            },
+            "requires": [
+              "--stack-api-key"
+            ]
+          },
+          {
+            "short": "f",
+            "long": "force",
+            "description": "replace an existing token",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "auth:tokens:remove",
+        "description": "remove a saved authentication token",
+        "options": [
+          {
+            "short": "a",
+            "long": "alias",
+            "description": "set the token alias",
+            "inherit": false,
+            "value": {
+              "name": "alias"
+            }
+          },
+          {
+            "short": "i",
+            "long": "ignore",
+            "description": "ignore missing tokens",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "cm:bootstrap",
+        "description": "bootstrap a Contentstack starter app",
+        "options": [
+          {
+            "long": "app-name",
+            "description": "choose the starter app",
+            "inherit": false,
+            "value": {
+              "name": "app-name",
+              "provider": "csdx.starter-apps"
+            }
+          },
+          {
+            "long": "project-dir",
+            "description": "set the project directory",
+            "inherit": false,
+            "value": {
+              "name": "project-dir",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "app-type",
+            "description": "choose sample or starter app",
+            "inherit": false,
+            "value": {
+              "name": "app-type",
+              "provider": "csdx.app-types"
+            }
+          },
+          {
+            "short": "k",
+            "long": "stack-api-key",
+            "description": "set the stack API key",
+            "inherit": false,
+            "value": {
+              "name": "stack-api-key"
+            }
+          },
+          {
+            "long": "org",
+            "description": "set the organization UID",
+            "inherit": false,
+            "value": {
+              "name": "org"
+            }
+          },
+          {
+            "short": "n",
+            "long": "stack-name",
+            "description": "set the new stack name",
+            "inherit": false,
+            "value": {
+              "name": "stack-name"
+            }
+          }
+        ]
+      },
+      {
+        "name": "auth:tokens",
+        "description": "list saved authentication tokens",
+        "options": [
+          {
+            "short": "x",
+            "long": "extended",
+            "description": "show extra columns",
+            "inherit": false
+          },
+          {
+            "long": "columns",
+            "description": "show selected columns",
+            "inherit": false,
+            "value": {
+              "name": "columns"
+            }
+          },
+          {
+            "long": "csv",
+            "description": "output CSV",
+            "inherit": false
+          },
+          {
+            "long": "filter",
+            "description": "filter by property match",
+            "inherit": false,
+            "value": {
+              "name": "filter"
+            }
+          },
+          {
+            "long": "no-header",
+            "description": "hide the table header",
+            "inherit": false
+          },
+          {
+            "long": "no-truncate",
+            "description": "do not truncate output",
+            "inherit": false
+          },
+          {
+            "long": "output",
+            "description": "choose the output format",
+            "inherit": false,
+            "value": {
+              "name": "format",
+              "provider": "csdx.output-formats"
+            }
+          },
+          {
+            "long": "sort",
+            "description": "sort the list",
+            "inherit": false,
+            "value": {
+              "name": "sort"
+            }
+          }
+        ]
+      },
+      {
+        "name": "config:get:region",
+        "description": "show the configured Contentstack region"
+      },
+      {
+        "name": "config:set:region",
+        "description": "set the Contentstack region",
+        "arguments": {
+          "states": [
+            {
+              "name": "region",
+              "description": "Contentstack region",
+              "provider": "csdx.regions",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "cm:stacks:export",
+        "description": "export stack content",
+        "options": [
+          {
+            "short": "c",
+            "long": "config",
+            "description": "set the config file path",
+            "inherit": false,
+            "value": {
+              "name": "config",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "short": "k",
+            "long": "stack-api-key",
+            "description": "set the stack API key",
+            "inherit": false,
+            "value": {
+              "name": "stack-api-key"
+            }
+          },
+          {
+            "short": "a",
+            "long": "alias",
+            "description": "set the token alias",
+            "inherit": false,
+            "value": {
+              "name": "alias"
+            }
+          },
+          {
+            "short": "d",
+            "long": "data-dir",
+            "description": "set the export data directory",
+            "inherit": false,
+            "value": {
+              "name": "data-dir",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "branch",
+            "description": "set the branch to export",
+            "inherit": false,
+            "value": {
+              "name": "branch"
+            }
+          },
+          {
+            "long": "module",
+            "description": "export a specific module",
+            "inherit": false,
+            "value": {
+              "name": "module",
+              "provider": "csdx.modules"
+            }
+          },
+          {
+            "long": "content-types",
+            "description": "set content types to export",
+            "inherit": false,
+            "value": {
+              "name": "content-types"
+            }
+          },
+          {
+            "long": "secured-assets",
+            "description": "export secured assets",
+            "inherit": false,
+            "value": {
+              "name": "secured-assets"
+            }
+          }
+        ]
+      },
+      {
+        "name": "logout",
+        "description": "log out of Contentstack"
+      },
+      {
+        "name": "whoami",
+        "description": "show the current logged-in user"
+      }
+    ],
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "csdx.starter-apps": {
+        "values": [
+          "reactjs-starter",
+          "nextjs-starter",
+          "gatsby-starter",
+          "angular-starter",
+          "nuxt-starter"
+        ]
+      },
+      "csdx.app-types": {
+        "values": [
+          "Sample",
+          "Starter"
+        ]
+      },
+      "csdx.output-formats": {
+        "values": [
+          "csv",
+          "json",
+          "yaml"
+        ]
+      },
+      "csdx.regions": {
+        "values": [
+          {
+            "value": "EU",
+            "description": "Europe"
+          },
+          {
+            "value": "AZURE-NA",
+            "description": "Azure North America"
+          },
+          {
+            "value": "NA",
+            "description": "North America",
+            "priority": 100
+          }
+        ]
+      },
+      "csdx.modules": {
+        "values": [
+          "assets",
+          "content-types",
+          "entries",
+          "environments",
+          "extensions",
+          "global-fields",
+          "labels",
+          "locales",
+          "webhooks",
+          "workflows"
+        ]
+      }
+    }
+  }
+}
