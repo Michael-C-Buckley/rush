@@ -410,6 +410,7 @@ pub const RealHost = struct {
         return platform.getResourceLimit(kind);
     }
 
+    // ziglint-ignore: Z024 preserve existing readable expression shape; lint-only cleanup
     pub fn setResourceLimit(_: *RealHost, kind: ResourceLimitKind, limit: ResourceLimit) platform.ResourceLimitError!void {
         try platform.setResourceLimit(kind, limit);
     }

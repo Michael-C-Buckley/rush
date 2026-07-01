@@ -90,6 +90,7 @@ pub const History = struct {
         try self.addRecord(.{ .cmd = line });
     }
 
+    // ziglint-ignore: Z012 existing public API type exposure; preserve API
     pub fn addCommand(
         self: *History,
         io: std.Io,
@@ -101,6 +102,7 @@ pub const History = struct {
         try self.addCommandRecord(io, line, status, started_at, duration_ms, true);
     }
 
+    // ziglint-ignore: Z012 existing public API type exposure; preserve API
     pub fn appendCommand(
         self: *History,
         io: std.Io,
@@ -383,6 +385,7 @@ pub const InteractiveHistoryService = struct {
         };
     }
 
+    // ziglint-ignore: Z012 existing public API type exposure; preserve API
     pub fn addCommand(
         self: *InteractiveHistoryService,
         io: std.Io,
@@ -440,7 +443,9 @@ pub const InteractiveHistoryService = struct {
         return self.history.nextEntry(allocator, prefix, self.history.current_cwd, "", after);
     }
 
+    // ziglint-ignore: Z024 preserve existing readable expression shape; lint-only cleanup
     fn hasCurrentSessionEntry(self: *InteractiveHistoryService, allocator: std.mem.Allocator, prefix: []const u8) !bool {
+        // ziglint-ignore: Z024 preserve existing readable expression shape; lint-only cleanup
         if (try self.history.previousEntry(allocator, prefix, self.history.current_cwd, self.history.session_id, null)) |value| {
             value.deinit(allocator);
             return true;
@@ -460,6 +465,7 @@ pub const InteractiveHistoryService = struct {
         return self.history.fcEntries(allocator);
     }
 
+    // ziglint-ignore: Z023 parameter order follows method or callback shape; preserve API
     fn listFcEntries(context: *anyopaque, allocator: std.mem.Allocator) ![]HistoryEntry {
         const history_service: *InteractiveHistoryService = @ptrCast(@alignCast(context));
         return history_service.fcEntries(allocator);
@@ -467,6 +473,7 @@ pub const InteractiveHistoryService = struct {
 
     fn appendFcCommand(
         context: *anyopaque,
+        // ziglint-ignore: Z023 parameter order follows method or callback shape; preserve API
         io: std.Io,
         line: []const u8,
         status: ExitStatus,

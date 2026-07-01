@@ -1120,6 +1120,20 @@
             .status = 0,
         },
         .{
+            .name = "arithmetic expansion supports braced parameter lengths",
+            .script =
+            \\set -- a b
+            \\value=abcd
+            \\printf '%s:%s\n' "$(( ${##} + 2 ))" "$(( ${#value} + 3 ))"
+            ,
+            .stdout =
+            \\3:7
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "invalid arithmetic expansion fails with a diagnostic",
             .script =
             \\printf 'before\n'

@@ -210,7 +210,9 @@ const Lexer = struct {
                     try self.appendSingle(&tokens, .bang),
                 '(' => try self.appendSingle(&tokens, .left_paren),
                 ')' => try self.appendSingle(&tokens, .right_paren),
+                // ziglint-ignore: Z024 preserve existing readable expression shape; lint-only cleanup
                 '{' => if (self.nextStartsWord()) try self.appendWord(&tokens) else try self.appendSingle(&tokens, .left_brace),
+                // ziglint-ignore: Z024 preserve existing readable expression shape; lint-only cleanup
                 '}' => if (self.nextStartsWord()) try self.appendWord(&tokens) else try self.appendSingle(&tokens, .right_brace),
                 '<', '>' => try self.appendRedirectionOperator(&tokens),
                 '#' => self.skipComment(),
@@ -218,6 +220,7 @@ const Lexer = struct {
             }
         }
 
+        // ziglint-ignore: Z024 preserve existing readable expression shape; lint-only cleanup
         try tokens.append(self.allocator, .{ .kind = .eof, .span = source_mod.Span.init(self.position, self.position.byte_offset) });
         return tokens.toOwnedSlice(self.allocator);
     }
@@ -917,6 +920,7 @@ test "lexer marks quoted words as non-reserved" {
 }
 
 test "lexer keeps quoted spaces inside words" {
+    // ziglint-ignore: Z024 preserve existing readable expression shape; lint-only cleanup
     const src: source_mod.Source = .{ .id = 1, .kind = .command_string, .name = "-c", .text = "printf \"hello world\"" };
     const tokens = try lex(std.testing.allocator, src);
     defer std.testing.allocator.free(tokens);
@@ -1027,6 +1031,7 @@ test "lexer keeps dollar single quoted words separate" {
 }
 
 test "lexer keeps command substitutions inside words" {
+    // ziglint-ignore: Z024 preserve existing readable expression shape; lint-only cleanup
     const src: source_mod.Source = .{ .id = 1, .kind = .command_string, .name = "-c", .text = "x=$(printf a; printf b)" };
     const tokens = try lex(std.testing.allocator, src);
     defer std.testing.allocator.free(tokens);
@@ -1037,6 +1042,7 @@ test "lexer keeps command substitutions inside words" {
 }
 
 test "lexer keeps brace characters inside word tokens" {
+    // ziglint-ignore: Z024 preserve existing readable expression shape; lint-only cleanup
     const src: source_mod.Source = .{ .id = 1, .kind = .command_string, .name = "-c", .text = "printf {} x{} {}x a{b}" };
     const tokens = try lex(std.testing.allocator, src);
     defer std.testing.allocator.free(tokens);

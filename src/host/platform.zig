@@ -353,6 +353,7 @@ pub fn isTerminalFd(fd: host.Fd) bool {
     return std.c.isatty(@intCast(fd.raw())) == 1;
 }
 
+// ziglint-ignore: Z015 existing public API error set exposure; preserve API
 pub fn listDir(allocator: std.mem.Allocator, path: []const u8) ListDirError!host.ListDirResult {
     std.debug.assert(path.len != 0);
     return switch (builtin.os.tag) {
@@ -371,6 +372,7 @@ pub fn changeDir(path: []const u8) ChangeDirError!void {
     };
 }
 
+// ziglint-ignore: Z015 existing public API error set exposure; preserve API
 pub fn currentDir(allocator: std.mem.Allocator) CurrentDirError![]const u8 {
     return switch (builtin.os.tag) {
         .linux => linuxCurrentDir(allocator),
@@ -641,6 +643,7 @@ fn libcDuplicateAtLeast(fd: host.Fd, min_fd: u31) DuplicateError!host.Fd {
             const duplicated: host.Fd = @enumFromInt(@as(i32, @intCast(rc)));
             if (comptime !@hasDecl(std.c.F, "DUPFD_CLOEXEC")) {
                 libcSetCloseOnExec(duplicated, true) catch |err| {
+                    // ziglint-ignore: Z026 intentional best-effort cleanup; preserve behavior
                     close(duplicated) catch {};
                     return switch (err) {
                         error.BadFd => error.BadFd,

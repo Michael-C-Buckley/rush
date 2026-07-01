@@ -31,8 +31,15 @@
     <li><code>shell/builtin.history.nonposix</code>: tests <code>history</code>, <code>history -c</code>, and <code>set -o nolog</code>.</li>
     <li><code>shell/builtin.source.nonexistent.earlyexit</code>, <code>shell/builtin.source.nonexistent</code>, and <code>shell/builtin.source.setvar</code>: <code>source</code> is a compatibility alias, not the POSIX dot utility.</li>
     <li><code>shell/builtin.test.numeric.spaces.nonposix</code>: accepts non-POSIX integer operands with leading or trailing blanks.</li>
+    <li><code>shell/semantics.case.escape.quotes</code>: uses <code>echo -n</code>, whose option handling is not portable POSIX <code>echo</code> behavior.</li>
     <li><code>shell/semantics.-h.nonposix</code>: <code>set -h</code> and command hash table contents are not a portable shell-script contract.</li>
   </ul>
+
+  <h3 id="job-id-operands-with-monitor-mode-disabled"><a href="#job-id-operands-with-monitor-mode-disabled">Job ID operands with monitor mode disabled</a></h3>
+
+  <p>Smoosh test: <code>shell/builtin.kill.jobs</code></p>
+
+  <p>The case expects <code>kill %1</code> to fail before <code>set -m</code> enables job control. Rush accepts job ID operands for jobs it is already tracking, matching Bash POSIX mode rather than dash. POSIX does not require Rush to hide known job IDs solely because monitor mode is disabled.</p>
 
   <h3 id="unspecified-control-flow"><a href="#unspecified-control-flow">Unspecified non-lexical loop control</a></h3>
 

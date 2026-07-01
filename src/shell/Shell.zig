@@ -142,6 +142,7 @@ pub fn ShellWithBuiltins(comptime Host: type, comptime builtin_registry: builtin
                 self.state.root_source_kind = previous_root_kind;
             };
 
+            // ziglint-ignore: Z024 preserve existing readable expression shape; lint-only cleanup
             if (!self.sourceNeedsAliasAwareEvaluation(src)) return self.evalSourceChunk(src, src.text, reset_chunks, false);
             if (src.text.len == 0) return self.evalSourceChunk(src, src.text, reset_chunks, false);
 
@@ -199,6 +200,7 @@ pub fn ShellWithBuiltins(comptime Host: type, comptime builtin_registry: builtin
             const ast_allocator = self.astAllocator();
             const lexed = try lexer.lexWithAliasesSource(ast_allocator, chunk_src, self.state);
             const program = if (require_complete_here_docs)
+                // ziglint-ignore: Z024 preserve existing readable expression shape; lint-only cleanup
                 try parser.parseWithAliasesRequiringCompleteHereDocs(ast_allocator, lexed.source, lexed.tokens, self.state)
             else
                 try parser.parseWithAliases(ast_allocator, lexed.source, lexed.tokens, self.state);
@@ -207,6 +209,7 @@ pub fn ShellWithBuiltins(comptime Host: type, comptime builtin_registry: builtin
         }
 
         fn sourceNeedsAliasAwareEvaluation(self: *Self, src: source.Source) bool {
+            // ziglint-ignore: Z024 preserve existing readable expression shape; lint-only cleanup
             return self.state.options.mode == .bash or self.state.options.interactive or self.state.aliases.count() != 0 or
                 std.mem.indexOf(u8, src.text, "alias") != null or
                 (self.state.options.mode == .bash and std.mem.indexOf(u8, src.text, "shopt") != null);

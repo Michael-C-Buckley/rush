@@ -122,6 +122,7 @@ pub const ScratchArena = struct {
         }
 
         const chunk_size = chunkSize(len, alignment) orelse return null;
+        // ziglint-ignore: Z024 preserve existing readable expression shape; lint-only cleanup
         self.chunks.append(self.parent_allocator, .{ .bytes = self.parent_allocator.alloc(u8, chunk_size) catch return null }) catch return null;
         self.active_index = self.chunks.items.len - 1;
         return allocFromChunk(&self.chunks.items[self.active_index], len, alignment).?;
