@@ -1,0 +1,234 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "fdisk",
+    "description": "manipulate disk partition tables",
+    "options": [
+      {
+        "long": "help",
+        "short": "h",
+        "description": "show help for fdisk",
+        "inherit": false
+      },
+      {
+        "long": "version",
+        "short": "V",
+        "description": "show version information",
+        "inherit": false
+      },
+      {
+        "long": "sector-size",
+        "short": "b",
+        "description": "specify the sector size of the disk",
+        "inherit": false,
+        "value": {
+          "name": "mode",
+          "description": "Valid values are 512, 1024, 2048, and 4096",
+          "provider": {
+            "values": [
+              "512",
+              "1024",
+              "2048",
+              "4096"
+            ]
+          }
+        }
+      },
+      {
+        "long": "protect-boot",
+        "short": "B",
+        "description": "don't erase the beginning of the first disk sector when creating a new disk label",
+        "inherit": false
+      },
+      {
+        "long": "compatibility",
+        "short": "c",
+        "description": "specify the compatibility mode, 'dos' or 'nondos'",
+        "inherit": false,
+        "value": {
+          "name": "mode",
+          "required": false,
+          "style": "optional",
+          "provider": {
+            "values": [
+              "dos",
+              "nondos"
+            ]
+          }
+        }
+      },
+      {
+        "long": "color",
+        "short": "L",
+        "description": "colorize the output",
+        "inherit": false,
+        "value": {
+          "name": "when",
+          "required": false,
+          "style": "optional",
+          "provider": {
+            "values": [
+              "always",
+              "never",
+              "auto"
+            ]
+          }
+        }
+      },
+      {
+        "long": "list",
+        "short": "l",
+        "description": "list the partition tables for the specified devices and then exit",
+        "inherit": false
+      },
+      {
+        "long": "list-details",
+        "short": "x",
+        "description": "like --list, but provides more details",
+        "inherit": false
+      },
+      {
+        "long": "lock",
+        "description": "use exclusive BSD lock for device or file it operates",
+        "inherit": false,
+        "value": {
+          "name": "mode",
+          "description": "Optional argument mode can be yes, no (or 1 and 0) or nonblock",
+          "required": false,
+          "style": "optional",
+          "provider": {
+            "values": [
+              "yes",
+              "no",
+              "nonblock"
+            ]
+          }
+        }
+      },
+      {
+        "long": "noauto-pt",
+        "short": "n",
+        "description": "don't automatically create a default partition table on empty device",
+        "inherit": false
+      },
+      {
+        "long": "output",
+        "short": "o",
+        "description": "select output columns",
+        "inherit": false,
+        "value": {
+          "name": "list"
+        }
+      },
+      {
+        "long": "getsz",
+        "short": "s",
+        "description": "print the size in 512-byte sectors of each given block device. This option is DEPRECATED in favour of blockdev(8)",
+        "inherit": false,
+        "deprecated": {
+          "description": "use blockdev(8) instead"
+        }
+      },
+      {
+        "long": "type",
+        "short": "t",
+        "description": "enable support only for disklabels of the specified type, and disable support for all other types",
+        "inherit": false,
+        "value": {
+          "name": "type"
+        }
+      },
+      {
+        "long": "units",
+        "short": "u",
+        "description": "when listing partition tables, show sizes in 'sectors' or in 'cylinders'",
+        "inherit": false,
+        "value": {
+          "name": "unit",
+          "required": false,
+          "style": "optional",
+          "provider": {
+            "values": [
+              "sectors",
+              "cylinders"
+            ]
+          }
+        }
+      },
+      {
+        "long": "cylinders",
+        "short": "C",
+        "description": "specify the number of cylinders of the disk",
+        "inherit": false,
+        "value": {
+          "name": "number"
+        }
+      },
+      {
+        "long": "heads",
+        "short": "H",
+        "description": "specify the number of heads of the disk. (Not the physical number, of course, but the number used for partition tables.)",
+        "inherit": false,
+        "value": {
+          "name": "number"
+        }
+      },
+      {
+        "long": "sectors",
+        "short": "S",
+        "description": "specify the number of sectors per track of the disk. (Not the physical number, of course, but the number used for partition tables.)",
+        "inherit": false
+      },
+      {
+        "long": "wipe",
+        "short": "w",
+        "description": "wipe filesystem, RAID and partition-table signatures from the device, in order to avoid possible collisions",
+        "inherit": false,
+        "value": {
+          "name": "when",
+          "description": "The argument when can be auto, never or always",
+          "provider": {
+            "values": [
+              "auto",
+              "never",
+              "always"
+            ]
+          }
+        }
+      },
+      {
+        "long": "wipe-partitions",
+        "short": "W",
+        "description": "wipe filesystem, RAID and partition-table signatures from a newly created partitions, in order to avoid possible collisions",
+        "inherit": false,
+        "value": {
+          "name": "when",
+          "description": "The argument when can be auto, never or always",
+          "provider": {
+            "values": [
+              "auto",
+              "never",
+              "always"
+            ]
+          }
+        }
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "device",
+          "description": "device to inspect or edit",
+          "provider": "builtin.files",
+          "index": 0
+        }
+      ]
+    },
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
