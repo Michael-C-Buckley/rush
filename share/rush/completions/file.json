@@ -1,0 +1,260 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "file",
+    "description": "determine file types",
+    "options": [
+      {
+        "long": "help",
+        "inherit": false,
+        "description": "print help and exit"
+      },
+      {
+        "long": "apple",
+        "inherit": false,
+        "description": "print MacOS file type and creator codes"
+      },
+      {
+        "long": "brief",
+        "short": "b",
+        "inherit": false,
+        "description": "omit filenames from output"
+      },
+      {
+        "long": "checking-printoug",
+        "short": "c",
+        "inherit": false,
+        "description": "print parsed magic file checks"
+      },
+      {
+        "long": "compile",
+        "short": "C",
+        "inherit": false,
+        "description": "compile magic files"
+      },
+      {
+        "short": "d",
+        "inherit": false,
+        "description": "apply default system tests"
+      },
+      {
+        "short": "D",
+        "inherit": false,
+        "description": "print debugging messages"
+      },
+      {
+        "short": "E",
+        "inherit": false,
+        "description": "exit on filesystem errors"
+      },
+      {
+        "long": "exclude",
+        "short": "e",
+        "inherit": false,
+        "value": {
+          "name": "testname",
+          "provider": {
+            "values": [
+              "apptype",
+              "ascii",
+              "encoding",
+              "token",
+              "cdf",
+              "compress",
+              "csv",
+              "elf",
+              "json",
+              "soft",
+              "tar"
+            ]
+          }
+        },
+        "description": "exclude a file type test"
+      },
+      {
+        "long": "exclude-quiet",
+        "inherit": false,
+        "description": "ignore unknown excluded tests"
+      },
+      {
+        "long": "extension",
+        "inherit": false,
+        "description": "print valid extensions for detected type"
+      },
+      {
+        "long": "separator",
+        "short": "F",
+        "inherit": false,
+        "value": {
+          "name": "separator",
+          "provider": {
+            "values": [
+              "."
+            ]
+          }
+        },
+        "description": "set filename/result separator"
+      },
+      {
+        "long": "files-from",
+        "short": "f",
+        "inherit": false,
+        "value": {
+          "name": "namefile",
+          "provider": "builtin.files"
+        },
+        "description": "read filenames from a file"
+      },
+      {
+        "long": "no-dereference",
+        "short": "h",
+        "inherit": false,
+        "description": "do not follow symlinks"
+      },
+      {
+        "short": "i",
+        "inherit": false,
+        "description": "do not classify regular file contents"
+      },
+      {
+        "long": "mime",
+        "short": "I",
+        "inherit": false,
+        "description": "print MIME type strings"
+      },
+      {
+        "long": "mime-type",
+        "aliases": [
+          "mime-encoding"
+        ],
+        "inherit": false,
+        "description": "print only MIME type or encoding"
+      },
+      {
+        "long": "keep-going",
+        "short": "k",
+        "inherit": false,
+        "description": "keep checking after the first match"
+      },
+      {
+        "long": "list",
+        "short": "l",
+        "inherit": false,
+        "description": "list magic patterns by strength"
+      },
+      {
+        "long": "dereference",
+        "short": "L",
+        "inherit": false,
+        "description": "follow symlinks"
+      },
+      {
+        "long": "magic-file",
+        "short": "m",
+        "inherit": false,
+        "value": {
+          "name": "list",
+          "provider": "builtin.files"
+        },
+        "description": "use alternate magic files or directories"
+      },
+      {
+        "short": "M",
+        "inherit": false,
+        "value": {
+          "name": "list",
+          "provider": "builtin.files"
+        },
+        "description": "use only the specified magic files unless -d is set"
+      },
+      {
+        "long": "no-buffer",
+        "short": "n",
+        "inherit": false,
+        "description": "flush stdout after each file"
+      },
+      {
+        "long": "preserve-data",
+        "short": "p",
+        "inherit": false,
+        "description": "preserve file access times"
+      },
+      {
+        "long": "parameter",
+        "short": "P",
+        "repeatable": true,
+        "inherit": false,
+        "value": {
+          "name": "name=value",
+          "provider": {
+            "values": [
+              "bytes=1048576",
+              "elf_notes=256",
+              "elf_phum=2048",
+              "encoding=65536",
+              "indir=50",
+              "name=60",
+              "regex=8192"
+            ]
+          }
+        },
+        "description": "set parameter limits"
+      },
+      {
+        "long": "raw",
+        "short": "r",
+        "inherit": false,
+        "description": "historical no-op compatibility option"
+      },
+      {
+        "long": "special-files",
+        "spellings": [
+          "s"
+        ],
+        "inherit": false,
+        "description": "read special files such as block devices"
+      },
+      {
+        "long": "version",
+        "short": "v",
+        "inherit": false,
+        "description": "print version information"
+      },
+      {
+        "long": "uncompress",
+        "short": "z",
+        "inherit": false,
+        "description": "look inside compressed files"
+      },
+      {
+        "long": "uncompress-noreport",
+        "short": "Z",
+        "inherit": false,
+        "description": "report compressed file contents only"
+      },
+      {
+        "long": "print0",
+        "short": "0",
+        "inherit": false,
+        "description": "terminate filenames with NUL"
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "file",
+          "description": "files to inspect",
+          "provider": "builtin.files",
+          "index": 0,
+          "repeatable": true
+        }
+      ]
+    },
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
