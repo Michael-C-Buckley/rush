@@ -1,0 +1,129 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "defaults",
+    "description": "read and write macOS user defaults",
+    "subcommands": [
+      {
+        "name": "read",
+        "description": "show defaults",
+        "arguments": {
+          "states": [
+            {
+              "name": "domain",
+              "provider": "defaults.domains",
+              "index": 0
+            },
+            {
+              "name": "key",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "write",
+        "description": "write a defaults key",
+        "arguments": {
+          "states": [
+            {
+              "name": "domain",
+              "provider": "defaults.domains",
+              "index": 0
+            },
+            {
+              "name": "key",
+              "index": 1
+            },
+            {
+              "name": "value",
+              "index": 2
+            }
+          ]
+        }
+      },
+      {
+        "name": "delete",
+        "description": "delete a domain or key",
+        "arguments": {
+          "states": [
+            {
+              "name": "domain",
+              "provider": "defaults.domains",
+              "index": 0
+            },
+            {
+              "name": "key",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "rename",
+        "description": "rename a key",
+        "arguments": {
+          "states": [
+            {
+              "name": "domain",
+              "provider": "defaults.domains",
+              "index": 0
+            },
+            {
+              "name": "old_key",
+              "index": 1
+            },
+            {
+              "name": "new_key",
+              "index": 2
+            }
+          ]
+        }
+      },
+      {
+        "name": "domains",
+        "description": "list all domains"
+      },
+      {
+        "name": "find",
+        "description": "find entries containing a word",
+        "arguments": {
+          "states": [
+            {
+              "name": "word",
+              "description": "word to search for",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "help",
+        "description": "show help text"
+      },
+      {
+        "name": "read-type",
+        "description": "show the type for a key",
+        "arguments": {
+          "states": [
+            {
+              "name": "domain",
+              "provider": "defaults.domains",
+              "index": 0
+            },
+            {
+              "name": "key",
+              "index": 1
+            }
+          ]
+        }
+      }
+    ],
+    "providers": {
+      "defaults.domains": {
+        "function": "__rush_complete_defaults_domains"
+      }
+    }
+  }
+}

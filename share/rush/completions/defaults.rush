@@ -1,0 +1,9 @@
+__rush_complete_defaults_domains() {
+  command -v defaults >/dev/null 2>&1 || return
+  defaults domains 2>/dev/null | tr ',' '\n' | while IFS= read -r domain; do
+    domain=$(printf '%s\n' "$domain" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')
+    test -n "$domain" && rush_complete candidate "$domain" --kind plain --description domain
+  done
+  rush_complete candidate -globalDomain --kind plain --description 'global domain' --priority 50
+  rush_complete candidate -app --kind option --description 'application name' --priority 40
+}
