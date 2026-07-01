@@ -1,0 +1,553 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "ampx",
+    "description": "manage amplify gen 2 projects",
+    "options": [
+      {
+        "long": "help",
+        "description": "show help",
+        "inherit": false
+      },
+      {
+        "long": "version",
+        "short": "v",
+        "description": "show version",
+        "inherit": false
+      },
+      {
+        "long": "profile",
+        "description": "set aws profile",
+        "inherit": false,
+        "value": {
+          "name": "profile"
+        }
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "sandbox",
+        "description": "deploy to your personal cloud sandbox",
+        "options": [
+          {
+            "long": "dir-to-watch",
+            "description": "directory to watch for file changes",
+            "inherit": false,
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "exclude",
+            "description": "paths or glob patterns to ignore",
+            "repeatable": true,
+            "inherit": false,
+            "value": {
+              "name": "pattern"
+            }
+          },
+          {
+            "long": "identifier",
+            "description": "name to distinguish between sandbox environments",
+            "inherit": false,
+            "value": {
+              "name": "name"
+            }
+          },
+          {
+            "long": "outputs-out-dir",
+            "description": "directory where client config file is written",
+            "inherit": false,
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "outputs-format",
+            "description": "format of the client config file",
+            "inherit": false,
+            "value": {
+              "name": "format",
+              "provider": "ampx.output-formats"
+            }
+          },
+          {
+            "long": "outputs-version",
+            "description": "version of the configuration",
+            "inherit": false,
+            "value": {
+              "name": "version",
+              "provider": "ampx.output-versions"
+            }
+          },
+          {
+            "long": "profile",
+            "description": "set aws profile",
+            "inherit": false,
+            "value": {
+              "name": "profile"
+            }
+          },
+          {
+            "long": "stream-function-logs",
+            "description": "stream function execution logs",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "provider": "ampx.booleans"
+            }
+          },
+          {
+            "long": "logs-filter",
+            "description": "regex pattern to filter logs",
+            "repeatable": true,
+            "inherit": false,
+            "value": {
+              "name": "pattern"
+            }
+          },
+          {
+            "long": "logs-out-file",
+            "description": "file to append streaming logs",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "delete",
+            "description": "delete your personal cloud sandbox",
+            "options": [
+              {
+                "long": "name",
+                "description": "name to distinguish between sandbox environments",
+                "inherit": false,
+                "value": {
+                  "name": "name"
+                }
+              },
+              {
+                "long": "profile",
+                "description": "set aws profile",
+                "inherit": false,
+                "value": {
+                  "name": "profile"
+                }
+              },
+              {
+                "short": "y",
+                "long": "yes",
+                "description": "do not ask for confirmation before deleting",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "secret",
+            "description": "manage backend secrets for your personal cloud sandbox",
+            "subcommands": [
+              {
+                "name": "set",
+                "description": "set a secret",
+                "options": [
+                  {
+                    "long": "profile",
+                    "description": "set aws profile",
+                    "inherit": false,
+                    "value": {
+                      "name": "profile"
+                    }
+                  }
+                ],
+                "arguments": {
+                  "states": [
+                    {
+                      "name": "secret-name",
+                      "index": 0
+                    }
+                  ]
+                }
+              },
+              {
+                "name": "remove",
+                "description": "remove a secret",
+                "options": [
+                  {
+                    "long": "profile",
+                    "description": "set aws profile",
+                    "inherit": false,
+                    "value": {
+                      "name": "profile"
+                    }
+                  }
+                ],
+                "arguments": {
+                  "states": [
+                    {
+                      "name": "secret-name",
+                      "index": 0
+                    }
+                  ]
+                }
+              },
+              {
+                "name": "list",
+                "description": "list all available secrets",
+                "options": [
+                  {
+                    "long": "profile",
+                    "description": "set aws profile",
+                    "inherit": false,
+                    "value": {
+                      "name": "profile"
+                    }
+                  }
+                ]
+              },
+              {
+                "name": "get",
+                "description": "view details of a secret",
+                "options": [
+                  {
+                    "long": "profile",
+                    "description": "set aws profile",
+                    "inherit": false,
+                    "value": {
+                      "name": "profile"
+                    }
+                  }
+                ],
+                "arguments": {
+                  "states": [
+                    {
+                      "name": "secret-name",
+                      "index": 0
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "generate",
+        "description": "generate supplemental information or code",
+        "options": [
+          {
+            "long": "stack",
+            "description": "cloudformation stack name",
+            "inherit": false,
+            "value": {
+              "name": "stack-name"
+            }
+          },
+          {
+            "long": "app-id",
+            "description": "amplify App id",
+            "inherit": false,
+            "value": {
+              "name": "app-id"
+            }
+          },
+          {
+            "long": "branch",
+            "description": "git branch name",
+            "inherit": false,
+            "value": {
+              "name": "branch-name"
+            }
+          },
+          {
+            "long": "profile",
+            "description": "set aws profile",
+            "inherit": false,
+            "value": {
+              "name": "profile"
+            }
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "outputs",
+            "description": "generate backend outputs file",
+            "options": [
+              {
+                "long": "profile",
+                "description": "set aws profile",
+                "inherit": false,
+                "value": {
+                  "name": "profile"
+                }
+              },
+              {
+                "long": "format",
+                "description": "format of the configuration",
+                "inherit": false,
+                "value": {
+                  "name": "format",
+                  "provider": "ampx.output-formats"
+                }
+              },
+              {
+                "long": "out-dir",
+                "description": "directory where config is written",
+                "inherit": false,
+                "value": {
+                  "name": "directory",
+                  "provider": "builtin.directories"
+                }
+              },
+              {
+                "long": "outputs-version",
+                "description": "version of the configuration",
+                "inherit": false,
+                "value": {
+                  "name": "version",
+                  "provider": "ampx.output-versions"
+                }
+              },
+              {
+                "long": "branch",
+                "description": "git branch name",
+                "inherit": false,
+                "value": {
+                  "name": "branch-name"
+                }
+              },
+              {
+                "long": "app-id",
+                "description": "amplify App id",
+                "inherit": false,
+                "value": {
+                  "name": "app-id"
+                }
+              }
+            ]
+          },
+          {
+            "name": "graphql-client-code",
+            "description": "generate graphql statements and types",
+            "options": [
+              {
+                "long": "out",
+                "description": "directory where config is written",
+                "inherit": false,
+                "value": {
+                  "name": "directory",
+                  "provider": "builtin.directories"
+                }
+              },
+              {
+                "long": "format",
+                "description": "format of the graphql client code",
+                "inherit": false,
+                "value": {
+                  "name": "format",
+                  "provider": "ampx.graphql-formats"
+                }
+              },
+              {
+                "long": "model-target",
+                "description": "modelgen export target",
+                "inherit": false,
+                "value": {
+                  "name": "target",
+                  "provider": "ampx.model-targets"
+                }
+              },
+              {
+                "long": "statement-target",
+                "description": "graphql codegen statement export target",
+                "inherit": false,
+                "value": {
+                  "name": "target",
+                  "provider": "ampx.statement-targets"
+                }
+              },
+              {
+                "long": "type-target",
+                "description": "graphql-codegen type export target",
+                "inherit": false,
+                "value": {
+                  "name": "target",
+                  "provider": "ampx.type-targets"
+                }
+              },
+              {
+                "long": "all",
+                "description": "show hidden options",
+                "inherit": false
+              },
+              {
+                "long": "profile",
+                "description": "set aws profile",
+                "inherit": false,
+                "value": {
+                  "name": "profile"
+                }
+              },
+              {
+                "long": "debug",
+                "description": "print debug logs to the console",
+                "inherit": false
+              },
+              {
+                "long": "statement-max-depth",
+                "description": "maximum depth of the generated graphql statements",
+                "inherit": false,
+                "value": {
+                  "name": "integer"
+                }
+              }
+            ]
+          },
+          {
+            "name": "forms",
+            "description": "generate React form components",
+            "options": [
+              {
+                "long": "out-dir",
+                "description": "directory where generated forms are written",
+                "inherit": false,
+                "value": {
+                  "name": "directory",
+                  "provider": "builtin.directories"
+                }
+              },
+              {
+                "long": "models",
+                "description": "model names to generate",
+                "repeatable": true,
+                "inherit": false,
+                "value": {
+                  "name": "model"
+                }
+              },
+              {
+                "long": "profile",
+                "description": "set aws profile",
+                "inherit": false,
+                "value": {
+                  "name": "profile"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "info",
+        "description": "generate system information for troubleshooting"
+      },
+      {
+        "name": "pipeline-deploy",
+        "description": "deploy amplify project in a CI/CD pipeline",
+        "options": [
+          {
+            "long": "branch",
+            "description": "name of the git branch being deployed",
+            "inherit": false,
+            "value": {
+              "name": "branch-name"
+            }
+          },
+          {
+            "long": "app-id",
+            "description": "the app id of the target amplify app",
+            "inherit": false,
+            "value": {
+              "name": "app-id"
+            }
+          },
+          {
+            "long": "outputs-out-dir",
+            "description": "directory where client config file is written",
+            "inherit": false,
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "outputs-version",
+            "description": "version of the configuration",
+            "inherit": false,
+            "value": {
+              "name": "version",
+              "provider": "ampx.output-versions"
+            }
+          }
+        ]
+      }
+    ],
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "ampx.output-formats": {
+        "values": [
+          "json",
+          "dart"
+        ]
+      },
+      "ampx.output-versions": {
+        "values": [
+          "0",
+          "1"
+        ]
+      },
+      "ampx.booleans": {
+        "values": [
+          "true",
+          "false"
+        ]
+      },
+      "ampx.graphql-formats": {
+        "values": [
+          "modelgen",
+          "graphql-codegen",
+          "introspection"
+        ]
+      },
+      "ampx.model-targets": {
+        "values": [
+          "java",
+          "swift",
+          "javascript",
+          "typescript",
+          "dart"
+        ]
+      },
+      "ampx.statement-targets": {
+        "values": [
+          "javascript",
+          "graphql",
+          "flow",
+          "typescript",
+          "angular"
+        ]
+      },
+      "ampx.type-targets": {
+        "values": [
+          "json",
+          "swift",
+          "typescript",
+          "flow",
+          "scala",
+          "flow-modern",
+          "angular"
+        ]
+      }
+    }
+  }
+}
