@@ -1,0 +1,238 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "fd",
+    "description": "find files and directories",
+    "options": [
+      {
+        "short": "H",
+        "long": "hidden",
+        "description": "search hidden files and directories",
+        "inherit": false
+      },
+      {
+        "short": "I",
+        "long": "no-ignore",
+        "description": "do not respect .(git|fd)ignore files",
+        "inherit": false
+      },
+      {
+        "short": "s",
+        "long": "case-sensitive",
+        "description": "case-sensitive search (default: smart case)",
+        "inherit": false
+      },
+      {
+        "short": "i",
+        "long": "ignore-case",
+        "description": "case-insensitive search (default: smart case)",
+        "inherit": false
+      },
+      {
+        "short": "g",
+        "long": "glob",
+        "description": "glob-based search (default: regular expression)",
+        "inherit": false
+      },
+      {
+        "short": "a",
+        "long": "absolute-path",
+        "description": "show absolute instead of relative paths",
+        "inherit": false
+      },
+      {
+        "short": "l",
+        "long": "list-details",
+        "description": "use a long listing format with file metadata",
+        "inherit": false
+      },
+      {
+        "short": "L",
+        "long": "follow",
+        "description": "follow symbolic links",
+        "inherit": false
+      },
+      {
+        "short": "p",
+        "long": "full-path",
+        "description": "search full path (default: file-/dirname only)",
+        "inherit": false
+      },
+      {
+        "short": "0",
+        "long": "print0",
+        "description": "separate results by the null character",
+        "inherit": false
+      },
+      {
+        "short": "h",
+        "long": "help",
+        "description": "prints help information",
+        "inherit": false
+      },
+      {
+        "short": "V",
+        "long": "version",
+        "description": "prints version information",
+        "inherit": false
+      },
+      {
+        "short": "d",
+        "long": "max-depth",
+        "description": "set maximum search depth",
+        "inherit": false,
+        "value": {
+          "name": "depth"
+        }
+      },
+      {
+        "short": "t",
+        "long": "type",
+        "description": "filter by type",
+        "repeatable": true,
+        "inherit": false,
+        "value": {
+          "name": "filetype",
+          "provider": {
+            "values": [
+              {
+                "value": "f",
+                "description": "File"
+              },
+              {
+                "value": "d",
+                "description": "Directory"
+              },
+              {
+                "value": "l",
+                "description": "Symlink"
+              },
+              {
+                "value": "x",
+                "description": "Executable"
+              },
+              {
+                "value": "e",
+                "description": "Empty"
+              },
+              {
+                "value": "s",
+                "description": "Socket"
+              },
+              {
+                "value": "p",
+                "description": "Pipe"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "short": "e",
+        "long": "extension",
+        "description": "filter by file extension",
+        "repeatable": true,
+        "inherit": false,
+        "value": {
+          "name": "file-extension"
+        }
+      },
+      {
+        "short": "x",
+        "long": "exec",
+        "description": "execute a command for each search result",
+        "inherit": false,
+        "value": {
+          "name": "cmd",
+          "provider": "builtin.executables"
+        }
+      },
+      {
+        "short": "X",
+        "long": "exec-batch",
+        "description": "execute a command with all search results at once",
+        "inherit": false,
+        "value": {
+          "name": "cmd",
+          "provider": "builtin.executables"
+        }
+      },
+      {
+        "short": "E",
+        "long": "exclude",
+        "description": "exclude entries that match the given glob pattern",
+        "repeatable": true,
+        "inherit": false,
+        "value": {
+          "name": "pattern"
+        }
+      },
+      {
+        "short": "c",
+        "long": "color",
+        "description": "when to use colors",
+        "inherit": false,
+        "value": {
+          "name": "when",
+          "provider": {
+            "values": [
+              "never",
+              "auto",
+              "always"
+            ]
+          }
+        }
+      },
+      {
+        "short": "S",
+        "long": "size",
+        "description": "limit results based on the size of files",
+        "inherit": false,
+        "value": {
+          "name": "size"
+        }
+      },
+      {
+        "long": "changed-within",
+        "description": "filter by file modification time (newer than)",
+        "inherit": false,
+        "value": {
+          "name": "date"
+        }
+      },
+      {
+        "long": "changed-before",
+        "description": "filter by file modification time (older than)",
+        "inherit": false,
+        "value": {
+          "name": "date"
+        }
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "pattern",
+          "description": "regular expression or glob pattern",
+          "index": 0
+        },
+        {
+          "name": "path",
+          "description": "root directories to search",
+          "provider": "builtin.directories",
+          "index": 1,
+          "repeatable": true
+        }
+      ]
+    },
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.executables": {
+        "builtin": "executables"
+      }
+    }
+  }
+}
