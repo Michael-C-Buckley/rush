@@ -1,0 +1,22 @@
+__rush_complete_docker_compose_file_args() {
+  for value in $(rush_complete option-values --short f); do
+    test -n "$value" && printf '%s\n%s\n' -f "$value"
+  done
+  for value in $(rush_complete option-values --long file); do
+    test -n "$value" && printf '%s\n%s\n' -f "$value"
+  done
+}
+
+__rush_complete_docker_compose_services() {
+  command -v docker-compose >/dev/null 2>&1 || return
+  docker-compose $(__rush_complete_docker_compose_file_args) config --services 2>/dev/null | while IFS= read -r service; do
+    test -n "$service" && rush_complete candidate "$service" --kind plain --description service
+  done
+}
+
+__rush_complete_docker_compose_profiles() {
+  command -v docker-compose >/dev/null 2>&1 || return
+  docker-compose $(__rush_complete_docker_compose_file_args) config --profiles 2>/dev/null | while IFS= read -r profile; do
+    test -n "$profile" && rush_complete candidate "$profile" --kind plain --description profile
+  done
+}

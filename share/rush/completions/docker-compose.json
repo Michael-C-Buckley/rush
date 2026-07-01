@@ -1,0 +1,1331 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "docker-compose",
+    "description": "define and run multi-container Docker applications",
+    "options": [
+      {
+        "long": "ansi",
+        "description": "control when to print ANSI control characters (\"never\"|\"always\"|\"auto\")",
+        "inherit": false,
+        "value": {
+          "name": "ansi",
+          "provider": {
+            "values": [
+              "never",
+              "always",
+              "auto"
+            ]
+          }
+        }
+      },
+      {
+        "long": "compatibility",
+        "description": "run compose in backward compatibility mode",
+        "inherit": false
+      },
+      {
+        "long": "env-file",
+        "description": "specify an alternate environment file",
+        "inherit": false,
+        "value": {
+          "name": "env-file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "file",
+        "short": "f",
+        "description": "compose configuration files",
+        "repeatable": true,
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "no-ansi",
+        "description": "do not print ANSI control characters (DEPRECATED)",
+        "inherit": false,
+        "hidden": true,
+        "deprecated": true
+      },
+      {
+        "long": "profile",
+        "description": "specify a profile to enable",
+        "repeatable": true,
+        "inherit": false,
+        "value": {
+          "name": "profile",
+          "provider": "docker-compose.profiles"
+        }
+      },
+      {
+        "long": "project-directory",
+        "description": "specify an alternate working directory (default: the path of the, first specified, Compose file)",
+        "inherit": false,
+        "value": {
+          "name": "project-directory",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "project-name",
+        "short": "p",
+        "description": "project name",
+        "inherit": false,
+        "value": {
+          "name": "project-name"
+        }
+      },
+      {
+        "long": "verbose",
+        "description": "show more output",
+        "inherit": false,
+        "hidden": true
+      },
+      {
+        "long": "workdir",
+        "description": "dEPRECATED! USE --project-directory INSTEAD. Specify an alternate working directory (default: the path of the, first specified, Compose file)",
+        "inherit": false,
+        "hidden": true,
+        "deprecated": true,
+        "value": {
+          "name": "workdir"
+        }
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "build",
+        "description": "build or rebuild services",
+        "options": [
+          {
+            "long": "build-arg",
+            "description": "set build-time variables for services",
+            "repeatable": true,
+            "inherit": false,
+            "value": {
+              "name": "key=value"
+            }
+          },
+          {
+            "long": "compress",
+            "description": "compress the build context using gzip. DEPRECATED",
+            "inherit": false,
+            "hidden": true,
+            "deprecated": true
+          },
+          {
+            "long": "force-rm",
+            "description": "always remove intermediate containers. DEPRECATED",
+            "inherit": false,
+            "hidden": true,
+            "deprecated": true
+          },
+          {
+            "long": "memory",
+            "short": "m",
+            "description": "set memory limit for the build container. Not supported on buildkit yet",
+            "inherit": false,
+            "hidden": true,
+            "value": {
+              "name": "memory"
+            }
+          },
+          {
+            "long": "no-cache",
+            "description": "do not use cache when building the image",
+            "inherit": false
+          },
+          {
+            "long": "no-rm",
+            "description": "do not remove intermediate containers after a successful build. DEPRECATED",
+            "inherit": false,
+            "hidden": true,
+            "deprecated": true
+          },
+          {
+            "long": "parallel",
+            "description": "build images in parallel. DEPRECATED",
+            "inherit": false,
+            "hidden": true,
+            "deprecated": true
+          },
+          {
+            "long": "progress",
+            "description": "set type of progress output (auto, tty, plain, quiet)",
+            "inherit": false,
+            "value": {
+              "name": "progress",
+              "provider": {
+                "values": [
+                  "auto",
+                  "tty",
+                  "plain",
+                  "quiet"
+                ]
+              }
+            }
+          },
+          {
+            "long": "pull",
+            "description": "always attempt to pull a newer version of the image",
+            "inherit": false
+          },
+          {
+            "long": "quiet",
+            "short": "q",
+            "description": "don't print anything to STDOUT",
+            "inherit": false
+          },
+          {
+            "long": "ssh",
+            "description": "set SSH authentications used when building service images. (use 'default' for using your default SSH Agent)",
+            "inherit": false,
+            "value": {
+              "name": "ssh"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "services",
+              "index": 0,
+              "repeatable": true,
+              "provider": "docker-compose.services"
+            }
+          ]
+        }
+      },
+      {
+        "name": "config",
+        "aliases": [
+          "convert"
+        ],
+        "description": "converts the compose file to platform's canonical format",
+        "options": [
+          {
+            "long": "format",
+            "description": "format the output. Values: [yaml | json]",
+            "inherit": false,
+            "value": {
+              "name": "format",
+              "provider": {
+                "values": [
+                  "yaml",
+                  "json"
+                ]
+              }
+            }
+          },
+          {
+            "long": "hash",
+            "description": "print the service config hash, one per line",
+            "inherit": false,
+            "value": {
+              "name": "hash"
+            }
+          },
+          {
+            "long": "images",
+            "description": "print the image names, one per line",
+            "inherit": false
+          },
+          {
+            "long": "no-interpolate",
+            "description": "don't interpolate environment variables",
+            "inherit": false
+          },
+          {
+            "long": "no-normalize",
+            "description": "don't normalize compose model",
+            "inherit": false
+          },
+          {
+            "long": "output",
+            "short": "o",
+            "description": "save to file (default to stdout)",
+            "inherit": false,
+            "value": {
+              "name": "output",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "profiles",
+            "description": "print the profile names, one per line",
+            "inherit": false
+          },
+          {
+            "long": "quiet",
+            "short": "q",
+            "description": "only validate the configuration, don't print anything",
+            "inherit": false
+          },
+          {
+            "long": "resolve-image-digests",
+            "description": "pin image tags to digests",
+            "inherit": false
+          },
+          {
+            "long": "services",
+            "description": "print the service names, one per line",
+            "inherit": false
+          },
+          {
+            "long": "volumes",
+            "description": "print the volume names, one per line",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "services",
+              "index": 0,
+              "repeatable": true,
+              "provider": "docker-compose.services"
+            }
+          ]
+        }
+      },
+      {
+        "name": "cp",
+        "description": "copy files/folders between a service container and the local filesystem",
+        "options": [
+          {
+            "long": "all",
+            "description": "copy to all the containers of the service",
+            "inherit": false,
+            "hidden": true
+          },
+          {
+            "long": "archive",
+            "short": "a",
+            "description": "archive mode (copy all uid/gid information)",
+            "inherit": false
+          },
+          {
+            "long": "follow-link",
+            "short": "L",
+            "description": "always follow symbol link in SRC_PATH",
+            "inherit": false
+          },
+          {
+            "long": "index",
+            "description": "index of the container if there are multiple instances of a service",
+            "inherit": false,
+            "value": {
+              "name": "index"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "source-path",
+              "index": 0,
+              "provider": "builtin.files"
+            },
+            {
+              "name": "dest-path",
+              "index": 1,
+              "provider": "builtin.files"
+            }
+          ]
+        }
+      },
+      {
+        "name": "create",
+        "description": "creates containers for a service",
+        "options": [
+          {
+            "long": "build",
+            "description": "build images before starting containers",
+            "inherit": false
+          },
+          {
+            "long": "force-recreate",
+            "description": "recreate containers even if their configuration and image haven't changed",
+            "inherit": false
+          },
+          {
+            "long": "no-build",
+            "description": "don't build an image, even if it's missing",
+            "inherit": false
+          },
+          {
+            "long": "no-recreate",
+            "description": "if containers already exist, don't recreate them. Incompatible with --force-recreate",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "service",
+              "index": 0,
+              "repeatable": true,
+              "provider": "docker-compose.services"
+            }
+          ]
+        }
+      },
+      {
+        "name": "down",
+        "description": "stop and remove containers, networks",
+        "options": [
+          {
+            "long": "remove-orphans",
+            "description": "remove containers for services not defined in the Compose file",
+            "inherit": false
+          },
+          {
+            "long": "rmi",
+            "description": "remove images used by services. \"local\" remove only images that don't have a custom tag (\"local\"|\"all\")",
+            "inherit": false,
+            "value": {
+              "name": "rmi"
+            }
+          },
+          {
+            "long": "timeout",
+            "short": "t",
+            "description": "specify a shutdown timeout in seconds",
+            "inherit": false,
+            "value": {
+              "name": "timeout"
+            }
+          },
+          {
+            "long": "volumes",
+            "short": "v",
+            "description": "remove named volumes declared in the `volumes` section of the Compose file and anonymous volumes attached to containers",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "events",
+        "description": "receive real time events from containers",
+        "options": [
+          {
+            "long": "json",
+            "description": "output events as a stream of json objects",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "service",
+              "index": 0,
+              "repeatable": true,
+              "provider": "docker-compose.services"
+            }
+          ]
+        }
+      },
+      {
+        "name": "exec",
+        "description": "execute a command in a running container",
+        "options": [
+          {
+            "long": "detach",
+            "short": "d",
+            "description": "detached mode: Run command in the background",
+            "inherit": false
+          },
+          {
+            "long": "env",
+            "short": "e",
+            "description": "set environment variables",
+            "repeatable": true,
+            "inherit": false,
+            "value": {
+              "name": "key=value"
+            }
+          },
+          {
+            "long": "index",
+            "description": "index of the container if there are multiple instances of a service [default: 1]",
+            "inherit": false,
+            "value": {
+              "name": "index"
+            }
+          },
+          {
+            "long": "interactive",
+            "short": "i",
+            "description": "keep STDIN open even if not attached",
+            "inherit": false,
+            "hidden": true
+          },
+          {
+            "long": "no-TTY",
+            "short": "T",
+            "description": "disable pseudo-TTY allocation. By default `docker compose exec` allocates a TTY",
+            "inherit": false
+          },
+          {
+            "long": "privileged",
+            "description": "give extended privileges to the process",
+            "inherit": false
+          },
+          {
+            "long": "tty",
+            "short": "t",
+            "description": "allocate a pseudo-TTY",
+            "inherit": false,
+            "hidden": true
+          },
+          {
+            "long": "user",
+            "short": "u",
+            "description": "run the command as this user",
+            "inherit": false,
+            "value": {
+              "name": "user"
+            }
+          },
+          {
+            "long": "workdir",
+            "short": "w",
+            "description": "path to workdir directory for this command",
+            "inherit": false,
+            "value": {
+              "name": "workdir",
+              "provider": "builtin.directories"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "service",
+              "index": 0,
+              "provider": "docker-compose.services"
+            },
+            {
+              "name": "command",
+              "provider": "builtin.executables",
+              "index": 1,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "images",
+        "description": "list images used by the created containers",
+        "options": [
+          {
+            "long": "quiet",
+            "short": "q",
+            "description": "only display IDs",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "service",
+              "index": 0,
+              "repeatable": true,
+              "provider": "docker-compose.services"
+            }
+          ]
+        }
+      },
+      {
+        "name": "kill",
+        "description": "force stop service containers",
+        "options": [
+          {
+            "long": "signal",
+            "short": "s",
+            "description": "sIGNAL to send to the container",
+            "inherit": false,
+            "value": {
+              "name": "signal"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "service",
+              "index": 0,
+              "repeatable": true,
+              "provider": "docker-compose.services"
+            }
+          ]
+        }
+      },
+      {
+        "name": "logs",
+        "description": "view output from containers",
+        "options": [
+          {
+            "long": "follow",
+            "short": "f",
+            "description": "follow log output",
+            "inherit": false
+          },
+          {
+            "long": "no-color",
+            "description": "produce monochrome output",
+            "inherit": false
+          },
+          {
+            "long": "no-log-prefix",
+            "description": "don't print prefix in logs",
+            "inherit": false
+          },
+          {
+            "long": "since",
+            "description": "show logs since timestamp (e.g. 2013-01-02T13:23:37Z) or relative (e.g. 42m for 42 minutes)",
+            "inherit": false,
+            "value": {
+              "name": "since"
+            }
+          },
+          {
+            "long": "tail",
+            "description": "number of lines to show from the end of the logs for each container",
+            "inherit": false,
+            "value": {
+              "name": "lines",
+              "provider": {
+                "values": [
+                  "all"
+                ]
+              }
+            }
+          },
+          {
+            "long": "timestamps",
+            "short": "t",
+            "description": "show timestamps",
+            "inherit": false
+          },
+          {
+            "long": "until",
+            "description": "show logs before a timestamp (e.g. 2013-01-02T13:23:37Z) or relative (e.g. 42m for 42 minutes)",
+            "inherit": false,
+            "value": {
+              "name": "timestamp"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "service",
+              "index": 0,
+              "repeatable": true,
+              "provider": "docker-compose.services"
+            }
+          ]
+        }
+      },
+      {
+        "name": "ls",
+        "description": "list running compose projects",
+        "options": [
+          {
+            "long": "all",
+            "short": "a",
+            "description": "show all stopped Compose projects",
+            "inherit": false
+          },
+          {
+            "long": "filter",
+            "description": "filter output based on conditions provided",
+            "inherit": false,
+            "value": {
+              "name": "filter"
+            }
+          },
+          {
+            "long": "format",
+            "description": "format the output. Values: [pretty | json]",
+            "inherit": false,
+            "value": {
+              "name": "format",
+              "provider": {
+                "values": [
+                  "pretty",
+                  "json"
+                ]
+              }
+            }
+          },
+          {
+            "long": "quiet",
+            "short": "q",
+            "description": "only display IDs",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "pause",
+        "description": "pause services",
+        "arguments": {
+          "states": [
+            {
+              "name": "service",
+              "index": 0,
+              "repeatable": true,
+              "provider": "docker-compose.services"
+            }
+          ]
+        }
+      },
+      {
+        "name": "port",
+        "description": "print the public port for a port binding",
+        "options": [
+          {
+            "long": "index",
+            "description": "index of the container if service has multiple replicas",
+            "inherit": false,
+            "value": {
+              "name": "index"
+            }
+          },
+          {
+            "long": "protocol",
+            "description": "tcp or udp",
+            "inherit": false,
+            "value": {
+              "name": "protocol",
+              "provider": {
+                "values": [
+                  "tcp",
+                  "udp"
+                ]
+              }
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "service",
+              "index": 0,
+              "provider": "docker-compose.services"
+            },
+            {
+              "name": "private_port",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "ps",
+        "description": "list containers",
+        "options": [
+          {
+            "long": "all",
+            "short": "a",
+            "description": "show all stopped containers (including those created by the run command)",
+            "inherit": false
+          },
+          {
+            "long": "filter",
+            "description": "filter services by a property (supported filters: status)",
+            "inherit": false,
+            "value": {
+              "name": "filter"
+            }
+          },
+          {
+            "long": "format",
+            "description": "format the output. Values: [pretty | json]",
+            "inherit": false,
+            "value": {
+              "name": "format",
+              "provider": {
+                "values": [
+                  "pretty",
+                  "json"
+                ]
+              }
+            }
+          },
+          {
+            "long": "quiet",
+            "short": "q",
+            "description": "only display IDs",
+            "inherit": false
+          },
+          {
+            "long": "services",
+            "description": "display services",
+            "inherit": false
+          },
+          {
+            "long": "status",
+            "description": "filter services by status. Values: [paused | restarting | removing | running | dead | created | exited]",
+            "repeatable": true,
+            "inherit": false,
+            "value": {
+              "name": "status",
+              "provider": {
+                "values": [
+                  "paused",
+                  "restarting",
+                  "removing",
+                  "running",
+                  "dead",
+                  "created",
+                  "exited"
+                ]
+              }
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "service",
+              "index": 0,
+              "repeatable": true,
+              "provider": "docker-compose.services"
+            }
+          ]
+        }
+      },
+      {
+        "name": "pull",
+        "description": "pull service images",
+        "options": [
+          {
+            "long": "ignore-pull-failures",
+            "description": "pull what it can and ignores images with pull failures",
+            "inherit": false
+          },
+          {
+            "long": "include-deps",
+            "description": "also pull services declared as dependencies",
+            "inherit": false
+          },
+          {
+            "long": "no-parallel",
+            "description": "dEPRECATED disable parallel pulling",
+            "inherit": false,
+            "hidden": true,
+            "deprecated": true
+          },
+          {
+            "long": "parallel",
+            "description": "dEPRECATED pull multiple images in parallel",
+            "inherit": false,
+            "hidden": true,
+            "deprecated": true
+          },
+          {
+            "long": "quiet",
+            "short": "q",
+            "description": "pull without printing progress information",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "service",
+              "index": 0,
+              "repeatable": true,
+              "provider": "docker-compose.services"
+            }
+          ]
+        }
+      },
+      {
+        "name": "push",
+        "description": "push service images",
+        "options": [
+          {
+            "long": "ignore-push-failures",
+            "description": "push what it can and ignores images with push failures",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "service",
+              "index": 0,
+              "repeatable": true,
+              "provider": "docker-compose.services"
+            }
+          ]
+        }
+      },
+      {
+        "name": "restart",
+        "description": "restart containers",
+        "options": [
+          {
+            "long": "timeout",
+            "short": "t",
+            "description": "specify a shutdown timeout in seconds",
+            "inherit": false,
+            "value": {
+              "name": "timeout"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "service",
+              "index": 0,
+              "repeatable": true,
+              "provider": "docker-compose.services"
+            }
+          ]
+        }
+      },
+      {
+        "name": "rm",
+        "description": "removes stopped service containers",
+        "options": [
+          {
+            "long": "all",
+            "short": "a",
+            "description": "deprecated - no effect",
+            "inherit": false,
+            "hidden": true
+          },
+          {
+            "long": "force",
+            "short": "f",
+            "description": "don't ask to confirm removal",
+            "inherit": false
+          },
+          {
+            "long": "stop",
+            "short": "s",
+            "description": "stop the containers, if required, before removing",
+            "inherit": false
+          },
+          {
+            "long": "volumes",
+            "short": "v",
+            "description": "remove any anonymous volumes attached to containers",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "service",
+              "index": 0,
+              "repeatable": true,
+              "provider": "docker-compose.services"
+            }
+          ]
+        }
+      },
+      {
+        "name": "run",
+        "description": "run a one-off command on a service",
+        "options": [
+          {
+            "long": "detach",
+            "short": "d",
+            "description": "run container in background and print container ID",
+            "inherit": false
+          },
+          {
+            "long": "entrypoint",
+            "description": "override the entrypoint of the image",
+            "inherit": false,
+            "value": {
+              "name": "entrypoint"
+            }
+          },
+          {
+            "long": "env",
+            "short": "e",
+            "description": "set environment variables",
+            "repeatable": true,
+            "inherit": false,
+            "value": {
+              "name": "env"
+            }
+          },
+          {
+            "long": "interactive",
+            "short": "i",
+            "description": "keep STDIN open even if not attached",
+            "inherit": false
+          },
+          {
+            "long": "label",
+            "short": "l",
+            "description": "add or override a label",
+            "repeatable": true,
+            "inherit": false,
+            "value": {
+              "name": "label"
+            }
+          },
+          {
+            "long": "name",
+            "description": "assign a name to the container",
+            "inherit": false,
+            "value": {
+              "name": "name"
+            }
+          },
+          {
+            "long": "no-TTY",
+            "short": "T",
+            "description": "disable pseudo-TTY allocation (default: auto-detected)",
+            "inherit": false
+          },
+          {
+            "long": "no-deps",
+            "description": "don't start linked services",
+            "inherit": false
+          },
+          {
+            "long": "publish",
+            "short": "p",
+            "description": "publish a container's port(s) to the host",
+            "repeatable": true,
+            "inherit": false,
+            "value": {
+              "name": "publish"
+            }
+          },
+          {
+            "long": "quiet-pull",
+            "description": "pull without printing progress information",
+            "inherit": false
+          },
+          {
+            "long": "rm",
+            "description": "automatically remove the container when it exits",
+            "inherit": false
+          },
+          {
+            "long": "service-ports",
+            "description": "run command with the service's ports enabled and mapped to the host",
+            "inherit": false
+          },
+          {
+            "long": "tty",
+            "short": "t",
+            "description": "allocate a pseudo-TTY",
+            "inherit": false,
+            "hidden": true
+          },
+          {
+            "long": "use-aliases",
+            "description": "use the service's network useAliases in the network(s) the container connects to",
+            "inherit": false
+          },
+          {
+            "long": "user",
+            "short": "u",
+            "description": "run as specified username or uid",
+            "inherit": false,
+            "value": {
+              "name": "user"
+            }
+          },
+          {
+            "long": "volume",
+            "short": "v",
+            "description": "bind mount a volume",
+            "repeatable": true,
+            "inherit": false,
+            "value": {
+              "name": "volume"
+            }
+          },
+          {
+            "long": "workdir",
+            "short": "w",
+            "description": "working directory inside the container",
+            "inherit": false,
+            "value": {
+              "name": "workdir",
+              "provider": "builtin.directories"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "service",
+              "index": 0,
+              "provider": "docker-compose.services"
+            },
+            {
+              "name": "command",
+              "provider": "builtin.executables",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "start",
+        "description": "start services",
+        "arguments": {
+          "states": [
+            {
+              "name": "service",
+              "index": 0,
+              "repeatable": true,
+              "provider": "docker-compose.services"
+            }
+          ]
+        }
+      },
+      {
+        "name": "stop",
+        "description": "stop services",
+        "options": [
+          {
+            "long": "timeout",
+            "short": "t",
+            "description": "specify a shutdown timeout in seconds",
+            "inherit": false,
+            "value": {
+              "name": "timeout"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "service",
+              "index": 0,
+              "repeatable": true,
+              "provider": "docker-compose.services"
+            }
+          ]
+        }
+      },
+      {
+        "name": "top",
+        "description": "display the running processes",
+        "arguments": {
+          "states": [
+            {
+              "name": "service",
+              "index": 0,
+              "repeatable": true,
+              "provider": "docker-compose.services"
+            }
+          ]
+        }
+      },
+      {
+        "name": "unpause",
+        "description": "unpause services",
+        "arguments": {
+          "states": [
+            {
+              "name": "service",
+              "index": 0,
+              "repeatable": true,
+              "provider": "docker-compose.services"
+            }
+          ]
+        }
+      },
+      {
+        "name": "up",
+        "description": "create and start containers",
+        "options": [
+          {
+            "long": "abort-on-container-exit",
+            "description": "stops all containers if any container was stopped. Incompatible with -d",
+            "inherit": false
+          },
+          {
+            "long": "always-recreate-deps",
+            "description": "recreate dependent containers. Incompatible with --no-recreate",
+            "inherit": false
+          },
+          {
+            "long": "attach",
+            "description": "attach to service output",
+            "repeatable": true,
+            "inherit": false,
+            "value": {
+              "name": "attach",
+              "provider": "docker-compose.services"
+            }
+          },
+          {
+            "long": "attach-dependencies",
+            "description": "attach to dependent containers",
+            "inherit": false
+          },
+          {
+            "long": "build",
+            "description": "build images before starting containers",
+            "inherit": false
+          },
+          {
+            "long": "detach",
+            "short": "d",
+            "description": "detached mode: Run containers in the background",
+            "inherit": false
+          },
+          {
+            "long": "exit-code-from",
+            "description": "return the exit code of the selected service container. Implies --abort-on-container-exit",
+            "inherit": false,
+            "value": {
+              "name": "exit-code-from",
+              "provider": "docker-compose.services"
+            }
+          },
+          {
+            "long": "force-recreate",
+            "description": "recreate containers even if their configuration and image haven't changed",
+            "inherit": false
+          },
+          {
+            "long": "no-build",
+            "description": "don't build an image, even if it's missing",
+            "inherit": false
+          },
+          {
+            "long": "no-color",
+            "description": "produce monochrome output",
+            "inherit": false
+          },
+          {
+            "long": "no-deps",
+            "description": "don't start linked services",
+            "inherit": false
+          },
+          {
+            "long": "no-log-prefix",
+            "description": "don't print prefix in logs",
+            "inherit": false
+          },
+          {
+            "long": "no-recreate",
+            "description": "if containers already exist, don't recreate them. Incompatible with --force-recreate",
+            "inherit": false
+          },
+          {
+            "long": "no-start",
+            "description": "don't start the services after creating them",
+            "inherit": false
+          },
+          {
+            "long": "quiet-pull",
+            "description": "pull without printing progress information",
+            "inherit": false
+          },
+          {
+            "long": "remove-orphans",
+            "description": "remove containers for services not defined in the Compose file",
+            "inherit": false
+          },
+          {
+            "long": "renew-anon-volumes",
+            "short": "V",
+            "description": "recreate anonymous volumes instead of retrieving data from the previous containers",
+            "inherit": false
+          },
+          {
+            "long": "scale",
+            "description": "scale SERVICE to NUM instances. Overrides the `scale` setting in the Compose file if present",
+            "repeatable": true,
+            "inherit": false,
+            "value": {
+              "name": "scale"
+            }
+          },
+          {
+            "long": "timeout",
+            "short": "t",
+            "description": "use this timeout in seconds for container shutdown when attached or when containers are already running",
+            "inherit": false,
+            "value": {
+              "name": "timeout"
+            }
+          },
+          {
+            "long": "wait",
+            "description": "wait for services to be running|healthy. Implies detached mode",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "service",
+              "index": 0,
+              "repeatable": true,
+              "provider": "docker-compose.services"
+            }
+          ]
+        }
+      },
+      {
+        "name": "version",
+        "description": "show the Docker Compose version information",
+        "options": [
+          {
+            "long": "format",
+            "short": "f",
+            "description": "format the output. Values: [pretty | json]. (Default: pretty)",
+            "inherit": false,
+            "value": {
+              "name": "format",
+              "provider": {
+                "values": [
+                  "pretty",
+                  "json"
+                ]
+              }
+            }
+          },
+          {
+            "long": "short",
+            "description": "shows only Compose's version number",
+            "inherit": false
+          }
+        ]
+      }
+    ],
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.executables": {
+        "builtin": "executables"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "docker-compose.services": {
+        "function": "__rush_complete_docker_compose_services"
+      },
+      "docker-compose.profiles": {
+        "function": "__rush_complete_docker_compose_profiles"
+      }
+    }
+  }
+}
