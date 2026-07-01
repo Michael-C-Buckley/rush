@@ -283,6 +283,17 @@ fn completeFromManifest(
 
     if (semantic.complete_options) {
         try appendOptionCandidates(allocator, builder, current, analyzed.replace_start, analyzed.replace_end);
+        try appendOptionProviderCandidates(
+            allocator,
+            io,
+            sh,
+            builder,
+            analyzed,
+            semantic,
+            current,
+            providers,
+            companion_path,
+        );
         return true;
     }
 
@@ -401,6 +412,35 @@ fn appendOptionCandidates(
 ) !void {
     const options = jsonArrayField(command, "options") orelse return;
     for (options.items) |option| try appendOptionCandidate(allocator, builder, option, replace_start, replace_end);
+}
+
+fn appendOptionProviderCandidates(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    sh: anytype,
+    builder: *Builder,
+    analyzed: AnalyzedLine,
+    semantic: Semantic,
+    command: std.json.Value,
+    providers: ?std.json.Value,
+    companion_path: ?[]const u8,
+) !void {
+    const options = jsonArrayField(command, "options") orelse return;
+    for (options.items) |option| {
+        const provider = jsonField(option, "provider") orelse continue;
+        try appendProviderCandidates(
+            allocator,
+            io,
+            sh,
+            builder,
+            analyzed,
+            semantic,
+            command,
+            providers,
+            provider,
+            companion_path,
+        );
+    }
 }
 
 fn appendOptionCandidate(
@@ -568,6 +608,7 @@ fn appendFunctionProvider(
 
     const argument_index = try std.fmt.allocPrint(allocator, "{d}", .{semantic.operand_index});
     defer allocator.free(argument_index);
+    try sh.state.putVariable(.{ .name = "rush_completion_prefix", .value = analyzed.prefix });
     try sh.state.putVariable(.{ .name = "rush_completion_argument_index", .value = argument_index });
     // ziglint-ignore: Z024 preserve existing readable expression shape; lint-only cleanup
     try sh.state.putVariable(.{ .name = "rush_completion_options_terminated", .value = if (semantic.options_terminated) "true" else "false" });
@@ -1052,6 +1093,23 @@ test "completion loads manifest subcommands" {
         if (std.mem.eql(u8, candidate.value, "build")) return;
     }
     return error.ExpectedZigBuildCandidate;
+}
+
+test "completion includes dynamic option provider candidates" {
+    var sh = shell.ShellWithBuiltins(host.RealHost, extensions.rush.registry).init(std.testing.allocator, .{}, .{});
+    defer sh.deinit();
+
+    const source = "zig build -Doptimize=";
+    var application = try complete(&sh, std.testing.allocator, std.testing.io, source, source.len);
+    defer application.deinit(std.testing.allocator);
+    const candidates = switch (application) {
+        .ambiguous => |candidates| candidates,
+        else => return error.ExpectedDynamicOptionCandidates,
+    };
+    for (candidates) |candidate| {
+        if (std.mem.eql(u8, candidate.value, "-Doptimize=ReleaseSafe")) return;
+    }
+    return error.ExpectedOptimizeReleaseSafeCandidate;
 }
 
 test "path completion follows symlinked directories before appending space" {
