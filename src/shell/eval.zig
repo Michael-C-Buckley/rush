@@ -4502,6 +4502,7 @@ fn evalCommandSubstitutionInChild(
             shell.state.diagnostic_line_offset += substitution.line_offset;
             shell.state.forgetActiveExitTrap();
             shell.state.exit_trap_listing = null;
+            if (shell.state.options.mode == .bash) shell.state.options.errexit = false;
             const evaluated = if (shell.state.options.xtrace) evaluated: {
                 break :evaluated evalProgram(@TypeOf(shell.host), shell, program) catch shell.host.exit(2);
             } else evaluated: {
