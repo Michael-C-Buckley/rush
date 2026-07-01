@@ -1,0 +1,185 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "cdk8s",
+    "description": "define kubernetes apps with cdk8s",
+    "options": [
+      {
+        "long": "version",
+        "description": "the current version",
+        "inherit": false
+      },
+      {
+        "long": "help",
+        "description": "show help",
+        "inherit": false
+      },
+      {
+        "long": "check-upgrade",
+        "description": "check for cdk8s-cli upgrade",
+        "inherit": false
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "init",
+        "description": "create a new, empty CDK8S project",
+        "arguments": {
+          "states": [
+            {
+              "name": "type",
+              "description": "Select language you are using",
+              "index": 0,
+              "values": [
+                {
+                  "value": "go-app"
+                },
+                {
+                  "value": "java-app"
+                },
+                {
+                  "value": "python-app"
+                },
+                {
+                  "value": "typescript-app"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "name": "import",
+        "description": "import a CRD schema to generate generate resources",
+        "options": [
+          {
+            "long": "language",
+            "short": "l",
+            "description": "output programming language",
+            "inherit": false,
+            "value": {
+              "name": "language",
+              "values": [
+                {
+                  "value": "typescript"
+                },
+                {
+                  "value": "python"
+                },
+                {
+                  "value": "java"
+                },
+                {
+                  "value": "go"
+                }
+              ]
+            }
+          },
+          {
+            "long": "class-prefix",
+            "description": "a prefix to add to all generated class names",
+            "inherit": false,
+            "exclusiveGroup": "cdk8s.class-prefix"
+          },
+          {
+            "long": "no-class-prefix",
+            "description": "does not add a prefix to generated class names",
+            "inherit": false,
+            "exclusiveGroup": "cdk8s.class-prefix"
+          },
+          {
+            "long": "exclude",
+            "description": "do not import types that match these regular expressions",
+            "inherit": false,
+            "value": {
+              "name": "regexp"
+            }
+          },
+          {
+            "long": "output",
+            "short": "o",
+            "description": "output directory",
+            "inherit": false,
+            "value": {
+              "name": "value",
+              "provider": "builtin.directories"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "spec",
+              "description": "Path to the CRD schema",
+              "provider": "builtin.files",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "synth",
+        "description": "synthesizes Kubernetes manifests for all charts in your app",
+        "options": [
+          {
+            "long": "app",
+            "short": "a",
+            "description": "command to use in order to execute cdk8s app",
+            "inherit": false
+          },
+          {
+            "long": "output",
+            "short": "o",
+            "description": "output directory",
+            "inherit": false,
+            "value": {
+              "name": "value",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "stdout",
+            "short": "s",
+            "description": "write synthesized manifests to stdout instead of the output directory",
+            "inherit": false
+          },
+          {
+            "long": "plugins-dir",
+            "description": "directory to store cdk8s plugins",
+            "inherit": false
+          },
+          {
+            "long": "validate",
+            "description": "apply validation plugins on the resulting manifests",
+            "inherit": false,
+            "exclusiveGroup": "cdk8s.validation"
+          },
+          {
+            "long": "no-validate",
+            "description": "disable validation",
+            "inherit": false,
+            "exclusiveGroup": "cdk8s.validation"
+          },
+          {
+            "long": "validation-reports-output-file",
+            "description": "file to write a JSON representation of the validation reports to",
+            "inherit": false,
+            "value": {
+              "name": "value",
+              "provider": "builtin.files"
+            }
+          }
+        ]
+      }
+    ],
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
