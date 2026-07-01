@@ -1,0 +1,176 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "ansible-doc",
+    "description": "show ansible plugin documentation",
+    "options": [
+      {
+        "long": "metadata-dump",
+        "description": "dump plugin metadata",
+        "inherit": false,
+        "value": {
+          "name": "value",
+          "required": false,
+          "style": "optional"
+        }
+      },
+      {
+        "long": "playbook-dir",
+        "description": "set playbook base directory",
+        "inherit": false,
+        "value": {
+          "name": "directory",
+          "description": "base directory",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "version",
+        "description": "show version and paths",
+        "inherit": false
+      },
+      {
+        "long": "list_files",
+        "short": "F",
+        "description": "list plugin source files",
+        "inherit": false
+      },
+      {
+        "long": "module-path",
+        "short": "M",
+        "description": "prepend module library paths",
+        "inherit": false,
+        "value": {
+          "name": "path",
+          "description": "module library path",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "entry-point",
+        "short": "E",
+        "description": "select role entry point",
+        "inherit": false,
+        "value": {
+          "name": "entry-point"
+        }
+      },
+      {
+        "long": "help",
+        "short": "h",
+        "description": "show help",
+        "inherit": false
+      },
+      {
+        "long": "json",
+        "short": "j",
+        "description": "write json output",
+        "inherit": false
+      },
+      {
+        "long": "list",
+        "short": "l",
+        "description": "list available plugins",
+        "inherit": false,
+        "value": {
+          "name": "namespace",
+          "style": "optional",
+          "required": false,
+          "description": "namespace or collection"
+        }
+      },
+      {
+        "long": "roles-path",
+        "short": "r",
+        "description": "set roles directory",
+        "inherit": false,
+        "value": {
+          "name": "directory",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "snippet",
+        "short": "s",
+        "description": "show playbook snippet",
+        "inherit": false,
+        "value": {
+          "name": "plugin-type",
+          "provider": "ansible-doc.snippet-types"
+        }
+      },
+      {
+        "long": "type",
+        "short": "t",
+        "description": "set plugin type",
+        "inherit": false,
+        "value": {
+          "name": "plugin-type",
+          "provider": "ansible-doc.plugin-types"
+        }
+      },
+      {
+        "long": "verbose",
+        "description": "enable verbose output",
+        "inherit": false,
+        "exclusiveGroup": "ansible-doc.verbosity"
+      },
+      {
+        "short": "v",
+        "description": "enable verbose output",
+        "inherit": false,
+        "exclusiveGroup": "ansible-doc.verbosity",
+        "repeatable": true
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "plugin",
+          "index": 0,
+          "repeatable": true,
+          "provider": "ansible-doc.plugins",
+          "description": "plugin name"
+        }
+      ]
+    },
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "ansible-doc.snippet-types": {
+        "values": [
+          "inventory",
+          "lookup",
+          "module"
+        ]
+      },
+      "ansible-doc.plugin-types": {
+        "values": [
+          "become",
+          "cache",
+          "callback",
+          "cliconf",
+          "connection",
+          "httpapi",
+          "inventory",
+          "lookup",
+          "netconf",
+          "shell",
+          "vars",
+          "module",
+          "strategy",
+          "role",
+          "keyword"
+        ]
+      },
+      "ansible-doc.plugins": {
+        "function": "__rush_complete_ansible_doc_plugins"
+      }
+    }
+  }
+}

@@ -1,0 +1,25 @@
+__rush_complete_ansible_doc_plugins() {
+  json_tmp=$(mktemp)
+  candidates_tmp=$(mktemp)
+  ansible-doc --list --json > "$json_tmp" 2>/dev/null || {
+    rm -f "$json_tmp" "$candidates_tmp"
+    return 0
+  }
+  python3 - "$json_tmp" > "$candidates_tmp" <<'PY'
+import json
+import sys
+try:
+    with open(sys.argv[1], "r", encoding="utf-8") as f:
+        plugins = json.load(f)
+except Exception:
+    raise SystemExit(0)
+for name, description in plugins.items():
+    description = str(description).replace("\n", " ")[:70]
+    print(f"{name}\t{description}")
+PY
+  while IFS='\t' read name description; do
+    test -n "$name" || continue
+    rush_complete candidate "$name" --kind plain --description "$description"
+  done < "$candidates_tmp"
+  rm -f "$json_tmp" "$candidates_tmp"
+}
