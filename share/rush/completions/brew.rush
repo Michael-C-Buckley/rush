@@ -1,0 +1,47 @@
+__rush_complete_brew_formulae() {
+  brew formulae 2>/dev/null | while IFS= read -r formula; do
+    test -n "$formula" && rush_complete candidate "$formula" --kind plain --description formula
+  done
+}
+
+__rush_complete_brew_casks() {
+  brew casks 2>/dev/null | while IFS= read -r cask; do
+    test -n "$cask" && rush_complete candidate "$cask" --kind plain --description cask
+  done
+}
+
+__rush_complete_brew_installed() {
+  brew list --formula 2>/dev/null | while IFS= read -r formula; do
+    test -n "$formula" && rush_complete candidate "$formula" --kind plain --description 'installed formula'
+  done
+  brew list --cask 2>/dev/null | while IFS= read -r cask; do
+    test -n "$cask" && rush_complete candidate "$cask" --kind plain --description 'installed cask'
+  done
+}
+
+__rush_complete_brew_outdated() {
+  brew outdated --formula 2>/dev/null | while IFS= read -r formula; do
+    test -n "$formula" && rush_complete candidate "$formula" --kind plain --description 'outdated formula'
+  done
+  brew outdated --cask 2>/dev/null | while IFS= read -r cask; do
+    test -n "$cask" && rush_complete candidate "$cask" --kind plain --description 'outdated cask'
+  done
+}
+
+__rush_complete_brew_services() {
+  brew services list 2>/dev/null | awk 'NR > 1 { print $1 }' | while IFS= read -r service; do
+    test -n "$service" && rush_complete candidate "$service" --kind plain --description service
+  done
+}
+
+__rush_complete_brew_taps() {
+  brew tap 2>/dev/null | while IFS= read -r tap; do
+    test -n "$tap" && rush_complete candidate "$tap" --kind plain --description tap
+  done
+}
+
+__rush_complete_brew_aliases() {
+  brew alias 2>/dev/null | sed -n 's/^\([^=[:space:]]*\).*/\1/p' | while IFS= read -r alias; do
+    test -n "$alias" && rush_complete candidate "$alias" --kind plain --description alias
+  done
+}

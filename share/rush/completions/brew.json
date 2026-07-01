@@ -1,0 +1,1948 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "brew",
+    "description": "manage packages with homebrew",
+    "options": [
+      {
+        "long": "version",
+        "description": "show version",
+        "inherit": false
+      },
+      {
+        "long": "help",
+        "short": "h",
+        "description": "show help",
+        "inherit": false
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "alias",
+          "description": "custom user defined brew alias",
+          "index": 0,
+          "provider": "brew.aliases"
+        }
+      ]
+    },
+    "subcommands": [
+      {
+        "name": "list",
+        "description": "list all installed formulae",
+        "options": [
+          {
+            "long": "formula",
+            "aliases": [
+              "formulae"
+            ],
+            "description": "list only formulae, or treat all named arguments as formulae",
+            "inherit": false,
+            "exclusiveGroup": "brew.kind"
+          },
+          {
+            "long": "cask",
+            "aliases": [
+              "casks"
+            ],
+            "description": "list only casks, or treat all named arguments as casks",
+            "inherit": false,
+            "exclusiveGroup": "brew.kind"
+          },
+          {
+            "long": "unbrewed",
+            "description": "list files in homebrew's prefix not installed by homebrew. (disabled; replaced by brew --prefix --unbrewed)",
+            "inherit": false
+          },
+          {
+            "long": "full-name",
+            "description": "print formulae with fully-qualified names. Unless --full-name, --versions or",
+            "inherit": false
+          },
+          {
+            "long": "pinned",
+            "description": "list only pinned formulae, or only the specified (pinned) formulae if formula are provided",
+            "inherit": false
+          },
+          {
+            "long": "versions",
+            "description": "show the version number for installed formulae, or only the specified formulae if formula are provided",
+            "inherit": false
+          },
+          {
+            "long": "multiple",
+            "description": "only show formulae with multiple versions installed",
+            "inherit": false
+          },
+          {
+            "long": "pinned",
+            "description": "list only pinned formulae, or only the specified (pinned) formulae if formula are provided. See also pin, u",
+            "inherit": false
+          },
+          {
+            "short": "1",
+            "description": "force output to be one entry per line. This is the default when output is not to a terminal",
+            "inherit": false
+          },
+          {
+            "short": "l",
+            "description": "list formulae and/or casks in long format. Has no effect when a formula or cask name is passed as an argument",
+            "inherit": false
+          },
+          {
+            "short": "r",
+            "description": "reverse the order of the formulae and/or casks sort to list the oldest entries first. Has no effect when a",
+            "inherit": false
+          },
+          {
+            "short": "t",
+            "description": "sort formulae and/or casks by time modified, listing most recently modified first. Has no effect when a for",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "formula",
+              "index": 0,
+              "repeatable": true,
+              "provider": "brew.formulae"
+            }
+          ]
+        }
+      },
+      {
+        "name": "ls",
+        "description": "list all installed formulae",
+        "options": [
+          {
+            "long": "formula",
+            "description": "list only formulae, or treat all named arguments as formulae",
+            "inherit": false,
+            "exclusiveGroup": "brew.kind"
+          },
+          {
+            "long": "cask",
+            "description": "list only casks, or treat all named arguments as casks",
+            "inherit": false,
+            "exclusiveGroup": "brew.kind"
+          },
+          {
+            "long": "unbrewed",
+            "description": "list files in homebrew's prefix not installed by homebrew. (disabled; replaced by brew --prefix --unbrewed)",
+            "inherit": false
+          },
+          {
+            "long": "full-name",
+            "description": "print formulae with fully-qualified names. Unless --full-name, --versions or",
+            "inherit": false
+          },
+          {
+            "long": "pinned",
+            "description": "list only pinned formulae, or only the specified (pinned) formulae if formula are provided",
+            "inherit": false
+          },
+          {
+            "long": "versions",
+            "description": "show the version number for installed formulae, or only the specified formulae if formula are provided",
+            "inherit": false
+          },
+          {
+            "long": "multiple",
+            "description": "only show formulae with multiple versions installed",
+            "inherit": false
+          },
+          {
+            "long": "pinned",
+            "description": "list only pinned formulae, or only the specified (pinned) formulae if formula are provided",
+            "inherit": false
+          },
+          {
+            "short": "1",
+            "description": "force output to be one entry per line. This is the default when output is not to a terminal",
+            "inherit": false
+          },
+          {
+            "short": "l",
+            "description": "list formulae and/or casks in long format. Has no effect when a formula or cask name is passed as an argument",
+            "inherit": false
+          },
+          {
+            "short": "r",
+            "description": "reverse the order of the formulae and/or casks sort to list the oldest entries first. Has no effect when a",
+            "inherit": false
+          },
+          {
+            "short": "t",
+            "description": "sort formulae and/or casks by time modified, listing most recently modified first. Has no effect when a for",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "formula",
+              "index": 0,
+              "repeatable": true,
+              "provider": "brew.formulae"
+            }
+          ]
+        }
+      },
+      {
+        "name": "leaves",
+        "description": "list installed formulae that are not dependencies of another installed formula",
+        "options": [
+          {
+            "short": "r",
+            "long": "installed-on-request",
+            "description": "show manually installed formula",
+            "inherit": false
+          },
+          {
+            "short": "p",
+            "long": "installed-as-dependency",
+            "description": "show installed formula as dependencies",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "doctor",
+        "description": "check your system for potential problems",
+        "options": [
+          {
+            "long": "list-checks",
+            "description": "list all audit methods",
+            "inherit": false
+          },
+          {
+            "short": "D",
+            "long": "audit-debug",
+            "description": "enable debugging and profiling of audit methods",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "abv",
+        "aliases": [
+          "info"
+        ],
+        "description": "display brief statistics for your homebrew installation",
+        "options": [
+          {
+            "long": "cask",
+            "aliases": [
+              "casks"
+            ],
+            "description": "list only casks, or treat all named arguments as casks",
+            "inherit": false,
+            "exclusiveGroup": "brew.kind"
+          },
+          {
+            "long": "analytics",
+            "description": "list global homebrew analytics data or, if specified, installation and build error data for formula",
+            "inherit": false
+          },
+          {
+            "long": "days",
+            "description": "how many days of analytics data to retrieve",
+            "inherit": false,
+            "value": {
+              "name": "days",
+              "description": "number of days of data to retrieve",
+              "values": [
+                "30",
+                "90",
+                "365"
+              ]
+            }
+          },
+          {
+            "long": "category",
+            "description": "which type of analytics data to retrieve",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "github",
+            "description": "open the GitHub source page for formula in a browser",
+            "inherit": false
+          },
+          {
+            "long": "json",
+            "description": "print a JSON representation",
+            "inherit": false
+          },
+          {
+            "long": "installed",
+            "description": "print JSON of formulae that are currently installed",
+            "inherit": false,
+            "exclusiveGroup": "brew.list-scope"
+          },
+          {
+            "long": "all",
+            "description": "print JSON of all available formulae",
+            "inherit": false,
+            "exclusiveGroup": "brew.list-scope"
+          },
+          {
+            "short": "v",
+            "long": "verbose",
+            "description": "show more verbose analytics data for formulae",
+            "inherit": false
+          },
+          {
+            "long": "formula",
+            "description": "treat all named arguments as formulae",
+            "inherit": false,
+            "exclusiveGroup": "brew.kind"
+          },
+          {
+            "long": "cash",
+            "description": "treat all named arguments as casks",
+            "inherit": false
+          },
+          {
+            "short": "d",
+            "long": "debug",
+            "description": "display any debugging information",
+            "inherit": false
+          },
+          {
+            "short": "q",
+            "long": "quiet",
+            "description": "list only the names of outdated kegs",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "get help with services command",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "formula",
+              "description": "formula or cask to summarize",
+              "index": 0,
+              "repeatable": true,
+              "provider": "brew.formulae"
+            }
+          ]
+        }
+      },
+      {
+        "name": "update",
+        "description": "fetch the newest version of homebrew and all formulae",
+        "options": [
+          {
+            "short": "f",
+            "long": "force",
+            "description": "always do a slower, full update check",
+            "inherit": false
+          },
+          {
+            "short": "v",
+            "long": "verbose",
+            "description": "print the directories checked and git operations performed",
+            "inherit": false
+          },
+          {
+            "short": "d",
+            "long": "debug",
+            "description": "display a trace of all shell commands as they are executed",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help message",
+            "inherit": false
+          },
+          {
+            "long": "merge",
+            "description": "use git merge to apply updates (rather than git rebase)",
+            "inherit": false
+          },
+          {
+            "long": "preinstall",
+            "description": "run on auto-updates (e.g. before brew install). Skips some slower steps",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "outdated",
+        "description": "list installed casks and formulae that have an updated version available",
+        "options": [
+          {
+            "short": "d",
+            "long": "debug",
+            "description": "display any debugging information",
+            "inherit": false
+          },
+          {
+            "short": "q",
+            "long": "quiet",
+            "description": "list only the names of outdated kegs",
+            "inherit": false
+          },
+          {
+            "short": "v",
+            "long": "verbose",
+            "description": "include detailed version information",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help message for the outdated command",
+            "inherit": false
+          },
+          {
+            "long": "cask",
+            "description": "list only outdated casks",
+            "inherit": false,
+            "exclusiveGroup": "brew.kind"
+          },
+          {
+            "long": "fetch-HEAD",
+            "description": "fetch the upstream repository to detect if the HEAD installation of the formula is outdated",
+            "inherit": false
+          },
+          {
+            "long": "formula",
+            "description": "list only outdated formulae",
+            "inherit": false,
+            "exclusiveGroup": "brew.kind"
+          },
+          {
+            "long": "greedy",
+            "description": "print outdated casks with auto_updates or version :latest",
+            "inherit": false
+          },
+          {
+            "long": "greedy-latest",
+            "description": "print outdated casks including those with version :latest",
+            "inherit": false
+          },
+          {
+            "long": "greedy-auto-updates",
+            "description": "print outdated casks including those with auto_updates true",
+            "inherit": false
+          },
+          {
+            "long": "json",
+            "description": "print output in JSON format",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "pin",
+        "description": "pin formula, preventing them from being upgraded",
+        "arguments": {
+          "states": [
+            {
+              "name": "formula",
+              "index": 0,
+              "repeatable": true,
+              "provider": "brew.formulae"
+            }
+          ]
+        }
+      },
+      {
+        "name": "unpin",
+        "description": "unpin formula, allowing them to be upgraded",
+        "arguments": {
+          "states": [
+            {
+              "name": "formula",
+              "index": 0,
+              "repeatable": true,
+              "provider": "brew.formulae"
+            }
+          ]
+        }
+      },
+      {
+        "name": "upgrade",
+        "description": "upgrade outdated casks and outdated, unpinned formulae using the same options they were originally installe",
+        "options": [
+          {
+            "short": "d",
+            "long": "debug",
+            "description": "if brewing fails, open an interactive debugging session with access to IRB or a shell inside the temporary",
+            "inherit": false
+          },
+          {
+            "short": "f",
+            "long": "force",
+            "description": "install formulae without checking for previously installed keg-only or non-migrated versions. When installi",
+            "inherit": false
+          },
+          {
+            "short": "v",
+            "long": "verbose",
+            "description": "print the verification and postinstall steps",
+            "inherit": false
+          },
+          {
+            "short": "n",
+            "long": "dry-run",
+            "description": "show what would be upgraded, but do not actually upgrade anything",
+            "inherit": false
+          },
+          {
+            "short": "s",
+            "long": "build-from-source",
+            "description": "compile formula from source even if a bottle is provided. Dependencies will still be installed from bottles",
+            "inherit": false
+          },
+          {
+            "short": "i",
+            "long": "interactive",
+            "description": "download and patch formula, then open a shell",
+            "inherit": false
+          },
+          {
+            "short": "g",
+            "long": "git",
+            "description": "create a Git repository",
+            "inherit": false
+          },
+          {
+            "short": "q",
+            "long": "quiet",
+            "description": "make some output more quiet",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show this message",
+            "inherit": false
+          },
+          {
+            "long": "formula",
+            "aliases": [
+              "formulae"
+            ],
+            "description": "treat all named arguments as formulae. If no named arguments are specified, upgrade only outdated formulae",
+            "inherit": false,
+            "exclusiveGroup": "brew.kind"
+          },
+          {
+            "long": "env",
+            "description": "disabled other than for internal homebrew use",
+            "inherit": false
+          },
+          {
+            "long": "ignore-dependencies",
+            "description": "an unsupported homebrew development flag to skip installing any dependencies of any kind. If the dependenci",
+            "inherit": false
+          },
+          {
+            "long": "only-dependencies",
+            "description": "install the dependencies with specified options but do not install the formula itself",
+            "inherit": false
+          },
+          {
+            "long": "cc",
+            "description": "attempt to compile using the specified compiler, which should be the name of the compiler's executable",
+            "inherit": false,
+            "value": {
+              "name": "compiler",
+              "values": [
+                "gcc-7",
+                "llvm_clang",
+                "clang"
+              ]
+            }
+          },
+          {
+            "long": "force-bottle",
+            "description": "install from a bottle if it exists for the current or newest version of macOS, even if it would not normall",
+            "inherit": false
+          },
+          {
+            "long": "include-test",
+            "description": "install testing dependencies required to run brew test formula",
+            "inherit": false
+          },
+          {
+            "long": "HEAD",
+            "description": "if formula defines it, install the HEAD version, aka. main, trunk, unstable, master",
+            "inherit": false
+          },
+          {
+            "long": "fetch-HEAD",
+            "description": "fetch the upstream repository to detect if the HEAD installation of the formula is outdated. Otherwise, the",
+            "inherit": false
+          },
+          {
+            "long": "ignore-pinned",
+            "description": "set a successful exit status even if pinned formulae are not upgraded",
+            "inherit": false
+          },
+          {
+            "long": "keep-tmp",
+            "description": "retain the temporary files created during installation",
+            "inherit": false
+          },
+          {
+            "long": "build-bottle",
+            "description": "prepare the formula for eventual bottling during installation, skipping any post-install steps",
+            "inherit": false
+          },
+          {
+            "long": "bottle-arch",
+            "description": "optimise bottles for the specified architecture rather than the oldest architecture supported by the versio",
+            "inherit": false
+          },
+          {
+            "long": "display-times",
+            "description": "print install times for each formula at the end of the run",
+            "inherit": false
+          },
+          {
+            "long": "cask",
+            "aliases": [
+              "casks"
+            ],
+            "description": "treat all named arguments as casks. If no named arguments are specified, upgrade only outdated casks",
+            "inherit": false,
+            "exclusiveGroup": "brew.kind"
+          },
+          {
+            "long": "binaries",
+            "description": "disable/enable linking of helper executables (default: enabled)",
+            "inherit": false
+          },
+          {
+            "long": "no-binaries",
+            "description": "disable/enable linking of helper executables (default: enabled)",
+            "inherit": false
+          },
+          {
+            "long": "require-sha",
+            "description": "require all casks to have a checksum",
+            "inherit": false
+          },
+          {
+            "long": "quarantine",
+            "description": "disable/enable quarantining of downloads (default: enabled)",
+            "inherit": false
+          },
+          {
+            "long": "no-quarantine",
+            "description": "disable/enable quarantining of downloads (default: enabled)",
+            "inherit": false
+          },
+          {
+            "long": "skip-cask-deps",
+            "description": "skip installing cask dependencies",
+            "inherit": false
+          },
+          {
+            "long": "greedy",
+            "description": "also include casks with auto_updates true or version :latest",
+            "inherit": false
+          },
+          {
+            "long": "greedy-latest",
+            "description": "also include casks with version :latest",
+            "inherit": false
+          },
+          {
+            "long": "greedy-auto-updates",
+            "description": "also include casks with auto_updates true",
+            "inherit": false
+          },
+          {
+            "long": "appdir",
+            "description": "target location for Applications (default: /Applications)",
+            "inherit": false,
+            "value": {
+              "name": "location",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "colorpickerdir",
+            "description": "target location for Color Pickers (default: ~/Library/ColorPickers)",
+            "inherit": false,
+            "value": {
+              "name": "location",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "prefpanedir",
+            "description": "target location for Preference Panes (default: ~/Library/PreferencePanes)",
+            "inherit": false,
+            "value": {
+              "name": "location",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "qlplugindir",
+            "description": "target location for QuickLook Plugins (default: ~/Library/QuickLook)",
+            "inherit": false,
+            "value": {
+              "name": "location",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "mdimporterdir",
+            "description": "target location for Spotlight Plugins (default: ~/Library/Spotlight)",
+            "inherit": false,
+            "value": {
+              "name": "location",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "dictionarydir",
+            "description": "target location for Dictionaries (default: ~/Library/Dictionaries)",
+            "inherit": false,
+            "value": {
+              "name": "location",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "fontdir",
+            "description": "target location for Fonts (default: ~/Library/Fonts)",
+            "inherit": false,
+            "value": {
+              "name": "location",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "servicedir",
+            "description": "target location for Services (default: ~/Library/Services)",
+            "inherit": false,
+            "value": {
+              "name": "location",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "input-methoddir",
+            "description": "target location for Input Methods (default: ~/Library/Input Methods)",
+            "inherit": false,
+            "value": {
+              "name": "location",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "internet-plugindir",
+            "description": "target location for Internet Plugins (default: ~/Library/Internet Plug-Ins)",
+            "inherit": false,
+            "value": {
+              "name": "location",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "audio-unit-plugindir",
+            "description": "target location for Audio Unit Plugins (default: ~/Library/Audio/Plug-Ins/Components)",
+            "inherit": false,
+            "value": {
+              "name": "location",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "vst-plugindir",
+            "description": "target location for VST Plugins (default: ~/Library/Audio/Plug-Ins/VST)",
+            "inherit": false,
+            "value": {
+              "name": "location",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "vst3-plugindir",
+            "description": "target location for VST3 Plugins (default: ~/Library/Audio/Plug-Ins/VST3)",
+            "inherit": false,
+            "value": {
+              "name": "location",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "screen-saverdir",
+            "description": "target location for Screen Savers (default: ~/Library/Screen Savers)",
+            "inherit": false,
+            "value": {
+              "name": "location",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "language",
+            "description": "comma-separated list of language codes to prefer for cask installation. The first matching language is used",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "outdated_formula|outdated_cask",
+              "index": 0,
+              "repeatable": true,
+              "provider": "brew.outdated"
+            }
+          ]
+        }
+      },
+      {
+        "name": "search",
+        "description": "perform a substring search of cask tokens and formula names",
+        "options": [
+          {
+            "long": "formula",
+            "description": "search online and locally for formulae",
+            "inherit": false,
+            "exclusiveGroup": "brew.kind"
+          },
+          {
+            "long": "cask",
+            "description": "search online and locally for casks",
+            "inherit": false,
+            "exclusiveGroup": "brew.kind"
+          },
+          {
+            "long": "desc",
+            "description": "search for formulae with a description matching text and casks with a name matching text",
+            "inherit": false
+          },
+          {
+            "long": "pull-request",
+            "description": "search for GitHub pull requests containing text",
+            "inherit": false
+          },
+          {
+            "long": "open",
+            "description": "search for only open GitHub pull requests",
+            "inherit": false
+          },
+          {
+            "long": "closed",
+            "description": "search for only closed GitHub pull requests",
+            "inherit": false
+          },
+          {
+            "long": "repology",
+            "aliases": [
+              "macports"
+            ],
+            "description": "search for text in the given database",
+            "inherit": false
+          },
+          {
+            "long": "fink",
+            "aliases": [
+              "opensuse"
+            ],
+            "description": "search for text in the given database",
+            "inherit": false
+          },
+          {
+            "long": "fedora",
+            "aliases": [
+              "debian"
+            ],
+            "description": "search for text in the given database",
+            "inherit": false
+          },
+          {
+            "long": "ubuntu",
+            "description": "search for text in the given database",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "config",
+        "description": "show homebrew and system configuration info"
+      },
+      {
+        "name": "postinstall",
+        "description": "rerun the post install step for formula",
+        "options": [
+          {
+            "short": "d",
+            "long": "debug",
+            "description": "display any debugging information",
+            "inherit": false
+          },
+          {
+            "short": "v",
+            "long": "verbose",
+            "description": "make some output more verbose",
+            "inherit": false
+          },
+          {
+            "short": "q",
+            "long": "quiet",
+            "description": "make some output more quiet",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show this message",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "formula",
+              "index": 0,
+              "repeatable": true,
+              "provider": "brew.formulae"
+            }
+          ]
+        }
+      },
+      {
+        "name": "install",
+        "description": "install <formula>",
+        "options": [
+          {
+            "short": "f",
+            "long": "force",
+            "description": "install formulae without checking for previously installed keg-only or non-migrated versions. When installi",
+            "inherit": false
+          },
+          {
+            "short": "v",
+            "long": "verbose",
+            "description": "print the verification and postinstall steps",
+            "inherit": false
+          },
+          {
+            "short": "s",
+            "long": "build-from-source",
+            "description": "compile formula from source even if a bottle is provided. Dependencies will still be installed from bottles",
+            "inherit": false
+          },
+          {
+            "short": "i",
+            "long": "interactive",
+            "description": "download and patch formula",
+            "inherit": false
+          },
+          {
+            "short": "g",
+            "long": "git",
+            "description": "create a Git repository",
+            "inherit": false
+          },
+          {
+            "short": "q",
+            "long": "quiet",
+            "description": "make some output more quiet",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show this message",
+            "inherit": false
+          },
+          {
+            "long": "formula",
+            "description": "treat all named arguments as formulae",
+            "inherit": false,
+            "exclusiveGroup": "brew.kind"
+          },
+          {
+            "long": "env",
+            "description": "disabled other than for internal homebrew use",
+            "inherit": false
+          },
+          {
+            "long": "ignore-dependencies",
+            "description": "an unsupported homebrew development flag to skip installing any dependencies of any kind. If the dependenci",
+            "inherit": false
+          },
+          {
+            "long": "only-dependencies",
+            "description": "install the dependencies with specified options but do not install the formula itself",
+            "inherit": false
+          },
+          {
+            "long": "cc",
+            "description": "attempt to compile using the specified compiler, which should be the name of the compiler's executable",
+            "inherit": false,
+            "value": {
+              "name": "compiler",
+              "values": [
+                "gcc-7",
+                "llvm_clang",
+                "clang"
+              ]
+            }
+          },
+          {
+            "long": "force-bottle",
+            "description": "install from a bottle if it exists for the current or newest version of macOS, even if it would not normall",
+            "inherit": false
+          },
+          {
+            "long": "include-test",
+            "description": "install testing dependencies required to run brew test formula",
+            "inherit": false
+          },
+          {
+            "long": "HEAD",
+            "description": "if formula defines it, install the HEAD version, aka. main, trunk, unstable, master",
+            "inherit": false
+          },
+          {
+            "long": "fetch-HEAD",
+            "description": "fetch the upstream repository to detect if the HEAD installation of the formula is outdated. Otherwise, the",
+            "inherit": false
+          },
+          {
+            "long": "keep-tmp",
+            "description": "retain the temporary files created during installation",
+            "inherit": false
+          },
+          {
+            "long": "build-bottle",
+            "description": "prepare the formula for eventual bottling during installation, skipping any post-install steps",
+            "inherit": false
+          },
+          {
+            "long": "bottle-arch",
+            "description": "optimise bottles for the specified architecture rather than the oldest architecture supported by the versio",
+            "inherit": false
+          },
+          {
+            "long": "display-times",
+            "description": "print install times for each formula at the end of the run",
+            "inherit": false
+          },
+          {
+            "long": "cask",
+            "description": "--casks Treat all named arguments as casks",
+            "inherit": false,
+            "exclusiveGroup": "brew.kind"
+          },
+          {
+            "long": "binaries",
+            "description": "disable/enable linking of helper executables (default: enabled)",
+            "inherit": false
+          },
+          {
+            "long": "no-binaries",
+            "description": "disable/enable linking of helper executables (default: enabled)",
+            "inherit": false
+          },
+          {
+            "long": "require-sha",
+            "description": "require all casks to have a checksum",
+            "inherit": false
+          },
+          {
+            "long": "quarantine",
+            "description": "disable/enable quarantining of downloads (default: enabled)",
+            "inherit": false
+          },
+          {
+            "long": "no-quarantine",
+            "description": "disable/enable quarantining of downloads (default: enabled)",
+            "inherit": false
+          },
+          {
+            "long": "skip-cask-deps",
+            "description": "skip installing cask dependencies",
+            "inherit": false
+          },
+          {
+            "long": "appdir",
+            "description": "target location for Applications (default: /Applications)",
+            "inherit": false,
+            "value": {
+              "name": "location",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "colorpickerdir",
+            "description": "target location for Color Pickers (default: ~/Library/ColorPickers)",
+            "inherit": false,
+            "value": {
+              "name": "location",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "prefpanedir",
+            "description": "target location for Preference Panes (default: ~/Library/PreferencePanes)",
+            "inherit": false,
+            "value": {
+              "name": "location",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "qlplugindir",
+            "description": "target location for QuickLook Plugins (default: ~/Library/QuickLook)",
+            "inherit": false,
+            "value": {
+              "name": "location",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "mdimporterdir",
+            "description": "target location for Spotlight Plugins (default: ~/Library/Spotlight)",
+            "inherit": false,
+            "value": {
+              "name": "location",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "dictionarydir",
+            "description": "target location for Dictionaries (default: ~/Library/Dictionaries)",
+            "inherit": false,
+            "value": {
+              "name": "location",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "fontdir",
+            "description": "target location for Fonts (default: ~/Library/Fonts)",
+            "inherit": false,
+            "value": {
+              "name": "location",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "servicedir",
+            "description": "target location for Services (default: ~/Library/Services)",
+            "inherit": false,
+            "value": {
+              "name": "location",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "input-methoddir",
+            "description": "target location for Input Methods (default: ~/Library/Input Methods)",
+            "inherit": false,
+            "value": {
+              "name": "location",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "internet-plugindir",
+            "description": "target location for Internet Plugins (default: ~/Library/Internet Plug-Ins)",
+            "inherit": false,
+            "value": {
+              "name": "location",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "audio-unit-plugindir",
+            "description": "target location for Audio Unit Plugins (default: ~/Library/Audio/Plug-Ins/Components)",
+            "inherit": false,
+            "value": {
+              "name": "location",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "vst-plugindir",
+            "description": "target location for VST Plugins (default: ~/Library/Audio/Plug-Ins/VST)",
+            "inherit": false,
+            "value": {
+              "name": "location",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "vst3-plugindir",
+            "description": "target location for VST3 Plugins (default: ~/Library/Audio/Plug-Ins/VST3)",
+            "inherit": false,
+            "value": {
+              "name": "location",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "screen-saverdir",
+            "description": "target location for Screen Savers (default: ~/Library/Screen Savers)",
+            "inherit": false,
+            "value": {
+              "name": "location",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "language",
+            "description": "comma-separated list of language codes to prefer for cask installation. The first matching language is used",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "formula",
+              "description": "formula or cask to install",
+              "index": 0,
+              "repeatable": true,
+              "provider": "brew.formulae"
+            }
+          ]
+        }
+      },
+      {
+        "name": "reinstall",
+        "description": "uninstall and then reinstall a formula or cask using the same options it was originally installed with, plu",
+        "options": [
+          {
+            "short": "d",
+            "long": "debug",
+            "description": "if brewing fails, open an interactive debugging session with access to IRB or a shell inside the temporary",
+            "inherit": false
+          },
+          {
+            "short": "f",
+            "long": "force",
+            "description": "install formulae without checking for previously installed keg-only or non-migrated versions. When installi",
+            "inherit": false
+          },
+          {
+            "short": "v",
+            "long": "verbose",
+            "description": "print the verification and postinstall steps",
+            "inherit": false
+          },
+          {
+            "short": "s",
+            "long": "build-from-source",
+            "description": "compile formula from source even if a bottle is provided. Dependencies will still be installed from bottles",
+            "inherit": false
+          },
+          {
+            "short": "i",
+            "long": "interactive",
+            "description": "download and patch formula",
+            "inherit": false
+          },
+          {
+            "short": "g",
+            "long": "git",
+            "description": "create a Git repository",
+            "inherit": false
+          },
+          {
+            "long": "formula",
+            "description": "treat all named arguments as formulae",
+            "inherit": false,
+            "exclusiveGroup": "brew.kind"
+          },
+          {
+            "long": "force-bottle",
+            "description": "install from a bottle if it exists for the current or newest version of macOS, even if it would not normall",
+            "inherit": false
+          },
+          {
+            "long": "keep-tmp",
+            "description": "retain the temporary files created during installation",
+            "inherit": false
+          },
+          {
+            "long": "display-times",
+            "description": "print install times for each formula at the end of the run",
+            "inherit": false
+          },
+          {
+            "long": "cask",
+            "description": "--casks Treat all named arguments as casks",
+            "inherit": false,
+            "exclusiveGroup": "brew.kind"
+          },
+          {
+            "long": "binaries",
+            "description": "disable/enable linking of helper executables (default: enabled)",
+            "inherit": false
+          },
+          {
+            "long": "no-binaries",
+            "description": "disable/enable linking of helper executables (default: enabled)",
+            "inherit": false
+          },
+          {
+            "long": "require-sha",
+            "description": "require all casks to have a checksum",
+            "inherit": false
+          },
+          {
+            "long": "quarantine",
+            "description": "disable/enable quarantining of downloads (default: enabled)",
+            "inherit": false
+          },
+          {
+            "long": "no-quarantine",
+            "description": "disable/enable quarantining of downloads (default: enabled)",
+            "inherit": false
+          },
+          {
+            "long": "skip-cask-deps",
+            "description": "skip installing cask dependencies",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "formula",
+              "index": 0,
+              "repeatable": true,
+              "provider": "brew.formulae"
+            }
+          ]
+        }
+      },
+      {
+        "name": "uninstall",
+        "aliases": [
+          "remove",
+          "rm"
+        ],
+        "description": "uninstall a formula or cask",
+        "arguments": {
+          "states": [
+            {
+              "name": "formula",
+              "index": 0,
+              "repeatable": true,
+              "provider": "brew.formulae"
+            }
+          ]
+        }
+      },
+      {
+        "name": "--prefix",
+        "description": "prefix of <formula>",
+        "options": [
+          {
+            "long": "unbrewed",
+            "description": "list files in homebrew's prefix not installed by homebrew",
+            "inherit": false
+          },
+          {
+            "long": "installed",
+            "description": "outputs nothing and returns a failing status code if formula is not installed",
+            "inherit": false,
+            "exclusiveGroup": "brew.list-scope"
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "formula",
+              "index": 0,
+              "repeatable": true,
+              "provider": "brew.formulae"
+            }
+          ]
+        }
+      },
+      {
+        "name": "cask",
+        "description": "homebrew Cask provides a friendly CLI workflow for the administration of macOS applications distributed as",
+        "subcommands": [
+          {
+            "name": "install",
+            "description": "installs the given cask",
+            "arguments": {
+              "states": [
+                {
+                  "name": "cask",
+                  "index": 0,
+                  "provider": "brew.casks",
+                  "repeatable": true
+                }
+              ]
+            }
+          },
+          {
+            "name": "uninstall",
+            "description": "uninstalls the given cask",
+            "options": [
+              {
+                "long": "zap",
+                "description": "remove all files associated with a cask. May remove files which are shared between applications",
+                "inherit": false
+              },
+              {
+                "long": "ignore-dependencies",
+                "description": "don't fail uninstall, even if formula is a dependency of any installed formulae",
+                "inherit": false
+              },
+              {
+                "long": "formula",
+                "description": "treat all named arguments as formulae",
+                "inherit": false,
+                "exclusiveGroup": "brew.kind"
+              },
+              {
+                "long": "cask",
+                "description": "treat all named arguments as casks",
+                "inherit": false,
+                "exclusiveGroup": "brew.kind"
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "cask",
+                  "index": 0,
+                  "provider": "brew.casks",
+                  "repeatable": true
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "cleanup",
+        "description": "remove stale lock files and outdated downloads for all formulae and casks and remove old versions of instal",
+        "options": [
+          {
+            "long": "prune",
+            "spellings": [
+              "--prune=all"
+            ],
+            "description": "remove all cache files older than specified days",
+            "inherit": false
+          },
+          {
+            "short": "n",
+            "long": "dry-run",
+            "description": "show what would be removed, but do not actually remove anything",
+            "inherit": false
+          },
+          {
+            "short": "s",
+            "description": "scrub the cache, including downloads for even the latest versions",
+            "inherit": false
+          },
+          {
+            "long": "prune-prefix",
+            "description": "only prune the symlinks and directories from the prefix and remove no other files",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "value",
+              "index": 0,
+              "repeatable": true,
+              "provider": "brew.installed"
+            }
+          ]
+        }
+      },
+      {
+        "name": "services",
+        "description": "manage background services with macOS' launchctl(1) daemon manager",
+        "options": [
+          {
+            "long": "file",
+            "description": "use the plist file from this location to start or run the service",
+            "inherit": false
+          },
+          {
+            "long": "all",
+            "description": "run subcommand on all services",
+            "inherit": false,
+            "exclusiveGroup": "brew.list-scope"
+          },
+          {
+            "short": "v",
+            "long": "verbose",
+            "description": "make some output more verbose",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "get help with services command",
+            "inherit": false
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "cleanup",
+            "description": "remove all unused services"
+          },
+          {
+            "name": "list",
+            "description": "list all services"
+          },
+          {
+            "name": "run",
+            "description": "run the service formula without registering to launch at login (or boot)",
+            "options": [
+              {
+                "long": "all",
+                "description": "start all services",
+                "inherit": false,
+                "exclusiveGroup": "brew.list-scope"
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "service",
+                  "index": 0,
+                  "provider": "brew.services"
+                }
+              ]
+            }
+          },
+          {
+            "name": "start",
+            "description": "start the service formula immediately and register it to launch at login",
+            "options": [
+              {
+                "long": "all",
+                "description": "start all services",
+                "inherit": false,
+                "exclusiveGroup": "brew.list-scope"
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "service",
+                  "index": 0,
+                  "provider": "brew.services"
+                }
+              ]
+            }
+          },
+          {
+            "name": "stop",
+            "description": "stop the service formula immediately and unregister it from launching at",
+            "options": [
+              {
+                "long": "all",
+                "description": "start all services",
+                "inherit": false,
+                "exclusiveGroup": "brew.list-scope"
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "service",
+                  "index": 0,
+                  "provider": "brew.services"
+                }
+              ]
+            }
+          },
+          {
+            "name": "restart",
+            "description": "stop (if necessary) and start the service formula immediately and register it to launch at login (or boot)",
+            "options": [
+              {
+                "long": "all",
+                "description": "start all services",
+                "inherit": false,
+                "exclusiveGroup": "brew.list-scope"
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "service",
+                  "index": 0,
+                  "provider": "brew.services"
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "analytics",
+        "description": "manages analytics preferences",
+        "subcommands": [
+          {
+            "name": "on",
+            "description": "turns on analytics"
+          },
+          {
+            "name": "off",
+            "description": "turns off analytics"
+          },
+          {
+            "name": "regenerate-uuid",
+            "description": "regenerate the UUID used for analytics"
+          }
+        ]
+      },
+      {
+        "name": "autoremove",
+        "description": "uninstall formulae that were only installed as a dependency of another formula and are now no longer needed",
+        "options": [
+          {
+            "short": "n",
+            "long": "dry-run",
+            "description": "list what would be uninstalled, but do not actually uninstall anything",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "tap",
+        "description": "tap a formula repository",
+        "options": [
+          {
+            "long": "full",
+            "description": "convert a shallow clone to a full clone without untapping",
+            "inherit": false
+          },
+          {
+            "long": "shallow",
+            "description": "fetch tap as a shallow clone rather than a full clone",
+            "inherit": false
+          },
+          {
+            "long": "force-auto-update",
+            "description": "auto-update tap even if it is not hosted on GitHub",
+            "inherit": false
+          },
+          {
+            "long": "repair",
+            "description": "migrate tapped formulae from symlink-based to directory-based structure",
+            "inherit": false
+          },
+          {
+            "long": "list-pinned",
+            "description": "list all pinned taps",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "user/repo-or-url",
+              "index": 0,
+              "provider": "builtin.files"
+            }
+          ]
+        }
+      },
+      {
+        "name": "untap",
+        "description": "remove a tapped formula repository",
+        "options": [
+          {
+            "short": "f",
+            "long": "force",
+            "description": "untap even if formulae or casks from this tap are currently installed",
+            "inherit": false
+          },
+          {
+            "short": "d",
+            "long": "debug",
+            "description": "display any debugging information",
+            "inherit": false
+          },
+          {
+            "short": "q",
+            "long": "quiet",
+            "description": "make some output more quiet",
+            "inherit": false
+          },
+          {
+            "short": "v",
+            "long": "verbose",
+            "description": "make some output more verbose",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help message",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "repository",
+              "index": 0,
+              "provider": "brew.taps"
+            }
+          ]
+        }
+      },
+      {
+        "name": "link",
+        "description": "symlink all of formula's installed files into homebrew's prefix",
+        "options": [
+          {
+            "long": "overwrite",
+            "description": "delete files that already exist in the prefix while linking",
+            "inherit": false
+          },
+          {
+            "short": "n",
+            "long": "dry-run",
+            "description": "list files which would be linked or deleted by brew link --overwrite without actually linking or deleting a",
+            "inherit": false
+          },
+          {
+            "short": "f",
+            "long": "force",
+            "description": "allow keg-only formulae to be linked",
+            "inherit": false
+          },
+          {
+            "long": "HEAD",
+            "description": "link the HEAD version of the formula if it is installed",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "formula",
+              "index": 0,
+              "repeatable": true,
+              "provider": "brew.formulae"
+            }
+          ]
+        }
+      },
+      {
+        "name": "unlink",
+        "description": "remove symlinks for formula from homebrew's prefix",
+        "options": [
+          {
+            "short": "n",
+            "long": "dry-run",
+            "description": "list files which would be unlinked without actually unlinking or deleting any files",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "formula",
+              "index": 0,
+              "repeatable": true,
+              "provider": "brew.formulae"
+            }
+          ]
+        }
+      },
+      {
+        "name": "formulae",
+        "description": "list all available formulae"
+      },
+      {
+        "name": "casks",
+        "description": "list all available casks"
+      },
+      {
+        "name": "edit",
+        "description": "",
+        "options": [
+          {
+            "long": "formula",
+            "aliases": [
+              "formulae"
+            ],
+            "description": "treat all named arguments as formulae",
+            "inherit": false,
+            "exclusiveGroup": "brew.kind"
+          },
+          {
+            "long": "cask",
+            "aliases": [
+              "casks"
+            ],
+            "description": "treat all named arguments as casks",
+            "inherit": false,
+            "exclusiveGroup": "brew.kind"
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "formula",
+              "description": "formula or cask to install",
+              "index": 0,
+              "repeatable": true,
+              "provider": "brew.formulae"
+            }
+          ]
+        }
+      },
+      {
+        "name": "home",
+        "aliases": [
+          "homepage"
+        ],
+        "description": "open a formula, cask's homepage in a browser, or open homebrew's own homepage if no argument is provided",
+        "options": [
+          {
+            "long": "formula",
+            "aliases": [
+              "formulae"
+            ],
+            "description": "treat all named arguments as formulae",
+            "inherit": false,
+            "exclusiveGroup": "brew.kind"
+          },
+          {
+            "long": "cask",
+            "aliases": [
+              "casks"
+            ],
+            "description": "treat all named arguments as casks",
+            "inherit": false,
+            "exclusiveGroup": "brew.kind"
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "formula",
+              "description": "formula or cask to open homepage for",
+              "index": 0,
+              "repeatable": true,
+              "provider": "brew.formulae"
+            }
+          ]
+        }
+      },
+      {
+        "name": "alias",
+        "description": "manage custom user created brew aliases",
+        "options": [
+          {
+            "long": "edit",
+            "description": "edit aliases in a text editor",
+            "inherit": false
+          },
+          {
+            "short": "d",
+            "long": "debug",
+            "description": "display any debugging information",
+            "inherit": false
+          },
+          {
+            "short": "q",
+            "long": "quiet",
+            "description": "make some output more quiet",
+            "inherit": false
+          },
+          {
+            "short": "v",
+            "long": "verbose",
+            "description": "make some output more verbose",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help message",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "alias",
+              "description": "display the alias command",
+              "index": 0,
+              "provider": "brew.aliases"
+            }
+          ]
+        }
+      },
+      {
+        "name": "developer",
+        "description": "display the current state of homebrew's developer mode",
+        "arguments": {
+          "states": [
+            {
+              "name": "state",
+              "description": "turn homebrew's developer mode on or off respectively",
+              "index": 0,
+              "values": [
+                "on",
+                "off"
+              ]
+            }
+          ]
+        }
+      }
+    ],
+    "providers": {
+      "brew.formulae": {
+        "function": "__rush_complete_brew_formulae"
+      },
+      "brew.casks": {
+        "function": "__rush_complete_brew_casks"
+      },
+      "brew.installed": {
+        "function": "__rush_complete_brew_installed"
+      },
+      "brew.outdated": {
+        "function": "__rush_complete_brew_outdated"
+      },
+      "brew.services": {
+        "function": "__rush_complete_brew_services"
+      },
+      "brew.taps": {
+        "function": "__rush_complete_brew_taps"
+      },
+      "brew.aliases": {
+        "function": "__rush_complete_brew_aliases"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "builtin.directories": {
+        "builtin": "directories"
+      }
+    }
+  }
+}
