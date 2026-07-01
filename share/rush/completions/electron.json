@@ -1,0 +1,59 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "electron",
+    "description": "run Electron applications",
+    "options": [
+      {
+        "short": "i",
+        "long": "interactive",
+        "description": "open a REPL to the main process",
+        "inherit": false
+      },
+      {
+        "short": "r",
+        "long": "require",
+        "description": "module to preload",
+        "inherit": false,
+        "value": {
+          "name": "module",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "short": "v",
+        "long": "version",
+        "description": "print the version",
+        "inherit": false
+      },
+      {
+        "short": "a",
+        "long": "abi",
+        "description": "print the Node ABI version",
+        "inherit": false
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "path",
+          "description": "electron app path",
+          "provider": [
+            "builtin.files",
+            "builtin.directories"
+          ],
+          "index": 0
+        }
+      ]
+    },
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
