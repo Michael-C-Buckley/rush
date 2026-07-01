@@ -577,6 +577,7 @@ fn appendSpecialQuotedFields(shell: anytype, fields: *std.ArrayList([]const u8),
         return true;
     }
     if (try appendParameterOperatorAtFields(shell, fields, word)) return true;
+    if (try appendParameterOperatorStarField(shell, fields, word)) return true;
     const parameter = singleDoubleQuotedParameter(word) orelse return false;
     if (parameter.parameter != .special or parameter.parameter.special != .at or parameter.op == null) return false;
 
@@ -610,6 +611,22 @@ fn appendParameterOperatorAtFields(shell: anytype, fields: *std.ArrayList([]cons
     if (!selected) return false;
 
     try fields.appendSlice(shell.scratchAllocator(), shell.state.positionals);
+    return true;
+}
+
+fn appendParameterOperatorStarField(shell: anytype, fields: *std.ArrayList([]const u8), word: ast.Word) !bool {
+    const parameter = singleParameterWord(word) orelse return false;
+    if (parameter.op == null or parameter.word == null or !wordIsQuotedStar(parameter.word.?)) return false;
+
+    const is_set = isParameterSet(parameter, try parameterCurrentValue(shell, parameter.parameter));
+    const selected = switch (parameter.op.?) {
+        .default_value => !is_set,
+        .alternate_value => is_set,
+        else => false,
+    };
+    if (!selected) return false;
+
+    try fields.append(shell.scratchAllocator(), try joinPositionals(shell, ifsFirstCharacter(shell)));
     return true;
 }
 
@@ -722,6 +739,20 @@ fn wordIsQuotedAt(word: ast.Word) bool {
             .double_quoted => |quoted| quoted.len == 1 and switch (quoted[0]) {
                 .parameter => |parameter| parameter.op == null and parameter.parameter == .special and
                     parameter.parameter.special == .at,
+                else => false,
+            },
+            else => false,
+        },
+    };
+}
+
+fn wordIsQuotedStar(word: ast.Word) bool {
+    return switch (word.data) {
+        .literal => false,
+        .parts => |parts| parts.len == 1 and switch (parts[0]) {
+            .double_quoted => |quoted| quoted.len == 1 and switch (quoted[0]) {
+                .parameter => |parameter| parameter.op == null and parameter.parameter == .special and
+                    parameter.parameter.special == .star,
                 else => false,
             },
             else => false,

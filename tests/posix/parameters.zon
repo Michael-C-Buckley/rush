@@ -156,6 +156,32 @@
             .status = 0,
         },
         .{
+            .name = "parameter operators preserve quoted star field",
+            .script =
+            \\set -- abc 'def ghi' jkl
+            \\unset var
+            \\IFS=:
+            \\set ${var-"$*"}
+            \\printf 'a:%s|%s\n' "$#" "$1"
+            \\set -- abc 'def ghi' jkl
+            \\unset IFS
+            \\set ${var-"$*"}
+            \\printf 'b:%s|%s\n' "$#" "$1"
+            \\set --
+            \\IFS=:
+            \\set ${var-"$*"}
+            \\printf 'c:%s|%s\n' "$#" "$1"
+            ,
+            .stdout =
+            \\a:1|abc:def ghi:jkl
+            \\b:1|abc def ghi jkl
+            \\c:1|
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "double-quoted star uses space as the separator when IFS is unset",
             .script =
             \\set -- a 'b c' d
