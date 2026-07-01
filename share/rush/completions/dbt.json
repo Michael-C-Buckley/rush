@@ -1,0 +1,890 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "dbt",
+    "description": "run dbt data build tool commands",
+    "options": [
+      {
+        "long": "version",
+        "description": "currently installed version",
+        "inherit": false
+      },
+      {
+        "short": "r",
+        "long": "record-timing-info",
+        "description": "create a new file to record timing info",
+        "inherit": false,
+        "value": {
+          "name": "file-name",
+          "description": "create a new file to record timing info"
+        }
+      },
+      {
+        "short": "d",
+        "long": "debug",
+        "description": "redirect debug logs to standard out",
+        "inherit": false
+      },
+      {
+        "long": "log-format",
+        "description": "specify how dbt's logs should be formatted",
+        "inherit": false,
+        "value": {
+          "name": "log-format",
+          "provider": "dbt.log-formats"
+        }
+      },
+      {
+        "long": "no-write-json",
+        "description": "prevent dbt from writing JSOn artifacts to the 'target/' directory",
+        "inherit": false
+      },
+      {
+        "short": "S",
+        "long": "strict",
+        "description": "perform extra validation of dbt objects and internal consistency checks during compilation. Use only during development",
+        "inherit": false
+      },
+      {
+        "long": "warn-error",
+        "description": "convert dbt warnings into errors",
+        "inherit": false
+      },
+      {
+        "long": "partial-parse",
+        "description": "configure partial parsing for your project",
+        "inherit": false
+      },
+      {
+        "long": "no-partial-parse",
+        "description": "turn off partial parsing for your project",
+        "inherit": false
+      },
+      {
+        "long": "use-colors",
+        "description": "default value -- colorize run logs",
+        "inherit": false
+      },
+      {
+        "long": "no-use-colors",
+        "description": "disable log colorizing",
+        "inherit": false
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "build",
+        "description": "run models, test tests, snapshot snapshots, and seed seeds",
+        "options": [
+          {
+            "long": "full-refresh",
+            "description": "treat incremental models as table models",
+            "inherit": false
+          },
+          {
+            "short": "x",
+            "long": "fail-fast",
+            "description": "exit immediately if a single model fails to build",
+            "inherit": false
+          },
+          {
+            "long": "profiles-dir",
+            "description": "set the profiles directory",
+            "inherit": false,
+            "value": {
+              "name": "directory",
+              "description": "directory containing profiles.yml",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "profile",
+            "description": "use the selected profile",
+            "inherit": false,
+            "value": {
+              "name": "profile",
+              "description": "name of profile to use when running dbt project",
+              "provider": "dbt.profiles"
+            }
+          },
+          {
+            "long": "target",
+            "description": "target profile configuration i.e. prod/dev",
+            "inherit": false,
+            "value": {
+              "name": "target",
+              "description": "target profile configuration (dev/prod)",
+              "provider": "dbt.targets"
+            }
+          },
+          {
+            "long": "vars",
+            "description": "variable values to override dbt_project.yml",
+            "inherit": false,
+            "value": {
+              "name": "variables",
+              "description": "a short YAML string eg. '{my_variable: my_value}'"
+            }
+          },
+          {
+            "long": "threads",
+            "description": "number of concurrent database jobs",
+            "inherit": false,
+            "value": {
+              "name": "THREADS"
+            }
+          },
+          {
+            "short": "s",
+            "long": "select",
+            "description": "select subset of models",
+            "inherit": false,
+            "value": {
+              "name": "selector",
+              "description": "select subset of models",
+              "provider": "dbt.selectors"
+            }
+          },
+          {
+            "long": "exclude",
+            "description": "exclude subset of models",
+            "inherit": false,
+            "value": {
+              "name": "selector",
+              "description": "exclude subset of models",
+              "provider": "dbt.selectors"
+            }
+          },
+          {
+            "long": "bypass-cache",
+            "description": "bypass the cache",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "run",
+        "description": "runs the models in a project",
+        "options": [
+          {
+            "long": "full-refresh",
+            "description": "treat incremental models as table models",
+            "inherit": false
+          },
+          {
+            "short": "x",
+            "long": "fail-fast",
+            "description": "exit immediately if a single model fails to build",
+            "inherit": false
+          },
+          {
+            "long": "use-colors",
+            "description": "default value -- colorize run logs",
+            "inherit": false
+          },
+          {
+            "long": "no-use-colors",
+            "description": "disable log colorizing",
+            "inherit": false
+          },
+          {
+            "long": "profiles-dir",
+            "description": "set the profiles directory",
+            "inherit": false,
+            "value": {
+              "name": "directory",
+              "description": "directory containing profiles.yml",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "profile",
+            "description": "select the profile to use",
+            "inherit": false,
+            "value": {
+              "name": "profile",
+              "description": "name of profile to use when running dbt project",
+              "provider": "dbt.profiles"
+            }
+          },
+          {
+            "long": "target",
+            "description": "the target profile",
+            "inherit": false,
+            "value": {
+              "name": "target",
+              "description": "target profile configuration (dev/prod)",
+              "provider": "dbt.targets"
+            }
+          },
+          {
+            "long": "vars",
+            "description": "variable values to override dbt_project.yml",
+            "inherit": false,
+            "value": {
+              "name": "variables",
+              "description": "a short YAML string eg. '{my_variable: my_value}'"
+            }
+          },
+          {
+            "long": "threads",
+            "description": "number of concurrent database jobs",
+            "inherit": false,
+            "value": {
+              "name": "threads"
+            }
+          },
+          {
+            "short": "s",
+            "long": "select",
+            "description": "select subset of models",
+            "inherit": false,
+            "value": {
+              "name": "selector",
+              "description": "select subset of models",
+              "provider": "dbt.selectors"
+            }
+          },
+          {
+            "long": "exclude",
+            "description": "exclude subset of models",
+            "inherit": false,
+            "value": {
+              "name": "selector",
+              "description": "exclude subset of models",
+              "provider": "dbt.selectors"
+            }
+          },
+          {
+            "long": "bypass-cache",
+            "description": "bypass the cache",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "debug",
+        "description": "debugs dbt connections and projects",
+        "options": [
+          {
+            "long": "config-dir",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "init",
+        "description": "initializes a new dbt project",
+        "options": [
+          {
+            "long": "adapter",
+            "description": "add an adapter",
+            "inherit": false,
+            "value": {
+              "name": "adapter",
+              "description": "e.g. big query"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "name",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "compile",
+        "description": "compiles (but does not run) the models in a project",
+        "options": [
+          {
+            "long": "profiles-dir",
+            "description": "set the profiles directory",
+            "inherit": false,
+            "value": {
+              "name": "directory",
+              "description": "directory containing profiles.yml",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "profile",
+            "description": "select the profile to use",
+            "inherit": false,
+            "value": {
+              "name": "profile",
+              "description": "name of profile to use when running dbt project",
+              "provider": "dbt.profiles"
+            }
+          },
+          {
+            "long": "target",
+            "description": "the target profile",
+            "inherit": false,
+            "value": {
+              "name": "target",
+              "description": "target profile configuration (dev/prod)",
+              "provider": "dbt.targets"
+            }
+          },
+          {
+            "long": "vars",
+            "description": "variable values to override dbt_project.yml",
+            "inherit": false,
+            "value": {
+              "name": "Variable-values",
+              "description": "a short YAML string eg. '{my_variable: my_value}'"
+            }
+          },
+          {
+            "long": "threads",
+            "description": "number of concurrent database jobs",
+            "inherit": false,
+            "value": {
+              "name": "THREADS"
+            }
+          },
+          {
+            "long": "select",
+            "description": "select subset of models",
+            "inherit": false,
+            "value": {
+              "name": "selector",
+              "description": "select subset of models",
+              "provider": "dbt.selectors"
+            }
+          },
+          {
+            "long": "exclude",
+            "description": "exclude subset of models",
+            "inherit": false,
+            "value": {
+              "name": "selector",
+              "description": "exclude subset of models",
+              "provider": "dbt.selectors"
+            }
+          },
+          {
+            "long": "bypass-cache",
+            "description": "bypass the cache",
+            "inherit": false
+          },
+          {
+            "long": "selector",
+            "description": "this flag specifies one or more named selectors, defined in a <selector name>.yml file",
+            "inherit": false,
+            "value": {
+              "name": "YAML-selector-file-name"
+            }
+          },
+          {
+            "long": "defer",
+            "description": "defer",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "test",
+        "description": "executes tests defined in a project",
+        "options": [
+          {
+            "short": "x",
+            "long": "fail-fast",
+            "description": "exit immediately if a single model fails to build",
+            "inherit": false
+          },
+          {
+            "long": "profiles-dir",
+            "description": "set the profiles directory",
+            "inherit": false,
+            "value": {
+              "name": "directory",
+              "description": "directory containing profiles.yml",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "profile",
+            "description": "select the profile to use",
+            "inherit": false,
+            "value": {
+              "name": "profile",
+              "description": "name of profile to use when running dbt project",
+              "provider": "dbt.profiles"
+            }
+          },
+          {
+            "long": "data",
+            "description": "run only custom data tests",
+            "inherit": false
+          },
+          {
+            "long": "schema",
+            "description": "run only schema tests",
+            "inherit": false
+          },
+          {
+            "short": "s",
+            "long": "select",
+            "description": "select subset of models",
+            "inherit": false,
+            "value": {
+              "name": "selector",
+              "provider": "dbt.selectors"
+            }
+          },
+          {
+            "long": "exclude",
+            "description": "exclude subset of models",
+            "inherit": false,
+            "value": {
+              "name": "selector",
+              "provider": "dbt.selectors"
+            }
+          },
+          {
+            "long": "bypass-cache",
+            "description": "bypass the cache",
+            "inherit": false
+          },
+          {
+            "long": "selector",
+            "description": "this flag specifies one or more named selectors, defined in a <selector name>.yml file",
+            "inherit": false,
+            "value": {
+              "name": "YAML-selector-file-name"
+            }
+          },
+          {
+            "long": "defer",
+            "description": "defer",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "deps",
+        "description": "downloads dependencies for a project"
+      },
+      {
+        "name": "snapshot",
+        "description": "executes 'snapshot' jobs defined in a project",
+        "options": [
+          {
+            "long": "profiles-dir",
+            "description": "set the profiles directory",
+            "inherit": false,
+            "value": {
+              "name": "directory",
+              "description": "directory containing profiles.yml",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "short": "x",
+            "long": "fail-fast",
+            "description": "exit immediately if a single model fails to build",
+            "inherit": false
+          },
+          {
+            "long": "profile",
+            "description": "select the profile to use",
+            "inherit": false,
+            "value": {
+              "name": "profile",
+              "description": "name of profile to use when running dbt project",
+              "provider": "dbt.profiles"
+            }
+          },
+          {
+            "long": "target",
+            "description": "the target profile",
+            "inherit": false,
+            "value": {
+              "name": "target",
+              "description": "target profile configuration (dev/prod)",
+              "provider": "dbt.targets"
+            }
+          },
+          {
+            "long": "vars",
+            "description": "variable values to override dbt_project.yml",
+            "inherit": false,
+            "value": {
+              "name": "Variable-values",
+              "description": "a short YAML string eg. '{my_variable: my_value}'"
+            }
+          },
+          {
+            "long": "threads",
+            "description": "number of concurrent database jobs",
+            "inherit": false,
+            "value": {
+              "name": "thread"
+            }
+          },
+          {
+            "long": "select",
+            "description": "select subset of models",
+            "inherit": false,
+            "value": {
+              "name": "selector",
+              "provider": "dbt.selectors"
+            }
+          },
+          {
+            "long": "exclude",
+            "description": "exclude subset of models",
+            "inherit": false,
+            "value": {
+              "name": "selector",
+              "provider": "dbt.selectors"
+            }
+          },
+          {
+            "long": "bypass-cache",
+            "description": "bypass the cache",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "clean",
+        "description": "deletes artifacts present in the dbt project"
+      },
+      {
+        "name": "seed",
+        "description": "loads CSV files into the database",
+        "options": [
+          {
+            "long": "profiles-dir",
+            "description": "set the profiles directory",
+            "inherit": false,
+            "value": {
+              "name": "directory",
+              "description": "directory containing profiles.yml",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "profile",
+            "description": "select the profile to use",
+            "inherit": false,
+            "value": {
+              "name": "profile",
+              "description": "name of profile to use when running dbt project",
+              "provider": "dbt.profiles"
+            }
+          },
+          {
+            "short": "x",
+            "long": "fail-fast",
+            "description": "exit immediately if a single model fails to build",
+            "inherit": false
+          },
+          {
+            "long": "select",
+            "description": "run specific seeds",
+            "inherit": false,
+            "value": {
+              "name": "selector",
+              "description": "e.g. country_codes",
+              "provider": "dbt.selectors"
+            }
+          },
+          {
+            "long": "exclude",
+            "description": "exclude subset of models",
+            "inherit": false,
+            "value": {
+              "name": "selector",
+              "description": "exclude subset of models",
+              "provider": "dbt.selectors"
+            }
+          },
+          {
+            "long": "bypass-cache",
+            "description": "bypass the cache",
+            "inherit": false
+          },
+          {
+            "long": "selector",
+            "description": "this flag specifies one or more named selectors, defined in a <selector name>.yml file",
+            "inherit": false,
+            "value": {
+              "name": "YAML-selector-file-name"
+            }
+          }
+        ]
+      },
+      {
+        "name": "docs",
+        "description": "generates documentation for a project",
+        "subcommands": [
+          {
+            "name": "generate",
+            "description": "Generate your project's documentation website",
+            "options": [
+              {
+                "long": "no-compile",
+                "description": "Skip re-compilation",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "serve",
+            "description": "Serve your documentation on a local webserver (default prot 8000)",
+            "options": [
+              {
+                "long": "profiles-dir",
+                "description": "Skip re-compilation",
+                "inherit": false,
+                "value": {
+                  "name": "PROFILES_DIR",
+                  "description": "Path to profiles directory",
+                  "provider": "builtin.directories"
+                }
+              },
+              {
+                "long": "profile",
+                "description": "Choose a profile",
+                "inherit": false,
+                "value": {
+                  "name": "PROFILE-NAME"
+                }
+              },
+              {
+                "long": "target",
+                "description": "The target profile",
+                "inherit": false,
+                "value": {
+                  "name": "Target-profile",
+                  "description": "Target profile configuration (dev/prod)",
+                  "provider": {
+                    "values": [
+                      "dev",
+                      "prod"
+                    ]
+                  }
+                }
+              },
+              {
+                "long": "port",
+                "description": "Choose a port",
+                "inherit": false,
+                "value": {
+                  "name": "port-number",
+                  "description": "Default is 8000"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "source",
+        "description": "provides tools for working with source data (including validating that sources are 'fresh')",
+        "subcommands": [
+          {
+            "name": "snapshot-freshness",
+            "options": [
+              {
+                "short": "o",
+                "long": "output",
+                "description": "Override the destination for sources.json",
+                "inherit": false,
+                "value": {
+                  "name": "FILEPATH",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "select",
+                "description": "This flag specifies one or more selection-type arguments used to filter the nodes returned by the dbt ls command",
+                "inherit": false,
+                "value": {
+                  "name": "Select-subset",
+                  "provider": {
+                    "values": [
+                      "path:",
+                      "tag:",
+                      "config:",
+                      "test_type:",
+                      "test_name:"
+                    ]
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "run-operation",
+        "description": "runs arbitrary maintenance SQL against the database",
+        "options": [
+          {
+            "long": "args",
+            "description": "supply arguments to the macro",
+            "inherit": false,
+            "value": {
+              "name": "ARGS",
+              "description": "a short YAML string eg. '{my_variable: my_value}'"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "MACRO",
+              "description": "Dbt will call this macro with the supplied arguments and then exit",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "rpc",
+        "description": "runs an RPC server that clients can submit queries to",
+        "options": [
+          {
+            "long": "host",
+            "description": "specify the host to listen on",
+            "inherit": false,
+            "value": {
+              "name": "HOST",
+              "description": "default: 0.0.0.0"
+            }
+          },
+          {
+            "long": "port",
+            "description": "the port to use",
+            "inherit": false,
+            "value": {
+              "name": "PORT",
+              "description": "default: 8580"
+            }
+          }
+        ]
+      },
+      {
+        "name": "ls",
+        "aliases": [
+          "list"
+        ],
+        "description": "lists resources defined in a dbt project",
+        "options": [
+          {
+            "long": "resource-type",
+            "description": "this flag limits the 'resource types' that dbt will return in the dbt ls command. By default, the following resources are included in the results of dbt ls: mod",
+            "inherit": false,
+            "value": {
+              "name": "resource-type",
+              "provider": "dbt.resource-types"
+            }
+          },
+          {
+            "short": "s",
+            "long": "select",
+            "description": "this flag specifies one or more selection-type arguments used to filter the nodes returned by the dbt ls command",
+            "inherit": false,
+            "value": {
+              "name": "selector",
+              "provider": "dbt.selectors"
+            }
+          },
+          {
+            "long": "exclude",
+            "description": "specify selectors that should be excluded from the list of returned nodes",
+            "inherit": false,
+            "value": {
+              "name": "selector",
+              "provider": "dbt.selectors"
+            }
+          },
+          {
+            "long": "selector",
+            "description": "this flag specifies one or more named selectors, defined in a <selector name>.yml file",
+            "inherit": false,
+            "value": {
+              "name": "YAML-selector-file-name"
+            }
+          },
+          {
+            "long": "output",
+            "description": "this flag controls the format of output from the dbt ls command",
+            "inherit": false,
+            "value": {
+              "name": "output",
+              "provider": "dbt.ls-outputs"
+            }
+          }
+        ]
+      },
+      {
+        "name": "parse",
+        "description": "parse dbt project and write detailed timing information"
+      }
+    ],
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "dbt.log-formats": {
+        "values": [
+          "text",
+          "json",
+          "default"
+        ]
+      },
+      "dbt.profiles": {
+        "values": [
+          "default"
+        ]
+      },
+      "dbt.targets": {
+        "values": [
+          "dev",
+          "prod"
+        ]
+      },
+      "dbt.selectors": {
+        "values": [
+          "path:",
+          "tag:",
+          "config:",
+          "test_type:",
+          "test_name:"
+        ]
+      },
+      "dbt.resource-types": {
+        "values": [
+          "source",
+          "analysis",
+          "model",
+          "snapshot",
+          "test",
+          "seed",
+          "default",
+          "all"
+        ]
+      },
+      "dbt.ls-outputs": {
+        "values": [
+          "json",
+          "name",
+          "path",
+          "selector"
+        ]
+      }
+    }
+  }
+}
