@@ -1,0 +1,1975 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "chezmoi",
+    "description": "manage dotfiles across machines",
+    "options": [
+      {
+        "long": "cache",
+        "description": "set cache directory",
+        "inherit": true,
+        "value": {
+          "name": "cache",
+          "style": "equals"
+        }
+      },
+      {
+        "long": "color",
+        "description": "colorize output",
+        "inherit": true,
+        "value": {
+          "name": "color",
+          "values": [
+            "true",
+            "false",
+            "auto"
+          ]
+        }
+      },
+      {
+        "long": "config",
+        "short": "c",
+        "description": "set config file",
+        "inherit": true,
+        "value": {
+          "name": "config",
+          "provider": "builtin.files",
+          "style": "equals"
+        }
+      },
+      {
+        "long": "config-format",
+        "description": "set config file format",
+        "inherit": true,
+        "value": {
+          "name": "config-format",
+          "values": [
+            "json",
+            "toml",
+            "yaml"
+          ],
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "cpu-profile",
+        "description": "write a CPU profile to path",
+        "inherit": true,
+        "hidden": true,
+        "value": {
+          "name": "cpu-profile",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "debug",
+        "description": "include debug information in output",
+        "inherit": true
+      },
+      {
+        "long": "destination",
+        "short": "D",
+        "description": "set destination directory",
+        "inherit": true,
+        "value": {
+          "name": "destination",
+          "provider": "builtin.files",
+          "style": "equals"
+        }
+      },
+      {
+        "long": "dry-run",
+        "short": "n",
+        "description": "do not make any modifications to the destination directory",
+        "inherit": true
+      },
+      {
+        "long": "force",
+        "description": "make all changes without prompting",
+        "inherit": true
+      },
+      {
+        "long": "gops",
+        "description": "enable gops agent",
+        "inherit": true,
+        "hidden": true
+      },
+      {
+        "long": "interactive",
+        "description": "prompt for all changes",
+        "inherit": true
+      },
+      {
+        "long": "keep-going",
+        "short": "k",
+        "description": "keep going as far as possible after an error",
+        "inherit": true
+      },
+      {
+        "long": "mode",
+        "description": "mode",
+        "inherit": true,
+        "value": {
+          "name": "mode",
+          "values": [
+            "file",
+            "symlink"
+          ]
+        }
+      },
+      {
+        "long": "no-pager",
+        "description": "do not use the pager",
+        "inherit": true
+      },
+      {
+        "long": "no-tty",
+        "description": "do not attempt to get a TTY for reading passwords",
+        "inherit": true
+      },
+      {
+        "long": "output",
+        "short": "o",
+        "description": "write output to path instead of stdout",
+        "inherit": true,
+        "value": {
+          "name": "output",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "persistent-state",
+        "description": "set persistent state file",
+        "inherit": true,
+        "value": {
+          "name": "persistent-state",
+          "style": "equals"
+        }
+      },
+      {
+        "long": "refresh-externals",
+        "short": "R",
+        "description": "refresh external cache",
+        "inherit": true
+      },
+      {
+        "long": "safe",
+        "description": "safely replace files and symlinks",
+        "inherit": true,
+        "hidden": true
+      },
+      {
+        "long": "source",
+        "short": "S",
+        "description": "set source directory",
+        "inherit": true,
+        "value": {
+          "name": "source",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "source-path",
+        "description": "specify targets by source path",
+        "inherit": true
+      },
+      {
+        "long": "use-builtin-age",
+        "description": "use builtin age",
+        "inherit": true,
+        "value": {
+          "name": "use-builtin-age",
+          "values": [
+            "true",
+            "false",
+            "auto"
+          ]
+        }
+      },
+      {
+        "long": "use-builtin-git",
+        "description": "use builtin git",
+        "inherit": true,
+        "value": {
+          "name": "use-builtin-git",
+          "values": [
+            "true",
+            "false",
+            "auto"
+          ]
+        }
+      },
+      {
+        "long": "verbose",
+        "short": "v",
+        "description": "make output more verbose",
+        "inherit": true
+      },
+      {
+        "long": "working-tree",
+        "short": "W",
+        "description": "set working tree directory",
+        "inherit": true,
+        "value": {
+          "name": "working-tree",
+          "provider": "builtin.directories",
+          "style": "equals"
+        }
+      },
+      {
+        "long": "help",
+        "short": "h",
+        "description": "display help",
+        "inherit": true
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "manage",
+        "aliases": [
+          "add"
+        ],
+        "description": "add an existing file, directory, or symlink to the source state",
+        "options": [
+          {
+            "long": "autotemplate",
+            "short": "a",
+            "description": "generate the template when adding files as templates",
+            "inherit": false
+          },
+          {
+            "long": "create",
+            "description": "add files that should exist, irrespective of their contents",
+            "inherit": false
+          },
+          {
+            "long": "encrypt",
+            "description": "encrypt files",
+            "inherit": false
+          },
+          {
+            "long": "exact",
+            "description": "add directories exactly",
+            "inherit": false
+          },
+          {
+            "long": "exclude",
+            "short": "x",
+            "description": "exclude entry types",
+            "inherit": false,
+            "value": {
+              "name": "exclude",
+              "values": [
+                "file",
+                "dir",
+                "symlink",
+                "empty",
+                "encrypted",
+                "template",
+                "script"
+              ]
+            }
+          },
+          {
+            "long": "follow",
+            "short": "f",
+            "description": "add symlink targets instead of symlinks",
+            "inherit": false
+          },
+          {
+            "long": "include",
+            "short": "i",
+            "description": "include entry types",
+            "inherit": false,
+            "value": {
+              "name": "include",
+              "values": [
+                "file",
+                "dir",
+                "symlink",
+                "empty",
+                "encrypted",
+                "template",
+                "script"
+              ]
+            }
+          },
+          {
+            "long": "prompt",
+            "short": "p",
+            "description": "prompt before adding each entry",
+            "inherit": false
+          },
+          {
+            "long": "recursive",
+            "short": "r",
+            "description": "recurse into subdirectories",
+            "inherit": false
+          },
+          {
+            "long": "template",
+            "short": "T",
+            "description": "add files as templates",
+            "inherit": false
+          },
+          {
+            "long": "template-symlinks",
+            "description": "add symlinks with target in source or home dirs as templates",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "file",
+              "provider": "builtin.files",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "apply",
+        "description": "update the destination directory to match the target state",
+        "options": [
+          {
+            "long": "exclude",
+            "short": "x",
+            "description": "exclude entry types",
+            "inherit": false,
+            "value": {
+              "name": "exclude",
+              "values": [
+                "file",
+                "dir",
+                "symlink",
+                "empty",
+                "encrypted",
+                "template",
+                "script"
+              ]
+            }
+          },
+          {
+            "long": "include",
+            "short": "i",
+            "description": "include entry types",
+            "inherit": false,
+            "value": {
+              "name": "include",
+              "values": [
+                "file",
+                "dir",
+                "symlink",
+                "empty",
+                "encrypted",
+                "template",
+                "script"
+              ]
+            }
+          },
+          {
+            "long": "init",
+            "description": "recreate config file from template",
+            "inherit": false
+          },
+          {
+            "long": "recursive",
+            "short": "r",
+            "description": "recurse into subdirectories",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "target",
+              "provider": "builtin.files",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "archive",
+        "description": "generate a tar archive of the target state",
+        "options": [
+          {
+            "long": "exclude",
+            "short": "x",
+            "description": "exclude entry types",
+            "inherit": false,
+            "value": {
+              "name": "exclude",
+              "values": [
+                "file",
+                "dir",
+                "symlink",
+                "empty",
+                "encrypted",
+                "template",
+                "script"
+              ]
+            }
+          },
+          {
+            "long": "format",
+            "short": "f",
+            "description": "set archive format",
+            "inherit": false,
+            "value": {
+              "name": "format",
+              "values": [
+                "tar",
+                "tar.bz2",
+                "tar.gz",
+                "tar.xz",
+                "tbz2",
+                "tgz",
+                "txz",
+                "zip"
+              ]
+            }
+          },
+          {
+            "long": "gzip",
+            "short": "z",
+            "description": "compress output with gzip",
+            "inherit": false
+          },
+          {
+            "long": "include",
+            "short": "i",
+            "description": "include entry types",
+            "inherit": false,
+            "value": {
+              "name": "include",
+              "values": [
+                "file",
+                "dir",
+                "symlink",
+                "empty",
+                "encrypted",
+                "template",
+                "script"
+              ]
+            }
+          },
+          {
+            "long": "init",
+            "description": "recreate config file from template",
+            "inherit": false
+          },
+          {
+            "long": "recursive",
+            "short": "r",
+            "description": "recurse into subdirectories",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "target",
+              "provider": "builtin.files",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "cat",
+        "description": "print the target contents of a file, script, or symlink",
+        "arguments": {
+          "states": [
+            {
+              "name": "target",
+              "provider": "builtin.files",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "cd",
+        "description": "launch a shell in the source directory"
+      },
+      {
+        "name": "chattr",
+        "description": "change the attributes of a target in the source state",
+        "arguments": {
+          "states": [
+            {
+              "name": "attributes/modifiers",
+              "index": 0
+            },
+            {
+              "name": "target",
+              "provider": "builtin.files",
+              "index": 1,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "completion",
+        "description": "generate shell completion code",
+        "arguments": {
+          "states": [
+            {
+              "name": "shell",
+              "index": 0,
+              "values": [
+                "bash",
+                "fish",
+                "zsh",
+                "powershell"
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "name": "data",
+        "description": "print the template data",
+        "options": [
+          {
+            "long": "format",
+            "short": "f",
+            "description": "format",
+            "inherit": true,
+            "value": {
+              "name": "format",
+              "values": [
+                "json",
+                "yaml"
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "decrypt",
+        "description": "decrypt file or standard input",
+        "arguments": {
+          "states": [
+            {
+              "name": "file",
+              "provider": "builtin.files",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "diff",
+        "description": "print the diff between the target state and the destination state",
+        "options": [
+          {
+            "long": "exclude",
+            "short": "x",
+            "description": "exclude entry types",
+            "inherit": false,
+            "value": {
+              "name": "exclude",
+              "values": [
+                "file",
+                "dir",
+                "symlink",
+                "empty",
+                "encrypted",
+                "template",
+                "script"
+              ]
+            }
+          },
+          {
+            "long": "include",
+            "short": "i",
+            "description": "include entry types",
+            "inherit": false,
+            "value": {
+              "name": "include",
+              "values": [
+                "file",
+                "dir",
+                "symlink",
+                "empty",
+                "encrypted",
+                "template",
+                "script"
+              ]
+            }
+          },
+          {
+            "long": "init",
+            "description": "recreate config file from template",
+            "inherit": false
+          },
+          {
+            "long": "pager",
+            "description": "set pager",
+            "inherit": false,
+            "value": {
+              "name": "pager"
+            }
+          },
+          {
+            "long": "recursive",
+            "short": "r",
+            "description": "recurse into subdirectories",
+            "inherit": false
+          },
+          {
+            "long": "reverse",
+            "description": "reverse the direction of the diff",
+            "inherit": false
+          },
+          {
+            "long": "use-builtin-diff",
+            "description": "use the builtin diff",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "target",
+              "index": 0,
+              "repeatable": true,
+              "provider": "builtin.files"
+            }
+          ]
+        }
+      },
+      {
+        "name": "doctor",
+        "description": "check your system for potential problems"
+      },
+      {
+        "name": "dump",
+        "description": "generate a dump of the target state",
+        "options": [
+          {
+            "long": "exclude",
+            "short": "x",
+            "description": "exclude entry types",
+            "inherit": false,
+            "value": {
+              "name": "exclude",
+              "values": [
+                "file",
+                "dir",
+                "symlink",
+                "empty",
+                "encrypted",
+                "template",
+                "script"
+              ]
+            }
+          },
+          {
+            "long": "format",
+            "short": "f",
+            "description": "set output format",
+            "inherit": false,
+            "value": {
+              "name": "format"
+            }
+          },
+          {
+            "long": "include",
+            "short": "i",
+            "description": "include entry types",
+            "inherit": false,
+            "value": {
+              "name": "include",
+              "values": [
+                "file",
+                "dir",
+                "symlink",
+                "empty",
+                "encrypted",
+                "template",
+                "script"
+              ]
+            }
+          },
+          {
+            "long": "init",
+            "description": "recreate config file from template",
+            "inherit": false
+          },
+          {
+            "long": "recursive",
+            "short": "r",
+            "description": "recurse into subdirectories",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "target",
+              "provider": "builtin.files",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "edit",
+        "description": "edit the source state of a target",
+        "options": [
+          {
+            "long": "apply",
+            "short": "a",
+            "description": "apply after editing",
+            "inherit": false
+          },
+          {
+            "long": "exclude",
+            "short": "x",
+            "description": "exclude entry types",
+            "inherit": false,
+            "value": {
+              "name": "exclude",
+              "values": [
+                "file",
+                "dir",
+                "symlink",
+                "empty",
+                "encrypted",
+                "template",
+                "script"
+              ]
+            }
+          },
+          {
+            "long": "hardlink",
+            "description": "invoke editor with a hardlink to the source file",
+            "inherit": false
+          },
+          {
+            "long": "include",
+            "short": "i",
+            "description": "include entry types",
+            "inherit": false,
+            "value": {
+              "name": "include",
+              "values": [
+                "file",
+                "dir",
+                "symlink",
+                "empty",
+                "encrypted",
+                "template",
+                "script"
+              ]
+            }
+          },
+          {
+            "long": "init",
+            "description": "recreate config file from template",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "target",
+              "provider": "builtin.files",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "edit-config",
+        "description": "edit the configuration file"
+      },
+      {
+        "name": "encrypt",
+        "description": "encrypt file or standard input",
+        "arguments": {
+          "states": [
+            {
+              "name": "target",
+              "provider": "builtin.files",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "execute-template",
+        "description": "execute the given template(s)",
+        "options": [
+          {
+            "long": "init",
+            "short": "i",
+            "description": "simulate chezmoi init",
+            "inherit": false
+          },
+          {
+            "long": "promptBool",
+            "description": "simulate promptBool",
+            "inherit": false,
+            "value": {
+              "name": "promptbool"
+            }
+          },
+          {
+            "long": "promptInt",
+            "description": "simulate promptInt",
+            "inherit": false,
+            "value": {
+              "name": "promptint"
+            }
+          },
+          {
+            "long": "promptString",
+            "short": "p",
+            "description": "simulate promptString",
+            "inherit": false,
+            "value": {
+              "name": "promptstring"
+            }
+          },
+          {
+            "long": "stdinisatty",
+            "description": "simulate stdinIsATTY",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "template",
+              "provider": "builtin.files",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "unmanage",
+        "aliases": [
+          "forget"
+        ],
+        "description": "remove a target from the source state",
+        "arguments": {
+          "states": [
+            {
+              "name": "target",
+              "provider": "builtin.files",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "generate",
+        "description": "generate a file for use with chezmoi",
+        "arguments": {
+          "states": [
+            {
+              "name": "file",
+              "index": 0,
+              "values": [
+                "install.sh"
+              ],
+              "provider": "builtin.files"
+            }
+          ]
+        }
+      },
+      {
+        "name": "git",
+        "description": "run git in the source directory"
+      },
+      {
+        "name": "ignored",
+        "description": "print ignored targets"
+      },
+      {
+        "name": "import",
+        "description": "import an archive into the source state",
+        "options": [
+          {
+            "long": "exact",
+            "description": "set exact_ attribute on imported directories",
+            "inherit": false
+          },
+          {
+            "long": "exclude",
+            "short": "x",
+            "description": "exclude entry types",
+            "inherit": false,
+            "value": {
+              "name": "exclude",
+              "values": [
+                "file",
+                "dir",
+                "symlink",
+                "empty",
+                "encrypted",
+                "template",
+                "script"
+              ]
+            }
+          },
+          {
+            "long": "include",
+            "short": "i",
+            "description": "include entry types",
+            "inherit": false,
+            "value": {
+              "name": "include",
+              "values": [
+                "file",
+                "dir",
+                "symlink",
+                "empty",
+                "encrypted",
+                "template",
+                "script"
+              ]
+            }
+          },
+          {
+            "long": "remove-destination",
+            "short": "r",
+            "description": "remove destination before import",
+            "inherit": false
+          },
+          {
+            "long": "strip-components",
+            "description": "strip leading path components",
+            "inherit": false,
+            "value": {
+              "name": "strip-components"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "archive",
+              "provider": "builtin.files",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "init",
+        "description": "setup the source directory and update the destination directory to match the target state",
+        "options": [
+          {
+            "long": "apply",
+            "short": "a",
+            "description": "update destination directory",
+            "inherit": false
+          },
+          {
+            "long": "branch",
+            "description": "set initial branch to checkout",
+            "inherit": false,
+            "value": {
+              "name": "branch"
+            }
+          },
+          {
+            "long": "config-path",
+            "short": "C",
+            "description": "path to write generated config file",
+            "inherit": false,
+            "value": {
+              "name": "config-path",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "data",
+            "description": "include existing template data",
+            "inherit": false
+          },
+          {
+            "long": "depth",
+            "short": "d",
+            "description": "create a shallow clone",
+            "inherit": false,
+            "value": {
+              "name": "depth"
+            }
+          },
+          {
+            "long": "exclude",
+            "short": "x",
+            "description": "exclude entry types",
+            "inherit": false,
+            "value": {
+              "name": "exclude",
+              "values": [
+                "file",
+                "dir",
+                "symlink",
+                "empty",
+                "encrypted",
+                "template",
+                "script"
+              ]
+            }
+          },
+          {
+            "long": "guess-repo-url",
+            "short": "g",
+            "description": "guess the repo URL",
+            "inherit": false
+          },
+          {
+            "long": "one-shot",
+            "description": "run in one-shot mode",
+            "inherit": false
+          },
+          {
+            "long": "prompt",
+            "description": "force prompt*Once template functions to prompt",
+            "inherit": false
+          },
+          {
+            "long": "purge",
+            "short": "p",
+            "description": "purge config and source directories after running",
+            "inherit": false
+          },
+          {
+            "long": "purge-binary",
+            "short": "P",
+            "description": "purge chezmoi binary after running",
+            "inherit": false
+          },
+          {
+            "long": "ssh",
+            "description": "use ssh instead of https when guessing dotfile repo URL",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "source",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "license",
+        "description": "print license"
+      },
+      {
+        "name": "list",
+        "aliases": [
+          "managed"
+        ],
+        "description": "list the managed entries in the destination directory",
+        "options": [
+          {
+            "long": "exclude",
+            "short": "x",
+            "description": "exclude entry types",
+            "inherit": false,
+            "value": {
+              "name": "exclude",
+              "values": [
+                "file",
+                "dir",
+                "symlink",
+                "empty",
+                "encrypted",
+                "template",
+                "script"
+              ]
+            }
+          },
+          {
+            "long": "include",
+            "short": "i",
+            "description": "include entry types",
+            "inherit": false,
+            "value": {
+              "name": "include",
+              "values": [
+                "file",
+                "dir",
+                "symlink",
+                "empty",
+                "encrypted",
+                "template",
+                "script"
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "merge",
+        "description": "perform a three-way merge between the destination state, the source state, and the target state",
+        "arguments": {
+          "states": [
+            {
+              "name": "target",
+              "provider": "builtin.files",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "merge-all",
+        "description": "perform a three-way merge for each modified file",
+        "options": [
+          {
+            "long": "init",
+            "description": "recreate config file from template",
+            "inherit": false
+          },
+          {
+            "long": "recursive",
+            "short": "r",
+            "description": "recurse into subdirectories",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "purge",
+        "description": "purge chezmoi's configuration and data",
+        "options": [
+          {
+            "long": "binary",
+            "short": "P",
+            "description": "purge chezmoi binary",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "re-add",
+        "description": "re-add modified files",
+        "options": [
+          {
+            "long": "exclude",
+            "short": "x",
+            "description": "exclude entry types",
+            "inherit": false,
+            "value": {
+              "name": "exclude",
+              "values": [
+                "file",
+                "dir",
+                "symlink",
+                "empty",
+                "encrypted",
+                "template",
+                "script"
+              ]
+            }
+          },
+          {
+            "long": "include",
+            "short": "i",
+            "description": "include entry types",
+            "inherit": false,
+            "value": {
+              "name": "include",
+              "values": [
+                "file",
+                "dir",
+                "symlink",
+                "empty",
+                "encrypted",
+                "template",
+                "script"
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "rm",
+        "aliases": [
+          "remove"
+        ],
+        "description": "remove a target from the source state and the destination directory",
+        "options": [
+          {
+            "long": "recursive",
+            "short": "r",
+            "description": "recurse into subdirectories",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "target",
+              "provider": "builtin.files",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "secret",
+        "description": "interact with a secret manager",
+        "subcommands": [
+          {
+            "name": "keyring",
+            "description": "interact with keyring",
+            "subcommands": [
+              {
+                "name": "delete",
+                "description": "delete a value from keyring",
+                "options": [
+                  {
+                    "long": "service",
+                    "description": "service",
+                    "inherit": true,
+                    "value": {
+                      "name": "service"
+                    }
+                  },
+                  {
+                    "long": "user",
+                    "description": "user",
+                    "inherit": true,
+                    "value": {
+                      "name": "user"
+                    }
+                  }
+                ]
+              },
+              {
+                "name": "get",
+                "description": "get a value from keyring",
+                "options": [
+                  {
+                    "long": "service",
+                    "description": "service",
+                    "inherit": true,
+                    "value": {
+                      "name": "service"
+                    }
+                  },
+                  {
+                    "long": "user",
+                    "description": "user",
+                    "inherit": true,
+                    "value": {
+                      "name": "user"
+                    }
+                  }
+                ]
+              },
+              {
+                "name": "set",
+                "description": "set a value in keyring",
+                "options": [
+                  {
+                    "long": "service",
+                    "description": "service",
+                    "inherit": true,
+                    "value": {
+                      "name": "service"
+                    }
+                  },
+                  {
+                    "long": "user",
+                    "description": "user",
+                    "inherit": true,
+                    "value": {
+                      "name": "user"
+                    }
+                  },
+                  {
+                    "long": "value",
+                    "description": "value",
+                    "inherit": true,
+                    "value": {
+                      "name": "value"
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "source-path",
+        "description": "print the source path of a target",
+        "arguments": {
+          "states": [
+            {
+              "name": "target",
+              "provider": "builtin.files",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "state",
+        "description": "manipulate the persistent state",
+        "subcommands": [
+          {
+            "name": "data",
+            "description": "print the raw data in the persistent state",
+            "options": [
+              {
+                "long": "format",
+                "short": "f",
+                "description": "format",
+                "inherit": true,
+                "value": {
+                  "name": "format"
+                }
+              }
+            ]
+          },
+          {
+            "name": "delete",
+            "description": "delete a value from the persistent state",
+            "options": [
+              {
+                "long": "bucket",
+                "description": "bucket",
+                "inherit": true,
+                "value": {
+                  "name": "bucket"
+                }
+              },
+              {
+                "long": "key",
+                "description": "key",
+                "inherit": true,
+                "value": {
+                  "name": "key"
+                }
+              }
+            ]
+          },
+          {
+            "name": "delete-bucket",
+            "description": "delete a bucket from the persistent state",
+            "options": [
+              {
+                "long": "bucket",
+                "description": "bucket",
+                "inherit": true,
+                "value": {
+                  "name": "bucket"
+                }
+              }
+            ]
+          },
+          {
+            "name": "dump",
+            "description": "generate a dump of the persistent state",
+            "options": [
+              {
+                "long": "format",
+                "short": "f",
+                "description": "format",
+                "inherit": true,
+                "value": {
+                  "name": "format"
+                }
+              }
+            ]
+          },
+          {
+            "name": "get",
+            "description": "get a value from the persistent state",
+            "options": [
+              {
+                "long": "bucket",
+                "description": "bucket",
+                "inherit": true,
+                "value": {
+                  "name": "bucket"
+                }
+              },
+              {
+                "long": "key",
+                "description": "key",
+                "inherit": true,
+                "value": {
+                  "name": "key"
+                }
+              }
+            ]
+          },
+          {
+            "name": "get-bucket",
+            "description": "get a bucket from the persistent state",
+            "options": [
+              {
+                "long": "bucket",
+                "description": "bucket",
+                "inherit": true,
+                "value": {
+                  "name": "bucket"
+                }
+              },
+              {
+                "long": "format",
+                "short": "f",
+                "description": "format",
+                "inherit": true,
+                "value": {
+                  "name": "format"
+                }
+              }
+            ]
+          },
+          {
+            "name": "reset",
+            "description": "reset the persistent state"
+          },
+          {
+            "name": "set",
+            "description": "set a value from the persistent state",
+            "options": [
+              {
+                "long": "bucket",
+                "description": "bucket",
+                "inherit": true,
+                "value": {
+                  "name": "bucket"
+                }
+              },
+              {
+                "long": "key",
+                "description": "key",
+                "inherit": true,
+                "value": {
+                  "name": "key"
+                }
+              },
+              {
+                "long": "value",
+                "description": "value",
+                "inherit": true,
+                "value": {
+                  "name": "value"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "status",
+        "description": "show the status of targets",
+        "options": [
+          {
+            "long": "exclude",
+            "short": "x",
+            "description": "exclude entry types",
+            "inherit": false,
+            "value": {
+              "name": "exclude",
+              "values": [
+                "file",
+                "dir",
+                "symlink",
+                "empty",
+                "encrypted",
+                "template",
+                "script"
+              ]
+            }
+          },
+          {
+            "long": "include",
+            "short": "i",
+            "description": "include entry types",
+            "inherit": false,
+            "value": {
+              "name": "include",
+              "values": [
+                "file",
+                "dir",
+                "symlink",
+                "empty",
+                "encrypted",
+                "template",
+                "script"
+              ]
+            }
+          },
+          {
+            "long": "init",
+            "description": "recreate config file from template",
+            "inherit": false
+          },
+          {
+            "long": "recursive",
+            "short": "r",
+            "description": "recurse into subdirectories",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "target",
+              "provider": "builtin.files",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "target-path",
+        "description": "print the target path of a source path",
+        "arguments": {
+          "states": [
+            {
+              "name": "source",
+              "provider": "builtin.files",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "unmanaged",
+        "description": "list the unmanaged files in the destination directory",
+        "arguments": {
+          "states": [
+            {
+              "name": "paths",
+              "provider": "builtin.files",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "update",
+        "description": "pull and apply any changes",
+        "options": [
+          {
+            "long": "apply",
+            "short": "a",
+            "description": "apply after pulling",
+            "inherit": false
+          },
+          {
+            "long": "exclude",
+            "short": "x",
+            "description": "exclude entry types",
+            "inherit": false,
+            "value": {
+              "name": "exclude",
+              "values": [
+                "file",
+                "dir",
+                "symlink",
+                "empty",
+                "encrypted",
+                "template",
+                "script"
+              ]
+            }
+          },
+          {
+            "long": "include",
+            "short": "i",
+            "description": "include entry types",
+            "inherit": false,
+            "value": {
+              "name": "include",
+              "values": [
+                "file",
+                "dir",
+                "symlink",
+                "empty",
+                "encrypted",
+                "template",
+                "script"
+              ]
+            }
+          },
+          {
+            "long": "init",
+            "description": "recreate config file from template",
+            "inherit": false
+          },
+          {
+            "long": "recursive",
+            "short": "r",
+            "description": "recurse into subdirectories",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "upgrade",
+        "description": "upgrade chezmoi to the latest released version",
+        "options": [
+          {
+            "long": "executable",
+            "description": "set executable to replace",
+            "inherit": false,
+            "value": {
+              "name": "executable"
+            }
+          },
+          {
+            "long": "method",
+            "description": "set upgrade method",
+            "inherit": false,
+            "value": {
+              "name": "method"
+            }
+          },
+          {
+            "long": "owner",
+            "description": "set owner",
+            "inherit": false,
+            "value": {
+              "name": "owner"
+            }
+          },
+          {
+            "long": "repo",
+            "description": "set repo",
+            "inherit": false,
+            "value": {
+              "name": "repo"
+            }
+          }
+        ]
+      },
+      {
+        "name": "verify",
+        "description": "exit with success if the destination state matches the target state, fail otherwise",
+        "options": [
+          {
+            "long": "exclude",
+            "short": "x",
+            "description": "exclude entry types",
+            "inherit": false,
+            "value": {
+              "name": "exclude",
+              "values": [
+                "file",
+                "dir",
+                "symlink",
+                "empty",
+                "encrypted",
+                "template",
+                "script"
+              ]
+            }
+          },
+          {
+            "long": "include",
+            "short": "i",
+            "description": "include entry types",
+            "inherit": false,
+            "value": {
+              "name": "include",
+              "values": [
+                "file",
+                "dir",
+                "symlink",
+                "empty",
+                "encrypted",
+                "template",
+                "script"
+              ]
+            }
+          },
+          {
+            "long": "init",
+            "description": "recreate config file from template",
+            "inherit": false
+          },
+          {
+            "long": "recursive",
+            "short": "r",
+            "description": "recurse into subdirectories",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "target",
+              "provider": "builtin.files",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "help",
+        "description": "help about any command",
+        "subcommands": [
+          {
+            "name": "manage",
+            "aliases": [
+              "add"
+            ],
+            "description": "add an existing file, directory, or symlink to the source state"
+          },
+          {
+            "name": "apply",
+            "description": "update the destination directory to match the target state"
+          },
+          {
+            "name": "archive",
+            "description": "generate a tar archive of the target state"
+          },
+          {
+            "name": "cat",
+            "description": "print the target contents of a file, script, or symlink"
+          },
+          {
+            "name": "cd",
+            "description": "launch a shell in the source directory"
+          },
+          {
+            "name": "chattr",
+            "description": "change the attributes of a target in the source state"
+          },
+          {
+            "name": "completion",
+            "description": "generate shell completion code"
+          },
+          {
+            "name": "data",
+            "description": "print the template data"
+          },
+          {
+            "name": "decrypt",
+            "description": "decrypt file or standard input"
+          },
+          {
+            "name": "diff",
+            "description": "print the diff between the target state and the destination state"
+          },
+          {
+            "name": "doctor",
+            "description": "check your system for potential problems"
+          },
+          {
+            "name": "dump",
+            "description": "generate a dump of the target state"
+          },
+          {
+            "name": "edit",
+            "description": "edit the source state of a target"
+          },
+          {
+            "name": "edit-config",
+            "description": "edit the configuration file"
+          },
+          {
+            "name": "encrypt",
+            "description": "encrypt file or standard input"
+          },
+          {
+            "name": "execute-template",
+            "description": "execute the given template(s)"
+          },
+          {
+            "name": "unmanage",
+            "aliases": [
+              "forget"
+            ],
+            "description": "remove a target from the source state"
+          },
+          {
+            "name": "generate",
+            "description": "generate a file for use with chezmoi"
+          },
+          {
+            "name": "git",
+            "description": "run git in the source directory"
+          },
+          {
+            "name": "ignored",
+            "description": "print ignored targets"
+          },
+          {
+            "name": "import",
+            "description": "import an archive into the source state"
+          },
+          {
+            "name": "init",
+            "description": "setup the source directory and update the destination directory to match the target state"
+          },
+          {
+            "name": "license",
+            "description": "print license"
+          },
+          {
+            "name": "list",
+            "aliases": [
+              "managed"
+            ],
+            "description": "list the managed entries in the destination directory"
+          },
+          {
+            "name": "merge",
+            "description": "perform a three-way merge between the destination state, the source state, and the target state"
+          },
+          {
+            "name": "merge-all",
+            "description": "perform a three-way merge for each modified file"
+          },
+          {
+            "name": "purge",
+            "description": "purge chezmoi's configuration and data"
+          },
+          {
+            "name": "re-add",
+            "description": "re-add modified files"
+          },
+          {
+            "name": "rm",
+            "aliases": [
+              "remove"
+            ],
+            "description": "remove a target from the source state and the destination directory"
+          },
+          {
+            "name": "secret",
+            "description": "interact with a secret manager",
+            "subcommands": [
+              {
+                "name": "keyring",
+                "description": "interact with keyring",
+                "subcommands": [
+                  {
+                    "name": "delete",
+                    "description": "delete a value from keyring"
+                  },
+                  {
+                    "name": "get",
+                    "description": "get a value from keyring"
+                  },
+                  {
+                    "name": "set",
+                    "description": "set a value in keyring"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "source-path",
+            "description": "print the source path of a target"
+          },
+          {
+            "name": "state",
+            "description": "manipulate the persistent state",
+            "subcommands": [
+              {
+                "name": "data",
+                "description": "print the raw data in the persistent state"
+              },
+              {
+                "name": "delete",
+                "description": "delete a value from the persistent state"
+              },
+              {
+                "name": "delete-bucket",
+                "description": "delete a bucket from the persistent state"
+              },
+              {
+                "name": "dump",
+                "description": "generate a dump of the persistent state"
+              },
+              {
+                "name": "get",
+                "description": "get a value from the persistent state"
+              },
+              {
+                "name": "get-bucket",
+                "description": "get a bucket from the persistent state"
+              },
+              {
+                "name": "reset",
+                "description": "reset the persistent state"
+              },
+              {
+                "name": "set",
+                "description": "set a value from the persistent state"
+              }
+            ]
+          },
+          {
+            "name": "status",
+            "description": "show the status of targets"
+          },
+          {
+            "name": "target-path",
+            "description": "print the target path of a source path"
+          },
+          {
+            "name": "unmanaged",
+            "description": "list the unmanaged files in the destination directory"
+          },
+          {
+            "name": "update",
+            "description": "pull and apply any changes"
+          },
+          {
+            "name": "upgrade",
+            "description": "upgrade chezmoi to the latest released version"
+          },
+          {
+            "name": "verify",
+            "description": "exit with success if the destination state matches the target state, fail otherwise"
+          }
+        ]
+      }
+    ],
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "builtin.directories": {
+        "builtin": "directories"
+      }
+    }
+  }
+}
