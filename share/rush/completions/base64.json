@@ -1,0 +1,78 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "base64",
+    "description": "encode or decode base64 data",
+    "options": [
+      {
+        "long": "help",
+        "short": "h",
+        "description": "display this help and exit",
+        "inherit": false
+      },
+      {
+        "long": "break",
+        "short": "b",
+        "description": "insert line breaks every count characters. Default is 0, which generates an unbroken stream",
+        "inherit": false,
+        "value": {
+          "name": "count",
+          "values": [
+            "0"
+          ]
+        }
+      },
+      {
+        "long": "decode",
+        "short": "d",
+        "spellings": [
+          "-D"
+        ],
+        "description": "decode incoming Base64 stream into binary data",
+        "inherit": false
+      },
+      {
+        "long": "input",
+        "short": "i",
+        "description": "read input from input_file. Default is stdin; passing - also represents stdin",
+        "inherit": false,
+        "value": {
+          "name": "input_file",
+          "values": [
+            "stdin",
+            "-"
+          ]
+        }
+      },
+      {
+        "long": "output",
+        "short": "o",
+        "description": "write output to output_file. Default is stdout; passing - also represents stdout",
+        "inherit": false,
+        "value": {
+          "name": "output_file",
+          "values": [
+            "stdout",
+            "-"
+          ]
+        }
+      }
+    ],
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      }
+    },
+    "arguments": {
+      "states": [
+        {
+          "name": "file",
+          "index": 0,
+          "description": "file to encode or decode",
+          "provider": "builtin.files"
+        }
+      ]
+    }
+  }
+}
