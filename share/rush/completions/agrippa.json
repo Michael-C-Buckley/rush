@@ -1,0 +1,82 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "agrippa",
+    "description": "generate react components",
+    "providers": {
+      "builtin.directories": { "builtin": "directories" },
+      "builtin.executables": { "builtin": "executables" },
+      "agrippa.booleans": { "values": ["true", "false"] },
+      "agrippa.props": {
+        "values": [
+          { "value": "ts", "description": "generate typescript props" },
+          { "value": "jsdoc", "description": "generate jsdoc props" },
+          { "value": "prop-types", "description": "generate prop-types props" },
+          { "value": "none", "description": "generate no props" }
+        ]
+      },
+      "agrippa.export-types": { "values": ["named", "default"] },
+      "agrippa.declarations": { "values": ["const", "function"] },
+      "agrippa.styling": {
+        "values": [
+          { "value": "none", "description": "generate no style" },
+          { "value": "css", "description": "generate a css file" },
+          { "value": "scss", "description": "generate an scss file" },
+          { "value": "jss", "description": "generate react-jss styles" },
+          { "value": "mui", "description": "generate material-ui v4 styles" },
+          { "value": "react-native", "description": "generate a react native stylesheet" }
+        ]
+      }
+    },
+    "arguments": {
+      "states": [
+        {
+          "name": "component",
+          "index": 0,
+          "description": "component name"
+        }
+      ]
+    },
+    "subcommands": [
+      {
+        "name": "init",
+        "description": "create an agrippa config"
+      },
+      {
+        "name": "generate",
+        "aliases": ["gen"],
+        "description": "generate a react component",
+        "options": [
+          { "long": "props", "description": "set props generation", "inherit": false, "value": { "name": "kind", "provider": "agrippa.props" } },
+          { "long": "children", "description": "set whether children are used", "inherit": false, "value": { "name": "bool", "provider": "agrippa.booleans" } },
+          { "long": "typescript", "aliases": ["ts"], "description": "set typescript output", "inherit": false, "value": { "name": "bool", "provider": "agrippa.booleans" } },
+          { "long": "import-react", "description": "set whether react is imported", "inherit": false, "value": { "name": "bool", "provider": "agrippa.booleans" } },
+          { "long": "export-type", "description": "set export style", "inherit": false, "value": { "name": "kind", "provider": "agrippa.export-types" } },
+          { "long": "declaration", "description": "set component declaration style", "inherit": false, "value": { "name": "kind", "provider": "agrippa.declarations" } },
+          { "long": "memo", "description": "set memo generation", "inherit": false, "value": { "name": "bool", "provider": "agrippa.booleans" } },
+          { "long": "react-native", "description": "set react native output", "inherit": false, "value": { "name": "bool", "provider": "agrippa.booleans" } },
+          { "long": "styling", "description": "set styling solution", "inherit": false, "value": { "name": "kind", "provider": "agrippa.styling" } },
+          { "long": "styling-module", "description": "set stylesheet module generation", "inherit": false, "value": { "name": "bool", "provider": "agrippa.booleans" } },
+          { "long": "base-dir", "description": "set base directory", "inherit": false, "value": { "name": "path", "provider": "builtin.directories" } },
+          { "long": "dest", "aliases": ["destination"], "description": "set destination path", "inherit": false, "value": { "name": "path", "provider": "builtin.directories" } },
+          { "long": "allow-outside-base", "description": "allow paths outside base directory", "inherit": false, "value": { "name": "path", "provider": "builtin.directories" } },
+          { "long": "flat", "description": "set flat output", "inherit": false, "value": { "name": "bool", "provider": "agrippa.booleans" } },
+          { "long": "separate-index", "description": "set separate index generation", "inherit": false, "value": { "name": "bool", "provider": "agrippa.booleans" } },
+          { "long": "post-command", "aliases": ["postCommand"], "description": "set command to run after generation", "inherit": false, "value": { "name": "command", "provider": "builtin.executables" } },
+          { "long": "overwrite", "description": "replace existing files", "inherit": false, "value": { "name": "bool", "provider": "agrippa.booleans" } },
+          { "long": "debug", "description": "print debug information", "inherit": false, "value": { "name": "bool", "provider": "agrippa.booleans" } }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "component",
+              "index": 0,
+              "description": "component name"
+            }
+          ]
+        }
+      }
+    ]
+  }
+}
