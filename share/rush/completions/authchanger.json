@@ -1,0 +1,133 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "authchanger",
+    "description": "manage jamf connect authorization",
+    "options": [
+      {
+        "short": "h",
+        "spellings": [
+          "-help"
+        ],
+        "description": "show help",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-version"
+        ],
+        "description": "show version",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-print"
+        ],
+        "description": "print authorization mechanisms",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-debug"
+        ],
+        "description": "dry run changes",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-reset"
+        ],
+        "description": "reset login screen",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-demobilize"
+        ],
+        "description": "only demobilize accounts",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-notify"
+        ],
+        "description": "add dep notify mechanism",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-setup"
+        ],
+        "description": "add setup mechanism",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-jamfconnect"
+        ],
+        "description": "enable jamf connect login",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-verbose"
+        ],
+        "description": "enable verbose logging",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-prelogin"
+        ],
+        "description": "set pre-login mechanisms",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-preauth"
+        ],
+        "description": "set pre-auth mechanisms",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-postauth"
+        ],
+        "description": "set post-auth mechanisms",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-customrule"
+        ],
+        "description": "print or set custom rule mechanisms",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-sysprefs"
+        ],
+        "description": "enable azure network preferences auth",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-sysprefsreset"
+        ],
+        "description": "remove azure network preferences auth",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-defaultjcright"
+        ],
+        "description": "add sudosaml mechanism",
+        "inherit": false
+      }
+    ],
+    "platforms": [
+      "macos"
+    ]
+  }
+}
