@@ -4097,6 +4097,7 @@ fn ArithmeticParser(comptime ShellType: type) type {
         text: []const u8,
         index: usize = 0,
         evaluating: bool = true,
+        recursion_depth: usize = 0,
 
         const Self = @This();
 
@@ -4387,6 +4388,15 @@ fn ArithmeticParser(comptime ShellType: type) type {
             };
             const trimmed = std.mem.trim(u8, value, " \t\n");
             if (trimmed.len == 0) return 0;
+            if (self.shell.state.options.mode == .bash) {
+                if (self.recursion_depth >= 64) return error.InvalidArithmetic;
+                var parser_state: ArithmeticParser(ShellType) = .{
+                    .shell = self.shell,
+                    .text = trimmed,
+                    .recursion_depth = self.recursion_depth + 1,
+                };
+                return parser_state.parse();
+            }
             return std.fmt.parseInt(i64, trimmed, 10) catch error.InvalidArithmetic;
         }
 
