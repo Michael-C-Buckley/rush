@@ -1139,6 +1139,43 @@
             .status = 0,
         },
         .{
+            .name = "unquoted positional star in default expansion preserves empty IFS fields",
+            .script =
+            \\set -- 'abc' 'def ghi' 'jkl'
+            \\unset var
+            \\IFS=
+            \\set ${var-$*}
+            \\printf '<%s>\n' "$#" "$1" "${2-NONE}" "${3-NONE}"
+            ,
+            .stdout =
+            \\<3>
+            \\<abc>
+            \\<def ghi>
+            \\<jkl>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "unquoted positional star in alternate expansion preserves empty IFS fields",
+            .script =
+            \\set -- 'abc' 'def ghi' 'jkl'
+            \\IFS=
+            \\set ${1+$*}
+            \\printf '<%s>\n' "$#" "$1" "${2-NONE}" "${3-NONE}"
+            ,
+            .stdout =
+            \\<3>
+            \\<abc>
+            \\<def ghi>
+            \\<jkl>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "field splitting uses default delimiters when IFS is unset",
             .script = "unset IFS\nx='a b\tc\nd'\nset -- $x\nprintf '<%s>\\n' \"$#\" \"$@\"\n",
             .stdout =
