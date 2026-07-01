@@ -1,0 +1,15 @@
+__rush_complete_bazel_targets() {
+  find . -type f \( -name BUILD -o -name BUILD.bazel \) 2>/dev/null | while IFS= read -r build_file; do
+    package=${build_file#./}
+    package=${package%/BUILD}
+    package=${package%/BUILD.bazel}
+    test "$package" = "." && package=""
+    sed -n 's/^[[:space:]]*name[[:space:]]*=[[:space:]]*["'"'"']\([^"'"'"']*\)["'"'"'].*/\1/p' "$build_file" 2>/dev/null | while IFS= read -r target; do
+      if test -n "$package"; then
+        rush_complete candidate "//$package:$target" --kind plain --description target
+      else
+        rush_complete candidate "//:$target" --kind plain --description target
+      fi
+    done
+  done
+}

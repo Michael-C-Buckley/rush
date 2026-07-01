@@ -1,0 +1,349 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "bazel",
+    "description": "build and test software with bazel",
+    "options": [
+      {
+        "long": "autodetect_server_javabase",
+        "description": "back to the local jdk for running the bazel server and instead exits",
+        "inherit": false,
+        "exclusiveGroup": "bazel.autodetect_server_javabase"
+      },
+      {
+        "long": "noautodetect_server_javabase",
+        "description": "does not fall back to the local jdk for running the bazel server and instead exits",
+        "inherit": false,
+        "exclusiveGroup": "bazel.autodetect_server_javabase"
+      },
+      {
+        "long": "batch",
+        "description": "run as just a client process without a server",
+        "inherit": false,
+        "exclusiveGroup": "bazel.batch"
+      },
+      {
+        "long": "nobatch",
+        "description": "run with a server",
+        "inherit": false,
+        "exclusiveGroup": "bazel.batch"
+      },
+      {
+        "long": "batch_cpu_scheduling",
+        "description": "only on linux; use 'batch' CPU scheduling for bazel",
+        "inherit": false,
+        "exclusiveGroup": "bazel.batch_cpu_scheduling"
+      },
+      {
+        "long": "nobatch_cpu_scheduling",
+        "description": "only on linux; bazel does not perform a system call",
+        "inherit": false,
+        "exclusiveGroup": "bazel.batch_cpu_scheduling"
+      },
+      {
+        "long": "bazelrc",
+        "description": "the location of the user .bazelrc file containing default values of bazel options",
+        "inherit": false,
+        "value": {
+          "name": "bazelrc-path",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "block_for_lock",
+        "description": "wait for a running command to complete",
+        "inherit": false,
+        "exclusiveGroup": "bazel.block_for_lock"
+      },
+      {
+        "long": "noblock_for_lock",
+        "description": "bazel does not wait for a running command to complete, but instead exits immediately",
+        "inherit": false,
+        "exclusiveGroup": "bazel.block_for_lock"
+      },
+      {
+        "long": "client_debug",
+        "description": "log debug information from the client to stderr. Changing this option will not cause the server to restart",
+        "inherit": false,
+        "exclusiveGroup": "bazel.client_debug"
+      },
+      {
+        "long": "noclient_debug",
+        "description": "don't log debug information from the client to stderr",
+        "inherit": false,
+        "exclusiveGroup": "bazel.client_debug"
+      },
+      {
+        "long": "connect_timeout_secs",
+        "description": "the amount of time the client waits for each attempt to connect to the server",
+        "inherit": false,
+        "value": {
+          "name": "time"
+        }
+      },
+      {
+        "long": "expand_configs_in_place",
+        "description": "changed the expansion of --config flags to be done in-place",
+        "inherit": false,
+        "exclusiveGroup": "bazel.expand_configs_in_place"
+      },
+      {
+        "long": "noexpand_configs_in_place",
+        "description": "--config flags in a fixed point expansion between normal rc options and command-line specified options",
+        "inherit": false,
+        "exclusiveGroup": "bazel.expand_configs_in_place"
+      },
+      {
+        "long": "failure_detail_out",
+        "description": "specifies a location to write a failure_detail protobuf message if the server experiences a failure and cannot report...",
+        "inherit": false,
+        "value": {
+          "name": "path",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "home_rc",
+        "description": "look for the home bazelrc file at $HOME/.bazelrc",
+        "inherit": false,
+        "exclusiveGroup": "bazel.home_rc"
+      },
+      {
+        "long": "nohome_rc",
+        "description": "don't look for the home bazelrc file at $HOME/.bazelrc",
+        "inherit": false,
+        "exclusiveGroup": "bazel.home_rc"
+      },
+      {
+        "long": "idle_server_tasks",
+        "description": "run System.gc() when the server is idle",
+        "inherit": false,
+        "exclusiveGroup": "bazel.idle_server_tasks"
+      },
+      {
+        "long": "noidle_server_tasks",
+        "description": "don't run System.gc() when the server is idle",
+        "inherit": false,
+        "exclusiveGroup": "bazel.idle_server_tasks"
+      },
+      {
+        "long": "ignore_all_rc_files",
+        "description": "disables all rc files, regardless of the values of other rc-modifying flags, even if these flags come later in the li...",
+        "inherit": false,
+        "exclusiveGroup": "bazel.ignore_all_rc_files"
+      },
+      {
+        "long": "noignore_all_rc_files",
+        "description": "enables all rc files",
+        "inherit": false,
+        "exclusiveGroup": "bazel.ignore_all_rc_files"
+      },
+      {
+        "long": "io_nice_level",
+        "description": "only on linux; set a level from 0-7 for best-effort IO scheduling using the sys_ioprio_set system call. 0 is highest...",
+        "inherit": false,
+        "value": {
+          "name": "io-level",
+          "values": [
+            "0",
+            "1",
+            "2",
+            "3",
+            "4",
+            "5",
+            "6",
+            "7"
+          ]
+        }
+      },
+      {
+        "long": "local_startup_timeout_secs",
+        "description": "the maximum amount of time the client waits to connect to the server",
+        "inherit": false,
+        "value": {
+          "name": "seconds"
+        }
+      },
+      {
+        "long": "macos_qos_class",
+        "description": "sets the QoS service class of the bazel server when running on macOS",
+        "inherit": false,
+        "value": {
+          "name": "qos-service-class"
+        }
+      },
+      {
+        "long": "max_idle_secs",
+        "description": "the number of seconds the build server will wait idling before shutting down",
+        "inherit": false,
+        "value": {
+          "name": "seconds"
+        }
+      },
+      {
+        "long": "output_base",
+        "description": "specifies the output location to which all build output will be written",
+        "inherit": false,
+        "value": {
+          "name": "path",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "output_base_root",
+        "description": "the user-specific directory beneath which all build outputs are written",
+        "inherit": false,
+        "value": {
+          "name": "path",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "preemptible",
+        "description": "if true, the command can be preempted if another command is started",
+        "inherit": false,
+        "exclusiveGroup": "bazel.preemptible"
+      },
+      {
+        "long": "nopreemptible",
+        "description": "if true, the command can be preempted if another command is started",
+        "inherit": false,
+        "exclusiveGroup": "bazel.preemptible"
+      },
+      {
+        "long": "server_jvm_out",
+        "description": "the location to write the server's JVM's output",
+        "inherit": false,
+        "value": {
+          "name": "path",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "shutdown_on_low_sys_mem",
+        "description": "linux only. If max_idle_secs is set and the build server has been idle for a while, shut down the server when the sys...",
+        "inherit": false,
+        "exclusiveGroup": "bazel.shutdown_on_low_sys_mem"
+      },
+      {
+        "long": "noshutdown_on_low_sys_mem",
+        "description": "linux only. Don't shut down the server when the system is low on free RAM",
+        "inherit": false,
+        "exclusiveGroup": "bazel.shutdown_on_low_sys_mem"
+      },
+      {
+        "long": "system_rc",
+        "description": "look for the system-wide bazelrc",
+        "inherit": false,
+        "exclusiveGroup": "bazel.system_rc"
+      },
+      {
+        "long": "nosystem_rc",
+        "description": "don't look for the system-wide bazelrc",
+        "inherit": false,
+        "exclusiveGroup": "bazel.system_rc"
+      },
+      {
+        "long": "unlimit_coredumps",
+        "description": "raises the soft coredump limit to the hard limit to make coredumps of the server (including the JVM) and the client p...",
+        "inherit": false,
+        "exclusiveGroup": "bazel.unlimit_coredumps"
+      },
+      {
+        "long": "nounlimit_coredumps",
+        "description": "don't raise the soft coredump limit to the hard limit to make coredumps of the server (including the JVM) and the cli...",
+        "inherit": false,
+        "exclusiveGroup": "bazel.unlimit_coredumps"
+      },
+      {
+        "long": "watchfs",
+        "description": "use the operating system's file watch service for local changes instead of scanning every file for a change",
+        "inherit": false,
+        "exclusiveGroup": "bazel.watchfs"
+      },
+      {
+        "long": "nowatchfs",
+        "description": "scan every file for a change",
+        "inherit": false,
+        "exclusiveGroup": "bazel.watchfs"
+      },
+      {
+        "long": "windows_enable_symlinks",
+        "description": "real symbolic links will be created on windows instead of file copying",
+        "inherit": false,
+        "exclusiveGroup": "bazel.windows_enable_symlinks"
+      },
+      {
+        "long": "nowindows_enable_symlinks",
+        "description": "real symbolic links will be created via file copying",
+        "inherit": false,
+        "exclusiveGroup": "bazel.windows_enable_symlinks"
+      },
+      {
+        "long": "workspace_rc",
+        "description": "look for the workspace bazelrc file at $workspace/.bazelrc",
+        "inherit": false,
+        "exclusiveGroup": "bazel.workspace_rc"
+      },
+      {
+        "long": "noworkspace_rc",
+        "description": "don't look for the workspace bazelrc file at $workspace/.bazelrc",
+        "inherit": false,
+        "exclusiveGroup": "bazel.workspace_rc"
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "run",
+        "description": "runs the specified target",
+        "arguments": {
+          "states": [
+            {
+              "name": "target",
+              "index": 0,
+              "provider": "bazel.targets",
+              "repeatable": false
+            }
+          ]
+        }
+      },
+      {
+        "name": "test",
+        "description": "builds and runs the specified test targets",
+        "arguments": {
+          "states": [
+            {
+              "name": "target",
+              "index": 0,
+              "provider": "bazel.targets",
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "build",
+        "description": "builds the specified targets",
+        "arguments": {
+          "states": [
+            {
+              "name": "target",
+              "index": 0,
+              "provider": "bazel.targets",
+              "repeatable": true
+            }
+          ]
+        }
+      }
+    ],
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "bazel.targets": {
+        "function": "__rush_complete_bazel_targets"
+      }
+    }
+  }
+}
