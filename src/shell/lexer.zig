@@ -204,8 +204,8 @@ const Lexer = struct {
                     try self.appendSingle(&tokens, .bang),
                 '(' => try self.appendSingle(&tokens, .left_paren),
                 ')' => try self.appendSingle(&tokens, .right_paren),
-                '{' => try self.appendSingle(&tokens, .left_brace),
-                '}' => try self.appendSingle(&tokens, .right_brace),
+                '{' => if (self.nextStartsWord()) try self.appendWord(&tokens) else try self.appendSingle(&tokens, .left_brace),
+                '}' => if (self.nextStartsWord()) try self.appendWord(&tokens) else try self.appendSingle(&tokens, .right_brace),
                 '<', '>' => try self.appendRedirectionOperator(&tokens),
                 '#' => self.skipComment(),
                 else => if (self.startsIoNumber()) try self.appendIoNumber(&tokens) else try self.appendWord(&tokens),
@@ -506,6 +506,11 @@ const Lexer = struct {
         return self.source.text[index];
     }
 
+    fn nextStartsWord(self: Lexer) bool {
+        if (self.peekByte(1)) |next| return !isWordTerminator(next);
+        return false;
+    }
+
     fn skipArithmeticExpansion(self: *Lexer) void {
         var paren_depth: usize = 0;
         while (!self.atEnd()) {
@@ -736,7 +741,7 @@ const Lexer = struct {
 
 fn isWordTerminator(byte: u8) bool {
     return switch (byte) {
-        ' ', '\t', '\r', '\n', ';', '&', '|', '(', ')', '{', '}', '<', '>' => true,
+        ' ', '\t', '\r', '\n', ';', '&', '|', '(', ')', '<', '>' => true,
         else => false,
     };
 }
@@ -911,4 +916,15 @@ test "lexer keeps command substitutions inside words" {
     try std.testing.expectEqual(token.Kind.word, tokens[0].kind);
     try std.testing.expectEqualStrings("x=$(printf a; printf b)", tokens[0].text);
     try std.testing.expectEqual(token.Kind.eof, tokens[1].kind);
+}
+
+test "lexer keeps brace characters inside word tokens" {
+    const src: source_mod.Source = .{ .id = 1, .kind = .command_string, .name = "-c", .text = "printf {} x{} {}x a{b}" };
+    const tokens = try lex(std.testing.allocator, src);
+    defer std.testing.allocator.free(tokens);
+
+    try std.testing.expectEqualStrings("{}", tokens[1].text);
+    try std.testing.expectEqualStrings("x{}", tokens[2].text);
+    try std.testing.expectEqualStrings("{}x", tokens[3].text);
+    try std.testing.expectEqualStrings("a{b}", tokens[4].text);
 }

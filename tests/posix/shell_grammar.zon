@@ -77,6 +77,21 @@
             .status = 0,
         },
         .{
+            .name = "brace characters are ordinary within words",
+            .script =
+            \\printf '<%s>\n' {} x{} {}x a{b}
+            ,
+            .stdout =
+            \\<{}>
+            \\<x{}>
+            \\<{}x>
+            \\<a{b}>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "for clause with in iterates listed words",
             .script =
             \\for name in a 'b c'
