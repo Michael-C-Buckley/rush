@@ -1,0 +1,304 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "broot",
+    "description": "explore directories with a tree view",
+    "options": [
+      {
+        "long": "dates",
+        "short": "d",
+        "description": "show the last modified date of files and directories",
+        "inherit": false,
+        "exclusiveGroup": "broot.dates"
+      },
+      {
+        "long": "no-dates",
+        "short": "D",
+        "description": "don't show the last modified date",
+        "inherit": false,
+        "exclusiveGroup": "broot.dates"
+      },
+      {
+        "long": "only-folders",
+        "short": "f",
+        "description": "only show folders",
+        "inherit": false,
+        "exclusiveGroup": "broot.only-folders"
+      },
+      {
+        "long": "no-only-folders",
+        "short": "F",
+        "description": "show folders and files alike",
+        "inherit": false,
+        "exclusiveGroup": "broot.only-folders"
+      },
+      {
+        "long": "show-root-fs",
+        "description": "show filesystem info on top",
+        "inherit": false
+      },
+      {
+        "long": "show-git-info",
+        "short": "g",
+        "description": "show git statuses on files and stats of repository",
+        "inherit": false,
+        "exclusiveGroup": "broot.show-git-info"
+      },
+      {
+        "long": "no-show-git-info",
+        "short": "G",
+        "description": "don't show git statuses on files nor stats",
+        "inherit": false,
+        "exclusiveGroup": "broot.show-git-info"
+      },
+      {
+        "long": "git-status",
+        "description": "only show files having an interesting git status, including hidden ones",
+        "inherit": false
+      },
+      {
+        "long": "hidden",
+        "short": "h",
+        "description": "show hidden files",
+        "inherit": false,
+        "exclusiveGroup": "broot.hidden"
+      },
+      {
+        "long": "no-hidden",
+        "short": "H",
+        "description": "don't show hidden files",
+        "inherit": false,
+        "exclusiveGroup": "broot.hidden"
+      },
+      {
+        "long": "show-gitignored",
+        "short": "i",
+        "description": "show files which should be ignored according to git",
+        "inherit": false,
+        "exclusiveGroup": "broot.show-gitignored"
+      },
+      {
+        "long": "no-show-gitignored",
+        "short": "I",
+        "description": "don't show gitignored files",
+        "inherit": false,
+        "exclusiveGroup": "broot.show-gitignored"
+      },
+      {
+        "long": "permissions",
+        "short": "p",
+        "description": "show permissions with owner and group",
+        "inherit": false,
+        "exclusiveGroup": "broot.permissions"
+      },
+      {
+        "long": "no-permissions",
+        "short": "P",
+        "description": "don't show permissions",
+        "inherit": false,
+        "exclusiveGroup": "broot.permissions"
+      },
+      {
+        "long": "sizes",
+        "short": "s",
+        "description": "show the sizes of files and directories. When this mode is on, children aren't shown so that the biggest en",
+        "inherit": false,
+        "exclusiveGroup": "broot.sizes"
+      },
+      {
+        "long": "no-sizes",
+        "short": "S",
+        "description": "don't show sizes",
+        "inherit": false,
+        "exclusiveGroup": "broot.sizes"
+      },
+      {
+        "long": "sort-by-count",
+        "description": "sort by count (only show one level of the tree)",
+        "inherit": false,
+        "exclusiveGroup": "broot.sort"
+      },
+      {
+        "long": "sort-by-date",
+        "description": "sort by date (only show one level of the tree)",
+        "inherit": false,
+        "exclusiveGroup": "broot.sort"
+      },
+      {
+        "long": "sort-by-size",
+        "description": "sort by size (only show one level of the tree)",
+        "inherit": false,
+        "exclusiveGroup": "broot.sort"
+      },
+      {
+        "long": "whale-spotting",
+        "short": "w",
+        "description": "sort by size, show ignored and hidden files",
+        "inherit": false,
+        "exclusiveGroup": "broot.sort"
+      },
+      {
+        "long": "no-sort",
+        "description": "don't sort",
+        "inherit": false,
+        "exclusiveGroup": "broot.sort"
+      },
+      {
+        "long": "trim-root",
+        "short": "t",
+        "description": "trim the root: remove elements which would exceed the screen size. This removes the scrollbar",
+        "inherit": false,
+        "exclusiveGroup": "broot.trim-root"
+      },
+      {
+        "long": "no-trim-root",
+        "short": "T",
+        "description": "don't trim the root (still trim the deeper levels). A scrollbar may be used when there are too many element",
+        "inherit": false,
+        "exclusiveGroup": "broot.trim-root"
+      },
+      {
+        "long": "install",
+        "description": "install or reinstall the br shell function",
+        "inherit": false
+      },
+      {
+        "long": "get-root",
+        "description": "ask for the current root of the remote broot",
+        "inherit": false
+      },
+      {
+        "long": "color",
+        "description": "controls styling of the output (default: auto). If set to auto, all styling is removed when output is piped",
+        "inherit": false,
+        "value": {
+          "name": "value",
+          "required": false,
+          "style": "optional",
+          "values": [
+            "yes",
+            "no",
+            "auto"
+          ]
+        }
+      },
+      {
+        "long": "help",
+        "description": "prints a help page, with more or less the same content as this man page",
+        "inherit": false
+      },
+      {
+        "long": "version",
+        "short": "v",
+        "description": "prints the version of broot",
+        "inherit": false
+      },
+      {
+        "long": "outcmd",
+        "description": "where to write a command if broot produces one",
+        "inherit": false,
+        "value": {
+          "name": "cmd-export-path",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "cmd",
+        "short": "c",
+        "description": "semicolon separated commands to execute on start of broot",
+        "inherit": false,
+        "value": {
+          "name": "commands"
+        }
+      },
+      {
+        "long": "conf",
+        "description": "semicolon separated paths to specific config files",
+        "inherit": false,
+        "value": {
+          "name": "conf",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "height",
+        "description": "height to use if you don't want to fill the screen or for file export (by default the terminal height is used)",
+        "inherit": false,
+        "value": {
+          "name": "height"
+        }
+      },
+      {
+        "long": "out",
+        "short": "o",
+        "description": "where to write the produced path, if any",
+        "inherit": false,
+        "value": {
+          "name": "file-export-path",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "set-install-state",
+        "description": "set the installation state. This is mostly useful in installation scripts to override the normal installati",
+        "inherit": false,
+        "value": {
+          "name": "state",
+          "values": [
+            "undefined",
+            "refused",
+            "installed"
+          ]
+        }
+      },
+      {
+        "long": "print-shell-function",
+        "description": "print to stdout the br function for the given shell. This can be used in your own installation process over",
+        "inherit": false,
+        "value": {
+          "name": "shell",
+          "values": [
+            "bash",
+            "fish",
+            "zsh"
+          ]
+        }
+      },
+      {
+        "long": "listen",
+        "description": "listen for commands",
+        "inherit": false,
+        "value": {
+          "name": "listen"
+        }
+      },
+      {
+        "long": "send",
+        "description": "send commands to a remote broot then quits",
+        "inherit": false,
+        "value": {
+          "name": "send"
+        }
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "root",
+          "description": "root directory",
+          "index": 0,
+          "provider": "builtin.directories"
+        }
+      ]
+    },
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "builtin.directories": {
+        "builtin": "directories"
+      }
+    }
+  }
+}
