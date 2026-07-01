@@ -37,6 +37,7 @@ pub const Id = enum {
     false_,
     getopts,
     hash,
+    jobs,
     kill,
     local,
     prompt,
@@ -94,6 +95,7 @@ pub const core_definitions: DefinitionMap = .initComptime(.{
     .{ "false", Definition{ .name = "false", .id = .false_, .kind = .regular } },
     .{ "getopts", Definition{ .name = "getopts", .id = .getopts, .kind = .regular } },
     .{ "hash", Definition{ .name = "hash", .id = .hash, .kind = .regular } },
+    .{ "jobs", Definition{ .name = "jobs", .id = .jobs, .kind = .regular } },
     .{ "kill", Definition{ .name = "kill", .id = .kill, .kind = .regular } },
     .{ "local", Definition{ .name = "local", .id = .local, .kind = .regular } },
     .{ "printf", Definition{ .name = "printf", .id = .printf, .kind = .regular } },
@@ -184,6 +186,7 @@ pub fn eval(shell: anytype, definition: Definition, args: []const []const u8) !r
         .false_ => .{ .status = 1 },
         .getopts => evalGetopts(shell, args),
         .hash => evalHash(shell, args),
+        .jobs => evalJobs(shell, args),
         .kill => evalKill(shell, args),
         .local => evalLocal(shell, args),
         .printf => evalPrintf(shell, args),
@@ -452,7 +455,7 @@ fn evalKill(shell: anytype, args: []const []const u8) !result.EvalResult {
 
     var status: result.ExitStatus = 0;
     while (index < args.len) : (index += 1) {
-        const pid = std.fmt.parseInt(host.Pid, args[index], 10) catch {
+        const pid = killOperandPid(shell, args[index]) orelse {
             status = 1;
             continue;
         };
@@ -466,8 +469,44 @@ fn evalKill(shell: anytype, args: []const []const u8) !result.EvalResult {
             status = 1;
             continue;
         };
+        shell.state.forgetBackgroundJob(pid);
     }
     return .{ .status = status };
+}
+
+fn killOperandPid(shell: anytype, arg: []const u8) ?host.Pid {
+    if (arg.len >= 2 and arg[0] == '%') {
+        if (!shell.state.options.monitor) return null;
+        const job_id = std.fmt.parseInt(usize, arg[1..], 10) catch return null;
+        return shell.state.backgroundJobPid(job_id);
+    }
+    return std.fmt.parseInt(host.Pid, arg, 10) catch null;
+}
+
+fn evalJobs(shell: anytype, args: []const []const u8) !result.EvalResult {
+    var long = false;
+    for (args[1..]) |arg| {
+        if (std.mem.eql(u8, arg, "-l")) {
+            long = true;
+        } else {
+            return .{ .status = 2 };
+        }
+    }
+
+    for (shell.state.background_jobs.items) |job| {
+        if (long) {
+            try shell.host.writeAll(
+                .stdout,
+                try std.fmt.allocPrint(shell.scratchAllocator(), "[{}] {} Running {s}\n", .{ job.id, job.pid, job.command }),
+            );
+        } else {
+            try shell.host.writeAll(
+                .stdout,
+                try std.fmt.allocPrint(shell.scratchAllocator(), "[{}] Running {s}\n", .{ job.id, job.command }),
+            );
+        }
+    }
+    return .{};
 }
 
 fn evalKillList(shell: anytype, operands: []const []const u8) !result.EvalResult {

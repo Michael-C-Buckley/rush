@@ -676,6 +676,52 @@
             .status = 0,
         },
         .{
+            .name = "jobs lists asynchronous commands",
+            .script =
+            \\sleep 2 &
+            \\pid=$!
+            \\jobs >jobs.out
+            \\grep '\[1\]' jobs.out >/dev/null && grep 'sleep 2' jobs.out >/dev/null
+            \\printf 'jobs:<%s>\n' "$?"
+            \\kill "$pid" 2>/dev/null
+            \\wait "$pid" 2>/dev/null || :
+            ,
+            .stdout =
+            \\jobs:<0>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "kill accepts job operands when monitor mode is enabled",
+            .script =
+            \\sleep 2 &
+            \\pid=$!
+            \\kill %1 2>/dev/null
+            \\printf 'no-monitor:<%s>\n' "$?"
+            \\kill "$pid" 2>/dev/null
+            \\wait "$pid" 2>/dev/null || :
+            \\set -m
+            \\sleep 2 &
+            \\pid=$!
+            \\jobs -l >jobs.out
+            \\grep "$pid" jobs.out >/dev/null && grep 'sleep 2' jobs.out >/dev/null
+            \\printf 'jobs-l:<%s>\n' "$?"
+            \\kill %1
+            \\printf 'kill-job:<%s>\n' "$?"
+            \\wait 2>/dev/null || :
+            ,
+            .stdout =
+            \\no-monitor:<1>
+            \\jobs-l:<0>
+            \\kill-job:<0>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "umask -S writes symbolic permissions",
             .script =
             \\umask 022

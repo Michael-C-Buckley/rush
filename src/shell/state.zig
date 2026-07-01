@@ -81,6 +81,17 @@ pub const CommandHash = struct {
     }
 };
 
+pub const BackgroundJob = struct {
+    id: usize,
+    pid: host.Pid,
+    command: []const u8,
+
+    pub fn validate(self: BackgroundJob) void {
+        std.debug.assert(self.id != 0);
+        std.debug.assert(self.command.len != 0);
+    }
+};
+
 pub const State = struct {
     allocator: std.mem.Allocator,
     definition_arena: memory.Arena,
@@ -93,6 +104,7 @@ pub const State = struct {
     signal_traps: std.StringHashMapUnmanaged([]const u8) = .empty,
     pending_traps: std.ArrayListUnmanaged([]const u8) = .empty,
     background_pids: std.ArrayListUnmanaged(host.Pid) = .empty,
+    background_jobs: std.ArrayListUnmanaged(BackgroundJob) = .empty,
     last_status: result.ExitStatus = 0,
     last_status_errexit_ignored: bool = false,
     last_background_pid: ?host.Pid = null,
@@ -146,6 +158,8 @@ pub const State = struct {
         self.signal_traps.deinit(self.allocator);
         self.pending_traps.deinit(self.allocator);
         self.background_pids.deinit(self.allocator);
+        for (self.background_jobs.items) |job| self.allocator.free(job.command);
+        self.background_jobs.deinit(self.allocator);
         self.freeOwnedPositionals();
         self.clearExitTrap();
         self.definition_arena.deinit();
@@ -407,17 +421,51 @@ pub const State = struct {
         try self.background_pids.append(self.allocator, pid);
     }
 
+    pub fn addBackgroundJob(self: *State, pid: host.Pid, command: []const u8) !void {
+        const owned_command = try self.allocator.dupe(u8, command);
+        errdefer self.allocator.free(owned_command);
+        const job: BackgroundJob = .{ .id = self.nextAvailableJobId(), .pid = pid, .command = owned_command };
+        job.validate();
+        try self.background_jobs.append(self.allocator, job);
+    }
+
+    fn nextAvailableJobId(self: State) usize {
+        var id: usize = 1;
+        while (true) : (id += 1) {
+            for (self.background_jobs.items) |job| {
+                if (job.id == id) break;
+            } else return id;
+        }
+    }
+
     pub fn removeBackgroundPid(self: *State, pid: host.Pid) bool {
         for (self.background_pids.items, 0..) |known, index| {
             if (known != pid) continue;
             _ = self.background_pids.orderedRemove(index);
+            self.forgetBackgroundJob(pid);
             return true;
         }
         return false;
     }
 
+    pub fn backgroundJobPid(self: State, job_id: usize) ?host.Pid {
+        for (self.background_jobs.items) |job| if (job.id == job_id) return job.pid;
+        return null;
+    }
+
+    pub fn forgetBackgroundJob(self: *State, pid: host.Pid) void {
+        for (self.background_jobs.items, 0..) |job, index| {
+            if (job.pid != pid) continue;
+            self.allocator.free(job.command);
+            _ = self.background_jobs.orderedRemove(index);
+            return;
+        }
+    }
+
     pub fn clearBackgroundPids(self: *State) void {
         self.background_pids.clearRetainingCapacity();
+        for (self.background_jobs.items) |job| self.allocator.free(job.command);
+        self.background_jobs.clearRetainingCapacity();
     }
 };
 

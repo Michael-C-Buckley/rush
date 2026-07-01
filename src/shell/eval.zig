@@ -127,6 +127,9 @@ fn evalBackgroundAndOr(shell: anytype, and_or: ast.AndOr) EvalError!result.EvalR
     };
     shell.state.last_background_pid = pid;
     try shell.state.addBackgroundPid(pid);
+    const job_scratch = try shell.beginScratchScope();
+    defer job_scratch.end();
+    try shell.state.addBackgroundJob(pid, try backgroundAndOrCommandText(shell, and_or));
     return .{ .status = 0 };
 }
 
@@ -179,7 +182,53 @@ fn evalBackgroundPipeline(shell: anytype, pipeline: ast.Pipeline) EvalError!resu
     defer shell.allocator.free(pids);
     for (pids) |pid| try shell.state.addBackgroundPid(pid);
     shell.state.last_background_pid = pids[pids.len - 1];
+    const job_scratch = try shell.beginScratchScope();
+    defer job_scratch.end();
+    try shell.state.addBackgroundJob(pids[pids.len - 1], try pipelineCommandText(shell, pipeline));
     return .{ .status = 0 };
+}
+
+fn backgroundAndOrCommandText(shell: anytype, and_or: ast.AndOr) ![]const u8 {
+    if (and_or.pipelines.len != 1) return "background job";
+    return pipelineCommandText(shell, and_or.pipelines[0].pipeline);
+}
+
+fn pipelineCommandText(shell: anytype, pipeline: ast.Pipeline) ![]const u8 {
+    var output: std.ArrayList(u8) = .empty;
+    const allocator = shell.scratchAllocator();
+    if (pipeline.negated) try output.appendSlice(allocator, "! ");
+    for (pipeline.stages, 0..) |stage, stage_index| {
+        if (stage_index != 0) try output.appendSlice(allocator, " | ");
+        try output.appendSlice(allocator, try commandText(shell, stage));
+    }
+    return output.toOwnedSlice(allocator);
+}
+
+fn commandText(shell: anytype, command: ast.Command) ![]const u8 {
+    return switch (command) {
+        .simple => |simple| simpleCommandText(shell, simple),
+        .function_definition => |definition| definition.name,
+        .compound => "compound command",
+    };
+}
+
+fn simpleCommandText(shell: anytype, command: ast.SimpleCommand) ![]const u8 {
+    var output: std.ArrayList(u8) = .empty;
+    const allocator = shell.scratchAllocator();
+    var needs_space = false;
+    for (command.assignments) |assignment| {
+        if (needs_space) try output.append(allocator, ' ');
+        try output.appendSlice(allocator, assignment.name);
+        try output.append(allocator, '=');
+        if (staticLiteralWord(assignment.value)) |value| try output.appendSlice(allocator, value) else try output.appendSlice(allocator, "...");
+        needs_space = true;
+    }
+    for (command.words) |word| {
+        if (needs_space) try output.append(allocator, ' ');
+        if (staticLiteralWord(word)) |value| try output.appendSlice(allocator, value) else try output.appendSlice(allocator, "...");
+        needs_space = true;
+    }
+    return if (needs_space) output.toOwnedSlice(allocator) else "simple command";
 }
 
 fn evalAndOr(shell: anytype, and_or: ast.AndOr) EvalError!result.EvalResult {
@@ -1104,6 +1153,7 @@ fn evalSimpleScoped(shell: anytype, command: ast.SimpleCommand) EvalError!result
             .event,
             .getopts,
             .hash,
+            .jobs,
             .kill,
             .local,
             .prompt,
@@ -1534,6 +1584,7 @@ fn evalCommandBuiltin(
             .exit,
             .getopts,
             .hash,
+            .jobs,
             .kill,
             .local,
             .prompt,
