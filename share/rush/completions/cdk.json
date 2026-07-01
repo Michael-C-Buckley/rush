@@ -1,0 +1,95 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "cdk",
+    "description": "manage aws cloud development kit apps",
+    "options": [
+      {
+        "long": "version",
+        "description": "the current version",
+        "inherit": false
+      },
+      {
+        "short": "h",
+        "long": "help",
+        "description": "show help",
+        "inherit": false
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "init",
+        "description": "create a new, empty CDK project from a template"
+      },
+      {
+        "name": "metadata",
+        "description": "returns all metadata associated with this stack"
+      },
+      {
+        "name": "doctor",
+        "description": "check your set-up for potential problems"
+      },
+      {
+        "name": "diff",
+        "description": "compares the specified stack with the deployed stack"
+      },
+      {
+        "name": "destroy",
+        "description": "destroy the specified stack(s)"
+      },
+      {
+        "name": "deploy",
+        "description": "deploy the specified stack(s) into your AWS account"
+      },
+      {
+        "name": "bootstrap",
+        "description": "deploys the CDK toolkit stack into an AWS environment"
+      },
+      {
+        "name": "synth",
+        "aliases": [
+          "synthesize"
+        ],
+        "description": "synthesizes and prints the CloudFormation template for this stack"
+      },
+      {
+        "name": "ls",
+        "aliases": [
+          "list"
+        ],
+        "description": "list all stacks in the app"
+      },
+      {
+        "name": "import",
+        "description": "import existing resource(s) into the given STACK"
+      },
+      {
+        "name": "watch",
+        "description": "shortcut for 'deploy --watch'"
+      },
+      {
+        "name": "ack",
+        "aliases": [
+          "acknowledge"
+        ],
+        "description": "acknowledge a notice so that it does not show up anymore"
+      },
+      {
+        "name": "notices",
+        "description": "returns a list of relevant notices"
+      },
+      {
+        "name": "context",
+        "description": "manage cached context values"
+      },
+      {
+        "name": "doc",
+        "aliases": [
+          "docs"
+        ],
+        "description": "opens the reference documentation in a browser"
+      }
+    ]
+  }
+}
