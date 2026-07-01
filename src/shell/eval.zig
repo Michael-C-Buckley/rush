@@ -4205,7 +4205,9 @@ fn ArithmeticParser(comptime ShellType: type) type {
                 if (self.shell.state.options.nounset) return error.InvalidArithmetic;
                 return 0;
             };
-            return std.fmt.parseInt(i64, value, 10) catch error.InvalidArithmetic;
+            const trimmed = std.mem.trim(u8, value, " \t\n");
+            if (trimmed.len == 0) return 0;
+            return std.fmt.parseInt(i64, trimmed, 10) catch error.InvalidArithmetic;
         }
 
         fn assignVariable(self: *Self, name: []const u8, value: i64) ArithmeticError!void {

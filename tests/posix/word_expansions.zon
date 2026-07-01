@@ -909,6 +909,35 @@
             .status = 0,
         },
         .{
+            .name = "arithmetic expansion trims whitespace around variable values",
+            .script =
+            \\n=$(printf ' \t\n1')
+            \\printf '<%s>\n' "$((n))"
+            \\n=$(printf '1 \t\n')
+            \\printf '<%s>\n' "$((n))"
+            ,
+            .stdout =
+            \\<1>
+            \\<1>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "arithmetic expansion treats empty variable values as zero",
+            .script =
+            \\n=
+            \\printf '<%s>\n' "$((n))"
+            ,
+            .stdout =
+            \\<0>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "arithmetic expansion honors nounset for bare variables",
             .script =
             \\( set -u
