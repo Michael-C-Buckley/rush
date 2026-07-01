@@ -1,0 +1,2524 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "cf",
+    "description": "manage cloud foundry apps and services",
+    "options": [
+      {
+        "long": "help",
+        "short": "h",
+        "description": "show help for cloud foundry command line tool",
+        "inherit": false
+      },
+      {
+        "short": "v",
+        "description": "print API request diagnostics to stdout",
+        "inherit": false
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "app",
+        "aliases": [
+          "a"
+        ],
+        "description": "display health and status for app",
+        "options": [
+          {
+            "long": "guid",
+            "description": "retrieve and display the given app's guid. All other health and status output for the app is suppressed",
+            "inherit": false,
+            "exclusiveGroup": "cf.output-identity"
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "app_name",
+              "description": "the app you want to get health and status for",
+              "index": 0,
+              "provider": "cf.apps"
+            }
+          ]
+        }
+      },
+      {
+        "name": "ssh",
+        "description": "display health and status for app",
+        "options": [
+          {
+            "short": "v",
+            "description": "verbose output",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "app_name",
+              "description": "the app you want to ssh into",
+              "index": 0,
+              "provider": "cf.apps"
+            }
+          ]
+        }
+      },
+      {
+        "name": "env",
+        "description": "show all env variables for an app",
+        "arguments": {
+          "states": [
+            {
+              "name": "app_name",
+              "description": "the app you want to get env vars for",
+              "index": 0,
+              "provider": "cf.apps"
+            }
+          ]
+        }
+      },
+      {
+        "name": "orgs",
+        "description": "list all orgs"
+      },
+      {
+        "name": "version",
+        "aliases": [],
+        "description": "print the version of cf"
+      },
+      {
+        "name": "login",
+        "description": "log user in",
+        "options": [
+          {
+            "short": "a",
+            "description": "aPI endpoint (e.g. https://api.example.com)",
+            "inherit": false,
+            "value": {
+              "name": "api-endpoint"
+            }
+          },
+          {
+            "short": "o",
+            "description": "org",
+            "inherit": false,
+            "value": {
+              "name": "org",
+              "provider": "cf.orgs"
+            }
+          },
+          {
+            "short": "s",
+            "description": "space",
+            "inherit": false,
+            "value": {
+              "name": "space",
+              "provider": "cf.spaces"
+            }
+          },
+          {
+            "short": "p",
+            "description": "password",
+            "inherit": false,
+            "value": {
+              "name": "password"
+            }
+          },
+          {
+            "short": "u",
+            "description": "username",
+            "inherit": false,
+            "value": {
+              "name": "username"
+            }
+          }
+        ]
+      },
+      {
+        "name": "logout",
+        "description": "log user out"
+      },
+      {
+        "name": "password",
+        "description": "change user password"
+      },
+      {
+        "name": "target",
+        "description": "set or view the targeted org or space",
+        "options": [
+          {
+            "short": "o",
+            "description": "org",
+            "inherit": false,
+            "value": {
+              "name": "org",
+              "provider": "cf.orgs"
+            }
+          },
+          {
+            "short": "s",
+            "description": "space",
+            "inherit": false,
+            "value": {
+              "name": "space",
+              "provider": "cf.spaces"
+            }
+          }
+        ]
+      },
+      {
+        "name": "api",
+        "description": "set or view target api url",
+        "options": [
+          {
+            "long": "skip-ssl-validation",
+            "description": "skip verification of the API endpoint. Not recommended!",
+            "inherit": false
+          },
+          {
+            "long": "unset",
+            "description": "remove all api endpoint targeting",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "url",
+              "description": "aPI endpoint",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "auth",
+        "description": "auth user non-interactively",
+        "arguments": {
+          "states": [
+            {
+              "name": "username",
+              "index": 0
+            },
+            {
+              "name": "password",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "apps",
+        "description": "list all apps in the target space"
+      },
+      {
+        "name": "push",
+        "description": "push a new app or sync changes to an existing app",
+        "options": [
+          {
+            "short": "b",
+            "description": "custom buildpack by name or git url",
+            "inherit": false,
+            "value": {
+              "name": "buildpack"
+            }
+          },
+          {
+            "short": "c",
+            "description": "startup command, set to null to reset to default start command",
+            "inherit": false,
+            "value": {
+              "name": "command",
+              "required": false,
+              "style": "optional"
+            }
+          },
+          {
+            "short": "d",
+            "description": "domain",
+            "inherit": false,
+            "value": {
+              "name": "domain"
+            }
+          },
+          {
+            "short": "o",
+            "long": "docker-image",
+            "description": "docker image",
+            "inherit": false,
+            "value": {
+              "name": "docker-image"
+            }
+          },
+          {
+            "short": "f",
+            "description": "path to manifest",
+            "inherit": false,
+            "value": {
+              "name": "path-to-manifest",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "short": "n",
+            "long": "host-name",
+            "description": "hostname",
+            "inherit": false,
+            "value": {
+              "name": "hostname"
+            }
+          },
+          {
+            "short": "i",
+            "description": "number of instances",
+            "inherit": false,
+            "value": {
+              "name": "number-of-instances"
+            }
+          },
+          {
+            "short": "k",
+            "description": "disk limit",
+            "inherit": false,
+            "value": {
+              "name": "disk-limit"
+            }
+          },
+          {
+            "short": "m",
+            "description": "memory limit",
+            "inherit": false,
+            "value": {
+              "name": "memory-limit"
+            }
+          }
+        ]
+      },
+      {
+        "name": "scale",
+        "description": "change or view the instance count, disk space limit, and memory limit for an app",
+        "options": [
+          {
+            "short": "f",
+            "description": "force restart of app without prompt",
+            "inherit": false
+          },
+          {
+            "short": "i",
+            "description": "number of instances",
+            "inherit": false,
+            "value": {
+              "name": "number-of-instances"
+            }
+          },
+          {
+            "short": "k",
+            "description": "disk limit",
+            "inherit": false,
+            "value": {
+              "name": "disk-limit"
+            }
+          },
+          {
+            "short": "m",
+            "description": "memory limit",
+            "inherit": false,
+            "value": {
+              "name": "memory-limit"
+            }
+          }
+        ]
+      },
+      {
+        "name": "delete",
+        "description": "delete an app",
+        "options": [
+          {
+            "short": "f",
+            "description": "force deletion without confirmation",
+            "priority": -10,
+            "inherit": false
+          },
+          {
+            "short": "r",
+            "description": "also delete any mapped routes",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "app_name",
+              "description": "the app you want to get health and status for",
+              "index": 0,
+              "provider": "cf.apps"
+            }
+          ]
+        }
+      },
+      {
+        "name": "rename",
+        "description": "rename an app",
+        "arguments": {
+          "states": [
+            {
+              "name": "app_name",
+              "index": 0,
+              "provider": "cf.apps"
+            },
+            {
+              "name": "new-app-name",
+              "index": 1,
+              "provider": "cf.apps"
+            }
+          ]
+        }
+      },
+      {
+        "name": "start",
+        "description": "start an app",
+        "arguments": {
+          "states": [
+            {
+              "name": "app_name",
+              "index": 0,
+              "provider": "cf.apps"
+            }
+          ]
+        }
+      },
+      {
+        "name": "stop",
+        "description": "stop an app",
+        "arguments": {
+          "states": [
+            {
+              "name": "app_name",
+              "index": 0,
+              "provider": "cf.apps"
+            }
+          ]
+        }
+      },
+      {
+        "name": "restart",
+        "description": "stop all instances of the app, then start them again. This may cause downtime",
+        "arguments": {
+          "states": [
+            {
+              "name": "app_name",
+              "index": 0,
+              "provider": "cf.apps"
+            }
+          ]
+        }
+      },
+      {
+        "name": "restage",
+        "description": "recreate the app's executable artifact using the latest pushed app files and the latest environment (variables,",
+        "arguments": {
+          "states": [
+            {
+              "name": "app_name",
+              "index": 0,
+              "provider": "cf.apps"
+            }
+          ]
+        }
+      },
+      {
+        "name": "restart-app-instance",
+        "description": "terminate the running application Instance at the given index and instantiate a new instance of the application",
+        "arguments": {
+          "states": [
+            {
+              "name": "app_name",
+              "index": 0,
+              "provider": "cf.apps"
+            },
+            {
+              "name": "index",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "run-task",
+        "description": "run a one-off task on an app",
+        "options": [
+          {
+            "short": "k",
+            "description": "disk limit",
+            "inherit": false,
+            "value": {
+              "name": "disk-limit"
+            }
+          },
+          {
+            "short": "m",
+            "description": "memory limit",
+            "inherit": false,
+            "value": {
+              "name": "memory-limit"
+            }
+          },
+          {
+            "long": "name",
+            "description": "name for task",
+            "inherit": false,
+            "value": {
+              "name": "name-for-task"
+            },
+            "exclusiveGroup": "cf.output-identity"
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "app_name",
+              "index": 0,
+              "provider": "cf.apps"
+            },
+            {
+              "name": "command",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "tasks",
+        "description": "list tasks of an app",
+        "arguments": {
+          "states": [
+            {
+              "name": "app_name",
+              "index": 0,
+              "provider": "cf.apps"
+            }
+          ]
+        }
+      },
+      {
+        "name": "terminate-task",
+        "description": "terminate a running task of an app",
+        "arguments": {
+          "states": [
+            {
+              "name": "app_name",
+              "index": 0,
+              "provider": "cf.apps"
+            },
+            {
+              "name": "task-id",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "events",
+        "description": "show recent app events",
+        "arguments": {
+          "states": [
+            {
+              "name": "app_name",
+              "index": 0,
+              "provider": "cf.apps"
+            }
+          ]
+        }
+      },
+      {
+        "name": "files",
+        "description": "print out a list of files in a directory or the contents of a specific file of an app running on the DEA backend",
+        "options": [
+          {
+            "short": "i",
+            "description": "instance",
+            "inherit": false,
+            "value": {
+              "name": "instance",
+              "provider": "cf.services"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "app_name",
+              "index": 0,
+              "provider": "cf.apps"
+            },
+            {
+              "name": "path",
+              "index": 1,
+              "provider": "builtin.files"
+            }
+          ]
+        }
+      },
+      {
+        "name": "logs",
+        "description": "trail or show recent logs for an app",
+        "options": [
+          {
+            "long": "recent",
+            "description": "dump recent logs instead of tailing",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "app_name",
+              "index": 0,
+              "provider": "cf.apps"
+            }
+          ]
+        }
+      },
+      {
+        "name": "set-env",
+        "description": "set an environment variable for an app",
+        "arguments": {
+          "states": [
+            {
+              "name": "app_name",
+              "index": 0,
+              "provider": "cf.apps"
+            },
+            {
+              "name": "env-var-name",
+              "index": 1
+            },
+            {
+              "name": "env-var-value",
+              "index": 2
+            }
+          ]
+        }
+      },
+      {
+        "name": "unset-env",
+        "description": "remove an environment variable",
+        "arguments": {
+          "states": [
+            {
+              "name": "app_name",
+              "index": 0,
+              "provider": "cf.apps"
+            },
+            {
+              "name": "env-var-name",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "stacks",
+        "description": "list all stacks (a stack is a pre-built file system, including an operating system, that can run apps)"
+      },
+      {
+        "name": "copy-source",
+        "description": "copies the source code of an application to another existing application (and restarts that application)",
+        "options": [
+          {
+            "short": "s",
+            "description": "space that contains the target application",
+            "inherit": false,
+            "value": {
+              "name": "space",
+              "provider": "cf.spaces"
+            }
+          },
+          {
+            "short": "o",
+            "description": "org that contains the target application",
+            "inherit": false,
+            "value": {
+              "name": "org",
+              "provider": "cf.orgs"
+            }
+          },
+          {
+            "long": "no-restart",
+            "description": "override restart of the application in target environment after copy-source completes",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "source-app",
+              "index": 0,
+              "provider": "cf.apps"
+            },
+            {
+              "name": "target-app",
+              "index": 1,
+              "provider": "cf.apps"
+            }
+          ]
+        }
+      },
+      {
+        "name": "create-app-manifest",
+        "description": "create an app manifest for an app that has been pushed successfully",
+        "options": [
+          {
+            "short": "p",
+            "description": "path for file creation",
+            "inherit": false,
+            "value": {
+              "name": "path",
+              "provider": "builtin.files"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "app_name",
+              "index": 0,
+              "provider": "cf.apps"
+            }
+          ]
+        }
+      },
+      {
+        "name": "get-health-check",
+        "description": "show the type of health check performed on an app",
+        "arguments": {
+          "states": [
+            {
+              "name": "app_name",
+              "index": 0,
+              "provider": "cf.apps"
+            }
+          ]
+        }
+      },
+      {
+        "name": "set-health-check",
+        "description": "change type of health check performed on an app",
+        "arguments": {
+          "states": [
+            {
+              "name": "app_name",
+              "index": 0,
+              "provider": "cf.apps"
+            },
+            {
+              "name": "type-of-health-check",
+              "description": "process, port or http",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "enable-ssh",
+        "description": "enable ssh for the application",
+        "arguments": {
+          "states": [
+            {
+              "name": "app_name",
+              "index": 0,
+              "provider": "cf.apps"
+            }
+          ]
+        }
+      },
+      {
+        "name": "disable-ssh",
+        "description": "disable ssh for the application",
+        "arguments": {
+          "states": [
+            {
+              "name": "app_name",
+              "index": 0,
+              "provider": "cf.apps"
+            }
+          ]
+        }
+      },
+      {
+        "name": "ssh-enabled",
+        "description": "reports whether SSH is enabled on an application container instance",
+        "arguments": {
+          "states": [
+            {
+              "name": "app_name",
+              "index": 0,
+              "provider": "cf.apps"
+            }
+          ]
+        }
+      },
+      {
+        "name": "marketplace",
+        "description": "list available offerings in the marketplace",
+        "options": [
+          {
+            "short": "s",
+            "description": "show plan details for a particular service offering",
+            "inherit": false,
+            "value": {
+              "name": "service",
+              "provider": "cf.services"
+            }
+          }
+        ]
+      },
+      {
+        "name": "services",
+        "aliases": [
+          "s"
+        ],
+        "description": "list all service instances in the target space"
+      },
+      {
+        "name": "create-service",
+        "description": "create a service instance",
+        "options": [
+          {
+            "short": "c",
+            "description": "valid JSON object containing service-specific configuration parameters, provided either in-line or in a file",
+            "inherit": false,
+            "value": {
+              "name": "json-object"
+            }
+          },
+          {
+            "short": "t",
+            "description": "user provided tags",
+            "inherit": false,
+            "value": {
+              "name": "tags"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "service",
+              "index": 0,
+              "provider": "cf.services"
+            },
+            {
+              "name": "plan",
+              "index": 1
+            },
+            {
+              "name": "service-instance",
+              "index": 2,
+              "provider": "cf.services"
+            }
+          ]
+        }
+      },
+      {
+        "name": "update-service",
+        "description": "update a service instance",
+        "options": [
+          {
+            "short": "c",
+            "description": "valid JSON object containing service-specific configuration parameters, provided either in-line or in a file",
+            "inherit": false,
+            "value": {
+              "name": "json-object"
+            }
+          },
+          {
+            "short": "p",
+            "description": "change service plan for a service instance",
+            "inherit": false,
+            "value": {
+              "name": "new-plan"
+            }
+          },
+          {
+            "short": "t",
+            "description": "user provided tags",
+            "inherit": false,
+            "value": {
+              "name": "tags"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "service",
+              "index": 0,
+              "provider": "cf.services"
+            }
+          ]
+        }
+      },
+      {
+        "name": "delete-service",
+        "description": "delete a service instance",
+        "options": [
+          {
+            "short": "f",
+            "description": "force deletion without confirmation",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "service-instance",
+              "index": 0,
+              "provider": "cf.services"
+            }
+          ]
+        }
+      },
+      {
+        "name": "rename-service",
+        "description": "rename a service instance",
+        "arguments": {
+          "states": [
+            {
+              "name": "service-instance",
+              "index": 0,
+              "provider": "cf.services"
+            },
+            {
+              "name": "new-service-instance",
+              "index": 1,
+              "provider": "cf.services"
+            }
+          ]
+        }
+      },
+      {
+        "name": "create-service-key",
+        "description": "create key for a service instance",
+        "options": [
+          {
+            "short": "c",
+            "description": "valid JSON object containing service-specific configuration parameters, provided either in-line or in a file",
+            "inherit": false,
+            "value": {
+              "name": "json-object"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "service-instance",
+              "index": 0,
+              "provider": "cf.services"
+            },
+            {
+              "name": "service-key",
+              "index": 1,
+              "provider": "cf.services"
+            }
+          ]
+        }
+      },
+      {
+        "name": "service-keys",
+        "description": "list keys for a service instance",
+        "arguments": {
+          "states": [
+            {
+              "name": "service-instance",
+              "index": 0,
+              "provider": "cf.services"
+            }
+          ]
+        }
+      },
+      {
+        "name": "service-key",
+        "description": "show service key info",
+        "arguments": {
+          "states": [
+            {
+              "name": "service-instance",
+              "index": 0,
+              "provider": "cf.services"
+            },
+            {
+              "name": "service-key",
+              "index": 1,
+              "provider": "cf.services"
+            }
+          ]
+        }
+      },
+      {
+        "name": "delete-service-key",
+        "description": "delete a service key",
+        "options": [
+          {
+            "short": "f",
+            "description": "force deletion without confirmation",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "service-instance",
+              "index": 0,
+              "provider": "cf.services"
+            },
+            {
+              "name": "service-key",
+              "index": 1,
+              "provider": "cf.services"
+            }
+          ]
+        }
+      },
+      {
+        "name": "bind-service",
+        "description": "bind a service instance to an app",
+        "options": [
+          {
+            "short": "c",
+            "description": "valid JSON object containing service-specific configuration parameters, provided either in-line or in a file",
+            "inherit": false,
+            "value": {
+              "name": "json-object"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "app_name",
+              "index": 0,
+              "provider": "cf.apps"
+            },
+            {
+              "name": "service-instance",
+              "index": 1,
+              "provider": "cf.services"
+            }
+          ]
+        }
+      },
+      {
+        "name": "unbind-service",
+        "description": "unbind a service instance from an app",
+        "arguments": {
+          "states": [
+            {
+              "name": "app_name",
+              "index": 0,
+              "provider": "cf.apps"
+            },
+            {
+              "name": "service-instance",
+              "index": 1,
+              "provider": "cf.services"
+            }
+          ]
+        }
+      },
+      {
+        "name": "bind-route-service",
+        "description": "bind a service instance to an HTTP route",
+        "options": [
+          {
+            "short": "c",
+            "description": "valid JSON object containing service-specific configuration parameters, provided either in-line or in a file",
+            "inherit": false,
+            "value": {
+              "name": "json-object"
+            }
+          },
+          {
+            "short": "n",
+            "long": "hostname",
+            "description": "hostname used in combination with DOMAIN to specify the route to bind",
+            "inherit": false,
+            "value": {
+              "name": "hostname"
+            }
+          },
+          {
+            "long": "path",
+            "description": "path used in combination with HOSTNAME and DOMAIN to specify the route to bind",
+            "inherit": false,
+            "value": {
+              "name": "path",
+              "provider": "builtin.files"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "domain",
+              "index": 0
+            },
+            {
+              "name": "service-instance",
+              "index": 1,
+              "provider": "cf.services"
+            }
+          ]
+        }
+      },
+      {
+        "name": "unbind-route-service",
+        "description": "unbind a service instance from an HTTP route",
+        "options": [
+          {
+            "short": "f",
+            "description": "force unbinding without confirmation",
+            "inherit": false
+          },
+          {
+            "short": "n",
+            "long": "hostname",
+            "description": "hostname used in combination with DOMAIN to specify the route to bind",
+            "inherit": false,
+            "value": {
+              "name": "hostname"
+            }
+          },
+          {
+            "long": "path",
+            "description": "path used in combination with HOSTNAME and DOMAIN to specify the route to bind",
+            "inherit": false,
+            "value": {
+              "name": "path",
+              "provider": "builtin.files"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "domain",
+              "index": 0
+            },
+            {
+              "name": "service-instance",
+              "index": 1,
+              "provider": "cf.services"
+            }
+          ]
+        }
+      },
+      {
+        "name": "create-user-provided-service",
+        "description": "make a user-provided service instance available to CF apps",
+        "options": [
+          {
+            "short": "p",
+            "description": "credentials, provided inline or in a file, to be exposed in the VCAP_SERVICES environment variable for bound app",
+            "inherit": false,
+            "value": {
+              "name": "credentials"
+            }
+          },
+          {
+            "short": "l",
+            "description": "url to which logs for bound applications will be streamed",
+            "inherit": false,
+            "value": {
+              "name": "sys-log-drain-url"
+            }
+          },
+          {
+            "short": "r",
+            "description": "url to which requests for bound routes will be forwarded. Scheme for this url must be https",
+            "inherit": false,
+            "value": {
+              "name": "serice-url"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "service-instance",
+              "index": 0,
+              "provider": "cf.services"
+            }
+          ]
+        }
+      },
+      {
+        "name": "update-user-provided-service",
+        "description": "update user-provided service instance",
+        "options": [
+          {
+            "short": "p",
+            "description": "credentials, provided inline or in a file, to be exposed in the VCAP_SERVICES environment variable for bound app",
+            "inherit": false,
+            "value": {
+              "name": "credentials"
+            }
+          },
+          {
+            "short": "l",
+            "description": "url to which logs for bound applications will be streamed",
+            "inherit": false,
+            "value": {
+              "name": "sys-log-drain-url"
+            }
+          },
+          {
+            "short": "r",
+            "description": "url to which requests for bound routes will be forwarded. Scheme for this url must be https",
+            "inherit": false,
+            "value": {
+              "name": "serice-url"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "service-instance",
+              "index": 0,
+              "provider": "cf.services"
+            }
+          ]
+        }
+      },
+      {
+        "name": "org",
+        "description": "show org info",
+        "options": [
+          {
+            "long": "guid",
+            "description": "retrieve and display the given org's guid. All other output for the org is suppressed",
+            "inherit": false,
+            "exclusiveGroup": "cf.output-identity"
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "org",
+              "index": 0,
+              "provider": "cf.orgs"
+            }
+          ]
+        }
+      },
+      {
+        "name": "create-org",
+        "description": "create an org",
+        "options": [
+          {
+            "short": "p",
+            "description": "quota to assign to the newly created org (excluding this option results in assignment of default quota)",
+            "inherit": false,
+            "value": {
+              "name": "quota"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "org",
+              "index": 0,
+              "provider": "cf.orgs"
+            }
+          ]
+        }
+      },
+      {
+        "name": "delete-org",
+        "description": "delete an org",
+        "options": [
+          {
+            "short": "f",
+            "description": "force deletion without confirmation",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "org",
+              "index": 0,
+              "provider": "cf.orgs"
+            }
+          ]
+        }
+      },
+      {
+        "name": "rename-org",
+        "description": "rename an org",
+        "arguments": {
+          "states": [
+            {
+              "name": "org",
+              "index": 0,
+              "provider": "cf.orgs"
+            },
+            {
+              "name": "new-org",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "spaces",
+        "description": "list all spaces in an org"
+      },
+      {
+        "name": "space",
+        "description": "show space info",
+        "options": [
+          {
+            "long": "guid",
+            "description": "retrieve and display the given org's guid. All other output for the org is suppressed",
+            "inherit": false,
+            "exclusiveGroup": "cf.output-identity"
+          },
+          {
+            "long": "security-group-rules",
+            "description": "retrieve the rules for all the security groups associated with the space's guid. All other output for the org is",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "space",
+              "index": 0,
+              "provider": "cf.spaces"
+            }
+          ]
+        }
+      },
+      {
+        "name": "create-space",
+        "description": "create a space",
+        "options": [
+          {
+            "short": "o",
+            "description": "org",
+            "inherit": false,
+            "value": {
+              "name": "org",
+              "provider": "cf.orgs"
+            }
+          },
+          {
+            "short": "p",
+            "description": "quota to assign to the newly created space",
+            "inherit": false,
+            "value": {
+              "name": "quota"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "space",
+              "index": 0,
+              "provider": "cf.spaces"
+            }
+          ]
+        }
+      },
+      {
+        "name": "delete-space",
+        "description": "delete a space",
+        "options": [
+          {
+            "short": "o",
+            "description": "delete space within specified org",
+            "inherit": false,
+            "value": {
+              "name": "org",
+              "provider": "cf.orgs"
+            }
+          },
+          {
+            "short": "f",
+            "description": "force deletion without confirmation",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "space",
+              "index": 0,
+              "provider": "cf.spaces"
+            }
+          ]
+        }
+      },
+      {
+        "name": "rename-space",
+        "description": "rename a space",
+        "arguments": {
+          "states": [
+            {
+              "name": "space",
+              "index": 0,
+              "provider": "cf.spaces"
+            },
+            {
+              "name": "new-space",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "allow-space-ssh",
+        "description": "allow SSH access for the space",
+        "arguments": {
+          "states": [
+            {
+              "name": "space",
+              "index": 0,
+              "provider": "cf.spaces"
+            }
+          ]
+        }
+      },
+      {
+        "name": "disallow-space-ssh",
+        "description": "disallow SSH access for the space",
+        "arguments": {
+          "states": [
+            {
+              "name": "space",
+              "index": 0,
+              "provider": "cf.spaces"
+            }
+          ]
+        }
+      },
+      {
+        "name": "space-ssh-allowed",
+        "description": "reports whether SSH is allowed in a space",
+        "arguments": {
+          "states": [
+            {
+              "name": "space",
+              "index": 0,
+              "provider": "cf.spaces"
+            }
+          ]
+        }
+      },
+      {
+        "name": "domains",
+        "description": "list domains in the target org"
+      },
+      {
+        "name": "create-domain",
+        "description": "create a domain in an org for later use",
+        "arguments": {
+          "states": [
+            {
+              "name": "org",
+              "index": 0,
+              "provider": "cf.orgs"
+            },
+            {
+              "name": "domain",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "delete-domain",
+        "description": "delete a domain",
+        "options": [
+          {
+            "short": "f",
+            "description": "force deletion without confirmation",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "space",
+              "index": 0,
+              "provider": "cf.spaces"
+            }
+          ]
+        }
+      },
+      {
+        "name": "create-shared-domain",
+        "description": "create a domain that can be used by all orgs (admin-only)",
+        "options": [
+          {
+            "long": "router-group",
+            "description": "routes for this domain will be configured only on the specified router group",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "domain",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "delete-shared-domain",
+        "description": "delete a shared domain",
+        "options": [
+          {
+            "short": "f",
+            "description": "force deletion without confirmation",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "domain",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "router-groups",
+        "description": "list router groups"
+      },
+      {
+        "name": "routes",
+        "description": "list all routes in the current space or the current organization",
+        "options": [
+          {
+            "long": "orglevel",
+            "description": "list all the routes for all spaces of current organization",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "create-route",
+        "description": "create a url route in a space for later use",
+        "options": [
+          {
+            "long": "hostname",
+            "short": "n",
+            "description": "hostname for the HTTP route (required for shared domains)",
+            "inherit": false,
+            "value": {
+              "name": "hostname"
+            }
+          },
+          {
+            "long": "path",
+            "description": "path for the HTTP route",
+            "inherit": false,
+            "value": {
+              "name": "path",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "port",
+            "description": "port for the TCP route",
+            "inherit": false,
+            "value": {
+              "name": "port"
+            }
+          },
+          {
+            "long": "random-port",
+            "description": "create a random port for the TCP route",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "space",
+              "index": 0,
+              "provider": "cf.spaces"
+            },
+            {
+              "name": "domain",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "check-route",
+        "description": "perform a simple check to determine whether a route currently exists or not",
+        "options": [
+          {
+            "long": "path",
+            "description": "path for the route",
+            "inherit": false,
+            "value": {
+              "name": "path",
+              "provider": "builtin.files"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "host",
+              "index": 0
+            },
+            {
+              "name": "domain",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "map-route",
+        "description": "add a url route to an app",
+        "options": [
+          {
+            "long": "hostname",
+            "short": "n",
+            "description": "hostname for the HTTP route (required for shared domains)",
+            "inherit": false,
+            "value": {
+              "name": "hostname"
+            }
+          },
+          {
+            "long": "path",
+            "description": "path for the HTTP route",
+            "inherit": false,
+            "value": {
+              "name": "path",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "port",
+            "description": "port for the TCP route",
+            "inherit": false,
+            "value": {
+              "name": "port"
+            }
+          },
+          {
+            "long": "random-port",
+            "description": "create a random port for the TCP route",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "app_name",
+              "index": 0,
+              "provider": "cf.apps"
+            },
+            {
+              "name": "domain",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "unmap-route",
+        "description": "remove a url route from an app",
+        "options": [
+          {
+            "long": "hostname",
+            "short": "n",
+            "description": "hostname used to identify the HTTP route",
+            "inherit": false,
+            "value": {
+              "name": "hostname"
+            }
+          },
+          {
+            "long": "path",
+            "description": "path used to identify the HTTP route",
+            "inherit": false,
+            "value": {
+              "name": "path",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "port",
+            "description": "port used to identify the TCP route",
+            "inherit": false,
+            "value": {
+              "name": "port"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "app_name",
+              "index": 0,
+              "provider": "cf.apps"
+            },
+            {
+              "name": "domain",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "delete-route",
+        "description": "delete a route",
+        "options": [
+          {
+            "long": "hostname",
+            "short": "n",
+            "description": "hostname used to identify the HTTP route",
+            "inherit": false,
+            "value": {
+              "name": "hostname"
+            }
+          },
+          {
+            "long": "path",
+            "description": "path used to identify the HTTP route",
+            "inherit": false,
+            "value": {
+              "name": "path",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "port",
+            "description": "port used to identify the TCP route",
+            "inherit": false,
+            "value": {
+              "name": "port"
+            }
+          },
+          {
+            "short": "f",
+            "description": "force deletion without confirmation",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "domain",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "delete-orphaned-routes",
+        "description": "delete all orphaned routes (i.e. those that are not mapped to an app)",
+        "options": [
+          {
+            "short": "f",
+            "description": "force deletion without confirmation",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "create-user",
+        "description": "create a new user",
+        "options": [
+          {
+            "long": "origin",
+            "description": "origin for mapping a user account to a user in an external identity provider",
+            "inherit": false,
+            "value": {
+              "name": "provider"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "username",
+              "index": 0
+            },
+            {
+              "name": "password",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "delete-user",
+        "description": "delete a user",
+        "options": [
+          {
+            "short": "f",
+            "description": "force deletion without confirmation",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "username",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "org-users",
+        "description": "show org users by role",
+        "options": [
+          {
+            "short": "a",
+            "description": "list all users in the org",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "org",
+              "index": 0,
+              "provider": "cf.orgs"
+            }
+          ]
+        }
+      },
+      {
+        "name": "set-org-role",
+        "description": "assign an org role to a user",
+        "arguments": {
+          "states": [
+            {
+              "name": "username",
+              "index": 0
+            },
+            {
+              "name": "org",
+              "index": 1,
+              "provider": "cf.orgs"
+            },
+            {
+              "name": "role",
+              "index": 2
+            }
+          ]
+        }
+      },
+      {
+        "name": "unset-org-role",
+        "description": "remove an org role from a user",
+        "arguments": {
+          "states": [
+            {
+              "name": "username",
+              "index": 0
+            },
+            {
+              "name": "org",
+              "index": 1,
+              "provider": "cf.orgs"
+            },
+            {
+              "name": "role",
+              "index": 2
+            }
+          ]
+        }
+      },
+      {
+        "name": "space-users",
+        "description": "show space users by role"
+      },
+      {
+        "name": "set-space-role",
+        "description": "assign a space role to a user",
+        "arguments": {
+          "states": [
+            {
+              "name": "username",
+              "index": 0
+            },
+            {
+              "name": "org",
+              "index": 1,
+              "provider": "cf.orgs"
+            },
+            {
+              "name": "space",
+              "index": 2,
+              "provider": "cf.spaces"
+            },
+            {
+              "name": "role",
+              "index": 3
+            }
+          ]
+        }
+      },
+      {
+        "name": "unset-space-role",
+        "description": "remove a space role from a user",
+        "arguments": {
+          "states": [
+            {
+              "name": "username",
+              "index": 0
+            },
+            {
+              "name": "org",
+              "index": 1,
+              "provider": "cf.orgs"
+            },
+            {
+              "name": "space",
+              "index": 2,
+              "provider": "cf.spaces"
+            },
+            {
+              "name": "role",
+              "index": 3
+            }
+          ]
+        }
+      },
+      {
+        "name": "quotas",
+        "description": "list available usage quotas"
+      },
+      {
+        "name": "quota",
+        "description": "show quota info",
+        "arguments": {
+          "states": [
+            {
+              "name": "quota",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "set-quota",
+        "description": "assign a quota to an org",
+        "arguments": {
+          "states": [
+            {
+              "name": "org",
+              "index": 0,
+              "provider": "cf.orgs"
+            },
+            {
+              "name": "quota",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "create-quota",
+        "description": "define a new resource quota",
+        "options": [
+          {
+            "short": "a",
+            "description": "total number of application instances",
+            "inherit": false,
+            "value": {
+              "name": "number-of-application-instances",
+              "provider": "cf.apps"
+            }
+          },
+          {
+            "short": "i",
+            "description": "maximum amount of memory an application instance can have",
+            "inherit": false,
+            "value": {
+              "name": "instance-memory"
+            }
+          },
+          {
+            "short": "m",
+            "description": "total amount of memory a space can have",
+            "inherit": false,
+            "value": {
+              "name": "total-memory"
+            }
+          },
+          {
+            "long": "reserved-route-ports",
+            "description": "maximum number of routes that may be created with reserved ports (Default: 0)",
+            "inherit": false,
+            "value": {
+              "name": "reserved-route-ports"
+            }
+          },
+          {
+            "short": "s",
+            "description": "total number of service instances",
+            "inherit": false,
+            "value": {
+              "name": "service-instances",
+              "provider": "cf.services"
+            }
+          },
+          {
+            "short": "r",
+            "description": "total number of routes",
+            "inherit": false,
+            "value": {
+              "name": "routes"
+            }
+          },
+          {
+            "long": "allow-paid-service-plans",
+            "description": "can provision instances of paid service plans",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "quota",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "delete-quota",
+        "description": "delete a quota",
+        "options": [
+          {
+            "short": "f",
+            "description": "force deletion without confirmation",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "quota",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "update-quota",
+        "description": "update an existing resource quota",
+        "options": [
+          {
+            "short": "a",
+            "description": "total number of application instances",
+            "inherit": false,
+            "value": {
+              "name": "number-of-application-instances",
+              "provider": "cf.apps"
+            }
+          },
+          {
+            "short": "i",
+            "description": "maximum amount of memory an application instance can have",
+            "inherit": false,
+            "value": {
+              "name": "instance-memory"
+            }
+          },
+          {
+            "short": "m",
+            "description": "total amount of memory a space can have",
+            "inherit": false,
+            "value": {
+              "name": "total-memory"
+            }
+          },
+          {
+            "long": "reserved-route-ports",
+            "description": "maximum number of routes that may be created with reserved ports (Default: 0)",
+            "inherit": false,
+            "value": {
+              "name": "reserved-route-ports"
+            }
+          },
+          {
+            "short": "s",
+            "description": "total number of service instances",
+            "inherit": false,
+            "value": {
+              "name": "service-instances",
+              "provider": "cf.services"
+            }
+          },
+          {
+            "short": "r",
+            "description": "total number of routes",
+            "inherit": false,
+            "value": {
+              "name": "routes"
+            }
+          },
+          {
+            "short": "n",
+            "description": "new name",
+            "inherit": false,
+            "value": {
+              "name": "name"
+            }
+          },
+          {
+            "long": "allow-paid-service-plans",
+            "description": "can provision instances of paid service plans",
+            "inherit": false
+          },
+          {
+            "long": "disallow-paid-service-plans",
+            "description": "cannot provision instances of paid service plans",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "quota",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "space-quotas",
+        "description": "list available space resource quotas"
+      },
+      {
+        "name": "space-quota",
+        "description": "show space quota info",
+        "arguments": {
+          "states": [
+            {
+              "name": "space-quota",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "create-space-quota",
+        "description": "define a new space resource quota",
+        "options": [
+          {
+            "short": "a",
+            "description": "total number of application instances",
+            "inherit": false,
+            "value": {
+              "name": "number-of-application-instances",
+              "provider": "cf.apps"
+            }
+          },
+          {
+            "short": "i",
+            "description": "maximum amount of memory an application instance can have",
+            "inherit": false,
+            "value": {
+              "name": "instance-memory"
+            }
+          },
+          {
+            "short": "m",
+            "description": "total amount of memory a space can have",
+            "inherit": false,
+            "value": {
+              "name": "total-memory"
+            }
+          },
+          {
+            "long": "reserved-route-ports",
+            "description": "maximum number of routes that may be created with reserved ports (Default: 0)",
+            "inherit": false,
+            "value": {
+              "name": "reserved-route-ports"
+            }
+          },
+          {
+            "short": "s",
+            "description": "total number of service instances",
+            "inherit": false,
+            "value": {
+              "name": "service-instances",
+              "provider": "cf.services"
+            }
+          },
+          {
+            "short": "r",
+            "description": "total number of routes",
+            "inherit": false,
+            "value": {
+              "name": "routes"
+            }
+          },
+          {
+            "long": "allow-paid-service-plans",
+            "description": "can provision instances of paid service plans",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "quota",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "update-space-quota",
+        "description": "update an existing space quota",
+        "options": [
+          {
+            "short": "a",
+            "description": "total number of application instances",
+            "inherit": false,
+            "value": {
+              "name": "number-of-application-instances",
+              "provider": "cf.apps"
+            }
+          },
+          {
+            "short": "i",
+            "description": "maximum amount of memory an application instance can have",
+            "inherit": false,
+            "value": {
+              "name": "instance-memory"
+            }
+          },
+          {
+            "short": "m",
+            "description": "total amount of memory a space can have",
+            "inherit": false,
+            "value": {
+              "name": "total-memory"
+            }
+          },
+          {
+            "long": "reserved-route-ports",
+            "description": "maximum number of routes that may be created with reserved ports (Default: 0)",
+            "inherit": false,
+            "value": {
+              "name": "reserved-route-ports"
+            }
+          },
+          {
+            "short": "s",
+            "description": "total number of service instances",
+            "inherit": false,
+            "value": {
+              "name": "service-instances",
+              "provider": "cf.services"
+            }
+          },
+          {
+            "short": "r",
+            "description": "total number of routes",
+            "inherit": false,
+            "value": {
+              "name": "routes"
+            }
+          },
+          {
+            "short": "n",
+            "description": "new name",
+            "inherit": false,
+            "value": {
+              "name": "name"
+            }
+          },
+          {
+            "long": "allow-paid-service-plans",
+            "description": "can provision instances of paid service plans",
+            "inherit": false
+          },
+          {
+            "long": "disallow-paid-service-plans",
+            "description": "cannot provision instances of paid service plans",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "space-quota",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "delete-space-quota",
+        "description": "delete a space quota definition and unassign the space quota from all spaces",
+        "options": [
+          {
+            "short": "f",
+            "description": "force deletion without confirmation",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "space-quota",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "set-space-quota",
+        "description": "assign a space quota definition to a space",
+        "arguments": {
+          "states": [
+            {
+              "name": "space",
+              "index": 0,
+              "provider": "cf.spaces"
+            },
+            {
+              "name": "quota",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "unset-space-quota",
+        "description": "unassign a quota from a space",
+        "arguments": {
+          "states": [
+            {
+              "name": "space",
+              "index": 0,
+              "provider": "cf.spaces"
+            },
+            {
+              "name": "quota",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "curl",
+        "description": "executes a request to the targeted API endpoint",
+        "options": [
+          {
+            "short": "H",
+            "description": "custom headers to include in the request, flag can be specified multiple times",
+            "inherit": false,
+            "value": {
+              "name": "headers"
+            }
+          },
+          {
+            "short": "X",
+            "description": "hTTP method (GET,POST,PUT,DELETE,etc)",
+            "inherit": false,
+            "value": {
+              "name": "http-method"
+            }
+          },
+          {
+            "short": "d",
+            "description": "hTTP data to include in the request body, or '@' followed by a file name to read the data from",
+            "inherit": false,
+            "value": {
+              "name": "data"
+            }
+          },
+          {
+            "long": "output",
+            "description": "write curl body to FILE instead of stdout",
+            "inherit": false,
+            "value": {
+              "name": "path-to-file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "short": "i",
+            "description": "include response headers in the output",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "description": "path to curl",
+              "index": 0,
+              "provider": "builtin.files"
+            }
+          ]
+        }
+      },
+      {
+        "name": "oauth-token",
+        "description": "retrieve and display the OAuth token for the current session"
+      },
+      {
+        "name": "ssh-code",
+        "description": "get a one time password for ssh clients"
+      },
+      {
+        "name": "add-plugin-repo",
+        "description": "add a new plugin repository",
+        "arguments": {
+          "states": [
+            {
+              "name": "repo-name",
+              "index": 0
+            },
+            {
+              "name": "url",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "remove-plugin-repo",
+        "description": "remove a plugin repository",
+        "arguments": {
+          "states": [
+            {
+              "name": "repo-name",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "list-plugin-repos",
+        "description": "list all the added plugin repositories"
+      },
+      {
+        "name": "repo-plugins",
+        "description": "list all available plugins in specified repository or in all added repositories",
+        "options": [
+          {
+            "short": "r",
+            "description": "name of a registered repository",
+            "inherit": false,
+            "value": {
+              "name": "repo"
+            }
+          }
+        ]
+      },
+      {
+        "name": "plugins",
+        "description": "list all available plugin commands",
+        "options": [
+          {
+            "long": "checksum",
+            "description": "compute and show the sha1 value of the plugin binary file",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "install-plugin",
+        "description": "install CLI plugin",
+        "options": [
+          {
+            "short": "r",
+            "description": "name of a registered repository where the specified plugin is located",
+            "inherit": false,
+            "value": [
+              {
+                "name": "repo-name"
+              },
+              {
+                "name": "plugin-name"
+              }
+            ]
+          },
+          {
+            "short": "f",
+            "description": "force install of plugin without confirmation",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "description": "local path to plugin",
+              "index": 0,
+              "provider": "builtin.files"
+            },
+            {
+              "name": "url",
+              "description": "url for plugin",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "uninstall-plugin",
+        "description": "uninstall the plugin defined in command argument",
+        "arguments": {
+          "states": [
+            {
+              "name": "plugin-name",
+              "index": 0
+            }
+          ]
+        }
+      }
+    ],
+    "providers": {
+      "cf.apps": {
+        "function": "__rush_complete_cf_apps"
+      },
+      "cf.orgs": {
+        "function": "__rush_complete_cf_orgs"
+      },
+      "cf.spaces": {
+        "function": "__rush_complete_cf_spaces"
+      },
+      "cf.services": {
+        "function": "__rush_complete_cf_services"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "builtin.directories": {
+        "builtin": "directories"
+      }
+    }
+  }
+}

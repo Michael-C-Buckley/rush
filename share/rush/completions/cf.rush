@@ -1,0 +1,23 @@
+__rush_complete_cf_apps() {
+  cf apps 2>/dev/null | awk 'NR > 4 && NF { print $1 }' | while IFS= read -r app; do
+    test -n "$app" && rush_complete candidate "$app" --kind plain --description app
+  done
+}
+
+__rush_complete_cf_orgs() {
+  cf orgs 2>/dev/null | awk 'NR > 3 && NF { print $1 }' | while IFS= read -r org; do
+    test -n "$org" && rush_complete candidate "$org" --kind plain --description org
+  done
+}
+
+__rush_complete_cf_spaces() {
+  cf spaces 2>/dev/null | awk 'NR > 3 && NF { print $1 }' | while IFS= read -r space; do
+    test -n "$space" && rush_complete candidate "$space" --kind plain --description space
+  done
+}
+
+__rush_complete_cf_services() {
+  cf services 2>/dev/null | awk 'NR > 4 && NF { print $1 }' | while IFS= read -r service; do
+    test -n "$service" && rush_complete candidate "$service" --kind plain --description service
+  done
+}
