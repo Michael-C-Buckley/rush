@@ -513,6 +513,9 @@ pub const InteractiveHistoryService = struct {
         prefix: []const u8,
     ) !?line_editor.HistoryView.HistoryEntry {
         if (try self.history.suggestEntry(allocator, prefix, self.history.current_cwd)) |entry| return entry;
+        if (self.history.current_cwd.len != 0) {
+            if (try self.history.suggestEntry(allocator, prefix, "")) |entry| return entry;
+        }
         if (self.history.suggest(prefix)) |entry| {
             return .{ .id = 0, .text = try allocator.dupe(u8, entry) };
         }
@@ -1185,6 +1188,25 @@ test "interactive history writes and reads the current cwd" {
     const suggestion = (try service.suggestEntry(std.testing.allocator, "echo")) orelse return error.TestExpectedEqual;
     defer suggestion.deinit(std.testing.allocator);
     try std.testing.expectEqualStrings("echo hello", suggestion.text);
+}
+
+test "interactive autosuggestion falls back to global sqlite history" {
+    const path = "rush-history-global-suggestion-test.sqlite";
+    try deleteHistoryDbFilesIfExists(std.testing.io, path);
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path ++ "-wal") catch {};
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path ++ "-shm") catch {};
+
+    var history = History.init(std.testing.allocator);
+    defer history.deinit();
+    try history.load(std.testing.io, path);
+    history.current_cwd = "/repo";
+    try insertHistoryRecord(history.db.?, .{ .cmd = "ls -la", .cwd = "/other", .when = 10 });
+
+    var service = InteractiveHistoryService.init(&history);
+    const suggestion = (try service.suggestEntry(std.testing.allocator, "l")) orelse return error.TestExpectedEqual;
+    defer suggestion.deinit(std.testing.allocator);
+    try std.testing.expectEqualStrings("ls -la", suggestion.text);
 }
 
 test "line history navigation is scoped to session and cwd" {
