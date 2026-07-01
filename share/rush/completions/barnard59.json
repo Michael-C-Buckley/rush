@@ -1,0 +1,729 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "barnard59",
+    "options": [
+      {
+        "long": "variable",
+        "description": "variable key/value pairs",
+        "inherit": false,
+        "value": {
+          "name": "name=value"
+        }
+      },
+      {
+        "long": "variable-all",
+        "description": "import all environment variables",
+        "inherit": false
+      },
+      {
+        "short": "v",
+        "long": "verbose",
+        "description": "enable diagnostic console output",
+        "inherit": false,
+        "exclusiveGroup": "barnard59.logging"
+      },
+      {
+        "short": "q",
+        "long": "quiet",
+        "description": "disable all logging",
+        "inherit": false,
+        "exclusiveGroup": "barnard59.logging"
+      },
+      {
+        "long": "enable-buffer-monitor",
+        "description": "enable histogram of buffer usage",
+        "inherit": false
+      },
+      {
+        "long": "otel-debug",
+        "description": "enable OpenTelemetry console diagnostic output",
+        "inherit": false,
+        "value": {
+          "name": "level",
+          "values": [
+            "NONE",
+            "ERROR",
+            "WARN",
+            "INFO",
+            "DEBUG",
+            "VERBOSE",
+            "ALL"
+          ]
+        }
+      },
+      {
+        "long": "otel-metrics-exporter",
+        "description": "openTelemetry Metrics exporter to use",
+        "inherit": false,
+        "value": {
+          "name": "exporter",
+          "values": [
+            "otlp",
+            "none"
+          ]
+        }
+      },
+      {
+        "long": "otel-metrics-interval",
+        "description": "export Metrics interval",
+        "inherit": false,
+        "value": {
+          "name": "milliseconds"
+        }
+      },
+      {
+        "long": "otel-traces-exporter",
+        "description": "openTelemetry Traces exporter to use",
+        "inherit": false,
+        "value": {
+          "name": "exporter",
+          "values": [
+            "otlp",
+            "none"
+          ]
+        }
+      },
+      {
+        "short": "h",
+        "long": "help",
+        "description": "display help for command",
+        "inherit": false
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "run",
+        "options": [
+          {
+            "long": "output",
+            "description": "output file",
+            "inherit": false,
+            "value": {
+              "name": "filename",
+              "required": false,
+              "style": "optional",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "pipeline",
+            "description": "iRI of the pipeline description",
+            "inherit": false,
+            "value": {
+              "name": "iri",
+              "required": false,
+              "style": "optional"
+            }
+          },
+          {
+            "long": "variable",
+            "description": "variable key/value pairs",
+            "inherit": false,
+            "value": {
+              "name": "name=value"
+            }
+          },
+          {
+            "long": "variable-all",
+            "description": "import all environment variables",
+            "inherit": false
+          },
+          {
+            "short": "v",
+            "long": "verbose",
+            "description": "enable diagnostic console output",
+            "inherit": false,
+            "exclusiveGroup": "barnard59.logging"
+          },
+          {
+            "short": "q",
+            "long": "quiet",
+            "description": "disable all logging",
+            "inherit": false,
+            "exclusiveGroup": "barnard59.logging"
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "display help for command",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "filename",
+              "index": 0,
+              "provider": "builtin.files"
+            }
+          ]
+        }
+      },
+      {
+        "name": "cube",
+        "options": [
+          {
+            "short": "V",
+            "long": "version",
+            "description": "output the version number",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "display help for command",
+            "inherit": false
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "fetch-metadata",
+            "description": "retrieves cube and its constraint shape from SPARQL endpoint",
+            "options": [
+              {
+                "long": "endpoint",
+                "description": "sPARQL endpoint",
+                "inherit": false,
+                "value": {
+                  "name": "endpoint"
+                }
+              },
+              {
+                "long": "cube",
+                "description": "cube uri",
+                "inherit": false,
+                "value": {
+                  "name": "cube"
+                }
+              },
+              {
+                "long": "variable",
+                "description": "variable key/value pairs",
+                "inherit": false,
+                "value": {
+                  "name": "name=value"
+                }
+              },
+              {
+                "long": "variable-all",
+                "description": "import all environment variables",
+                "inherit": false
+              },
+              {
+                "short": "v",
+                "long": "verbose",
+                "description": "enable diagnostic console output",
+                "inherit": false,
+                "exclusiveGroup": "barnard59.logging"
+              },
+              {
+                "short": "h",
+                "long": "help",
+                "description": "display help for command",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "check-metadata",
+            "description": "validate input cube and its constraint against profile shapes",
+            "options": [
+              {
+                "long": "profile",
+                "description": "cube constraint profile url",
+                "inherit": false,
+                "value": {
+                  "name": "profile"
+                }
+              },
+              {
+                "long": "profileFormat",
+                "description": "override the profile format",
+                "inherit": false,
+                "value": {
+                  "name": "profileFormat"
+                }
+              },
+              {
+                "long": "variable",
+                "description": "variable key/value pairs",
+                "inherit": false,
+                "value": {
+                  "name": "name=value"
+                }
+              },
+              {
+                "long": "variable-all",
+                "description": "import all environment variables",
+                "inherit": false
+              },
+              {
+                "short": "v",
+                "long": "verbose",
+                "description": "enable diagnostic console output",
+                "inherit": false,
+                "exclusiveGroup": "barnard59.logging"
+              },
+              {
+                "short": "h",
+                "long": "help",
+                "description": "display help for command",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "fetch-observations",
+            "description": "retrieves cube observations from SPARQL endpoint",
+            "options": [
+              {
+                "long": "endpoint",
+                "description": "sPARQL endpoint",
+                "inherit": false,
+                "value": {
+                  "name": "endpoint"
+                }
+              },
+              {
+                "long": "cube",
+                "description": "cube uri",
+                "inherit": false,
+                "value": {
+                  "name": "cube"
+                }
+              },
+              {
+                "long": "variable",
+                "description": "variable key/value pairs",
+                "inherit": false,
+                "value": {
+                  "name": "name=value"
+                }
+              },
+              {
+                "long": "variable-all",
+                "description": "import all environment variables",
+                "inherit": false
+              },
+              {
+                "short": "v",
+                "long": "verbose",
+                "description": "enable diagnostic console output",
+                "inherit": false,
+                "exclusiveGroup": "barnard59.logging"
+              },
+              {
+                "short": "h",
+                "long": "help",
+                "description": "display help for command",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "check-observations",
+            "description": "validate input observations against cube constraint",
+            "options": [
+              {
+                "long": "constraint",
+                "description": "cube constraint file",
+                "inherit": false,
+                "value": {
+                  "name": "constraint"
+                }
+              },
+              {
+                "long": "batchSize",
+                "description": "batch size",
+                "inherit": false,
+                "value": {
+                  "name": "batchSize"
+                }
+              },
+              {
+                "long": "maxViolations",
+                "description": "max number of violations",
+                "inherit": false,
+                "value": {
+                  "name": "maxViolations"
+                }
+              },
+              {
+                "long": "sortChunkSize",
+                "description": "sort chunk size",
+                "inherit": false,
+                "value": {
+                  "name": "sortChunkSize"
+                }
+              },
+              {
+                "long": "variable",
+                "description": "variable key/value pairs",
+                "inherit": false,
+                "value": {
+                  "name": "name=value"
+                }
+              },
+              {
+                "long": "variable-all",
+                "description": "import all environment variables",
+                "inherit": false
+              },
+              {
+                "short": "v",
+                "long": "verbose",
+                "description": "enable diagnostic console output",
+                "inherit": false,
+                "exclusiveGroup": "barnard59.logging"
+              },
+              {
+                "short": "h",
+                "long": "help",
+                "description": "display help for command",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "fetch-constraint",
+            "description": "retrieves cube constraint from SPARQL endpoint",
+            "options": [
+              {
+                "long": "endpoint",
+                "description": "sPARQL endpoint",
+                "inherit": false,
+                "value": {
+                  "name": "endpoint"
+                }
+              },
+              {
+                "long": "cube",
+                "description": "cube uri",
+                "inherit": false,
+                "value": {
+                  "name": "cube"
+                }
+              },
+              {
+                "long": "variable",
+                "description": "variable key/value pairs",
+                "inherit": false,
+                "value": {
+                  "name": "name=value"
+                }
+              },
+              {
+                "long": "variable-all",
+                "description": "import all environment variables",
+                "inherit": false
+              },
+              {
+                "short": "v",
+                "long": "verbose",
+                "description": "enable diagnostic console output",
+                "inherit": false,
+                "exclusiveGroup": "barnard59.logging"
+              },
+              {
+                "short": "h",
+                "long": "help",
+                "description": "display help for command",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "fetch-cube",
+            "description": "retrieves cube with observations from SPARQL endpoint",
+            "options": [
+              {
+                "long": "endpoint",
+                "description": "sPARQL endpoint",
+                "inherit": false,
+                "value": {
+                  "name": "endpoint"
+                }
+              },
+              {
+                "long": "cube",
+                "description": "cube uri",
+                "inherit": false,
+                "value": {
+                  "name": "cube"
+                }
+              },
+              {
+                "long": "variable",
+                "description": "variable key/value pairs",
+                "inherit": false,
+                "value": {
+                  "name": "name=value"
+                }
+              },
+              {
+                "long": "variable-all",
+                "description": "import all environment variables",
+                "inherit": false
+              },
+              {
+                "short": "v",
+                "long": "verbose",
+                "description": "enable diagnostic console output",
+                "inherit": false,
+                "exclusiveGroup": "barnard59.logging"
+              },
+              {
+                "short": "h",
+                "long": "help",
+                "description": "display help for command",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "help",
+            "description": "display help for command",
+            "arguments": {
+              "states": [
+                {
+                  "name": "command",
+                  "index": 0
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "graph-store",
+        "options": [
+          {
+            "short": "V",
+            "long": "version",
+            "description": "output the version number",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "display help for command",
+            "inherit": false
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "put",
+            "description": "upload RDF documents using SPARQL Graph Store Protocol",
+            "options": [
+              {
+                "long": "source",
+                "description": "glob of RDF documents to upload",
+                "inherit": false,
+                "value": {
+                  "name": "source"
+                }
+              },
+              {
+                "long": "graph",
+                "inherit": false,
+                "value": {
+                  "name": "graph"
+                }
+              },
+              {
+                "long": "endpoint",
+                "inherit": false,
+                "value": {
+                  "name": "endpoint"
+                }
+              },
+              {
+                "long": "user",
+                "inherit": false,
+                "value": {
+                  "name": "user"
+                }
+              },
+              {
+                "long": "password",
+                "inherit": false,
+                "value": {
+                  "name": "password"
+                }
+              },
+              {
+                "long": "variable",
+                "description": "variable key/value pairs",
+                "inherit": false,
+                "value": {
+                  "name": "name=value"
+                }
+              },
+              {
+                "long": "variable-all",
+                "description": "import all environment variables",
+                "inherit": false
+              },
+              {
+                "short": "v",
+                "long": "verbose",
+                "description": "enable diagnostic console output",
+                "inherit": false,
+                "exclusiveGroup": "barnard59.logging"
+              },
+              {
+                "short": "h",
+                "long": "help",
+                "description": "display help for command",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "help",
+            "description": "display help for command",
+            "arguments": {
+              "states": [
+                {
+                  "name": "command",
+                  "index": 0
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "shacl",
+        "options": [
+          {
+            "short": "V",
+            "long": "version",
+            "description": "output the version number",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "display help for command",
+            "inherit": false
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "validate",
+            "description": "validates the RDF in standard input against a SHACL document",
+            "options": [
+              {
+                "long": "shapes",
+                "description": "uRL or path of the shapes graph",
+                "inherit": false,
+                "value": {
+                  "name": "shapes"
+                }
+              },
+              {
+                "long": "shapesMediaType",
+                "description": "override the shapes graph format",
+                "inherit": false,
+                "value": {
+                  "name": "shapesMediaType"
+                }
+              },
+              {
+                "long": "variable",
+                "description": "variable key/value pairs",
+                "inherit": false,
+                "value": {
+                  "name": "name=value"
+                }
+              },
+              {
+                "long": "variable-all",
+                "description": "import all environment variables",
+                "inherit": false
+              },
+              {
+                "short": "v",
+                "long": "verbose",
+                "description": "enable diagnostic console output",
+                "inherit": false,
+                "exclusiveGroup": "barnard59.logging"
+              },
+              {
+                "short": "h",
+                "long": "help",
+                "description": "display help for command",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "report-summary",
+            "description": "human-readable summary of SHACL validation report",
+            "options": [
+              {
+                "long": "variable",
+                "description": "variable key/value pairs",
+                "inherit": false,
+                "value": {
+                  "name": "name=value"
+                }
+              },
+              {
+                "long": "variable-all",
+                "description": "import all environment variables",
+                "inherit": false
+              },
+              {
+                "short": "v",
+                "long": "verbose",
+                "description": "enable diagnostic console output",
+                "inherit": false,
+                "exclusiveGroup": "barnard59.logging"
+              },
+              {
+                "short": "h",
+                "long": "help",
+                "description": "display help for command",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "help",
+            "description": "display help for command",
+            "arguments": {
+              "states": [
+                {
+                  "name": "command",
+                  "index": 0
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "help",
+        "description": "display help for command",
+        "arguments": {
+          "states": [
+            {
+              "name": "command",
+              "index": 0
+            }
+          ]
+        }
+      }
+    ],
+    "description": "run barnard59 linked data pipelines",
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
