@@ -1,0 +1,76 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "do-release-upgrade",
+    "description": "upgrade Ubuntu to the latest release",
+    "options": [
+      {
+        "short": "h",
+        "long": "help",
+        "description": "show help message and exit",
+        "inherit": false
+      },
+      {
+        "short": "d",
+        "long": "devel-release",
+        "description": "if using the latest supported release, upgrade to the development release",
+        "inherit": false
+      },
+      {
+        "short": "p",
+        "long": "proposed",
+        "description": "try upgrading to the latest release using the upgrader from Ubuntu-proposed",
+        "inherit": false
+      },
+      {
+        "short": "m",
+        "description": "run in a special upgrade mode",
+        "inherit": false,
+        "hidden": true,
+        "value": {
+          "name": "mode",
+          "provider": "do-release-upgrade.modes",
+          "style": "detached"
+        }
+      },
+      {
+        "long": "mode",
+        "description": "run in a special upgrade mode",
+        "inherit": false,
+        "value": {
+          "name": "mode",
+          "provider": "do-release-upgrade.modes",
+          "style": "detached"
+        }
+      },
+      {
+        "short": "f",
+        "description": "run the specified frontend",
+        "inherit": false,
+        "hidden": true,
+        "value": {
+          "name": "frontend",
+          "style": "detached"
+        }
+      },
+      {
+        "long": "frontend",
+        "description": "run the specified frontend",
+        "inherit": false,
+        "value": {
+          "name": "frontend",
+          "style": "detached"
+        }
+      }
+    ],
+    "providers": {
+      "do-release-upgrade.modes": {
+        "values": [
+          "desktop",
+          "server"
+        ]
+      }
+    }
+  }
+}
