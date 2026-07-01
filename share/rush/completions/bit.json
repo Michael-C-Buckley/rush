@@ -1,0 +1,3800 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "bit",
+    "description": "manage bit components and workspaces",
+    "options": [
+      {
+        "long": "version",
+        "short": "v",
+        "description": "show version",
+        "inherit": false
+      },
+      {
+        "long": "help",
+        "short": "h",
+        "description": "show help for bit",
+        "inherit": false
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "init",
+        "description": "create or reinitialize an empty workspace",
+        "options": [
+          {
+            "long": "bare",
+            "short": "b",
+            "inherit": false,
+            "value": {
+              "name": "value",
+              "description": "initialize an empty bit bare scope"
+            }
+          },
+          {
+            "long": "shared",
+            "short": "s",
+            "inherit": false,
+            "value": {
+              "name": "value",
+              "description": "add group write permissions to a scope"
+            }
+          },
+          {
+            "long": "standalone",
+            "description": "do not nest component store within .git",
+            "inherit": false
+          },
+          {
+            "long": "reset",
+            "short": "r",
+            "description": "write missing or damaged bit files",
+            "inherit": false
+          },
+          {
+            "long": "reset-new",
+            "description": "reset .bitmap file as if components were newly added",
+            "inherit": false
+          },
+          {
+            "long": "reset-lane-new",
+            "description": "reset only components belonging to lanes",
+            "inherit": false
+          },
+          {
+            "long": "reset-hard",
+            "description": "delete all bit files and directories",
+            "inherit": false
+          },
+          {
+            "long": "reset-scope",
+            "description": "removes local scope",
+            "inherit": false
+          },
+          {
+            "long": "default-directory",
+            "short": "d",
+            "inherit": false,
+            "value": {
+              "name": "value",
+              "description": "set the default directory pattern",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "default-scope",
+            "inherit": false,
+            "value": {
+              "name": "value",
+              "description": "set the default scope for components"
+            }
+          },
+          {
+            "long": "package-manager",
+            "short": "p",
+            "inherit": false,
+            "value": {
+              "name": "value",
+              "description": "set the package manager to be used"
+            }
+          },
+          {
+            "long": "force",
+            "description": "force workspace initialization without clearing local objects",
+            "inherit": false
+          },
+          {
+            "long": "harmony",
+            "description": "deprecated: Harmony is the default now",
+            "inherit": false
+          },
+          {
+            "long": "interactive",
+            "short": "I",
+            "description": "start an interactive process",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "value",
+              "description": "path",
+              "index": 0,
+              "provider": "builtin.directories"
+            }
+          ]
+        }
+      },
+      {
+        "name": "new",
+        "description": "create a new workspace from a template",
+        "options": [
+          {
+            "long": "aspect",
+            "short": "a",
+            "description": "id of the aspect that registered the template",
+            "inherit": false
+          },
+          {
+            "long": "template",
+            "short": "t",
+            "description": "env-id of the template's owner. Alias for --env",
+            "inherit": false
+          },
+          {
+            "long": "env",
+            "description": "env-id of the template. Alias for -t",
+            "inherit": false
+          },
+          {
+            "long": "default-scope",
+            "short": "d",
+            "description": "set defaultScope in the new workspace's workspace.jsonc",
+            "inherit": false
+          },
+          {
+            "long": "skip-git",
+            "description": "skip generation of Git repository in the new workspace",
+            "inherit": false
+          },
+          {
+            "long": "empty",
+            "description": "skip template's default component creation",
+            "inherit": false
+          },
+          {
+            "long": "load-from",
+            "description": "local path to the workspace containing the template",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "value",
+              "description": "the name of the workspace template",
+              "index": 0
+            },
+            {
+              "name": "value",
+              "description": "the name for the new workspace and workspace directory",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "config",
+        "description": "global config management",
+        "subcommands": [
+          {
+            "name": "set",
+            "description": "set a global configuration",
+            "arguments": {
+              "states": [
+                {
+                  "name": "value",
+                  "description": "configuration key",
+                  "index": 0
+                },
+                {
+                  "name": "value",
+                  "description": "configuration value",
+                  "index": 1
+                }
+              ]
+            }
+          },
+          {
+            "name": "del",
+            "description": "delete given key from global configuration",
+            "arguments": {
+              "states": [
+                {
+                  "name": "value",
+                  "description": "configuration key",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "get",
+            "description": "get a value from global configuration",
+            "arguments": {
+              "states": [
+                {
+                  "name": "value",
+                  "description": "configuration key",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "list",
+            "description": "list all configuration(s)"
+          }
+        ]
+      },
+      {
+        "name": "scope-config",
+        "description": "scope config management bit scope-config",
+        "subcommands": [
+          {
+            "name": "set",
+            "description": "set a scope configuration. Usage: scope-config set <key> <val>",
+            "arguments": {
+              "states": [
+                {
+                  "name": "value",
+                  "description": "configuration key to set",
+                  "index": 0
+                },
+                {
+                  "name": "value",
+                  "description": "value for the configuration key",
+                  "index": 1
+                }
+              ]
+            }
+          },
+          {
+            "name": "del",
+            "description": "delete given key from global configuration. Usage: scope-config del <key>",
+            "arguments": {
+              "states": [
+                {
+                  "name": "value",
+                  "description": "configuration key to delete",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "get",
+            "description": "get a scope configuration. Usage: scope-config get <key>",
+            "arguments": {
+              "states": [
+                {
+                  "name": "value",
+                  "description": "configuration key to retrieve",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "list",
+            "description": "list all scope configuration(s). Usage: scope-config list"
+          }
+        ]
+      },
+      {
+        "name": "login",
+        "description": "log in to bit cloud",
+        "options": [
+          {
+            "long": "cloud-domain",
+            "description": "login cloud domain (default bit.cloud)",
+            "inherit": false
+          },
+          {
+            "long": "port",
+            "short": "p",
+            "description": "port number to open for localhost server",
+            "inherit": false
+          },
+          {
+            "long": "suppress-browser-launch",
+            "description": "do not open a browser for authentication",
+            "inherit": false
+          },
+          {
+            "long": "npmrc-path",
+            "description": "path to npmrc file to configure bit.cloud registry",
+            "inherit": false
+          },
+          {
+            "long": "skip-registry-config",
+            "description": "don't configure bit.cloud registry",
+            "inherit": false
+          },
+          {
+            "long": "machine-name",
+            "description": "specify machine-name to pair with the token",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "logout",
+        "description": "log the CLI out of bit"
+      },
+      {
+        "name": "doctor",
+        "description": "diagnose a bit workspace",
+        "options": [
+          {
+            "long": "json",
+            "short": "j",
+            "description": "return diagnoses in json format",
+            "inherit": false
+          },
+          {
+            "long": "list",
+            "description": "list all available diagnoses",
+            "inherit": false
+          },
+          {
+            "long": "save",
+            "short": "s",
+            "inherit": false,
+            "value": {
+              "name": "filePath",
+              "description": "path to save diagnoses to a file"
+            }
+          },
+          {
+            "long": "archive",
+            "short": "a",
+            "inherit": false,
+            "value": {
+              "name": "filePath",
+              "description": "path to archive the workspace including diagnosis info"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "value",
+              "description": "diagnosis name",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "completion",
+        "description": "enable bash/zsh-completion shortcuts for commands and options"
+      },
+      {
+        "name": "cli",
+        "description": "eXPERIMENTAL: Enters bit cli program and generates commands list",
+        "subcommands": [
+          {
+            "name": "generate",
+            "description": "generate an .md file with all commands details",
+            "options": [
+              {
+                "long": "metadata",
+                "description": "metadata/front-matter to place at the top of the .md file",
+                "inherit": false
+              },
+              {
+                "long": "docs",
+                "description": "generate the cli-reference.docs.mdx file",
+                "inherit": false
+              },
+              {
+                "long": "json",
+                "short": "j",
+                "description": "output the commands info as JSON",
+                "inherit": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "help",
+        "aliases": [],
+        "description": "shows help",
+        "options": [
+          {
+            "long": "internal",
+            "description": "show internal commands",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "clear-cache",
+        "aliases": [
+          "cc"
+        ],
+        "description": "clears bit's cache from current working machine",
+        "options": [
+          {
+            "long": "remote",
+            "short": "r",
+            "description": "clear memory cache from a remote scope",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "remote",
+        "description": "manage set of tracked bit scope(s)",
+        "subcommands": [
+          {
+            "name": "add",
+            "description": "add a bare-scope as a remote, usage: remote add <url>",
+            "options": [
+              {
+                "long": "global",
+                "short": "g",
+                "description": "configure a remote bit scope",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "value",
+                  "description": "uRL of the remote scope",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "del",
+            "description": "remove a tracked bit remote: usage: remote del <name>",
+            "options": [
+              {
+                "long": "global",
+                "short": "g",
+                "description": "remove a globally configured remote scope",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "value",
+                  "description": "name of the remote to remove",
+                  "index": 0
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "remove",
+        "aliases": [
+          "rm"
+        ],
+        "description": "remove component(s) from the local workspace",
+        "options": [
+          {
+            "long": "track",
+            "short": "t",
+            "description": "keep tracking component in .bitmap",
+            "inherit": false
+          },
+          {
+            "long": "keep-files",
+            "description": "keep component files",
+            "inherit": false
+          },
+          {
+            "long": "force",
+            "short": "f",
+            "description": "removes the component even if used as a dependency",
+            "inherit": false
+          },
+          {
+            "long": "silent",
+            "short": "s",
+            "description": "skip confirmation",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "value",
+              "description": "component name, id, or pattern",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "import",
+        "description": "import components from their remote scopes to the local workspace",
+        "options": [
+          {
+            "long": "path",
+            "short": "p",
+            "inherit": false,
+            "value": {
+              "name": "value",
+              "description": "import components into a specific directory",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "objects",
+            "description": "import components objects without checkout",
+            "inherit": false
+          },
+          {
+            "long": "override",
+            "short": "O",
+            "description": "override local changes",
+            "inherit": false
+          },
+          {
+            "long": "verbose",
+            "short": "v",
+            "description": "show verbose output for inspection",
+            "inherit": false
+          },
+          {
+            "long": "json",
+            "short": "j",
+            "description": "return the output as JSON",
+            "inherit": false
+          },
+          {
+            "long": "skip-dependency-installation",
+            "description": "do not auto-install dependencies",
+            "inherit": false
+          },
+          {
+            "long": "merge",
+            "inherit": false,
+            "value": {
+              "name": "value",
+              "description": "merge local changes with imported version"
+            }
+          },
+          {
+            "long": "dependencies",
+            "description": "import all dependencies of imported components",
+            "inherit": false
+          },
+          {
+            "long": "dependents",
+            "description": "import components found while traversing from imported components",
+            "inherit": false
+          },
+          {
+            "long": "save-in-lane",
+            "description": "save in the lane when checked out to a lane",
+            "inherit": false
+          },
+          {
+            "long": "all-history",
+            "description": "fetch all history versions, always",
+            "inherit": false
+          },
+          {
+            "long": "fetch-deps",
+            "description": "fetch dependencies objects without adding to the workspace",
+            "inherit": false
+          },
+          {
+            "long": "track-only",
+            "description": "create bitmap entries without writing component files",
+            "inherit": false
+          },
+          {
+            "long": "include-deprecated",
+            "description": "include deprecated components when importing with patterns",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "value",
+              "description": "component ids or component patterns",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "pack",
+        "description": "create tar for npm publish"
+      },
+      {
+        "name": "deprecate",
+        "aliases": [
+          "d"
+        ],
+        "description": "deprecate a component",
+        "options": [
+          {
+            "long": "new-id",
+            "description": "if replaced by another component, enter the new component id",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "value",
+              "description": "component name or component id",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "undeprecate",
+        "description": "undeprecate a deprecated component (local/remote). bit undeprecate <id>"
+      },
+      {
+        "name": "rename",
+        "description": "rename a component",
+        "options": [
+          {
+            "long": "scope",
+            "short": "s",
+            "description": "define the scope for the newly created component",
+            "inherit": false
+          },
+          {
+            "long": "path",
+            "short": "p",
+            "description": "relative path in the workspace to place new component in",
+            "inherit": false
+          },
+          {
+            "long": "refactor",
+            "short": "r",
+            "description": "update the import/require statements in all dependent components",
+            "inherit": false
+          },
+          {
+            "long": "preserve",
+            "description": "avoid renaming files and variables according to the new component name",
+            "inherit": false
+          },
+          {
+            "long": "ast",
+            "description": "eXPERIMENTAL. Use AST to transform files instead of regex",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "value",
+              "description": "the current component name",
+              "index": 0
+            },
+            {
+              "name": "value",
+              "description": "the new component name",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "fork",
+        "description": "create a new component forked from an existing one (copies source files and configs)",
+        "options": [
+          {
+            "long": "scope",
+            "short": "s",
+            "inherit": false,
+            "value": {
+              "name": "value",
+              "description": "default scope for the new component"
+            }
+          },
+          {
+            "long": "path",
+            "short": "p",
+            "inherit": false,
+            "value": {
+              "name": "value",
+              "description": "relative path in the workspace for the new component",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "refactor",
+            "short": "r",
+            "description": "update the import/require statements in all dependent components",
+            "inherit": false
+          },
+          {
+            "long": "skip-dependency-installation",
+            "description": "do not install packages of the imported components",
+            "inherit": false
+          },
+          {
+            "long": "env",
+            "inherit": false,
+            "value": {
+              "name": "value",
+              "description": "set the environment for the new component"
+            }
+          },
+          {
+            "long": "skip-config",
+            "description": "do not copy the config to the new component",
+            "inherit": false
+          },
+          {
+            "long": "preserve",
+            "description": "avoid refactoring file and variable/class names according to the new component name",
+            "inherit": false
+          },
+          {
+            "long": "no-link",
+            "description": "avoid saving a reference to the original component",
+            "inherit": false
+          },
+          {
+            "long": "ast",
+            "description": "use ast to transform files instead of regex",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "value",
+              "description": "component id of the source component",
+              "index": 0
+            },
+            {
+              "name": "value",
+              "description": "name for the new component",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "export",
+        "aliases": [
+          "e"
+        ],
+        "description": "export components from the workspace to remote scopes",
+        "options": [
+          {
+            "long": "eject",
+            "short": "e",
+            "description": "remove component from the workspace and install it as a regular npm package",
+            "inherit": false
+          },
+          {
+            "long": "all",
+            "description": "export all components, including non-staged",
+            "inherit": false
+          },
+          {
+            "long": "all-versions",
+            "description": "export not only staged versions but all of them",
+            "inherit": false
+          },
+          {
+            "long": "origin-directly",
+            "description": "avoid export to the central hub, export directly to the original scopes",
+            "inherit": false
+          },
+          {
+            "long": "resume",
+            "inherit": false,
+            "value": {
+              "name": "string",
+              "description": "resume export using an export-id"
+            }
+          },
+          {
+            "long": "ignore-missing-artifacts",
+            "description": "don't throw an error when artifact files are missing",
+            "inherit": false
+          },
+          {
+            "long": "fork-lane-new-scope",
+            "description": "allow exporting a forked lane into a different scope than the original scope",
+            "inherit": false
+          },
+          {
+            "long": "json",
+            "short": "j",
+            "description": "show output in json format",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "value",
+              "description": "component patterns",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "dependents",
+        "description": "show dependents of the given component",
+        "arguments": {
+          "states": [
+            {
+              "name": "value",
+              "description": "component name",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "show",
+        "description": "display the component's essential information bit show <component-name>",
+        "options": [
+          {
+            "long": "json",
+            "short": "j",
+            "description": "return the component data in JSON format",
+            "inherit": false
+          },
+          {
+            "long": "legacy",
+            "description": "use the legacy bit show",
+            "inherit": false
+          },
+          {
+            "long": "remote",
+            "short": "r",
+            "description": "show data for a remote component",
+            "inherit": false
+          },
+          {
+            "long": "compare",
+            "short": "c",
+            "description": "legacy-only. Compare current file system component to its latest tagged version",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "value",
+              "description": "component name or component id",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "deps",
+        "aliases": [
+          "dependencies"
+        ],
+        "description": "manage dependencies",
+        "subcommands": [
+          {
+            "name": "get",
+            "description": "show direct and indirect dependencies of the given component",
+            "options": [
+              {
+                "long": "tree",
+                "short": "t",
+                "description": "eXPERIMENTAL: Render dependencies as a tree, similar to 'npm ls'",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "value",
+                  "description": "component name or component id",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "remove",
+            "description": "remove a dependency to component(s)",
+            "options": [
+              {
+                "long": "dev",
+                "short": "d",
+                "description": "remove from devDependencies",
+                "inherit": false
+              },
+              {
+                "long": "peer",
+                "short": "p",
+                "description": "remove from peerDependencies",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "value",
+                  "description": "component name, component id, or component pattern",
+                  "index": 0
+                },
+                {
+                  "name": "value",
+                  "description": "package name with or without a version",
+                  "index": 1
+                }
+              ]
+            }
+          },
+          {
+            "name": "unset",
+            "description": "unset a dependency to component(s) that was previously set by 'bit deps set'",
+            "options": [
+              {
+                "long": "dev",
+                "short": "d",
+                "description": "unset from devDependencies",
+                "inherit": false
+              },
+              {
+                "long": "peer",
+                "short": "p",
+                "description": "unset from peerDependencies",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "value",
+                  "description": "component name, component id, or component pattern",
+                  "index": 0
+                },
+                {
+                  "name": "value",
+                  "description": "package name with or without a version",
+                  "index": 1
+                }
+              ]
+            }
+          },
+          {
+            "name": "debug",
+            "description": "show the immediate dependencies and how their versions were determined",
+            "arguments": {
+              "states": [
+                {
+                  "name": "value",
+                  "description": "component name or component id",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "set",
+            "description": "set a dependency to component(s)",
+            "options": [
+              {
+                "long": "dev",
+                "short": "d",
+                "description": "add to the devDependencies",
+                "inherit": false
+              },
+              {
+                "long": "peer",
+                "short": "p",
+                "description": "add to the peerDependencies",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "value",
+                  "description": "component name, component id, or component pattern",
+                  "index": 0
+                },
+                {
+                  "name": "value",
+                  "description": "package name with or without a version",
+                  "index": 1
+                }
+              ]
+            }
+          },
+          {
+            "name": "reset",
+            "description": "reset dependencies to the default values (revert any previously 'bit deps set')",
+            "arguments": {
+              "states": [
+                {
+                  "name": "value",
+                  "description": "component name, component id, or component pattern",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "eject",
+            "description": "write dependencies that were previously set via 'bit deps set' into .bitmap",
+            "arguments": {
+              "states": [
+                {
+                  "name": "value",
+                  "description": "component name, component id, or component pattern",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "blame",
+            "description": "eXPERIMENTAL: Find out which snap/tag changed a dependency version",
+            "arguments": {
+              "states": [
+                {
+                  "name": "value",
+                  "description": "component name",
+                  "index": 0
+                },
+                {
+                  "name": "value",
+                  "description": "dependency name, package-name or component-id",
+                  "index": 1
+                }
+              ]
+            }
+          },
+          {
+            "name": "usage",
+            "description": "eXPERIMENTAL: Find components that use the specified dependency",
+            "arguments": {
+              "states": [
+                {
+                  "name": "value",
+                  "description": "package name, component-id or package-name, optionally with version",
+                  "index": 0
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "log",
+        "description": "show components(s) version history",
+        "options": [
+          {
+            "long": "remote",
+            "short": "r",
+            "description": "show log of a remote component",
+            "inherit": false
+          },
+          {
+            "long": "parents",
+            "description": "show parents and lanes data",
+            "inherit": false
+          },
+          {
+            "long": "one-line",
+            "short": "o",
+            "description": "show each log entry in one line",
+            "inherit": false
+          },
+          {
+            "long": "json",
+            "short": "j",
+            "description": "jSON format",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "value",
+              "description": "component-id or component-name to show logs for",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "add",
+        "description": "add any subset of files to be tracked as a component(s)",
+        "options": [
+          {
+            "long": "id",
+            "short": "i",
+            "description": "manually set component id",
+            "inherit": false
+          },
+          {
+            "long": "main",
+            "short": "m",
+            "description": "define component entry point",
+            "inherit": false
+          },
+          {
+            "long": "namespace",
+            "short": "n",
+            "description": "organize component in a namespace",
+            "inherit": false
+          },
+          {
+            "long": "override",
+            "short": "o",
+            "description": "override existing component if exists (default = false)",
+            "inherit": false
+          },
+          {
+            "long": "scope",
+            "short": "s",
+            "description": "sets the component's scope. If not entered, the default-scope from workspace.jsonc will be used",
+            "inherit": false
+          },
+          {
+            "long": "env",
+            "short": "e",
+            "description": "set the component's environment. (overrides the env from variants if exists)",
+            "inherit": false
+          },
+          {
+            "long": "json",
+            "short": "j",
+            "description": "output as json format",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "move",
+        "aliases": [
+          "mv"
+        ],
+        "description": "move a component to a different filesystem path",
+        "arguments": {
+          "states": [
+            {
+              "name": "value",
+              "description": "the component's current directory",
+              "index": 0
+            },
+            {
+              "name": "value",
+              "description": "the new directory to move the component's files to",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "diff",
+        "description": "show the diff between the components' current source files and config, and their latest snapshot or tag",
+        "options": [
+          {
+            "long": "verbose",
+            "short": "v",
+            "description": "show a more verbose output where possible",
+            "inherit": false
+          },
+          {
+            "long": "table",
+            "short": "t",
+            "description": "show tables instead of plain text for dependencies diff",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "value",
+              "description": "values for comparison, component ids, versions or patterns",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "envs",
+        "aliases": [
+          "env"
+        ],
+        "description": "list all components maintained by the workspace and their corresponding envs",
+        "subcommands": [
+          {
+            "name": "list",
+            "description": "list all envs currently used in the workspace"
+          },
+          {
+            "name": "get",
+            "description": "show config information from a component's env",
+            "options": [
+              {
+                "long": "services",
+                "inherit": false,
+                "value": {
+                  "name": "string",
+                  "description": "show information about the specific services only"
+                }
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "value",
+                  "description": "component name or component id of the component whose env you'd like to inspect",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "set",
+            "description": "assigns one or more components a development environment (env)",
+            "arguments": {
+              "states": [
+                {
+                  "name": "value",
+                  "description": "component pattern",
+                  "index": 0
+                },
+                {
+                  "name": "value",
+                  "description": "the env's component id",
+                  "index": 1
+                }
+              ]
+            }
+          },
+          {
+            "name": "unset",
+            "description": "un-sets an env from components",
+            "arguments": {
+              "states": [
+                {
+                  "name": "value",
+                  "description": "component pattern",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "replace",
+            "description": "replace an existing env with another env for all components using the old env",
+            "arguments": {
+              "states": [
+                {
+                  "name": "value",
+                  "description": "current environment id",
+                  "index": 0
+                },
+                {
+                  "name": "value",
+                  "description": "new environment id",
+                  "index": 1
+                }
+              ]
+            }
+          },
+          {
+            "name": "update",
+            "description": "update a version of an env for all components using that env",
+            "arguments": {
+              "states": [
+                {
+                  "name": "value",
+                  "description": "environment id",
+                  "index": 0
+                },
+                {
+                  "name": "value",
+                  "description": "component pattern",
+                  "index": 1
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "start",
+        "aliases": [
+          "c"
+        ],
+        "description": "run the UI/development server bit start [component-pattern]",
+        "options": [
+          {
+            "long": "dev",
+            "short": "d",
+            "description": "start UI server in dev mode",
+            "inherit": false
+          },
+          {
+            "long": "port",
+            "short": "p",
+            "description": "port of the UI server",
+            "inherit": false
+          },
+          {
+            "long": "rebuild",
+            "short": "r",
+            "description": "rebuild the UI (useful e.g. when updating the workspace UI - can use the dev flag for HMR in this case)",
+            "inherit": false
+          },
+          {
+            "long": "skip-ui-build",
+            "description": "skip building UI",
+            "inherit": false
+          },
+          {
+            "long": "verbose",
+            "description": "show verbose output for inspection and prints stack trace",
+            "inherit": false
+          },
+          {
+            "long": "no-browser",
+            "short": "n",
+            "description": "do not automatically open browser when ready",
+            "inherit": false
+          },
+          {
+            "long": "skip-compilation",
+            "description": "skip the auto-compilation before starting the web-server",
+            "inherit": false
+          },
+          {
+            "long": "ui-root-name",
+            "description": "name of the UI root to use, e.g. \"teambit.scope/scope\" or \"teambit.workspace/workspace\"",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "value",
+              "description": "component name, component id, or component pattern. Use component pattern to select multiple components. Use comma to separate patterns and \"!\" to exclude. E.g",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "ui-build",
+        "description": "build production assets for deployment"
+      },
+      {
+        "name": "checkout",
+        "aliases": [
+          "U"
+        ],
+        "description": "switch between component versions or remove local changes",
+        "options": [
+          {
+            "long": "interactive-merge",
+            "description": "display options to resolve conflicts when found during merge",
+            "inherit": false
+          },
+          {
+            "long": "ours",
+            "description": "deprecated",
+            "inherit": false
+          },
+          {
+            "long": "theirs",
+            "description": "deprecated",
+            "inherit": false
+          },
+          {
+            "long": "manual",
+            "description": "deprecated",
+            "inherit": false
+          },
+          {
+            "long": "auto-merge-resolve",
+            "description": "resolve merge conflicts according to the provided strategy: [ours, theirs, manual]",
+            "inherit": false
+          },
+          {
+            "long": "reset",
+            "short": "r",
+            "description": "revert changes that were not snapped/tagged",
+            "inherit": false
+          },
+          {
+            "long": "all",
+            "short": "a",
+            "description": "all components",
+            "inherit": false
+          },
+          {
+            "long": "workspace-only",
+            "description": "only relevant for 'bit checkout head' when on a lane",
+            "inherit": false
+          },
+          {
+            "long": "verbose",
+            "short": "v",
+            "description": "verbose output for inspection",
+            "inherit": false
+          },
+          {
+            "long": "skip-dependency-installation",
+            "description": "do not auto-install dependencies of the imported components",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "value",
+              "description": "permitted values: [head, latest, reset, specific-version]",
+              "index": 0
+            },
+            {
+              "name": "value",
+              "description": "component name, component id, or component pattern",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "install",
+        "aliases": [
+          "in"
+        ],
+        "description": "installs workspace dependencies",
+        "options": [
+          {
+            "long": "type",
+            "inherit": false,
+            "value": {
+              "name": "value",
+              "description": "'runtime' (default) or 'peer'"
+            }
+          },
+          {
+            "long": "update",
+            "short": "u",
+            "description": "update all dependencies to the latest version",
+            "inherit": false
+          },
+          {
+            "long": "update-existing",
+            "description": "deprecated: Update existing dependencies version and types",
+            "inherit": false
+          },
+          {
+            "long": "save-prefix",
+            "inherit": false,
+            "value": {
+              "name": "value",
+              "description": "set the prefix to use when adding dependency"
+            }
+          },
+          {
+            "long": "skip-dedupe",
+            "description": "do not dedupe dependencies on installation",
+            "inherit": false
+          },
+          {
+            "long": "skip-import",
+            "description": "do not import bit objects post installation",
+            "inherit": false
+          },
+          {
+            "long": "skip-compile",
+            "description": "do not compile components",
+            "inherit": false
+          },
+          {
+            "long": "add-missing-deps",
+            "description": "install all missing dependencies",
+            "inherit": false
+          },
+          {
+            "long": "add-missing-peers",
+            "description": "install all missing peer dependencies",
+            "inherit": false
+          },
+          {
+            "long": "recurring-install",
+            "description": "automatically run install again if there are old envs",
+            "inherit": false
+          },
+          {
+            "long": "no-optional",
+            "description": "do not install optional dependencies (pnpm only)",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "value",
+              "description": "a list of packages to install",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "uninstall",
+        "aliases": [
+          "un"
+        ],
+        "description": "uninstall dependencies. bit uninstall [packages...]"
+      },
+      {
+        "name": "update",
+        "aliases": [
+          "up"
+        ],
+        "description": "update dependencies. bit update [package-patterns...]",
+        "options": [
+          {
+            "long": "yes",
+            "short": "y",
+            "description": "automatically update all outdated versions for packages specified in pattern (all if no pattern supplied) - use carefully as could result in breaking updates fo",
+            "inherit": false
+          },
+          {
+            "long": "patch",
+            "description": "update to the latest patch version. Semver rules are ignored",
+            "inherit": false
+          },
+          {
+            "long": "minor",
+            "description": "update to the latest minor version. Semver rules are ignored",
+            "inherit": false
+          },
+          {
+            "long": "major",
+            "description": "update to the latest major version. Semver rules are ignored",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "value",
+              "description": "a string list of package names, or patterns (separated by space), e.g. \"@teambit/ @my-org/ui/\". The patterns should be in glob format. By default, all packages",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "link",
+        "description": "create links in the node_modules directory, to core aspects and to components in the workspace",
+        "options": [
+          {
+            "long": "json",
+            "short": "j",
+            "description": "return the output as JSON",
+            "inherit": false
+          },
+          {
+            "long": "verbose",
+            "description": "verbose output",
+            "inherit": false
+          },
+          {
+            "long": "rewire",
+            "short": "r",
+            "description": "replace relative paths with module paths in code (e.g. \"../foo\" => \"@bit/foo\")",
+            "inherit": false
+          },
+          {
+            "long": "target",
+            "description": "link to an external directory (similar to npm-link) so other projects could use these components",
+            "inherit": false
+          },
+          {
+            "long": "skip-fetching-objects",
+            "description": "skip fetch missing objects from remotes before linking",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "component-names",
+              "description": "names or ids of the components to link",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "component-issues",
+        "description": "list available component-issues"
+      },
+      {
+        "name": "tag",
+        "aliases": [
+          "t"
+        ],
+        "description": "create an immutable and exportable component snapshot, tagged with a release version. If no patterns are provided, it will tag all new and modified components",
+        "options": [
+          {
+            "long": "message",
+            "short": "m",
+            "description": "a log message describing the latest changes",
+            "inherit": false
+          },
+          {
+            "long": "unmodified",
+            "short": "u",
+            "description": "include unmodified components (by default, only new and modified components are tagged)",
+            "inherit": false
+          },
+          {
+            "long": "editor",
+            "description": "open an editor to write a tag message for each component. Optionally, specify the editor-name (defaults to vim)",
+            "inherit": false
+          },
+          {
+            "long": "ver",
+            "short": "v",
+            "description": "tag with the given version",
+            "inherit": false
+          },
+          {
+            "long": "increment",
+            "short": "l",
+            "description": "options are: [major, premajor, minor, preminor, patch, prepatch, prerelease], default to patch",
+            "inherit": false
+          },
+          {
+            "long": "prerelease-id",
+            "description": "prerelease identifier (e.g. \"dev\" to get \"1.0.0-dev.1\")",
+            "inherit": false
+          },
+          {
+            "long": "patch",
+            "short": "p",
+            "description": "syntactic sugar for \"--increment patch\"",
+            "inherit": false
+          },
+          {
+            "long": "minor",
+            "description": "syntactic sugar for \"--increment minor\"",
+            "inherit": false
+          },
+          {
+            "long": "major",
+            "description": "syntactic sugar for \"--increment major\"",
+            "inherit": false
+          },
+          {
+            "long": "pre-release",
+            "description": "syntactic sugar for \"--increment prerelease\" and --prerelease-id <identifier>",
+            "inherit": false
+          },
+          {
+            "long": "snapped",
+            "description": "tag only components whose head is a snap (not a tag)",
+            "inherit": false
+          },
+          {
+            "long": "unmerged",
+            "description": "complete a merge process by tagging the unmerged components",
+            "inherit": false
+          },
+          {
+            "long": "skip-tests",
+            "description": "skip running component tests during tag process",
+            "inherit": false
+          },
+          {
+            "long": "skip-auto-tag",
+            "description": "skip auto tagging dependents",
+            "inherit": false
+          },
+          {
+            "long": "soft",
+            "description": "do not persist. Only keep note of the changes to be made",
+            "inherit": false
+          },
+          {
+            "long": "persist",
+            "description": "persist the changes generated by --soft tag",
+            "inherit": false
+          },
+          {
+            "long": "disable-tag-pipeline",
+            "description": "skip the tag pipeline to avoid publishing the components",
+            "inherit": false
+          },
+          {
+            "long": "ignore-build-errors",
+            "description": "proceed to tag pipeline even when build pipeline fails",
+            "inherit": false
+          },
+          {
+            "long": "increment-by",
+            "description": "(default to 1) increment semver flag (patch/minor/major) by. e.g. incrementing patch by 2: 0.0.1 -> 0.0.3",
+            "inherit": false
+          },
+          {
+            "long": "ignore-issues",
+            "short": "i",
+            "description": "ignore component issues (shown in \"bit status\" as \"issues found\"), issues to ignore: [MissingPackagesDependenciesOnFs, MissingManuallyConfiguredPackages, Missin",
+            "inherit": false
+          },
+          {
+            "long": "ignore-newest-version",
+            "short": "I",
+            "description": "allow tagging even when the component has newer versions e.g. for hotfixes (default = false)",
+            "inherit": false
+          },
+          {
+            "long": "fail-fast",
+            "description": "stop pipeline execution on the first failed task (by default a task is skipped only when its dependency failed)",
+            "inherit": false
+          },
+          {
+            "long": "build",
+            "short": "b",
+            "description": "not needed for now. Run the pipeline build and complete the tag",
+            "inherit": false
+          },
+          {
+            "long": "all",
+            "short": "a",
+            "description": "deprecated (not needed anymore, it is the default now). Tag all new and modified components",
+            "inherit": false
+          },
+          {
+            "long": "scope",
+            "short": "s",
+            "description": "deprecated (use \"--unmodified\" instead). Tag all components of the local scope",
+            "inherit": false
+          },
+          {
+            "long": "force",
+            "description": "deprecated (use \"--skip-tests\", \"--ignore-build-errors\" or \"--unmodified\" instead). Force-tag even if tests are failing and even when component has not changed",
+            "inherit": false
+          },
+          {
+            "long": "disable-deploy-pipeline",
+            "description": "deprecated. Use --disable-tag-pipeline instead",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "value",
+              "description": "component name, component id, or component pattern. Use component pattern to select multiple components. Use comma to separate patterns and \"!\" to exclude. e.g",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "reset",
+        "description": "revert tagged or snapped versions for component(s)",
+        "options": [
+          {
+            "long": "all",
+            "short": "a",
+            "description": "revert all unexported tags/snaps for all components",
+            "inherit": false
+          },
+          {
+            "long": "head",
+            "description": "revert the head tag/snap only",
+            "inherit": false
+          },
+          {
+            "long": "soft",
+            "description": "revert only soft-tags",
+            "inherit": false
+          },
+          {
+            "long": "force",
+            "short": "f",
+            "description": "revert the tag even if it's used as a dependency",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "value",
+              "description": "component name, id, or pattern",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "merge",
+        "description": "merge changes of the remote head into local and creates snaps for merged components",
+        "options": [
+          {
+            "long": "ours",
+            "description": "deprecated. In case of a conflict, keep the local modification",
+            "inherit": false
+          },
+          {
+            "long": "theirs",
+            "description": "deprecated. In case of a conflict, override the local modification with the specified version",
+            "inherit": false
+          },
+          {
+            "long": "manual",
+            "description": "deprecated. Use --auto-merge-resolve",
+            "inherit": false
+          },
+          {
+            "long": "auto-merge-resolve",
+            "description": "in case of a conflict, resolve according to the strategy: [ours, theirs, manual]",
+            "inherit": false
+          },
+          {
+            "long": "abort",
+            "description": "in case of an unresolved merge, revert to pre-merge state",
+            "inherit": false
+          },
+          {
+            "long": "resolve",
+            "description": "mark an unresolved merge as resolved and create a new snap with the changes",
+            "inherit": false
+          },
+          {
+            "long": "no-snap",
+            "description": "do not auto snap even if the merge completed without conflicts",
+            "inherit": false
+          },
+          {
+            "long": "build",
+            "description": "in case of snap during the merge, run the build-pipeline",
+            "inherit": false
+          },
+          {
+            "long": "verbose",
+            "description": "show details of components that were not merged successfully",
+            "inherit": false
+          },
+          {
+            "long": "skip-dependency-installation",
+            "short": "x",
+            "description": "do not install new dependencies resulting from the merge",
+            "inherit": false
+          },
+          {
+            "long": "message",
+            "short": "m",
+            "description": "override the default message for the auto snap",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "value",
+              "description": "ids or patterns of components to merge",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "create",
+        "description": "create a new component using a template",
+        "options": [
+          {
+            "long": "namespace",
+            "short": "n",
+            "description": "sets the component's namespace and nested dirs inside the scope",
+            "inherit": false
+          },
+          {
+            "long": "scope",
+            "short": "s",
+            "description": "sets the component's scope-name",
+            "inherit": false
+          },
+          {
+            "long": "aspect",
+            "short": "a",
+            "description": "aspect-id of the template",
+            "inherit": false
+          },
+          {
+            "long": "template",
+            "description": "env-id of the template, alias for --aspect",
+            "inherit": false
+          },
+          {
+            "long": "path",
+            "description": "relative path in the workspace",
+            "inherit": false
+          },
+          {
+            "long": "env",
+            "description": "set the component's environment",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "value",
+              "description": "the template for generating the component",
+              "index": 0
+            },
+            {
+              "name": "value",
+              "description": "a list of component names to generate",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "templates",
+        "description": "list available templates for \"bit create\" and \"bit new\" List components templates when inside bit-workspace (for bit-create), otherwise, list workspace template",
+        "options": [
+          {
+            "long": "show-all",
+            "short": "s",
+            "description": "show hidden templates",
+            "inherit": false
+          },
+          {
+            "long": "aspect",
+            "short": "a",
+            "description": "show templates provided by the aspect-id",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "build",
+        "description": "run set of tasks for build. By default, only new and modified components are built",
+        "options": [
+          {
+            "long": "all",
+            "short": "a",
+            "description": "deprecated. Use --unmodified",
+            "inherit": false
+          },
+          {
+            "long": "unmodified",
+            "short": "u",
+            "description": "include unmodified components",
+            "inherit": false
+          },
+          {
+            "long": "dev",
+            "short": "d",
+            "description": "run the pipeline in dev mode",
+            "inherit": false
+          },
+          {
+            "long": "install",
+            "description": "install core aspects in capsules",
+            "inherit": false
+          },
+          {
+            "long": "reuse-capsules",
+            "description": "avoid deleting the capsules root-dir before starting the build",
+            "inherit": false
+          },
+          {
+            "long": "tasks",
+            "description": "build the specified task(s) only",
+            "inherit": false
+          },
+          {
+            "long": "cache-packages-on-capsule-root",
+            "description": "set the package-manager cache on the capsule root",
+            "inherit": false
+          },
+          {
+            "long": "list-tasks",
+            "description": "list tasks of an env or a component-id for each one of the pipelines",
+            "inherit": false
+          },
+          {
+            "long": "skip-tests",
+            "description": "skip running component tests during build process",
+            "inherit": false
+          },
+          {
+            "long": "fail-fast",
+            "description": "stop pipeline execution on the first failed task",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "value",
+              "description": "component name, component id, or component pattern. Use component pattern to select multiple components. Use comma to separate patterns and '!' to exclude",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "artifacts",
+        "description": "list and download component artifacts",
+        "options": [
+          {
+            "long": "aspect",
+            "description": "show/download only artifacts generated by this aspect-id",
+            "inherit": false
+          },
+          {
+            "long": "task",
+            "description": "show/download only artifacts generated by this task-id",
+            "inherit": false
+          },
+          {
+            "long": "files",
+            "description": "show/download only artifacts matching the given files or the glob pattern (wrap glob patterns in quotes)",
+            "inherit": false
+          },
+          {
+            "long": "out-dir",
+            "description": "download the files to the specified dir",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "value",
+              "description": "component name, component id, or component pattern. Use component pattern to select multiple components. Use comma to separate patterns and '!' to exclude. E.g",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "refactor",
+        "description": "source code refactoring / codemod",
+        "subcommands": [
+          {
+            "name": "dependency-name",
+            "description": "replace the dependency's old package-name with a new one in the code, usage: refactor dependency-name <old-id> <new-id>",
+            "arguments": {
+              "states": [
+                {
+                  "name": "value",
+                  "description": "old id or package name",
+                  "index": 0
+                },
+                {
+                  "name": "value",
+                  "description": "new id or package name",
+                  "index": 1
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "status",
+        "aliases": [
+          "s"
+        ],
+        "description": "present the current status of components in the workspace, including indication of detected issues bit status",
+        "options": [
+          {
+            "long": "json",
+            "short": "j",
+            "description": "return a JSON version of the component",
+            "inherit": false
+          },
+          {
+            "long": "verbose",
+            "description": "show extra data: full snap hashes for staged components, and divergence point for lanes",
+            "inherit": false
+          },
+          {
+            "long": "lanes",
+            "short": "l",
+            "description": "when on a lane, show updates from main and updates from forked lanes",
+            "inherit": false
+          },
+          {
+            "long": "strict",
+            "description": "in case issues found, exit with code 1",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "compile",
+        "description": "compile components in the workspace",
+        "options": [
+          {
+            "long": "changed",
+            "short": "c",
+            "description": "compile only new and modified components",
+            "inherit": false
+          },
+          {
+            "long": "verbose",
+            "short": "v",
+            "description": "show more data, such as, dist paths",
+            "inherit": false
+          },
+          {
+            "long": "json",
+            "short": "j",
+            "description": "return the compile results in json format",
+            "inherit": false
+          },
+          {
+            "long": "delete-dist-dir",
+            "description": "delete existing dist folder before writing new compiled files",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "value",
+              "description": "a list of component names or component ids",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "test",
+        "aliases": [
+          "at"
+        ],
+        "description": "test components in the workspace. By default only runs tests for new and modified components. bit test [component-pattern]",
+        "options": [
+          {
+            "long": "watch",
+            "short": "w",
+            "description": "start the tester in watch mode",
+            "inherit": false
+          },
+          {
+            "long": "debug",
+            "short": "d",
+            "description": "start the tester in debug mode",
+            "inherit": false
+          },
+          {
+            "long": "all",
+            "short": "a",
+            "description": "test all components, not only new and modified",
+            "inherit": false
+          },
+          {
+            "long": "junit",
+            "description": "write tests results as JUnit XML format into the specified file path",
+            "inherit": false
+          },
+          {
+            "long": "coverage",
+            "description": "show code coverage data",
+            "inherit": false
+          },
+          {
+            "long": "env",
+            "short": "e",
+            "description": "test only components assigned the given env",
+            "inherit": false
+          },
+          {
+            "long": "scope",
+            "short": "s",
+            "description": "deprecated. (use the pattern instead, e.g. \"scopeName/**\"). Name of the scope to test",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "value",
+              "description": "component name, component id, or component pattern. Use component pattern to select multiple components. Use comma to separate patterns and \"!\" to exclude. e.g",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "schema",
+        "description": "shows the API schema of the specified component/s",
+        "options": [
+          {
+            "long": "json",
+            "short": "j",
+            "description": "return the component schema in json format",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "value",
+              "description": "pattern for components to match",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "check-types",
+        "description": "check typescript types",
+        "options": [
+          {
+            "long": "all",
+            "short": "a",
+            "description": "check-types for all components, not only modified and new",
+            "inherit": false
+          },
+          {
+            "long": "strict",
+            "description": "in case issues found, exit with code 1",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "value",
+              "description": "component name, component id, or component pattern",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "aspect",
+        "description": "eXPERIMENTAL. Manage aspects"
+      },
+      {
+        "name": "eject",
+        "aliases": [
+          "E"
+        ],
+        "description": "remove component from the workspace and install it instead as a regular npm package. By default the component files will be removed from the workspace",
+        "options": [
+          {
+            "long": "force",
+            "short": "f",
+            "description": "ignore local changes/versions, eject component/s even when they are staged or modified. Note: unexported tags/snaps will be lost",
+            "inherit": false
+          },
+          {
+            "long": "json",
+            "short": "j",
+            "description": "print the results in JSON format",
+            "inherit": false
+          },
+          {
+            "long": "keep-files",
+            "description": "keep the component files in the workspace intact",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "value",
+              "description": "component name, component id, or component pattern",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "format",
+        "description": "format components in the development workspace",
+        "options": [
+          {
+            "long": "changed",
+            "description": "format only new and modified components",
+            "inherit": false
+          },
+          {
+            "long": "check",
+            "description": "will output a message and a list of unformatted files, if any",
+            "inherit": false
+          },
+          {
+            "long": "json",
+            "short": "j",
+            "description": "return the format results in json format",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "lint",
+        "description": "lint components in the development workspace",
+        "options": [
+          {
+            "long": "changed",
+            "short": "c",
+            "description": "lint only new and modified components",
+            "inherit": false
+          },
+          {
+            "long": "fix",
+            "short": "f",
+            "description": "automatically fix problems",
+            "inherit": false
+          },
+          {
+            "long": "fix-type",
+            "description": "specify the types of fixes to apply (problem, suggestion, layout)",
+            "inherit": false
+          },
+          {
+            "long": "json",
+            "short": "j",
+            "description": "return the lint results in json format",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "value",
+              "description": "component names or component ids to lint",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "graph",
+        "description": "generate an image file with the workspace components' dependencies graph",
+        "options": [
+          {
+            "long": "image",
+            "short": "i",
+            "inherit": false,
+            "value": {
+              "name": "value",
+              "description": "image path and format"
+            }
+          },
+          {
+            "long": "remote",
+            "inherit": false,
+            "value": {
+              "name": "value",
+              "description": "remote name"
+            }
+          },
+          {
+            "long": "all-versions",
+            "description": "enter all components versions into the graph, not only latest",
+            "inherit": false
+          },
+          {
+            "long": "layout",
+            "inherit": false,
+            "value": {
+              "name": "value",
+              "description": "graphVis layout"
+            }
+          },
+          {
+            "long": "json",
+            "short": "j",
+            "description": "json format",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "value",
+              "description": "id",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "list",
+        "aliases": [
+          "ls"
+        ],
+        "description": "list components on a workspace or a remote scope",
+        "options": [
+          {
+            "long": "ids",
+            "short": "i",
+            "description": "show only component ids, unformatted",
+            "inherit": false
+          },
+          {
+            "long": "scope",
+            "short": "s",
+            "description": "show only components stored in the local scope",
+            "inherit": false
+          },
+          {
+            "long": "outdated",
+            "short": "o",
+            "description": "highlight outdated components",
+            "inherit": false
+          },
+          {
+            "long": "json",
+            "short": "j",
+            "description": "show the output in JSON format",
+            "inherit": false
+          },
+          {
+            "long": "namespace",
+            "description": "show only components in the specified namespace",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "value",
+              "description": "remote scope to list components from",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "globals",
+        "description": "list all globals",
+        "options": [
+          {
+            "long": "json",
+            "short": "j",
+            "description": "json format",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "run",
+        "description": "locally run an app component (independent of bit's dev server)",
+        "options": [
+          {
+            "long": "dev",
+            "short": "d",
+            "description": "start the application in dev mode",
+            "inherit": false
+          },
+          {
+            "long": "port",
+            "short": "p",
+            "description": "port to run the app on",
+            "inherit": false
+          },
+          {
+            "long": "verbose",
+            "short": "v",
+            "description": "show verbose output for inspection and print stack trace",
+            "inherit": false
+          },
+          {
+            "long": "skip-watch",
+            "description": "avoid running the watch process that compiles components in the background",
+            "inherit": false
+          },
+          {
+            "long": "ssr",
+            "description": "run app in server side rendering mode",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "value",
+              "description": "the app's name registered by the app",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "app",
+        "description": "manages apps",
+        "subcommands": [
+          {
+            "name": "list",
+            "description": "list all registered apps",
+            "options": [
+              {
+                "long": "json",
+                "short": "j",
+                "description": "return the component data in json format",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "run",
+            "description": "locally run an app component (independent of bit's dev server)",
+            "options": [
+              {
+                "long": "dev",
+                "short": "d",
+                "description": "start the application in dev mode",
+                "inherit": false
+              },
+              {
+                "long": "port",
+                "short": "p",
+                "description": "port to run the app on",
+                "inherit": false
+              },
+              {
+                "long": "verbose",
+                "short": "v",
+                "description": "show verbose output for inspection and print stack trace",
+                "inherit": false
+              },
+              {
+                "long": "skip-watch",
+                "description": "avoid running the watch process that compiles components in the background",
+                "inherit": false
+              },
+              {
+                "long": "ssr",
+                "description": "run app in server side rendering mode",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "value",
+                  "description": "the app's name is registered by the app (run 'bit app list' to list the names of the available apps)",
+                  "index": 0
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "capsule",
+        "description": "manage capsules",
+        "subcommands": [
+          {
+            "name": "list",
+            "description": "list the capsules generated for this workspace",
+            "options": [
+              {
+                "long": "json",
+                "short": "j",
+                "description": "jSON format",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "create",
+            "description": "create capsules for components",
+            "options": [
+              {
+                "long": "base-dir",
+                "short": "b",
+                "description": "set base dir of all capsules",
+                "inherit": false
+              },
+              {
+                "long": "root-base-dir",
+                "short": "r",
+                "description": "set root base dir of all capsules",
+                "inherit": false
+              },
+              {
+                "long": "always-new",
+                "short": "a",
+                "description": "create new environment for capsule",
+                "inherit": false
+              },
+              {
+                "long": "seeders-only",
+                "description": "create capsules for the seeders only",
+                "inherit": false
+              },
+              {
+                "long": "id",
+                "short": "i",
+                "description": "reuse capsule of certain name",
+                "inherit": false
+              },
+              {
+                "long": "use-hash",
+                "description": "whether to use hash function as capsules root dir name",
+                "inherit": false
+              },
+              {
+                "long": "json",
+                "short": "j",
+                "description": "jSON format",
+                "inherit": false
+              },
+              {
+                "long": "install-packages",
+                "description": "install packages by the package-manager",
+                "inherit": false
+              },
+              {
+                "long": "package-manager",
+                "short": "p",
+                "description": "npm, yarn or pnpm, default to npm",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "delete",
+            "description": "delete capsules",
+            "options": [
+              {
+                "long": "scope-aspects",
+                "description": "delete scope-aspects capsules",
+                "inherit": false
+              },
+              {
+                "long": "all",
+                "short": "a",
+                "description": "delete all capsules for all workspaces and scopes",
+                "inherit": false
+              },
+              {
+                "long": "json",
+                "short": "j",
+                "description": "jSON format",
+                "inherit": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "delete",
+        "description": "mark components as deleted on the remote",
+        "options": [
+          {
+            "long": "lane",
+            "description": "when on a lane, delete the component from this lane only",
+            "inherit": false
+          },
+          {
+            "long": "update-main",
+            "description": "eXPERIMENTAL: Delete component/s on the main lane after merging this lane into main",
+            "inherit": false
+          },
+          {
+            "long": "force",
+            "short": "f",
+            "description": "removes the component from the scope, even if used as a dependency",
+            "inherit": false
+          },
+          {
+            "long": "silent",
+            "short": "s",
+            "description": "skip confirmation",
+            "inherit": false
+          },
+          {
+            "long": "hard",
+            "description": "nOT-RECOMMENDED: Delete a component completely from a remote scope",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "value",
+              "description": "component name, component id, or component pattern",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "eject-conf",
+        "description": "eject components configuration (create a component.json file). Note this can be reversed at any time by snapping/tagging changes and deleting the component.json",
+        "options": [
+          {
+            "long": "propagate",
+            "short": "p",
+            "description": "mark propagate true in the config file, so that component.json configs will be merge with workspace configs",
+            "inherit": false
+          },
+          {
+            "long": "override",
+            "short": "o",
+            "description": "override file if exist",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "value",
+              "description": "pattern for component ids",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "git",
+        "description": "perform git operations",
+        "subcommands": [
+          {
+            "name": "set-merge-driver",
+            "description": "setup bit's git merge driver for bitmap files",
+            "options": [
+              {
+                "long": "global",
+                "short": "g",
+                "description": "set the git merge driver globally",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "merge-bitmaps",
+            "description": "merge conflicting bitmap files during git merge",
+            "arguments": {
+              "states": [
+                {
+                  "name": "value",
+                  "description": "ancestor",
+                  "index": 0
+                },
+                {
+                  "name": "value",
+                  "description": "current",
+                  "index": 1
+                },
+                {
+                  "name": "value",
+                  "description": "other",
+                  "index": 2
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "lane",
+        "aliases": [
+          "l"
+        ],
+        "description": "manage lanes - if no sub-command is used, runs 'bit lane list'",
+        "subcommands": [
+          {
+            "name": "list",
+            "description": "list local lanes",
+            "options": [
+              {
+                "long": "details",
+                "short": "d",
+                "description": "show more details on the state of each component in each lane",
+                "inherit": false
+              },
+              {
+                "long": "json",
+                "short": "j",
+                "description": "show lanes' details in a json format",
+                "inherit": false
+              },
+              {
+                "long": "remote",
+                "short": "r",
+                "description": "show all remote lanes from the specified scope",
+                "inherit": false,
+                "value": {
+                  "name": "value",
+                  "description": "remote scope name"
+                }
+              },
+              {
+                "long": "merged",
+                "description": "list only merged lanes",
+                "inherit": false
+              },
+              {
+                "long": "not-merged",
+                "description": "list only lanes that haven't been merged",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "switch",
+            "description": "switch to the specified lane",
+            "options": [
+              {
+                "long": "alias",
+                "short": "n",
+                "description": "relevant when the specified lane is a remote lane. Create a local alias for the lane",
+                "inherit": false,
+                "value": {
+                  "name": "value",
+                  "description": "local alias for the lane"
+                }
+              },
+              {
+                "long": "merge",
+                "short": "m",
+                "description": "merge local changes with the checked out version. Strategy should be 'theirs', 'ours', or 'manual'",
+                "inherit": false,
+                "value": {
+                  "name": "value",
+                  "description": "merge strategy"
+                }
+              },
+              {
+                "long": "get-all",
+                "description": "checkout all components in a lane, including those not currently in the workspace",
+                "inherit": false
+              },
+              {
+                "long": "skip-dependency-installation",
+                "description": "do not install packages of the imported components",
+                "inherit": false
+              },
+              {
+                "long": "pattern",
+                "short": "p",
+                "description": "switch only the lane components matching the specified component-pattern",
+                "inherit": false,
+                "value": {
+                  "name": "value",
+                  "description": "component pattern"
+                }
+              },
+              {
+                "long": "json",
+                "short": "j",
+                "description": "return the output as JSON",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "value",
+                  "description": "lane-name or lane-id (if lane is not local) to switch to",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "show",
+            "description": "show lane details. If no lane specified, show the current lane",
+            "options": [
+              {
+                "long": "json",
+                "short": "j",
+                "description": "show the lane details in json format",
+                "inherit": false
+              },
+              {
+                "long": "remote",
+                "description": "show details of the remote head of the provided lane",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "create",
+            "description": "creates a new lane and switches to it",
+            "options": [
+              {
+                "long": "scope",
+                "short": "s",
+                "description": "remote scope to which this lane will be exported, default to the workspace.json's defaultScope",
+                "inherit": false,
+                "value": {
+                  "name": "value",
+                  "description": "remote scope for the new component"
+                }
+              },
+              {
+                "long": "remote-scope",
+                "description": "deprecated. Use --scope",
+                "inherit": false
+              },
+              {
+                "long": "alias",
+                "description": "a local alias to refer to this lane, defaults to the <lane-name>",
+                "inherit": false,
+                "value": {
+                  "name": "value",
+                  "description": "local alias"
+                }
+              },
+              {
+                "long": "fork-lane-new-scope",
+                "description": "create the new lane in a different scope than its parent lane (if created from another lane)",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "value",
+                  "description": "the name for the new lane",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "remove",
+            "description": "remove or delete lanes",
+            "options": [
+              {
+                "long": "remote",
+                "short": "r",
+                "description": "delete a remote lane. Use remote/lane-id syntax e.g. bit lane remove owner.org/my-lane --remote. Delete is immediate, no export required",
+                "inherit": false
+              },
+              {
+                "long": "force",
+                "short": "f",
+                "description": "removes/deletes the lane even when the lane is not yet merged to main",
+                "inherit": false
+              },
+              {
+                "long": "silent",
+                "short": "s",
+                "description": "skip confirmation",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "value",
+                  "description": "a list of lane names, separated by spaces",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "change-scope",
+            "description": "changes the remote scope of a lane",
+            "options": [
+              {
+                "long": "lane-name",
+                "short": "l",
+                "description": "the name of the lane to change its remote scope. If not specified, the current lane is used",
+                "inherit": false,
+                "value": {
+                  "name": "value",
+                  "description": "name of the lane"
+                }
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "value",
+                  "description": "remote scope name",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "alias",
+            "description": "adds an alias to a lane",
+            "arguments": {
+              "states": [
+                {
+                  "name": "value",
+                  "description": "lane name and alias",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "rename",
+            "description": "eXPERIMENTAL. Change the lane-name locally and on the remote (if exported)",
+            "options": [
+              {
+                "long": "lane-name",
+                "short": "l",
+                "description": "the name of the lane to rename. If not specified, the current lane is used",
+                "inherit": false,
+                "value": {
+                  "name": "value",
+                  "description": "name of the lane"
+                }
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "value",
+                  "description": "new name for the lane",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "diff",
+            "description": "show diff between lanes",
+            "options": [
+              {
+                "long": "pattern",
+                "short": "p",
+                "description": "show lane-diff for components conforming to the specified component-pattern only",
+                "inherit": false,
+                "value": {
+                  "name": "value",
+                  "description": "component pattern"
+                }
+              },
+              {
+                "long": "workspace-only",
+                "description": "do not mark the components as removed from the lane. Instead, remove them from the workspace only",
+                "inherit": false
+              },
+              {
+                "long": "update-main",
+                "description": "eXPERIMENTAL. Remove, i.e. delete, component/s on the main lane after merging this lane into main",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "value",
+                  "description": "base lane for comparison and lane being compared to base lane",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "merge-abort",
+            "description": "abort the recent lane-merge. Revert the lane object and checkout accordingly",
+            "options": [
+              {
+                "long": "verbose",
+                "description": "show details of components that didn't need to be merged",
+                "inherit": false
+              },
+              {
+                "long": "silent",
+                "short": "s",
+                "description": "skip confirmation",
+                "inherit": false
+              },
+              {
+                "long": "skip-dependency-installation",
+                "description": "do not install packages of the imported components",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "merge",
+            "description": "merge a local or a remote lane to the current lane. By default, the provided lane will be fetched from the remote before merging. To merge the lane from the loc",
+            "options": [
+              {
+                "long": "ours",
+                "description": "deprecated. Use --auto-merge-resolve. In case of a conflict, keep local modifications",
+                "inherit": false
+              },
+              {
+                "long": "theirs",
+                "description": "deprecated. Use --auto-merge-resolve. In case of a conflict, override local with incoming changes",
+                "inherit": false
+              },
+              {
+                "long": "manual",
+                "description": "deprecated. Use --auto-merge-resolve. Requires manual resolution of conflicts",
+                "inherit": false
+              },
+              {
+                "long": "auto-merge-resolve",
+                "description": "in case of a merge conflict, resolve according to the provided strategy. Options include: [ours, theirs, manual]",
+                "inherit": false
+              },
+              {
+                "long": "workspace",
+                "description": "merge only lane components that are in the current workspace",
+                "inherit": false
+              },
+              {
+                "long": "no-snap",
+                "description": "do not auto snap after merge completed without conflicts",
+                "inherit": false
+              },
+              {
+                "long": "tag",
+                "description": "auto-tag all lane components after merging into main (or tag-merge in case of snap-merge)",
+                "inherit": false
+              },
+              {
+                "long": "build",
+                "description": "in case of snap during the merge, run the build-pipeline (similar to bit snap --build)",
+                "inherit": false
+              },
+              {
+                "long": "message",
+                "short": "m",
+                "description": "override the default message for the auto snap",
+                "inherit": false
+              },
+              {
+                "long": "keep-readme",
+                "description": "skip deleting the lane readme component after merging",
+                "inherit": false
+              },
+              {
+                "long": "no-squash",
+                "description": "relevant for merging lanes into main, which by default squashes all lane snaps",
+                "inherit": false
+              },
+              {
+                "long": "squash",
+                "description": "eXPERIMENTAL. Relevant for merging a lane into another non-main lane, which by default does not squash",
+                "inherit": false
+              },
+              {
+                "long": "ignore-config-changes",
+                "description": "allow merging when components are modified due to config changes (such as dependencies) only and not files",
+                "inherit": false
+              },
+              {
+                "long": "verbose",
+                "description": "show details of components that were not merged successfully",
+                "inherit": false
+              },
+              {
+                "long": "skip-dependency-installation",
+                "short": "x",
+                "description": "do not install dependencies of the imported components",
+                "inherit": false
+              },
+              {
+                "long": "skip-fetch",
+                "description": "use the local state of target-lane if exits locally, without updating it from the remote",
+                "inherit": false
+              },
+              {
+                "long": "include-deps",
+                "description": "relevant for \"--pattern\" and \"--workspace\". Merge also dependencies of the specified components",
+                "inherit": false
+              },
+              {
+                "long": "resolve-unrelated",
+                "description": "relevant when a component on a lane and the component on main have nothing in common. merge-strategy can be \"ours\" (default) or \"theirs\"",
+                "inherit": false
+              },
+              {
+                "long": "include-non-lane-comps",
+                "description": "when merging main, include workspace components that are not on the lane (by default only lane components are merged)",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "lane",
+                  "description": "lane-name or full lane-id (if remote) to merge into the current lane",
+                  "index": 0
+                },
+                {
+                  "name": "pattern",
+                  "description": "partially merge the lane - only components that match the specified component-pattern. Component pattern format: component name, component id, or component patt",
+                  "index": 1
+                }
+              ]
+            }
+          },
+          {
+            "name": "add-readme",
+            "description": "eXPERIMENTAL. Sets an existing component as the readme of a lane",
+            "arguments": {
+              "states": [
+                {
+                  "name": "component-id",
+                  "description": "the component name or id of the component to use as the lane's readme",
+                  "index": 0
+                },
+                {
+                  "name": "lane-name",
+                  "description": "the lane to attach the readme to (defaults to the current lane)",
+                  "index": 1
+                }
+              ]
+            }
+          },
+          {
+            "name": "remove-readme",
+            "description": "eXPERIMENTAL. Remove lane readme component",
+            "arguments": {
+              "states": [
+                {
+                  "name": "laneName",
+                  "description": "name of the lane from which the readme component should be removed",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "import",
+            "description": "import a remote lane to your workspace and switch to that lane",
+            "options": [
+              {
+                "long": "skip-dependency-installation",
+                "short": "x",
+                "description": "do not install dependencies of the imported components",
+                "inherit": false
+              },
+              {
+                "long": "pattern",
+                "short": "p",
+                "description": "import only components from the lane that fit the specified component-pattern to the workspace. Works only when the workspace is empty",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "lane",
+                  "description": "the remote lane name to be imported",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "remove-comp",
+            "description": "deprecated. Remove components when on a lane",
+            "options": [
+              {
+                "long": "workspace-only",
+                "description": "do not mark the components as removed from the lane. Instead, remove them from the workspace only",
+                "inherit": false
+              },
+              {
+                "long": "update-main",
+                "description": "eXPERIMENTAL. Remove, i.e., delete, component/s on the main lane after merging this lane into the main",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "component-pattern",
+                  "description": "component name, component id, or component pattern. Use component pattern to select multiple components. Use comma to separate patterns and \"!\" to exclude. E.g",
+                  "index": 0
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "log-file",
+        "description": "eXPERIMENTAL: Show file history",
+        "options": [
+          {
+            "long": "one-line",
+            "short": "o",
+            "description": "show each log entry in one line",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "value",
+              "description": "file path relative to the workspace",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "mini-status",
+        "aliases": [
+          "ms"
+        ],
+        "description": "eXPERIMENTAL. Basic status for fast execution",
+        "options": [
+          {
+            "long": "show-issues",
+            "description": "show component issues",
+            "inherit": false
+          },
+          {
+            "long": "json",
+            "short": "j",
+            "description": "output in JSON format",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "value",
+              "description": "component name, component id, or component pattern",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "pattern",
+        "description": "list the component ids matching the given pattern",
+        "options": [
+          {
+            "long": "json",
+            "short": "j",
+            "description": "return the output as JSON",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "value",
+              "description": "pattern for components to match",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "recover",
+        "description": "eXPERIMENTAL. Recover component(s) soft-deleted from the workspace, or a remote scope",
+        "options": [
+          {
+            "long": "skip-dependency-installation",
+            "short": "x",
+            "description": "do not install packages in case of importing components",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "value",
+              "description": "component name to recover",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "revert",
+        "description": "replace the current component files by the specified version, leave the version intact",
+        "options": [
+          {
+            "long": "verbose",
+            "short": "v",
+            "description": "showing verbose output for inspection",
+            "inherit": false
+          },
+          {
+            "long": "skip-dependency-installation",
+            "short": "x",
+            "description": "do not install packages of the imported components",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "value",
+              "description": "component name, id, or pattern",
+              "index": 0
+            },
+            {
+              "name": "value",
+              "description": "permitted values: [main, specific-version]",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "scope",
+        "description": "manage the scope-name for components bit scope <sub-command>",
+        "subcommands": [
+          {
+            "name": "set",
+            "description": "sets the scope for specified component/s. If no component is specified, sets the default scope of the workspace. Default scopes for components are set in the bi",
+            "arguments": {
+              "states": [
+                {
+                  "name": "value",
+                  "description": "name of the scope to set",
+                  "index": 0
+                },
+                {
+                  "name": "value",
+                  "description": "component name, id, or pattern",
+                  "index": 1
+                }
+              ]
+            }
+          },
+          {
+            "name": "rename",
+            "description": "renames the scope name for all components with the specified 'current scope name' - only available for new components that have not yet been snapped/tagged. If",
+            "options": [
+              {
+                "long": "refactor",
+                "short": "r",
+                "description": "update the import statements in all dependent components",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "value",
+                  "description": "the current scope name",
+                  "index": 0
+                },
+                {
+                  "name": "value",
+                  "description": "the new scope name",
+                  "index": 1
+                }
+              ]
+            }
+          },
+          {
+            "name": "rename-owner",
+            "description": "renames the owner part of the scope-name for all components with the specified 'current owner name'. Usage: scope rename-owner <current-owner-name> <new-owner-n",
+            "options": [
+              {
+                "long": "refactor",
+                "short": "r",
+                "description": "update the import statements in all dependent components",
+                "inherit": false
+              },
+              {
+                "long": "ast",
+                "description": "eXPERIMENTAL. Use AST to transform files instead of regex",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "value",
+                  "description": "the current owner name",
+                  "index": 0
+                },
+                {
+                  "name": "value",
+                  "description": "the new owner name",
+                  "index": 1
+                }
+              ]
+            }
+          },
+          {
+            "name": "fork",
+            "description": "fork all components of the original-scope and refactor the source-code to use the new scope name. Usage: scope fork <original-scope> <new-scope>",
+            "options": [
+              {
+                "long": "ast",
+                "description": "eXPERIMENTAL. Use AST to transform files instead of regex",
+                "inherit": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "server",
+        "description": "eXPERIMENTAL. Communicate with bit CLI program via HTTP requests bit server",
+        "options": [
+          {
+            "long": "port",
+            "short": "p",
+            "description": "port to run the server on",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "system",
+        "description": "system operations bit system <sub-command>",
+        "subcommands": [
+          {
+            "name": "log",
+            "description": "print debug.log to the screen Usage: system log"
+          }
+        ]
+      },
+      {
+        "name": "snap",
+        "description": "create an immutable and exportable component snapshot (non-release version) bit snap [component-pattern]",
+        "options": [
+          {
+            "long": "message",
+            "short": "m",
+            "description": "snap message describing the latest changes - will appear in component history log",
+            "inherit": false
+          },
+          {
+            "long": "unmodified",
+            "description": "include unmodified components (by default, only new and modified components are snapped)",
+            "inherit": false
+          },
+          {
+            "long": "unmerged",
+            "description": "complete a merge process by snapping the unmerged components",
+            "inherit": false
+          },
+          {
+            "long": "build",
+            "short": "b",
+            "description": "not needed for now. Run the build pipeline locally in case the feature-flag build-on-ci is enabled",
+            "inherit": false
+          },
+          {
+            "long": "editor",
+            "description": "open an editor to write a snap message per component. Optionally specify the editor-name (defaults to vim)",
+            "inherit": false
+          },
+          {
+            "long": "skip-tests",
+            "description": "skip running component tests during snap process",
+            "inherit": false
+          },
+          {
+            "long": "skip-auto-snap",
+            "description": "skip auto snapping dependents",
+            "inherit": false
+          },
+          {
+            "long": "disable-snap-pipeline",
+            "description": "skip the snap pipeline. This will for instance skip packing and publishing component version for install, and app deployment",
+            "inherit": false
+          },
+          {
+            "long": "ignore-build-errors",
+            "description": "proceed to snap pipeline even when build pipeline fails",
+            "inherit": false
+          },
+          {
+            "long": "ignore-issues",
+            "short": "i",
+            "description": "ignore component issues (shown in \"bit status\" as \"issues found\"), issues to ignore: [MissingPackagesDependenciesOnFs, MissingManuallyConfiguredPackages, Missin",
+            "inherit": false
+          },
+          {
+            "long": "all",
+            "short": "a",
+            "description": "deprecated (not needed anymore, now the default). Snap all new and modified components",
+            "inherit": false
+          },
+          {
+            "long": "fail-fast",
+            "description": "stop pipeline execution on the first failed task (by default a task is skipped only when its dependency failed)",
+            "inherit": false
+          },
+          {
+            "long": "force",
+            "short": "f",
+            "description": "deprecated (use \"--skip-tests\" or \"--unmodified\" instead). Force-snap even if tests are failing and even when component has not changed",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "value",
+              "description": "component name, component id, or component pattern. Use component pattern to select multiple components. Use comma to separate patterns and \"!\" to exclude. E.g",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "watch",
+        "description": "automatically recompile modified components (on save). By default, the watcher doesn't use polling, to keep the CPU idle. In some rare cases, this could result",
+        "options": [
+          {
+            "long": "verbose",
+            "short": "v",
+            "description": "show all watch events and compiler verbose output",
+            "inherit": false
+          },
+          {
+            "long": "skip-pre-compilation",
+            "description": "skip compilation step before starting to watch",
+            "inherit": false
+          },
+          {
+            "long": "check-types",
+            "short": "t",
+            "description": "eXPERIMENTAL. Show errors/warnings for types. Options are [file, project] to investigate only changed file or entire project. Defaults to project",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "use",
+        "description": "set aspects in the workspace/scope config to make them loadable by the workspace/scope. bit use <component-id>",
+        "arguments": {
+          "states": [
+            {
+              "name": "value",
+              "description": "the component id of the aspect",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "ws-config",
+        "aliases": [
+          "workspace-config"
+        ],
+        "description": "manage workspace config files. bit ws-config <sub-command>",
+        "subcommands": [
+          {
+            "name": "ws-config write",
+            "description": "eXPERIMENTAL. Write config files in the workspace. Useful for idEs. ws-config write",
+            "options": [
+              {
+                "long": "clean",
+                "short": "c",
+                "description": "delete existing config files from the workspace. Highly recommended to run it with \"--dry-run\" first",
+                "inherit": false
+              },
+              {
+                "long": "writers",
+                "short": "w",
+                "description": "only write config files for the given writers. Use comma to separate multiple writers. Use ws-config list to see all writers",
+                "inherit": false
+              },
+              {
+                "long": "silent",
+                "short": "s",
+                "description": "do not prompt for confirmation",
+                "inherit": false
+              },
+              {
+                "long": "no-dedupe",
+                "description": "write configs inside each one of the component's dir, avoid deduping",
+                "inherit": false
+              },
+              {
+                "long": "dry-run",
+                "description": "show the paths that configs will be written per env",
+                "inherit": false
+              },
+              {
+                "long": "dry-run-with-content",
+                "description": "use with --json flag. Show the config content and the paths that will be written per env",
+                "inherit": false
+              },
+              {
+                "long": "verbose",
+                "short": "v",
+                "description": "showing verbose output for writing",
+                "inherit": false
+              },
+              {
+                "long": "json",
+                "short": "j",
+                "description": "jSON format",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "ws-config clean",
+            "description": "eXPERIMENTAL. Clean (delete) written config files in the workspace. Useful for idEs. ws-config clean",
+            "options": [
+              {
+                "long": "silent",
+                "short": "s",
+                "description": "do not prompt for confirmation",
+                "inherit": false
+              },
+              {
+                "long": "writers",
+                "short": "w",
+                "description": "only clean config files for the given writers. Use comma to separate multiple writers. Use ws-config list to see all writers",
+                "inherit": false
+              },
+              {
+                "long": "dry-run",
+                "description": "show the paths of configs that will be cleaned",
+                "inherit": false
+              },
+              {
+                "long": "json",
+                "short": "j",
+                "description": "jSON format",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "ws-config list",
+            "description": "eXPERIMENTAL. List config writers. ws-config list",
+            "options": [
+              {
+                "long": "json",
+                "short": "j",
+                "description": "jSON format",
+                "inherit": false
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "builtin.directories": {
+        "builtin": "directories"
+      }
+    }
+  }
+}
