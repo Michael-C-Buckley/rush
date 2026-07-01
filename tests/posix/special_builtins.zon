@@ -135,6 +135,21 @@
             .status = 0,
         },
         .{
+            .name = "dot path search skips unreadable scripts",
+            .script =
+            \\mkdir p1 p2
+            \\printf 'printf bad\n' >p1/script
+            \\printf 'printf ok\n' >p2/script
+            \\chmod 333 p1/script
+            \\chmod 444 p2/script
+            \\PATH=$PWD/p1:$PWD/p2:$PATH
+            \\. script
+            ,
+            .stdout = "ok",
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "exec with no command returns zero",
             .script =
             \\exec

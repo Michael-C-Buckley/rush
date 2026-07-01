@@ -1239,7 +1239,7 @@ fn resolveDotPath(shell: anytype, operand: []const u8) !?[]const u8 {
         try candidate_buffer.appendSlice(allocator, operand);
         try candidate_buffer.append(allocator, 0);
         const candidate = candidate_buffer.items[0 .. candidate_buffer.items.len - 1 :0];
-        if (shell.host.existsZ(candidate)) return candidate;
+        if (shell.host.fileAccessZ(candidate, .read)) return candidate;
     }
     return null;
 }
