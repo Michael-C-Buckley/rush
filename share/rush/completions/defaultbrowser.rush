@@ -1,0 +1,10 @@
+__rush_complete_defaultbrowser_browsers() {
+  command -v defaultbrowser >/dev/null 2>&1 || return
+  defaultbrowser 2>/dev/null | while IFS= read -r line; do
+    case "$line" in
+      \**) continue ;;
+    esac
+    browser=$(printf '%s\n' "$line" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')
+    test -n "$browser" && rush_complete candidate "$browser" --kind plain --description browser
+  done
+}

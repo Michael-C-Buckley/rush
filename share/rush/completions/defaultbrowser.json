@@ -1,0 +1,22 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "defaultbrowser",
+    "description": "change the default browser",
+    "arguments": {
+      "states": [
+        {
+          "name": "browser",
+          "index": 0,
+          "provider": "defaultbrowser.browsers"
+        }
+      ]
+    },
+    "providers": {
+      "defaultbrowser.browsers": {
+        "function": "__rush_complete_defaultbrowser_browsers"
+      }
+    }
+  }
+}
