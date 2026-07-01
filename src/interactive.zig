@@ -131,6 +131,8 @@ const InteractiveSession = struct {
     command_history: *history.History,
     history_service: *history.InteractiveHistoryService,
     events: interactive_event.Dispatcher(RushShell),
+    terminal: ?*editor.driver.TerminalSession = null,
+    dispatching_directory_change: bool = false,
     restore_terminal_pgrp: ?host.Pid = null,
     last_command_duration_ms: ?i64 = null,
     pending_event_exit_status: ?u8 = null,
@@ -142,6 +144,9 @@ const InteractiveSession = struct {
         };
         defer self.restoreTerminalProcessGroup();
         defer terminal.deinit();
+        self.terminal = &terminal;
+        defer self.terminal = null;
+        self.sh.setDirectoryChangeCallback(self, onDirectoryChange);
         self.restore_terminal_pgrp = enableJobControl(self.sh, @enumFromInt(terminal.ttyFd()));
         self.sh.extensions.configurePromptAsync(self.io, terminal.promptRedrawWakeFd());
 
@@ -194,6 +199,8 @@ const InteractiveSession = struct {
         const current_cwd = self.sh.host.currentDir(self.allocator) catch try self.allocator.dupe(u8, "");
         defer self.allocator.free(current_cwd);
         self.command_history.current_cwd = current_cwd;
+        // ziglint-ignore: Z026 best-effort terminal metadata; the next directory change or prompt reports it again
+        self.reportCurrentDirectory(terminal) catch {};
 
         return terminal.readLine(.{
             .prompt = prompt_text,
@@ -222,6 +229,19 @@ const InteractiveSession = struct {
             self.sh.host.writeAll(.stderr, message) catch {};
             return error.EditorFailure;
         };
+    }
+
+    fn reportCurrentDirectory(self: *InteractiveSession, terminal: *editor.driver.TerminalSession) !void {
+        const cwd = try self.currentDirectoryForReporting();
+        defer self.allocator.free(cwd);
+        try terminal.reportCurrentDirectory(cwd, self.command_history.hostname);
+    }
+
+    fn currentDirectoryForReporting(self: *InteractiveSession) ![]const u8 {
+        if (self.sh.state.getVariable("PWD")) |variable| {
+            if (variable.value.len != 0 and variable.value[0] == '/') return self.allocator.dupe(u8, variable.value);
+        }
+        return self.sh.host.currentDir(self.allocator);
     }
 
     fn renderPrompt(self: *InteractiveSession) ![]const u8 {
@@ -394,6 +414,41 @@ const InteractiveSession = struct {
         };
     }
 };
+
+fn onDirectoryChange(context: *anyopaque, old_pwd: []const u8, new_pwd: []const u8) void {
+    const session: *InteractiveSession = @ptrCast(@alignCast(context));
+    const terminal = session.terminal orelse return;
+
+    // ziglint-ignore: Z026 best-effort terminal metadata; the next prompt reports it again
+    terminal.reportCurrentDirectory(new_pwd, session.command_history.hostname) catch {};
+
+    if (session.dispatching_directory_change) return;
+    session.dispatching_directory_change = true;
+    defer session.dispatching_directory_change = false;
+
+    var dispatched = session.events.runEvent(
+        session.allocator,
+        session.io,
+        "directory.change",
+        &.{ old_pwd, new_pwd },
+    ) catch |err| {
+        var message_buffer: [128]u8 = undefined;
+        const message = std.fmt.bufPrint(
+            &message_buffer,
+            "rush: directory.change event failed: {s}\n",
+            .{@errorName(err)},
+        ) catch "rush: directory.change event failed\n";
+        // ziglint-ignore: Z026 event diagnostics are best effort during callback dispatch
+        session.sh.host.writeAll(.stderr, message) catch {};
+        return;
+    };
+    defer dispatched.deinit(session.allocator);
+    if (dispatched.exit_status) |status| pendingEventExit(session, status);
+    if (dispatched.output.len != 0) {
+        // ziglint-ignore: Z026 event output is best effort during callback dispatch
+        session.sh.host.writeAll(.stderr, dispatched.output) catch {};
+    }
+}
 
 // ziglint-ignore: Z023 parameter order follows method or callback shape; preserve API
 fn runInteractiveHooks(context: *anyopaque, allocator: std.mem.Allocator, io: std.Io) !editor.driver.HookResult {

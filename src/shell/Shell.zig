@@ -35,6 +35,8 @@ pub fn ShellWithBuiltins(comptime Host: type, comptime builtin_registry: builtin
         command_history: ?history.CommandHistory = null,
         function_autoload: ?*const fn (*Self, []const u8) anyerror!bool = null,
         autoloading_function: ?[]const u8 = null,
+        directory_change_context: ?*anyopaque = null,
+        directory_change_callback: ?*const fn (*anyopaque, []const u8, []const u8) void = null,
 
         const Self = @This();
 
@@ -100,6 +102,27 @@ pub fn ShellWithBuiltins(comptime Host: type, comptime builtin_registry: builtin
 
         pub fn setCommandHistory(self: *Self, command_history: history.CommandHistory) void {
             self.command_history = command_history;
+        }
+
+        pub fn setDirectoryChangeCallback(
+            self: *Self,
+            context: *anyopaque,
+            callback: *const fn (*anyopaque, []const u8, []const u8) void,
+        ) void {
+            self.directory_change_context = context;
+            self.directory_change_callback = callback;
+        }
+
+        pub fn notifyDirectoryChange(self: *Self, old_pwd: []const u8, new_pwd: []const u8) void {
+            if (std.mem.eql(u8, old_pwd, new_pwd)) return;
+            const callback = self.directory_change_callback orelse return;
+            const context = self.directory_change_context orelse return;
+            if (self.state.shell_pid) |shell_pid| {
+                if (comptime @hasDecl(Host, "currentProcessId")) {
+                    if (self.host.currentProcessId() != shell_pid) return;
+                }
+            }
+            callback(context, old_pwd, new_pwd);
         }
 
         pub fn tryAutoloadFunction(self: *Self, name: []const u8) !bool {
@@ -264,4 +287,47 @@ test "ShellWithBuiltins uses the supplied compile-time builtin registry" {
 
     try std.testing.expect(shell.lookupBuiltin("printf") != null);
     try std.testing.expectEqual(@as(?builtin.Definition, null), shell.lookupBuiltin("abbr"));
+}
+
+test "Shell directory change callback reports only current-shell changes" {
+    const TestHost = struct {
+        const Self = @This();
+
+        pid: i32,
+
+        pub fn currentProcessId(self: Self) i32 {
+            return self.pid;
+        }
+    };
+    const CallbackState = struct {
+        const Self = @This();
+
+        count: usize = 0,
+        old_pwd: []const u8 = "",
+        new_pwd: []const u8 = "",
+
+        fn callback(context: *anyopaque, old_pwd: []const u8, new_pwd: []const u8) void {
+            const callback_state: *Self = @ptrCast(@alignCast(context));
+            callback_state.count += 1;
+            callback_state.old_pwd = old_pwd;
+            callback_state.new_pwd = new_pwd;
+        }
+    };
+
+    var callback_state: CallbackState = .{};
+    var sh = Shell(TestHost).init(std.testing.allocator, .{ .pid = 42 }, .{});
+    defer sh.deinit();
+    sh.setDirectoryChangeCallback(&callback_state, CallbackState.callback);
+
+    sh.notifyDirectoryChange("/old", "/new");
+    try std.testing.expectEqual(@as(usize, 1), callback_state.count);
+    try std.testing.expectEqualStrings("/old", callback_state.old_pwd);
+    try std.testing.expectEqualStrings("/new", callback_state.new_pwd);
+
+    sh.notifyDirectoryChange("/new", "/new");
+    try std.testing.expectEqual(@as(usize, 1), callback_state.count);
+
+    sh.state.shell_pid = 7;
+    sh.notifyDirectoryChange("/new", "/other");
+    try std.testing.expectEqual(@as(usize, 1), callback_state.count);
 }

@@ -1534,6 +1534,7 @@ fn evalCdBuiltin(shell: anytype, args: []const []const u8) EvalError!result.Eval
     shell.state.putVariable(.{ .name = "PWD", .value = new_pwd, .exported = exportedFlag(shell, "PWD") }) catch {
         return .{ .status = 1 };
     };
+    if (comptime @hasDecl(@TypeOf(shell.*), "notifyDirectoryChange")) shell.notifyDirectoryChange(old_pwd, new_pwd);
 
     if (print_new_dir) try shell.host.writeAll(.stdout, try std.fmt.allocPrint(allocator, "{s}\n", .{new_pwd}));
     return .{};
