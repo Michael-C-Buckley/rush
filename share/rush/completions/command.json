@@ -1,0 +1,31 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "command",
+    "description": "execute a command bypassing shell functions",
+    "options": [
+      {
+        "short": "v",
+        "description": "print the location of the command",
+        "inherit": false
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "command",
+          "provider": "builtin.executables",
+          "index": 0,
+          "description": "command to execute",
+          "repeatable": true
+        }
+      ]
+    },
+    "providers": {
+      "builtin.executables": {
+        "builtin": "executables"
+      }
+    }
+  }
+}
