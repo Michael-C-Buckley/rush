@@ -999,6 +999,22 @@
             .status = 0,
         },
         .{
+            .name = "alias expands first command in case item body",
+            .script =
+            \\alias not='! '
+            \\is_false() { return 1; }
+            \\case word in
+            \\( word ) not is_false && printf 'yes\n' ;;
+            \\esac
+            ,
+            .stdout =
+            \\yes
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "alias expansion preserves here-document source positions",
             .script =
             \\alias exit=:

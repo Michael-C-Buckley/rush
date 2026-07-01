@@ -136,6 +136,7 @@ fn tokenStartsCommandPosition(kind: token.Kind) bool {
         .ampersand_ampersand,
         .bang,
         .left_paren,
+        .right_paren,
         .left_brace,
         => true,
         else => false,
