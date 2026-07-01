@@ -1,0 +1,306 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "ansible-config",
+    "description": "view ansible configuration",
+    "options": [
+      {
+        "long": "version",
+        "description": "show version and paths",
+        "inherit": false
+      },
+      {
+        "long": "help",
+        "short": "h",
+        "description": "show help",
+        "inherit": false
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "list",
+        "description": "list available configs",
+        "options": [
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help",
+            "inherit": false
+          },
+          {
+            "long": "verbose",
+            "description": "enable verbose output",
+            "inherit": false,
+            "exclusiveGroup": "ansible-config.verbosity"
+          },
+          {
+            "short": "v",
+            "description": "enable verbose output",
+            "inherit": false,
+            "exclusiveGroup": "ansible-config.verbosity",
+            "repeatable": true
+          },
+          {
+            "long": "config",
+            "short": "c",
+            "description": "use configuration file",
+            "inherit": false,
+            "value": {
+              "name": "config-file",
+              "description": "configuration file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "type",
+            "short": "t",
+            "description": "filter by plugin type",
+            "inherit": false,
+            "value": {
+              "name": "type",
+              "description": "plugin type",
+              "provider": "ansible-config.plugin-types"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "plugin",
+              "description": "plugin name",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "dump",
+        "description": "show current settings",
+        "options": [
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help",
+            "inherit": false
+          },
+          {
+            "long": "verbose",
+            "description": "enable verbose output",
+            "inherit": false,
+            "exclusiveGroup": "ansible-config.verbosity"
+          },
+          {
+            "short": "v",
+            "description": "enable verbose output",
+            "inherit": false,
+            "exclusiveGroup": "ansible-config.verbosity",
+            "repeatable": true
+          },
+          {
+            "long": "only-changed",
+            "aliases": [
+              "changed-only"
+            ],
+            "description": "show changed settings only",
+            "inherit": false
+          },
+          {
+            "long": "config",
+            "short": "c",
+            "description": "use configuration file",
+            "inherit": false,
+            "value": {
+              "name": "config-file",
+              "description": "configuration file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "type",
+            "short": "t",
+            "description": "filter by plugin type",
+            "inherit": false,
+            "value": {
+              "name": "type",
+              "description": "plugin type",
+              "provider": "ansible-config.plugin-types"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "plugin",
+              "description": "plugin name",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "view",
+        "description": "show current config file",
+        "options": [
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help",
+            "inherit": false
+          },
+          {
+            "long": "verbose",
+            "description": "enable verbose output",
+            "inherit": false,
+            "exclusiveGroup": "ansible-config.verbosity"
+          },
+          {
+            "short": "v",
+            "description": "enable verbose output",
+            "inherit": false,
+            "exclusiveGroup": "ansible-config.verbosity",
+            "repeatable": true
+          },
+          {
+            "long": "config",
+            "short": "c",
+            "description": "use configuration file",
+            "inherit": false,
+            "value": {
+              "name": "config-file",
+              "description": "configuration file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "type",
+            "short": "t",
+            "description": "filter by plugin type",
+            "inherit": false,
+            "value": {
+              "name": "type",
+              "description": "plugin type",
+              "provider": "ansible-config.plugin-types"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "plugin",
+              "description": "plugin name",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "init",
+        "description": "write a new config file",
+        "options": [
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help",
+            "inherit": false
+          },
+          {
+            "long": "verbose",
+            "description": "enable verbose output",
+            "inherit": false,
+            "exclusiveGroup": "ansible-config.verbosity"
+          },
+          {
+            "short": "v",
+            "description": "enable verbose output",
+            "inherit": false,
+            "exclusiveGroup": "ansible-config.verbosity",
+            "repeatable": true
+          },
+          {
+            "long": "disabled",
+            "description": "write disabled entries",
+            "inherit": false
+          },
+          {
+            "long": "format",
+            "short": "f",
+            "description": "set output format",
+            "inherit": false,
+            "value": {
+              "name": "format",
+              "description": "output format",
+              "style": "optional",
+              "required": false,
+              "provider": "ansible-config.init-formats"
+            }
+          },
+          {
+            "long": "config",
+            "short": "c",
+            "description": "use configuration file",
+            "inherit": false,
+            "value": {
+              "name": "config-file",
+              "description": "configuration file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "type",
+            "short": "t",
+            "description": "filter by plugin type",
+            "inherit": false,
+            "value": {
+              "name": "type",
+              "description": "plugin type",
+              "provider": "ansible-config.plugin-types"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "plugin",
+              "description": "plugin name",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      }
+    ],
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "ansible-config.plugin-types": {
+        "values": [
+          "all",
+          "base",
+          "become",
+          "cache",
+          "callback",
+          "cliconf",
+          "connection",
+          "httpapi",
+          "inventory",
+          "lookup",
+          "netconf",
+          "shell",
+          "vars"
+        ]
+      },
+      "ansible-config.init-formats": {
+        "values": [
+          "ini",
+          "env",
+          "vars"
+        ]
+      }
+    }
+  }
+}
