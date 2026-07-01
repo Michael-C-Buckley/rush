@@ -594,12 +594,13 @@ fn resumeBackgroundJob(shell: anytype, job: state_mod.BackgroundJob) !result.Eva
 }
 
 fn foregroundJob(shell: anytype, job: state_mod.BackgroundJob) !result.EvalResult {
-    sendContinueToJob(shell, job) catch return .{ .status = 1 };
     const text = try std.fmt.allocPrint(shell.scratchAllocator(), "{s}\n", .{job.command});
     defer shell.scratchAllocator().free(text);
     try shell.host.writeAll(.stdout, text);
     const foreground_restore_group = giveTerminalToJob(shell, job.process_group) catch return .{ .status = 1 };
     defer if (foreground_restore_group) |process_group| restoreTerminalToShell(shell, process_group);
+    sendContinueToJob(shell, job) catch return .{ .status = 1 };
+    _ = shell.state.setBackgroundJobStatus(job.id, .running);
     const HostType = switch (@typeInfo(@TypeOf(shell.host))) {
         .pointer => |pointer| pointer.child,
         else => @TypeOf(shell.host),
