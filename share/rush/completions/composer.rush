@@ -1,0 +1,28 @@
+__rush_complete_composer_json_keys() {
+  key=$1
+  test -f composer.json || return 0
+  python3 - "$key" <<'PY' 2>/dev/null
+import json, sys
+key = sys.argv[1]
+try:
+    data = json.load(open('composer.json'))
+except Exception:
+    sys.exit(0)
+value = data.get(key, {})
+if isinstance(value, dict):
+    for name in value:
+        print(name)
+PY
+}
+
+__rush_complete_composer_packages() {
+  { __rush_complete_composer_json_keys require; __rush_complete_composer_json_keys require-dev; } | sort -u | while IFS= read -r package; do
+    test -n "$package" && rush_complete candidate "$package" --kind plain --description package
+  done
+}
+
+__rush_complete_composer_scripts() {
+  __rush_complete_composer_json_keys scripts | while IFS= read -r script; do
+    test -n "$script" && rush_complete candidate "$script" --kind plain --description script
+  done
+}

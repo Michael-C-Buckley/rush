@@ -1,0 +1,59 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "composer",
+    "description": "manage php dependencies",
+    "providers": {
+      "builtin.files": { "builtin": "files" },
+      "builtin.directories": { "builtin": "directories" },
+      "composer.packages": { "function": "__rush_complete_composer_packages" },
+      "composer.scripts": { "function": "__rush_complete_composer_scripts" }
+    },
+    "options": [
+      { "short": "h", "long": "help", "description": "show help", "inherit": true },
+      { "short": "q", "long": "quiet", "description": "suppress output", "inherit": true },
+      { "short": "V", "long": "version", "description": "show version", "inherit": true },
+      { "long": "ansi", "description": "force ansi output", "inherit": true, "exclusiveGroup": "composer.ansi" },
+      { "long": "no-ansi", "description": "disable ansi output", "inherit": true, "exclusiveGroup": "composer.ansi" },
+      { "short": "n", "long": "no-interaction", "description": "do not ask interactive questions", "inherit": true },
+      { "short": "d", "long": "working-dir", "description": "set working directory", "inherit": true, "value": { "name": "directory", "provider": "builtin.directories" } },
+      { "long": "no-cache", "description": "disable cache", "inherit": true },
+      { "short": "v", "long": "verbose", "description": "increase verbosity", "inherit": true }
+    ],
+    "subcommands": [
+      { "name": "about", "description": "show composer information" },
+      { "name": "archive", "description": "create package archive", "arguments": { "states": [{ "name": "package", "index": 0, "provider": "composer.packages" }] } },
+      { "name": "browse", "description": "open package repository", "arguments": { "states": [{ "name": "package", "index": 0, "provider": "composer.packages" }] } },
+      { "name": "check-platform-reqs", "description": "check platform requirements" },
+      { "name": "clear-cache", "aliases": ["clearcache", "cc"], "description": "clear composer cache" },
+      { "name": "config", "description": "set config options" },
+      { "name": "create-project", "description": "create a project from a package", "arguments": { "states": [{ "name": "package", "index": 0 }, { "name": "directory", "index": 1, "provider": "builtin.directories" }] } },
+      { "name": "depends", "aliases": ["why"], "description": "show packages depending on package", "arguments": { "states": [{ "name": "package", "index": 0, "provider": "composer.packages" }] } },
+      { "name": "diagnose", "description": "diagnose common errors" },
+      { "name": "dump-autoload", "aliases": ["dumpautoload"], "description": "dump autoloader" },
+      { "name": "exec", "description": "execute vendor binary", "arguments": { "states": [{ "name": "binary", "index": 0 }] } },
+      { "name": "fund", "description": "show funding information" },
+      { "name": "global", "description": "run command in global composer dir" },
+      { "name": "help", "description": "show command help" },
+      { "name": "home", "description": "open package homepage", "arguments": { "states": [{ "name": "package", "index": 0, "provider": "composer.packages" }] } },
+      { "name": "info", "aliases": ["show"], "description": "show package information", "arguments": { "states": [{ "name": "package", "index": 0, "provider": "composer.packages" }] } },
+      { "name": "init", "description": "create composer.json" },
+      { "name": "install", "description": "install dependencies" },
+      { "name": "licenses", "description": "show package licenses" },
+      { "name": "list", "description": "list commands" },
+      { "name": "outdated", "description": "show outdated packages" },
+      { "name": "prohibits", "aliases": ["why-not"], "description": "show packages preventing install", "arguments": { "states": [{ "name": "package", "index": 0, "provider": "composer.packages" }] } },
+      { "name": "reinstall", "description": "reinstall packages", "arguments": { "states": [{ "name": "package", "index": 0, "provider": "composer.packages", "repeatable": true }] } },
+      { "name": "remove", "description": "remove packages", "arguments": { "states": [{ "name": "package", "index": 0, "provider": "composer.packages", "repeatable": true }] } },
+      { "name": "require", "description": "add required packages", "arguments": { "states": [{ "name": "package", "index": 0, "repeatable": true }] } },
+      { "name": "run-script", "aliases": ["run"], "description": "run composer script", "arguments": { "states": [{ "name": "script", "index": 0, "provider": "composer.scripts" }] } },
+      { "name": "search", "description": "search packages", "arguments": { "states": [{ "name": "query", "index": 0 }] } },
+      { "name": "self-update", "aliases": ["selfupdate"], "description": "update composer" },
+      { "name": "status", "description": "show local package changes" },
+      { "name": "suggests", "description": "show package suggestions" },
+      { "name": "update", "aliases": ["upgrade"], "description": "update dependencies", "arguments": { "states": [{ "name": "package", "index": 0, "provider": "composer.packages", "repeatable": true }] } },
+      { "name": "validate", "description": "validate composer.json", "arguments": { "states": [{ "name": "file", "index": 0, "provider": "builtin.files" }] } }
+    ]
+  }
+}
