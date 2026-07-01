@@ -1,0 +1,1652 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "eas",
+    "description": "manage Expo Application Services",
+    "subcommands": [
+      {
+        "name": "account:login",
+        "aliases": [
+          "login"
+        ],
+        "description": "log in with your Expo account"
+      },
+      {
+        "name": "account:logout",
+        "aliases": [
+          "logout"
+        ],
+        "description": "log out"
+      },
+      {
+        "name": "account:view",
+        "aliases": [
+          "whoami"
+        ],
+        "description": "show the username you are logged in as"
+      },
+      {
+        "name": "analytics",
+        "description": "display or change analytics settings",
+        "arguments": {
+          "states": [
+            {
+              "name": "Status",
+              "provider": {
+                "values": [
+                  "on",
+                  "off"
+                ]
+              },
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "autocomplete",
+        "description": "display autocomplete installation instructions",
+        "options": [
+          {
+            "short": "r",
+            "long": "refresh-cache",
+            "description": "refresh cache (ignores displaying instructions)",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "Shell",
+              "description": "select the shell you'd like to display autocomplete information for",
+              "provider": {
+                "values": [
+                  "zsh",
+                  "bash"
+                ]
+              },
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "branch:create",
+        "description": "create a branch",
+        "options": [
+          {
+            "long": "json",
+            "description": "enable JSON output, non-JSON messages will be printed to stderr",
+            "inherit": false
+          },
+          {
+            "long": "non-interactive",
+            "description": "run the command in non-interactive mode",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "Name",
+              "description": "name of the branch to create",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "branch:delete",
+        "description": "delete a branch",
+        "options": [
+          {
+            "long": "json",
+            "description": "enable JSON output, non-JSON messages will be printed to stderr",
+            "inherit": false
+          },
+          {
+            "long": "non-interactive",
+            "description": "run the command in non-interactive mode",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "Name",
+              "description": "name of the branch to delete",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "branch:list",
+        "description": "list all branches",
+        "options": [
+          {
+            "long": "json",
+            "description": "enable JSON output, non-JSON messages will be printed to stderr",
+            "inherit": false
+          },
+          {
+            "long": "limit",
+            "description": "the number of items to fetch each query. Defaults to 50 and is capped at 100",
+            "inherit": false,
+            "value": {
+              "name": "Limit",
+              "provider": "eas.limit.50-100"
+            }
+          },
+          {
+            "long": "non-interactive",
+            "description": "run the command in non-interactive mode",
+            "inherit": false
+          },
+          {
+            "long": "offset",
+            "description": "start queries from specified index. Use for paginating results. Defaults to 0",
+            "inherit": false,
+            "value": {
+              "name": "Offset"
+            }
+          }
+        ]
+      },
+      {
+        "name": "branch:rename",
+        "description": "rename a branch",
+        "options": [
+          {
+            "long": "from",
+            "description": "current name of the branch",
+            "inherit": false,
+            "value": {
+              "name": "Value"
+            }
+          },
+          {
+            "long": "json",
+            "description": "enable JSON output, non-JSON messages will be printed to stderr",
+            "inherit": false
+          },
+          {
+            "long": "non-interactive",
+            "description": "run the command in non-interactive mode",
+            "inherit": false
+          },
+          {
+            "long": "to",
+            "description": "new name of the branch",
+            "inherit": false,
+            "value": {
+              "name": "Value"
+            }
+          }
+        ]
+      },
+      {
+        "name": "branch:view",
+        "description": "view a branch",
+        "options": [
+          {
+            "long": "json",
+            "description": "enable JSON output, non-JSON messages will be printed to stderr",
+            "inherit": false
+          },
+          {
+            "long": "limit",
+            "description": "the number of items to fetch each query. Defaults to 25 and is capped at 50",
+            "inherit": false,
+            "value": {
+              "name": "Limit",
+              "provider": "eas.limit.25-50"
+            }
+          },
+          {
+            "long": "non-interactive",
+            "description": "run the command in non-interactive mode",
+            "inherit": false
+          },
+          {
+            "long": "offset",
+            "description": "start queries from specified index. Use for paginating results. Defaults to 0",
+            "inherit": false,
+            "value": {
+              "name": "Offset"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "Name",
+              "description": "name of the branch to view",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "build",
+        "description": "start a build",
+        "options": [
+          {
+            "short": "e",
+            "long": "profile",
+            "description": "name of the build profile from eas.json. Defaults to \"production\" if defined in eas.json",
+            "inherit": false,
+            "value": {
+              "name": "Profile-Name"
+            }
+          },
+          {
+            "short": "m",
+            "long": "message",
+            "description": "a short message describing the build",
+            "inherit": false,
+            "value": {
+              "name": "Value"
+            }
+          },
+          {
+            "short": "p",
+            "long": "platform",
+            "inherit": false,
+            "value": {
+              "name": "Platform",
+              "provider": {
+                "values": [
+                  "android",
+                  "ios",
+                  "all"
+                ]
+              }
+            }
+          },
+          {
+            "long": "auto-submit",
+            "description": "submit on build complete using the submit profile with the same name as the build profile",
+            "inherit": false
+          },
+          {
+            "long": "auto-submit-with-profile",
+            "description": "submit on build complete using the submit profile with provided name",
+            "inherit": false,
+            "value": {
+              "name": "Profile-Name"
+            }
+          },
+          {
+            "long": "clear-cache",
+            "description": "clear cache before the build",
+            "inherit": false
+          },
+          {
+            "long": "json",
+            "description": "enable JSON output, non-JSON messages will be printed to stderr",
+            "inherit": false
+          },
+          {
+            "long": "local",
+            "description": "run build locally [experimental]",
+            "inherit": false
+          },
+          {
+            "long": "non-interactive",
+            "description": "run the command in non-interactive mode",
+            "inherit": false
+          },
+          {
+            "long": "output",
+            "description": "output path for local build",
+            "inherit": false,
+            "value": {
+              "name": "Value",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "no-wait",
+            "description": "don't wait for build(s) to complete",
+            "inherit": false
+          },
+          {
+            "long": "wait",
+            "description": "wait for build(s) to complete",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "build:cancel",
+        "description": "cancel a build",
+        "options": [
+          {
+            "long": "non-interactive",
+            "description": "run the command in non-interactive mode",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "Build-ID",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "build:configure",
+        "description": "configure the project to support EAS build",
+        "options": [
+          {
+            "short": "p",
+            "long": "platform",
+            "description": "platform to configure",
+            "inherit": false,
+            "value": {
+              "name": "Platform",
+              "provider": {
+                "values": [
+                  "android",
+                  "ios",
+                  "all"
+                ]
+              }
+            }
+          }
+        ]
+      },
+      {
+        "name": "build:inspect",
+        "description": "inspect the state of the project at specific build stages, useful for troubleshooting",
+        "options": [
+          {
+            "short": "e",
+            "long": "profile",
+            "description": "name of the build profile from eas.json. Defaults to \"production\" if defined in eas.json",
+            "inherit": false,
+            "value": {
+              "name": "Profile-Name"
+            }
+          },
+          {
+            "short": "o",
+            "long": "output",
+            "description": "(required) Output directory",
+            "inherit": false,
+            "value": {
+              "name": "Output-directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "short": "p",
+            "long": "platform",
+            "description": "(required)",
+            "inherit": false,
+            "value": {
+              "name": "Platform",
+              "provider": {
+                "values": [
+                  "android",
+                  "ios"
+                ]
+              }
+            }
+          },
+          {
+            "short": "s",
+            "long": "stage",
+            "inherit": false,
+            "value": {
+              "name": "Build-Stage",
+              "provider": {
+                "values": [
+                  "archive",
+                  "pre-build",
+                  "post-build"
+                ]
+              }
+            },
+            "description": "select the build inspection stage"
+          },
+          {
+            "short": "v",
+            "long": "verbose",
+            "inherit": false
+          },
+          {
+            "long": "force",
+            "description": "delete OUTPUT_DIRECTORY if it already exists",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "build:list",
+        "description": "list all builds for your project",
+        "options": [
+          {
+            "long": "appBuildVersion",
+            "inherit": false,
+            "value": {
+              "name": "Value"
+            }
+          },
+          {
+            "long": "appIdentifier",
+            "inherit": false,
+            "value": {
+              "name": "Value"
+            }
+          },
+          {
+            "long": "appVersion",
+            "inherit": false,
+            "value": {
+              "name": "Value"
+            }
+          },
+          {
+            "long": "buildProfile",
+            "inherit": false,
+            "value": {
+              "name": "Value"
+            }
+          },
+          {
+            "long": "channel",
+            "inherit": false,
+            "value": {
+              "name": "Value"
+            }
+          },
+          {
+            "long": "distribution",
+            "inherit": false,
+            "value": {
+              "name": "Distribution",
+              "provider": {
+                "values": [
+                  "store",
+                  "internal",
+                  "simulator"
+                ]
+              }
+            }
+          },
+          {
+            "long": "json",
+            "description": "enable JSON output, non-JSON messages will be printed to stderr",
+            "inherit": false
+          },
+          {
+            "long": "limit",
+            "description": "the number of items to fetch each query. Defaults to 10 and is capped at 50",
+            "inherit": false,
+            "value": {
+              "name": "Limit",
+              "provider": "eas.limit.10-50"
+            }
+          },
+          {
+            "long": "non-interactive",
+            "description": "run the command in non-interactive mode",
+            "inherit": false
+          },
+          {
+            "long": "offset",
+            "description": "start queries from specified index. Use for paginating results. Defaults to 0",
+            "inherit": false,
+            "value": {
+              "name": "Offset"
+            }
+          },
+          {
+            "long": "platform",
+            "inherit": false,
+            "value": {
+              "name": "Platform",
+              "provider": {
+                "values": [
+                  "all",
+                  "android",
+                  "ios"
+                ]
+              }
+            }
+          },
+          {
+            "long": "runtimeVersion",
+            "inherit": false,
+            "value": {
+              "name": "Value"
+            }
+          },
+          {
+            "long": "sdkVersion",
+            "inherit": false,
+            "value": {
+              "name": "Value"
+            }
+          },
+          {
+            "long": "status",
+            "inherit": false,
+            "value": {
+              "name": "Status",
+              "provider": {
+                "values": [
+                  "new",
+                  "in-queue",
+                  "in-progress",
+                  "errored",
+                  "finished",
+                  "canceled"
+                ]
+              }
+            }
+          }
+        ]
+      },
+      {
+        "name": "build:submit",
+        "aliases": [
+          "submit"
+        ],
+        "description": "submit app binary to App Store and/or Play Store",
+        "options": [
+          {
+            "short": "e",
+            "long": "profile",
+            "description": "name of the submit profile from eas.json. Defaults to \"production\" if defined in eas.json",
+            "inherit": false,
+            "value": {
+              "name": "Value"
+            }
+          },
+          {
+            "short": "p",
+            "long": "platform",
+            "inherit": false,
+            "value": {
+              "name": "Platform",
+              "provider": {
+                "values": [
+                  "android",
+                  "ios",
+                  "all"
+                ]
+              }
+            }
+          },
+          {
+            "long": "id",
+            "description": "iD of the build to submit",
+            "inherit": false,
+            "value": {
+              "name": "Value"
+            }
+          },
+          {
+            "long": "latest",
+            "description": "submit the latest build for specified platform",
+            "inherit": false
+          },
+          {
+            "long": "non-interactive",
+            "description": "run command in non-interactive mode",
+            "inherit": false
+          },
+          {
+            "long": "path",
+            "description": "path to the .apk/.aab/.ipa file",
+            "inherit": false,
+            "value": {
+              "name": "Value"
+            }
+          },
+          {
+            "long": "url",
+            "description": "app archive url",
+            "inherit": false,
+            "value": {
+              "name": "Value"
+            }
+          },
+          {
+            "long": "verbose",
+            "description": "always print logs from Submission Service",
+            "inherit": false
+          },
+          {
+            "long": "no-wait",
+            "description": "don't wait for submission to complete",
+            "inherit": false
+          },
+          {
+            "long": "wait",
+            "description": "wait for submission to complete",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "build:version:set",
+        "description": "update version of an app",
+        "options": [
+          {
+            "short": "e",
+            "long": "profile",
+            "description": "name of the build profile from eas.json. Defaults to \"production\" if defined in eas.json",
+            "inherit": false,
+            "value": {
+              "name": "Profile-Name"
+            }
+          },
+          {
+            "short": "p",
+            "long": "platform",
+            "inherit": false,
+            "value": {
+              "name": "Platform",
+              "provider": {
+                "values": [
+                  "android",
+                  "ios"
+                ]
+              }
+            }
+          }
+        ]
+      },
+      {
+        "name": "build:version:sync",
+        "description": "update a version in native code with a value stored on EAS servers",
+        "options": [
+          {
+            "short": "e",
+            "long": "profile",
+            "description": "name of the build profile from eas.json. Defaults to \"production\" if defined in eas.json",
+            "inherit": false,
+            "value": {
+              "name": "Profile-Name"
+            }
+          },
+          {
+            "short": "p",
+            "long": "platform",
+            "inherit": false,
+            "value": {
+              "name": "Platform",
+              "provider": {
+                "values": [
+                  "android",
+                  "ios",
+                  "all"
+                ]
+              }
+            }
+          }
+        ]
+      },
+      {
+        "name": "build:view",
+        "description": "view a build for your project",
+        "options": [
+          {
+            "long": "json",
+            "description": "enable JSON output, non-JSON messages will be printed to stderr",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "Build-ID",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "channel:create",
+        "description": "create a channel",
+        "options": [
+          {
+            "long": "json",
+            "description": "enable JSON output, non-JSON messages will be printed to stderr",
+            "inherit": false
+          },
+          {
+            "long": "non-interactive",
+            "description": "run the command in non-interactive mode",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "Name",
+              "description": "name of the channel to create",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "channel:edit",
+        "description": "point a channel at a new branch",
+        "options": [
+          {
+            "long": "branch",
+            "description": "name of the branch to point to",
+            "inherit": false,
+            "value": {
+              "name": "Value"
+            }
+          },
+          {
+            "long": "json",
+            "description": "enable JSON output, non-JSON messages will be printed to stderr",
+            "inherit": false
+          },
+          {
+            "long": "non-interactive",
+            "description": "run the command in non-interactive mode",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "Name",
+              "description": "name of the channel to edit",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "channel:list",
+        "description": "list all channels",
+        "options": [
+          {
+            "long": "json",
+            "description": "enable JSON output, non-JSON messages will be printed to stderr",
+            "inherit": false
+          },
+          {
+            "long": "limit",
+            "description": "the number of items to fetch each query. Defaults to 10 and is capped at 25",
+            "inherit": false,
+            "value": {
+              "name": "Limit",
+              "provider": "eas.limit.10-25"
+            }
+          },
+          {
+            "long": "non-interactive",
+            "description": "run the command in non-interactive mode",
+            "inherit": false
+          },
+          {
+            "long": "offset",
+            "description": "start queries from specified index. Use for paginating results. Defaults to 0",
+            "inherit": false,
+            "value": {
+              "name": "Value"
+            }
+          }
+        ]
+      },
+      {
+        "name": "channel:view",
+        "description": "view a channel",
+        "options": [
+          {
+            "long": "json",
+            "description": "enable JSON output, non-JSON messages will be printed to stderr",
+            "inherit": false
+          },
+          {
+            "long": "limit",
+            "description": "the number of items to fetch each query. Defaults to 50 and is capped at 100",
+            "inherit": false,
+            "value": {
+              "name": "Limit",
+              "provider": "eas.limit.50-100"
+            }
+          },
+          {
+            "long": "non-interactive",
+            "description": "run the command in non-interactive mode",
+            "inherit": false
+          },
+          {
+            "long": "offset",
+            "description": "start queries from specified index. Use for paginating results. Defaults to 0",
+            "inherit": false,
+            "value": {
+              "name": "Value"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "Name",
+              "description": "name of the channel to view",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "config",
+        "description": "display project configuration (app.json + eas.json)",
+        "options": [
+          {
+            "short": "e",
+            "long": "profile",
+            "description": "name of the build profile from eas.json. Defaults to \"production\" if defined in eas.json",
+            "inherit": false,
+            "value": {
+              "name": "Profile-Name"
+            }
+          },
+          {
+            "short": "p",
+            "long": "platform",
+            "inherit": false,
+            "value": {
+              "name": "Platform",
+              "provider": {
+                "values": [
+                  "android",
+                  "ios"
+                ]
+              }
+            }
+          }
+        ]
+      },
+      {
+        "name": "credentials",
+        "description": "manage credentials",
+        "options": [
+          {
+            "short": "p",
+            "long": "platform",
+            "inherit": false,
+            "value": {
+              "name": "Platform",
+              "provider": {
+                "values": [
+                  "android",
+                  "ios"
+                ]
+              }
+            }
+          }
+        ]
+      },
+      {
+        "name": "device:create",
+        "description": "register new Apple devices to use for internal distribution"
+      },
+      {
+        "name": "device:delete",
+        "description": "remove a registered device from your account",
+        "options": [
+          {
+            "long": "apple-team-id",
+            "description": "the Apple team ID on which to find the device",
+            "inherit": false,
+            "value": {
+              "name": "Value"
+            }
+          },
+          {
+            "long": "json",
+            "description": "enable JSON output, non-JSON messages will be printed to stderr",
+            "inherit": false
+          },
+          {
+            "long": "non-interactive",
+            "description": "run the command in non-interactive mode",
+            "inherit": false
+          },
+          {
+            "long": "udid",
+            "description": "the Apple device ID to disable",
+            "inherit": false,
+            "value": {
+              "name": "Value"
+            }
+          }
+        ]
+      },
+      {
+        "name": "device:list",
+        "description": "list all registered devices for your account",
+        "options": [
+          {
+            "long": "apple-team-id",
+            "inherit": false,
+            "value": {
+              "name": "Value"
+            }
+          },
+          {
+            "long": "json",
+            "description": "enable JSON output, non-JSON messages will be printed to stderr",
+            "inherit": false
+          },
+          {
+            "long": "limit",
+            "description": "the number of items to fetch each query. Defaults to 50 and is capped at 100",
+            "inherit": false,
+            "value": {
+              "name": "Limit",
+              "provider": "eas.limit.50-100"
+            }
+          },
+          {
+            "long": "non-interactive",
+            "description": "run the command in non-interactive mode",
+            "inherit": false
+          },
+          {
+            "long": "offset",
+            "description": "start queries from specified index. Use for paginating results. Defaults to 0",
+            "inherit": false,
+            "value": {
+              "name": "Offset"
+            }
+          }
+        ]
+      },
+      {
+        "name": "device:view",
+        "description": "view a device for your project",
+        "arguments": {
+          "states": [
+            {
+              "name": "UDID",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "diagnostics",
+        "description": "display environment info"
+      },
+      {
+        "name": "help",
+        "description": "display help for eas-cli",
+        "options": [
+          {
+            "short": "n",
+            "long": "nested-commands",
+            "description": "include all nested commands in the output",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "Command",
+              "description": "command to show help for",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "metadata:pull",
+        "description": "generate the local store configuration from the app stores",
+        "options": [
+          {
+            "short": "e",
+            "long": "profile",
+            "description": "name of the submit profile from eas.json. Defaults to \"production\" if defined in eas.json",
+            "inherit": false,
+            "value": {
+              "name": "Value"
+            }
+          }
+        ]
+      },
+      {
+        "name": "metadata:push",
+        "description": "sync the local store configuration to the app stores",
+        "options": [
+          {
+            "short": "e",
+            "long": "profile",
+            "description": "name of the submit profile from eas.json. Defaults to \"production\" if defined in eas.json",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "open",
+        "description": "open the project page in a web browser"
+      },
+      {
+        "name": "project:info",
+        "description": "information about the current project"
+      },
+      {
+        "name": "project:init",
+        "aliases": [
+          "init"
+        ],
+        "description": "create or link an EAS project",
+        "options": [
+          {
+            "long": "force",
+            "description": "whether to overwrite any existing project ID",
+            "inherit": false
+          },
+          {
+            "long": "id",
+            "description": "iD of the EAS project to link",
+            "inherit": false,
+            "value": {
+              "name": "Value"
+            }
+          },
+          {
+            "long": "non-interactive",
+            "description": "run the command in non-interactive mode",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "secret:create",
+        "description": "create an environment secret on the current project or owner account",
+        "options": [
+          {
+            "long": "force",
+            "description": "delete and recreate existing secrets",
+            "inherit": false
+          },
+          {
+            "long": "name",
+            "description": "name of the secret",
+            "inherit": false,
+            "value": {
+              "name": "Value"
+            }
+          },
+          {
+            "long": "non-interactive",
+            "description": "run the command in non-interactive mode",
+            "inherit": false
+          },
+          {
+            "long": "scope",
+            "description": "[default: project] Scope for the secret",
+            "inherit": false,
+            "value": {
+              "name": "Scope",
+              "provider": {
+                "values": [
+                  "account",
+                  "project"
+                ]
+              }
+            }
+          },
+          {
+            "long": "type",
+            "description": "the type of secret",
+            "inherit": false,
+            "value": {
+              "name": "Type",
+              "provider": {
+                "values": [
+                  "string",
+                  "file"
+                ]
+              }
+            }
+          },
+          {
+            "long": "value",
+            "description": "text value or path to a file to store in the secret",
+            "inherit": false,
+            "value": {
+              "name": "Value"
+            }
+          }
+        ]
+      },
+      {
+        "name": "secret:delete",
+        "description": "delete an environment secret by ID",
+        "options": [
+          {
+            "long": "id",
+            "description": "iD of the secret to delete",
+            "inherit": false,
+            "value": {
+              "name": "Value"
+            }
+          },
+          {
+            "long": "non-interactive",
+            "description": "run the command in non-interactive mode",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "secret:list",
+        "description": "list environment secrets available for your current app"
+      },
+      {
+        "name": "update",
+        "description": "publish an update group",
+        "options": [
+          {
+            "short": "p",
+            "long": "platform",
+            "description": "[default: all]",
+            "inherit": false,
+            "value": {
+              "name": "Platform",
+              "provider": {
+                "values": [
+                  "android",
+                  "ios",
+                  "all"
+                ]
+              }
+            }
+          },
+          {
+            "long": "auto",
+            "description": "use the current git branch and commit message for the EAS branch and update message",
+            "inherit": false
+          },
+          {
+            "long": "branch",
+            "description": "branch to publish the update group on",
+            "inherit": false,
+            "value": {
+              "name": "Value"
+            }
+          },
+          {
+            "long": "group",
+            "description": "update group to republish",
+            "inherit": false,
+            "value": {
+              "name": "Value"
+            }
+          },
+          {
+            "long": "input-dir",
+            "description": "[default: dist] Location of the bundle",
+            "inherit": false,
+            "value": {
+              "name": "Value",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "json",
+            "description": "enable JSON output, non-JSON messages will be printed to stderr",
+            "inherit": false
+          },
+          {
+            "long": "message",
+            "description": "a short message describing the update",
+            "inherit": false,
+            "value": {
+              "name": "Value"
+            }
+          },
+          {
+            "long": "non-interactive",
+            "description": "run the command in non-interactive mode",
+            "inherit": false
+          },
+          {
+            "long": "private-key-path",
+            "inherit": false,
+            "value": {
+              "name": "Value",
+              "provider": "builtin.files"
+            },
+            "description": "path to the PEM-encoded private key"
+          },
+          {
+            "long": "republish",
+            "description": "republish an update group",
+            "inherit": false
+          },
+          {
+            "long": "skip-bundler",
+            "description": "skip running Expo CLI to bundle the app before publishing",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "update:configure",
+        "description": "configure the project to support EAS update",
+        "options": [
+          {
+            "short": "p",
+            "long": "platform",
+            "description": "[default: all] Platform to configure",
+            "inherit": false,
+            "value": {
+              "name": "Platform",
+              "provider": {
+                "values": [
+                  "android",
+                  "ios",
+                  "all"
+                ]
+              }
+            }
+          }
+        ]
+      },
+      {
+        "name": "update:delete",
+        "description": "delete all the updates in an update group",
+        "options": [
+          {
+            "long": "json",
+            "description": "enable JSON output, non-JSON messages will be printed to stderr",
+            "inherit": false
+          },
+          {
+            "long": "non-interactive",
+            "description": "run the command in non-interactive mode",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "Group-ID",
+              "description": "the ID of an update group to delete",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "update:list",
+        "description": "view the recent updates",
+        "options": [
+          {
+            "long": "all",
+            "description": "list updates on all branches",
+            "inherit": false
+          },
+          {
+            "long": "branch",
+            "description": "list updates only on this branch",
+            "inherit": false,
+            "value": {
+              "name": "Value"
+            }
+          },
+          {
+            "long": "json",
+            "description": "enable JSON output, non-JSON messages will be printed to stderr",
+            "inherit": false
+          },
+          {
+            "long": "limit",
+            "description": "the number of items to fetch each query. Defaults to 25 and is capped at 50",
+            "inherit": false,
+            "value": {
+              "name": "Limit",
+              "provider": "eas.limit.25-50"
+            }
+          },
+          {
+            "long": "non-interactive",
+            "description": "run the command in non-interactive mode",
+            "inherit": false
+          },
+          {
+            "long": "offset",
+            "description": "start queries from specified index. Use for paginating results. Defaults to 0",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "update:view",
+        "description": "update group details",
+        "options": [
+          {
+            "long": "json",
+            "description": "enable JSON output, non-JSON messages will be printed to stderr",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "Group-ID",
+              "description": "the ID of an update group",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "webhook:create",
+        "description": "create a webhook",
+        "options": [
+          {
+            "long": "event",
+            "description": "event type that triggers the webhook",
+            "inherit": false,
+            "value": {
+              "name": "Value",
+              "provider": {
+                "values": [
+                  "BUILD",
+                  "SUBMIT"
+                ]
+              }
+            }
+          },
+          {
+            "long": "non-interactive",
+            "description": "run the command in non-interactive mode",
+            "inherit": false
+          },
+          {
+            "long": "secret",
+            "description": "secret used to create a hash signature of the request payload, provided in the 'Expo-Signature' header",
+            "inherit": false,
+            "value": {
+              "name": "Value"
+            }
+          },
+          {
+            "long": "url",
+            "description": "webhook URL",
+            "inherit": false,
+            "value": {
+              "name": "Value"
+            }
+          }
+        ]
+      },
+      {
+        "name": "webhook:delete",
+        "description": "delete a webhook",
+        "options": [
+          {
+            "long": "non-interactive",
+            "description": "run the command in non-interactive mode",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "ID",
+              "description": "iD of the webhook to delete",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "webhook:list",
+        "description": "list webhooks",
+        "options": [
+          {
+            "long": "event",
+            "description": "event type that triggers the webhook",
+            "inherit": false,
+            "value": {
+              "name": "Value",
+              "provider": {
+                "values": [
+                  "BUILD",
+                  "SUBMIT"
+                ]
+              }
+            }
+          }
+        ]
+      },
+      {
+        "name": "webhook:update",
+        "description": "update a webhook",
+        "options": [
+          {
+            "long": "event",
+            "description": "event type that triggers the webhook",
+            "inherit": false,
+            "value": {
+              "name": "Value",
+              "provider": {
+                "values": [
+                  "BUILD",
+                  "SUBMIT"
+                ]
+              }
+            }
+          },
+          {
+            "long": "id",
+            "description": "(required) Webhook ID",
+            "inherit": false,
+            "value": {
+              "name": "Value"
+            }
+          },
+          {
+            "long": "non-interactive",
+            "description": "run the command in non-interactive mode",
+            "inherit": false
+          },
+          {
+            "long": "secret",
+            "description": "secret used to create a hash signature of the request payload, provided in the 'Expo-Signature' header",
+            "inherit": false,
+            "value": {
+              "name": "Value"
+            }
+          },
+          {
+            "long": "url",
+            "description": "webhook URL",
+            "inherit": false,
+            "value": {
+              "name": "Value"
+            }
+          }
+        ]
+      },
+      {
+        "name": "webhook:view",
+        "description": "view a webhook",
+        "arguments": {
+          "states": [
+            {
+              "name": "ID",
+              "description": "iD of the webhook to view",
+              "index": 0
+            }
+          ]
+        }
+      }
+    ],
+    "providers": {
+      "eas.limit.10-50": {
+        "values": [
+          "10",
+          "11",
+          "12",
+          "13",
+          "14",
+          "15",
+          "16",
+          "17",
+          "18",
+          "19",
+          "20",
+          "21",
+          "22",
+          "23",
+          "24",
+          "25",
+          "26",
+          "27",
+          "28",
+          "29",
+          "30",
+          "31",
+          "32",
+          "33",
+          "34",
+          "35",
+          "36",
+          "37",
+          "38",
+          "39",
+          "40",
+          "41",
+          "42",
+          "43",
+          "44",
+          "45",
+          "46",
+          "47",
+          "48",
+          "49",
+          "50"
+        ]
+      },
+      "eas.limit.10-25": {
+        "values": [
+          "10",
+          "11",
+          "12",
+          "13",
+          "14",
+          "15",
+          "16",
+          "17",
+          "18",
+          "19",
+          "20",
+          "21",
+          "22",
+          "23",
+          "24",
+          "25"
+        ]
+      },
+      "eas.limit.25-50": {
+        "values": [
+          "25",
+          "26",
+          "27",
+          "28",
+          "29",
+          "30",
+          "31",
+          "32",
+          "33",
+          "34",
+          "35",
+          "36",
+          "37",
+          "38",
+          "39",
+          "40",
+          "41",
+          "42",
+          "43",
+          "44",
+          "45",
+          "46",
+          "47",
+          "48",
+          "49",
+          "50"
+        ]
+      },
+      "eas.limit.50-100": {
+        "values": [
+          "50",
+          "51",
+          "52",
+          "53",
+          "54",
+          "55",
+          "56",
+          "57",
+          "58",
+          "59",
+          "60",
+          "61",
+          "62",
+          "63",
+          "64",
+          "65",
+          "66",
+          "67",
+          "68",
+          "69",
+          "70",
+          "71",
+          "72",
+          "73",
+          "74",
+          "75",
+          "76",
+          "77",
+          "78",
+          "79",
+          "80",
+          "81",
+          "82",
+          "83",
+          "84",
+          "85",
+          "86",
+          "87",
+          "88",
+          "89",
+          "90",
+          "91",
+          "92",
+          "93",
+          "94",
+          "95",
+          "96",
+          "97",
+          "98",
+          "99",
+          "100"
+        ]
+      }
+    }
+  }
+}
