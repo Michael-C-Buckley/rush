@@ -4506,7 +4506,13 @@ fn expandParameter(shell: anytype, parameter: ast.ParameterExpansion) EvalError!
             .star => try joinPositionals(shell, ifsFirstCharacter(shell)),
             .at => try joinPositionals(shell, " "),
         },
-        .positional => |position| positionalValue(shell, position) orelse "",
+        .positional => |position| positionalValue(shell, position) orelse {
+            if (shell.state.options.nounset) {
+                try writeExpansionDiagnostic(shell, parameter, parameterDiagnosticName(parameter.parameter), "parameter not set");
+                return error.ExpansionError;
+            }
+            return "";
+        },
     };
 }
 
@@ -4557,9 +4563,22 @@ fn joinPositionals(shell: anytype, separator: []const u8) ![]const u8 {
 }
 
 fn expandParameterLength(shell: anytype, parameter: ast.ParameterExpansion) EvalError![]const u8 {
-    const value = (try parameterCurrentValue(shell, parameter.parameter)) orelse "";
+    const value = (try parameterCurrentValue(shell, parameter.parameter)) orelse {
+        if (shell.state.options.nounset and parameterSubjectToNounset(parameter.parameter)) {
+            try writeExpansionDiagnostic(shell, parameter, parameterDiagnosticName(parameter.parameter), "parameter not set");
+            return error.ExpansionError;
+        }
+        return "0";
+    };
     const length = std.unicode.utf8CountCodepoints(value) catch value.len;
     return std.fmt.allocPrint(shell.scratchAllocator(), "{}", .{length});
+}
+
+fn parameterSubjectToNounset(parameter: ast.Parameter) bool {
+    return switch (parameter) {
+        .variable, .positional => true,
+        .special => false,
+    };
 }
 
 fn expandParameterDefault(shell: anytype, parameter: ast.ParameterExpansion) EvalError![]const u8 {

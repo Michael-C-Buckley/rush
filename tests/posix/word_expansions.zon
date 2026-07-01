@@ -1004,6 +1004,38 @@
             .status = 0,
         },
         .{
+            .name = "nounset fails unset positional parameter expansion",
+            .script =
+            \\( set -u
+            \\  set -- one
+            \\  printf 'bad:%s\n' "$3"
+            \\  printf 'after\n' ) 2>/dev/null
+            \\case $? in 0) printf 'zero\n' ;; *) printf 'nonzero\n' ;; esac
+            ,
+            .stdout =
+            \\nonzero
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "nounset fails unset parameter length expansion",
+            .script =
+            \\( set -u
+            \\  unset missing
+            \\  printf 'bad:%s\n' "${#missing}"
+            \\  printf 'after\n' ) 2>/dev/null
+            \\case $? in 0) printf 'zero\n' ;; *) printf 'nonzero\n' ;; esac
+            ,
+            .stdout =
+            \\nonzero
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "arithmetic expansion expands parameters and commands before evaluation",
             .script =
             \\x='1 + 2'
