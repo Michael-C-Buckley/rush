@@ -890,7 +890,7 @@ fn appendPathCandidates(allocator: std.mem.Allocator, builder: *Builder, sh: any
         if (entry.name.len == 0 or std.mem.eql(u8, entry.name, ".") or std.mem.eql(u8, entry.name, "..")) continue;
         if (!include_hidden and entry.name[0] == '.') continue;
         if (!std.mem.startsWith(u8, entry.name, entry_prefix)) continue;
-        const is_directory = entry.kind == .directory;
+        const is_directory = try pathCandidateIsDirectory(allocator, sh, dir_prefix, entry);
         if (directories_only and !is_directory) continue;
         const value = if (is_directory)
             try std.fmt.allocPrint(allocator, "{s}{s}/", .{ dir_prefix, entry.name })
@@ -900,6 +900,23 @@ fn appendPathCandidates(allocator: std.mem.Allocator, builder: *Builder, sh: any
         // ziglint-ignore: Z024 preserve existing readable expression shape; lint-only cleanup
         try builder.append(allocator, .{ .value = value, .display = entry.name, .kind = if (is_directory) .directory else .file, .replace_start = replace_start, .replace_end = replace_end, .append_space = !is_directory });
     }
+}
+
+fn pathCandidateIsDirectory(
+    allocator: std.mem.Allocator,
+    sh: anytype,
+    dir_prefix: []const u8,
+    entry: host.DirectoryEntry,
+) !bool {
+    if (entry.kind == .directory) return true;
+    if (entry.kind != .symlink and entry.kind != .other) return false;
+
+    const path = try std.fmt.allocPrint(allocator, "{s}{s}", .{ dir_prefix, entry.name });
+    defer allocator.free(path);
+    const path_z = try allocator.dupeZ(u8, path);
+    defer allocator.free(path_z);
+    const status = sh.host.fileTestStatusZ(path_z, true) orelse return false;
+    return status.kind == .directory;
 }
 
 fn shellValue(sh: anytype, name: []const u8) ?[]const u8 {
@@ -1035,4 +1052,48 @@ test "completion loads manifest subcommands" {
         if (std.mem.eql(u8, candidate.value, "build")) return;
     }
     return error.ExpectedZigBuildCandidate;
+}
+
+test "path completion follows symlinked directories before appending space" {
+    const TestHost = struct {
+        const Self = @This();
+
+        pub fn listDir(_: *Self, allocator: std.mem.Allocator, path: []const u8) !host.ListDirResult {
+            try std.testing.expectEqualStrings(".config", path);
+            const entries = try allocator.alloc(host.DirectoryEntry, 1);
+            errdefer allocator.free(entries);
+            entries[0] = .{ .name = try allocator.dupe(u8, "rush"), .kind = .symlink };
+            return .{ .allocator = allocator, .entries = entries };
+        }
+
+        pub fn fileTestStatusZ(_: *Self, path: [:0]const u8, follow_symlinks: bool) ?host.FileStatus {
+            std.testing.expect(follow_symlinks) catch unreachable;
+            std.testing.expectEqualStrings(".config/rush", path) catch unreachable;
+            return .{ .kind = .directory };
+        }
+    };
+    const TestShell = struct { host: TestHost };
+
+    var sh: TestShell = .{ .host = .{} };
+    var builder: Builder = .{};
+    defer builder.deinit(std.testing.allocator);
+
+    try appendPathCandidates(
+        std.testing.allocator,
+        &builder,
+        &sh,
+        ".config/ru",
+        "nvim ".len,
+        "nvim .config/ru".len,
+        false,
+    );
+    var application = try applyBuiltCandidates(std.testing.allocator, "nvim .config/ru", &builder);
+    defer application.deinit(std.testing.allocator);
+
+    const edit = switch (application) {
+        .edit => |edit| edit,
+        else => return error.ExpectedSingleSymlinkDirectoryCompletion,
+    };
+    try std.testing.expectEqualStrings(".config/rush/", edit.replacement);
+    try std.testing.expect(!edit.append_space);
 }
