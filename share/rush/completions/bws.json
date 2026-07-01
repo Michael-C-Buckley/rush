@@ -1,0 +1,440 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "bws",
+    "options": [
+      {
+        "short": "o",
+        "long": "output",
+        "description": "output format [default: json]",
+        "inherit": true,
+        "value": {
+          "name": "format",
+          "description": "select output format",
+          "values": [
+            {
+              "value": "json",
+              "description": "Produce json output"
+            },
+            {
+              "value": "yaml",
+              "description": "Produce yaml output"
+            },
+            {
+              "value": "env",
+              "description": "Produce env output"
+            },
+            {
+              "value": "table",
+              "description": "Produce table output"
+            },
+            {
+              "value": "tsv",
+              "description": "Produce tsv output"
+            },
+            {
+              "value": "none",
+              "description": "Produce no output"
+            }
+          ]
+        }
+      },
+      {
+        "short": "c",
+        "long": "color",
+        "description": "use colors in the output [default: auto]",
+        "inherit": true,
+        "value": {
+          "name": "color",
+          "description": "select output coloration scheme",
+          "values": [
+            {
+              "value": "no",
+              "description": "Do not color output"
+            },
+            {
+              "value": "yes",
+              "description": "Colorize output"
+            },
+            {
+              "value": "auto",
+              "description": "Use default terminal colors"
+            }
+          ]
+        }
+      },
+      {
+        "short": "t",
+        "long": "access-token",
+        "description": "specify access token for the service account [env: BWS_ACCESS_TOKEN]",
+        "inherit": true,
+        "value": {
+          "name": "access-token",
+          "description": "bitwarden secrets manager Access Token"
+        }
+      },
+      {
+        "short": "f",
+        "long": "config-file",
+        "description": "config file to use [default: ~/.bws.config]",
+        "inherit": true,
+        "value": {
+          "name": "config-file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "short": "p",
+        "long": "profile",
+        "description": "profile to use from the config file [env: BWS_PROFILE=]",
+        "inherit": true,
+        "value": {
+          "name": "profile",
+          "description": "user Profile to enable",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "short": "u",
+        "long": "server-url",
+        "description": "override the server url from the config file [env: BWS_SERVER_url=]",
+        "inherit": true,
+        "value": {
+          "name": "server-url",
+          "description": "url of bitwarden secrets manager server"
+        }
+      },
+      {
+        "short": "h",
+        "long": "help",
+        "description": "print help",
+        "inherit": true
+      },
+      {
+        "short": "V",
+        "long": "version",
+        "description": "print version",
+        "inherit": true
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "config",
+        "description": "specify server settings for the secrets manager cli",
+        "options": [
+          {
+            "long": "profile",
+            "description": "save specified value(s) to an alternate profile",
+            "inherit": false,
+            "value": {
+              "name": "profile",
+              "description": "profile name to save to",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "config-file",
+            "description": "save specified value(s) to an alternative config file",
+            "inherit": false,
+            "value": {
+              "name": "config-file-path",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "display help for login command",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "setting",
+              "description": "server setting to specify",
+              "index": 0,
+              "values": [
+                {
+                  "value": "server-base",
+                  "description": "Base server URL"
+                },
+                {
+                  "value": "server-api",
+                  "description": "Server API endpoint URL"
+                },
+                {
+                  "value": "server-identity",
+                  "description": "Server Identity endpoint URL"
+                },
+                {
+                  "value": "state-file-dir",
+                  "description": "Server file storage location"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "name": "completions",
+        "description": "generate shell completions",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "display help for logout command",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "shell",
+              "description": "shell to generate completions for",
+              "index": 0,
+              "values": [
+                {
+                  "value": "bash",
+                  "description": "Generate shell completions for bash"
+                },
+                {
+                  "value": "elvish",
+                  "description": "Generate shell completions for elvish"
+                },
+                {
+                  "value": "fish",
+                  "description": "Generate shell completions for fish"
+                },
+                {
+                  "value": "powershell",
+                  "description": "Generate shell completions for powershell"
+                },
+                {
+                  "value": "zsh",
+                  "description": "Generate shell completions for zsh"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "name": "project",
+        "description": "access, manipulate and create projects",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "access, manipulate and create projects",
+            "inherit": false
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "create",
+            "description": "create a new project",
+            "arguments": {
+              "states": [
+                {
+                  "name": "name",
+                  "description": "name of project to be created",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "delete",
+            "description": "delete one or more existing projects",
+            "arguments": {
+              "states": [
+                {
+                  "name": "project_id(s)",
+                  "description": "iD(s) of project(s) to delete",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "edit",
+            "description": "change the name of an existing project",
+            "arguments": {
+              "states": [
+                {
+                  "name": "--name",
+                  "description": "new project name",
+                  "index": 0
+                },
+                {
+                  "name": "project_id",
+                  "description": "iD of project to edit",
+                  "index": 1
+                }
+              ]
+            }
+          },
+          {
+            "name": "get",
+            "description": "retrieve a specific project accessible to this service account",
+            "arguments": {
+              "states": [
+                {
+                  "name": "project_id",
+                  "description": "iD of project to retrieve",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "list",
+            "description": "list projects accessible to this service account"
+          }
+        ]
+      },
+      {
+        "name": "secret",
+        "description": "access, manipulate and create secrets",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "display help for unlock command",
+            "inherit": false
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "create",
+            "description": "create a new secret",
+            "options": [
+              {
+                "long": "note",
+                "description": "optional notes about this secret",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "key",
+                  "description": "secret Key",
+                  "index": 0
+                },
+                {
+                  "name": "value",
+                  "description": "secret Value",
+                  "index": 1
+                },
+                {
+                  "name": "project_id",
+                  "description": "the ID of the project this secret will be added to",
+                  "index": 2
+                }
+              ]
+            }
+          },
+          {
+            "name": "delete",
+            "description": "delete an existing secret",
+            "arguments": {
+              "states": [
+                {
+                  "name": "secret_ids",
+                  "description": "delete one or more secrets designated by SECRET_IDS",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "edit",
+            "description": "edit an existing secret",
+            "options": [
+              {
+                "spellings": [
+                  "key"
+                ],
+                "description": "edit the Secret Key",
+                "inherit": false
+              },
+              {
+                "spellings": [
+                  "value"
+                ],
+                "description": "edit the Secret Value",
+                "inherit": false
+              },
+              {
+                "spellings": [
+                  "project-id"
+                ],
+                "description": "edit the ID of project this secret belongs to",
+                "inherit": false
+              },
+              {
+                "spellings": [
+                  "note"
+                ],
+                "description": "edit the optional notes about this secret",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "secret_id",
+                  "description": "iD of secret to be edited",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "get",
+            "description": "retrieve an existing secret",
+            "arguments": {
+              "states": [
+                {
+                  "name": "secret_id",
+                  "description": "secret to retrieve",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "list",
+            "description": "list the secrets this service account can access",
+            "arguments": {
+              "states": [
+                {
+                  "name": "project",
+                  "description": "project Identifier",
+                  "index": 0
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "--help",
+        "aliases": [],
+        "description": "get help about using the bitwarden secrets manager cli tool"
+      }
+    ],
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "builtin.directories": {
+        "builtin": "directories"
+      }
+    },
+    "description": "manage bitwarden secrets"
+  }
+}
