@@ -1,0 +1,794 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "bundle",
+    "description": "manage ruby dependencies",
+    "options": [
+      {
+        "long": "no-color",
+        "description": "print all output without color",
+        "inherit": false
+      },
+      {
+        "long": "retry",
+        "short": "r",
+        "description": "specify the number of times you wish to attempt network commands",
+        "inherit": false
+      },
+      {
+        "long": "verbose",
+        "short": "V",
+        "description": "print out additional logging information",
+        "inherit": false
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "install",
+        "description": "install the gems specified by the Gemfile or Gemfile.lock",
+        "options": [
+          {
+            "long": "binstubs",
+            "description": "create binstubs in dir",
+            "inherit": false,
+            "value": {
+              "name": "value",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "clean",
+            "description": "remove unused gems after install",
+            "inherit": false
+          },
+          {
+            "long": "deployment",
+            "description": "for Production and CI use",
+            "inherit": false
+          },
+          {
+            "long": "force",
+            "aliases": [
+              "redownload"
+            ],
+            "description": "redownload all gems",
+            "inherit": false
+          },
+          {
+            "long": "frozen",
+            "description": "do not allow lock file to update",
+            "inherit": false
+          },
+          {
+            "long": "full-index",
+            "description": "cache the full index locally",
+            "inherit": false
+          },
+          {
+            "long": "gemfile",
+            "description": "the gemfile to use",
+            "inherit": false,
+            "value": {
+              "name": "value",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "jobs",
+            "description": "maximum number of parallel installs",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "local",
+            "description": "use only gems already downloaded or cached",
+            "inherit": false
+          },
+          {
+            "long": "no-cache",
+            "description": "do not use vendor/cache",
+            "inherit": false
+          },
+          {
+            "long": "no-prune",
+            "description": "do not remove stale gems",
+            "inherit": false
+          },
+          {
+            "long": "path",
+            "description": "path the install gems too",
+            "inherit": false,
+            "value": {
+              "name": "value",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "quiet",
+            "description": "do not print to stdout",
+            "inherit": false
+          },
+          {
+            "long": "retry",
+            "description": "retry failed network requests N times",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "shebang",
+            "description": "uses the specified ruby executable for binstubs",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "standalone",
+            "description": "makes a bundle that can work without depending on rubygems or Bundler at runtime",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "system",
+            "description": "use system rubygems location",
+            "inherit": false
+          },
+          {
+            "long": "trust-policy",
+            "description": "apply the rubygems security policy",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "with",
+            "description": "groups to install",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "without",
+            "description": "groups to NOT install",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          }
+        ]
+      },
+      {
+        "name": "update",
+        "description": "update dependencies to their latest versions",
+        "options": [
+          {
+            "long": "all",
+            "description": "update all gems specified in Gemfile",
+            "inherit": false
+          },
+          {
+            "long": "group",
+            "short": "g",
+            "description": "only update the gems in the specified group",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "source",
+            "description": "the name of a :git or :path source used in the Gemfile",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "local",
+            "description": "use only gems already downloaded or cached",
+            "inherit": false
+          },
+          {
+            "long": "ruby",
+            "description": "update the locked version of ruby to the current version of ruby",
+            "inherit": false
+          },
+          {
+            "long": "bundler",
+            "description": "update the locked version of bundler to the invoked bundler version",
+            "inherit": false
+          },
+          {
+            "long": "full-index",
+            "description": "fall back to using the single-file index of all gems",
+            "inherit": false
+          },
+          {
+            "long": "jobs",
+            "short": "j",
+            "description": "specify the number of jobs to run in parallel. The default is 1",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "retry",
+            "description": "retry failed network or git requests for number times",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "quiet",
+            "description": "only output warnings and errors",
+            "inherit": false
+          },
+          {
+            "long": "force",
+            "aliases": [
+              "redownload"
+            ],
+            "description": "force downloading every gem",
+            "inherit": false
+          },
+          {
+            "long": "patch",
+            "description": "prefer updating only to next patch version",
+            "inherit": false
+          },
+          {
+            "long": "minor",
+            "description": "prefer updating only to next minor version",
+            "inherit": false
+          },
+          {
+            "long": "major",
+            "description": "prefer updating to next major version (default)",
+            "inherit": false
+          },
+          {
+            "long": "strict",
+            "description": "do not allow any gem to be updated past latest --patch | --minor | --major",
+            "inherit": false
+          },
+          {
+            "long": "conservative",
+            "description": "do not allow shared dependencies to be updated",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "gem",
+              "index": 0,
+              "provider": "bundle.gems"
+            }
+          ]
+        }
+      },
+      {
+        "name": "package",
+        "description": "package the .gem files required by your application into the vendor/cache directory"
+      },
+      {
+        "name": "exec",
+        "description": "execute a command in the context of the bundle",
+        "options": [
+          {
+            "long": "keep-file-descriptors",
+            "description": "pass all file descriptors to the new process",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "value",
+              "provider": "builtin.executables",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "config",
+        "arguments": {
+          "states": [
+            {
+              "name": "value",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "help"
+      },
+      {
+        "name": "add",
+        "description": "add gem to the Gemfile and run bundle install",
+        "options": [
+          {
+            "long": "version",
+            "short": "v",
+            "description": "specify version requirements",
+            "inherit": false
+          },
+          {
+            "long": "group",
+            "short": "g",
+            "description": "specify the group(s) for the added gem",
+            "inherit": false
+          },
+          {
+            "long": "source",
+            "short": "s",
+            "description": "specify the source",
+            "inherit": false
+          },
+          {
+            "long": "skip-install",
+            "description": "adds the gem to the Gemfile but does not install it",
+            "inherit": false
+          },
+          {
+            "long": "optimistic",
+            "description": "adds optimistic declaration of version",
+            "inherit": false
+          },
+          {
+            "long": "strict",
+            "description": "adds strict declaration of version",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "value",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "binstubs",
+        "description": "install the binstubs of the listed gems",
+        "options": [
+          {
+            "long": "force",
+            "description": "overwrite existing binstubs",
+            "inherit": false
+          },
+          {
+            "long": "path",
+            "description": "the location to install the specified binstubs to",
+            "inherit": false
+          },
+          {
+            "long": "standalone",
+            "description": "makes binstubs that can work without depending on rubygems or Bundler at runtime",
+            "inherit": false
+          },
+          {
+            "long": "shebang",
+            "description": "specify a different shebang executable name than the default",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "gem",
+              "index": 0,
+              "provider": "bundle.gems"
+            }
+          ]
+        }
+      },
+      {
+        "name": "check",
+        "description": "determine whether the requirements for your application are installed and available to Bundler",
+        "options": [
+          {
+            "long": "dry-run",
+            "description": "locks the Gemfile before running the command",
+            "inherit": false
+          },
+          {
+            "long": "gemfile",
+            "description": "use the specified gemfile instead of the Gemfile",
+            "inherit": false
+          },
+          {
+            "long": "path",
+            "description": "specify a different path than the system default",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "show",
+        "description": "show the source location of a particular gem in the bundle",
+        "options": [
+          {
+            "long": "paths",
+            "description": "list the paths of all gems that are required by your Gemfile",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "gem",
+              "index": 0,
+              "provider": "bundle.gems"
+            }
+          ]
+        }
+      },
+      {
+        "name": "outdated",
+        "description": "show all of the outdated gems in the current bundle",
+        "options": [
+          {
+            "long": "local",
+            "description": "do not attempt to fetch gems remotely and use the gem cache instead",
+            "inherit": false
+          },
+          {
+            "long": "pre",
+            "description": "check for newer pre-release gems",
+            "inherit": false
+          },
+          {
+            "long": "source",
+            "description": "check against a specific source",
+            "inherit": false
+          },
+          {
+            "long": "strict",
+            "description": "only list newer versions allowed by your Gemfile requirements",
+            "inherit": false
+          },
+          {
+            "long": "parseable",
+            "aliases": [
+              "porcelain"
+            ],
+            "description": "use minimal formatting for more parseable output",
+            "inherit": false
+          },
+          {
+            "long": "group",
+            "description": "list gems from a specific group",
+            "inherit": false
+          },
+          {
+            "long": "groups",
+            "description": "list gems organized by groups",
+            "inherit": false
+          },
+          {
+            "long": "update-strict",
+            "description": "strict conservative resolution, do not allow any gem to be updated past latest --patch | --minor| --major",
+            "inherit": false
+          },
+          {
+            "long": "minor",
+            "description": "prefer updating only to next minor version",
+            "inherit": false
+          },
+          {
+            "long": "major",
+            "description": "prefer updating to next major version (default)",
+            "inherit": false
+          },
+          {
+            "long": "patch",
+            "description": "prefer updating only to next patch version",
+            "inherit": false
+          },
+          {
+            "long": "filter-major",
+            "description": "only list major newer versions",
+            "inherit": false
+          },
+          {
+            "long": "filter-minor",
+            "description": "only list minor newer versions",
+            "inherit": false
+          },
+          {
+            "long": "filter-patch",
+            "description": "only list patch newer versions",
+            "inherit": false
+          },
+          {
+            "long": "only-explicit",
+            "description": "only list gems specified in your Gemfile, not their dependencies",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "console",
+        "description": "start an IRB session in the current bundle"
+      },
+      {
+        "name": "open",
+        "description": "open an installed gem in the editor",
+        "arguments": {
+          "states": [
+            {
+              "name": "gem",
+              "index": 0,
+              "provider": "bundle.gems"
+            }
+          ]
+        }
+      },
+      {
+        "name": "lock",
+        "description": "generate a lockfile for your dependencies",
+        "options": [
+          {
+            "long": "update",
+            "description": "ignores the existing lockfile",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "local",
+            "description": "do not attempt to connect to rubygems.org",
+            "inherit": false
+          },
+          {
+            "long": "print",
+            "description": "prints the lockfile to STDOUT instead of writing to the file system",
+            "inherit": false
+          },
+          {
+            "long": "lockfile",
+            "description": "the path where the lockfile should be written to",
+            "inherit": false,
+            "value": {
+              "name": "path",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "full-index",
+            "description": "fall back to using the single-file index of all gems",
+            "inherit": false
+          },
+          {
+            "long": "add-platform",
+            "description": "add a new platform to the lockfile, re-resolving for the addi- tion of that platform",
+            "inherit": false
+          },
+          {
+            "long": "remove-platform",
+            "description": "remove a platform from the lockfile",
+            "inherit": false
+          },
+          {
+            "long": "patch",
+            "description": "if updating, prefer updating only to next patch version",
+            "inherit": false
+          },
+          {
+            "long": "minor",
+            "description": "if updating, prefer updating only to next minor version",
+            "inherit": false
+          },
+          {
+            "long": "major",
+            "description": "if updating, prefer updating to next major version (default)",
+            "inherit": false
+          },
+          {
+            "long": "strict",
+            "description": "if updating, do not allow any gem to be updated past latest --patch | --minor | --major",
+            "inherit": false
+          },
+          {
+            "long": "conservative",
+            "description": "if updating, use bundle install conservative update behavior and do not allow shared dependencies to be upd",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "viz",
+        "description": "generate a visual representation of your dependencies",
+        "options": [
+          {
+            "long": "file",
+            "short": "f",
+            "description": "the name to use for the generated file. See --format option",
+            "inherit": false
+          },
+          {
+            "long": "format",
+            "short": "F",
+            "description": "this is output format option",
+            "inherit": false
+          },
+          {
+            "long": "requirements",
+            "short": "R",
+            "description": "set to show the version of each required dependency",
+            "inherit": false
+          },
+          {
+            "long": "version",
+            "short": "v",
+            "description": "set to show each gem version",
+            "inherit": false
+          },
+          {
+            "long": "without",
+            "short": "W",
+            "description": "exclude gems that are part of the specified named group",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "init",
+        "description": "generate a simple Gemfile, placed in the current directory",
+        "options": [
+          {
+            "long": "gemspec",
+            "description": "use the specified .gemspec to create the Gemfile",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "gem",
+        "description": "create a simple gem, suitable for development with Bundler",
+        "options": [
+          {
+            "long": "exe",
+            "short": "b",
+            "aliases": [
+              "bin"
+            ],
+            "description": "specify that Bundler should create a binary executable",
+            "inherit": false
+          },
+          {
+            "long": "no-exe",
+            "description": "do not create a binary",
+            "inherit": false
+          },
+          {
+            "long": "coc",
+            "description": "add a CODE_OF_CONDUCT.md file to the root of the generated project",
+            "inherit": false
+          },
+          {
+            "long": "no-coc",
+            "description": "do not create a CODE_OF_CONDUCT.md",
+            "inherit": false
+          },
+          {
+            "long": "ext",
+            "description": "add boilerplate for C extension code to the generated project",
+            "inherit": false
+          },
+          {
+            "long": "no-ext",
+            "description": "do not add C extension code",
+            "inherit": false
+          },
+          {
+            "long": "mit",
+            "description": "add an MIT license",
+            "inherit": false
+          },
+          {
+            "long": "no-mit",
+            "description": "do not create a LICENSE.txt",
+            "inherit": false
+          },
+          {
+            "short": "t",
+            "long": "test",
+            "description": "specify the test framework that Bundler should use",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "short": "e",
+            "long": "edit",
+            "description": "open the resulting gemspec in EDITOR",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          }
+        ]
+      },
+      {
+        "name": "platform",
+        "description": "display platform compatibility information",
+        "options": [
+          {
+            "long": "ruby",
+            "description": "it will display the ruby directive information so you don't have to parse it from the Gemfile",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "clean",
+        "description": "clean up unused gems in your Bundler directory",
+        "options": [
+          {
+            "long": "dry-run",
+            "description": "print the changes, but do not clean the unused gems",
+            "inherit": false
+          },
+          {
+            "long": "force",
+            "description": "force a clean even if --path is not set",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "doctor",
+        "description": "display warnings about common problems",
+        "options": [
+          {
+            "long": "quiet",
+            "description": "only output warnings and errors",
+            "inherit": false
+          },
+          {
+            "long": "gemfile",
+            "description": "the location of the Gemfile which Bundler should use",
+            "inherit": false,
+            "value": {
+              "name": "value",
+              "provider": "builtin.files"
+            }
+          }
+        ]
+      }
+    ],
+    "providers": {
+      "bundle.gems": {
+        "function": "__rush_complete_bundle_gems"
+      },
+      "builtin.executables": {
+        "builtin": "executables"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "builtin.directories": {
+        "builtin": "directories"
+      }
+    }
+  }
+}

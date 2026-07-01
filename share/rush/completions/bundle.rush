@@ -1,0 +1,6 @@
+__rush_complete_bundle_gems() {
+  test -f Gemfile || return 0
+  sed -n "s/^[[:space:]]*gem[[:space:]]*['\"]\([^'\"]*\)['\"].*/\1/p" Gemfile 2>/dev/null | while IFS= read -r gem; do
+    test -n "$gem" && rush_complete candidate "$gem" --kind plain --description gem
+  done
+}
