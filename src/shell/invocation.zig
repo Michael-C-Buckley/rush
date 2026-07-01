@@ -12,8 +12,15 @@ pub const ParseError = error{
 
 pub const Invocation = union(enum) {
     help,
+    interactive: Interactive,
     command_string: CommandString,
     script_file: ScriptFile,
+};
+
+pub const Interactive = struct {
+    mode: state.Mode = .bash,
+    options: state.Options = .{},
+    arg_zero: []const u8,
 };
 
 pub const CommandString = struct {
@@ -88,7 +95,37 @@ pub fn parse(args: []const []const u8) ParseError!Invocation {
         } };
     }
 
-    return error.MissingCommandString;
+    options.mode = mode;
+    options.interactive = true;
+    return .{ .interactive = .{
+        .mode = mode,
+        .options = options,
+        .arg_zero = args[0],
+    } };
+}
+
+test "invocation parses bare interactive shell" {
+    const args = [_][]const u8{"rush"};
+    const invocation = try parse(&args);
+    const interactive = switch (invocation) {
+        .interactive => |interactive| interactive,
+        .help, .command_string, .script_file => return error.TestExpectedEqual,
+    };
+    try std.testing.expectEqual(state.Mode.bash, interactive.mode);
+    try std.testing.expect(interactive.options.interactive);
+    try std.testing.expectEqualStrings("rush", interactive.arg_zero);
+}
+
+test "invocation parses POSIX interactive shell" {
+    const args = [_][]const u8{ "rush", "--posix" };
+    const invocation = try parse(&args);
+    const interactive = switch (invocation) {
+        .interactive => |interactive| interactive,
+        .help, .command_string, .script_file => return error.TestExpectedEqual,
+    };
+    try std.testing.expectEqual(state.Mode.posix, interactive.mode);
+    try std.testing.expectEqual(state.Mode.posix, interactive.options.mode);
+    try std.testing.expect(interactive.options.interactive);
 }
 
 test "invocation parses POSIX command string" {
@@ -96,7 +133,7 @@ test "invocation parses POSIX command string" {
     const invocation = try parse(&args);
     const command = switch (invocation) {
         .command_string => |command| command,
-        .help, .script_file => return error.TestExpectedEqual,
+        .help, .interactive, .script_file => return error.TestExpectedEqual,
     };
     try std.testing.expectEqual(state.Mode.posix, command.mode);
     try std.testing.expectEqual(state.Mode.posix, command.options.mode);
@@ -111,7 +148,7 @@ test "invocation parses xtrace option" {
     const invocation = try parse(&args);
     const command = switch (invocation) {
         .command_string => |command| command,
-        .help, .script_file => return error.TestExpectedEqual,
+        .help, .interactive, .script_file => return error.TestExpectedEqual,
     };
     try std.testing.expect(command.options.xtrace);
     try std.testing.expectEqual(state.Mode.posix, command.options.mode);
@@ -122,7 +159,7 @@ test "invocation parses nounset option" {
     const invocation = try parse(&args);
     const command = switch (invocation) {
         .command_string => |command| command,
-        .help, .script_file => return error.TestExpectedEqual,
+        .help, .interactive, .script_file => return error.TestExpectedEqual,
     };
     try std.testing.expect(command.options.nounset);
     try std.testing.expectEqual(state.Mode.posix, command.options.mode);
@@ -133,7 +170,7 @@ test "invocation parses POSIX script file" {
     const invocation = try parse(&args);
     const script = switch (invocation) {
         .script_file => |script| script,
-        .command_string, .help => return error.TestExpectedEqual,
+        .command_string, .help, .interactive => return error.TestExpectedEqual,
     };
     try std.testing.expectEqual(state.Mode.posix, script.mode);
     try std.testing.expectEqual(state.Mode.posix, script.options.mode);
@@ -148,7 +185,7 @@ test "invocation parses script file after option terminator" {
     const invocation = try parse(&args);
     const script = switch (invocation) {
         .script_file => |script| script,
-        .command_string, .help => return error.TestExpectedEqual,
+        .command_string, .help, .interactive => return error.TestExpectedEqual,
     };
     try std.testing.expectEqual(state.Mode.posix, script.options.mode);
     try std.testing.expectEqualStrings("-script", script.path);
@@ -161,7 +198,7 @@ test "invocation parses interactive option" {
     const invocation = try parse(&args);
     const command = switch (invocation) {
         .command_string => |command| command,
-        .help, .script_file => return error.TestExpectedEqual,
+        .help, .interactive, .script_file => return error.TestExpectedEqual,
     };
     try std.testing.expect(command.options.interactive);
     try std.testing.expectEqual(state.Mode.posix, command.options.mode);

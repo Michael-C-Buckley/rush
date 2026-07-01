@@ -108,8 +108,6 @@ pub fn build(b: *std.Build) void {
     const run_cmd = b.addRunArtifact(exe);
     if (b.args) |args| {
         run_cmd.addArgs(args);
-    } else {
-        run_cmd.addArg("--help");
     }
 
     const run_step = b.step("run", "Run the application");

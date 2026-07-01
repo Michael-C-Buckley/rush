@@ -12,7 +12,8 @@ pub const shell = @import("shell.zig");
 const use_debug_allocator = builtin.mode == .Debug;
 const AppDebugAllocator = if (use_debug_allocator) std.heap.DebugAllocator(.{}) else void;
 const usage =
-    \\usage: rush [--posix] -c SCRIPT [NAME [ARGS...]]
+    \\usage: rush [-i] [--posix]
+    \\       rush [--posix] -c SCRIPT [NAME [ARGS...]]
     \\       rush [--posix] SCRIPT [ARGS...]
     \\       rush --help
     \\
@@ -42,6 +43,18 @@ pub fn main(init: std.process.Init.Minimal) !u8 {
         .help => {
             try real_host.writeAll(.stdout, usage);
             return 0;
+        },
+        .interactive => |interactive| {
+            var threaded_io: std.Io.Threaded = .init(root_allocator, .{
+                .argv0 = .init(init.args),
+                .environ = init.environ,
+            });
+            defer threaded_io.deinit();
+            return runInteractive(process_allocator, real_host, threaded_io.io(), init.environ.block.view().slice, .{
+                .state_options = interactive.options,
+                .arg_zero = interactive.arg_zero,
+                .positionals = &.{},
+            });
         },
         .command_string => |command| {
             const src: shell.source.Source = .{
@@ -73,6 +86,75 @@ pub fn main(init: std.process.Init.Minimal) !u8 {
                 .positionals = script.positionals,
             }, src);
         },
+    }
+}
+
+fn runInteractive(
+    allocator: std.mem.Allocator,
+    real_host: host.RealHost,
+    io: std.Io,
+    env: []const [*:0]const u8,
+    options: EvalSourceOptions,
+) !u8 {
+    var sh = shell.Shell(host.RealHost).init(allocator, real_host, .{
+        .state = options.state_options,
+        .env = env,
+        .arg_zero = options.arg_zero,
+        .positionals = options.positionals,
+    });
+    defer sh.deinit();
+
+    var terminal = editor.driver.TerminalSession.init(allocator, io) catch {
+        try sh.host.writeAll(.stderr, "rush: cannot initialize terminal\n");
+        return 2;
+    };
+    defer terminal.deinit();
+
+    var source_id: shell.source.SourceId = 1;
+    while (true) {
+        const line_result = terminal.readLine(.{ .prompt = "rush> " }) catch {
+            try sh.host.writeAll(.stderr, "rush: editor error\n");
+            return 2;
+        };
+        switch (line_result) {
+            .submitted => |line| {
+                defer allocator.free(line);
+
+                try terminal.leaveEditorMode();
+
+                const src: shell.source.Source = .{
+                    .id = source_id,
+                    .kind = .interactive,
+                    .name = "interactive",
+                    .text = line,
+                };
+                source_id +%= 1;
+
+                const evaluated = sh.evalSource(src) catch {
+                    try sh.host.writeAll(.stderr, "rush: shell error\n");
+                    terminal.finishSemanticCommand(2) catch {};
+                    try terminal.enterEditorMode();
+                    continue;
+                };
+                terminal.finishSemanticCommand(evaluated.status) catch {};
+
+                switch (evaluated.flow) {
+                    .exit => |status| return shell.eval.runExitTrap(&sh, status) catch {
+                        try sh.host.writeAll(.stderr, "rush: shell error\n");
+                        return 2;
+                    },
+                    else => try terminal.enterEditorMode(),
+                }
+            },
+            .canceled, .interrupted => continue,
+            .eof => {
+                try terminal.leaveEditorMode();
+                return shell.eval.runExitTrap(&sh, sh.state.last_status) catch {
+                    try sh.host.writeAll(.stderr, "rush: shell error\n");
+                    return 2;
+                };
+            },
+        }
     }
 }
 
