@@ -1,0 +1,140 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "create-t3-app",
+    "description": "create a T3 stack web app",
+    "options": [
+      {
+        "long": "noGit",
+        "description": "skip git initialization",
+        "inherit": false
+      },
+      {
+        "long": "noInstall",
+        "description": "skip package installation",
+        "inherit": false
+      },
+      {
+        "short": "y",
+        "long": "default",
+        "description": "use all default options",
+        "inherit": false
+      },
+      {
+        "long": "CI",
+        "description": "run in CI mode",
+        "inherit": false
+      },
+      {
+        "long": "tailwind",
+        "description": "install Tailwind CSS in CI mode",
+        "inherit": false,
+        "value": {
+          "name": "boolean",
+          "provider": "create-t3-app.booleans"
+        },
+        "requires": [
+          "--CI"
+        ]
+      },
+      {
+        "long": "nextAuth",
+        "description": "install NextAuth.js in CI mode",
+        "inherit": false,
+        "value": {
+          "name": "boolean",
+          "provider": "create-t3-app.booleans"
+        },
+        "requires": [
+          "--CI"
+        ]
+      },
+      {
+        "long": "prisma",
+        "description": "install Prisma in CI mode",
+        "inherit": false,
+        "value": {
+          "name": "boolean",
+          "provider": "create-t3-app.booleans"
+        },
+        "requires": [
+          "--CI"
+        ]
+      },
+      {
+        "long": "trpc",
+        "description": "install tRPC in CI mode",
+        "inherit": false,
+        "value": {
+          "name": "boolean",
+          "provider": "create-t3-app.booleans"
+        },
+        "requires": [
+          "--CI"
+        ]
+      },
+      {
+        "short": "i",
+        "long": "import-alias",
+        "description": "set a custom import alias",
+        "inherit": false,
+        "value": {
+          "name": "alias",
+          "provider": "create-t3-app.import-aliases"
+        }
+      },
+      {
+        "short": "v",
+        "long": "version",
+        "description": "display the version number",
+        "inherit": false
+      },
+      {
+        "long": "help",
+        "short": "h",
+        "description": "display help for command",
+        "inherit": false
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "dir",
+          "description": "application directory",
+          "provider": "builtin.directories",
+          "index": 0
+        }
+      ]
+    },
+    "providers": {
+      "create-t3-app.booleans": {
+        "values": [
+          {
+            "value": "true",
+            "description": "enable"
+          },
+          {
+            "value": "false",
+            "description": "disable"
+          }
+        ]
+      },
+      "create-t3-app.import-aliases": {
+        "values": [
+          {
+            "value": "~/",
+            "description": "use the ~/ alias"
+          },
+          {
+            "value": "@/",
+            "description": "use the @/ alias"
+          }
+        ]
+      },
+      "builtin.directories": {
+        "builtin": "directories"
+      }
+    }
+  }
+}
