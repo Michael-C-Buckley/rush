@@ -1,0 +1,67 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "degit",
+    "description": "scaffold a project from a git repository",
+    "options": [
+      {
+        "long": "help",
+        "description": "print help",
+        "inherit": false
+      },
+      {
+        "short": "f",
+        "long": "force",
+        "description": "overwrite existing files",
+        "inherit": false
+      },
+      {
+        "short": "c",
+        "long": "cache",
+        "description": "use a cache",
+        "inherit": false
+      },
+      {
+        "short": "v",
+        "long": "verbose",
+        "description": "print verbose output",
+        "inherit": false
+      },
+      {
+        "short": "m",
+        "long": "mode",
+        "description": "set the clone mode",
+        "inherit": false,
+        "value": {
+          "name": "mode",
+          "provider": "degit.modes"
+        }
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "repository",
+          "index": 0
+        },
+        {
+          "name": "location",
+          "provider": "builtin.directories",
+          "index": 1
+        }
+      ]
+    },
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "degit.modes": {
+        "values": [
+          "git",
+          "tar"
+        ]
+      }
+    }
+  }
+}
