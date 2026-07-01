@@ -1,0 +1,25 @@
+__rush_complete_bat_languages() {
+  bat --list-languages 2>/dev/null | while IFS= read -r line; do
+    case "$line" in
+      *:*)
+        description=${line%%:*}
+        rest=${line#*:}
+        old_ifs=$IFS
+        IFS=,
+        for language in $rest; do
+          IFS=$old_ifs
+          language=$(printf '%s' "$language" | sed 's/^ *//; s/ *$//')
+          test -n "$language" && rush_complete candidate "$language" --kind plain --description "$description language"
+          IFS=,
+        done
+        IFS=$old_ifs
+        ;;
+    esac
+  done
+}
+
+__rush_complete_bat_themes() {
+  bat --list-themes 2>/dev/null | while IFS= read -r theme; do
+    test -n "$theme" && rush_complete candidate "$theme" --kind plain --description theme
+  done
+}

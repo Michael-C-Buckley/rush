@@ -1,0 +1,274 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "bat",
+    "description": "view files with syntax highlighting",
+    "options": [
+      {
+        "short": "A",
+        "long": "show-all",
+        "description": "show non-printable characters",
+        "inherit": false
+      },
+      {
+        "short": "p",
+        "long": "plain",
+        "description": "show plain style, no decorations",
+        "inherit": false
+      },
+      {
+        "short": "l",
+        "long": "language",
+        "description": "explicitly set the language for syntax highlighting",
+        "inherit": false,
+        "value": {
+          "name": "language",
+          "provider": "bat.languages"
+        }
+      },
+      {
+        "short": "H",
+        "long": "highlight-line",
+        "description": "highlight the specified line ranges",
+        "inherit": false,
+        "value": {
+          "name": "n:m",
+          "description": "Range of line"
+        }
+      },
+      {
+        "long": "file-name",
+        "description": "specify the name to display for a file. Useful when piping data to bat from stdin when bat does not otherwise know the filename",
+        "inherit": false,
+        "value": {
+          "name": "value",
+          "description": "File(s)",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "short": "d",
+        "long": "diff",
+        "description": "show lines that have been added/removed/modified with respect to the git index",
+        "inherit": false
+      },
+      {
+        "long": "diff-context",
+        "description": "include N lines of context around added/removed/modified lines when using '--diff'",
+        "inherit": false,
+        "value": {
+          "name": "n",
+          "description": "Lines of context"
+        }
+      },
+      {
+        "long": "tabs",
+        "description": "set the tab width to T spaces. Use a width of 0 to pass tabs through directly",
+        "inherit": false,
+        "value": {
+          "name": "t",
+          "description": "Spaces of tab width"
+        }
+      },
+      {
+        "long": "wrap",
+        "description": "set line wrapping mode",
+        "inherit": false,
+        "value": {
+          "name": "mode",
+          "values": [
+            "auto",
+            "never",
+            "character"
+          ]
+        }
+      },
+      {
+        "long": "terminal-width",
+        "description": "explicitly set the width of the terminal instead of determining it automatically",
+        "inherit": false,
+        "value": {
+          "name": "width",
+          "description": "Width to wrap"
+        }
+      },
+      {
+        "short": "n",
+        "long": "number",
+        "description": "show line numbers, no other decorations",
+        "inherit": false
+      },
+      {
+        "long": "color",
+        "description": "specify when to use colored output",
+        "inherit": false,
+        "value": {
+          "name": "when",
+          "values": [
+            "auto",
+            "always",
+            "never"
+          ]
+        }
+      },
+      {
+        "long": "italic-text",
+        "description": "specify when to use ansi sequences for italic text in the output",
+        "inherit": false,
+        "value": {
+          "name": "when",
+          "values": [
+            "always",
+            "never"
+          ]
+        }
+      },
+      {
+        "long": "decorations",
+        "description": "specify when to use the decorations that have been specified via '--style'",
+        "inherit": false,
+        "value": {
+          "name": "when",
+          "values": [
+            "auto",
+            "always",
+            "never"
+          ]
+        }
+      },
+      {
+        "short": "f",
+        "long": "force-colorization",
+        "description": "alias for '--decorations=always --color=always'",
+        "inherit": false
+      },
+      {
+        "long": "paging",
+        "description": "specify when to use the pager",
+        "inherit": false,
+        "value": {
+          "name": "when",
+          "values": [
+            "auto",
+            "always",
+            "never"
+          ]
+        }
+      },
+      {
+        "long": "pager",
+        "description": "determine which pager is used",
+        "inherit": false,
+        "value": {
+          "name": "command",
+          "description": "Command to pager"
+        }
+      },
+      {
+        "short": "m",
+        "long": "map-syntax",
+        "description": "map a glob pattern to an existing syntax name",
+        "inherit": false,
+        "value": {
+          "name": "glob:syntax",
+          "description": "Full path or the filename:language that highlighted"
+        }
+      },
+      {
+        "long": "ignored-suffix",
+        "description": "ignore extension",
+        "inherit": false,
+        "value": {
+          "name": "ignored-suffix",
+          "description": "Extension"
+        }
+      },
+      {
+        "long": "theme",
+        "description": "set the theme for syntax highlighting",
+        "inherit": false,
+        "value": {
+          "name": "theme",
+          "provider": "bat.themes"
+        }
+      },
+      {
+        "long": "list-themes",
+        "description": "display a list of supported themes for syntax highlighting",
+        "inherit": false
+      },
+      {
+        "long": "style",
+        "description": "set output style components",
+        "inherit": false
+      },
+      {
+        "short": "r",
+        "long": "line-range",
+        "description": "only print the specified range of lines for each file",
+        "inherit": false,
+        "value": {
+          "name": "n:m",
+          "description": "Range of line"
+        }
+      },
+      {
+        "short": "L",
+        "long": "list-languages",
+        "description": "display a list of supported languages for syntax highlighting",
+        "inherit": false
+      },
+      {
+        "short": "u",
+        "long": "unbuffered",
+        "description": "make output unbuffered (exists for POSIX-compliance reasons and is simply ignored)",
+        "inherit": false
+      },
+      {
+        "long": "diagnostic",
+        "description": "show diagnostic information for bug reports",
+        "inherit": false
+      },
+      {
+        "long": "acknowledgements",
+        "description": "show acknowledgements",
+        "inherit": false
+      },
+      {
+        "short": "h",
+        "long": "help",
+        "description": "print help message",
+        "inherit": false
+      },
+      {
+        "short": "V",
+        "long": "version",
+        "description": "show version information",
+        "inherit": false
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "file",
+          "description": "file to display",
+          "provider": "builtin.files",
+          "index": 0,
+          "repeatable": true
+        }
+      ]
+    },
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "bat.languages": {
+        "function": "__rush_complete_bat_languages"
+      },
+      "bat.themes": {
+        "function": "__rush_complete_bat_themes"
+      }
+    }
+  }
+}
