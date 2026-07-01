@@ -23,18 +23,19 @@
 
   <h2 id="synopsis"><a href="#synopsis">SYNOPSIS</a></h2>
 
-  <pre><span class="cmd">fc</span> <span class="opt">-l</span> [<span class="opt">-nr</span>] [<span class="var">first</span> [<span class="var">last</span>]]
+  <pre><span class="cmd">fc</span> [<span class="opt">-r</span>] [<span class="opt">-e</span> <span class="var">editor</span>] [<span class="var">first</span> [<span class="var">last</span>]]
+<span class="cmd">fc</span> <span class="opt">-l</span> [<span class="opt">-nr</span>] [<span class="var">first</span> [<span class="var">last</span>]]
 <span class="cmd">fc</span> <span class="opt">-s</span> [<span class="var">old</span>=<span class="var">new</span>] [<span class="var">first</span>]</pre>
 
   <h2 id="description"><a href="#description">DESCRIPTION</a></h2>
 
-  <p><code>fc</code> is a POSIX regular builtin provided by Rush. It lists interactive command history or re-executes a selected history entry.</p>
+  <p><code>fc</code> is a POSIX regular builtin provided by Rush. It lists, edits, or re-executes interactive command history.</p>
 
   <p><code>fc -l</code> lists history entries. <code>-n</code> suppresses command numbers and <code>-r</code> reverses the selected range. History selectors may be command numbers, negative offsets such as <code>-1</code>, or command prefixes.</p>
 
   <p><code>fc -s</code> re-executes one selected entry without invoking an editor. If <code>old=new</code> is present, the first occurrence of <code>old</code> in the selected command is replaced before execution. The re-executed command is appended to history; the <code>fc</code> invocation itself is not.</p>
 
-  <p>The editor form, <code>fc [-r] [-e editor] [first [last]]</code>, is not implemented yet.</p>
+  <p>The editor form, <code>fc [-r] [-e editor] [first [last]]</code>, writes the selected command range to a temporary file, invokes the selected editor, and then re-executes the edited contents. <code>-r</code> reverses the selected range before editing. If <code>-e</code> is omitted, <code>FCEDIT</code> selects the editor; if <code>FCEDIT</code> is unset or null, Rush uses <code>ed</code>.</p>
 
   <h2 id="exit-status"><a href="#exit-status">EXIT STATUS</a></h2>
 

@@ -419,7 +419,7 @@ fn findHashPath(shell: anytype, utility: []const u8) !?[]const u8 {
         return if (shell.host.isExecutableZ(utility_z)) utility else null;
     }
 
-    const path = if (shell.state.getVariable("PATH")) |variable| variable.value else envPath(shell.env) orelse defaultUtilityPath();
+    const path = if (shell.state.getVariable("PATH")) |variable| variable.value else shellEnvValue(shell, "PATH") orelse defaultUtilityPath();
     var candidate_buffer: std.ArrayList(u8) = .empty;
     var iterator = std.mem.splitScalar(u8, path, ':');
     while (iterator.next()) |directory| {
@@ -786,44 +786,59 @@ fn evalFc(shell: anytype, args: []const []const u8) !result.EvalResult {
         return .{ .status = 1 };
     };
 
-    var list = false;
-    var no_numbers = false;
-    var reverse = false;
-    var reexecute = false;
-
-    var index: usize = 1;
-    while (index < args.len and isFcOptionArg(args[index])) : (index += 1) {
-        const arg = args[index];
-        if (std.mem.eql(u8, arg, "--")) {
-            index += 1;
-            break;
-        }
-        var option_index: usize = 1;
-        while (option_index < arg.len) : (option_index += 1) switch (arg[option_index]) {
-            'l' => list = true,
-            'n' => no_numbers = true,
-            'r' => reverse = true,
-            's' => reexecute = true,
-            'e' => {
-                try shell.host.writeAll(.stderr, "fc: editor form is not implemented\n");
-                return .{ .status = 2 };
-            },
-            else => return fcUsageError(shell),
-        };
-    }
-
-    if (list and reexecute) return fcUsageError(shell);
-    if (!list and !reexecute) {
-        try shell.host.writeAll(.stderr, "fc: editor form is not implemented\n");
-        return .{ .status = 2 };
-    }
+    const options = parseFcOptions(args) orelse return fcUsageError(shell);
+    if (options.list and options.reexecute) return fcUsageError(shell);
+    if (options.no_numbers and !options.list) return fcUsageError(shell);
+    if (options.editor != null and (options.list or options.reexecute)) return fcUsageError(shell);
 
     const allocator = shell.scratchAllocator();
     const entries = command_history.list(command_history.context, allocator) catch return fcHistoryError(shell);
     defer freeFcEntries(allocator, entries);
 
-    if (reexecute) return evalFcReexecute(shell, command_history, entries, args[index..]);
-    return evalFcList(shell, entries, args[index..], no_numbers, reverse);
+    if (options.reexecute) return evalFcReexecute(shell, command_history, entries, args[options.operand_index..]);
+    if (options.list) return evalFcList(shell, entries, args[options.operand_index..], options.no_numbers, options.reverse);
+    return evalFcEdit(shell, command_history, entries, args[options.operand_index..], options.editor, options.reverse);
+}
+
+const FcOptions = struct {
+    list: bool = false,
+    no_numbers: bool = false,
+    reverse: bool = false,
+    reexecute: bool = false,
+    editor: ?[]const u8 = null,
+    operand_index: usize = 1,
+};
+
+fn parseFcOptions(args: []const []const u8) ?FcOptions {
+    var options: FcOptions = .{};
+    while (options.operand_index < args.len and isFcOptionArg(args[options.operand_index])) : (options.operand_index += 1) {
+        const arg = args[options.operand_index];
+        if (std.mem.eql(u8, arg, "--")) {
+            options.operand_index += 1;
+            break;
+        }
+        var option_index: usize = 1;
+        while (option_index < arg.len) : (option_index += 1) switch (arg[option_index]) {
+            'l' => options.list = true,
+            'n' => options.no_numbers = true,
+            'r' => options.reverse = true,
+            's' => options.reexecute = true,
+            'e' => {
+                if (option_index + 1 < arg.len) {
+                    options.editor = arg[option_index + 1 ..];
+                    option_index = arg.len;
+                    continue;
+                }
+                options.operand_index += 1;
+                if (options.operand_index >= args.len) return null;
+                options.editor = args[options.operand_index];
+                option_index = arg.len;
+                continue;
+            },
+            else => return null,
+        };
+    }
+    return options;
 }
 
 fn isFcOptionArg(arg: []const u8) bool {
@@ -921,6 +936,107 @@ fn evalFcReexecute(
     const command = try fcReexecuteCommand(shell.scratchAllocator(), entries[entry_index].command, replacement);
     defer if (command.owned) shell.scratchAllocator().free(command.text);
 
+    return evalFcCommand(shell, command_history, command.text);
+}
+
+fn evalFcEdit(
+    shell: anytype,
+    command_history: *history_mod.CommandHistory,
+    entries: []const history_mod.HistoryEntry,
+    operands: []const []const u8,
+    editor: ?[]const u8,
+    reverse: bool,
+) !result.EvalResult {
+    if (entries.len == 0) return fcNoHistoryMatch(shell);
+    if (operands.len > 2) return fcUsageError(shell);
+    if (comptime !fcEditorAvailable(@TypeOf(shell.host))) {
+        try shell.host.writeAll(.stderr, "fc: editor unavailable\n");
+        return .{ .status = 2 };
+    }
+
+    const selected = fcSelectedCommands(shell.scratchAllocator(), entries, operands, reverse, .edit) catch |err| switch (err) {
+        error.NoHistoryMatch => return fcNoHistoryMatch(shell),
+        else => return err,
+    };
+    defer shell.scratchAllocator().free(selected);
+
+    const temp_path = createFcTempFile(shell, selected) catch return fcHistoryError(shell);
+    defer deleteFcTempFile(shell, temp_path);
+    defer shell.scratchAllocator().free(temp_path);
+
+    const editor_name = fcEditorName(shell, editor);
+    const editor_status = runFcEditor(shell, editor_name, temp_path) catch return fcEditorError(shell);
+    if (editor_status != 0) return .{ .status = editor_status };
+
+    const edited = readFcTempFile(shell, temp_path) catch return fcHistoryError(shell);
+    defer shell.scratchAllocator().free(edited);
+    return evalFcCommand(shell, command_history, edited);
+}
+
+const FcRangeMode = enum { list, edit };
+
+fn fcSelectedCommands(
+    allocator: std.mem.Allocator,
+    entries: []const history_mod.HistoryEntry,
+    operands: []const []const u8,
+    reverse: bool,
+    mode: FcRangeMode,
+) ![]const u8 {
+    const range = fcRange(entries, operands, mode) orelse return error.NoHistoryMatch;
+    const descending_range = range.first > range.last;
+    const output_reverse = reverse != descending_range;
+    const start = @min(range.first, range.last);
+    const end = @max(range.first, range.last);
+
+    var text: std.ArrayList(u8) = .empty;
+    if (output_reverse) {
+        var index = end + 1;
+        while (index > start) {
+            index -= 1;
+            try text.appendSlice(allocator, entries[index].command);
+            try text.append(allocator, '\n');
+        }
+    } else {
+        var index = start;
+        while (index <= end) : (index += 1) {
+            try text.appendSlice(allocator, entries[index].command);
+            try text.append(allocator, '\n');
+        }
+    }
+    return text.toOwnedSlice(allocator);
+}
+
+const FcRange = struct { first: usize, last: usize };
+
+fn fcRange(entries: []const history_mod.HistoryEntry, operands: []const []const u8, mode: FcRangeMode) ?FcRange {
+    if (entries.len == 0 or operands.len > 2) return null;
+
+    const last_entry_index = entries.len - 1;
+    const first_index = if (operands.len >= 1)
+        fcEntryIndex(entries, operands[0]) orelse return null
+    else switch (mode) {
+        .list => if (entries.len > 16) entries.len - 16 else 0,
+        .edit => last_entry_index,
+    };
+    const last_index = if (operands.len >= 2)
+        fcEntryIndex(entries, operands[1]) orelse return null
+    else switch (mode) {
+        .list => last_entry_index,
+        .edit => first_index,
+    };
+    return .{ .first = first_index, .last = last_index };
+}
+
+fn evalFcCommand(shell: anytype, command_history: *history_mod.CommandHistory, command: []const u8) !result.EvalResult {
+    const ShellType = switch (@typeInfo(@TypeOf(shell))) {
+        .pointer => |pointer| pointer.child,
+        else => @TypeOf(shell),
+    };
+    if (!@hasDecl(ShellType, "evalSourceNested")) {
+        try shell.host.writeAll(.stderr, "fc: re-execution unavailable\n");
+        return .{ .status = 2 };
+    }
+
     if (command_history.suppress_next_append) |suppress| suppress(command_history.context);
 
     const started_at = std.Io.Clock.real.now(command_history.io).toSeconds();
@@ -928,13 +1044,177 @@ fn evalFcReexecute(
         .id = 0,
         .kind = .interactive,
         .name = "fc",
-        .text = command.text,
+        .text = command,
     });
     const duration_ms = @max(std.Io.Clock.real.now(command_history.io).toSeconds() - started_at, 0) * 1000;
     if (command_history.append) |append| {
-        append(command_history.context, command_history.io, command.text, evaluated.status, started_at, duration_ms) catch {};
+        append(command_history.context, command_history.io, command, evaluated.status, started_at, duration_ms) catch {};
     }
     return evaluated;
+}
+
+fn fcEditorAvailable(comptime HostValueType: type) bool {
+    const HostType = switch (@typeInfo(HostValueType)) {
+        .pointer => |pointer| pointer.child,
+        else => HostValueType,
+    };
+    return @hasDecl(HostType, "openZ") and
+        @hasDecl(HostType, "close") and
+        @hasDecl(HostType, "read") and
+        @hasDecl(HostType, "deleteFileZ") and
+        @hasDecl(HostType, "spawn") and
+        @hasDecl(HostType, "wait") and
+        @hasDecl(HostType, "isExecutableZ");
+}
+
+fn fcEditorName(shell: anytype, editor: ?[]const u8) []const u8 {
+    if (editor) |name| if (name.len != 0) return name;
+    if (shell.state.getVariable("FCEDIT")) |variable| if (variable.value.len != 0) return variable.value;
+    if (shellEnvValue(shell, "FCEDIT")) |value| if (value.len != 0) return value;
+    return "ed";
+}
+
+fn shellEnvValue(shell: anytype, name: []const u8) ?[]const u8 {
+    const ShellType = switch (@typeInfo(@TypeOf(shell))) {
+        .pointer => |pointer| pointer.child,
+        else => @TypeOf(shell),
+    };
+    if (!@hasField(ShellType, "env")) return null;
+    return envValue(shell.env, name);
+}
+
+fn createFcTempFile(shell: anytype, contents: []const u8) ![]const u8 {
+    const allocator = shell.scratchAllocator();
+    const pid = fcTempPid(shell);
+    var attempt: usize = 0;
+    while (attempt < 100) : (attempt += 1) {
+        const path = try std.fmt.allocPrint(allocator, "/tmp/rush-fc-{}-{}", .{ pid, attempt });
+        errdefer allocator.free(path);
+        const path_z = try allocator.dupeZ(u8, path);
+        defer allocator.free(path_z);
+
+        const fd = shell.host.openZ(path_z, .{
+            .access = .read_write,
+            .create = true,
+            .exclusive = true,
+            .truncate = true,
+            .mode = 0o600,
+        }) catch |err| switch (err) {
+            error.PathAlreadyExists => {
+                allocator.free(path);
+                continue;
+            },
+            else => return err,
+        };
+        var close = true;
+        errdefer if (close) shell.host.close(fd) catch {};
+        try shell.host.writeAll(fd, contents);
+        try shell.host.close(fd);
+        close = false;
+        return path;
+    }
+    return error.PathAlreadyExists;
+}
+
+fn fcTempPid(shell: anytype) host.Pid {
+    const HostType = switch (@typeInfo(@TypeOf(shell.host))) {
+        .pointer => |pointer| pointer.child,
+        else => @TypeOf(shell.host),
+    };
+    if (!@hasDecl(HostType, "currentProcessId")) return 0;
+    return shell.host.currentProcessId();
+}
+
+fn deleteFcTempFile(shell: anytype, path: []const u8) void {
+    const HostType = switch (@typeInfo(@TypeOf(shell.host))) {
+        .pointer => |pointer| pointer.child,
+        else => @TypeOf(shell.host),
+    };
+    if (!@hasDecl(HostType, "deleteFileZ")) return;
+    const path_z = shell.scratchAllocator().dupeZ(u8, path) catch return;
+    defer shell.scratchAllocator().free(path_z);
+    shell.host.deleteFileZ(path_z) catch {};
+}
+
+fn readFcTempFile(shell: anytype, path: []const u8) ![]const u8 {
+    const allocator = shell.scratchAllocator();
+    const path_z = try allocator.dupeZ(u8, path);
+    defer allocator.free(path_z);
+    const fd = try shell.host.openZ(path_z, .{ .access = .read_only });
+    defer shell.host.close(fd) catch {};
+
+    var bytes: std.ArrayList(u8) = .empty;
+    var buffer: [4096]u8 = undefined;
+    while (true) {
+        const read_len = try shell.host.read(fd, &buffer);
+        if (read_len == 0) break;
+        try bytes.appendSlice(allocator, buffer[0..read_len]);
+    }
+    return bytes.toOwnedSlice(allocator);
+}
+
+fn runFcEditor(shell: anytype, editor: []const u8, path: []const u8) !result.ExitStatus {
+    const allocator = shell.scratchAllocator();
+    const editor_path_z = (try fcResolveEditorPathZ(shell, editor)) orelse return error.FileNotFound;
+    defer allocator.free(editor_path_z);
+    const editor_arg_z = try allocator.dupeZ(u8, editor);
+    defer allocator.free(editor_arg_z);
+    const path_z = try allocator.dupeZ(u8, path);
+    defer allocator.free(path_z);
+    const argv = try allocator.allocSentinel(?[*:0]const u8, 2, null);
+    defer allocator.free(argv);
+    argv[0] = editor_arg_z.ptr;
+    argv[1] = path_z.ptr;
+
+    const envp = try fcEditorEnvp(shell);
+    defer allocator.free(envp);
+    const spawned = try shell.host.spawn(.{
+        .path = editor_path_z,
+        .argv = argv,
+        .envp = envp,
+    });
+    return (try shell.host.wait(spawned.pid)).shellStatus();
+}
+
+fn fcEditorEnvp(shell: anytype) ![:null]const ?[*:0]const u8 {
+    const ShellType = switch (@typeInfo(@TypeOf(shell))) {
+        .pointer => |pointer| pointer.child,
+        else => @TypeOf(shell),
+    };
+    const allocator = shell.scratchAllocator();
+    if (@hasField(ShellType, "env")) {
+        const envp = try allocator.allocSentinel(?[*:0]const u8, shell.env.len, null);
+        for (shell.env, 0..) |entry, index| envp[index] = entry;
+        return envp;
+    }
+    return allocator.allocSentinel(?[*:0]const u8, 0, null);
+}
+
+fn fcResolveEditorPathZ(shell: anytype, editor: []const u8) !?[:0]u8 {
+    const allocator = shell.scratchAllocator();
+    if (std.mem.indexOfScalar(u8, editor, '/') != null) {
+        const editor_z = try allocator.dupeZ(u8, editor);
+        errdefer allocator.free(editor_z);
+        if (shell.host.isExecutableZ(editor_z)) return editor_z;
+        allocator.free(editor_z);
+        return null;
+    }
+
+    const path = if (shell.state.getVariable("PATH")) |variable| variable.value else shellEnvValue(shell, "PATH") orelse defaultUtilityPath();
+    var iterator = std.mem.splitScalar(u8, path, ':');
+    while (iterator.next()) |directory| {
+        const prefix = if (directory.len == 0) "." else directory;
+        const candidate_text = if (std.mem.endsWith(u8, prefix, "/"))
+            try std.fmt.allocPrint(allocator, "{s}{s}", .{ prefix, editor })
+        else
+            try std.fmt.allocPrint(allocator, "{s}/{s}", .{ prefix, editor });
+        defer allocator.free(candidate_text);
+        const candidate = try allocator.dupeZ(u8, candidate_text);
+        errdefer allocator.free(candidate);
+        if (shell.host.isExecutableZ(candidate)) return candidate;
+        allocator.free(candidate);
+    }
+    return null;
 }
 
 fn fcEntryIndex(entries: []const history_mod.HistoryEntry, selector: []const u8) ?usize {
@@ -1017,6 +1297,11 @@ fn fcNoHistoryMatch(shell: anytype) !result.EvalResult {
 
 fn fcHistoryError(shell: anytype) !result.EvalResult {
     try shell.host.writeAll(.stderr, "fc: history error\n");
+    return .{ .status = 1 };
+}
+
+fn fcEditorError(shell: anytype) !result.EvalResult {
+    try shell.host.writeAll(.stderr, "fc: editor error\n");
     return .{ .status = 1 };
 }
 
@@ -1853,18 +2138,62 @@ test "fc lists and re-executes attached command history" {
     const TestHost = struct {
         stdout: std.ArrayList(u8) = .empty,
         stderr: std.ArrayList(u8) = .empty,
+        file: std.ArrayList(u8) = .empty,
+        read_offset: usize = 0,
+        deleted: bool = false,
 
         fn deinit(self: *@This()) void {
             self.stdout.deinit(std.testing.allocator);
             self.stderr.deinit(std.testing.allocator);
+            self.file.deinit(std.testing.allocator);
         }
 
         pub fn writeAll(self: *@This(), fd: host.Fd, bytes: []const u8) !void {
             switch (fd) {
                 .stdout => try self.stdout.appendSlice(std.testing.allocator, bytes),
                 .stderr => try self.stderr.appendSlice(std.testing.allocator, bytes),
-                else => unreachable,
+                else => try self.file.appendSlice(std.testing.allocator, bytes),
             }
+        }
+
+        pub fn read(self: *@This(), _: host.Fd, buffer: []u8) !usize {
+            if (self.read_offset >= self.file.items.len) return 0;
+            const len = @min(buffer.len, self.file.items.len - self.read_offset);
+            @memcpy(buffer[0..len], self.file.items[self.read_offset..][0..len]);
+            self.read_offset += len;
+            return len;
+        }
+
+        pub fn openZ(self: *@This(), _: [:0]const u8, options: host.OpenOptions) !host.Fd {
+            if (options.create) {
+                self.file.clearRetainingCapacity();
+            }
+            self.read_offset = 0;
+            return @enumFromInt(100);
+        }
+
+        pub fn close(_: *@This(), _: host.Fd) !void {}
+
+        pub fn deleteFileZ(self: *@This(), _: [:0]const u8) !void {
+            self.deleted = true;
+        }
+
+        pub fn isExecutableZ(_: *@This(), path: [:0]const u8) bool {
+            return std.mem.endsWith(u8, path, "fake-ed");
+        }
+
+        pub fn spawn(self: *@This(), request: host.SpawnRequest) !host.SpawnResult {
+            try std.testing.expectEqualStrings("/bin/fake-ed", request.path);
+            try std.testing.expectEqualStrings("fake-ed", std.mem.span(request.argv[0].?));
+            try std.testing.expect(std.mem.startsWith(u8, std.mem.span(request.argv[1].?), "/tmp/rush-fc-1-"));
+            try std.testing.expectEqualStrings("echo two\n", self.file.items);
+            self.file.clearRetainingCapacity();
+            try self.file.appendSlice(std.testing.allocator, "echo edited\n");
+            return .{ .pid = 123 };
+        }
+
+        pub fn wait(_: *@This(), _: host.Pid) !host.WaitStatus {
+            return .{ .exited = 0 };
         }
 
         pub fn setFileCreationMask(_: *@This(), mask: u32) u32 {
@@ -1973,6 +2302,18 @@ test "fc lists and re-executes attached command history" {
     try std.testing.expectEqualStrings("RUN:echo deux\n", shell.host.stdout.items);
     try std.testing.expectEqualStrings("echo deux", context.appended.items);
     try std.testing.expect(context.suppress_next_append);
+
+    shell.host.stdout.clearRetainingCapacity();
+    context.appended.clearRetainingCapacity();
+    context.suppress_next_append = false;
+    try std.testing.expectEqual(
+        @as(result.ExitStatus, 0),
+        (try eval(&shell, fc_definition, &.{ "fc", "-e", "fake-ed", "2" })).status,
+    );
+    try std.testing.expectEqualStrings("RUN:echo edited\n\n", shell.host.stdout.items);
+    try std.testing.expectEqualStrings("echo edited\n", context.appended.items);
+    try std.testing.expect(context.suppress_next_append);
+    try std.testing.expect(shell.host.deleted);
 }
 
 test "builtin eval returns utility status" {

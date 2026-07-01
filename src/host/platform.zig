@@ -44,6 +44,8 @@ pub const CurrentDirError = host.CurrentDirError || std.mem.Allocator.Error;
 
 pub const CloseError = host.CloseError;
 
+pub const DeleteFileError = host.DeleteFileError;
+
 pub const DuplicateError = host.DuplicateError;
 
 pub const FdFlagError = host.FdFlagError;
@@ -109,6 +111,14 @@ pub fn close(fd: host.Fd) CloseError!void {
     return switch (builtin.os.tag) {
         .linux => linuxClose(fd),
         .macos, .freebsd, .openbsd, .netbsd => libcClose(fd),
+        else => @compileError("unsupported host OS"),
+    };
+}
+
+pub fn deleteFileZ(path: [:0]const u8) DeleteFileError!void {
+    return switch (builtin.os.tag) {
+        .linux => linuxDeleteFileZ(path),
+        .macos, .freebsd, .openbsd, .netbsd => libcDeleteFileZ(path),
         else => @compileError("unsupported host OS"),
     };
 }
@@ -557,6 +567,33 @@ fn libcClose(fd: host.Fd) CloseError!void {
         .INTR => return error.Interrupted,
         .IO => return error.InputOutput,
         .BADF => return error.Unexpected,
+        else => return error.Unexpected,
+    }
+}
+
+fn linuxDeleteFileZ(path: [:0]const u8) DeleteFileError!void {
+    const linux = std.os.linux;
+    const rc = linux.unlinkat(linux.AT.FDCWD, path.ptr, 0);
+    switch (linux.errno(rc)) {
+        .SUCCESS => return,
+        .ACCES, .PERM => return error.AccessDenied,
+        .NOENT => return error.FileNotFound,
+        .NOTDIR => return error.NotDir,
+        .NAMETOOLONG => return error.NameTooLong,
+        .ISDIR => return error.Unexpected,
+        else => return error.Unexpected,
+    }
+}
+
+fn libcDeleteFileZ(path: [:0]const u8) DeleteFileError!void {
+    const rc = std.c.unlink(path.ptr);
+    switch (std.c.errno(rc)) {
+        .SUCCESS => return,
+        .ACCES, .PERM => return error.AccessDenied,
+        .NOENT => return error.FileNotFound,
+        .NOTDIR => return error.NotDir,
+        .NAMETOOLONG => return error.NameTooLong,
+        .ISDIR => return error.Unexpected,
         else => return error.Unexpected,
     }
 }

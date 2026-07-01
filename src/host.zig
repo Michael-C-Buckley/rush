@@ -111,6 +111,14 @@ pub const ListDirError = error{
     Unexpected,
 };
 
+pub const DeleteFileError = error{
+    AccessDenied,
+    FileNotFound,
+    NotDir,
+    NameTooLong,
+    Unexpected,
+};
+
 pub const ChangeDirError = error{
     AccessDenied,
     FileNotFound,
@@ -280,6 +288,10 @@ pub const RealHost = struct {
 
     pub fn close(_: *RealHost, fd: Fd) platform.CloseError!void {
         try platform.close(fd);
+    }
+
+    pub fn deleteFileZ(_: *RealHost, path: [:0]const u8) platform.DeleteFileError!void {
+        try platform.deleteFileZ(path);
     }
 
     pub fn duplicate(_: *RealHost, fd: Fd) platform.DuplicateError!Fd {
