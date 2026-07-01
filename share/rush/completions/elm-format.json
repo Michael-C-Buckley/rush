@@ -1,0 +1,74 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "elm-format",
+    "description": "format Elm source files",
+    "options": [
+      {
+        "long": "help",
+        "short": "h",
+        "description": "show help for elm-format",
+        "inherit": false
+      },
+      {
+        "long": "output",
+        "description": "write output to FILE instead of overwriting the given source file",
+        "inherit": false,
+        "value": {
+          "name": "FILE",
+          "description": "Name and location of output file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "yes",
+        "description": "reply 'yes' to all automated prompts",
+        "inherit": false
+      },
+      {
+        "long": "validate",
+        "description": "check if files are formatted without changing them",
+        "inherit": false
+      },
+      {
+        "long": "stdin",
+        "description": "read from stdin, output to stdout",
+        "inherit": false
+      },
+      {
+        "long": "elm-version",
+        "description": "the Elm version of the source files being formatted",
+        "inherit": false,
+        "value": {
+          "name": "VERSION",
+          "description": "Valid values: 0.18, 0.19. Default: auto",
+          "required": false,
+          "style": "optional",
+          "provider": "elm-format.versions"
+        }
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "input",
+          "provider": "builtin.files",
+          "index": 0,
+          "description": "Elm source file"
+        }
+      ]
+    },
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "elm-format.versions": {
+        "values": [
+          "0.19",
+          "0.18"
+        ]
+      }
+    }
+  }
+}
