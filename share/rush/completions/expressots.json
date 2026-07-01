@@ -1,0 +1,107 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "expressots",
+    "description": "create ExpressoTS applications",
+    "options": [
+      {
+        "long": "help",
+        "short": "h",
+        "description": "show help for expressots",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "i",
+          "info"
+        ],
+        "description": "display CLI details",
+        "inherit": false
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "new",
+        "description": "create a new ExpressoTS application",
+        "options": [
+          {
+            "short": "t",
+            "long": "template",
+            "description": "choose a template to use",
+            "inherit": false,
+            "value": {
+              "name": "template",
+              "description": "Choose a template",
+              "provider": "expressots.templates"
+            }
+          },
+          {
+            "short": "p",
+            "long": "package-manager",
+            "description": "choose a package manager to use",
+            "inherit": false,
+            "value": {
+              "name": "package-manager",
+              "description": "Choose a package manager",
+              "provider": "expressots.package-managers"
+            }
+          },
+          {
+            "short": "d",
+            "long": "directory",
+            "description": "create the application in a specific directory",
+            "inherit": false,
+            "value": {
+              "name": "directory",
+              "description": "Select a directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show command help",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "name",
+              "description": "Name of the application",
+              "index": 0
+            }
+          ]
+        }
+      }
+    ],
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "expressots.templates": {
+        "values": [
+          {
+            "value": "opinionated",
+            "description": "opinionated ExpressoTS application"
+          },
+          {
+            "value": "non-opinionated",
+            "description": "ExpressoTS application"
+          }
+        ]
+      },
+      "expressots.package-managers": {
+        "values": [
+          "npm",
+          "yarn",
+          "pnpm"
+        ]
+      }
+    }
+  }
+}
