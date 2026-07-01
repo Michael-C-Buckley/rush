@@ -196,6 +196,22 @@
             .status = 0,
         },
         .{
+            .name = "kill accepts case-insensitive symbolic signal names",
+            .script =
+            \\sleep 10 & pid=$!
+            \\kill -s term "$pid"
+            \\printf 'kill-term:%s\n' "$?"
+            \\wait "$pid" 2>/dev/null
+            \\exit 0
+            ,
+            .stdout =
+            \\kill-term:0
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "subshell EXIT trap registered inside trap action runs once",
             .script =
             \\trap '(trap "echo nested" EXIT; :)' EXIT
@@ -485,6 +501,21 @@
             ,
             .stdout =
             \\<0>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "empty trap action ignores signal for child processes",
+            .script =
+            \\trap '' USR1
+            \\sh -c 'kill -USR1 $$; printf survived'
+            \\printf ':status:%s\n' "$?"
+            \\trap - USR1
+            ,
+            .stdout =
+            \\survived:status:0
             \\
             ,
             .stderr = "",

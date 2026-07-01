@@ -773,7 +773,13 @@ fn evalTrap(shell: anytype, args: []const []const u8) !result.EvalResult {
                 if (signalNumber(name)) |number| shell.host.setSignalDefault(number) catch {};
             } else {
                 try shell.state.setSignalTrap(name, action);
-                if (signalNumber(name)) |number| shell.host.installSignalTrap(number) catch {};
+                if (signalNumber(name)) |number| {
+                    if (action.len == 0) {
+                        shell.host.setSignalIgnored(number) catch {};
+                    } else {
+                        shell.host.installSignalTrap(number) catch {};
+                    }
+                }
             },
         }
     }
@@ -818,7 +824,7 @@ const trap_signal_names = [_][]const u8{
 };
 
 fn parseTrapSignal(signal: []const u8) ?TrapSignal {
-    if (std.mem.eql(u8, signal, "0") or std.mem.eql(u8, signal, "EXIT")) return .exit;
+    if (std.mem.eql(u8, signal, "0") or std.ascii.eqlIgnoreCase(signal, "EXIT")) return .exit;
     if (signalName(signal)) |name| return .{ .other = name };
     const number = std.fmt.parseInt(u8, signal, 10) catch return null;
     return if (signalNameFromNumber(number)) |name| .{ .other = name } else null;
@@ -833,8 +839,11 @@ fn parseKillSignal(signal: []const u8) ?KillSignal {
 }
 
 fn signalName(signal: []const u8) ?[]const u8 {
-    const name_without_prefix = if (std.mem.startsWith(u8, signal, "SIG")) signal[3..] else signal;
-    for (trap_signal_names) |name| if (std.mem.eql(u8, name_without_prefix, name)) return name;
+    const name_without_prefix = if (signal.len >= 3 and std.ascii.eqlIgnoreCase(signal[0..3], "SIG"))
+        signal[3..]
+    else
+        signal;
+    for (trap_signal_names) |name| if (std.ascii.eqlIgnoreCase(name_without_prefix, name)) return name;
     return null;
 }
 
@@ -909,6 +918,8 @@ test "builtin eval returns utility status" {
 
         pub fn setSignalDefault(_: *@This(), _: u8) !void {}
 
+        pub fn setSignalIgnored(_: *@This(), _: u8) !void {}
+
         pub fn installSignalTrap(_: *@This(), _: u8) !void {}
     };
     const TestShell = struct {
@@ -944,6 +955,8 @@ test "exit builtin returns requested exit flow" {
         pub fn sendSignal(_: *@This(), _: host.Pid, _: u8) !void {}
 
         pub fn setSignalDefault(_: *@This(), _: u8) !void {}
+
+        pub fn setSignalIgnored(_: *@This(), _: u8) !void {}
 
         pub fn installSignalTrap(_: *@This(), _: u8) !void {}
     };
@@ -993,6 +1006,8 @@ test "printf writes formatted output once" {
         pub fn sendSignal(_: *@This(), _: host.Pid, _: u8) !void {}
 
         pub fn setSignalDefault(_: *@This(), _: u8) !void {}
+
+        pub fn setSignalIgnored(_: *@This(), _: u8) !void {}
 
         pub fn installSignalTrap(_: *@This(), _: u8) !void {}
     };
