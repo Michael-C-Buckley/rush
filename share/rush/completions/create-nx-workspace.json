@@ -1,0 +1,208 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "create-nx-workspace",
+    "description": "create a new Nx workspace",
+    "options": [
+      {
+        "long": "name",
+        "description": "set the workspace name",
+        "inherit": false,
+        "value": {
+          "name": "workspace"
+        }
+      },
+      {
+        "long": "preset",
+        "description": "choose what to create in the workspace",
+        "inherit": false,
+        "value": {
+          "name": "preset",
+          "provider": "create-nx-workspace.presets"
+        }
+      },
+      {
+        "long": "appName",
+        "description": "set the generated application name",
+        "inherit": false,
+        "value": {
+          "name": "appName",
+          "required": false,
+          "style": "optional"
+        }
+      },
+      {
+        "long": "cli",
+        "description": "choose the workspace CLI",
+        "inherit": false,
+        "value": {
+          "name": "cli",
+          "provider": "create-nx-workspace.clis"
+        }
+      },
+      {
+        "long": "style",
+        "description": "choose the default stylesheet format",
+        "inherit": false,
+        "value": {
+          "name": "style",
+          "provider": "create-nx-workspace.styles"
+        }
+      },
+      {
+        "long": "interactive",
+        "description": "enable interactive prompts",
+        "inherit": false,
+        "value": {
+          "name": "interactive",
+          "required": false,
+          "style": "optional",
+          "provider": "create-nx-workspace.booleans"
+        }
+      },
+      {
+        "long": "packageManager",
+        "aliases": [
+          "pm"
+        ],
+        "description": "choose the package manager",
+        "inherit": false,
+        "value": {
+          "name": "package-manager",
+          "provider": "create-nx-workspace.package-managers"
+        }
+      },
+      {
+        "long": "nx-cloud",
+        "description": "enable Nx Cloud",
+        "inherit": false,
+        "value": {
+          "name": "nx-cloud",
+          "required": false,
+          "style": "optional",
+          "provider": "create-nx-workspace.booleans"
+        }
+      },
+      {
+        "long": "help",
+        "short": "h",
+        "description": "show help",
+        "inherit": false
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "workspace",
+          "index": 0
+        }
+      ]
+    },
+    "providers": {
+      "create-nx-workspace.presets": {
+        "values": [
+          {
+            "value": "empty",
+            "description": "empty workspace"
+          },
+          {
+            "value": "npm",
+            "description": "npm package workspace"
+          },
+          {
+            "value": "web-components",
+            "description": "web components app"
+          },
+          {
+            "value": "angular",
+            "description": "Angular app"
+          },
+          {
+            "value": "angular-nest",
+            "description": "Angular and Nest app"
+          },
+          {
+            "value": "react",
+            "description": "React app"
+          },
+          {
+            "value": "react-express",
+            "description": "React and Express app"
+          },
+          {
+            "value": "react-native",
+            "description": "React Native app"
+          },
+          {
+            "value": "next",
+            "description": "Next.js app"
+          },
+          {
+            "value": "gatsby",
+            "description": "Gatsby app"
+          },
+          {
+            "value": "nest",
+            "description": "Nest app"
+          },
+          {
+            "value": "express",
+            "description": "Express app"
+          }
+        ]
+      },
+      "create-nx-workspace.clis": {
+        "values": [
+          "nx",
+          "angular"
+        ]
+      },
+      "create-nx-workspace.styles": {
+        "values": [
+          {
+            "value": "css",
+            "description": "CSS"
+          },
+          {
+            "value": "scss",
+            "description": "Sass"
+          },
+          {
+            "value": "less",
+            "description": "Less"
+          },
+          {
+            "value": "styl",
+            "description": "Stylus"
+          },
+          {
+            "value": "styled-components",
+            "description": "styled-components"
+          },
+          {
+            "value": "@emotion/styled",
+            "description": "Emotion"
+          },
+          {
+            "value": "styled-jsx",
+            "description": "styled-jsx"
+          }
+        ]
+      },
+      "create-nx-workspace.package-managers": {
+        "values": [
+          "npm",
+          "yarn",
+          "pnpm"
+        ]
+      },
+      "create-nx-workspace.booleans": {
+        "values": [
+          "true",
+          "false"
+        ]
+      }
+    }
+  }
+}
