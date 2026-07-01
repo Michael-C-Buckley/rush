@@ -138,9 +138,13 @@ pub fn ShellWithBuiltins(comptime Host: type, comptime builtin_registry: builtin
 
                 last = evaluated;
                 if (last.flow != .normal) {
-                    if (!self.state.options.interactive or last.flow != .fatal) return last;
-                    last.flow = .normal;
-                    self.state.last_status = last.status;
+                    if ((self.state.options.interactive or
+                        (self.state.options.mode == .bash and !self.state.options.errexit)) and
+                        last.flow == .fatal)
+                    {
+                        last.flow = .normal;
+                        self.state.last_status = last.status;
+                    } else return last;
                 }
                 start = end;
             }
@@ -169,7 +173,7 @@ pub fn ShellWithBuiltins(comptime Host: type, comptime builtin_registry: builtin
         }
 
         fn sourceNeedsAliasAwareEvaluation(self: *Self, src: source.Source) bool {
-            return self.state.options.interactive or self.state.aliases.count() != 0 or
+            return self.state.options.mode == .bash or self.state.options.interactive or self.state.aliases.count() != 0 or
                 std.mem.indexOf(u8, src.text, "alias") != null or
                 (self.state.options.mode == .bash and std.mem.indexOf(u8, src.text, "shopt") != null);
         }

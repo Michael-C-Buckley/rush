@@ -972,6 +972,14 @@ fn evalSimple(shell: anytype, command: ast.SimpleCommand) EvalError!result.EvalR
     return evalSimpleScoped(shell, command) catch |err| switch (err) {
         error.AssignmentError => .{ .status = 1, .flow = .{ .fatal = 1 } },
         error.ExpansionError => .{ .status = 1, .flow = .{ .fatal = 1 } },
+        error.FatalExpansionError => {
+            try shell.host.writeAll(.stderr, "expansion error\n");
+            return .{ .status = 127, .flow = .{ .exit = 127 } };
+        },
+        error.InvalidArithmetic => {
+            try shell.host.writeAll(.stderr, "arithmetic expansion error\n");
+            return .{ .status = 1, .flow = .{ .fatal = 1 } };
+        },
         error.BadFd, error.BrokenPipe, error.InputOutput, error.WouldBlock => .{ .status = 1 },
         else => return err,
     };
@@ -1327,7 +1335,19 @@ fn evalDotBuiltin(shell: anytype, args: []const []const u8) EvalError!result.Eva
         .name = path,
         .text = script,
     };
-    const evaluated = try shell.evalSourceNested(src);
+    const evaluated = shell.evalSourceNested(src) catch |err| switch (err) {
+        error.ExpectedCommand,
+        error.ExpectedRedirectionTarget,
+        error.InvalidParameterExpansion,
+        error.UnclosedCommandSubstitution,
+        error.UnclosedQuote,
+        error.UnexpectedToken,
+        => {
+            try shell.host.writeAll(.stderr, ".: syntax error\n");
+            return .{ .status = 2, .flow = .{ .fatal = 2 } };
+        },
+        else => return err,
+    };
     if (!keep_positional_changes) try restorePositionals(shell, saved_positionals);
     restored_positionals = true;
     if (evaluated.flow == .return_) return .{ .status = evaluated.status };
@@ -2386,6 +2406,9 @@ fn evalFunction(
     restored_positionals = true;
     if (evaluated.flow == .return_) return .{ .status = evaluated.status };
     if (evaluated.flow == .break_ or evaluated.flow == .continue_) return .{ .status = 2 };
+    if (evaluated.flow == .fatal and shell.state.options.mode == .bash and !shell.state.options.errexit) {
+        return .{ .status = evaluated.status };
+    }
     return evaluated;
 }
 
@@ -4095,7 +4118,10 @@ fn expandArithmeticParameter(shell: anytype, text: []const u8, index: *usize) ![
     while (parameter_end < text.len and isArithmeticNameContinue(text[parameter_end])) parameter_end += 1;
     index.* = parameter_end;
     return parameterValue(shell, text[parameter_start..parameter_end]) orelse {
-        if (shell.state.options.nounset) return error.InvalidArithmetic;
+        if (shell.state.options.nounset) return if (shell.state.options.mode == .bash)
+            error.FatalExpansionError
+        else
+            error.InvalidArithmetic;
         return "";
     };
 }
@@ -4224,7 +4250,7 @@ fn scanArithmeticCommandSubstitution(text: []const u8, open_index: usize) !usize
     return error.InvalidArithmetic;
 }
 
-const ArithmeticError = error{ InvalidArithmetic, OutOfMemory };
+const ArithmeticError = error{ InvalidArithmetic, FatalExpansionError, OutOfMemory };
 
 fn ArithmeticParser(comptime ShellType: type) type {
     return struct {
@@ -4528,7 +4554,10 @@ fn ArithmeticParser(comptime ShellType: type) type {
         fn variableValue(self: *Self, name: []const u8) ArithmeticError!i64 {
             if (!self.evaluating) return 0;
             const value = parameterValue(self.shell, name) orelse {
-                if (self.shell.state.options.nounset) return error.InvalidArithmetic;
+                if (self.shell.state.options.nounset) return if (self.shell.state.options.mode == .bash)
+                    error.FatalExpansionError
+                else
+                    error.InvalidArithmetic;
                 return 0;
             };
             const trimmed = std.mem.trim(u8, value, " \t\n");
@@ -4789,7 +4818,7 @@ fn expandParameter(shell: anytype, parameter: ast.ParameterExpansion) EvalError!
         .variable => |name| parameterExpansionValue(shell, name, parameter.span) orelse {
             if (shell.state.options.nounset) {
                 try writeExpansionDiagnostic(shell, parameter, "parameter", "parameter not set");
-                return error.ExpansionError;
+                return if (shell.state.options.mode == .bash) error.FatalExpansionError else error.ExpansionError;
             }
             return "";
         },
@@ -4808,7 +4837,7 @@ fn expandParameter(shell: anytype, parameter: ast.ParameterExpansion) EvalError!
         .positional => |position| positionalValue(shell, position) orelse {
             if (shell.state.options.nounset) {
                 try writeExpansionDiagnostic(shell, parameter, parameterDiagnosticName(parameter.parameter), "parameter not set");
-                return error.ExpansionError;
+                return if (shell.state.options.mode == .bash) error.FatalExpansionError else error.ExpansionError;
             }
             return "";
         },
@@ -4872,7 +4901,7 @@ fn expandParameterLength(shell: anytype, parameter: ast.ParameterExpansion) Eval
     const value = (try parameterCurrentValue(shell, parameter.parameter)) orelse {
         if (shell.state.options.nounset and parameterSubjectToNounset(parameter.parameter)) {
             try writeExpansionDiagnostic(shell, parameter, parameterDiagnosticName(parameter.parameter), "parameter not set");
-            return error.ExpansionError;
+            return if (shell.state.options.mode == .bash) error.FatalExpansionError else error.ExpansionError;
         }
         return "0";
     };
@@ -4902,7 +4931,13 @@ fn expandParameterAssignDefault(shell: anytype, parameter: ast.ParameterExpansio
     if (isParameterSet(parameter, value)) return value.?;
 
     const default = try expandWord(shell, parameter.word.?);
-    try shell.state.putVariable(.{ .name = name, .value = default });
+    shell.state.putVariable(.{ .name = name, .value = default }) catch |err| switch (err) {
+        error.ReadonlyVariable => {
+            try writeReadonlyDiagnostic(shell, name);
+            return error.ExpansionError;
+        },
+        else => return err,
+    };
     return default;
 }
 
@@ -4918,7 +4953,7 @@ fn expandParameterErrorIfUnset(shell: anytype, parameter: ast.ParameterExpansion
 
     const message = try expandWord(shell, parameter.word.?);
     try writeExpansionDiagnostic(shell, parameter, parameterDiagnosticName(parameter.parameter), message);
-    return error.ExpansionError;
+    return if (shell.state.options.mode == .bash) error.FatalExpansionError else error.ExpansionError;
 }
 
 fn parameterDiagnosticName(parameter: ast.Parameter) []const u8 {
