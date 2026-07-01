@@ -1138,6 +1138,9 @@ fn evalSimpleScoped(shell: anytype, command: ast.SimpleCommand) EvalError!result
     }
     if (name.len == 0) return .{ .status = 127 };
     if (shell.state.getFunction(name)) |function| return evalFunction(shell, function, command.assignments, fields[1..]);
+    if (try shell.tryAutoloadFunction(name)) {
+        if (shell.state.getFunction(name)) |function| return evalFunction(shell, function, command.assignments, fields[1..]);
+    }
     if (lookupBuiltin(shell, name)) |definition| {
         if (definition.id == .cd) return evalCdBuiltin(shell, fields);
         if (definition.id == .command) {

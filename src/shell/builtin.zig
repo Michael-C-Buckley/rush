@@ -963,7 +963,10 @@ fn evalUnset(shell: anytype, args: []const []const u8) !result.EvalResult {
             continue;
         }
         if (unset_functions) {
-            if (std.mem.indexOfScalar(u8, name, '/') == null) shell.state.removeFunction(name);
+            if (std.mem.indexOfScalar(u8, name, '/') == null) {
+                shell.state.removeFunction(name);
+                try shell.state.suppressFunctionAutoload(name);
+            }
         } else if (shell.state.getVariable(name)) |variable| {
             if (variable.readonly) {
                 try shell.host.writeAll(.stderr, try std.fmt.allocPrint(shell.scratchAllocator(), "{s}: readonly variable\n", .{name}));

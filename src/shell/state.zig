@@ -100,6 +100,7 @@ pub const State = struct {
     variables: std.StringHashMapUnmanaged(Variable) = .empty,
     variable_attributes: std.StringHashMapUnmanaged(VariableAttributes) = .empty,
     functions: std.StringHashMapUnmanaged(Function) = .empty,
+    suppressed_autoload_functions: std.StringHashMapUnmanaged(void) = .empty,
     aliases: std.StringHashMapUnmanaged(Alias) = .empty,
     command_hashes: std.StringHashMapUnmanaged(CommandHash) = .empty,
     signal_traps: std.StringHashMapUnmanaged([]const u8) = .empty,
@@ -143,6 +144,9 @@ pub const State = struct {
         while (attributes_iterator.next()) |entry| self.allocator.free(entry.value_ptr.name);
         self.variable_attributes.deinit(self.allocator);
         self.functions.deinit(self.allocator);
+        var suppressed_iterator = self.suppressed_autoload_functions.iterator();
+        while (suppressed_iterator.next()) |entry| self.allocator.free(entry.key_ptr.*);
+        self.suppressed_autoload_functions.deinit(self.allocator);
         var alias_iterator = self.aliases.iterator();
         while (alias_iterator.next()) |entry| {
             self.allocator.free(entry.value_ptr.name);
@@ -280,11 +284,29 @@ pub const State = struct {
     pub fn putPersistentFunction(self: *State, function: Function) !void {
         function.validate();
         try self.functions.put(self.allocator, function.name, function);
+        self.unsuppressFunctionAutoload(function.name);
     }
 
     pub fn removeFunction(self: *State, name: []const u8) void {
         std.debug.assert(name.len != 0);
         _ = self.functions.remove(name);
+    }
+
+    pub fn suppressFunctionAutoload(self: *State, name: []const u8) !void {
+        std.debug.assert(name.len != 0);
+        if (self.suppressed_autoload_functions.contains(name)) return;
+        const owned_name = try self.allocator.dupe(u8, name);
+        errdefer self.allocator.free(owned_name);
+        try self.suppressed_autoload_functions.put(self.allocator, owned_name, {});
+    }
+
+    pub fn isFunctionAutoloadSuppressed(self: State, name: []const u8) bool {
+        std.debug.assert(name.len != 0);
+        return self.suppressed_autoload_functions.contains(name);
+    }
+
+    fn unsuppressFunctionAutoload(self: *State, name: []const u8) void {
+        if (self.suppressed_autoload_functions.fetchRemove(name)) |entry| self.allocator.free(entry.key);
     }
 
     pub fn getAlias(self: State, name: []const u8) ?Alias {

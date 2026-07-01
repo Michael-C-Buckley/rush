@@ -4,8 +4,10 @@ const std = @import("std");
 
 const editor = @import("editor.zig");
 const extensions = @import("extensions.zig");
+const function_autoload = @import("function_autoload.zig");
 const history = @import("history.zig");
 const host = @import("host.zig");
+const interactive_event = @import("interactive/event.zig");
 const interactive_style = @import("interactive/style.zig");
 const startup = @import("interactive/startup.zig");
 const shell = @import("shell.zig");
@@ -33,6 +35,7 @@ pub fn run(
         .positionals = options.positionals,
     });
     defer sh.deinit();
+    sh.setFunctionAutoload(autoloadRushFunction);
 
     const prompted_stdin = !sh.host.isTerminalFd(.stdin);
 
@@ -66,6 +69,7 @@ pub fn run(
         .source_id = &source_id,
         .command_history = &command_history,
         .history_service = &history_service,
+        .events = .{ .sh = &sh },
     };
     return session.runTerminal();
 }
@@ -77,7 +81,9 @@ const InteractiveSession = struct {
     source_id: *shell.source.SourceId,
     command_history: *history.History,
     history_service: *history.InteractiveHistoryService,
+    events: interactive_event.Dispatcher(RushShell),
     last_command_duration_ms: ?i64 = null,
+    pending_event_exit_status: ?u8 = null,
 
     fn runTerminal(self: *InteractiveSession) !u8 {
         var terminal = editor.driver.TerminalSession.init(self.allocator, self.io) catch {
@@ -96,7 +102,8 @@ const InteractiveSession = struct {
                     defer self.allocator.free(line);
                     if (try self.evaluateSubmittedLine(&terminal, line)) |status| return status;
                 },
-                .canceled, .interrupted => continue,
+                .canceled => continue,
+                .interrupted => if (self.pending_event_exit_status) |status| return self.exit(status) else continue,
                 .eof => {
                     try terminal.leaveEditorMode();
                     return self.exitWithLastStatus();
@@ -108,12 +115,7 @@ const InteractiveSession = struct {
     const ReadLineError = error{EditorFailure} || error{OutOfMemory};
 
     fn readLine(self: *InteractiveSession, terminal: *editor.driver.TerminalSession) ReadLineError!editor.driver.ReadLineResult {
-        const prompt_text = extensions.rush.renderPrompt(
-            self.allocator,
-            self.sh,
-            self.sh.state.last_status,
-            self.last_command_duration_ms,
-        ) catch try prompt(self.allocator, self.sh);
+        const prompt_text = self.renderPrompt() catch try prompt(self.allocator, self.sh);
         defer self.allocator.free(prompt_text);
 
         const current_cwd = self.sh.host.currentDir(self.allocator) catch try self.allocator.dupe(u8, "");
@@ -129,10 +131,31 @@ const InteractiveSession = struct {
             .style_context = self.sh,
             .refresh_style = interactive_style.refreshStyle,
             .refresh_color_report = interactive_style.refreshColorReport,
+            .hook_context = self,
+            .run_hooks = runInteractiveHooks,
+            .next_hook_interval_ms = nextInteractiveHookIntervalMs,
+            .run_activity_event = runInteractiveActivityEvent,
+            .prompt_context = self,
+            .refresh_prompt = refreshInteractivePrompt,
         }) catch {
             self.sh.host.writeAll(.stderr, "rush: editor error\n") catch {};
             return error.EditorFailure;
         };
+    }
+
+    fn renderPrompt(self: *InteractiveSession) ![]const u8 {
+        var prepared = try self.events.runEvent(self.allocator, self.io, "prompt.prepare", &.{});
+        defer prepared.deinit(self.allocator);
+        if (prepared.exit_status) |status| {
+            self.pending_event_exit_status = status;
+            return prompt(self.allocator, self.sh);
+        }
+        return extensions.rush.renderPrompt(
+            self.allocator,
+            self.sh,
+            self.sh.state.last_status,
+            self.last_command_duration_ms,
+        );
     }
 
     fn evaluateSubmittedLine(
@@ -183,6 +206,45 @@ const InteractiveSession = struct {
         };
     }
 };
+
+fn runInteractiveHooks(context: *anyopaque, allocator: std.mem.Allocator, io: std.Io) !editor.driver.HookResult {
+    const session: *InteractiveSession = @ptrCast(@alignCast(context));
+    var dispatched = try session.events.runDueTimers(allocator, io);
+    if (dispatched.exit_status) |status| pendingEventExit(session, status);
+    return dispatched.hookResult();
+}
+
+fn nextInteractiveHookIntervalMs(context: *anyopaque, io: std.Io) !?u64 {
+    const session: *InteractiveSession = @ptrCast(@alignCast(context));
+    return session.events.nextTimerDelayMs(io);
+}
+
+fn runInteractiveActivityEvent(
+    context: *anyopaque,
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    event_name: []const u8,
+    args: []const []const u8,
+) !editor.driver.HookResult {
+    const session: *InteractiveSession = @ptrCast(@alignCast(context));
+    var dispatched = try session.events.runEvent(allocator, io, event_name, args);
+    if (dispatched.exit_status) |status| pendingEventExit(session, status);
+    return dispatched.hookResult();
+}
+
+fn refreshInteractivePrompt(context: *anyopaque, allocator: std.mem.Allocator, io: std.Io) ![]const u8 {
+    _ = io;
+    const session: *InteractiveSession = @ptrCast(@alignCast(context));
+    return session.renderPrompt() catch try prompt(allocator, session.sh);
+}
+
+fn pendingEventExit(session: *InteractiveSession, status: u8) void {
+    session.pending_event_exit_status = status;
+}
+
+fn autoloadRushFunction(sh: *RushShell, name: []const u8) !bool {
+    return function_autoload.autoload(sh, name);
+}
 
 fn runPromptedStdin(
     allocator: std.mem.Allocator,

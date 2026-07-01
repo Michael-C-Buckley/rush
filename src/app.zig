@@ -4,6 +4,7 @@ const std = @import("std");
 
 const extensions = @import("extensions.zig");
 const file_util = @import("file_util.zig");
+const function_autoload = @import("function_autoload.zig");
 const host = @import("host.zig");
 const interactive = @import("interactive.zig");
 const shell = @import("shell.zig");
@@ -102,6 +103,7 @@ fn evalSource(
         .positionals = options.positionals,
     });
     defer sh.deinit();
+    sh.setFunctionAutoload(autoloadRushFunction);
 
     const evaluated = sh.evalSource(src) catch {
         try sh.host.writeAll(.stderr, "rush: shell error\n");
@@ -111,6 +113,10 @@ fn evalSource(
         try sh.host.writeAll(.stderr, "rush: shell error\n");
         return 2;
     };
+}
+
+fn autoloadRushFunction(sh: *RushShell, name: []const u8) !bool {
+    return function_autoload.autoload(sh, name);
 }
 
 test {

@@ -30,7 +30,9 @@ pub const EventHandler = struct {
     event: []const u8,
     name: []const u8,
     action: []const u8,
+    priority: i32 = 0,
     every_ms: ?u64 = null,
+    next_tick_ms: ?u64 = null,
 };
 
 pub const State = struct {
@@ -114,11 +116,12 @@ pub const State = struct {
         return false;
     }
 
-    fn putEventHandler(
+    pub fn putEventHandler(
         self: *State,
         event: []const u8,
         name: []const u8,
         action: []const u8,
+        priority: i32,
         every_ms: ?u64,
     ) !void {
         std.debug.assert(event.len != 0);
@@ -144,6 +147,7 @@ pub const State = struct {
             .event = owned_event,
             .name = owned_name,
             .action = owned_action,
+            .priority = priority,
             .every_ms = every_ms,
         });
     }
@@ -225,7 +229,8 @@ fn writeShellSingleQuoted(sh: anytype, value: []const u8) !void {
 }
 
 fn evalEvent(state: *State, sh: anytype, args: []const []const u8) !result.EvalResult {
-    if (args.len == 1 or std.mem.eql(u8, args[1], "list")) return listEvents(state, sh, args[2..]);
+    if (args.len == 1) return listEvents(state, sh, &.{});
+    if (std.mem.eql(u8, args[1], "list")) return listEvents(state, sh, args[2..]);
     if (std.mem.eql(u8, args[1], "add")) return eventAdd(state, args[2..]);
     if (std.mem.eql(u8, args[1], "remove")) return eventRemove(state, args[2..]);
     return .{ .status = 2 };
@@ -233,39 +238,160 @@ fn evalEvent(state: *State, sh: anytype, args: []const []const u8) !result.EvalR
 
 fn eventAdd(state: *State, args: []const []const u8) !result.EvalResult {
     if (args.len < 3) return .{ .status = 2 };
+    if (!isEventName(args[0]) or !isRegistrationName(args[1]) or !isFunctionName(args[2])) return .{ .status = 2 };
+
+    var priority: i32 = 0;
     var every_ms: ?u64 = null;
     var index: usize = 3;
-    while (index < args.len) : (index += 1) {
+    while (index < args.len) {
         if (std.mem.eql(u8, args[index], "--every")) {
             index += 1;
             if (index >= args.len) return .{ .status = 2 };
             every_ms = std.fmt.parseInt(u64, args[index], 10) catch return .{ .status = 2 };
+            if (every_ms.? == 0) return .{ .status = 2 };
+        } else if (std.mem.eql(u8, args[index], "--priority")) {
+            index += 1;
+            if (index >= args.len) return .{ .status = 2 };
+            priority = std.fmt.parseInt(i32, args[index], 10) catch return .{ .status = 2 };
         } else return .{ .status = 2 };
+        index += 1;
     }
-    try state.putEventHandler(args[0], args[1], args[2], every_ms);
+    if (std.mem.eql(u8, args[0], "timer.tick")) {
+        if (every_ms == null) return .{ .status = 2 };
+    } else if (every_ms != null) return .{ .status = 2 };
+    try state.putEventHandler(args[0], args[1], args[2], priority, every_ms);
     return .{};
 }
 
 fn eventRemove(state: *State, args: []const []const u8) !result.EvalResult {
     if (args.len != 2) return .{ .status = 2 };
+    if (!isEventName(args[0]) or !isRegistrationName(args[1])) return .{ .status = 2 };
     _ = try state.removeEventHandler(args[0], args[1]);
     return .{};
 }
 
 fn listEvents(state: *State, sh: anytype, args: []const []const u8) !result.EvalResult {
-    const filter = if (args.len == 0) null else args[0];
+    if (args.len > 2) return .{ .status = 2 };
+    var json = false;
+    var filter: ?[]const u8 = null;
+    for (args) |arg| {
+        if (std.mem.eql(u8, arg, "--json")) {
+            if (json) return .{ .status = 2 };
+            json = true;
+            continue;
+        }
+        if (filter != null or !isEventName(arg)) return .{ .status = 2 };
+        filter = arg;
+    }
+
+    var handlers: std.ArrayList(EventHandler) = .empty;
+    defer handlers.deinit(sh.scratchAllocator());
     var iterator = state.event_handlers.iterator();
     while (iterator.next()) |entry| {
         const handler = entry.value_ptr.*;
         if (filter) |event_name| if (!std.mem.eql(u8, handler.event, event_name)) continue;
-        try sh.host.writeAll(.stdout, handler.event);
-        try sh.host.writeAll(.stdout, "\t");
+        try handlers.append(sh.scratchAllocator(), handler);
+    }
+    std.mem.sort(EventHandler, handlers.items, {}, lessThanEventHandler);
+    if (json) return listEventsJson(sh, handlers.items);
+    try listEventsText(sh, handlers.items);
+    return .{};
+}
+
+fn lessThanEventHandler(_: void, left: EventHandler, right: EventHandler) bool {
+    const event_order = std.mem.order(u8, left.event, right.event);
+    if (event_order != .eq) return event_order == .lt;
+    if (left.priority != right.priority) return left.priority < right.priority;
+    return std.mem.lessThan(u8, left.name, right.name);
+}
+
+fn listEventsText(sh: anytype, handlers: []const EventHandler) !void {
+    var current_event: ?[]const u8 = null;
+    for (handlers) |handler| {
+        if (current_event == null or !std.mem.eql(u8, current_event.?, handler.event)) {
+            current_event = handler.event;
+            try sh.host.writeAll(.stdout, handler.event);
+            try sh.host.writeAll(.stdout, "\n");
+        }
+        try sh.host.writeAll(.stdout, "  ");
         try sh.host.writeAll(.stdout, handler.name);
-        try sh.host.writeAll(.stdout, "\t");
+        try sh.host.writeAll(.stdout, try std.fmt.allocPrint(sh.scratchAllocator(), " priority={d}", .{handler.priority}));
+        if (handler.every_ms) |every_ms| {
+            try sh.host.writeAll(.stdout, try std.fmt.allocPrint(sh.scratchAllocator(), " every={d}ms", .{every_ms}));
+        }
+        try sh.host.writeAll(.stdout, " ");
         try sh.host.writeAll(.stdout, handler.action);
         try sh.host.writeAll(.stdout, "\n");
     }
+}
+
+fn listEventsJson(sh: anytype, handlers: []const EventHandler) !result.EvalResult {
+    try sh.host.writeAll(.stdout, "[\n");
+    for (handlers, 0..) |handler, index| {
+        if (index != 0) try sh.host.writeAll(.stdout, ",\n");
+        try sh.host.writeAll(.stdout, "{\"event\":");
+        try writeJsonString(sh, handler.event);
+        try sh.host.writeAll(.stdout, ",\"name\":");
+        try writeJsonString(sh, handler.name);
+        try sh.host.writeAll(.stdout, ",\"function\":");
+        try writeJsonString(sh, handler.action);
+        try sh.host.writeAll(.stdout, try std.fmt.allocPrint(sh.scratchAllocator(), ",\"priority\":{d}", .{handler.priority}));
+        if (handler.every_ms) |every_ms| {
+            try sh.host.writeAll(.stdout, try std.fmt.allocPrint(sh.scratchAllocator(), ",\"every_ms\":{d}", .{every_ms}));
+        }
+        try sh.host.writeAll(.stdout, "}");
+    }
+    try sh.host.writeAll(.stdout, "\n]\n");
     return .{};
+}
+
+fn writeJsonString(sh: anytype, value: []const u8) !void {
+    try sh.host.writeAll(.stdout, "\"");
+    for (value) |byte| switch (byte) {
+        '"' => try sh.host.writeAll(.stdout, "\\\""),
+        '\\' => try sh.host.writeAll(.stdout, "\\\\"),
+        '\n' => try sh.host.writeAll(.stdout, "\\n"),
+        '\r' => try sh.host.writeAll(.stdout, "\\r"),
+        '\t' => try sh.host.writeAll(.stdout, "\\t"),
+        else => if (byte < 0x20)
+            try sh.host.writeAll(
+                .stdout,
+                try std.fmt.allocPrint(sh.scratchAllocator(), "\\u{x:0>4}", .{byte}),
+            )
+        else
+            try sh.host.writeAll(.stdout, try std.fmt.allocPrint(sh.scratchAllocator(), "{c}", .{byte})),
+    };
+    try sh.host.writeAll(.stdout, "\"");
+}
+
+fn isEventName(name: []const u8) bool {
+    return std.mem.eql(u8, name, "directory.change") or
+        std.mem.eql(u8, name, "prompt.prepare") or
+        std.mem.eql(u8, name, "prompt.async.start") or
+        std.mem.eql(u8, name, "prompt.async.end") or
+        std.mem.eql(u8, name, "completion.async.start") or
+        std.mem.eql(u8, name, "completion.async.end") or
+        std.mem.eql(u8, name, "job.start") or
+        std.mem.eql(u8, name, "job.end") or
+        std.mem.eql(u8, name, "timer.tick");
+}
+
+fn isRegistrationName(name: []const u8) bool {
+    if (name.len == 0) return false;
+    for (name) |byte| {
+        if (std.ascii.isAlphanumeric(byte) or byte == '_' or byte == '-' or byte == '.') continue;
+        return false;
+    }
+    return true;
+}
+
+fn isFunctionName(name: []const u8) bool {
+    if (name.len == 0) return false;
+    if (!std.ascii.isAlphabetic(name[0]) and name[0] != '_') return false;
+    for (name[1..]) |byte| {
+        if (!std.ascii.isAlphanumeric(byte) and byte != '_') return false;
+    }
+    return true;
 }
 
 fn evalPrompt(state: *State, args: []const []const u8) !result.EvalResult {

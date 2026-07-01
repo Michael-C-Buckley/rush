@@ -31,6 +31,8 @@ pub fn ShellWithBuiltins(comptime Host: type, comptime builtin_registry: builtin
         state: state.State,
         extensions: builtin_registry.ExtensionState,
         arenas: memory.Arenas,
+        function_autoload: ?*const fn (*Self, []const u8) anyerror!bool = null,
+        autoloading_function: ?[]const u8 = null,
 
         const Self = @This();
 
@@ -88,6 +90,23 @@ pub fn ShellWithBuiltins(comptime Host: type, comptime builtin_registry: builtin
             args: []const []const u8,
         ) !result.EvalResult {
             return self.extensions.eval(self, definition, args);
+        }
+
+        pub fn setFunctionAutoload(self: *Self, autoload: *const fn (*Self, []const u8) anyerror!bool) void {
+            self.function_autoload = autoload;
+        }
+
+        pub fn tryAutoloadFunction(self: *Self, name: []const u8) !bool {
+            std.debug.assert(name.len != 0);
+            if (self.state.options.mode == .posix) return false;
+            const autoload = self.function_autoload orelse return false;
+            if (self.state.isFunctionAutoloadSuppressed(name)) return false;
+            if (self.autoloading_function) |loading| if (std.mem.eql(u8, loading, name)) return false;
+
+            const previous = self.autoloading_function;
+            self.autoloading_function = name;
+            defer self.autoloading_function = previous;
+            return autoload(self, name);
         }
 
         pub fn resetForTopLevelCommand(self: *Self) void {
