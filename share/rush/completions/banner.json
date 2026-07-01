@@ -1,0 +1,33 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "banner",
+    "description": "print large banner text",
+    "options": [
+      {
+        "short": "t",
+        "description": "enable trace",
+        "inherit": false
+      },
+      {
+        "short": "d",
+        "description": "enable debug",
+        "inherit": false
+      },
+      {
+        "short": "w",
+        "description": "change the output from a width of 132 to width, suitable for a narrow terminal",
+        "inherit": false
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "text",
+          "index": 0
+        }
+      ]
+    }
+  }
+}
