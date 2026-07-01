@@ -1,0 +1,869 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "bosh",
+    "description": "manage bosh deployments",
+    "options": [
+      {
+        "long": "version",
+        "description": "show cli version",
+        "inherit": false
+      },
+      {
+        "long": "config",
+        "description": "config file path (default: ~/.bosh/config)",
+        "inherit": false,
+        "value": {
+          "name": "path",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "short": "e",
+        "long": "environment",
+        "description": "director environment name or url",
+        "inherit": false,
+        "value": {
+          "name": "name"
+        }
+      },
+      {
+        "long": "ca-cert",
+        "description": "director ca certificate path or value",
+        "inherit": false,
+        "value": {
+          "name": "path",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "sha2",
+        "description": "use SHA256 checksums",
+        "inherit": false
+      },
+      {
+        "long": "parallel",
+        "description": "the max number of parallel operations (default: 5)",
+        "inherit": false,
+        "value": {
+          "name": "amount",
+          "values": [
+            "1",
+            "2",
+            "3",
+            "4",
+            "5",
+            "6",
+            "7",
+            "8",
+            "9",
+            "10",
+            "11",
+            "12",
+            "13",
+            "14",
+            "15",
+            "16",
+            "17",
+            "18",
+            "19",
+            "20"
+          ]
+        }
+      },
+      {
+        "long": "client",
+        "description": "override username or UAA client [$BOSH_cliENT]",
+        "inherit": false,
+        "value": {
+          "name": "name"
+        }
+      },
+      {
+        "long": "client-secret",
+        "description": "override password or UAA client secret [$BOSH_cliENT_SECRET]",
+        "inherit": false,
+        "value": {
+          "name": "secret"
+        }
+      },
+      {
+        "long": "deployment",
+        "description": "deployment name [$BOSH_DEPLOYMENT]",
+        "inherit": false,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "column",
+        "description": "filter to show only given column(s)",
+        "inherit": false,
+        "value": {
+          "name": "name"
+        }
+      },
+      {
+        "long": "json",
+        "description": "output as JSON",
+        "inherit": false
+      },
+      {
+        "long": "tty",
+        "description": "force tty-like output",
+        "inherit": false
+      },
+      {
+        "long": "no-color",
+        "description": "toggle colorized output",
+        "inherit": false
+      },
+      {
+        "short": "n",
+        "long": "non-interactive",
+        "description": "don't ask for user input [$BOSH_NON_INTERACTIVE]",
+        "inherit": false
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "add-blob",
+        "description": "add blob",
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "provider": "builtin.files",
+              "index": 0
+            },
+            {
+              "name": "blobs-path",
+              "provider": "builtin.files",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "unignore",
+        "description": "unignore an instance",
+        "arguments": {
+          "states": [
+            {
+              "name": "instance-group/instance-id",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "update-cloud-config",
+        "description": "update current cloud config",
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "index": 0,
+              "provider": "builtin.files"
+            }
+          ]
+        }
+      },
+      {
+        "name": "update-config",
+        "description": "update config",
+        "arguments": {
+          "states": [
+            {
+              "name": "value",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "update-cpi-config",
+        "description": "update current CPI config",
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "index": 0,
+              "provider": "builtin.files"
+            }
+          ]
+        }
+      },
+      {
+        "name": "update-resurrection",
+        "description": "enable/disable resurrection",
+        "arguments": {
+          "states": [
+            {
+              "name": "value",
+              "index": 0,
+              "values": [
+                "on",
+                "off"
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "name": "update-runtime-config",
+        "description": "update current runtime config",
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "index": 0,
+              "provider": "builtin.files"
+            }
+          ]
+        }
+      },
+      {
+        "name": "upload-blobs",
+        "description": "upload blobs"
+      },
+      {
+        "name": "upload-release",
+        "description": "upload release",
+        "arguments": {
+          "states": [
+            {
+              "name": "url",
+              "index": 0,
+              "provider": "builtin.files"
+            }
+          ]
+        }
+      },
+      {
+        "name": "upload-stemcell",
+        "description": "upload stemcell",
+        "arguments": {
+          "states": [
+            {
+              "name": "fileorurl",
+              "provider": "builtin.files",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "variables",
+        "description": "list variables"
+      },
+      {
+        "name": "vendor-package",
+        "description": "vendor package",
+        "arguments": {
+          "states": [
+            {
+              "name": "package",
+              "index": 0
+            },
+            {
+              "name": "src-dir",
+              "provider": "builtin.directories",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "vms",
+        "description": "list all VMs in all deployments"
+      },
+      {
+        "name": "orphan-disk",
+        "description": "orphan disk",
+        "arguments": {
+          "states": [
+            {
+              "name": "cid",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "networks",
+        "description": "list networks"
+      },
+      {
+        "name": "manifest",
+        "description": "show deployment manifest"
+      },
+      {
+        "name": "tasks",
+        "description": "list running or recent tasks",
+        "arguments": {
+          "states": [
+            {
+              "name": "id",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "task",
+        "description": "show task status and start tracking its output"
+      },
+      {
+        "name": "take-snapshot",
+        "description": "take snapshot",
+        "arguments": {
+          "states": [
+            {
+              "name": "instance-group/instance-id",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "sync-blobs",
+        "description": "sync blobs"
+      },
+      {
+        "name": "stop-env",
+        "description": "stop BOSH environment"
+      },
+      {
+        "name": "stop",
+        "description": "stop instance(s)",
+        "arguments": {
+          "states": [
+            {
+              "name": "instance-group/instance-id",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "stemcells",
+        "description": "list stemcells"
+      },
+      {
+        "name": "start-env",
+        "description": "start BOSH environment"
+      },
+      {
+        "name": "start",
+        "description": "start instance(s)",
+        "arguments": {
+          "states": [
+            {
+              "name": "instance-group/instance-id",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "ssh",
+        "description": "sSH into instance(s)",
+        "arguments": {
+          "states": [
+            {
+              "name": "instance-group/instance-id",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "snapshots",
+        "description": "list snapshots",
+        "arguments": {
+          "states": [
+            {
+              "name": "instance-group/instance-id",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "sha2ify-release",
+        "description": "convert release tarball to use SHA256"
+      },
+      {
+        "name": "sha1ify-release",
+        "description": "convert release tarball to use SHA1"
+      },
+      {
+        "name": "runtime-config",
+        "description": "show current runtime config"
+      },
+      {
+        "name": "run-errand",
+        "description": "run errand",
+        "arguments": {
+          "states": [
+            {
+              "name": "name",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "restart",
+        "description": "restart instance(s)",
+        "arguments": {
+          "states": [
+            {
+              "name": "instance-group/instance-id",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "reset-release",
+        "description": "reset release"
+      },
+      {
+        "name": "repack-stemcell",
+        "description": "repack stemcell",
+        "arguments": {
+          "states": [
+            {
+              "name": "path-to-stemcell",
+              "provider": "builtin.files",
+              "index": 0
+            },
+            {
+              "name": "path-to-result",
+              "provider": "builtin.files",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "remove-blob",
+        "description": "remove blob"
+      },
+      {
+        "name": "releases",
+        "description": "list releases"
+      },
+      {
+        "name": "recreate",
+        "description": "recreate instance(s)",
+        "arguments": {
+          "states": [
+            {
+              "name": "instance-group/instance-id",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "orphaned-vms",
+        "description": "list all the orphaned VMs in all deployments"
+      },
+      {
+        "name": "scp",
+        "description": "sCP to/from instance(s)",
+        "arguments": {
+          "states": [
+            {
+              "name": "path...",
+              "provider": "builtin.files",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "help",
+        "description": "show this help message"
+      },
+      {
+        "name": "ignore",
+        "description": "ignore an instance",
+        "arguments": {
+          "states": [
+            {
+              "name": "instance-group/instance-id",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "init-release",
+        "description": "initialize release"
+      },
+      {
+        "name": "inspect-local-release",
+        "description": "display information from release metadata"
+      },
+      {
+        "name": "inspect-local-stemcell",
+        "description": "display information from stemcell metadata",
+        "arguments": {
+          "states": [
+            {
+              "name": "path-to-stemcell",
+              "provider": "builtin.files",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "inspect-release",
+        "description": "list release contents such as jobs",
+        "arguments": {
+          "states": [
+            {
+              "name": "name/version",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "instances",
+        "description": "list all instances in a deployment"
+      },
+      {
+        "name": "interpolate",
+        "description": "interpolates variables into a manifest"
+      },
+      {
+        "name": "locks",
+        "description": "list current locks"
+      },
+      {
+        "name": "log-in",
+        "description": "login"
+      },
+      {
+        "name": "log-out",
+        "description": "log out"
+      },
+      {
+        "name": "logs",
+        "description": "fetch logs from instance(s)",
+        "arguments": {
+          "states": [
+            {
+              "name": "instance-group/instance-id",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "deployment",
+        "description": "show deployment information"
+      },
+      {
+        "name": "deployments",
+        "description": "list deployments"
+      },
+      {
+        "name": "diff-config",
+        "description": "diff two configs by ID or content"
+      },
+      {
+        "name": "disks",
+        "description": "list disks"
+      },
+      {
+        "name": "environment",
+        "description": "show environment"
+      },
+      {
+        "name": "environments",
+        "description": "list environments"
+      },
+      {
+        "name": "errands",
+        "description": "list errands"
+      },
+      {
+        "name": "event",
+        "description": "show event details",
+        "arguments": {
+          "states": [
+            {
+              "name": "id",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "events",
+        "description": "list events"
+      },
+      {
+        "name": "export-release",
+        "description": "export the compiled release to a tarball",
+        "arguments": {
+          "states": [
+            {
+              "name": "name/version",
+              "index": 0
+            },
+            {
+              "name": "os/version",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "finalize-release",
+        "description": "create final release from dev release tarball"
+      },
+      {
+        "name": "generate-job",
+        "description": "generate job",
+        "arguments": {
+          "states": [
+            {
+              "name": "name",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "generate-package",
+        "description": "generate package",
+        "arguments": {
+          "states": [
+            {
+              "name": "name",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "create-release",
+        "description": "create release",
+        "arguments": {
+          "states": [
+            {
+              "name": "value",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "curl",
+        "description": "make an HTTP request to the Director"
+      },
+      {
+        "name": "delete-config",
+        "description": "delete config",
+        "arguments": {
+          "states": [
+            {
+              "name": "id",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "delete-deployment",
+        "description": "delete deployment"
+      },
+      {
+        "name": "delete-disk",
+        "description": "delete disk",
+        "arguments": {
+          "states": [
+            {
+              "name": "cid",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "delete-env",
+        "description": "delete BOSH environment"
+      },
+      {
+        "name": "delete-network",
+        "description": "delete network",
+        "arguments": {
+          "states": [
+            {
+              "name": "name",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "delete-release",
+        "description": "delete release",
+        "arguments": {
+          "states": [
+            {
+              "name": "name/version",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "delete-snapshot",
+        "description": "delete snapshot",
+        "arguments": {
+          "states": [
+            {
+              "name": "cid",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "delete-snapshots",
+        "description": "delete all snapshots in a deployment"
+      },
+      {
+        "name": "delete-stemcell",
+        "description": "delete stemcell",
+        "arguments": {
+          "states": [
+            {
+              "name": "value",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "delete-vm",
+        "description": "delete VM",
+        "arguments": {
+          "states": [
+            {
+              "name": "cid",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "deploy",
+        "description": "update deployment"
+      },
+      {
+        "name": "alias-env",
+        "description": "alias environment to save url and ca certificate",
+        "arguments": {
+          "states": [
+            {
+              "name": "value",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "attach-disk",
+        "description": "attach disk to an instance",
+        "arguments": {
+          "states": [
+            {
+              "name": "instance-group/instance-id",
+              "index": 0
+            },
+            {
+              "name": "disk-cid",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "blobs",
+        "description": "list blobs"
+      },
+      {
+        "name": "cancel-task",
+        "description": "cancel task at its next checkpoint",
+        "arguments": {
+          "states": [
+            {
+              "name": "id",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "cancel-tasks",
+        "description": "cancel tasks at their next checkpoints"
+      },
+      {
+        "name": "clean-up",
+        "description": "clean up old unused resources except orphaned disks"
+      },
+      {
+        "name": "cloud-check",
+        "description": "cloud consistency check and interactive repair"
+      },
+      {
+        "name": "cloud-config",
+        "description": "show current cloud config"
+      },
+      {
+        "name": "config",
+        "description": "show current config for either ID or both type and name",
+        "arguments": {
+          "states": [
+            {
+              "name": "id",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "configs",
+        "description": "list configs"
+      },
+      {
+        "name": "cpi-config",
+        "description": "show current CPI config"
+      },
+      {
+        "name": "create-env",
+        "description": "create or update BOSH environment"
+      }
+    ],
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "builtin.directories": {
+        "builtin": "directories"
+      }
+    }
+  }
+}
