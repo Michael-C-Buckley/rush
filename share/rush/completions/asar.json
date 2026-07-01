@@ -1,0 +1,119 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "asar",
+    "description": "work with asar archives",
+    "options": [
+      {
+        "long": "help",
+        "short": "h",
+        "description": "show help",
+        "inherit": false
+      },
+      {
+        "long": "V",
+        "aliases": [
+          "version"
+        ],
+        "description": "show version",
+        "inherit": false
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "pack",
+        "aliases": [
+          "p"
+        ],
+        "description": "create an asar archive",
+        "arguments": {
+          "states": [
+            {
+              "name": "directory",
+              "description": "directory path",
+              "index": 0,
+              "provider": "builtin.directories"
+            },
+            {
+              "name": "output",
+              "description": "output archive file",
+              "index": 1,
+              "provider": "builtin.files"
+            }
+          ]
+        }
+      },
+      {
+        "name": "list",
+        "aliases": [
+          "l"
+        ],
+        "description": "list archive files",
+        "arguments": {
+          "states": [
+            {
+              "name": "archive",
+              "description": "archive file",
+              "index": 0,
+              "provider": "builtin.files"
+            }
+          ]
+        }
+      },
+      {
+        "name": "extract-file",
+        "aliases": [
+          "ef"
+        ],
+        "description": "extract one archive file",
+        "arguments": {
+          "states": [
+            {
+              "name": "archive",
+              "description": "archive file",
+              "index": 0,
+              "provider": "builtin.files"
+            },
+            {
+              "name": "filename",
+              "description": "file inside archive",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "extract",
+        "aliases": [
+          "e"
+        ],
+        "description": "extract an archive",
+        "arguments": {
+          "states": [
+            {
+              "name": "archive",
+              "description": "archive file",
+              "index": 0,
+              "provider": "builtin.files"
+            },
+            {
+              "name": "directory",
+              "description": "directory path",
+              "index": 1,
+              "provider": "builtin.directories"
+            }
+          ]
+        }
+      }
+    ],
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "builtin.directories": {
+        "builtin": "directories"
+      }
+    }
+  }
+}
