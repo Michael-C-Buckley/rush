@@ -2137,7 +2137,8 @@ fn evalDeclarationBuiltin(shell: anytype, id: builtin.Id, words: []const ast.Wor
                 continue;
             }
             if (!isAssignmentName(name)) {
-                status = 2;
+                try writeInvalidIdentifierDiagnostic(shell, id, name);
+                status = if (shell.state.options.mode == .bash) 1 else 2;
                 continue;
             }
             const existing = shell.state.getVariable(name);
@@ -2163,7 +2164,20 @@ fn evalDeclarationBuiltin(shell: anytype, id: builtin.Id, words: []const ast.Wor
             }
         }
     }
-    return .{ .status = status, .flow = if (status != 0) .{ .fatal = status } else .normal };
+    const fatal = status != 0 and shell.state.options.mode == .posix;
+    return .{ .status = status, .flow = if (fatal) .{ .fatal = status } else .normal };
+}
+
+fn writeInvalidIdentifierDiagnostic(shell: anytype, id: builtin.Id, name: []const u8) !void {
+    const builtin_name = switch (id) {
+        .export_ => "export",
+        .readonly => "readonly",
+        else => unreachable,
+    };
+    try shell.host.writeAll(
+        .stderr,
+        try std.fmt.allocPrint(shell.scratchAllocator(), "{s}: `{s}': not a valid identifier\n", .{ builtin_name, name }),
+    );
 }
 
 fn evalDeclarationList(shell: anytype, id: builtin.Id) !result.EvalResult {
