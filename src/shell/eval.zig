@@ -733,7 +733,8 @@ fn wordPartsContainAtParameter(parts: []const ast.WordPart) bool {
 fn wordPartIsAtParameter(part: ast.WordPart) bool {
     return switch (part) {
         .parameter => |parameter| {
-            return parameter.op == null and parameter.parameter == .special and parameter.parameter.special == .at;
+            return !parameter.length and parameter.op == null and parameter.parameter == .special and
+                parameter.parameter.special == .at;
         },
         else => false,
     };
@@ -836,7 +837,7 @@ fn wordIsUnquotedAt(word: ast.Word) bool {
     return switch (word.data) {
         .literal => false,
         .parts => |parts| parts.len == 1 and switch (parts[0]) {
-            .parameter => |parameter| parameter.op == null and parameter.parameter == .special and
+            .parameter => |parameter| !parameter.length and parameter.op == null and parameter.parameter == .special and
                 parameter.parameter.special == .at,
             else => false,
         },
@@ -847,7 +848,7 @@ fn wordIsUnquotedStar(word: ast.Word) bool {
     return switch (word.data) {
         .literal => false,
         .parts => |parts| parts.len == 1 and switch (parts[0]) {
-            .parameter => |parameter| parameter.op == null and parameter.parameter == .special and
+            .parameter => |parameter| !parameter.length and parameter.op == null and parameter.parameter == .special and
                 parameter.parameter.special == .star,
             else => false,
         },
@@ -859,7 +860,7 @@ fn wordIsQuotedAt(word: ast.Word) bool {
         .literal => false,
         .parts => |parts| parts.len == 1 and switch (parts[0]) {
             .double_quoted => |quoted| quoted.len == 1 and switch (quoted[0]) {
-                .parameter => |parameter| parameter.op == null and parameter.parameter == .special and
+                .parameter => |parameter| !parameter.length and parameter.op == null and parameter.parameter == .special and
                     parameter.parameter.special == .at,
                 else => false,
             },
@@ -873,7 +874,7 @@ fn wordIsQuotedStar(word: ast.Word) bool {
         .literal => false,
         .parts => |parts| parts.len == 1 and switch (parts[0]) {
             .double_quoted => |quoted| quoted.len == 1 and switch (quoted[0]) {
-                .parameter => |parameter| parameter.op == null and parameter.parameter == .special and
+                .parameter => |parameter| !parameter.length and parameter.op == null and parameter.parameter == .special and
                     parameter.parameter.special == .star,
                 else => false,
             },
@@ -886,10 +887,10 @@ fn wordIsAtParameter(word: ast.Word) bool {
     return switch (word.data) {
         .literal => false,
         .parts => |parts| parts.len == 1 and switch (parts[0]) {
-            .parameter => |parameter| parameter.op == null and parameter.parameter == .special and
+            .parameter => |parameter| !parameter.length and parameter.op == null and parameter.parameter == .special and
                 parameter.parameter.special == .at,
             .double_quoted => |quoted| quoted.len == 1 and switch (quoted[0]) {
-                .parameter => |parameter| parameter.op == null and parameter.parameter == .special and
+                .parameter => |parameter| !parameter.length and parameter.op == null and parameter.parameter == .special and
                     parameter.parameter.special == .at,
                 else => false,
             },
@@ -4706,6 +4707,13 @@ fn joinPositionals(shell: anytype, separator: []const u8) ![]const u8 {
 }
 
 fn expandParameterLength(shell: anytype, parameter: ast.ParameterExpansion) EvalError![]const u8 {
+    if (shell.state.options.mode == .bash) switch (parameter.parameter) {
+        .special => |special| switch (special) {
+            .at, .star => return std.fmt.allocPrint(shell.scratchAllocator(), "{}", .{shell.state.positionals.len}),
+            else => {},
+        },
+        else => {},
+    };
     const value = (try parameterCurrentValue(shell, parameter.parameter)) orelse {
         if (shell.state.options.nounset and parameterSubjectToNounset(parameter.parameter)) {
             try writeExpansionDiagnostic(shell, parameter, parameterDiagnosticName(parameter.parameter), "parameter not set");
