@@ -13,6 +13,11 @@ pub const Kind = enum {
     regular,
 };
 
+pub const Origin = enum {
+    core,
+    extension,
+};
+
 pub const Id = enum {
     abbr,
     alias,
@@ -34,6 +39,8 @@ pub const Id = enum {
     hash,
     kill,
     prompt,
+    prompt_async,
+    prompt_pwd,
     printf,
     pwd,
     read,
@@ -57,6 +64,7 @@ pub const Definition = struct {
     name: []const u8,
     id: Id,
     kind: Kind,
+    origin: Origin = .core,
 
     pub fn validate(self: Definition) void {
         std.debug.assert(self.name.len != 0);
@@ -65,18 +73,15 @@ pub const Definition = struct {
 
 const DefinitionMap = std.StaticStringMap(Definition);
 
-pub const definitions: DefinitionMap = .initComptime(.{
+pub const core_definitions: DefinitionMap = .initComptime(.{
     .{ "[", Definition{ .name = "[", .id = .bracket, .kind = .regular } },
-    .{ "abbr", Definition{ .name = "abbr", .id = .abbr, .kind = .regular } },
     .{ "alias", Definition{ .name = "alias", .id = .alias, .kind = .regular } },
     .{ "break", Definition{ .name = "break", .id = .break_, .kind = .special } },
     .{ "cd", Definition{ .name = "cd", .id = .cd, .kind = .regular } },
-    .{ "color", Definition{ .name = "color", .id = .color, .kind = .regular } },
     .{ ":", Definition{ .name = ":", .id = .colon, .kind = .special } },
     .{ ".", Definition{ .name = ".", .id = .dot, .kind = .special } },
     .{ "command", Definition{ .name = "command", .id = .command, .kind = .regular } },
     .{ "continue", Definition{ .name = "continue", .id = .continue_, .kind = .special } },
-    .{ "event", Definition{ .name = "event", .id = .event, .kind = .regular } },
     .{ "eval", Definition{ .name = "eval", .id = .eval, .kind = .special } },
     .{ "exec", Definition{ .name = "exec", .id = .exec, .kind = .special } },
     .{ "export", Definition{ .name = "export", .id = .export_, .kind = .special } },
@@ -85,7 +90,6 @@ pub const definitions: DefinitionMap = .initComptime(.{
     .{ "getopts", Definition{ .name = "getopts", .id = .getopts, .kind = .regular } },
     .{ "hash", Definition{ .name = "hash", .id = .hash, .kind = .regular } },
     .{ "kill", Definition{ .name = "kill", .id = .kill, .kind = .regular } },
-    .{ "prompt", Definition{ .name = "prompt", .id = .prompt, .kind = .regular } },
     .{ "printf", Definition{ .name = "printf", .id = .printf, .kind = .regular } },
     .{ "pwd", Definition{ .name = "pwd", .id = .pwd, .kind = .regular } },
     .{ "read", Definition{ .name = "read", .id = .read, .kind = .regular } },
@@ -105,18 +109,59 @@ pub const definitions: DefinitionMap = .initComptime(.{
     .{ "wait", Definition{ .name = "wait", .id = .wait, .kind = .regular } },
 });
 
+pub const Registry = struct {
+    extensions: []const Definition = &.{},
+    ExtensionState: type = EmptyExtensionState,
+
+    pub fn lookup(comptime self: Registry, name: []const u8) ?Definition {
+        if (core_definitions.get(name)) |definition| {
+            definition.validate();
+            return definition;
+        }
+        inline for (self.extensions) |definition| {
+            if (std.mem.eql(u8, definition.name, name)) {
+                definition.validate();
+                return definition;
+            }
+        }
+        return null;
+    }
+};
+
+pub const EmptyExtensionState = struct {
+    pub fn init(_: std.mem.Allocator) EmptyExtensionState {
+        return .{};
+    }
+
+    pub fn deinit(_: *EmptyExtensionState) void {}
+
+    pub fn eval(
+        _: *EmptyExtensionState,
+        _: anytype,
+        _: Definition,
+        _: []const []const u8,
+    ) !result.EvalResult {
+        return .{ .status = 127 };
+    }
+};
+
+pub const core_registry: Registry = .{};
+pub const default_registry: Registry = core_registry;
+
+pub fn extensionDefinition(comptime name: []const u8, comptime id: Id) Definition {
+    return .{ .name = name, .id = id, .kind = .regular, .origin = .extension };
+}
+
 pub fn lookup(name: []const u8) ?Definition {
-    const definition = definitions.get(name) orelse return null;
-    definition.validate();
-    return definition;
+    return default_registry.lookup(name);
 }
 
 pub fn eval(shell: anytype, definition: Definition, args: []const []const u8) !result.EvalResult {
     definition.validate();
     std.debug.assert(args.len != 0);
+    if (definition.origin == .extension) return evalExtension(shell, definition, args);
     return switch (definition.id) {
         .colon, .true_ => .{},
-        .abbr, .color, .event, .prompt => .{},
         .alias => evalAlias(shell, args),
         .break_ => evalBreak(args),
         .bracket, .cd, .command, .dot, .eval, .exec, .export_, .pwd, .read, .test_, .type, .wait => unreachable,
@@ -137,7 +182,17 @@ pub fn eval(shell: anytype, definition: Definition, args: []const []const u8) !r
         .umask => evalUmask(shell, args),
         .unalias => evalUnalias(shell, args),
         .unset => evalUnset(shell, args),
+        .abbr, .color, .event, .prompt, .prompt_async, .prompt_pwd => unreachable,
     };
+}
+
+fn evalExtension(shell: anytype, definition: Definition, args: []const []const u8) !result.EvalResult {
+    const ShellType = switch (@typeInfo(@TypeOf(shell))) {
+        .pointer => |pointer| pointer.child,
+        else => @TypeOf(shell),
+    };
+    if (!@hasDecl(ShellType, "evalExtensionBuiltin")) return .{ .status = 127 };
+    return shell.evalExtensionBuiltin(definition, args);
 }
 
 fn evalAlias(shell: anytype, args: []const []const u8) !result.EvalResult {
@@ -915,6 +970,7 @@ fn isAssignmentName(name: []const u8) bool {
 
 test "builtin lookup identifies null true and false utilities" {
     try std.testing.expectEqual(Id.bracket, lookup("[").?.id);
+    try std.testing.expectEqual(@as(?Definition, null), lookup("abbr"));
     try std.testing.expectEqual(Id.alias, lookup("alias").?.id);
     try std.testing.expectEqual(Id.break_, lookup("break").?.id);
     try std.testing.expectEqual(Id.cd, lookup("cd").?.id);

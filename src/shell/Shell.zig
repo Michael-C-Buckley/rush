@@ -2,6 +2,7 @@
 
 const std = @import("std");
 
+const builtin = @import("builtin.zig");
 const eval = @import("eval.zig");
 const lexer = @import("lexer.zig");
 const memory = @import("memory.zig");
@@ -18,12 +19,17 @@ pub const InitOptions = struct {
 };
 
 pub fn Shell(comptime Host: type) type {
+    return ShellWithBuiltins(Host, builtin.default_registry);
+}
+
+pub fn ShellWithBuiltins(comptime Host: type, comptime builtin_registry: builtin.Registry) type {
     return struct {
         allocator: std.mem.Allocator,
         host: Host,
         env: []const [*:0]const u8,
         exec_envp_cache: ?[:null]const ?[*:0]const u8 = null,
         state: state.State,
+        extensions: builtin_registry.ExtensionState,
         arenas: memory.Arenas,
 
         const Self = @This();
@@ -34,6 +40,7 @@ pub fn Shell(comptime Host: type) type {
                 .host = host,
                 .env = options.env,
                 .state = state.State.init(allocator, options.state),
+                .extensions = builtin_registry.ExtensionState.init(allocator),
                 .arenas = memory.Arenas.init(allocator),
             };
             shell.state.putVariable(.{ .name = "PS4", .value = "+ " }) catch unreachable;
@@ -46,6 +53,7 @@ pub fn Shell(comptime Host: type) type {
         pub fn deinit(self: *Self) void {
             if (self.exec_envp_cache) |envp| self.allocator.free(envp);
             self.arenas.deinit();
+            self.extensions.deinit();
             self.state.deinit();
             self.* = undefined;
         }
@@ -65,6 +73,19 @@ pub fn Shell(comptime Host: type) type {
 
         pub fn scratchAllocator(self: *Self) std.mem.Allocator {
             return self.arenas.scratchAllocator();
+        }
+
+        pub fn lookupBuiltin(self: *Self, name: []const u8) ?builtin.Definition {
+            _ = self;
+            return builtin_registry.lookup(name);
+        }
+
+        pub fn evalExtensionBuiltin(
+            self: *Self,
+            definition: builtin.Definition,
+            args: []const []const u8,
+        ) !result.EvalResult {
+            return self.extensions.eval(self, definition, args);
         }
 
         pub fn resetForTopLevelCommand(self: *Self) void {
@@ -187,4 +208,14 @@ test "Shell initializes IFS from the shell default instead of the environment" {
     defer shell.deinit();
 
     try std.testing.expectEqualStrings(" \t\n", shell.state.getVariable("IFS").?.value);
+}
+
+test "ShellWithBuiltins uses the supplied compile-time builtin registry" {
+    const TestHost = struct {};
+
+    var shell = ShellWithBuiltins(TestHost, builtin.core_registry).init(std.testing.allocator, .{}, .{});
+    defer shell.deinit();
+
+    try std.testing.expect(shell.lookupBuiltin("printf") != null);
+    try std.testing.expectEqual(@as(?builtin.Definition, null), shell.lookupBuiltin("abbr"));
 }

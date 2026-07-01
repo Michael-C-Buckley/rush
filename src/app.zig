@@ -1,0 +1,118 @@
+//! CLI invocation dispatch for the Rush executable.
+
+const std = @import("std");
+
+const extensions = @import("extensions.zig");
+const file_util = @import("file_util.zig");
+const host = @import("host.zig");
+const interactive = @import("interactive.zig");
+const shell = @import("shell.zig");
+
+const RushShell = shell.ShellWithBuiltins(host.RealHost, extensions.rush.registry);
+
+const usage =
+    \\usage: rush [--login] [-i] [--posix]
+    \\       rush [--posix] -c SCRIPT [NAME [ARGS...]]
+    \\       rush [--posix] SCRIPT [ARGS...]
+    \\       rush --help
+    \\
+;
+
+const EvalSourceOptions = struct {
+    state_options: shell.state.Options,
+    arg_zero: []const u8,
+    positionals: []const []const u8,
+};
+
+pub fn run(
+    root_allocator: std.mem.Allocator,
+    process_allocator: std.mem.Allocator,
+    init: std.process.Init.Minimal,
+) !u8 {
+    var real_host: host.RealHost = .{};
+
+    const args = try init.args.toSlice(process_allocator);
+    const invocation = shell.invocation.parse(args) catch {
+        try real_host.writeAll(.stderr, usage);
+        return 2;
+    };
+
+    switch (invocation) {
+        .help => {
+            try real_host.writeAll(.stdout, usage);
+            return 0;
+        },
+        .interactive => |interactive_invocation| {
+            var threaded_io: std.Io.Threaded = .init(root_allocator, .{
+                .argv0 = .init(init.args),
+                .environ = init.environ,
+            });
+            defer threaded_io.deinit();
+            return interactive.run(process_allocator, real_host, threaded_io.io(), init.environ.block.view().slice, .{
+                .state_options = interactive_invocation.options,
+                .arg_zero = interactive_invocation.arg_zero,
+                .positionals = &.{},
+                .login = interactive_invocation.login,
+            });
+        },
+        .command_string => |command| {
+            const src: shell.source.Source = .{
+                .id = 1,
+                .kind = .command_string,
+                .name = command.arg_zero,
+                .text = command.script,
+            };
+            return evalSource(process_allocator, real_host, init.environ.block.view().slice, .{
+                .state_options = command.options,
+                .arg_zero = command.arg_zero,
+                .positionals = command.positionals,
+            }, src);
+        },
+        .script_file => |script| {
+            const text = file_util.readFileAlloc(process_allocator, &real_host, script.path) catch {
+                try real_host.writeAll(.stderr, "rush: cannot read script file\n");
+                return 2;
+            };
+            const src: shell.source.Source = .{
+                .id = 1,
+                .kind = .script_file,
+                .name = script.path,
+                .text = text,
+            };
+            return evalSource(process_allocator, real_host, init.environ.block.view().slice, .{
+                .state_options = script.options,
+                .arg_zero = script.path,
+                .positionals = script.positionals,
+            }, src);
+        },
+    }
+}
+
+fn evalSource(
+    allocator: std.mem.Allocator,
+    real_host: host.RealHost,
+    env: []const [*:0]const u8,
+    options: EvalSourceOptions,
+    src: shell.source.Source,
+) !u8 {
+    var sh = RushShell.init(allocator, real_host, .{
+        .state = options.state_options,
+        .env = env,
+        .arg_zero = options.arg_zero,
+        .positionals = options.positionals,
+    });
+    defer sh.deinit();
+
+    const evaluated = sh.evalSource(src) catch {
+        try sh.host.writeAll(.stderr, "rush: shell error\n");
+        return 2;
+    };
+    return shell.eval.runExitTrap(&sh, evaluated.status) catch {
+        try sh.host.writeAll(.stderr, "rush: shell error\n");
+        return 2;
+    };
+}
+
+test {
+    std.testing.refAllDecls(@This());
+}

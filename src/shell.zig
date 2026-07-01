@@ -17,6 +17,7 @@ pub const state = @import("shell/state.zig");
 pub const token = @import("shell/token.zig");
 
 pub const Shell = @import("shell/Shell.zig").Shell;
+pub const ShellWithBuiltins = @import("shell/Shell.zig").ShellWithBuiltins;
 
 pub const ExitStatus = result.ExitStatus;
 pub const EvalResult = result.EvalResult;

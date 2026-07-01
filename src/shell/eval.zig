@@ -325,11 +325,20 @@ fn staticExternalPipelineStageRequest(
         if (wordExpandsLeadingTilde(shell, word)) return null;
         fields[index] = staticLiteralWord(word) orelse return null;
     }
-    if (builtin.lookup(fields[0]) != null or shell.state.getFunction(fields[0]) != null) return null;
+    if (lookupBuiltin(shell, fields[0]) != null or shell.state.getFunction(fields[0]) != null) return null;
     return makeExternalSpawnRequest(shell, fields, &.{}, fd_actions) catch |err| switch (err) {
         error.OutOfMemory => return err,
         else => return null,
     };
+}
+
+fn lookupBuiltin(shell: anytype, name: []const u8) ?builtin.Definition {
+    const ShellType = switch (@typeInfo(@TypeOf(shell))) {
+        .pointer => |pointer| pointer.child,
+        else => @TypeOf(shell),
+    };
+    if (@hasDecl(ShellType, "lookupBuiltin")) return shell.lookupBuiltin(name);
+    return builtin.lookup(name);
 }
 
 fn staticLiteralWord(word: ast.Word) ?[]const u8 {
@@ -981,7 +990,7 @@ fn evalSimpleScoped(shell: anytype, command: ast.SimpleCommand) EvalError!result
     var redirections: AppliedRedirections = if (has_redirections)
         applyRedirections(shell, command.redirections) catch |err| switch (err) {
             error.OutOfMemory => return err,
-            else => return redirectionFailure(shell, simpleRedirectionFailureIsFatal(command)),
+            else => return redirectionFailure(shell, simpleRedirectionFailureIsFatal(shell, command)),
         }
     else
         .{ .frames = &.{}, .here_doc_writers = &.{} };
@@ -1007,7 +1016,7 @@ fn evalSimpleScoped(shell: anytype, command: ast.SimpleCommand) EvalError!result
     }
     try traceSimpleCommand(shell, &.{}, fields);
     const name = fields[0];
-    if (builtin.lookup(name)) |definition| {
+    if (lookupBuiltin(shell, name)) |definition| {
         if (definition.kind == .special) {
             try applyAssignments(shell, command.assignments);
             if (definition.id == .export_ or definition.id == .readonly) {
@@ -1033,7 +1042,7 @@ fn evalSimpleScoped(shell: anytype, command: ast.SimpleCommand) EvalError!result
     }
     if (name.len == 0) return .{ .status = 127 };
     if (shell.state.getFunction(name)) |function| return evalFunction(shell, function, command.assignments, fields[1..]);
-    if (builtin.lookup(name)) |definition| {
+    if (lookupBuiltin(shell, name)) |definition| {
         if (definition.id == .cd) return evalCdBuiltin(shell, fields);
         if (definition.id == .command) {
             return evalCommandBuiltin(shell, fields, command.assignments, &redirections, &restore_redirections);
@@ -1056,6 +1065,8 @@ fn evalSimpleScoped(shell: anytype, command: ast.SimpleCommand) EvalError!result
             .hash,
             .kill,
             .prompt,
+            .prompt_async,
+            .prompt_pwd,
             .printf,
             .pwd,
             .read,
@@ -1164,10 +1175,10 @@ fn commandSubstitutionEnd(text: []const u8, start: usize) ?usize {
     return null;
 }
 
-fn simpleRedirectionFailureIsFatal(command: ast.SimpleCommand) bool {
+fn simpleRedirectionFailureIsFatal(shell: anytype, command: ast.SimpleCommand) bool {
     if (command.words.len == 0) return false;
     const name = staticLiteralWord(command.words[0]) orelse return false;
-    const definition = builtin.lookup(name) orelse return false;
+    const definition = lookupBuiltin(shell, name) orelse return false;
     return definition.kind == .special;
 }
 
@@ -1388,7 +1399,7 @@ fn evalCommandBuiltin(
     }
 
     const name = args[index];
-    if (builtin.lookup(name)) |definition| {
+    if (lookupBuiltin(shell, name)) |definition| {
         switch (definition.id) {
             .cd => {
                 const evaluated = try evalCdBuiltin(shell, args[index..]);
@@ -1461,6 +1472,8 @@ fn evalCommandBuiltin(
             .hash,
             .kill,
             .prompt,
+            .prompt_async,
+            .prompt_pwd,
             .printf,
             .return_,
             .set,
@@ -1702,7 +1715,7 @@ fn commandLookupText(shell: anytype, name: []const u8, mode: CommandLookupMode, 
     if (isCommandLookupReservedWord(name)) {
         return if (mode == .verbose) try std.fmt.allocPrint(allocator, "{s} is a shell reserved word", .{name}) else name;
     }
-    if (builtin.lookup(name) != null) {
+    if (lookupBuiltin(shell, name) != null) {
         return if (mode == .verbose) try std.fmt.allocPrint(allocator, "{s} is a shell builtin", .{name}) else name;
     }
     if (try findCommandPath(shell, name, search_path)) |path| {
@@ -4525,7 +4538,7 @@ fn dynamicExternalCommandRequest(
     var expansion_status: ?result.ExitStatus = null;
     const fields = try expandWordFields(shell, simple.words, &expansion_status);
     if (expansion_status != null or fields.len == 0) return null;
-    if (builtin.lookup(fields[0]) != null or shell.state.getFunction(fields[0]) != null) return null;
+    if (lookupBuiltin(shell, fields[0]) != null or shell.state.getFunction(fields[0]) != null) return null;
     return makeExternalSpawnRequest(shell, fields, &.{}, fd_actions) catch |err| switch (err) {
         error.OutOfMemory => return err,
         else => return null,
