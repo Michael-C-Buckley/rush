@@ -178,12 +178,14 @@ pub const SpawnRequest = struct {
     envp: [:null]const ?[*:0]const u8,
     cwd: ?[]const u8 = null,
     fd_actions: []const SpawnFdAction = &.{},
+    default_signals: []const u8 = &.{},
     process_group: ?Pid = null,
 
     pub fn validate(self: SpawnRequest) void {
         std.debug.assert(self.path.len != 0);
         std.debug.assert(self.argv.len != 0);
         std.debug.assert(self.argv[0] != null);
+        for (self.default_signals) |signal| std.debug.assert(signal != 0);
     }
 };
 

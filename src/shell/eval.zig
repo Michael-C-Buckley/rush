@@ -17,6 +17,11 @@ const token_mod = @import("token.zig");
 pub const EvalError = anyerror;
 const CopyError = std.mem.Allocator.Error;
 const CommandLookupMode = enum { none, terse, verbose };
+const job_control_signals = [_]u8{
+    builtin.signalNumber("TSTP").?,
+    builtin.signalNumber("TTIN").?,
+    builtin.signalNumber("TTOU").?,
+};
 
 fn validateAst(value: anytype) void {
     if (zig_builtin.mode != .ReleaseFast and zig_builtin.mode != .ReleaseSmall) value.validate();
@@ -107,6 +112,7 @@ fn evalBackgroundAndOr(shell: anytype, and_or: ast.AndOr) EvalError!result.EvalR
             const scratch = shell.beginScratchScope() catch shell.host.exit(2);
             defer scratch.end();
             if (shell.state.options.monitor) setChildProcessGroup(shell, 0) catch shell.host.exit(2);
+            resetJobControlSignalsForChild(shell);
             resetCaughtSignalTrapsForAsyncChild(shell);
             if (!shell.state.options.monitor) ignoreAsynchronousJobSignals(shell) catch shell.host.exit(2);
             if (background_subshell) |subshell| {
@@ -445,6 +451,7 @@ fn forkPipelineStage(
         },
         .child => {
             if (process_group) |pgid| setChildProcessGroup(shell, pgid) catch shell.host.exit(2);
+            resetJobControlSignalsForChild(shell);
             applyPipelineChildFdActions(shell, fd_actions) catch shell.host.exit(127);
             if (!shell.state.options.xtrace) {
                 const request = dynamicExternalCommandRequest(shell, command, &.{}) catch shell.host.exit(2);
@@ -454,6 +461,11 @@ fn forkPipelineStage(
             shell.host.exit(evaluated.status);
         },
     };
+}
+
+fn resetJobControlSignalsForChild(shell: anytype) void {
+    if (!shell.state.options.monitor) return;
+    for (job_control_signals) |signal| shell.host.setSignalDefault(signal) catch {};
 }
 
 fn setParentProcessGroup(shell: anytype, pid: host_mod.Pid, process_group: host_mod.Pid) !void {
@@ -5585,6 +5597,7 @@ fn makeExternalSpawnRequestWithSearchPath(
         .fallback_argv = try makeShellFallbackArgv(shell, path, fields[1..]),
         .envp = envp,
         .fd_actions = fd_actions,
+        .default_signals = if (shell.state.options.monitor) &job_control_signals else &.{},
     };
 }
 

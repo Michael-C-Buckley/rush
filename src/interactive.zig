@@ -87,7 +87,16 @@ fn enableJobControl(sh: *RushShell) void {
         sh.state.options.monitor = false;
         return;
     };
+    ignoreInteractiveJobControlSignals(sh);
     sh.state.options.monitor = true;
+}
+
+fn ignoreInteractiveJobControlSignals(sh: *RushShell) void {
+    inline for (.{ "TSTP", "TTIN", "TTOU" }) |name| {
+        if (shell.builtin.signalNumber(name)) |signal| {
+            sh.host.setSignalIgnored(signal) catch {};
+        }
+    }
 }
 
 const InteractiveSession = struct {

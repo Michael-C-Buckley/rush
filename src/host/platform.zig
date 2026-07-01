@@ -1079,6 +1079,7 @@ fn linuxSpawn(request: host.SpawnRequest) SpawnError!host.SpawnResult {
     const pid: i32 = @intCast(fork_rc);
     if (pid == 0) {
         if (request.process_group) |process_group| linuxSetProcessGroup(0, process_group) catch linux.exit(127);
+        applyDefaultSignals(request.default_signals) catch linux.exit(127);
         applyLinuxFdActions(request.fd_actions);
         const exec_rc = linux.execve(request.path.ptr, request.argv.ptr, request.envp.ptr);
         if (linux.errno(exec_rc) == .NOEXEC) {
@@ -1093,6 +1094,7 @@ fn linuxSpawn(request: host.SpawnRequest) SpawnError!host.SpawnResult {
 fn linuxExec(request: host.SpawnRequest) SpawnError!void {
     const linux = std.os.linux;
     if (request.process_group) |process_group| linuxSetProcessGroup(0, process_group) catch return error.Unexpected;
+    applyDefaultSignals(request.default_signals) catch return error.Unexpected;
     applyLinuxFdActions(request.fd_actions);
     const exec_rc = linux.execve(request.path.ptr, request.argv.ptr, request.envp.ptr);
     if (linux.errno(exec_rc) == .NOEXEC) {
@@ -1177,6 +1179,7 @@ fn libcSpawn(request: host.SpawnRequest) SpawnError!host.SpawnResult {
     const pid: i32 = @intCast(fork_rc);
     if (pid == 0) {
         if (request.process_group) |process_group| libcSetProcessGroup(0, process_group) catch std.c._exit(127);
+        applyDefaultSignals(request.default_signals) catch std.c._exit(127);
         applyLibcFdActions(request.fd_actions);
         const exec_rc = std.c.execve(request.path.ptr, request.argv.ptr, request.envp.ptr);
         if (std.c.errno(exec_rc) == .NOEXEC) {
@@ -1190,6 +1193,7 @@ fn libcSpawn(request: host.SpawnRequest) SpawnError!host.SpawnResult {
 
 fn libcExec(request: host.SpawnRequest) SpawnError!void {
     if (request.process_group) |process_group| libcSetProcessGroup(0, process_group) catch return error.Unexpected;
+    applyDefaultSignals(request.default_signals) catch return error.Unexpected;
     applyLibcFdActions(request.fd_actions);
     const exec_rc = std.c.execve(request.path.ptr, request.argv.ptr, request.envp.ptr);
     if (std.c.errno(exec_rc) == .NOEXEC) {
@@ -1258,6 +1262,10 @@ fn libcWaitInterruptible(pid: host.Pid) WaitError!host.WaitStatus {
             else => return error.Unexpected,
         }
     }
+}
+
+fn applyDefaultSignals(signals: []const u8) SignalDispositionError!void {
+    for (signals) |signal| try setSignalDefault(signal);
 }
 
 fn applyLinuxFdActions(actions: []const host.SpawnFdAction) void {
