@@ -1,0 +1,66 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "cat",
+    "description": "concatenate and print files",
+    "options": [
+      {
+        "short": "b",
+        "description": "number the non-blank output lines, starting at 1",
+        "inherit": false
+      },
+      {
+        "short": "e",
+        "description": "display non-printing characters (see the -v option), and display a dollar sign (\u2018$\u2019) at the end of each line",
+        "inherit": false
+      },
+      {
+        "short": "l",
+        "description": "set an exclusive advisory lock on the standard output file descriptor. This lock is set using fcntl(2) with the F_SETLKW command. If the output file is already ",
+        "inherit": false
+      },
+      {
+        "short": "n",
+        "description": "number the output lines, starting at 1",
+        "inherit": false
+      },
+      {
+        "short": "s",
+        "description": "squeeze multiple adjacent empty lines, causing the output to be single spaced",
+        "inherit": false
+      },
+      {
+        "short": "t",
+        "description": "display non-printing characters (see the -v option), and display tab characters as \u2018^I\u2019",
+        "inherit": false
+      },
+      {
+        "short": "u",
+        "description": "disable output buffering",
+        "inherit": false
+      },
+      {
+        "short": "v",
+        "description": "display non-printing characters so they are visible. Control characters print as \u2018^X\u2019 for control-X; the delete character (octal 0177) prints as \u2018^?\u2019. Non-ASCII",
+        "inherit": false
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "file",
+          "provider": "builtin.files",
+          "index": 0,
+          "repeatable": true,
+          "description": "file to print"
+        }
+      ]
+    },
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
