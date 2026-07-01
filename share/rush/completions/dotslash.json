@@ -1,0 +1,28 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "dotslash",
+    "arguments": {
+      "states": [
+        {
+          "name": "path",
+          "provider": [
+            "builtin.files",
+            "builtin.directories"
+          ],
+          "index": 0
+        }
+      ]
+    },
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      }
+    },
+    "description": "run a dotslash file"
+  }
+}
