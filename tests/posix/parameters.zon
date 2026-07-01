@@ -106,6 +106,24 @@
             .status = 0,
         },
         .{
+            .name = "parameter operators preserve embedded at field boundaries",
+            .script =
+            \\set -- ' abc ' ' def ghi ' ' jkl '
+            \\IFS=
+            \\set "${1+ foo: $@ bar }"
+            \\printf '<%s>\n' "$#" "$1" "$2" "$3"
+            ,
+            .stdout =
+            \\<3>
+            \\< foo:  abc >
+            \\< def ghi >
+            \\< jkl  bar >
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "embedded double-quoted at joins the first and last generated fields",
             .script =
             \\set -- A B

@@ -600,7 +600,8 @@ fn appendSpecialQuotedFields(shell: anytype, fields: *std.ArrayList([]const u8),
 
 fn appendParameterOperatorAtFields(shell: anytype, fields: *std.ArrayList([]const u8), word: ast.Word) !bool {
     const parameter = singleParameterWord(word) orelse return false;
-    if (parameter.op == null or parameter.word == null or !wordIsAtParameter(parameter.word.?)) return false;
+    if (parameter.op == null or parameter.word == null) return false;
+    const at_parts = atExpansionParts(parameter.word.?) orelse return false;
 
     const is_set = isParameterSet(parameter, try parameterCurrentValue(shell, parameter.parameter));
     const selected = switch (parameter.op.?) {
@@ -610,7 +611,7 @@ fn appendParameterOperatorAtFields(shell: anytype, fields: *std.ArrayList([]cons
     };
     if (!selected) return false;
 
-    try fields.appendSlice(shell.scratchAllocator(), shell.state.positionals);
+    try appendQuotedAtPartsFields(shell, fields, at_parts);
     return true;
 }
 
@@ -640,6 +641,11 @@ fn appendEmbeddedQuotedAtFields(shell: anytype, fields: *std.ArrayList([]const u
     };
     if (!wordPartsContainAtParameter(quoted)) return false;
 
+    try appendQuotedAtPartsFields(shell, fields, quoted);
+    return true;
+}
+
+fn appendQuotedAtPartsFields(shell: anytype, fields: *std.ArrayList([]const u8), quoted: []const ast.WordPart) !void {
     const positionals = shell.state.positionals;
     const allocator = shell.scratchAllocator();
     const start_len = fields.items.len;
@@ -658,7 +664,6 @@ fn appendEmbeddedQuotedAtFields(shell: anytype, fields: *std.ArrayList([]const u
     if (fields.items.len == start_len + 1 and fields.items[start_len].len == 0) {
         _ = fields.pop();
     }
-    return true;
 }
 
 fn appendTextToLastField(shell: anytype, fields: *std.ArrayList([]const u8), text: []const u8) !void {
@@ -773,6 +778,18 @@ fn wordIsAtParameter(word: ast.Word) bool {
             },
             else => false,
         },
+    };
+}
+
+fn atExpansionParts(word: ast.Word) ?[]const ast.WordPart {
+    return switch (word.data) {
+        .literal => null,
+        .parts => |parts| if (wordPartsContainAtParameter(parts))
+            parts
+        else if (parts.len == 1) switch (parts[0]) {
+            .double_quoted => |quoted| if (wordPartsContainAtParameter(quoted)) quoted else null,
+            else => null,
+        } else null,
     };
 }
 
