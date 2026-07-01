@@ -1,0 +1,101 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "dig",
+    "description": "query DNS records",
+    "subcommands": [
+      {
+        "name": "A",
+        "description": "query A Record",
+        "options": [
+          {
+            "spellings": [
+              "+short"
+            ],
+            "description": "only print meaningful results",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "MX",
+        "description": "query MX Record",
+        "options": [
+          {
+            "spellings": [
+              "+short"
+            ],
+            "description": "only print meaningful results",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "CNAME",
+        "description": "query CNAME Record",
+        "options": [
+          {
+            "spellings": [
+              "+short"
+            ],
+            "description": "only print meaningful results",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "TXT",
+        "description": "query TXT Record",
+        "options": [
+          {
+            "spellings": [
+              "+short"
+            ],
+            "description": "only print meaningful results",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "NS",
+        "description": "query NS record",
+        "options": [
+          {
+            "spellings": [
+              "+short"
+            ],
+            "description": "only print meaningful results",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "SOA",
+        "description": "query SOA Record",
+        "options": [
+          {
+            "spellings": [
+              "+short"
+            ],
+            "description": "only print meaningful results",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "TTL",
+        "description": "query TTL Record",
+        "options": [
+          {
+            "spellings": [
+              "+short"
+            ],
+            "description": "only print meaningful results",
+            "inherit": false
+          }
+        ]
+      }
+    ]
+  }
+}
