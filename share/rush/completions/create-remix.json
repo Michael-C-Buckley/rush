@@ -1,0 +1,22 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "create-remix",
+    "options": [
+      {
+        "short": "h",
+        "long": "help",
+        "description": "display help for command",
+        "inherit": false
+      },
+      {
+        "short": "v",
+        "long": "version",
+        "description": "display version for command",
+        "inherit": false
+      }
+    ],
+    "description": "create a Remix app"
+  }
+}
