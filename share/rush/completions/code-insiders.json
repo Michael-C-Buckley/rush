@@ -1,0 +1,35 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "code-insiders",
+    "description": "open files in visual studio code insiders",
+    "providers": {
+      "builtin.files": { "builtin": "files" },
+      "builtin.directories": { "builtin": "directories" }
+    },
+    "options": [
+      { "short": "a", "long": "add", "description": "add folder to last active window", "inherit": false },
+      { "short": "d", "long": "diff", "description": "compare two files", "inherit": false },
+      { "short": "g", "long": "goto", "description": "open file at line and column", "inherit": false },
+      { "short": "n", "long": "new-window", "description": "force new window", "inherit": false, "exclusiveGroup": "code.window" },
+      { "short": "r", "long": "reuse-window", "description": "force opening in existing window", "inherit": false, "exclusiveGroup": "code.window" },
+      { "short": "w", "long": "wait", "description": "wait for files to close", "inherit": false },
+      { "long": "user-data-dir", "description": "set user data directory", "inherit": false, "value": { "name": "directory", "provider": "builtin.directories" } },
+      { "long": "profile", "description": "open with profile", "inherit": false, "value": { "name": "profile" } },
+      { "long": "extensions-dir", "description": "set extensions directory", "inherit": false, "value": { "name": "directory", "provider": "builtin.directories" } },
+      { "long": "list-extensions", "description": "list installed extensions", "inherit": false },
+      { "long": "show-versions", "description": "show extension versions", "inherit": false },
+      { "long": "install-extension", "description": "install extension", "inherit": false, "value": { "name": "extension" } },
+      { "long": "uninstall-extension", "description": "uninstall extension", "inherit": false, "value": { "name": "extension" } },
+      { "long": "disable-extensions", "description": "disable all extensions", "inherit": false },
+      { "short": "v", "long": "version", "description": "show version", "inherit": false },
+      { "short": "h", "long": "help", "description": "show help", "inherit": false }
+    ],
+    "arguments": {
+      "states": [
+        { "name": "path", "index": 0, "description": "file or directory to open", "provider": "builtin.files", "repeatable": true }
+      ]
+    }
+  }
+}
