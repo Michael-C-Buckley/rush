@@ -1,0 +1,22 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "figterm",
+    "description": "run the Fig terminal layer",
+    "options": [
+      {
+        "long": "help",
+        "short": "h",
+        "description": "print help information",
+        "inherit": false
+      },
+      {
+        "long": "version",
+        "short": "V",
+        "description": "print version information",
+        "inherit": false
+      }
+    ]
+  }
+}
