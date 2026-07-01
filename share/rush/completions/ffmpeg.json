@@ -1,0 +1,1615 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "ffmpeg",
+    "description": "record, convert, and stream audio and video",
+    "options": [
+      {
+        "short": "i",
+        "description": "input file",
+        "inherit": false,
+        "value": {
+          "name": "infile",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "short": "L",
+        "description": "show license",
+        "inherit": false
+      },
+      {
+        "short": "h",
+        "description": "show help",
+        "inherit": false,
+        "value": {
+          "name": "topic"
+        }
+      },
+      {
+        "short": "?",
+        "description": "show help",
+        "inherit": false,
+        "value": {
+          "name": "topic"
+        }
+      },
+      {
+        "spellings": [
+          "-help"
+        ],
+        "description": "show help",
+        "inherit": false,
+        "value": {
+          "name": "topic"
+        }
+      },
+      {
+        "long": "help",
+        "description": "show help",
+        "inherit": false,
+        "value": {
+          "name": "topic"
+        }
+      },
+      {
+        "spellings": [
+          "-version"
+        ],
+        "description": "show version",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-buildconf"
+        ],
+        "description": "show build configuration",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-formats"
+        ],
+        "description": "show available formats",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-muxers"
+        ],
+        "description": "show available muxers",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-demuxers"
+        ],
+        "description": "show available demuxers",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-devices"
+        ],
+        "description": "show available devices",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-codecs"
+        ],
+        "description": "show available codecs",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-decoders"
+        ],
+        "description": "show available decoders",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-encoders"
+        ],
+        "description": "show available encoders",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-bsfs"
+        ],
+        "description": "show available bit stream filters",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-protocols"
+        ],
+        "description": "show available protocols",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-filters"
+        ],
+        "description": "show available filters",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-pix_fmts"
+        ],
+        "description": "show available pixel formats",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-layouts"
+        ],
+        "description": "show standard channel layouts",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-sample_fmts"
+        ],
+        "description": "show available audio sample formats",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-dispositions"
+        ],
+        "description": "show available stream dispositions",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-colors"
+        ],
+        "description": "show available color names",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-sources"
+        ],
+        "description": "list sources of the input device",
+        "inherit": false,
+        "value": {
+          "name": "device"
+        }
+      },
+      {
+        "spellings": [
+          "-sinks"
+        ],
+        "description": "list sinks of the output device",
+        "inherit": false,
+        "value": {
+          "name": "device"
+        }
+      },
+      {
+        "spellings": [
+          "-hwaccels"
+        ],
+        "description": "show available HW acceleration methods",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-loglevel"
+        ],
+        "description": "set logging level",
+        "inherit": false,
+        "value": {
+          "name": "loglevel"
+        }
+      },
+      {
+        "short": "v",
+        "description": "set logging level",
+        "inherit": false,
+        "value": {
+          "name": "loglevel"
+        }
+      },
+      {
+        "spellings": [
+          "-report"
+        ],
+        "description": "generate a report",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-max_alloc"
+        ],
+        "description": "set maximum size of a single allocated block",
+        "inherit": false,
+        "value": {
+          "name": "bytes"
+        }
+      },
+      {
+        "short": "y",
+        "description": "overwrite output files",
+        "inherit": false
+      },
+      {
+        "short": "n",
+        "description": "never overwrite output files",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-ignore_unknown"
+        ],
+        "description": "ignore unknown stream types",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-filter_threads"
+        ],
+        "description": "number of non-complex filter threads",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-filter_complex_threads"
+        ],
+        "description": "number of threads for -filter_complex",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-stats"
+        ],
+        "description": "print progress report during encoding",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-max_error_rate"
+        ],
+        "description": "ratio of decoding errors (0.0: no errors, 1.0: 100% errors) above which ffmpeg returns an error instead of success",
+        "inherit": false,
+        "value": {
+          "name": "maximum-error-rate"
+        }
+      },
+      {
+        "spellings": [
+          "-vol"
+        ],
+        "description": "change audio volume (256=normal)",
+        "inherit": false,
+        "value": {
+          "name": "volume"
+        }
+      },
+      {
+        "spellings": [
+          "-cpuflags"
+        ],
+        "description": "force specific cpu flags",
+        "inherit": false,
+        "value": {
+          "name": "flags"
+        }
+      },
+      {
+        "spellings": [
+          "-cpucount"
+        ],
+        "description": "force specific cpu count",
+        "inherit": false,
+        "value": {
+          "name": "count"
+        }
+      },
+      {
+        "spellings": [
+          "-hide_banner"
+        ],
+        "description": "do not show program banner",
+        "inherit": false,
+        "value": {
+          "name": "hide_banner"
+        }
+      },
+      {
+        "spellings": [
+          "-copy_unknown"
+        ],
+        "description": "copy unknown stream types",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-recast_media"
+        ],
+        "description": "allow recasting stream type in order to force a decoder of different media type",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-benchmark"
+        ],
+        "description": "add timings for benchmarking",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-benchmark_all"
+        ],
+        "description": "add timings for each task",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-progress"
+        ],
+        "description": "write program-readable progress information",
+        "inherit": false,
+        "value": {
+          "name": "url"
+        }
+      },
+      {
+        "spellings": [
+          "-stdin"
+        ],
+        "description": "enable or disable interaction on standard input",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-timelimit"
+        ],
+        "description": "set max runtime in seconds in CPU user time",
+        "inherit": false,
+        "value": {
+          "name": "limit"
+        }
+      },
+      {
+        "spellings": [
+          "-dump"
+        ],
+        "description": "dump each input packet",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-hex"
+        ],
+        "description": "when dumping packets, also dump the payload",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-vsync"
+        ],
+        "description": "set video sync method globally; deprecated, use -fps_mode",
+        "inherit": false,
+        "deprecated": true
+      },
+      {
+        "spellings": [
+          "-frame_drop_threshold"
+        ],
+        "description": "frame drop threshold",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-async"
+        ],
+        "description": "audio sync method",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-adrift_threshold"
+        ],
+        "description": "audio drift threshold",
+        "inherit": false,
+        "value": {
+          "name": "threshold"
+        }
+      },
+      {
+        "spellings": [
+          "-copyts"
+        ],
+        "description": "copy timestamps",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-start_at_zero"
+        ],
+        "description": "shift input timestamps to start at 0 when using copyts",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-copytb"
+        ],
+        "description": "copy input stream time base when stream copying",
+        "inherit": false,
+        "value": {
+          "name": "mode"
+        }
+      },
+      {
+        "spellings": [
+          "-dts_delta_threshold"
+        ],
+        "description": "timestamp discontinuity delta threshold",
+        "inherit": false,
+        "value": {
+          "name": "threshold"
+        }
+      },
+      {
+        "spellings": [
+          "-dts_error_threshold"
+        ],
+        "description": "timestamp error delta threshold",
+        "inherit": false,
+        "value": {
+          "name": "threshold"
+        }
+      },
+      {
+        "spellings": [
+          "-xerror"
+        ],
+        "description": "exit on error",
+        "inherit": false,
+        "value": {
+          "name": "error"
+        }
+      },
+      {
+        "spellings": [
+          "-abort_on"
+        ],
+        "description": "abort on the specified condition flags",
+        "inherit": false,
+        "value": {
+          "name": "flags"
+        }
+      },
+      {
+        "spellings": [
+          "-filter_complex"
+        ],
+        "description": "create a complex filtergraph",
+        "inherit": false,
+        "value": {
+          "name": "graph_description"
+        }
+      },
+      {
+        "spellings": [
+          "-lavfi"
+        ],
+        "description": "create a complex filtergraph",
+        "inherit": false,
+        "value": {
+          "name": "graph_description"
+        }
+      },
+      {
+        "spellings": [
+          "-filter_complex_script"
+        ],
+        "description": "read complex filtergraph description from a file",
+        "inherit": false,
+        "value": {
+          "name": "filename"
+        }
+      },
+      {
+        "spellings": [
+          "-auto_conversion_filters"
+        ],
+        "description": "enable automatic conversion filters globally",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-stats_period"
+        ],
+        "description": "set the period at which ffmpeg updates stats and -progress output",
+        "inherit": false,
+        "value": {
+          "name": "time"
+        }
+      },
+      {
+        "spellings": [
+          "-debug_ts"
+        ],
+        "description": "print timestamp debugging info",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-psnr"
+        ],
+        "description": "calculate PSNR of compressed frames",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-vstats"
+        ],
+        "description": "dump video coding statistics to file",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-vstats_file"
+        ],
+        "description": "dump video coding statistics to file",
+        "inherit": false,
+        "value": {
+          "name": "file"
+        }
+      },
+      {
+        "spellings": [
+          "-vstats_version"
+        ],
+        "description": "version of the vstats format to use",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-qphist"
+        ],
+        "description": "show QP histogram",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-sdp_file"
+        ],
+        "description": "specify a file in which to print sdp information",
+        "inherit": false,
+        "value": {
+          "name": "file"
+        }
+      },
+      {
+        "spellings": [
+          "-init_hw_device"
+        ],
+        "description": "initialise hardware device",
+        "inherit": false,
+        "value": {
+          "name": "args"
+        }
+      },
+      {
+        "spellings": [
+          "-filter_hw_device"
+        ],
+        "description": "set hardware device used when filtering",
+        "inherit": false,
+        "value": {
+          "name": "device"
+        }
+      },
+      {
+        "short": "f",
+        "description": "force format",
+        "inherit": false,
+        "value": {
+          "name": "fmt"
+        }
+      },
+      {
+        "short": "c",
+        "description": "codec name",
+        "inherit": false,
+        "value": {
+          "name": "codec"
+        }
+      },
+      {
+        "spellings": [
+          "-codec"
+        ],
+        "description": "codec name",
+        "inherit": false,
+        "value": {
+          "name": "codec"
+        }
+      },
+      {
+        "spellings": [
+          "-pre"
+        ],
+        "description": "preset name",
+        "inherit": false,
+        "value": {
+          "name": "preset"
+        }
+      },
+      {
+        "spellings": [
+          "-map_metadata"
+        ],
+        "description": "set metadata information of outfile from infile",
+        "inherit": false,
+        "value": {
+          "name": "outfile[,metadata]:infile[,metadata]"
+        }
+      },
+      {
+        "short": "t",
+        "description": "record or transcode \"duration\" seconds of audio/video",
+        "inherit": false,
+        "value": {
+          "name": "duration"
+        }
+      },
+      {
+        "spellings": [
+          "-to"
+        ],
+        "description": "record or transcode stop time",
+        "inherit": false,
+        "value": {
+          "name": "time_stop"
+        }
+      },
+      {
+        "spellings": [
+          "-fs"
+        ],
+        "description": "set the limit file size in bytes",
+        "inherit": false,
+        "value": {
+          "name": "limit_size"
+        }
+      },
+      {
+        "spellings": [
+          "-ss"
+        ],
+        "description": "set the start time offset",
+        "inherit": false,
+        "value": {
+          "name": "time_off"
+        }
+      },
+      {
+        "spellings": [
+          "-sseof"
+        ],
+        "description": "set the start time offset relative to EOF",
+        "inherit": false,
+        "value": {
+          "name": "time_off"
+        }
+      },
+      {
+        "spellings": [
+          "-seek_timestamp"
+        ],
+        "description": "enable/disable seeking by timestamp with -ss",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-timestamp"
+        ],
+        "description": "set the recording timestamp ('now' to set the current time)",
+        "inherit": false,
+        "value": {
+          "name": "time"
+        }
+      },
+      {
+        "spellings": [
+          "-metadata"
+        ],
+        "description": "add metadata",
+        "inherit": false,
+        "value": {
+          "name": "string=string"
+        }
+      },
+      {
+        "spellings": [
+          "-program"
+        ],
+        "description": "add program with specified streams",
+        "inherit": false,
+        "value": {
+          "name": "title=string:st=number..."
+        }
+      },
+      {
+        "spellings": [
+          "-target"
+        ],
+        "description": "specify target file type (\"vcd\", \"svcd\", \"dvd\", \"dv\" or \"dv50\" with optional prefixes \"pal-\", \"ntsc-\" or \"film-\")",
+        "inherit": false,
+        "value": {
+          "name": "type"
+        }
+      },
+      {
+        "spellings": [
+          "-apad"
+        ],
+        "description": "audio pad",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-frames"
+        ],
+        "description": "set the number of frames to output",
+        "inherit": false,
+        "value": {
+          "name": "number"
+        }
+      },
+      {
+        "spellings": [
+          "-filter"
+        ],
+        "description": "set stream filtergraph",
+        "inherit": false,
+        "value": {
+          "name": "filter_graph"
+        }
+      },
+      {
+        "spellings": [
+          "-filter_script"
+        ],
+        "description": "read stream filtergraph description from a file",
+        "inherit": false,
+        "value": {
+          "name": "filename"
+        }
+      },
+      {
+        "spellings": [
+          "-reinit_filter"
+        ],
+        "description": "reinit filtergraph on input parameter changes",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-discard"
+        ],
+        "description": "discard",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-disposition"
+        ],
+        "description": "disposition",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-map"
+        ],
+        "description": "set input stream mapping",
+        "inherit": false,
+        "value": {
+          "name": "[-]input_file_id[:stream_specifier][,sync_file_id[:stream_specifier]]"
+        }
+      },
+      {
+        "spellings": [
+          "-map_channel"
+        ],
+        "description": "map an audio channel from one stream to another",
+        "inherit": false,
+        "value": {
+          "name": "file.stream.channel[:syncfile.syncstream]"
+        }
+      },
+      {
+        "spellings": [
+          "-map_chapters"
+        ],
+        "description": "set chapters mapping",
+        "inherit": false,
+        "value": {
+          "name": "input_file_index"
+        }
+      },
+      {
+        "spellings": [
+          "-accurate_seek"
+        ],
+        "description": "enable/disable accurate seeking with -ss",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-isync"
+        ],
+        "description": "indicate the input index for sync reference",
+        "inherit": false,
+        "value": {
+          "name": "sync-ref"
+        }
+      },
+      {
+        "spellings": [
+          "-itsoffset"
+        ],
+        "description": "set the input ts offset",
+        "inherit": false,
+        "value": {
+          "name": "time_off"
+        }
+      },
+      {
+        "spellings": [
+          "-itsscale"
+        ],
+        "description": "set the input ts scale",
+        "inherit": false,
+        "value": {
+          "name": "scale"
+        }
+      },
+      {
+        "spellings": [
+          "-dframes"
+        ],
+        "description": "set the number of data frames to output",
+        "inherit": false,
+        "value": {
+          "name": "number"
+        }
+      },
+      {
+        "spellings": [
+          "-re"
+        ],
+        "description": "read input at native frame rate; equivalent to -readrate 1",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-readrate"
+        ],
+        "description": "read input at specified rate",
+        "inherit": false,
+        "value": {
+          "name": "speed"
+        }
+      },
+      {
+        "spellings": [
+          "-shortest"
+        ],
+        "description": "finish encoding within shortest input",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-bitexact"
+        ],
+        "description": "bitexact mode",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-copyinkf"
+        ],
+        "description": "copy initial non-keyframes",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-copypriorss"
+        ],
+        "description": "copy or discard frames before start time",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-tag"
+        ],
+        "description": "force codec tag/fourcc",
+        "inherit": false,
+        "value": {
+          "name": "fourcc/tag"
+        }
+      },
+      {
+        "short": "q",
+        "description": "use fixed quality scale (VBR)",
+        "inherit": false,
+        "value": {
+          "name": "q"
+        }
+      },
+      {
+        "spellings": [
+          "-qscale"
+        ],
+        "description": "use fixed quality scale (VBR)",
+        "inherit": false,
+        "value": {
+          "name": "q"
+        }
+      },
+      {
+        "spellings": [
+          "-profile"
+        ],
+        "description": "set profile",
+        "inherit": false,
+        "value": {
+          "name": "profile"
+        }
+      },
+      {
+        "spellings": [
+          "-attach"
+        ],
+        "description": "add an attachment to the output file",
+        "inherit": false,
+        "value": {
+          "name": "filename"
+        }
+      },
+      {
+        "spellings": [
+          "-dump_attachment"
+        ],
+        "description": "extract an attachment into a file",
+        "inherit": false,
+        "value": {
+          "name": "filename"
+        }
+      },
+      {
+        "spellings": [
+          "-stream_loop"
+        ],
+        "description": "set number of times input stream shall be looped",
+        "inherit": false,
+        "value": {
+          "name": "loop-count"
+        }
+      },
+      {
+        "spellings": [
+          "-thread_queue_size"
+        ],
+        "description": "set the maximum number of queued packets from the demuxer",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-find_stream_info"
+        ],
+        "description": "read and decode the streams to fill missing information with heuristics",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-bits_per_raw_sample"
+        ],
+        "description": "set the number of bits per raw sample",
+        "inherit": false,
+        "value": {
+          "name": "number"
+        }
+      },
+      {
+        "spellings": [
+          "-autorotate"
+        ],
+        "description": "automatically insert correct rotate filters",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-autoscale"
+        ],
+        "description": "automatically insert a scale filter at the end of the filter graph",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-muxdelay"
+        ],
+        "description": "set the maximum demux-decode delay",
+        "inherit": false,
+        "value": {
+          "name": "seconds"
+        }
+      },
+      {
+        "spellings": [
+          "-muxpreload"
+        ],
+        "description": "set the initial demux-decode delay",
+        "inherit": false,
+        "value": {
+          "name": "seconds"
+        }
+      },
+      {
+        "spellings": [
+          "-time_base"
+        ],
+        "description": "set the desired time base hint for output stream (1:24, 1:48000 or 0.04166, 2.0833e-5)",
+        "inherit": false,
+        "value": {
+          "name": "ratio"
+        }
+      },
+      {
+        "spellings": [
+          "-enc_time_base"
+        ],
+        "description": "set the desired time base for the encoder (1:24, 1:48000 or 0.04166, 2.0833e-5). two special values are defined - 0 = use frame rate (video) or sample rate (aud",
+        "inherit": false,
+        "value": {
+          "name": "ratio"
+        }
+      },
+      {
+        "spellings": [
+          "-bsf"
+        ],
+        "description": "a comma-separated list of bitstream filters",
+        "inherit": false,
+        "value": {
+          "name": "bitstream_filters"
+        }
+      },
+      {
+        "spellings": [
+          "-fpre"
+        ],
+        "description": "set options from indicated preset file",
+        "inherit": false,
+        "value": {
+          "name": "filename"
+        }
+      },
+      {
+        "spellings": [
+          "-max_muxing_queue_size"
+        ],
+        "description": "maximum number of packets that can be buffered while waiting for all streams to initialize",
+        "inherit": false,
+        "value": {
+          "name": "packets"
+        }
+      },
+      {
+        "spellings": [
+          "-muxing_queue_data_threshold"
+        ],
+        "description": "set the threshold after which max_muxing_queue_size is taken into account",
+        "inherit": false,
+        "value": {
+          "name": "bytes"
+        }
+      },
+      {
+        "spellings": [
+          "-dcodec"
+        ],
+        "description": "force data codec ('copy' to copy stream)",
+        "inherit": false,
+        "value": {
+          "name": "codec"
+        }
+      },
+      {
+        "spellings": [
+          "-vframes"
+        ],
+        "description": "set the number of video frames to output",
+        "inherit": false,
+        "value": {
+          "name": "number"
+        }
+      },
+      {
+        "short": "r",
+        "description": "set frame rate (Hz value, fraction or abbreviation)",
+        "inherit": false,
+        "value": {
+          "name": "rate"
+        }
+      },
+      {
+        "spellings": [
+          "-fpsmax"
+        ],
+        "description": "set max frame rate (Hz value, fraction or abbreviation)",
+        "inherit": false,
+        "value": {
+          "name": "rate"
+        }
+      },
+      {
+        "short": "s",
+        "description": "set frame size (WxH or abbreviation)",
+        "inherit": false,
+        "value": {
+          "name": "size"
+        }
+      },
+      {
+        "spellings": [
+          "-aspect"
+        ],
+        "description": "set aspect ratio (4:3, 16:9 or 1.3333, 1.7777)",
+        "inherit": false,
+        "value": {
+          "name": "aspect"
+        }
+      },
+      {
+        "spellings": [
+          "-vn"
+        ],
+        "description": "disable video",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-vcodec"
+        ],
+        "description": "force video codec ('copy' to copy stream)",
+        "inherit": false,
+        "value": {
+          "name": "codec"
+        }
+      },
+      {
+        "spellings": [
+          "-timecode"
+        ],
+        "description": "set initial TimeCode value",
+        "inherit": false,
+        "value": {
+          "name": "hh:mm:ss[:;.]ff"
+        }
+      },
+      {
+        "spellings": [
+          "-pass"
+        ],
+        "description": "select the pass number (1 to 3)",
+        "inherit": false,
+        "value": {
+          "name": "n"
+        }
+      },
+      {
+        "spellings": [
+          "-vf"
+        ],
+        "description": "set video filters",
+        "inherit": false,
+        "value": {
+          "name": "filter_graph"
+        }
+      },
+      {
+        "spellings": [
+          "-ab"
+        ],
+        "description": "audio bitrate (please use -b:a)",
+        "inherit": false,
+        "value": {
+          "name": "bitrate"
+        }
+      },
+      {
+        "short": "b",
+        "description": "video bitrate (please use -b:v)",
+        "inherit": false,
+        "value": {
+          "name": "bitrate"
+        }
+      },
+      {
+        "spellings": [
+          "-dn"
+        ],
+        "description": "disable data",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-pix_fmt"
+        ],
+        "description": "set pixel format",
+        "inherit": false,
+        "value": {
+          "name": "format"
+        }
+      },
+      {
+        "spellings": [
+          "-rc_override"
+        ],
+        "description": "rate control override for specific intervals",
+        "inherit": false,
+        "value": {
+          "name": "override"
+        }
+      },
+      {
+        "spellings": [
+          "-passlogfile"
+        ],
+        "description": "select two pass log file name prefix",
+        "inherit": false,
+        "value": {
+          "name": "prefix"
+        }
+      },
+      {
+        "spellings": [
+          "-intra_matrix"
+        ],
+        "description": "specify intra matrix coeffs",
+        "inherit": false,
+        "value": {
+          "name": "matrix"
+        }
+      },
+      {
+        "spellings": [
+          "-inter_matrix"
+        ],
+        "description": "specify inter matrix coeffs",
+        "inherit": false,
+        "value": {
+          "name": "matrix"
+        }
+      },
+      {
+        "spellings": [
+          "-chroma_intra_matrix"
+        ],
+        "description": "specify intra matrix coeffs",
+        "inherit": false,
+        "value": {
+          "name": "matrix"
+        }
+      },
+      {
+        "spellings": [
+          "-top"
+        ],
+        "description": "top=1/bottom=0/auto=-1 field first",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-vtag"
+        ],
+        "description": "force video tag/fourcc",
+        "inherit": false,
+        "value": {
+          "name": "fourcc/tag"
+        }
+      },
+      {
+        "spellings": [
+          "-fps_mode"
+        ],
+        "description": "set framerate mode for matching video streams; overrides vsync",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-force_fps"
+        ],
+        "description": "force the selected framerate, disable the best supported framerate selection",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-streamid"
+        ],
+        "description": "set the value of an outfile streamid",
+        "inherit": false,
+        "value": {
+          "name": "streamIndex:value"
+        }
+      },
+      {
+        "spellings": [
+          "-force_key_frames"
+        ],
+        "description": "force key frames at specified timestamps",
+        "inherit": false,
+        "value": {
+          "name": "timestamps"
+        }
+      },
+      {
+        "spellings": [
+          "-hwaccel"
+        ],
+        "description": "use HW accelerated decoding",
+        "inherit": false,
+        "value": {
+          "name": "hwaccel-name"
+        }
+      },
+      {
+        "spellings": [
+          "-hwaccel_device"
+        ],
+        "description": "select a device for HW acceleration",
+        "inherit": false,
+        "value": {
+          "name": "devicename"
+        }
+      },
+      {
+        "spellings": [
+          "-hwaccel_output_format"
+        ],
+        "description": "select output format used with HW accelerated decoding",
+        "inherit": false,
+        "value": {
+          "name": "format"
+        }
+      },
+      {
+        "spellings": [
+          "-vbsf"
+        ],
+        "description": "deprecated",
+        "inherit": false,
+        "deprecated": true,
+        "value": {
+          "name": "video-bitstream_filters"
+        }
+      },
+      {
+        "spellings": [
+          "-vpre"
+        ],
+        "description": "set the video options to the indicated preset",
+        "inherit": false,
+        "value": {
+          "name": "preset"
+        }
+      },
+      {
+        "spellings": [
+          "-aframes"
+        ],
+        "description": "set the number of audio frames to output",
+        "inherit": false,
+        "value": {
+          "name": "number"
+        }
+      },
+      {
+        "spellings": [
+          "-aq"
+        ],
+        "description": "set audio quality (codec-specific)",
+        "inherit": false,
+        "value": {
+          "name": "quality"
+        }
+      },
+      {
+        "spellings": [
+          "-ar"
+        ],
+        "description": "set audio sampling rate (in Hz)",
+        "inherit": false,
+        "value": {
+          "name": "rate"
+        }
+      },
+      {
+        "spellings": [
+          "-ac"
+        ],
+        "description": "set number of audio channels",
+        "inherit": false,
+        "value": {
+          "name": "channels"
+        }
+      },
+      {
+        "spellings": [
+          "-an"
+        ],
+        "description": "disable audio",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-acodec"
+        ],
+        "description": "force audio codec ('copy' to copy stream)",
+        "inherit": false,
+        "value": {
+          "name": "codec"
+        }
+      },
+      {
+        "spellings": [
+          "-af"
+        ],
+        "description": "set audio filters",
+        "inherit": false,
+        "value": {
+          "name": "filter_graph"
+        }
+      },
+      {
+        "spellings": [
+          "-atag"
+        ],
+        "description": "force audio tag/fourcc",
+        "inherit": false,
+        "value": {
+          "name": "fourcc/tag"
+        }
+      },
+      {
+        "spellings": [
+          "-sample_fmt"
+        ],
+        "description": "set sample format",
+        "inherit": false,
+        "value": {
+          "name": "format"
+        }
+      },
+      {
+        "spellings": [
+          "-channel_layout"
+        ],
+        "description": "set channel layout",
+        "inherit": false,
+        "value": {
+          "name": "layout"
+        }
+      },
+      {
+        "spellings": [
+          "-ch_layout"
+        ],
+        "description": "set channel layout",
+        "inherit": false,
+        "value": {
+          "name": "layout"
+        }
+      },
+      {
+        "spellings": [
+          "-guess_layout_max"
+        ],
+        "description": "set the maximum number of channels to try to guess the channel layout",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-absf"
+        ],
+        "description": "deprecated",
+        "inherit": false,
+        "deprecated": true,
+        "value": {
+          "name": "audio-bitstream_filters"
+        }
+      },
+      {
+        "spellings": [
+          "-apre"
+        ],
+        "description": "set the audio options to the indicated preset",
+        "inherit": false,
+        "value": {
+          "name": "preset"
+        }
+      },
+      {
+        "spellings": [
+          "-sn"
+        ],
+        "description": "disable subtitle",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-scodec"
+        ],
+        "description": "force subtitle codec ('copy' to copy stream)",
+        "inherit": false,
+        "value": {
+          "name": "codec"
+        }
+      },
+      {
+        "spellings": [
+          "-stag"
+        ],
+        "description": "force subtitle tag/fourcc",
+        "inherit": false,
+        "value": {
+          "name": "fourcc/tag"
+        }
+      },
+      {
+        "spellings": [
+          "-fix_sub_duration"
+        ],
+        "description": "fix subtitles duration",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-canvas_size"
+        ],
+        "description": "set canvas size (WxH or abbreviation)",
+        "inherit": false,
+        "value": {
+          "name": "size"
+        }
+      },
+      {
+        "spellings": [
+          "-spre"
+        ],
+        "description": "set the subtitle options to the indicated preset",
+        "inherit": false,
+        "value": {
+          "name": "preset"
+        }
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "outfile",
+          "description": "output file",
+          "provider": "builtin.files",
+          "index": 0
+        }
+      ]
+    },
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
