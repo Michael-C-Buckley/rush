@@ -212,6 +212,22 @@
             .status = 0,
         },
         .{
+            .name = "trap and kill list common extended signal names",
+            .script =
+            \\trap : VTALRM
+            \\printf 'trap-vtalrm:%s\n' "$?"
+            \\trap - VTALRM
+            \\kill -l 26
+            ,
+            .stdout =
+            \\trap-vtalrm:0
+            \\VTALRM
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "subshell EXIT trap registered inside trap action runs once",
             .script =
             \\trap '(trap "echo nested" EXIT; :)' EXIT

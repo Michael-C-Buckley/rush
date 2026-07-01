@@ -820,9 +820,9 @@ const KillSignal = struct {
 };
 
 const trap_signal_names = [_][]const u8{
-    "HUP",  "INT",  "QUIT", "ILL",  "TRAP", "ABRT", "FPE",  "KILL", "BUS",  "SEGV",
-    "PIPE", "ALRM", "TERM", "USR1", "USR2", "CHLD", "CONT", "STOP", "TSTP", "TTIN",
-    "TTOU",
+    "HUP",  "INT",  "QUIT", "ILL",  "TRAP",   "ABRT", "FPE",   "KILL", "BUS",  "SEGV",
+    "PIPE", "ALRM", "TERM", "USR1", "USR2",   "CHLD", "CONT",  "STOP", "TSTP", "TTIN",
+    "TTOU", "URG",  "XCPU", "XFSZ", "VTALRM", "PROF", "WINCH", "POLL", "SYS",
 };
 
 fn parseTrapSignal(signal: []const u8) ?TrapSignal {
