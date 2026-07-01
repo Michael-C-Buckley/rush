@@ -21,6 +21,7 @@ pub const Origin = enum {
 pub const Id = enum {
     abbr,
     alias,
+    bg,
     bracket,
     break_,
     cd,
@@ -35,6 +36,7 @@ pub const Id = enum {
     export_,
     exit,
     false_,
+    fg,
     getopts,
     hash,
     jobs,
@@ -82,6 +84,7 @@ const DefinitionMap = std.StaticStringMap(Definition);
 pub const core_definitions: DefinitionMap = .initComptime(.{
     .{ "[", Definition{ .name = "[", .id = .bracket, .kind = .regular } },
     .{ "alias", Definition{ .name = "alias", .id = .alias, .kind = .regular } },
+    .{ "bg", Definition{ .name = "bg", .id = .bg, .kind = .regular } },
     .{ "break", Definition{ .name = "break", .id = .break_, .kind = .special } },
     .{ "cd", Definition{ .name = "cd", .id = .cd, .kind = .regular } },
     .{ ":", Definition{ .name = ":", .id = .colon, .kind = .special } },
@@ -93,6 +96,7 @@ pub const core_definitions: DefinitionMap = .initComptime(.{
     .{ "export", Definition{ .name = "export", .id = .export_, .kind = .special } },
     .{ "exit", Definition{ .name = "exit", .id = .exit, .kind = .special } },
     .{ "false", Definition{ .name = "false", .id = .false_, .kind = .regular } },
+    .{ "fg", Definition{ .name = "fg", .id = .fg, .kind = .regular } },
     .{ "getopts", Definition{ .name = "getopts", .id = .getopts, .kind = .regular } },
     .{ "hash", Definition{ .name = "hash", .id = .hash, .kind = .regular } },
     .{ "jobs", Definition{ .name = "jobs", .id = .jobs, .kind = .regular } },
@@ -179,11 +183,13 @@ pub fn eval(shell: anytype, definition: Definition, args: []const []const u8) !r
     return switch (definition.id) {
         .colon, .true_ => .{},
         .alias => evalAlias(shell, args),
+        .bg => evalBg(shell, args),
         .break_ => evalBreak(args),
         .bracket, .cd, .command, .dot, .eval, .exec, .export_, .pwd, .read, .test_, .type, .wait => unreachable,
         .continue_ => evalContinue(args),
         .exit => evalExit(shell, args),
         .false_ => .{ .status = 1 },
+        .fg => evalFg(shell, args),
         .getopts => evalGetopts(shell, args),
         .hash => evalHash(shell, args),
         .jobs => evalJobs(shell, args),
@@ -469,9 +475,13 @@ fn evalKill(shell: anytype, args: []const []const u8) !result.EvalResult {
             status = 1;
             continue;
         };
-        shell.state.forgetBackgroundJob(pid);
+        if (killSignalRemovesJob(kill_signal.number)) shell.state.forgetBackgroundJob(pid);
     }
     return .{ .status = status };
+}
+
+fn killSignalRemovesJob(signal: u8) bool {
+    return signal == signalNumber("TERM").? or signal == signalNumber("KILL").?;
 }
 
 fn killOperandPid(shell: anytype, arg: []const u8) ?host.Pid {
@@ -507,6 +517,40 @@ fn evalJobs(shell: anytype, args: []const []const u8) !result.EvalResult {
         }
     }
     return .{};
+}
+
+fn evalBg(shell: anytype, args: []const []const u8) !result.EvalResult {
+    if (args.len > 1) return .{ .status = 2 };
+    const job = shell.state.currentBackgroundJob() orelse {
+        try shell.host.writeAll(.stderr, "bg: no current job\n");
+        return .{ .status = 1 };
+    };
+    const cont = signalNumber("CONT") orelse return .{ .status = 2 };
+    shell.host.sendSignal(job.pid, cont) catch return .{ .status = 1 };
+    try shell.host.writeAll(
+        .stdout,
+        try std.fmt.allocPrint(shell.scratchAllocator(), "[{}] {s}\n", .{ job.id, job.command }),
+    );
+    return .{};
+}
+
+fn evalFg(shell: anytype, args: []const []const u8) !result.EvalResult {
+    if (args.len > 1) return .{ .status = 2 };
+    const job = shell.state.currentBackgroundJob() orelse {
+        try shell.host.writeAll(.stderr, "fg: no current job\n");
+        return .{ .status = 1 };
+    };
+    const cont = signalNumber("CONT") orelse return .{ .status = 2 };
+    shell.host.sendSignal(job.pid, cont) catch return .{ .status = 1 };
+    try shell.host.writeAll(.stdout, try std.fmt.allocPrint(shell.scratchAllocator(), "{s}\n", .{job.command}));
+    const HostType = switch (@typeInfo(@TypeOf(shell.host))) {
+        .pointer => |pointer| pointer.child,
+        else => @TypeOf(shell.host),
+    };
+    if (!@hasDecl(HostType, "waitInterruptible")) return .{ .status = 1 };
+    _ = shell.state.removeBackgroundPid(job.pid);
+    const waited = shell.host.waitInterruptible(job.pid) catch return .{ .status = 127 };
+    return .{ .status = waited.shellStatus() };
 }
 
 fn evalKillList(shell: anytype, operands: []const []const u8) !result.EvalResult {

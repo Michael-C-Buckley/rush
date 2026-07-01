@@ -453,6 +453,11 @@ pub const State = struct {
         return null;
     }
 
+    pub fn currentBackgroundJob(self: State) ?BackgroundJob {
+        if (self.background_jobs.items.len == 0) return null;
+        return self.background_jobs.items[self.background_jobs.items.len - 1];
+    }
+
     pub fn forgetBackgroundJob(self: *State, pid: host.Pid) void {
         for (self.background_jobs.items, 0..) |job, index| {
             if (job.pid != pid) continue;
