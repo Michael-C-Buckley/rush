@@ -1,0 +1,768 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "amplify",
+    "description": "manage aws amplify projects",
+    "subcommands": [
+      {
+        "name": "init",
+        "description": "initialize a project"
+      },
+      {
+        "name": "configure",
+        "description": "configure project settings"
+      },
+      {
+        "name": "push",
+        "description": "provision cloud resources",
+        "options": [
+          {
+            "short": "y",
+            "description": "answer yes to prompts",
+            "inherit": false
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "notifications",
+            "description": "manage notifications resources"
+          },
+          {
+            "name": "analytics",
+            "description": "manage analytics resources"
+          },
+          {
+            "name": "api",
+            "description": "manage api resources"
+          },
+          {
+            "name": "auth",
+            "description": "manage auth resources"
+          },
+          {
+            "name": "function",
+            "description": "manage function resources"
+          },
+          {
+            "name": "hosting",
+            "description": "manage hosting resources"
+          },
+          {
+            "name": "interactions",
+            "description": "manage interactions resources"
+          },
+          {
+            "name": "predictions",
+            "description": "manage predictions resources"
+          },
+          {
+            "name": "storage",
+            "description": "manage storage resources"
+          },
+          {
+            "name": "xr",
+            "description": "manage xr resources"
+          }
+        ]
+      },
+      {
+        "name": "pull",
+        "description": "fetch backend environment changes"
+      },
+      {
+        "name": "publish",
+        "description": "push and publish the app"
+      },
+      {
+        "name": "serve",
+        "description": "push and run the app locally"
+      },
+      {
+        "name": "status",
+        "description": "show local resource status",
+        "subcommands": [
+          {
+            "name": "notifications",
+            "description": "manage notifications resources"
+          },
+          {
+            "name": "analytics",
+            "description": "manage analytics resources"
+          },
+          {
+            "name": "api",
+            "description": "manage api resources"
+          },
+          {
+            "name": "auth",
+            "description": "manage auth resources"
+          },
+          {
+            "name": "function",
+            "description": "manage function resources"
+          },
+          {
+            "name": "hosting",
+            "description": "manage hosting resources"
+          },
+          {
+            "name": "interactions",
+            "description": "manage interactions resources"
+          },
+          {
+            "name": "predictions",
+            "description": "manage predictions resources"
+          },
+          {
+            "name": "storage",
+            "description": "manage storage resources"
+          },
+          {
+            "name": "xr",
+            "description": "manage xr resources"
+          }
+        ],
+        "options": [
+          {
+            "short": "v",
+            "description": "show verbose resource diff",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "delete",
+        "description": "delete cloud resources"
+      },
+      {
+        "name": "add",
+        "description": "add a local backend resource",
+        "subcommands": [
+          {
+            "name": "notifications",
+            "description": "manage notifications resources"
+          },
+          {
+            "name": "analytics",
+            "description": "manage analytics resources"
+          },
+          {
+            "name": "api",
+            "description": "manage api resources"
+          },
+          {
+            "name": "auth",
+            "description": "manage auth resources"
+          },
+          {
+            "name": "function",
+            "description": "manage function resources"
+          },
+          {
+            "name": "hosting",
+            "description": "manage hosting resources"
+          },
+          {
+            "name": "interactions",
+            "description": "manage interactions resources"
+          },
+          {
+            "name": "predictions",
+            "description": "manage predictions resources"
+          },
+          {
+            "name": "storage",
+            "description": "manage storage resources"
+          },
+          {
+            "name": "xr",
+            "description": "manage xr resources"
+          }
+        ]
+      },
+      {
+        "name": "update",
+        "description": "update a local backend resource",
+        "subcommands": [
+          {
+            "name": "notifications",
+            "description": "manage notifications resources"
+          },
+          {
+            "name": "analytics",
+            "description": "manage analytics resources"
+          },
+          {
+            "name": "api",
+            "description": "manage api resources"
+          },
+          {
+            "name": "auth",
+            "description": "manage auth resources"
+          },
+          {
+            "name": "function",
+            "description": "manage function resources"
+          },
+          {
+            "name": "hosting",
+            "description": "manage hosting resources"
+          },
+          {
+            "name": "interactions",
+            "description": "manage interactions resources"
+          },
+          {
+            "name": "predictions",
+            "description": "manage predictions resources"
+          },
+          {
+            "name": "storage",
+            "description": "manage storage resources"
+          },
+          {
+            "name": "xr",
+            "description": "manage xr resources"
+          }
+        ]
+      },
+      {
+        "name": "remove",
+        "description": "remove a local backend resource",
+        "subcommands": [
+          {
+            "name": "notifications",
+            "description": "manage notifications resources"
+          },
+          {
+            "name": "analytics",
+            "description": "manage analytics resources"
+          },
+          {
+            "name": "api",
+            "description": "manage api resources"
+          },
+          {
+            "name": "auth",
+            "description": "manage auth resources"
+          },
+          {
+            "name": "function",
+            "description": "manage function resources"
+          },
+          {
+            "name": "hosting",
+            "description": "manage hosting resources"
+          },
+          {
+            "name": "interactions",
+            "description": "manage interactions resources"
+          },
+          {
+            "name": "predictions",
+            "description": "manage predictions resources"
+          },
+          {
+            "name": "storage",
+            "description": "manage storage resources"
+          },
+          {
+            "name": "xr",
+            "description": "manage xr resources"
+          }
+        ]
+      },
+      {
+        "name": "upgrade",
+        "description": "install the latest amplify cli"
+      },
+      {
+        "name": "uninstall",
+        "description": "remove global amplify configuration"
+      },
+      {
+        "name": "notifications",
+        "description": "manage notifications resources",
+        "subcommands": [
+          {
+            "name": "add",
+            "description": "add a local backend resource"
+          },
+          {
+            "name": "update",
+            "description": "update a local backend resource"
+          },
+          {
+            "name": "remove",
+            "description": "remove a local backend resource"
+          },
+          {
+            "name": "console",
+            "description": "open the category console"
+          },
+          {
+            "name": "push",
+            "description": "provision cloud resources",
+            "options": [
+              {
+                "short": "y",
+                "description": "answer yes to prompts",
+                "inherit": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "analytics",
+        "description": "manage analytics resources",
+        "subcommands": [
+          {
+            "name": "add",
+            "description": "add a local backend resource"
+          },
+          {
+            "name": "update",
+            "description": "update a local backend resource"
+          },
+          {
+            "name": "remove",
+            "description": "remove a local backend resource"
+          },
+          {
+            "name": "console",
+            "description": "open the category console"
+          },
+          {
+            "name": "push",
+            "description": "provision cloud resources",
+            "options": [
+              {
+                "short": "y",
+                "description": "answer yes to prompts",
+                "inherit": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "api",
+        "subcommands": [
+          {
+            "name": "gql-compile",
+            "description": "compile graphql schema"
+          },
+          {
+            "name": "migrate",
+            "description": "migrate graphql schema"
+          },
+          {
+            "name": "override",
+            "description": "generate override files"
+          },
+          {
+            "name": "rebuild",
+            "description": "rebuild graphql api tables"
+          },
+          {
+            "name": "add",
+            "description": "add a local backend resource"
+          },
+          {
+            "name": "update",
+            "description": "update a local backend resource"
+          },
+          {
+            "name": "remove",
+            "description": "remove a local backend resource"
+          },
+          {
+            "name": "console",
+            "description": "open the category console"
+          },
+          {
+            "name": "push",
+            "description": "provision cloud resources",
+            "options": [
+              {
+                "short": "y",
+                "description": "answer yes to prompts",
+                "inherit": false
+              }
+            ]
+          }
+        ],
+        "description": "manage api resources"
+      },
+      {
+        "name": "auth",
+        "description": "manage auth resources",
+        "subcommands": [
+          {
+            "name": "add",
+            "description": "add a local backend resource"
+          },
+          {
+            "name": "update",
+            "description": "update a local backend resource"
+          },
+          {
+            "name": "remove",
+            "description": "remove a local backend resource"
+          },
+          {
+            "name": "console",
+            "description": "open the category console"
+          },
+          {
+            "name": "push",
+            "description": "provision cloud resources",
+            "options": [
+              {
+                "short": "y",
+                "description": "answer yes to prompts",
+                "inherit": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "function",
+        "subcommands": [
+          {
+            "name": "build",
+            "description": "build project functions"
+          },
+          {
+            "name": "add",
+            "description": "add a local backend resource"
+          },
+          {
+            "name": "update",
+            "description": "update a local backend resource"
+          },
+          {
+            "name": "remove",
+            "description": "remove a local backend resource"
+          },
+          {
+            "name": "console",
+            "description": "open the category console"
+          },
+          {
+            "name": "push",
+            "description": "provision cloud resources",
+            "options": [
+              {
+                "short": "y",
+                "description": "answer yes to prompts",
+                "inherit": false
+              }
+            ]
+          }
+        ],
+        "description": "manage function resources"
+      },
+      {
+        "name": "hosting",
+        "description": "manage hosting resources",
+        "subcommands": [
+          {
+            "name": "add",
+            "description": "add a local backend resource"
+          },
+          {
+            "name": "update",
+            "description": "update a local backend resource"
+          },
+          {
+            "name": "remove",
+            "description": "remove a local backend resource"
+          },
+          {
+            "name": "console",
+            "description": "open the category console"
+          },
+          {
+            "name": "push",
+            "description": "provision cloud resources",
+            "options": [
+              {
+                "short": "y",
+                "description": "answer yes to prompts",
+                "inherit": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "interactions",
+        "description": "manage interactions resources",
+        "subcommands": [
+          {
+            "name": "add",
+            "description": "add a local backend resource"
+          },
+          {
+            "name": "update",
+            "description": "update a local backend resource"
+          },
+          {
+            "name": "remove",
+            "description": "remove a local backend resource"
+          },
+          {
+            "name": "console",
+            "description": "open the category console"
+          },
+          {
+            "name": "push",
+            "description": "provision cloud resources",
+            "options": [
+              {
+                "short": "y",
+                "description": "answer yes to prompts",
+                "inherit": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "predictions",
+        "description": "manage predictions resources",
+        "subcommands": [
+          {
+            "name": "add",
+            "description": "add a local backend resource"
+          },
+          {
+            "name": "update",
+            "description": "update a local backend resource"
+          },
+          {
+            "name": "remove",
+            "description": "remove a local backend resource"
+          },
+          {
+            "name": "console",
+            "description": "open the category console"
+          },
+          {
+            "name": "push",
+            "description": "provision cloud resources",
+            "options": [
+              {
+                "short": "y",
+                "description": "answer yes to prompts",
+                "inherit": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "storage",
+        "description": "manage storage resources",
+        "subcommands": [
+          {
+            "name": "add",
+            "description": "add a local backend resource"
+          },
+          {
+            "name": "update",
+            "description": "update a local backend resource"
+          },
+          {
+            "name": "remove",
+            "description": "remove a local backend resource"
+          },
+          {
+            "name": "console",
+            "description": "open the category console"
+          },
+          {
+            "name": "push",
+            "description": "provision cloud resources",
+            "options": [
+              {
+                "short": "y",
+                "description": "answer yes to prompts",
+                "inherit": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "xr",
+        "description": "manage xr resources",
+        "subcommands": [
+          {
+            "name": "add",
+            "description": "add a local backend resource"
+          },
+          {
+            "name": "update",
+            "description": "update a local backend resource"
+          },
+          {
+            "name": "remove",
+            "description": "remove a local backend resource"
+          },
+          {
+            "name": "console",
+            "description": "open the category console"
+          },
+          {
+            "name": "push",
+            "description": "provision cloud resources",
+            "options": [
+              {
+                "short": "y",
+                "description": "answer yes to prompts",
+                "inherit": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "mock",
+        "description": "run local mock servers"
+      },
+      {
+        "name": "codegen",
+        "description": "generate graphql code"
+      },
+      {
+        "name": "console",
+        "description": "open the amplify console"
+      },
+      {
+        "name": "logout",
+        "description": "log out temporary cloud credentials"
+      },
+      {
+        "name": "env",
+        "description": "manage environments",
+        "subcommands": [
+          {
+            "name": "add",
+            "description": "add an environment"
+          },
+          {
+            "name": "pull",
+            "description": "pull current environment",
+            "options": [
+              {
+                "long": "restore",
+                "description": "overwrite local changes",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "checkout",
+            "description": "switch environment",
+            "options": [
+              {
+                "long": "restore",
+                "description": "overwrite local changes",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "env-name",
+                  "description": "environment name",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "list",
+            "description": "list environments",
+            "options": [
+              {
+                "long": "details",
+                "description": "show more details",
+                "inherit": false
+              },
+              {
+                "long": "json",
+                "description": "write json output",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "get",
+            "description": "show environment details",
+            "options": [
+              {
+                "long": "name",
+                "description": "set environment name",
+                "inherit": false,
+                "value": {
+                  "name": "env-name",
+                  "description": "environment name"
+                }
+              }
+            ]
+          },
+          {
+            "name": "import",
+            "description": "import an environment",
+            "options": [
+              {
+                "long": "name",
+                "description": "set environment name",
+                "inherit": false,
+                "value": {
+                  "name": "env-name",
+                  "description": "environment name"
+                }
+              },
+              {
+                "long": "config",
+                "description": "set provider configs",
+                "inherit": false,
+                "value": {
+                  "name": "value"
+                }
+              },
+              {
+                "long": "awsInfo",
+                "description": "set aws configs",
+                "inherit": false,
+                "value": {
+                  "name": "value"
+                }
+              }
+            ]
+          },
+          {
+            "name": "remove",
+            "description": "remove an environment",
+            "arguments": {
+              "states": [
+                {
+                  "name": "env-name",
+                  "description": "environment name",
+                  "index": 0
+                }
+              ]
+            }
+          }
+        ]
+      }
+    ]
+  }
+}
