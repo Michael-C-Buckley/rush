@@ -304,6 +304,7 @@ fn staticExternalPipelineStageRequest(
 
     const fields = try shell.scratchAllocator().alloc([]const u8, simple.words.len);
     for (simple.words, 0..) |word, index| {
+        if (wordExpandsLeadingTilde(shell, word)) return null;
         fields[index] = staticLiteralWord(word) orelse return null;
     }
     if (builtin.lookup(fields[0]) != null or shell.state.getFunction(fields[0]) != null) return null;

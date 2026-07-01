@@ -510,6 +510,19 @@
             .status = 0,
         },
         .{
+            .name = "tilde expansion applies in command substitution external commands",
+            .script =
+            \\expanded=$(echo ~)
+            \\case $expanded in "$HOME") printf 'tilde\n';; *) printf 'bad:%s\n' "$expanded";; esac
+            ,
+            .stdout =
+            \\tilde
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "tilde expansion is suppressed by quoting",
             .script =
             \\printf '<%s>\n' '~' "~" \~
