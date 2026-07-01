@@ -107,6 +107,7 @@ pub fn ShellWithBuiltins(comptime Host: type, comptime builtin_registry: builtin
             if (self.state.options.mode == .posix) return false;
             const autoload = self.function_autoload orelse return false;
             if (self.state.isFunctionAutoloadSuppressed(name)) return false;
+            if (self.state.isFunctionAutoloadMissed(name)) return false;
             if (self.autoloading_function) |loading| if (std.mem.eql(u8, loading, name)) return false;
 
             const previous = self.autoloading_function;

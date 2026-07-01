@@ -11,8 +11,12 @@ const max_function_source_bytes = 1024 * 1024;
 pub fn autoload(sh: anytype, name: []const u8) !bool {
     if (!isFunctionName(name)) return false;
     if (sh.state.isFunctionAutoloadSuppressed(name)) return false;
+    if (sh.state.isFunctionAutoloadMissed(name)) return false;
 
-    const source = try findFunctionSource(sh, name) orelse return false;
+    const source = try findFunctionSource(sh, name) orelse {
+        try sh.state.markFunctionAutoloadMissed(name);
+        return false;
+    };
     defer source.deinit(sh.allocator);
 
     var discard = try OutputDiscard.init(&sh.host);
@@ -311,6 +315,108 @@ test "autoload sources function into current shell and hides load output" {
     const redefined_output = try std.Io.Dir.cwd().readFileAlloc(io, redefined_path, allocator, .limited(1024));
     defer allocator.free(redefined_output);
     try std.testing.expectEqualStrings("redefined", redefined_output);
+}
+
+test "autoload caches misses until function is explicitly defined" {
+    const allocator = std.testing.allocator;
+    const io = std.testing.io;
+    const root = try std.fmt.allocPrint(allocator, "rush-test-autoload-miss-{d}", .{std.c.getpid()});
+    defer allocator.free(root);
+    // ziglint-ignore: Z026 intentional best-effort cleanup; preserve behavior
+    std.Io.Dir.cwd().deleteTree(io, root) catch {};
+    defer std.Io.Dir.cwd().deleteTree(io, root) catch {};
+
+    const functions_dir = try std.fs.path.join(allocator, &.{ root, "rush", "functions" });
+    defer allocator.free(functions_dir);
+    try std.Io.Dir.cwd().createDirPath(io, functions_dir);
+
+    var sh = TestRushShell.init(allocator, .{}, .{});
+    defer sh.deinit();
+    sh.setFunctionAutoload(testAutoload);
+    try sh.state.putVariable(.{ .name = "XDG_CONFIG_HOME", .value = root });
+
+    const name = "rush_missing_autoload_test_function";
+    const missing_command = name ++ " >/dev/null 2>&1";
+    const missing_src: shell.source.Source = .{ .id = 1, .kind = .command_string, .name = "test", .text = missing_command };
+    const missing = try sh.evalSource(missing_src);
+    try std.testing.expectEqual(@as(shell.result.ExitStatus, 127), missing.status);
+    try std.testing.expect(sh.state.isFunctionAutoloadMissed(name));
+
+    const function_path = try std.fs.path.join(allocator, &.{ functions_dir, name ++ ".rush" });
+    defer allocator.free(function_path);
+    try std.Io.Dir.cwd().writeFile(io, .{
+        .sub_path = function_path,
+        .data = name ++ "(){ printf autoloaded; }\n",
+    });
+
+    const still_missing = try sh.evalSource(.{ .id = 2, .kind = .command_string, .name = "test", .text = missing_command });
+    try std.testing.expectEqual(@as(shell.result.ExitStatus, 127), still_missing.status);
+    try std.testing.expect(sh.state.getFunction(name) == null);
+
+    const out_path = try std.fs.path.join(allocator, &.{ root, "explicit.txt" });
+    defer allocator.free(out_path);
+    const explicit_command = try std.fmt.allocPrint(
+        allocator,
+        "{s}(){{ printf explicit; }}; {s} > {s}",
+        .{ name, name, out_path },
+    );
+    defer allocator.free(explicit_command);
+    const explicit = try sh.evalSource(.{ .id = 3, .kind = .command_string, .name = "test", .text = explicit_command });
+    try std.testing.expectEqual(@as(shell.result.ExitStatus, 0), explicit.status);
+    try std.testing.expect(!sh.state.isFunctionAutoloadMissed(name));
+
+    const output = try std.Io.Dir.cwd().readFileAlloc(io, out_path, allocator, .limited(1024));
+    defer allocator.free(output);
+    try std.testing.expectEqualStrings("explicit", output);
+}
+
+test "autoload clears cached misses when search path variables change" {
+    const allocator = std.testing.allocator;
+    const io = std.testing.io;
+    const root = try std.fmt.allocPrint(allocator, "rush-test-autoload-path-{d}", .{std.c.getpid()});
+    defer allocator.free(root);
+    // ziglint-ignore: Z026 intentional best-effort cleanup; preserve behavior
+    std.Io.Dir.cwd().deleteTree(io, root) catch {};
+    defer std.Io.Dir.cwd().deleteTree(io, root) catch {};
+
+    const first_root = try std.fs.path.join(allocator, &.{ root, "first" });
+    defer allocator.free(first_root);
+    const second_root = try std.fs.path.join(allocator, &.{ root, "second" });
+    defer allocator.free(second_root);
+    const second_functions_dir = try std.fs.path.join(allocator, &.{ second_root, "rush", "functions" });
+    defer allocator.free(second_functions_dir);
+    try std.Io.Dir.cwd().createDirPath(io, second_functions_dir);
+
+    var sh = TestRushShell.init(allocator, .{}, .{});
+    defer sh.deinit();
+    sh.setFunctionAutoload(testAutoload);
+    try sh.state.putVariable(.{ .name = "XDG_CONFIG_HOME", .value = first_root });
+
+    const name = "rush_autoload_path_change_test_function";
+    const missing_command = name ++ " >/dev/null 2>&1";
+    const missing = try sh.evalSource(.{ .id = 1, .kind = .command_string, .name = "test", .text = missing_command });
+    try std.testing.expectEqual(@as(shell.result.ExitStatus, 127), missing.status);
+    try std.testing.expect(sh.state.isFunctionAutoloadMissed(name));
+
+    const function_path = try std.fs.path.join(allocator, &.{ second_functions_dir, name ++ ".rush" });
+    defer allocator.free(function_path);
+    try std.Io.Dir.cwd().writeFile(io, .{
+        .sub_path = function_path,
+        .data = name ++ "(){ printf changed-path; }\n",
+    });
+    try sh.state.putVariable(.{ .name = "XDG_CONFIG_HOME", .value = second_root });
+    try std.testing.expect(!sh.state.isFunctionAutoloadMissed(name));
+
+    const out_path = try std.fs.path.join(allocator, &.{ root, "out.txt" });
+    defer allocator.free(out_path);
+    const command = try std.fmt.allocPrint(allocator, "{s} > {s}", .{ name, out_path });
+    defer allocator.free(command);
+    const evaluated = try sh.evalSource(.{ .id = 2, .kind = .command_string, .name = "test", .text = command });
+    try std.testing.expectEqual(@as(shell.result.ExitStatus, 0), evaluated.status);
+
+    const output = try std.Io.Dir.cwd().readFileAlloc(io, out_path, allocator, .limited(1024));
+    defer allocator.free(output);
+    try std.testing.expectEqualStrings("changed-path", output);
 }
 
 // ziglint-ignore: Z028 inline import kept local to test/helper; avoid non-semantic refactor

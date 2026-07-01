@@ -97,6 +97,18 @@ pub const Function = struct {
     }
 };
 
+const FunctionAutoloadState = enum {
+    missed,
+    suppressed,
+};
+
+fn functionAutoloadSearchUsesVariable(name: []const u8) bool {
+    return std.mem.eql(u8, name, "HOME") or
+        std.mem.eql(u8, name, "XDG_CONFIG_HOME") or
+        std.mem.eql(u8, name, "XDG_DATA_HOME") or
+        std.mem.eql(u8, name, "XDG_DATA_DIRS");
+}
+
 pub const Alias = struct {
     name: []const u8,
     value: []const u8,
@@ -153,7 +165,7 @@ pub const State = struct {
     variable_attributes: std.StringHashMapUnmanaged(VariableAttributes) = .empty,
     local_frames: std.ArrayListUnmanaged(LocalFrame) = .empty,
     functions: std.StringHashMapUnmanaged(Function) = .empty,
-    suppressed_autoload_functions: std.StringHashMapUnmanaged(void) = .empty,
+    function_autoload_states: std.StringHashMapUnmanaged(FunctionAutoloadState) = .empty,
     aliases: std.StringHashMapUnmanaged(Alias) = .empty,
     command_hashes: std.StringHashMapUnmanaged(CommandHash) = .empty,
     signal_traps: std.StringHashMapUnmanaged([]const u8) = .empty,
@@ -199,9 +211,9 @@ pub const State = struct {
         for (self.local_frames.items) |*frame| frame.deinit(self.allocator);
         self.local_frames.deinit(self.allocator);
         self.functions.deinit(self.allocator);
-        var suppressed_iterator = self.suppressed_autoload_functions.iterator();
-        while (suppressed_iterator.next()) |entry| self.allocator.free(entry.key_ptr.*);
-        self.suppressed_autoload_functions.deinit(self.allocator);
+        var autoload_iterator = self.function_autoload_states.iterator();
+        while (autoload_iterator.next()) |entry| self.allocator.free(entry.key_ptr.*);
+        self.function_autoload_states.deinit(self.allocator);
         var alias_iterator = self.aliases.iterator();
         while (alias_iterator.next()) |entry| {
             self.allocator.free(entry.value_ptr.name);
@@ -257,6 +269,7 @@ pub const State = struct {
             existing.exported = variable.exported or (attributes != null and attributes.?.exported);
             existing.readonly = variable.readonly or (attributes != null and attributes.?.readonly);
             self.removeVariableAttributes(variable.name);
+            self.clearFunctionAutoloadMissesIfSearchVariable(variable.name);
             return;
         }
 
@@ -270,6 +283,7 @@ pub const State = struct {
             .readonly = variable.readonly or (attributes != null and attributes.?.readonly),
         });
         self.removeVariableAttributes(variable.name);
+        self.clearFunctionAutoloadMissesIfSearchVariable(variable.name);
     }
 
     pub fn removeVariable(self: *State, name: []const u8) void {
@@ -279,6 +293,7 @@ pub const State = struct {
             self.allocator.free(entry.value.value);
         }
         self.removeVariableAttributes(name);
+        self.clearFunctionAutoloadMissesIfSearchVariable(name);
     }
 
     pub fn putVariableAttributes(self: *State, attributes: VariableAttributes) !void {
@@ -441,7 +456,7 @@ pub const State = struct {
     pub fn putPersistentFunction(self: *State, function: Function) !void {
         function.validate();
         try self.functions.put(self.allocator, function.name, function);
-        self.unsuppressFunctionAutoload(function.name);
+        self.clearFunctionAutoloadState(function.name);
     }
 
     pub fn removeFunction(self: *State, name: []const u8) void {
@@ -451,19 +466,50 @@ pub const State = struct {
 
     pub fn suppressFunctionAutoload(self: *State, name: []const u8) !void {
         std.debug.assert(name.len != 0);
-        if (self.suppressed_autoload_functions.contains(name)) return;
+        if (self.function_autoload_states.getPtr(name)) |state| {
+            state.* = .suppressed;
+            return;
+        }
         const owned_name = try self.allocator.dupe(u8, name);
         errdefer self.allocator.free(owned_name);
-        try self.suppressed_autoload_functions.put(self.allocator, owned_name, {});
+        try self.function_autoload_states.put(self.allocator, owned_name, .suppressed);
     }
 
     pub fn isFunctionAutoloadSuppressed(self: State, name: []const u8) bool {
         std.debug.assert(name.len != 0);
-        return self.suppressed_autoload_functions.contains(name);
+        return if (self.function_autoload_states.get(name)) |state| state == .suppressed else false;
     }
 
-    fn unsuppressFunctionAutoload(self: *State, name: []const u8) void {
-        if (self.suppressed_autoload_functions.fetchRemove(name)) |entry| self.allocator.free(entry.key);
+    pub fn markFunctionAutoloadMissed(self: *State, name: []const u8) !void {
+        std.debug.assert(name.len != 0);
+        if (self.function_autoload_states.contains(name)) return;
+        const owned_name = try self.allocator.dupe(u8, name);
+        errdefer self.allocator.free(owned_name);
+        try self.function_autoload_states.put(self.allocator, owned_name, .missed);
+    }
+
+    pub fn isFunctionAutoloadMissed(self: State, name: []const u8) bool {
+        std.debug.assert(name.len != 0);
+        return if (self.function_autoload_states.get(name)) |state| state == .missed else false;
+    }
+
+    fn clearFunctionAutoloadMissesIfSearchVariable(self: *State, name: []const u8) void {
+        if (!functionAutoloadSearchUsesVariable(name)) return;
+        self.clearFunctionAutoloadMisses();
+    }
+
+    fn clearFunctionAutoloadMisses(self: *State) void {
+        while (true) {
+            var iterator = self.function_autoload_states.iterator();
+            const missed = while (iterator.next()) |entry| {
+                if (entry.value_ptr.* == .missed) break entry.key_ptr.*;
+            } else return;
+            if (self.function_autoload_states.fetchRemove(missed)) |entry| self.allocator.free(entry.key);
+        }
+    }
+
+    fn clearFunctionAutoloadState(self: *State, name: []const u8) void {
+        if (self.function_autoload_states.fetchRemove(name)) |entry| self.allocator.free(entry.key);
     }
 
     pub fn getAlias(self: State, name: []const u8) ?Alias {
