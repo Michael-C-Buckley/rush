@@ -70,6 +70,16 @@ pub const Alias = struct {
     }
 };
 
+pub const CommandHash = struct {
+    name: []const u8,
+    path: []const u8,
+
+    pub fn validate(self: CommandHash) void {
+        std.debug.assert(self.name.len != 0);
+        std.debug.assert(self.path.len != 0);
+    }
+};
+
 pub const State = struct {
     allocator: std.mem.Allocator,
     definition_arena: memory.Arena,
@@ -78,6 +88,7 @@ pub const State = struct {
     variable_attributes: std.StringHashMapUnmanaged(VariableAttributes) = .empty,
     functions: std.StringHashMapUnmanaged(Function) = .empty,
     aliases: std.StringHashMapUnmanaged(Alias) = .empty,
+    command_hashes: std.StringHashMapUnmanaged(CommandHash) = .empty,
     signal_traps: std.StringHashMapUnmanaged([]const u8) = .empty,
     pending_traps: std.ArrayListUnmanaged([]const u8) = .empty,
     background_pids: std.ArrayListUnmanaged(host.Pid) = .empty,
@@ -123,6 +134,12 @@ pub const State = struct {
             self.allocator.free(entry.value_ptr.value);
         }
         self.aliases.deinit(self.allocator);
+        var command_hash_iterator = self.command_hashes.iterator();
+        while (command_hash_iterator.next()) |entry| {
+            self.allocator.free(entry.value_ptr.name);
+            self.allocator.free(entry.value_ptr.path);
+        }
+        self.command_hashes.deinit(self.allocator);
         var signal_trap_iterator = self.signal_traps.iterator();
         while (signal_trap_iterator.next()) |entry| self.allocator.free(entry.value_ptr.*);
         self.signal_traps.deinit(self.allocator);
@@ -295,6 +312,35 @@ pub const State = struct {
             self.allocator.free(entry.value_ptr.value);
         }
         self.aliases.clearRetainingCapacity();
+    }
+
+    pub fn putCommandHash(self: *State, command_hash: CommandHash) !void {
+        command_hash.validate();
+        const owned_path = try self.allocator.dupe(u8, command_hash.path);
+        errdefer self.allocator.free(owned_path);
+
+        if (self.command_hashes.getPtr(command_hash.name)) |existing| {
+            self.allocator.free(existing.path);
+            existing.path = owned_path;
+            return;
+        }
+
+        const owned_name = try self.allocator.dupe(u8, command_hash.name);
+        errdefer self.allocator.free(owned_name);
+
+        try self.command_hashes.put(self.allocator, owned_name, .{
+            .name = owned_name,
+            .path = owned_path,
+        });
+    }
+
+    pub fn clearCommandHashes(self: *State) void {
+        var iterator = self.command_hashes.iterator();
+        while (iterator.next()) |entry| {
+            self.allocator.free(entry.value_ptr.name);
+            self.allocator.free(entry.value_ptr.path);
+        }
+        self.command_hashes.clearRetainingCapacity();
     }
 
     pub fn setExitTrap(self: *State, action: []const u8) !void {

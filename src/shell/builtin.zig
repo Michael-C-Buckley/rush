@@ -124,7 +124,7 @@ pub fn eval(shell: anytype, definition: Definition, args: []const []const u8) !r
         .exit => evalExit(shell, args),
         .false_ => .{ .status = 1 },
         .getopts => evalGetopts(shell, args),
-        .hash => .{},
+        .hash => evalHash(shell, args),
         .kill => evalKill(shell, args),
         .printf => evalPrintf(shell, args),
         .readonly => evalReadonly(shell, args),
@@ -213,6 +213,31 @@ fn evalUnalias(shell: anytype, args: []const []const u8) result.EvalResult {
         if (!shell.state.removeAlias(name)) status = 1;
     }
     return .{ .status = status };
+}
+
+fn evalHash(shell: anytype, args: []const []const u8) !result.EvalResult {
+    var index: usize = 1;
+    while (index < args.len) : (index += 1) {
+        const arg = args[index];
+        if (std.mem.eql(u8, arg, "--")) {
+            index += 1;
+            break;
+        }
+        if (arg.len < 2 or arg[0] != '-') break;
+        for (arg[1..]) |option| switch (option) {
+            'r' => shell.state.clearCommandHashes(),
+            else => return .{ .status = 2 },
+        };
+    }
+
+    if (index < args.len) return .{ .status = 2 };
+
+    var iterator = shell.state.command_hashes.iterator();
+    while (iterator.next()) |entry| {
+        try shell.host.writeAll(.stdout, entry.value_ptr.path);
+        try shell.host.writeAll(.stdout, "\n");
+    }
+    return .{};
 }
 
 fn evalGetopts(shell: anytype, args: []const []const u8) !result.EvalResult {

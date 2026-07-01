@@ -4933,12 +4933,13 @@ fn evalExternalWithSearchPath(
         restored_assignments = true;
         return .{ .status = 126 };
     }
-    if (try findCommandPath(shell, fields[0], search_path) == null) {
+    const command_path = try findCommandPath(shell, fields[0], search_path) orelse {
         try shell.host.writeAll(.stderr, try std.fmt.allocPrint(shell.scratchAllocator(), "{s}: not found\n", .{fields[0]}));
         restoreVariables(shell, saved);
         restored_assignments = true;
         return .{ .status = 127 };
-    }
+    };
+    try rememberCommandHash(shell, fields[0], command_path, search_path);
     const request = try makeExternalSpawnRequestWithSearchPath(shell, fields, assignments, &.{}, search_path);
     const status = try shell.host.spawnAndWait(request);
     restoreVariables(shell, saved);
@@ -4974,6 +4975,12 @@ fn commandFoundButNotExecutable(shell: anytype, command: []const u8, search_path
         found = found or shell.host.existsZ(candidate);
     }
     return found;
+}
+
+fn rememberCommandHash(shell: anytype, command: []const u8, path: []const u8, search_path: ?[]const u8) !void {
+    if (search_path != null) return;
+    if (std.mem.indexOfScalar(u8, command, '/') != null) return;
+    try shell.state.putCommandHash(.{ .name = command, .path = path });
 }
 
 fn makeExternalSpawnRequest(
