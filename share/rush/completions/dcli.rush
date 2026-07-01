@@ -1,0 +1,35 @@
+__rush_complete_dcli_devices() {
+  command -v dcli >/dev/null 2>&1 || return
+  command -v python3 >/dev/null 2>&1 || return
+  dcli devices list --json 2>/dev/null | python3 -c '
+import json, sys
+try:
+    devices = json.load(sys.stdin)
+except Exception:
+    sys.exit(0)
+for device in devices if isinstance(devices, list) else []:
+    device_id = device.get("deviceId")
+    if device_id:
+        print(device_id)
+' | while IFS= read -r device_id; do
+    test -n "$device_id" && rush_complete candidate "$device_id" --kind plain --description 'device id'
+  done
+}
+
+__rush_complete_dcli_team_credentials() {
+  command -v dcli >/dev/null 2>&1 || return
+  command -v python3 >/dev/null 2>&1 || return
+  dcli team credentials list --json 2>/dev/null | python3 -c '
+import json, sys
+try:
+    credentials = json.load(sys.stdin)
+except Exception:
+    sys.exit(0)
+for credential in credentials if isinstance(credentials, list) else []:
+    access_key = credential.get("accessKey")
+    if access_key:
+        print(access_key)
+' | while IFS= read -r access_key; do
+    test -n "$access_key" && rush_complete candidate "$access_key" --kind plain --description 'team credential'
+  done
+}

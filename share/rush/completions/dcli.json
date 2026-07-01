@@ -1,0 +1,506 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "dcli",
+    "description": "dashlane CLI",
+    "options": [
+      {
+        "short": "h",
+        "long": "help",
+        "description": "display help for command",
+        "inherit": true
+      },
+      {
+        "short": "V",
+        "long": "version",
+        "description": "output the version number",
+        "inherit": false
+      },
+      {
+        "long": "debug",
+        "description": "print debug messages",
+        "inherit": true
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "sync",
+        "aliases": [
+          "s"
+        ],
+        "description": "manually synchronize the local vault with Dashlane"
+      },
+      {
+        "name": "read",
+        "description": "retrieve a secret from the local vault via its path",
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "description": "path to the secret (dl://<title>/<field> or dl://<id>/<field>)",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "exec",
+        "description": "execute a command with secrets injected into the environment variables (-- <command>)",
+        "arguments": {
+          "states": [
+            {
+              "name": "command",
+              "provider": "builtin.executables",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "inject",
+        "description": "inject secrets into a templated string or file (uses stdin and stdout by default)",
+        "options": [
+          {
+            "short": "i",
+            "long": "in",
+            "description": "input file of a template to inject the credential into",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "short": "o",
+            "long": "out",
+            "description": "output file to write the injected template to",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          }
+        ]
+      },
+      {
+        "name": "password",
+        "aliases": [
+          "p"
+        ],
+        "description": "retrieve a password from the local vault and copy it to the clipboard",
+        "options": [
+          {
+            "short": "o",
+            "long": "output",
+            "description": "how to print the passwords. The JSON option outputs all the matching credentials",
+            "inherit": false,
+            "value": {
+              "name": "type",
+              "provider": {
+                "values": [
+                  "clipboard",
+                  "password",
+                  "json"
+                ]
+              }
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "filters",
+              "description": "filter credentials based on any parameter using <param>=<value>; if <param> is not specified in the filter, will default to url and title",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "otp",
+        "aliases": [
+          "o"
+        ],
+        "description": "retrieve an OTP code from local vault and copy it to the clipboard",
+        "options": [
+          {
+            "long": "print",
+            "description": "prints just the OTP code, instead of copying it to the clipboard",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "filters",
+              "description": "filter credentials based on any parameter using <param>=<value>; if <param> is not specified in the filter, will default to url and title",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "note",
+        "aliases": [
+          "n"
+        ],
+        "description": "retrieve a secure note from the local vault and open it",
+        "options": [
+          {
+            "short": "o",
+            "long": "output",
+            "description": "how to print the notes. The JSON option outputs all the matching notes",
+            "inherit": false,
+            "value": {
+              "name": "type",
+              "provider": {
+                "values": [
+                  "text",
+                  "json"
+                ]
+              }
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "filters",
+              "description": "filter notes based on any parameter using <param>=<value>; if <param> is not specified in the filter, will default to title only",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "accounts",
+        "aliases": [
+          "a"
+        ],
+        "description": "manage your accounts connected to the CLI",
+        "subcommands": [
+          {
+            "name": "whoami",
+            "description": "prints the login email of the account currently in use"
+          }
+        ]
+      },
+      {
+        "name": "devices",
+        "aliases": [
+          "d"
+        ],
+        "description": "operations on devices",
+        "subcommands": [
+          {
+            "name": "list",
+            "description": "lists all registered devices that can access your account",
+            "options": [
+              {
+                "long": "json",
+                "description": "output in JSON format",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "remove",
+            "description": "de-registers a list of devices. De-registering the CLI will implies doing a \"dcli logout\"",
+            "options": [
+              {
+                "long": "all",
+                "description": "remove all devices including this one (dangerous)",
+                "priority": -10,
+                "inherit": false
+              },
+              {
+                "long": "others",
+                "description": "remove all other devices",
+                "priority": -10,
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "device-ids",
+                  "description": "ids of the devices to remove",
+                  "index": 0,
+                  "repeatable": true,
+                  "provider": "dcli.devices"
+                }
+              ]
+            }
+          },
+          {
+            "name": "register",
+            "description": "registers a new device to be used in non-interactive mode",
+            "options": [
+              {
+                "long": "json",
+                "description": "output in JSON format",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "device-name",
+                  "description": "name of the device to register",
+                  "index": 0
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "team",
+        "aliases": [
+          "t"
+        ],
+        "description": "team related commands",
+        "subcommands": [
+          {
+            "name": "credentials",
+            "aliases": [
+              "c"
+            ],
+            "description": "team credentials operations",
+            "subcommands": [
+              {
+                "name": "generate",
+                "description": "generate new team credentials",
+                "options": [
+                  {
+                    "long": "json",
+                    "description": "output in JSON format",
+                    "inherit": false
+                  }
+                ]
+              },
+              {
+                "name": "list",
+                "description": "list all team credentials",
+                "options": [
+                  {
+                    "long": "json",
+                    "description": "output in JSON format",
+                    "inherit": false
+                  }
+                ]
+              },
+              {
+                "name": "revoke",
+                "description": "revoke credentials by access key",
+                "arguments": {
+                  "states": [
+                    {
+                      "name": "accessKey",
+                      "description": "access key of the credentials to revoke",
+                      "index": 0,
+                      "provider": "dcli.team-credentials"
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "name": "members",
+            "aliases": [
+              "m"
+            ],
+            "description": "list team members",
+            "options": [
+              {
+                "long": "csv",
+                "description": "output in CSV format",
+                "inherit": false
+              },
+              {
+                "long": "human-readable",
+                "description": "output dates in human readable format",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "page",
+                  "description": "page number",
+                  "index": 0
+                },
+                {
+                  "name": "limit",
+                  "description": "limit of members per page",
+                  "index": 1
+                }
+              ]
+            }
+          },
+          {
+            "name": "logs",
+            "aliases": [
+              "l"
+            ],
+            "description": "list audit logs",
+            "options": [
+              {
+                "long": "start",
+                "description": "start timestamp in ms",
+                "inherit": false,
+                "value": {
+                  "name": "start"
+                }
+              },
+              {
+                "long": "end",
+                "description": "end timestamp in ms (use \"now\" to get the current timestamp)",
+                "inherit": false,
+                "value": {
+                  "name": "end"
+                }
+              },
+              {
+                "long": "type",
+                "description": "log type",
+                "inherit": false,
+                "value": {
+                  "name": "type"
+                }
+              },
+              {
+                "long": "category",
+                "description": "log category",
+                "inherit": false,
+                "value": {
+                  "name": "category"
+                }
+              },
+              {
+                "long": "csv",
+                "description": "output in CSV format",
+                "inherit": false
+              },
+              {
+                "long": "human-readable",
+                "description": "output dates in human readable format",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "report",
+            "aliases": [
+              "r"
+            ],
+            "description": "get team report",
+            "arguments": {
+              "states": [
+                {
+                  "name": "days",
+                  "description": "number of days in history",
+                  "index": 0
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "configure",
+        "aliases": [
+          "c"
+        ],
+        "description": "configure the CLI",
+        "subcommands": [
+          {
+            "name": "disable-auto-sync",
+            "description": "disable automatic synchronization which is done once per hour (default: false)",
+            "arguments": {
+              "states": [
+                {
+                  "name": "boolean",
+                  "provider": {
+                    "values": [
+                      "true",
+                      "false"
+                    ]
+                  },
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "save-master-password",
+            "description": "should the encrypted master password be saved and the OS keychain be used (default: true)",
+            "arguments": {
+              "states": [
+                {
+                  "name": "boolean",
+                  "provider": {
+                    "values": [
+                      "true",
+                      "false"
+                    ]
+                  },
+                  "index": 0
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "backup",
+        "description": "backup your local vault (will use the current directory by default)",
+        "options": [
+          {
+            "long": "directory",
+            "description": "output directory of the backup (\".\" by default)",
+            "inherit": false,
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "filename",
+            "description": "filename of the backup (\"dashlane-backup-<unix_timestamp>.db by default\")",
+            "inherit": false,
+            "value": {
+              "name": "filename"
+            }
+          }
+        ]
+      },
+      {
+        "name": "logout",
+        "description": "logout and clean your local database and OS keychain"
+      }
+    ],
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.executables": {
+        "builtin": "executables"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "dcli.devices": {
+        "function": "__rush_complete_dcli_devices"
+      },
+      "dcli.team-credentials": {
+        "function": "__rush_complete_dcli_team_credentials"
+      }
+    }
+  }
+}
