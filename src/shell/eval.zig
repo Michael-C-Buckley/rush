@@ -500,7 +500,11 @@ fn evalFor(shell: anytype, command: ast.ForCommand) EvalError!result.EvalResult 
     const words = try snapshotFields(shell, try forCommandWords(shell, command.words));
     var status: result.ExitStatus = 0;
     for (words) |word| {
-        try shell.state.putVariable(.{ .name = command.name, .value = word });
+        try shell.state.putVariable(.{
+            .name = command.name,
+            .value = word,
+            .exported = assignmentExported(shell, command.name),
+        });
         const evaluated = try evalList(shell, command.body);
         status = evaluated.status;
         switch (evaluated.flow) {
@@ -546,10 +550,19 @@ fn expandForWordFields(shell: anytype, words: []const ast.Word) ![]const []const
         } else if (!wordHasDynamicExpansion(word)) {
             try appendStaticWordField(shell, &fields, word);
         } else {
-            const expanded = try expandWordTracking(shell, word, null);
             if (wordContainsQuotes(word)) {
-                try fields.append(allocator, expanded);
+                if (wordDynamicExpansionsAreQuoted(word)) {
+                    try appendPathnameExpandedPattern(
+                        shell,
+                        &fields,
+                        try expandQuotedDynamicWordPathnamePattern(shell, word, null),
+                    );
+                } else {
+                    const expanded = try expandWordTracking(shell, word, null);
+                    try fields.append(allocator, expanded);
+                }
             } else {
+                const expanded = try expandWordTracking(shell, word, null);
                 try appendSplitFields(shell, &fields, expanded, !wordExpandsLeadingTilde(shell, word));
             }
         }
@@ -2622,7 +2635,11 @@ fn applyAssignmentsWithStatus(shell: anytype, assignments: []const ast.Assignmen
     var status: ?result.ExitStatus = null;
     for (assignments) |assignment| {
         const value = try expandAssignmentWordTracking(shell, assignment.value, &status);
-        shell.state.putVariable(.{ .name = assignment.name, .value = value }) catch |err| switch (err) {
+        shell.state.putVariable(.{
+            .name = assignment.name,
+            .value = value,
+            .exported = assignmentExported(shell, assignment.name),
+        }) catch |err| switch (err) {
             error.ReadonlyVariable => {
                 try writeReadonlyDiagnostic(shell, assignment.name);
                 return error.AssignmentError;
@@ -2639,7 +2656,11 @@ fn expandAndApplyAssignments(shell: anytype, assignments: []const ast.Assignment
     for (assignments, 0..) |assignment, index| {
         var status: ?result.ExitStatus = null;
         const value = try expandAssignmentWordTracking(shell, assignment.value, &status);
-        shell.state.putVariable(.{ .name = assignment.name, .value = value }) catch |err| switch (err) {
+        shell.state.putVariable(.{
+            .name = assignment.name,
+            .value = value,
+            .exported = assignmentExported(shell, assignment.name),
+        }) catch |err| switch (err) {
             error.ReadonlyVariable => {
                 try writeReadonlyDiagnostic(shell, assignment.name);
                 return error.AssignmentError;
@@ -2649,6 +2670,10 @@ fn expandAndApplyAssignments(shell: anytype, assignments: []const ast.Assignment
         expanded[index] = .{ .name = assignment.name, .value = value, .status = status };
     }
     return expanded;
+}
+
+fn assignmentExported(shell: anytype, name: []const u8) bool {
+    return shell.state.options.allexport or if (shell.state.getVariable(name)) |variable| variable.exported else false;
 }
 
 fn assignmentExpansionStatus(assignments: []const ExpandedAssignment) result.ExitStatus {
@@ -2682,10 +2707,19 @@ fn expandWordFields(
         } else if (!wordHasDynamicExpansion(word)) {
             try appendStaticWordField(shell, &fields, word);
         } else {
-            const expanded = try expandWordTracking(shell, word, substitution_status);
             if (wordContainsQuotes(word)) {
-                try fields.append(allocator, expanded);
+                if (wordDynamicExpansionsAreQuoted(word)) {
+                    try appendPathnameExpandedPattern(
+                        shell,
+                        &fields,
+                        try expandQuotedDynamicWordPathnamePattern(shell, word, substitution_status),
+                    );
+                } else {
+                    const expanded = try expandWordTracking(shell, word, substitution_status);
+                    try fields.append(allocator, expanded);
+                }
             } else {
+                const expanded = try expandWordTracking(shell, word, substitution_status);
                 try appendSplitFields(shell, &fields, expanded, !wordExpandsLeadingTilde(shell, word));
             }
         }
@@ -2721,6 +2755,22 @@ fn partsHaveDynamicExpansion(parts: []const ast.WordPart) bool {
     return false;
 }
 
+fn wordDynamicExpansionsAreQuoted(word: ast.Word) bool {
+    return switch (word.data) {
+        .literal => true,
+        .parts => |parts| partsDynamicExpansionsAreQuoted(parts, false),
+    };
+}
+
+fn partsDynamicExpansionsAreQuoted(parts: []const ast.WordPart, quoted: bool) bool {
+    for (parts) |part| switch (part) {
+        .parameter, .command_substitution, .arithmetic => if (!quoted) return false,
+        .double_quoted => |nested| if (!partsDynamicExpansionsAreQuoted(nested, true)) return false,
+        else => {},
+    };
+    return true;
+}
+
 fn staticWordPathnamePattern(shell: anytype, word: ast.Word) !PathnamePattern {
     const allocator = shell.scratchAllocator();
     var text: std.ArrayList(u8) = .empty;
@@ -2744,6 +2794,56 @@ fn appendStaticWordPathnameParts(
         .escaped, .single_quoted => |bytes| try appendPathnamePatternBytes(allocator, text, special, bytes, false),
         .double_quoted => |nested| try appendStaticWordPathnameParts(allocator, text, special, nested, true),
         .parameter, .command_substitution, .arithmetic => unreachable,
+    };
+}
+
+fn expandQuotedDynamicWordPathnamePattern(
+    shell: anytype,
+    word: ast.Word,
+    substitution_status: ?*?result.ExitStatus,
+) EvalError!PathnamePattern {
+    const allocator = shell.scratchAllocator();
+    var text: std.ArrayList(u8) = .empty;
+    var special: std.ArrayList(bool) = .empty;
+    switch (word.data) {
+        .literal => |literal| try appendPathnamePatternBytes(allocator, &text, &special, literal, true),
+        .parts => |parts| try appendExpandedWordPathnameParts(
+            shell,
+            &text,
+            &special,
+            parts,
+            false,
+            substitution_status,
+        ),
+    }
+    return .{ .text = try text.toOwnedSlice(allocator), .special = try special.toOwnedSlice(allocator) };
+}
+
+fn appendExpandedWordPathnameParts(
+    shell: anytype,
+    text: *std.ArrayList(u8),
+    special: *std.ArrayList(bool),
+    parts: []const ast.WordPart,
+    quoted: bool,
+    substitution_status: ?*?result.ExitStatus,
+) EvalError!void {
+    const allocator = shell.scratchAllocator();
+    for (parts) |part| switch (part) {
+        .literal => |bytes| try appendPathnamePatternBytes(allocator, text, special, bytes, !quoted),
+        .escaped, .single_quoted => |bytes| try appendPathnamePatternBytes(allocator, text, special, bytes, false),
+        .double_quoted => |nested| try appendExpandedWordPathnameParts(
+            shell,
+            text,
+            special,
+            nested,
+            true,
+            substitution_status,
+        ),
+        .parameter, .command_substitution, .arithmetic => {
+            std.debug.assert(quoted);
+            const bytes = try expandWordPart(shell, part, substitution_status);
+            try appendPathnamePatternBytes(allocator, text, special, bytes, false);
+        },
     };
 }
 
@@ -2885,7 +2985,12 @@ fn expandPathnamePattern(
     else
         PathnamePattern{ .text = "" };
     const trailing_slash = slash_index != null and rest.text.len == 0;
-    if (component.text.len == 0) return;
+    if (component.text.len == 0) {
+        if (prefix.len == 0 and slash_index == 0 and rest.text.len != 0) {
+            try expandPathnamePattern(shell, allocator, matches, "/", rest);
+        }
+        return;
+    }
 
     if (!containsPatternMeta(component)) {
         const candidate = try joinPathComponent(allocator, prefix, component.text);
@@ -2973,6 +3078,7 @@ fn appendSyntheticDotPathnameMatch(
 
 fn joinPathComponent(allocator: std.mem.Allocator, prefix: []const u8, component: []const u8) ![]const u8 {
     if (prefix.len == 0) return allocator.dupe(u8, component);
+    if (std.mem.eql(u8, prefix, "/")) return std.fmt.allocPrint(allocator, "/{s}", .{component});
     return std.fmt.allocPrint(allocator, "{s}/{s}", .{ prefix, component });
 }
 
@@ -3476,17 +3582,85 @@ fn expandArithmeticParameter(shell: anytype, text: []const u8, index: *usize) ![
 }
 
 fn expandArithmeticBracedParameter(shell: anytype, text: []const u8, index: *usize) ![]const u8 {
-    const name_start = index.* + 2;
-    var name_end = name_start;
-    if (name_end >= text.len or !isArithmeticNameStart(text[name_end])) return error.InvalidArithmetic;
-    name_end += 1;
-    while (name_end < text.len and isArithmeticNameContinue(text[name_end])) name_end += 1;
-    if (name_end >= text.len or text[name_end] != '}') return error.InvalidArithmetic;
+    const content_start = index.* + 2;
+    const content_end = scanArithmeticBracedParameterEnd(text, content_start) orelse return error.InvalidArithmetic;
+    const content = text[content_start..content_end];
+    const parameter = parseArithmeticBracedParameter(content) orelse return error.InvalidArithmetic;
 
-    index.* = name_end + 1;
-    return parameterValue(shell, text[name_start..name_end]) orelse {
-        if (shell.state.options.nounset) return error.InvalidArithmetic;
-        return "";
+    index.* = content_end + 1;
+    return expandParameter(shell, parameter);
+}
+
+fn scanArithmeticBracedParameterEnd(text: []const u8, start: usize) ?usize {
+    var depth: usize = 1;
+    var index = start;
+    while (index < text.len) : (index += 1) {
+        if (text[index] == '\'' or text[index] == '"') {
+            const quote = text[index];
+            index += 1;
+            while (index < text.len and text[index] != quote) : (index += 1) {}
+            if (index >= text.len) return null;
+            continue;
+        }
+        if (text[index] == '$' and index + 1 < text.len and text[index + 1] == '{') {
+            depth += 1;
+            index += 1;
+            continue;
+        }
+        if (text[index] == '}') {
+            depth -= 1;
+            if (depth == 0) return index;
+        }
+    }
+    return null;
+}
+
+const ArithmeticParameterPrefix = struct {
+    parameter: ast.Parameter,
+    end: usize,
+};
+
+fn parseArithmeticBracedParameter(content: []const u8) ?ast.ParameterExpansion {
+    const prefix = parseArithmeticParameterPrefix(content) orelse return null;
+    const rest = content[prefix.end..];
+    if (rest.len == 0) return .{ .parameter = prefix.parameter };
+
+    const colon = rest.len >= 2 and rest[0] == ':' and arithmeticParameterOperator(rest[1]) != null;
+    const operator_byte = if (colon) rest[1] else rest[0];
+    const operator = arithmeticParameterOperator(operator_byte) orelse return null;
+    const word_text = if (colon) rest[2..] else rest[1..];
+    return .{
+        .parameter = prefix.parameter,
+        .colon = colon,
+        .op = operator,
+        .word = .{ .data = .{ .literal = word_text } },
+    };
+}
+
+fn parseArithmeticParameterPrefix(content: []const u8) ?ArithmeticParameterPrefix {
+    if (content.len == 0) return null;
+    if (arithmeticSpecialParameter(content[0])) |special| return .{ .parameter = .{ .special = special }, .end = 1 };
+    if (std.ascii.isDigit(content[0])) {
+        var end: usize = 1;
+        while (end < content.len and std.ascii.isDigit(content[end])) end += 1;
+        return .{
+            .parameter = .{ .positional = std.fmt.parseInt(u32, content[0..end], 10) catch return null },
+            .end = end,
+        };
+    }
+    if (!isArithmeticNameStart(content[0])) return null;
+    var end: usize = 1;
+    while (end < content.len and isArithmeticNameContinue(content[end])) end += 1;
+    return .{ .parameter = .{ .variable = content[0..end] }, .end = end };
+}
+
+fn arithmeticParameterOperator(byte: u8) ?ast.ParameterOperator {
+    return switch (byte) {
+        '-' => .default_value,
+        '=' => .assign_default,
+        '?' => .error_if_unset,
+        '+' => .alternate_value,
+        else => null,
     };
 }
 
@@ -4051,6 +4225,7 @@ fn positionalValue(shell: anytype, position: u32) ?[]const u8 {
 fn optionFlags(shell: anytype) ![]const u8 {
     var flags: std.ArrayList(u8) = .empty;
     const allocator = shell.scratchAllocator();
+    if (shell.state.options.allexport) try flags.append(allocator, 'a');
     if (shell.state.options.noclobber) try flags.append(allocator, 'C');
     if (shell.state.options.errexit) try flags.append(allocator, 'e');
     if (shell.state.options.noglob) try flags.append(allocator, 'f');

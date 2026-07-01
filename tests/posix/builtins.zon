@@ -574,6 +574,20 @@
             .status = 0,
         },
         .{
+            .name = "kill -l reports signal names for numbers and statuses",
+            .script =
+            \\kill -l 1
+            \\kill -l 129
+            ,
+            .stdout =
+            \\HUP
+            \\HUP
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "umask -S writes symbolic permissions",
             .script =
             \\umask 022

@@ -288,6 +288,7 @@ fn isGetoptsOptionOperand(operand: []const u8) bool {
 fn evalKill(shell: anytype, args: []const []const u8) !result.EvalResult {
     var kill_signal: KillSignal = .{ .name = "TERM", .number = signalNumber("TERM").? };
     var index: usize = 1;
+    if (index < args.len and std.mem.eql(u8, args[index], "-l")) return evalKillList(shell, args[index + 1 ..]);
     if (index < args.len and std.mem.eql(u8, args[index], "-s")) {
         index += 1;
         if (index >= args.len) return .{ .status = 2 };
@@ -317,6 +318,24 @@ fn evalKill(shell: anytype, args: []const []const u8) !result.EvalResult {
         };
     }
     return .{ .status = status };
+}
+
+fn evalKillList(shell: anytype, operands: []const []const u8) !result.EvalResult {
+    if (operands.len == 0) {
+        for (trap_signal_names, 0..) |name, index| {
+            if (index != 0) try shell.host.writeAll(.stdout, " ");
+            try shell.host.writeAll(.stdout, name);
+        }
+        try shell.host.writeAll(.stdout, "\n");
+        return .{};
+    }
+    if (operands.len != 1) return .{ .status = 2 };
+    const raw_number = std.fmt.parseInt(u8, operands[0], 10) catch return .{ .status = 2 };
+    const number = if (raw_number > 128) raw_number - 128 else raw_number;
+    const name = signalNameFromNumber(number) orelse return .{ .status = 2 };
+    try shell.host.writeAll(.stdout, name);
+    try shell.host.writeAll(.stdout, "\n");
+    return .{};
 }
 
 fn evalUmask(shell: anytype, args: []const []const u8) !result.EvalResult {
@@ -517,6 +536,7 @@ fn evalSet(shell: anytype, args: []const []const u8) !result.EvalResult {
             continue;
         }
         for (arg[1..]) |option| switch (option) {
+            'a' => shell.state.options.allexport = enabled,
             'C' => shell.state.options.noclobber = enabled,
             'e' => shell.state.options.errexit = enabled,
             'f' => shell.state.options.noglob = enabled,
@@ -529,6 +549,7 @@ fn evalSet(shell: anytype, args: []const []const u8) !result.EvalResult {
 }
 
 const SetOption = enum {
+    allexport,
     errexit,
     noclobber,
     noexec,
@@ -539,6 +560,7 @@ const SetOption = enum {
 };
 
 const set_option_names = std.StaticStringMap(SetOption).initComptime(.{
+    .{ "allexport", .allexport },
     .{ "errexit", .errexit },
     .{ "noclobber", .noclobber },
     .{ "noexec", .noexec },
@@ -551,6 +573,7 @@ const set_option_names = std.StaticStringMap(SetOption).initComptime(.{
 fn setNamedOption(shell: anytype, name: []const u8, enabled: bool) bool {
     const option = set_option_names.get(name) orelse return false;
     switch (option) {
+        .allexport => shell.state.options.allexport = enabled,
         .errexit => shell.state.options.errexit = enabled,
         .noclobber => shell.state.options.noclobber = enabled,
         .noexec => shell.state.options.noexec = enabled,

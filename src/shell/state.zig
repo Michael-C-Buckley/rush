@@ -14,6 +14,7 @@ pub const Mode = enum {
 
 pub const Options = struct {
     mode: Mode = .bash,
+    allexport: bool = false,
     errexit: bool = false,
     nounset: bool = false,
     noglob: bool = false,

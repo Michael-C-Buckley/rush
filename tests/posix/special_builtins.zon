@@ -508,6 +508,32 @@
             .status = 0,
         },
         .{
+            .name = "set -a exports subsequent assignments",
+            .script =
+            \\set -fCu +ax
+            \\case $- in *a*|*x*) printf 'bad-flags:%s\n' "$-" ;; *)
+            \\    case $- in *C*) : ;; *) printf 'bad-flags:%s\n' "$-" ;; esac
+            \\    case $- in *f*) : ;; *) printf 'bad-flags:%s\n' "$-" ;; esac
+            \\    case $- in *u*) : ;; *) printf 'bad-flags:%s\n' "$-" ;; esac
+            \\    printf 'flags-ok\n'
+            \\esac
+            \\set -a
+            \\X=ok
+            \\sh -c 'printf "<%s>\n" "$X"'
+            \\set +a
+            \\Y=no
+            \\sh -c 'printf "<%s>\n" "${Y-unset}"'
+            ,
+            .stdout =
+            \\flags-ok
+            \\<ok>
+            \\<unset>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "set non-option operands replace positional parameters",
             .script =
             \\set 'a b' c

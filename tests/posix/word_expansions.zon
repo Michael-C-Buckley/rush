@@ -845,10 +845,13 @@
             \\target=0
             \\printf '%s:%s\n' "$(( ${name} + 2 ))" "$((_Msh__V${name}__SP = 7))"
             \\printf '%s\n' "$_Msh__Vtarget__SP"
+            \\set -- x 5
+            \\printf '%s:%s\n' "$(( ${2-1} ))" "$(( ${3+${ERROR:?bad}} + 1 ))"
             ,
             .stdout =
             \\2:7
             \\7
+            \\5:1
             \\
             ,
             .stderr = "",
@@ -1560,6 +1563,26 @@
             .stdout =
             \\<foo*[/a>
             \\<foo*[/b>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "pathname expansion expands absolute patterns",
+            .script =
+            \\mkdir absdir
+            \\: >absdir/a
+            \\: >absdir/b
+            \\dir=$(pwd)/absdir
+            \\for path in "$dir"/*
+            \\do
+            \\    printf '<%s>\n' "${path##*/}"
+            \\done
+            ,
+            .stdout =
+            \\<a>
+            \\<b>
             \\
             ,
             .stderr = "",
