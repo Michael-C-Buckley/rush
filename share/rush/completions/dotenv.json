@@ -1,0 +1,62 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "dotenv",
+    "description": "load environment variables from .env",
+    "options": [
+      {
+        "short": "f",
+        "description": "list of env files to parse",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        },
+        "exclusiveGroup": "dotenv.mode"
+      },
+      {
+        "short": "h",
+        "long": "help",
+        "description": "display help",
+        "inherit": false,
+        "exclusiveGroup": "dotenv.mode"
+      },
+      {
+        "short": "v",
+        "long": "version",
+        "description": "show version",
+        "inherit": false,
+        "exclusiveGroup": "dotenv.mode"
+      },
+      {
+        "short": "t",
+        "long": "template",
+        "description": "create a template env file",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        },
+        "exclusiveGroup": "dotenv.mode"
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "command",
+          "provider": "builtin.executables",
+          "index": 0
+        }
+      ]
+    },
+    "providers": {
+      "builtin.executables": {
+        "builtin": "executables"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
