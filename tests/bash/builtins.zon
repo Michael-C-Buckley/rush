@@ -53,5 +53,18 @@
             .stderr = "",
             .status = 0,
         },
+        .{
+            .name = "test integer comparisons trim operand whitespace",
+            .script =
+            \\test " 5" -eq " 5 "
+            \\printf '<%s>\n' "$?"
+            ,
+            .stdout =
+            \\<0>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
     },
 }

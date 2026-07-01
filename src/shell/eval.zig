@@ -1717,14 +1717,16 @@ fn evalThreeArgumentTest(shell: anytype, left: []const u8, operator: []const u8,
     }
 
     if (try evalFileBinaryTest(shell, left, operator, right)) |matches| return matches;
-    if (try evalIntegerComparison(left, operator, right)) |matches| return matches;
+    if (try evalIntegerComparison(shell, left, operator, right)) |matches| return matches;
     return error.Syntax;
 }
 
-fn evalIntegerComparison(left: []const u8, operator: []const u8, right: []const u8) TestEvalError!?bool {
+fn evalIntegerComparison(shell: anytype, left: []const u8, operator: []const u8, right: []const u8) TestEvalError!?bool {
     if (!isIntegerComparisonOperator(operator)) return null;
-    const lhs = std.fmt.parseInt(i64, left, 10) catch return error.Integer;
-    const rhs = std.fmt.parseInt(i64, right, 10) catch return error.Integer;
+    const lhs_text = testIntegerOperand(shell, left);
+    const rhs_text = testIntegerOperand(shell, right);
+    const lhs = std.fmt.parseInt(i64, lhs_text, 10) catch return error.Integer;
+    const rhs = std.fmt.parseInt(i64, rhs_text, 10) catch return error.Integer;
     if (std.mem.eql(u8, operator, "-eq")) return lhs == rhs;
     if (std.mem.eql(u8, operator, "-ne")) return lhs != rhs;
     if (std.mem.eql(u8, operator, "-gt")) return lhs > rhs;
@@ -1732,6 +1734,11 @@ fn evalIntegerComparison(left: []const u8, operator: []const u8, right: []const 
     if (std.mem.eql(u8, operator, "-lt")) return lhs < rhs;
     if (std.mem.eql(u8, operator, "-le")) return lhs <= rhs;
     unreachable;
+}
+
+fn testIntegerOperand(shell: anytype, operand: []const u8) []const u8 {
+    if (shell.state.options.mode == .posix) return operand;
+    return std.mem.trim(u8, operand, " \t\n\r");
 }
 
 fn isIntegerComparisonOperator(operator: []const u8) bool {
