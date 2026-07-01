@@ -48,6 +48,7 @@ pub const Id = enum {
     return_,
     set,
     shift,
+    shopt,
     source,
     test_,
     times,
@@ -98,6 +99,7 @@ pub const core_definitions: DefinitionMap = .initComptime(.{
     .{ "return", Definition{ .name = "return", .id = .return_, .kind = .special } },
     .{ "set", Definition{ .name = "set", .id = .set, .kind = .special } },
     .{ "shift", Definition{ .name = "shift", .id = .shift, .kind = .special } },
+    .{ "shopt", Definition{ .name = "shopt", .id = .shopt, .kind = .regular } },
     .{ "source", Definition{ .name = "source", .id = .source, .kind = .regular } },
     .{ "test", Definition{ .name = "test", .id = .test_, .kind = .regular } },
     .{ "times", Definition{ .name = "times", .id = .times, .kind = .special } },
@@ -160,7 +162,7 @@ pub fn lookup(name: []const u8) ?Definition {
 
 pub fn lookupInMode(name: []const u8, mode: state_mod.Mode) ?Definition {
     const definition = lookup(name) orelse return null;
-    if (mode == .posix and definition.id == .source) return null;
+    if (mode == .posix and (definition.id == .source or definition.id == .shopt)) return null;
     return definition;
 }
 
@@ -184,6 +186,7 @@ pub fn eval(shell: anytype, definition: Definition, args: []const []const u8) !r
         .return_ => evalReturn(shell, args),
         .set => evalSet(shell, args),
         .shift => evalShift(shell, args),
+        .shopt => evalShopt(shell, args),
         .source => unreachable,
         .times => evalTimes(shell, args),
         .trap => evalTrap(shell, args),
@@ -275,6 +278,36 @@ fn evalUnalias(shell: anytype, args: []const []const u8) result.EvalResult {
     var status: result.ExitStatus = 0;
     for (args[index..]) |name| {
         if (!shell.state.removeAlias(name)) status = 1;
+    }
+    return .{ .status = status };
+}
+
+fn evalShopt(shell: anytype, args: []const []const u8) result.EvalResult {
+    var set_value: ?bool = null;
+    var index: usize = 1;
+    while (index < args.len) : (index += 1) {
+        const arg = args[index];
+        if (std.mem.eql(u8, arg, "--")) {
+            index += 1;
+            break;
+        }
+        if (arg.len < 2 or arg[0] != '-') break;
+        for (arg[1..]) |option| switch (option) {
+            's' => set_value = true,
+            'u' => set_value = false,
+            else => return .{ .status = 2 },
+        };
+    }
+
+    if (set_value == null or index >= args.len) return .{ .status = 2 };
+
+    var status: result.ExitStatus = 0;
+    for (args[index..]) |name| {
+        if (std.mem.eql(u8, name, "expand_aliases")) {
+            shell.state.options.expand_aliases = set_value.?;
+        } else {
+            status = 1;
+        }
     }
     return .{ .status = status };
 }

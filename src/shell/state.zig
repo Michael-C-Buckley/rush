@@ -21,6 +21,7 @@ pub const Options = struct {
     noclobber: bool = false,
     noexec: bool = false,
     pipefail: bool = false,
+    expand_aliases: bool = false,
     xtrace: bool = false,
     monitor: bool = false,
     interactive: bool = false,

@@ -62,6 +62,7 @@ fn aliasExpandedSource(
     shell_state: state_mod.State,
 ) std.mem.Allocator.Error!?[]const u8 {
     if (shell_state.aliases.count() == 0) return null;
+    if (!aliasesEnabled(shell_state)) return null;
 
     var output: std.ArrayList(u8) = .empty;
     var changed = false;
@@ -117,6 +118,10 @@ fn aliasExpandedSource(
     try output.appendSlice(allocator, src.text[cursor..]);
     const expanded: []const u8 = try output.toOwnedSlice(allocator);
     return expanded;
+}
+
+fn aliasesEnabled(shell_state: state_mod.State) bool {
+    return shell_state.options.mode == .posix or shell_state.options.interactive or shell_state.options.expand_aliases;
 }
 
 fn reservedWordStartsCommandList(reserved: token.ReservedWord) bool {

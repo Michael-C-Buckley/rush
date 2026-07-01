@@ -77,7 +77,7 @@ pub fn ShellWithBuiltins(comptime Host: type, comptime builtin_registry: builtin
 
         pub fn lookupBuiltin(self: *Self, name: []const u8) ?builtin.Definition {
             const definition = builtin_registry.lookup(name) orelse return null;
-            if (self.state.options.mode == .posix and definition.id == .source) return null;
+            if (self.state.options.mode == .posix and (definition.id == .source or definition.id == .shopt)) return null;
             return definition;
         }
 
@@ -168,7 +168,9 @@ pub fn ShellWithBuiltins(comptime Host: type, comptime builtin_registry: builtin
         }
 
         fn sourceNeedsAliasAwareEvaluation(self: *Self, src: source.Source) bool {
-            return self.state.options.interactive or self.state.aliases.count() != 0 or std.mem.indexOf(u8, src.text, "alias") != null;
+            return self.state.options.interactive or self.state.aliases.count() != 0 or
+                std.mem.indexOf(u8, src.text, "alias") != null or
+                (self.state.options.mode == .bash and std.mem.indexOf(u8, src.text, "shopt") != null);
         }
     };
 }
