@@ -381,8 +381,17 @@ fn spawnPipelineStages(
     }
 
     for (stages, 0..) |stage, index| {
+        const suppress_child_xtrace = try traceStaticPipelineStage(shell, stage);
         const process_group: ?host_mod.Pid = if (!create_process_group) null else if (index == 0) 0 else pids[0];
-        pids[index] = try forkPipelineStage(shell, stage, pipes, index, direct_static_externals, process_group);
+        pids[index] = try forkPipelineStage(
+            shell,
+            stage,
+            pipes,
+            index,
+            direct_static_externals,
+            process_group,
+            suppress_child_xtrace,
+        );
         spawned += 1;
     }
 
@@ -433,6 +442,7 @@ fn forkPipelineStage(
     stage_index: usize,
     direct_static_external: bool,
     process_group: ?host_mod.Pid,
+    suppress_child_xtrace: bool,
 ) !host_mod.Pid {
     const fd_actions = try pipelineFdActions(shell, pipes, stage_index);
     if (direct_static_external) {
@@ -457,10 +467,32 @@ fn forkPipelineStage(
                 const request = dynamicExternalCommandRequest(shell, command, &.{}) catch shell.host.exit(2);
                 if (request) |spawn_request| shell.host.exec(spawn_request) catch shell.host.exit(127);
             }
+            if (suppress_child_xtrace) shell.state.options.xtrace = false;
             const evaluated = evalCommand(shell, command) catch shell.host.exit(2);
             shell.host.exit(evaluated.status);
         },
     };
+}
+
+fn traceStaticPipelineStage(shell: anytype, command: ast.Command) EvalError!bool {
+    if (!shell.state.options.xtrace) return false;
+    const fields = try staticPipelineStageFields(shell, command) orelse return false;
+    try traceSimpleCommand(shell, &.{}, fields);
+    return true;
+}
+
+fn staticPipelineStageFields(shell: anytype, command: ast.Command) !?[]const []const u8 {
+    if (command != .simple) return null;
+    const simple = command.simple;
+    if (simple.assignments.len != 0 or simple.redirections.len != 0 or simple.words.len == 0) return null;
+
+    const fields = try shell.scratchAllocator().alloc([]const u8, simple.words.len);
+    for (simple.words, 0..) |word, index| {
+        if (wordExpandsLeadingTilde(shell, word)) return null;
+        fields[index] = staticLiteralWord(word) orelse return null;
+    }
+    if (shell.state.getFunction(fields[0]) != null) return null;
+    return fields;
 }
 
 fn resetJobControlSignalsForChild(shell: anytype) void {
