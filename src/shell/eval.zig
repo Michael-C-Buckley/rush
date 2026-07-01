@@ -4617,7 +4617,11 @@ fn expandPatternParts(shell: anytype, parts: []const ast.WordPart) ![]const u8 {
 
 fn appendPatternLiteral(allocator: std.mem.Allocator, output: *std.ArrayList(u8), bytes: []const u8) !void {
     for (bytes) |byte| {
-        if (byte == '*' or byte == '?' or byte == '[' or byte == ']' or byte == '\\') try output.append(allocator, '\\');
+        if (byte == '*' or byte == '?' or byte == '[' or byte == ']' or byte == '\\' or
+            byte == '-' or byte == '!' or byte == '^')
+        {
+            try output.append(allocator, '\\');
+        }
         try output.append(allocator, byte);
     }
 }

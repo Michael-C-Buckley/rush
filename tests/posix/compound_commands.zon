@@ -1067,6 +1067,30 @@
             .status = 0,
         },
         .{
+            .name = "case command bracket patterns preserve quoted range and negation bytes",
+            .script =
+            \\case foo in
+            \\    f['n-p']o | f["!"@]o) printf 'bad\n' ;;
+            \\    f[n-p]o) printf 'range\n' ;;
+            \\    *) printf 'nomatch\n' ;;
+            \\esac
+            \\
+            \\chars='n-p'
+            \\case foo in
+            \\    f["$chars"]o) printf 'bad\n' ;;
+            \\    f[n-p]o) printf 'variable\n' ;;
+            \\    *) printf 'nomatch\n' ;;
+            \\esac
+            ,
+            .stdout =
+            \\range
+            \\variable
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "case command bracket patterns preserve quoted closing bracket",
             .script =
             \\chars='ab]cd'
