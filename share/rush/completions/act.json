@@ -3,7 +3,7 @@
   "manifestVersion": 1,
   "command": {
     "name": "act",
-    "description": "run GitHub Actions locally",
+    "description": "run github actions locally",
     "providers": {
       "builtin.files": { "builtin": "files" },
       "builtin.directories": { "builtin": "directories" },
@@ -36,7 +36,7 @@
       { "long": "detect-event", "inherit": false, "description": "use the first workflow event" },
       { "short": "C", "long": "directory", "inherit": true, "value": { "name": "directory", "provider": "builtin.directories" }, "description": "change working directory" },
       { "short": "n", "long": "dryrun", "inherit": true, "description": "show what would run" },
-      { "long": "env", "repeatable": true, "inherit": false, "value": { "name": "env", "style": "optional" }, "description": "set action environment variable" },
+      { "long": "env", "repeatable": true, "inherit": false, "value": { "name": "env" }, "description": "set action environment variable" },
       { "long": "env-file", "inherit": true, "value": { "name": "file", "provider": "builtin.files" }, "description": "read environment variables from file" },
       { "short": "e", "long": "eventpath", "inherit": false, "value": { "name": "file", "provider": "builtin.files" }, "description": "read event payload from file" },
       { "long": "github-instance", "inherit": true, "value": { "name": "host" }, "description": "set GitHub instance host" },
@@ -56,7 +56,7 @@
       { "long": "remote-name", "inherit": false, "value": { "name": "remote" }, "description": "set git remote name" },
       { "short": "r", "long": "reuse", "inherit": false, "description": "keep successful containers" },
       { "long": "rm", "inherit": false, "description": "remove failed containers" },
-      { "short": "s", "long": "secret", "repeatable": true, "inherit": false, "value": { "name": "secret", "style": "optional" }, "description": "set action secret" },
+      { "short": "s", "long": "secret", "repeatable": true, "inherit": false, "value": { "name": "secret" }, "description": "set action secret" },
       { "long": "secret-file", "inherit": true, "value": { "name": "file", "provider": "builtin.files" }, "description": "read secrets from file" },
       { "long": "use-gitignore", "inherit": false, "description": "respect gitignore when copying files" },
       { "long": "userns", "inherit": false, "value": { "name": "namespace" }, "description": "set user namespace" },
