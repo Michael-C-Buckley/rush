@@ -1,0 +1,306 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "elm-review",
+    "description": "review Elm code",
+    "options": [
+      {
+        "long": "help",
+        "short": "h",
+        "description": "show help for elm-review",
+        "inherit": false
+      },
+      {
+        "long": "unsuppress",
+        "description": "include suppressed errors in the error report for all rules",
+        "inherit": false
+      },
+      {
+        "long": "rules",
+        "description": "run with a subsection of the rules in the configuration. Specify them by their name, and separate them by commas",
+        "inherit": false,
+        "value": {
+          "name": "<rule1,rule2,...>",
+          "description": "run with a subsection of the rules in the configuration"
+        }
+      },
+      {
+        "long": "watch",
+        "description": "re-run elm-review automatically when your project or configuration changes",
+        "inherit": false
+      },
+      {
+        "long": "watch-code",
+        "description": "re-run elm-review automatically when your project changes",
+        "inherit": false
+      },
+      {
+        "long": "elmjson",
+        "description": "specify the path to the elm.json file of the project",
+        "inherit": false,
+        "value": {
+          "name": "<path-to-elm.json>",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "config",
+        "description": "use the review configuration in the specified directory",
+        "inherit": false,
+        "value": {
+          "name": "<path-to-review-directory>",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "template",
+        "description": "use the review configuration from a GitHub repository",
+        "inherit": false,
+        "value": {
+          "name": "<author>/<repo>[/path-to-the-config-folder][#branch-or-commit]"
+        }
+      },
+      {
+        "long": "compiler",
+        "description": "specify the path to the elm compiler",
+        "inherit": false,
+        "value": {
+          "name": "<path-to-elm>",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "version",
+        "short": "v",
+        "description": "print the version of the elm-review CLI",
+        "inherit": false
+      },
+      {
+        "long": "debug",
+        "description": "add helpful information to debug your configuration or rules",
+        "inherit": false
+      },
+      {
+        "long": "report",
+        "description": "error reports will be in JSON format",
+        "inherit": false,
+        "value": {
+          "name": "json-or-ndjson",
+          "provider": "elm-review.report-types"
+        }
+      },
+      {
+        "long": "no-details",
+        "description": "hide the details from error reports for a more compact view",
+        "inherit": false
+      },
+      {
+        "long": "ignore-dirs",
+        "description": "ignore the reports of all rules for the specified directories",
+        "inherit": false,
+        "value": {
+          "name": "<dir1,dir2,...>",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "ignore-files",
+        "description": "ignore the reports of all rules for the specified files",
+        "inherit": false,
+        "value": {
+          "name": "<file1,file2,...>",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "fix",
+        "description": "elm Review will present fixes for the errors that offer an automatic fix, which you can then accept or refuse one by one",
+        "inherit": false
+      },
+      {
+        "long": "fix-all",
+        "description": "elm Review will present a single fix containing the application of all available automatic fixes, which you can then accept or refuse",
+        "inherit": false
+      },
+      {
+        "long": "elm-format-path",
+        "description": "specify the path to elm-format",
+        "inherit": false,
+        "value": {
+          "name": "<path-to-elm-format>",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "fix-limit",
+        "description": "limit the number of fixes applied in a single batch to N",
+        "inherit": false,
+        "value": {
+          "name": "N",
+          "description": "the number of fixes to apply before prompting the user"
+        }
+      },
+      {
+        "long": "extract",
+        "description": "extract project data for rules that have data extractors",
+        "inherit": false
+      },
+      {
+        "long": "benchmark-info",
+        "description": "print out how much time it took for rules and phases of the process to run. This is meant for benchmarking purposes",
+        "inherit": false
+      },
+      {
+        "long": "no-color",
+        "description": "disable colors in the output",
+        "inherit": false
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "files-or-directories-to-review",
+          "provider": [
+            "builtin.files",
+            "builtin.directories"
+          ],
+          "index": 0,
+          "repeatable": true
+        }
+      ]
+    },
+    "subcommands": [
+      {
+        "name": "init",
+        "description": "initialize Elm Review in this directory",
+        "options": [
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help for elm-review init",
+            "inherit": false
+          },
+          {
+            "long": "config",
+            "description": "create the configuration files in the specified directory instead of in the review/ directory",
+            "inherit": false,
+            "value": {
+              "name": "<path-to-review-directory>",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "template",
+            "description": "copy the review configuration from a GitHub repository, at the root or in a folder",
+            "inherit": false,
+            "value": {
+              "name": "<author>/<repo>[/path-to-the-config-folder][#branch-or-commit]"
+            }
+          },
+          {
+            "long": "compiler",
+            "description": "specify the path to the elm compiler",
+            "inherit": false,
+            "value": {
+              "name": "<path-to-elm>",
+              "provider": "builtin.files"
+            }
+          }
+        ]
+      },
+      {
+        "name": "suppress",
+        "description": "generate suppression files for rules that report many errors",
+        "options": [
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help for elm-review suppress",
+            "inherit": false
+          },
+          {
+            "long": "check-after-tests",
+            "description": "checks whether there are uncommitted suppression files",
+            "inherit": false
+          },
+          {
+            "long": "unsuppress",
+            "description": "include suppressed errors in the error report for all rules",
+            "inherit": false
+          },
+          {
+            "long": "unsuppress-rules",
+            "description": "include suppressed errors in the error report for all rules",
+            "inherit": false,
+            "value": {
+              "name": "<rule1,rule2,...>"
+            }
+          }
+        ]
+      },
+      {
+        "name": "new-package",
+        "description": "creates an new project aimed to contain rules and to be published later",
+        "options": [
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help for elm-review new-package",
+            "inherit": false
+          },
+          {
+            "long": "compiler",
+            "description": "specify the path to the elm compiler",
+            "inherit": false,
+            "value": {
+              "name": "<path-to-elm>",
+              "provider": "builtin.files"
+            }
+          }
+        ]
+      },
+      {
+        "name": "new-rule",
+        "description": "adds a new rule to your review configuration or review package",
+        "options": [
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help for elm-review new-package",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "rule-name",
+              "description": "add a rule file in src/ and a corresponding test file in tests/. Should be formatted just like an Elm module name, such as NoDoingThis or No.Doing.This",
+              "index": 0
+            }
+          ]
+        }
+      }
+    ],
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "elm-review.report-types": {
+        "values": [
+          {
+            "value": "json",
+            "description": "print a single JSON object"
+          },
+          {
+            "value": "ndjson",
+            "description": "print one JSON object per error"
+          }
+        ]
+      }
+    }
+  }
+}
