@@ -1,0 +1,39 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "arch",
+    "description": "run a command for an architecture",
+    "providers": {
+      "builtin.executables": { "builtin": "executables" },
+      "arch.architectures": {
+        "values": [
+          { "value": "i386", "description": "32-bit intel" },
+          { "value": "x86_64", "description": "64-bit intel" },
+          { "value": "x86_64h", "description": "64-bit intel haswell" },
+          { "value": "arm64", "description": "64-bit arm" },
+          { "value": "arm64e", "description": "64-bit arm apple silicon" }
+        ]
+      }
+    },
+    "options": [
+      { "spellings": ["-32"], "description": "add native 32-bit architecture", "inherit": false },
+      { "spellings": ["-64"], "description": "add native 64-bit architecture", "inherit": false },
+      { "spellings": ["-arch"], "description": "add architecture", "repeatable": true, "inherit": false, "exclusiveGroup": "arch.architecture", "value": { "name": "architecture", "provider": "arch.architectures" } },
+      { "spellings": ["-i386"], "description": "add 32-bit intel architecture", "repeatable": true, "inherit": false, "exclusiveGroup": "arch.architecture" },
+      { "spellings": ["-x86_64"], "description": "add 64-bit intel architecture", "repeatable": true, "inherit": false, "exclusiveGroup": "arch.architecture" },
+      { "spellings": ["-x86_64h"], "description": "add 64-bit intel haswell architecture", "repeatable": true, "inherit": false, "exclusiveGroup": "arch.architecture" },
+      { "spellings": ["-arm64"], "description": "add 64-bit arm architecture", "repeatable": true, "inherit": false, "exclusiveGroup": "arch.architecture" },
+      { "spellings": ["-arm64e"], "description": "add 64-bit arm apple silicon architecture", "repeatable": true, "inherit": false, "exclusiveGroup": "arch.architecture" },
+      { "short": "c", "description": "clear command environment", "inherit": false },
+      { "short": "d", "description": "delete environment variable", "repeatable": true, "inherit": false, "value": { "name": "variable" } },
+      { "short": "e", "description": "set environment variable", "repeatable": true, "inherit": false, "value": { "name": "name=value" } },
+      { "short": "h", "description": "show help", "inherit": false }
+    ],
+    "arguments": {
+      "states": [
+        { "name": "command", "provider": "builtin.executables", "index": 0, "repeatable": true, "description": "command to run" }
+      ]
+    }
+  }
+}
