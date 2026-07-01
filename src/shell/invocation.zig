@@ -21,6 +21,7 @@ pub const Interactive = struct {
     mode: state.Mode = .bash,
     options: state.Options = .{},
     arg_zero: []const u8,
+    login: bool = false,
 };
 
 pub const CommandString = struct {
@@ -43,10 +44,15 @@ pub fn parse(args: []const []const u8) ParseError!Invocation {
 
     var mode: state.Mode = .bash;
     var options: state.Options = .{};
+    var login = isLoginArgZero(args[0]);
     var index: usize = 1;
     while (index < args.len) : (index += 1) {
         const arg = args[index];
         if (std.mem.eql(u8, arg, "--help")) return .help;
+        if (std.mem.eql(u8, arg, "--login")) {
+            login = true;
+            continue;
+        }
         if (std.mem.eql(u8, arg, "--posix")) {
             mode = .posix;
             continue;
@@ -101,7 +107,13 @@ pub fn parse(args: []const []const u8) ParseError!Invocation {
         .mode = mode,
         .options = options,
         .arg_zero = args[0],
+        .login = login,
     } };
+}
+
+fn isLoginArgZero(arg_zero: []const u8) bool {
+    const base = std.fs.path.basename(arg_zero);
+    return base.len > 1 and base[0] == '-';
 }
 
 test "invocation parses bare interactive shell" {
@@ -113,7 +125,30 @@ test "invocation parses bare interactive shell" {
     };
     try std.testing.expectEqual(state.Mode.bash, interactive.mode);
     try std.testing.expect(interactive.options.interactive);
+    try std.testing.expect(!interactive.login);
     try std.testing.expectEqualStrings("rush", interactive.arg_zero);
+}
+
+test "invocation parses explicit login shell" {
+    const args = [_][]const u8{ "rush", "--login" };
+    const invocation = try parse(&args);
+    const interactive = switch (invocation) {
+        .interactive => |interactive| interactive,
+        .help, .command_string, .script_file => return error.TestExpectedEqual,
+    };
+    try std.testing.expect(interactive.login);
+    try std.testing.expect(interactive.options.interactive);
+}
+
+test "invocation parses login shell arg zero" {
+    const args = [_][]const u8{"/bin/-rush"};
+    const invocation = try parse(&args);
+    const interactive = switch (invocation) {
+        .interactive => |interactive| interactive,
+        .help, .command_string, .script_file => return error.TestExpectedEqual,
+    };
+    try std.testing.expect(interactive.login);
+    try std.testing.expect(interactive.options.interactive);
 }
 
 test "invocation parses POSIX interactive shell" {
