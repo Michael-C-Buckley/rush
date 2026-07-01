@@ -632,6 +632,7 @@ fn appendParameterOperatorAtFields(shell: anytype, fields: *std.ArrayList([]cons
 fn appendParameterOperatorStarField(shell: anytype, fields: *std.ArrayList([]const u8), word: ast.Word) !bool {
     const parameter = singleParameterWord(word) orelse return false;
     if (parameter.op == null or parameter.word == null) return false;
+    const parameter_is_quoted = singleDoubleQuotedParameter(word) != null;
     const word_is_quoted_star = wordIsQuotedStar(parameter.word.?);
     const word_is_unquoted_star = wordIsUnquotedStar(parameter.word.?);
     if (!word_is_quoted_star and !word_is_unquoted_star) return false;
@@ -644,7 +645,7 @@ fn appendParameterOperatorStarField(shell: anytype, fields: *std.ArrayList([]con
     };
     if (!selected) return false;
 
-    if (word_is_quoted_star) {
+    if (parameter_is_quoted or word_is_quoted_star) {
         try fields.append(shell.scratchAllocator(), try joinPositionals(shell, ifsFirstCharacter(shell)));
     } else {
         try appendUnquotedPositionalFields(shell, fields);

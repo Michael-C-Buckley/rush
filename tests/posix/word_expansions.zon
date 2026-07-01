@@ -1173,6 +1173,30 @@
             .status = 0,
         },
         .{
+            .name = "quoted parameter default with unquoted star joins with first IFS character",
+            .script =
+            \\set -- 'abc' 'def ghi' 'jkl'
+            \\unset var
+            \\IFS=:
+            \\set "${var-$*}"
+            \\printf '<%s>\n' "$#" "$1"
+            \\
+            \\IFS=
+            \\set -- 'abc' 'def ghi' 'jkl'
+            \\set "${var-$*}"
+            \\printf '[%s]\n' "$#" "$1"
+            ,
+            .stdout =
+            \\<1>
+            \\<abc:def ghi:jkl>
+            \\[1]
+            \\[abcdef ghijkl]
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "unquoted positional star in alternate expansion preserves empty IFS fields",
             .script =
             \\set -- 'abc' 'def ghi' 'jkl'
