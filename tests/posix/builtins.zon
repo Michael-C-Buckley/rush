@@ -534,6 +534,29 @@
             .status = 0,
         },
         .{
+            .name = "getopts reports missing option arguments by mode",
+            .script =
+            \\set -- -xfoo -yz
+            \\OPTIND=1 v=
+            \\while getopts x:yz: opt 2>/dev/null; do
+            \\    v="${v:+$v/}$opt,${OPTARG:-Empty}"
+            \\done
+            \\printf '<%s>\n' "$v"
+            \\OPTIND=1 v=
+            \\while getopts :x:yz: opt; do
+            \\    v="${v:+$v/}$opt,${OPTARG:-Empty}"
+            \\done
+            \\printf '<%s>\n' "$v"
+            ,
+            .stdout =
+            \\<x,foo/y,Empty/?,Empty>
+            \\<x,foo/y,Empty/:,z>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "command -p uses a default utility path",
             .script =
             \\PATH=/no/such command -p sh -c 'printf p'

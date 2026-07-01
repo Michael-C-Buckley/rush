@@ -241,6 +241,7 @@ fn evalGetopts(shell: anytype, args: []const []const u8) !result.EvalResult {
     const option_index = std.mem.indexOfScalar(u8, optstring, option);
     if (option_index == null or option == ':') {
         try shell.state.putVariable(.{ .name = name, .value = "?" });
+        shell.state.removeVariable("OPTARG");
         try advanceGetopts(shell, optind, operand);
         return .{};
     }
@@ -256,12 +257,19 @@ fn evalGetopts(shell: anytype, args: []const []const u8) !result.EvalResult {
             shell.state.getopts_char_index = 1;
             try putGetoptsOptind(shell, optind + 2);
         } else {
-            try shell.state.putVariable(.{ .name = name, .value = "?" });
-            try shell.state.putVariable(.{ .name = "OPTARG", .value = operand[shell.state.getopts_char_index..][0..1] });
+            const option_text = operand[shell.state.getopts_char_index..][0..1];
+            if (std.mem.startsWith(u8, optstring, ":")) {
+                try shell.state.putVariable(.{ .name = name, .value = ":" });
+                try shell.state.putVariable(.{ .name = "OPTARG", .value = option_text });
+            } else {
+                try shell.state.putVariable(.{ .name = name, .value = "?" });
+                shell.state.removeVariable("OPTARG");
+            }
             shell.state.getopts_char_index = 1;
             try putGetoptsOptind(shell, optind + 1);
         }
     } else {
+        shell.state.removeVariable("OPTARG");
         try advanceGetopts(shell, optind, operand);
     }
     return .{};
