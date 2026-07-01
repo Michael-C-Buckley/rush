@@ -1036,7 +1036,21 @@ fn evalSimpleScoped(shell: anytype, command: ast.SimpleCommand) EvalError!result
     const name = fields[0];
     if (lookupBuiltin(shell, name)) |definition| {
         if (definition.kind == .special) {
-            try applyAssignments(shell, command.assignments);
+            const saved_assignments = if (shell.state.options.mode == .bash)
+                try saveAssignmentVariables(shell, command.assignments)
+            else
+                &[_]SavedVariable{};
+            var restore_assignments = shell.state.options.mode == .bash;
+            defer if (restore_assignments) restoreVariables(shell, saved_assignments);
+            errdefer if (restore_assignments) {
+                restoreVariables(shell, saved_assignments);
+                restore_assignments = false;
+            };
+            if (shell.state.options.mode == .bash) {
+                try applyAssignmentsIgnoringReadonly(shell, command.assignments);
+            } else {
+                try applyAssignments(shell, command.assignments);
+            }
             if (definition.id == .export_ or definition.id == .readonly) {
                 return evalDeclarationBuiltin(shell, definition.id, command.words[1..]);
             }
@@ -3036,6 +3050,21 @@ fn parseKnownFd(raw: u31) host_mod.Fd {
 
 fn applyAssignments(shell: anytype, assignments: []const ast.Assignment) !void {
     _ = try applyAssignmentsWithStatus(shell, assignments);
+}
+
+fn applyAssignmentsIgnoringReadonly(shell: anytype, assignments: []const ast.Assignment) !void {
+    for (assignments) |assignment| {
+        var status: ?result.ExitStatus = null;
+        const value = try expandAssignmentWordTracking(shell, assignment.value, &status);
+        shell.state.putVariable(.{
+            .name = assignment.name,
+            .value = value,
+            .exported = assignmentExported(shell, assignment.name),
+        }) catch |err| switch (err) {
+            error.ReadonlyVariable => try writeReadonlyDiagnostic(shell, assignment.name),
+            else => return err,
+        };
+    }
 }
 
 fn applyAssignmentsWithStatus(shell: anytype, assignments: []const ast.Assignment) !result.ExitStatus {
