@@ -590,6 +590,21 @@
             .status = 0,
         },
         .{
+            .name = "exec exports preceding assignment variables",
+            .script =
+            \\case $(unset v; v=foo PATH=/bin exec sh -c 'printf "%s" "${v-U}"') in
+            \\    foo) printf '<ok>\n' ;;
+            \\    *) printf '<bad>\n' ;;
+            \\esac
+            ,
+            .stdout =
+            \\<ok>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "command -p uses a default utility path",
             .script =
             \\PATH=/no/such command -p sh -c 'printf p'

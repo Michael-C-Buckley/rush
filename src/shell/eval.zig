@@ -935,7 +935,7 @@ fn evalSimpleScoped(shell: anytype, command: ast.SimpleCommand) EvalError!result
                 restore_redirections = false;
                 if (has_redirections) try redirections.commit(shell);
                 if (fields.len == 1) return .{};
-                return evalExecBuiltin(shell, fields);
+                return evalExecBuiltin(shell, fields, command.assignments);
             }
             if ((definition.id == .break_ or definition.id == .continue_) and shell.state.loop_depth == 0) {
                 return .{ .status = 2 };
@@ -1310,7 +1310,7 @@ fn evalCommandBuiltin(
                 restore_redirections.* = false;
                 try redirections.commit(shell);
                 if (index + 1 == args.len) return .{};
-                return evalExecBuiltin(shell, args[index..]);
+                return evalExecBuiltin(shell, args[index..], assignments);
             },
             .export_, .readonly => {
                 const evaluated = try evalDeclarationBuiltin(shell, definition.id, commandFieldsAsWords(shell, args[index + 1 ..]) catch return error.OutOfMemory);
@@ -2141,9 +2141,9 @@ fn evalEvalBuiltin(shell: anytype, args: []const []const u8) EvalError!result.Ev
     };
 }
 
-fn evalExecBuiltin(shell: anytype, args: []const []const u8) EvalError!result.EvalResult {
+fn evalExecBuiltin(shell: anytype, args: []const []const u8, assignments: []const ast.Assignment) EvalError!result.EvalResult {
     std.debug.assert(args.len > 1);
-    const request = try makeExternalSpawnRequest(shell, args[1..], &.{}, &.{});
+    const request = try makeExternalSpawnRequest(shell, args[1..], assignments, &.{});
     try shell.host.exec(request);
     return .{ .status = 127 };
 }
