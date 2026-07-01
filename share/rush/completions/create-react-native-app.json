@@ -1,0 +1,92 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "create-react-native-app",
+    "description": "create a new React Native project",
+    "options": [
+      {
+        "long": "template",
+        "description": "set the project template",
+        "inherit": false,
+        "value": {
+          "name": "template"
+        }
+      },
+      {
+        "long": "template-path",
+        "description": "set the path to the template in a GitHub repo",
+        "inherit": false,
+        "value": {
+          "name": "name",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "yes",
+        "description": "use default project options",
+        "inherit": false,
+        "value": {
+          "name": "boolean",
+          "required": false,
+          "style": "optional",
+          "provider": "create-react-native-app.booleans"
+        }
+      },
+      {
+        "long": "no-install",
+        "description": "skip package and CocoaPods installation",
+        "inherit": false,
+        "value": {
+          "name": "boolean",
+          "required": false,
+          "style": "optional",
+          "provider": "create-react-native-app.booleans"
+        }
+      },
+      {
+        "long": "use-npm",
+        "description": "install dependencies with npm",
+        "inherit": false,
+        "value": {
+          "name": "boolean",
+          "required": false,
+          "style": "optional",
+          "provider": "create-react-native-app.booleans"
+        }
+      },
+      {
+        "short": "h",
+        "long": "help",
+        "description": "output usage information",
+        "inherit": false
+      },
+      {
+        "short": "V",
+        "long": "version",
+        "description": "output the version number",
+        "inherit": false
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "name",
+          "provider": "builtin.directories",
+          "index": 0
+        }
+      ]
+    },
+    "providers": {
+      "create-react-native-app.booleans": {
+        "values": [
+          "true",
+          "false"
+        ]
+      },
+      "builtin.directories": {
+        "builtin": "directories"
+      }
+    }
+  }
+}
