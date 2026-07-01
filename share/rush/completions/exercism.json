@@ -1,0 +1,220 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "exercism",
+    "description": "download and submit Exercism exercises",
+    "options": [
+      {
+        "long": "help",
+        "short": "h",
+        "description": "help for this command",
+        "inherit": true
+      },
+      {
+        "long": "timeout",
+        "description": "override the default HTTP timeout",
+        "inherit": true,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "unmask-token",
+        "description": "will unmask the API during a request/response dump",
+        "inherit": true
+      },
+      {
+        "long": "verbose",
+        "short": "v",
+        "description": "verbose output",
+        "inherit": true
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "configure",
+        "aliases": [
+          "c"
+        ],
+        "description": "configure the command-line client",
+        "options": [
+          {
+            "short": "a",
+            "long": "api",
+            "description": "aPI base url",
+            "inherit": false,
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "no-verify",
+            "description": "skip online token authorization check",
+            "inherit": false
+          },
+          {
+            "short": "s",
+            "long": "show",
+            "description": "show the current configuration",
+            "inherit": false
+          },
+          {
+            "short": "t",
+            "long": "token",
+            "description": "auth token used to connect to the site",
+            "inherit": false,
+            "value": {
+              "name": "token"
+            }
+          },
+          {
+            "short": "w",
+            "long": "workspace",
+            "description": "directory for exercism exercises",
+            "inherit": false,
+            "value": {
+              "name": "path",
+              "provider": "builtin.directories"
+            }
+          }
+        ]
+      },
+      {
+        "name": "download",
+        "aliases": [
+          "d"
+        ],
+        "description": "download an exercise",
+        "options": [
+          {
+            "short": "e",
+            "long": "exercise",
+            "description": "the exercise slug",
+            "inherit": false,
+            "value": {
+              "name": "exercise"
+            }
+          },
+          {
+            "short": "T",
+            "long": "team",
+            "description": "the team slug",
+            "inherit": false,
+            "value": {
+              "name": "team"
+            }
+          },
+          {
+            "short": "t",
+            "long": "track",
+            "description": "the track ID",
+            "inherit": false,
+            "value": {
+              "name": "track"
+            }
+          },
+          {
+            "short": "u",
+            "long": "uuid",
+            "description": "the solution UUID",
+            "inherit": false,
+            "value": {
+              "name": "uuid"
+            }
+          }
+        ]
+      },
+      {
+        "name": "help",
+        "description": "help about any command"
+      },
+      {
+        "name": "open",
+        "aliases": [
+          "o"
+        ],
+        "description": "open an exercise on the website",
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "provider": "builtin.directories",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "prepare",
+        "aliases": [
+          "p"
+        ],
+        "description": "prepare does setup for Exercism and its tracks"
+      },
+      {
+        "name": "submit",
+        "aliases": [
+          "s"
+        ],
+        "description": "submit your solution to an exercise",
+        "arguments": {
+          "states": [
+            {
+              "name": "file",
+              "description": "the files you want to submit",
+              "provider": "builtin.files",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "troubleshoot",
+        "aliases": [
+          "t",
+          "debug"
+        ],
+        "description": "troubleshoot does a diagnostic self-check",
+        "options": [
+          {
+            "short": "f",
+            "long": "full-api-key",
+            "description": "display the user's full API key",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "upgrade",
+        "aliases": [
+          "u"
+        ],
+        "description": "upgrade to the latest version of the CLI"
+      },
+      {
+        "name": "version",
+        "aliases": [
+          "v"
+        ],
+        "description": "version outputs the version of CLI"
+      },
+      {
+        "name": "workspace",
+        "aliases": [
+          "w"
+        ],
+        "description": "print out the path to your Exercism workspace"
+      }
+    ],
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
