@@ -1,0 +1,5 @@
+__rush_complete_aws_vault_profiles() {
+  aws-vault list --profiles 2>/dev/null | while read profile; do
+    test -n "$profile" && rush_complete candidate "$profile" --kind plain --description profile
+  done
+}

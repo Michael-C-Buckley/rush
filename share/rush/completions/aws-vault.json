@@ -1,0 +1,28 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "aws-vault",
+    "description": "store and use aws credentials",
+    "providers": {
+      "builtin.executables": { "builtin": "executables" },
+      "aws-vault.profiles": { "function": "__rush_complete_aws_vault_profiles" }
+    },
+    "options": [
+      { "long": "help", "description": "show help", "inherit": false },
+      { "long": "version", "description": "show version", "inherit": false },
+      { "long": "debug", "description": "show debug output", "inherit": false }
+    ],
+    "subcommands": [
+      { "name": "add", "description": "add credentials", "arguments": { "states": [{ "name": "profile", "index": 0, "description": "profile to add" }] } },
+      { "name": "remove", "description": "remove credentials", "options": [{ "short": "f", "long": "force", "description": "skip confirmation", "inherit": false }], "arguments": { "states": [{ "name": "profile", "index": 0, "provider": "aws-vault.profiles" }] } },
+      { "name": "list", "description": "list profiles and sessions", "options": [{ "long": "profiles", "description": "show profile names only", "inherit": false }, { "long": "sessions", "description": "show session names only", "inherit": false }, { "long": "credentials", "description": "show profiles with credentials", "inherit": false }] },
+      { "name": "rotate", "description": "rotate credentials", "options": [{ "short": "n", "long": "no-session", "description": "use master credentials", "inherit": false }], "arguments": { "states": [{ "name": "profile", "index": 0, "provider": "aws-vault.profiles" }] } },
+      { "name": "exec", "description": "run command with aws credentials", "options": [{ "short": "d", "long": "duration", "description": "set session duration", "inherit": false, "value": { "name": "duration" } }, { "short": "n", "long": "no-session", "description": "use master credentials", "inherit": false }, { "long": "region", "description": "set aws region", "inherit": false, "value": { "name": "region" } }, { "short": "t", "long": "mfa-token", "description": "set mfa token", "inherit": false, "value": { "name": "token" } }], "arguments": { "states": [{ "name": "profile", "index": 0, "provider": "aws-vault.profiles" }, { "name": "command", "index": 1, "provider": "builtin.executables", "repeatable": true }] } },
+      { "name": "export", "description": "export aws credentials", "arguments": { "states": [{ "name": "profile", "index": 0, "provider": "aws-vault.profiles" }] } },
+      { "name": "clear", "description": "clear temporary credentials", "arguments": { "states": [{ "name": "profile", "index": 0, "provider": "aws-vault.profiles" }] } },
+      { "name": "login", "description": "generate console login link", "arguments": { "states": [{ "name": "profile", "index": 0, "provider": "aws-vault.profiles" }] } },
+      { "name": "help", "description": "show command help" }
+    ]
+  }
+}
