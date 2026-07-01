@@ -1,0 +1,5293 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "cosign",
+    "description": "sign and verify container artifacts",
+    "options": [
+      {
+        "long": "output-file",
+        "description": "log output to a file",
+        "inherit": false,
+        "value": {
+          "name": "output-file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "timeout",
+        "short": "t",
+        "description": "timeout for commands",
+        "inherit": false,
+        "value": {
+          "name": "timeout"
+        }
+      },
+      {
+        "long": "verbose",
+        "short": "d",
+        "description": "log debug output",
+        "inherit": false
+      },
+      {
+        "long": "help",
+        "short": "h",
+        "description": "help for cosign",
+        "inherit": false
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "attach",
+        "description": "provides utilities for attaching artifacts to other artifacts in a registry",
+        "options": [
+          {
+            "long": "output-file",
+            "description": "log output to a file",
+            "inherit": false,
+            "value": {
+              "name": "output-file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "timeout",
+            "short": "t",
+            "description": "timeout for commands",
+            "inherit": false,
+            "value": {
+              "name": "timeout"
+            }
+          },
+          {
+            "long": "verbose",
+            "short": "d",
+            "description": "log debug output",
+            "inherit": false
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "help for attach",
+            "inherit": false
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "attestation",
+            "description": "attach attestation to the supplied container image",
+            "options": [
+              {
+                "long": "output-file",
+                "description": "log output to a file",
+                "inherit": false,
+                "value": {
+                  "name": "output-file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "timeout",
+                "short": "t",
+                "description": "timeout for commands",
+                "inherit": false,
+                "value": {
+                  "name": "timeout"
+                }
+              },
+              {
+                "long": "verbose",
+                "short": "d",
+                "description": "log debug output",
+                "inherit": false
+              },
+              {
+                "long": "allow-insecure-registry",
+                "description": "whether to allow insecure connections to registries. Don't use this for anything but testing",
+                "inherit": false
+              },
+              {
+                "long": "attachment-tag-prefix",
+                "description": "optional custom prefix to use for attached image tags. Attachment images are tagged as: `[AttachmentTagPrefix]sh",
+                "inherit": false,
+                "value": {
+                  "name": "attachment-tag-prefix",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "attestation",
+                "description": "path to the attestation envelope",
+                "inherit": false,
+                "value": {
+                  "name": "attestation"
+                }
+              },
+              {
+                "long": "k8s-keychain",
+                "description": "whether to use the kubernetes keychain instead of the default keychain (supports workload identity)",
+                "inherit": false
+              },
+              {
+                "long": "help",
+                "short": "h",
+                "description": "help for attestation",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "sbom",
+            "description": "attach sbom to the supplied container image",
+            "options": [
+              {
+                "long": "output-file",
+                "description": "log output to a file",
+                "inherit": false,
+                "value": {
+                  "name": "output-file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "timeout",
+                "short": "t",
+                "description": "timeout for commands",
+                "inherit": false,
+                "value": {
+                  "name": "timeout"
+                }
+              },
+              {
+                "long": "verbose",
+                "short": "d",
+                "description": "log debug output",
+                "inherit": false
+              },
+              {
+                "long": "allow-insecure-registry",
+                "description": "whether to allow insecure connections to registries. Don't use this for anything but testing",
+                "inherit": false
+              },
+              {
+                "long": "attachment-tag-prefix",
+                "description": "optional custom prefix to use for attached image tags. Attachment images are tagged as: `[AttachmentTagPrefix]sh",
+                "inherit": false,
+                "value": {
+                  "name": "attachment-tag-prefix",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "k8s-keychain",
+                "description": "whether to use the kubernetes keychain instead of the default keychain (supports workload identity)",
+                "inherit": false
+              },
+              {
+                "long": "sbom",
+                "description": "path to the sbom, or {-} for stdin",
+                "inherit": false,
+                "value": {
+                  "name": "sbom"
+                }
+              },
+              {
+                "long": "type",
+                "description": "type of sbom (spdx|cyclonedx|syft)",
+                "inherit": false,
+                "value": {
+                  "name": "type"
+                }
+              },
+              {
+                "long": "help",
+                "short": "h",
+                "description": "help for sbom",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "signature",
+            "description": "attach signatures to the supplied container image",
+            "options": [
+              {
+                "long": "output-file",
+                "description": "log output to a file",
+                "inherit": false,
+                "value": {
+                  "name": "output-file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "timeout",
+                "short": "t",
+                "description": "timeout for commands",
+                "inherit": false,
+                "value": {
+                  "name": "timeout"
+                }
+              },
+              {
+                "long": "verbose",
+                "short": "d",
+                "description": "log debug output",
+                "inherit": false
+              },
+              {
+                "long": "allow-insecure-registry",
+                "description": "whether to allow insecure connections to registries. Don't use this for anything but testing",
+                "inherit": false
+              },
+              {
+                "long": "attachment-tag-prefix",
+                "description": "optional custom prefix to use for attached image tags. Attachment images are tagged as: `[AttachmentTagPrefix]sh",
+                "inherit": false,
+                "value": {
+                  "name": "attachment-tag-prefix",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "k8s-keychain",
+                "description": "whether to use the kubernetes keychain instead of the default keychain (supports workload identity)",
+                "inherit": false
+              },
+              {
+                "long": "payload",
+                "description": "path to the payload covered by the signature (if using another format)",
+                "inherit": false,
+                "value": {
+                  "name": "payload"
+                }
+              },
+              {
+                "long": "signature",
+                "description": "the signature, path to the signature, or {-} for stdin",
+                "inherit": false,
+                "value": {
+                  "name": "signature"
+                }
+              },
+              {
+                "long": "help",
+                "short": "h",
+                "description": "help for signature",
+                "inherit": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "attest",
+        "description": "attest the supplied container image",
+        "options": [
+          {
+            "long": "output-file",
+            "description": "log output to a file",
+            "inherit": false,
+            "value": {
+              "name": "output-file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "timeout",
+            "short": "t",
+            "description": "timeout for commands",
+            "inherit": false,
+            "value": {
+              "name": "timeout"
+            }
+          },
+          {
+            "long": "verbose",
+            "short": "d",
+            "description": "log debug output",
+            "inherit": false
+          },
+          {
+            "long": "allow-insecure-registry",
+            "description": "whether to allow insecure connections to registries. Don't use this for anything but testing",
+            "inherit": false
+          },
+          {
+            "long": "attachment-tag-prefix",
+            "description": "optional custom prefix to use for attached image tags. Attachment images are tagged as: `[AttachmentTagPrefix]sh",
+            "inherit": false,
+            "value": {
+              "name": "attachment-tag-prefix",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "cert",
+            "description": "path to the x509 certificate to include in the Signature",
+            "inherit": false,
+            "value": {
+              "name": "cert",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "force",
+            "short": "f",
+            "description": "skip warnings and confirmations",
+            "inherit": false
+          },
+          {
+            "long": "fulcio-url",
+            "description": "[EXPERIMENTAL] address of sigstore PKI server",
+            "inherit": false,
+            "value": {
+              "name": "fulcio-url"
+            }
+          },
+          {
+            "long": "identity-token",
+            "description": "[EXPERIMENTAL] identity token to use for certificate from fulcio",
+            "inherit": false,
+            "value": {
+              "name": "identity-token"
+            }
+          },
+          {
+            "long": "insecure-skip-verify",
+            "description": "[EXPERIMENTAL] skip verifying fulcio published to the SCT (this should only be used for testing)",
+            "inherit": false
+          },
+          {
+            "long": "k8s-keychain",
+            "description": "whether to use the kubernetes keychain instead of the default keychain (supports workload identity)",
+            "inherit": false
+          },
+          {
+            "long": "key",
+            "description": "path to the private key file, kms URI or Kubernetes Secret",
+            "inherit": false,
+            "value": {
+              "name": "key",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "no-upload",
+            "description": "do not upload the generated attestation",
+            "inherit": false
+          },
+          {
+            "long": "oidc-client-id",
+            "description": "[EXPERIMENTAL] oidc client ID for application",
+            "inherit": false,
+            "value": {
+              "name": "oidc-client-id"
+            }
+          },
+          {
+            "long": "oidc-client-secret",
+            "description": "[EXPERIMENTAL] oidc client secret for application",
+            "inherit": false,
+            "value": {
+              "name": "oidc-client-secret"
+            }
+          },
+          {
+            "long": "oidc-issuer",
+            "description": "[EXPERIMENTAL] oidc provider to be used to issue ID token",
+            "inherit": false,
+            "value": {
+              "name": "oidc-issuer"
+            }
+          },
+          {
+            "long": "predicate",
+            "description": "path to the predicate file",
+            "inherit": false,
+            "value": {
+              "name": "predicate",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "recursive",
+            "short": "r",
+            "description": "if a multi-arch image is specified, additionally sign each discrete image",
+            "inherit": false
+          },
+          {
+            "long": "rekor-url",
+            "description": "[EXPERIMENTAL] address of rekor STL server",
+            "inherit": false,
+            "value": {
+              "name": "rekor-url"
+            }
+          },
+          {
+            "long": "replace",
+            "description": "",
+            "inherit": false
+          },
+          {
+            "long": "sk",
+            "description": "whether to use a hardware security key",
+            "inherit": false
+          },
+          {
+            "long": "slot",
+            "description": "security key slot to use for generated key (default: signature) (authentication|signature|card-authentication|ke",
+            "inherit": false,
+            "value": {
+              "name": "slot"
+            }
+          },
+          {
+            "long": "type",
+            "description": "specify a predicate type (slsaprovenance|link|spdx|vuln|custom) or an URI",
+            "inherit": false,
+            "value": {
+              "name": "type"
+            }
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "help for attest",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "clean",
+        "description": "remove all signatures from an image",
+        "options": [
+          {
+            "long": "output-file",
+            "description": "log output to a file",
+            "inherit": false,
+            "value": {
+              "name": "output-file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "timeout",
+            "short": "t",
+            "description": "timeout for commands",
+            "inherit": false,
+            "value": {
+              "name": "timeout"
+            }
+          },
+          {
+            "long": "verbose",
+            "short": "d",
+            "description": "log debug output",
+            "inherit": false
+          },
+          {
+            "long": "allow-insecure-registry",
+            "description": "whether to allow insecure connections to registries. Don't use this for anything but testing",
+            "inherit": false
+          },
+          {
+            "long": "attachment-tag-prefix",
+            "description": "optional custom prefix to use for attached image tags. Attachment images are tagged as: `[AttachmentTagPrefix]sh",
+            "inherit": false,
+            "value": {
+              "name": "attachment-tag-prefix",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "force",
+            "short": "f",
+            "description": "do not prompt for confirmation",
+            "inherit": false
+          },
+          {
+            "long": "k8s-keychain",
+            "description": "whether to use the kubernetes keychain instead of the default keychain (supports workload identity)",
+            "inherit": false
+          },
+          {
+            "long": "type",
+            "description": "a type of clean: <signature|attestation|sbom|all> (default: all)",
+            "inherit": false,
+            "value": {
+              "name": "type"
+            }
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "help for clean",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "completion",
+        "description": "generate completion script",
+        "options": [
+          {
+            "long": "output-file",
+            "description": "log output to a file",
+            "inherit": false,
+            "value": {
+              "name": "output-file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "timeout",
+            "short": "t",
+            "description": "timeout for commands",
+            "inherit": false,
+            "value": {
+              "name": "timeout"
+            }
+          },
+          {
+            "long": "verbose",
+            "short": "d",
+            "description": "log debug output",
+            "inherit": false
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "help for completion",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "copy",
+        "description": "copy the supplied container image and signatures",
+        "options": [
+          {
+            "long": "output-file",
+            "description": "log output to a file",
+            "inherit": false,
+            "value": {
+              "name": "output-file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "timeout",
+            "short": "t",
+            "description": "timeout for commands",
+            "inherit": false,
+            "value": {
+              "name": "timeout"
+            }
+          },
+          {
+            "long": "verbose",
+            "short": "d",
+            "description": "log debug output",
+            "inherit": false
+          },
+          {
+            "long": "allow-insecure-registry",
+            "description": "whether to allow insecure connections to registries. Don't use this for anything but testing",
+            "inherit": false
+          },
+          {
+            "long": "attachment-tag-prefix",
+            "description": "optional custom prefix to use for attached image tags. Attachment images are tagged as: `[AttachmentTagPrefix]sh",
+            "inherit": false,
+            "value": {
+              "name": "attachment-tag-prefix",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "force",
+            "short": "f",
+            "description": "overwrite destination image(s), if necessary",
+            "inherit": false
+          },
+          {
+            "long": "k8s-keychain",
+            "description": "whether to use the kubernetes keychain instead of the default keychain (supports workload identity)",
+            "inherit": false
+          },
+          {
+            "long": "sig-only",
+            "description": "only copy the image signature",
+            "inherit": false
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "help for copy",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "dockerfile",
+        "description": "provides utilities for discovering images in and performing operations on Dockerfiles",
+        "options": [
+          {
+            "long": "output-file",
+            "description": "log output to a file",
+            "inherit": false,
+            "value": {
+              "name": "output-file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "timeout",
+            "short": "t",
+            "description": "timeout for commands",
+            "inherit": false,
+            "value": {
+              "name": "timeout"
+            }
+          },
+          {
+            "long": "verbose",
+            "short": "d",
+            "description": "log debug output",
+            "inherit": false
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "help for dockerfile",
+            "inherit": false
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "verify",
+            "description": "verify a signature on the base image specified in the Dockerfile",
+            "options": [
+              {
+                "long": "output-file",
+                "description": "log output to a file",
+                "inherit": false,
+                "value": {
+                  "name": "output-file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "timeout",
+                "short": "t",
+                "description": "timeout for commands",
+                "inherit": false,
+                "value": {
+                  "name": "timeout"
+                }
+              },
+              {
+                "long": "verbose",
+                "short": "d",
+                "description": "log debug output",
+                "inherit": false
+              },
+              {
+                "long": "allow-insecure-registry",
+                "description": "whether to allow insecure connections to registries. Don't use this for anything but testing",
+                "inherit": false
+              },
+              {
+                "long": "annotations",
+                "short": "a",
+                "description": "extra key=value pairs to sign",
+                "inherit": false,
+                "value": {
+                  "name": "annotations"
+                }
+              },
+              {
+                "long": "attachment",
+                "description": "related image attachment to sign (sbom), default none",
+                "inherit": false,
+                "value": {
+                  "name": "attachment",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "attachment-tag-prefix",
+                "description": "optional custom prefix to use for attached image tags. Attachment images are tagged as: `[AttachmentTagPrefix]sh",
+                "inherit": false,
+                "value": {
+                  "name": "attachment-tag-prefix",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "base-image-only",
+                "description": "only verify the base image (the last FROM image in the Dockerfile)",
+                "inherit": false
+              },
+              {
+                "long": "cert",
+                "description": "path to the public certificate",
+                "inherit": false,
+                "value": {
+                  "name": "cert",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "cert-email",
+                "description": "the email expected in a valid Fulcio certificate",
+                "inherit": false,
+                "value": {
+                  "name": "cert-email",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "cert-oidc-issuer",
+                "description": "the oidc issuer expected in a valid Fulcio certificate, e.g. https://token.actions.githubusercontent.com or http",
+                "inherit": false,
+                "value": {
+                  "name": "cert-oidc-issuer",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "check-claims",
+                "description": "whether to check the claims found",
+                "inherit": false
+              },
+              {
+                "long": "k8s-keychain",
+                "description": "whether to use the kubernetes keychain instead of the default keychain (supports workload identity)",
+                "inherit": false
+              },
+              {
+                "long": "key",
+                "description": "path to the public key file, kms URI or Kubernetes Secret",
+                "inherit": false,
+                "value": {
+                  "name": "key",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "local-image",
+                "description": "whether the specified image is a path to an image saved locally via 'cosign save'",
+                "inherit": false
+              },
+              {
+                "long": "output",
+                "short": "o",
+                "description": "output format for the signing image information (json|text)",
+                "inherit": false,
+                "value": {
+                  "name": "output",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "rekor-url",
+                "description": "[EXPERIMENTAL] address of rekor STL server",
+                "inherit": false,
+                "value": {
+                  "name": "rekor-url"
+                }
+              },
+              {
+                "long": "signature",
+                "description": "signature content or path or remote URL",
+                "inherit": false,
+                "value": {
+                  "name": "signature"
+                }
+              },
+              {
+                "long": "signature-digest-algorithm",
+                "description": "digest algorithm to use when processing a signature (sha224|sha256|sha384|sha512)",
+                "inherit": false,
+                "value": {
+                  "name": "signature-digest-algorithm"
+                }
+              },
+              {
+                "long": "sk",
+                "description": "whether to use a hardware security key",
+                "inherit": false
+              },
+              {
+                "long": "slot",
+                "description": "security key slot to use for generated key (default: signature) (authentication|signature|card-authentication|ke",
+                "inherit": false,
+                "value": {
+                  "name": "slot"
+                }
+              },
+              {
+                "long": "help",
+                "short": "h",
+                "description": "help for verify",
+                "inherit": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "download",
+        "description": "provides utilities for downloading artifacts and attached artifacts in a registry",
+        "options": [
+          {
+            "long": "output-file",
+            "description": "log output to a file",
+            "inherit": false,
+            "value": {
+              "name": "output-file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "timeout",
+            "short": "t",
+            "description": "timeout for commands",
+            "inherit": false,
+            "value": {
+              "name": "timeout"
+            }
+          },
+          {
+            "long": "verbose",
+            "short": "d",
+            "description": "log debug output",
+            "inherit": false
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "help for download",
+            "inherit": false
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "attestation",
+            "description": "download in-toto attestations from the supplied container image",
+            "options": [
+              {
+                "long": "output-file",
+                "description": "log output to a file",
+                "inherit": false,
+                "value": {
+                  "name": "output-file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "timeout",
+                "short": "t",
+                "description": "timeout for commands",
+                "inherit": false,
+                "value": {
+                  "name": "timeout"
+                }
+              },
+              {
+                "long": "verbose",
+                "short": "d",
+                "description": "log debug output",
+                "inherit": false
+              },
+              {
+                "long": "allow-insecure-registry",
+                "description": "whether to allow insecure connections to registries. Don't use this for anything but testing",
+                "inherit": false
+              },
+              {
+                "long": "attachment-tag-prefix",
+                "description": "optional custom prefix to use for attached image tags. Attachment images are tagged as: `[AttachmentTagPrefix]sh",
+                "inherit": false,
+                "value": {
+                  "name": "attachment-tag-prefix",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "k8s-keychain",
+                "description": "whether to use the kubernetes keychain instead of the default keychain (supports workload identity)",
+                "inherit": false
+              },
+              {
+                "long": "help",
+                "short": "h",
+                "description": "help for attestation",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "sbom",
+            "description": "download SBOMs from the supplied container image",
+            "options": [
+              {
+                "long": "output-file",
+                "description": "log output to a file",
+                "inherit": false,
+                "value": {
+                  "name": "output-file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "timeout",
+                "short": "t",
+                "description": "timeout for commands",
+                "inherit": false,
+                "value": {
+                  "name": "timeout"
+                }
+              },
+              {
+                "long": "verbose",
+                "short": "d",
+                "description": "log debug output",
+                "inherit": false
+              },
+              {
+                "long": "allow-insecure-registry",
+                "description": "whether to allow insecure connections to registries. Don't use this for anything but testing",
+                "inherit": false
+              },
+              {
+                "long": "attachment-tag-prefix",
+                "description": "optional custom prefix to use for attached image tags. Attachment images are tagged as: `[AttachmentTagPrefix]sh",
+                "inherit": false,
+                "value": {
+                  "name": "attachment-tag-prefix",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "k8s-keychain",
+                "description": "whether to use the kubernetes keychain instead of the default keychain (supports workload identity)",
+                "inherit": false
+              },
+              {
+                "long": "help",
+                "short": "h",
+                "description": "help for sbom",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "signature",
+            "description": "download signatures from the supplied container image",
+            "options": [
+              {
+                "long": "output-file",
+                "description": "log output to a file",
+                "inherit": false,
+                "value": {
+                  "name": "output-file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "timeout",
+                "short": "t",
+                "description": "timeout for commands",
+                "inherit": false,
+                "value": {
+                  "name": "timeout"
+                }
+              },
+              {
+                "long": "verbose",
+                "short": "d",
+                "description": "log debug output",
+                "inherit": false
+              },
+              {
+                "long": "allow-insecure-registry",
+                "description": "whether to allow insecure connections to registries. Don't use this for anything but testing",
+                "inherit": false
+              },
+              {
+                "long": "attachment-tag-prefix",
+                "description": "optional custom prefix to use for attached image tags. Attachment images are tagged as: `[AttachmentTagPrefix]sh",
+                "inherit": false,
+                "value": {
+                  "name": "attachment-tag-prefix",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "k8s-keychain",
+                "description": "whether to use the kubernetes keychain instead of the default keychain (supports workload identity)",
+                "inherit": false
+              },
+              {
+                "long": "help",
+                "short": "h",
+                "description": "help for signature",
+                "inherit": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "generate",
+        "description": "generates (unsigned) signature payloads from the supplied container image",
+        "options": [
+          {
+            "long": "output-file",
+            "description": "log output to a file",
+            "inherit": false,
+            "value": {
+              "name": "output-file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "timeout",
+            "short": "t",
+            "description": "timeout for commands",
+            "inherit": false,
+            "value": {
+              "name": "timeout"
+            }
+          },
+          {
+            "long": "verbose",
+            "short": "d",
+            "description": "log debug output",
+            "inherit": false
+          },
+          {
+            "long": "allow-insecure-registry",
+            "description": "whether to allow insecure connections to registries. Don't use this for anything but testing",
+            "inherit": false
+          },
+          {
+            "long": "annotations",
+            "short": "a",
+            "description": "extra key=value pairs to sign",
+            "inherit": false,
+            "value": {
+              "name": "annotations"
+            }
+          },
+          {
+            "long": "attachment-tag-prefix",
+            "description": "optional custom prefix to use for attached image tags. Attachment images are tagged as: `[AttachmentTagPrefix]sh",
+            "inherit": false,
+            "value": {
+              "name": "attachment-tag-prefix",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "k8s-keychain",
+            "description": "whether to use the kubernetes keychain instead of the default keychain (supports workload identity)",
+            "inherit": false
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "help for generate",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "generate-key-pair",
+        "description": "generates a key-pair",
+        "options": [
+          {
+            "long": "output-file",
+            "description": "log output to a file",
+            "inherit": false,
+            "value": {
+              "name": "output-file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "timeout",
+            "short": "t",
+            "description": "timeout for commands",
+            "inherit": false,
+            "value": {
+              "name": "timeout"
+            }
+          },
+          {
+            "long": "verbose",
+            "short": "d",
+            "description": "log debug output",
+            "inherit": false
+          },
+          {
+            "long": "kms",
+            "description": "create key pair in kms service to use for signing",
+            "inherit": false,
+            "value": {
+              "name": "kms"
+            }
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "help for generate-key-pair",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "import-key-pair",
+        "description": "imports a PEM-encoded RSA or EC private key",
+        "options": [
+          {
+            "long": "output-file",
+            "description": "log output to a file",
+            "inherit": false,
+            "value": {
+              "name": "output-file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "timeout",
+            "short": "t",
+            "description": "timeout for commands",
+            "inherit": false,
+            "value": {
+              "name": "timeout"
+            }
+          },
+          {
+            "long": "verbose",
+            "short": "d",
+            "description": "log debug output",
+            "inherit": false
+          },
+          {
+            "long": "key",
+            "description": "import key pair to use for signing",
+            "inherit": false,
+            "value": {
+              "name": "key",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "help for import-key-pair",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "initialize",
+        "description": "initializes SigStore root to retrieve trusted certificate and key targets for verification",
+        "options": [
+          {
+            "long": "output-file",
+            "description": "log output to a file",
+            "inherit": false,
+            "value": {
+              "name": "output-file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "timeout",
+            "short": "t",
+            "description": "timeout for commands",
+            "inherit": false,
+            "value": {
+              "name": "timeout"
+            }
+          },
+          {
+            "long": "verbose",
+            "short": "d",
+            "description": "log debug output",
+            "inherit": false
+          },
+          {
+            "long": "mirror",
+            "description": "gCS bucket to a SigStore TUF repository or HTTP(S) base URL",
+            "inherit": false,
+            "value": {
+              "name": "mirror"
+            }
+          },
+          {
+            "long": "root",
+            "description": "path to trusted initial root. defaults to embedded root",
+            "inherit": false,
+            "value": {
+              "name": "root"
+            }
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "help for initialize",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "load",
+        "description": "load a signed image on disk to a remote registry",
+        "options": [
+          {
+            "long": "output-file",
+            "description": "log output to a file",
+            "inherit": false,
+            "value": {
+              "name": "output-file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "timeout",
+            "short": "t",
+            "description": "timeout for commands",
+            "inherit": false,
+            "value": {
+              "name": "timeout"
+            }
+          },
+          {
+            "long": "verbose",
+            "short": "d",
+            "description": "log debug output",
+            "inherit": false
+          },
+          {
+            "long": "dir",
+            "description": "path to directory where the signed image is stored on disk",
+            "inherit": false,
+            "value": {
+              "name": "dir"
+            }
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "help for load",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "login",
+        "description": "log in to a registry",
+        "options": [
+          {
+            "long": "output-file",
+            "description": "log output to a file",
+            "inherit": false,
+            "value": {
+              "name": "output-file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "timeout",
+            "short": "t",
+            "description": "timeout for commands",
+            "inherit": false,
+            "value": {
+              "name": "timeout"
+            }
+          },
+          {
+            "long": "verbose",
+            "short": "d",
+            "description": "log debug output",
+            "inherit": false
+          },
+          {
+            "long": "password",
+            "short": "p",
+            "description": "password",
+            "inherit": false,
+            "value": {
+              "name": "password"
+            }
+          },
+          {
+            "long": "password-stdin",
+            "description": "take the password from stdin",
+            "inherit": false
+          },
+          {
+            "long": "username",
+            "short": "u",
+            "description": "username",
+            "inherit": false,
+            "value": {
+              "name": "username"
+            }
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "help for login",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "manifest",
+        "description": "provides utilities for discovering images in and performing operations on Kubernetes manifests",
+        "options": [
+          {
+            "long": "output-file",
+            "description": "log output to a file",
+            "inherit": false,
+            "value": {
+              "name": "output-file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "timeout",
+            "short": "t",
+            "description": "timeout for commands",
+            "inherit": false,
+            "value": {
+              "name": "timeout"
+            }
+          },
+          {
+            "long": "verbose",
+            "short": "d",
+            "description": "log debug output",
+            "inherit": false
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "help for manifest",
+            "inherit": false
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "verify",
+            "description": "verify all signatures of images specified in the manifest",
+            "options": [
+              {
+                "long": "output-file",
+                "description": "log output to a file",
+                "inherit": false,
+                "value": {
+                  "name": "output-file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "timeout",
+                "short": "t",
+                "description": "timeout for commands",
+                "inherit": false,
+                "value": {
+                  "name": "timeout"
+                }
+              },
+              {
+                "long": "verbose",
+                "short": "d",
+                "description": "log debug output",
+                "inherit": false
+              },
+              {
+                "long": "allow-insecure-registry",
+                "description": "whether to allow insecure connections to registries. Don't use this for anything but testing",
+                "inherit": false
+              },
+              {
+                "long": "annotations",
+                "short": "a",
+                "description": "extra key=value pairs to sign",
+                "inherit": false,
+                "value": {
+                  "name": "annotations"
+                }
+              },
+              {
+                "long": "attachment",
+                "description": "related image attachment to sign (sbom), default none",
+                "inherit": false,
+                "value": {
+                  "name": "attachment",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "attachment-tag-prefix",
+                "description": "optional custom prefix to use for attached image tags. Attachment images are tagged as: `[AttachmentTagPrefix]sh",
+                "inherit": false,
+                "value": {
+                  "name": "attachment-tag-prefix",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "cert",
+                "description": "path to the public certificate",
+                "inherit": false,
+                "value": {
+                  "name": "cert",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "cert-email",
+                "description": "the email expected in a valid Fulcio certificate",
+                "inherit": false,
+                "value": {
+                  "name": "cert-email",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "cert-oidc-issuer",
+                "description": "the oidc issuer expected in a valid Fulcio certificate, e.g. https://token.actions.githubusercontent.com or http",
+                "inherit": false,
+                "value": {
+                  "name": "cert-oidc-issuer",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "check-claims",
+                "description": "whether to check the claims found",
+                "inherit": false
+              },
+              {
+                "long": "k8s-keychain",
+                "description": "whether to use the kubernetes keychain instead of the default keychain (supports workload identity)",
+                "inherit": false
+              },
+              {
+                "long": "key",
+                "description": "path to the public key file, kms URI or Kubernetes Secret",
+                "inherit": false,
+                "value": {
+                  "name": "key",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "local-image",
+                "description": "whether the specified image is a path to an image saved locally via 'cosign save'",
+                "inherit": false
+              },
+              {
+                "long": "output",
+                "short": "o",
+                "description": "output format for the signing image information (json|text)",
+                "inherit": false,
+                "value": {
+                  "name": "output",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "rekor-url",
+                "description": "[EXPERIMENTAL] address of rekor STL server",
+                "inherit": false,
+                "value": {
+                  "name": "rekor-url"
+                }
+              },
+              {
+                "long": "signature",
+                "description": "signature content or path or remote URL",
+                "inherit": false,
+                "value": {
+                  "name": "signature"
+                }
+              },
+              {
+                "long": "signature-digest-algorithm",
+                "description": "digest algorithm to use when processing a signature (sha224|sha256|sha384|sha512)",
+                "inherit": false,
+                "value": {
+                  "name": "signature-digest-algorithm"
+                }
+              },
+              {
+                "long": "sk",
+                "description": "whether to use a hardware security key",
+                "inherit": false
+              },
+              {
+                "long": "slot",
+                "description": "security key slot to use for generated key (default: signature) (authentication|signature|card-authentication|ke",
+                "inherit": false,
+                "value": {
+                  "name": "slot"
+                }
+              },
+              {
+                "long": "help",
+                "short": "h",
+                "description": "help for verify",
+                "inherit": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "piv-tool",
+        "description": "this cosign was not built with piv-tool support!",
+        "options": [
+          {
+            "long": "output-file",
+            "description": "log output to a file",
+            "inherit": false,
+            "value": {
+              "name": "output-file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "timeout",
+            "short": "t",
+            "description": "timeout for commands",
+            "inherit": false,
+            "value": {
+              "name": "timeout"
+            }
+          },
+          {
+            "long": "verbose",
+            "short": "d",
+            "description": "log debug output",
+            "inherit": false
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "help for piv-tool",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "pkcs11-tool",
+        "description": "this cosign was not built with pkcs11-tool support!",
+        "options": [
+          {
+            "long": "output-file",
+            "description": "log output to a file",
+            "inherit": false,
+            "value": {
+              "name": "output-file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "timeout",
+            "short": "t",
+            "description": "timeout for commands",
+            "inherit": false,
+            "value": {
+              "name": "timeout"
+            }
+          },
+          {
+            "long": "verbose",
+            "short": "d",
+            "description": "log debug output",
+            "inherit": false
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "help for pkcs11-tool",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "policy",
+        "description": "subcommand to manage a keyless policy",
+        "options": [
+          {
+            "long": "output-file",
+            "description": "log output to a file",
+            "inherit": false,
+            "value": {
+              "name": "output-file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "timeout",
+            "short": "t",
+            "description": "timeout for commands",
+            "inherit": false,
+            "value": {
+              "name": "timeout"
+            }
+          },
+          {
+            "long": "verbose",
+            "short": "d",
+            "description": "log debug output",
+            "inherit": false
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "help for policy",
+            "inherit": false
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "init",
+            "description": "generate a new keyless policy",
+            "options": [
+              {
+                "long": "output-file",
+                "description": "log output to a file",
+                "inherit": false,
+                "value": {
+                  "name": "output-file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "timeout",
+                "short": "t",
+                "description": "timeout for commands",
+                "inherit": false,
+                "value": {
+                  "name": "timeout"
+                }
+              },
+              {
+                "long": "verbose",
+                "short": "d",
+                "description": "log debug output",
+                "inherit": false
+              },
+              {
+                "long": "allow-insecure-registry",
+                "description": "whether to allow insecure connections to registries. Don't use this for anything but testing",
+                "inherit": false
+              },
+              {
+                "long": "attachment-tag-prefix",
+                "description": "optional custom prefix to use for attached image tags. Attachment images are tagged as: `[AttachmentTagPrefix]sh",
+                "inherit": false,
+                "value": {
+                  "name": "attachment-tag-prefix",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "expires",
+                "description": "total expire duration in days",
+                "inherit": false,
+                "value": {
+                  "name": "expires"
+                }
+              },
+              {
+                "long": "issuer",
+                "description": "trusted issuer to use for identity tokens, e.g. https://accounts.google.com",
+                "inherit": false,
+                "value": {
+                  "name": "issuer"
+                }
+              },
+              {
+                "long": "k8s-keychain",
+                "description": "whether to use the kubernetes keychain instead of the default keychain (supports workload identity)",
+                "inherit": false
+              },
+              {
+                "long": "maintainers",
+                "short": "m",
+                "description": "list of maintainers to add to the root policy",
+                "inherit": false,
+                "value": {
+                  "name": "maintainers"
+                }
+              },
+              {
+                "long": "namespace",
+                "description": "registry namespace that the root policy belongs to",
+                "inherit": false,
+                "value": {
+                  "name": "namespace"
+                }
+              },
+              {
+                "long": "out",
+                "description": "output policy locally",
+                "inherit": false,
+                "value": {
+                  "name": "out"
+                }
+              },
+              {
+                "long": "threshold",
+                "description": "threshold for root policy signers",
+                "inherit": false,
+                "value": {
+                  "name": "threshold"
+                }
+              },
+              {
+                "long": "help",
+                "short": "h",
+                "description": "help for init",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "sign",
+            "description": "sign a keyless policy",
+            "options": [
+              {
+                "long": "output-file",
+                "description": "log output to a file",
+                "inherit": false,
+                "value": {
+                  "name": "output-file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "timeout",
+                "short": "t",
+                "description": "timeout for commands",
+                "inherit": false,
+                "value": {
+                  "name": "timeout"
+                }
+              },
+              {
+                "long": "verbose",
+                "short": "d",
+                "description": "log debug output",
+                "inherit": false
+              },
+              {
+                "long": "allow-insecure-registry",
+                "description": "whether to allow insecure connections to registries. Don't use this for anything but testing",
+                "inherit": false
+              },
+              {
+                "long": "attachment-tag-prefix",
+                "description": "optional custom prefix to use for attached image tags. Attachment images are tagged as: `[AttachmentTagPrefix]sh",
+                "inherit": false,
+                "value": {
+                  "name": "attachment-tag-prefix",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "fulcio-url",
+                "description": "[EXPERIMENTAL] address of sigstore PKI server",
+                "inherit": false,
+                "value": {
+                  "name": "fulcio-url"
+                }
+              },
+              {
+                "long": "identity-token",
+                "description": "[EXPERIMENTAL] identity token to use for certificate from fulcio",
+                "inherit": false,
+                "value": {
+                  "name": "identity-token"
+                }
+              },
+              {
+                "long": "insecure-skip-verify",
+                "description": "[EXPERIMENTAL] skip verifying fulcio published to the SCT (this should only be used for testing)",
+                "inherit": false
+              },
+              {
+                "long": "k8s-keychain",
+                "description": "whether to use the kubernetes keychain instead of the default keychain (supports workload identity)",
+                "inherit": false
+              },
+              {
+                "long": "namespace",
+                "description": "registry namespace that the root policy belongs to",
+                "inherit": false,
+                "value": {
+                  "name": "namespace"
+                }
+              },
+              {
+                "long": "oidc-client-id",
+                "description": "[EXPERIMENTAL] oidc client ID for application",
+                "inherit": false,
+                "value": {
+                  "name": "oidc-client-id"
+                }
+              },
+              {
+                "long": "oidc-client-secret",
+                "description": "[EXPERIMENTAL] oidc client secret for application",
+                "inherit": false,
+                "value": {
+                  "name": "oidc-client-secret"
+                }
+              },
+              {
+                "long": "oidc-issuer",
+                "description": "[EXPERIMENTAL] oidc provider to be used to issue ID token",
+                "inherit": false,
+                "value": {
+                  "name": "oidc-issuer"
+                }
+              },
+              {
+                "long": "out",
+                "description": "output policy locally",
+                "inherit": false,
+                "value": {
+                  "name": "out"
+                }
+              },
+              {
+                "long": "rekor-url",
+                "description": "[EXPERIMENTAL] address of rekor STL server",
+                "inherit": false,
+                "value": {
+                  "name": "rekor-url"
+                }
+              },
+              {
+                "long": "help",
+                "short": "h",
+                "description": "help for sign",
+                "inherit": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "public-key",
+        "description": "gets a public key from the key-pair",
+        "options": [
+          {
+            "long": "output-file",
+            "description": "log output to a file",
+            "inherit": false,
+            "value": {
+              "name": "output-file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "timeout",
+            "short": "t",
+            "description": "timeout for commands",
+            "inherit": false,
+            "value": {
+              "name": "timeout"
+            }
+          },
+          {
+            "long": "verbose",
+            "short": "d",
+            "description": "log debug output",
+            "inherit": false
+          },
+          {
+            "long": "key",
+            "description": "path to the private key file, kms URI or Kubernetes Secret",
+            "inherit": false,
+            "value": {
+              "name": "key",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "outfile",
+            "description": "path to a payload file to use rather than generating one",
+            "inherit": false,
+            "value": {
+              "name": "outfile",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "sk",
+            "description": "whether to use a hardware security key",
+            "inherit": false
+          },
+          {
+            "long": "slot",
+            "description": "security key slot to use for generated key (default: signature) (authentication|signature|card-authentication|ke",
+            "inherit": false,
+            "value": {
+              "name": "slot"
+            }
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "help for public-key",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "save",
+        "description": "save the container image and associated signatures to disk at the specified directory",
+        "options": [
+          {
+            "long": "output-file",
+            "description": "log output to a file",
+            "inherit": false,
+            "value": {
+              "name": "output-file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "timeout",
+            "short": "t",
+            "description": "timeout for commands",
+            "inherit": false,
+            "value": {
+              "name": "timeout"
+            }
+          },
+          {
+            "long": "verbose",
+            "short": "d",
+            "description": "log debug output",
+            "inherit": false
+          },
+          {
+            "long": "dir",
+            "description": "path to dir where the signed image should be stored on disk",
+            "inherit": false,
+            "value": {
+              "name": "dir"
+            }
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "help for save",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "sign",
+        "description": "sign the supplied container image",
+        "options": [
+          {
+            "long": "output-file",
+            "description": "log output to a file",
+            "inherit": false,
+            "value": {
+              "name": "output-file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "timeout",
+            "short": "t",
+            "description": "timeout for commands",
+            "inherit": false,
+            "value": {
+              "name": "timeout"
+            }
+          },
+          {
+            "long": "verbose",
+            "short": "d",
+            "description": "log debug output",
+            "inherit": false
+          },
+          {
+            "long": "allow-insecure-registry",
+            "description": "whether to allow insecure connections to registries. Don't use this for anything but testing",
+            "inherit": false
+          },
+          {
+            "long": "annotations",
+            "short": "a",
+            "description": "extra key=value pairs to sign",
+            "inherit": false,
+            "value": {
+              "name": "annotations"
+            }
+          },
+          {
+            "long": "attachment",
+            "description": "related image attachment to sign (sbom), default none",
+            "inherit": false,
+            "value": {
+              "name": "attachment",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "attachment-tag-prefix",
+            "description": "optional custom prefix to use for attached image tags. Attachment images are tagged as: `[AttachmentTagPrefix]sh",
+            "inherit": false,
+            "value": {
+              "name": "attachment-tag-prefix",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "cert",
+            "description": "path to the x509 certificate to include in the Signature",
+            "inherit": false,
+            "value": {
+              "name": "cert",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "force",
+            "short": "f",
+            "description": "skip warnings and confirmations",
+            "inherit": false
+          },
+          {
+            "long": "fulcio-url",
+            "description": "[EXPERIMENTAL] address of sigstore PKI server",
+            "inherit": false,
+            "value": {
+              "name": "fulcio-url"
+            }
+          },
+          {
+            "long": "identity-token",
+            "description": "[EXPERIMENTAL] identity token to use for certificate from fulcio",
+            "inherit": false,
+            "value": {
+              "name": "identity-token"
+            }
+          },
+          {
+            "long": "insecure-skip-verify",
+            "description": "[EXPERIMENTAL] skip verifying fulcio published to the SCT (this should only be used for testing)",
+            "inherit": false
+          },
+          {
+            "long": "k8s-keychain",
+            "description": "whether to use the kubernetes keychain instead of the default keychain (supports workload identity)",
+            "inherit": false
+          },
+          {
+            "long": "key",
+            "description": "path to the private key file, kms URI or Kubernetes Secret",
+            "inherit": false,
+            "value": {
+              "name": "key",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "oidc-client-id",
+            "description": "[EXPERIMENTAL] oidc client ID for application",
+            "inherit": false,
+            "value": {
+              "name": "oidc-client-id"
+            }
+          },
+          {
+            "long": "oidc-client-secret",
+            "description": "[EXPERIMENTAL] oidc client secret for application",
+            "inherit": false,
+            "value": {
+              "name": "oidc-client-secret"
+            }
+          },
+          {
+            "long": "oidc-issuer",
+            "description": "[EXPERIMENTAL] oidc provider to be used to issue ID token",
+            "inherit": false,
+            "value": {
+              "name": "oidc-issuer"
+            }
+          },
+          {
+            "long": "output-certificate",
+            "description": "write the certificate to FILE",
+            "inherit": false,
+            "value": {
+              "name": "output-certificate",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "output-signature",
+            "description": "write the signature to FILE",
+            "inherit": false,
+            "value": {
+              "name": "output-signature",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "payload",
+            "description": "path to a payload file to use rather than generating one",
+            "inherit": false,
+            "value": {
+              "name": "payload"
+            }
+          },
+          {
+            "long": "recursive",
+            "short": "r",
+            "description": "if a multi-arch image is specified, additionally sign each discrete image",
+            "inherit": false
+          },
+          {
+            "long": "rekor-url",
+            "description": "[EXPERIMENTAL] address of rekor STL server",
+            "inherit": false,
+            "value": {
+              "name": "rekor-url"
+            }
+          },
+          {
+            "long": "sk",
+            "description": "whether to use a hardware security key",
+            "inherit": false
+          },
+          {
+            "long": "slot",
+            "description": "security key slot to use for generated key (default: signature) (authentication|signature|card-authentication|ke",
+            "inherit": false,
+            "value": {
+              "name": "slot"
+            }
+          },
+          {
+            "long": "upload",
+            "description": "whether to upload the signature",
+            "inherit": false
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "help for sign",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "sign-blob",
+        "description": "sign the supplied blob, outputting the base64-encoded signature to stdout",
+        "options": [
+          {
+            "long": "output-file",
+            "description": "log output to a file",
+            "inherit": false,
+            "value": {
+              "name": "output-file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "timeout",
+            "short": "t",
+            "description": "timeout for commands",
+            "inherit": false,
+            "value": {
+              "name": "timeout"
+            }
+          },
+          {
+            "long": "verbose",
+            "short": "d",
+            "description": "log debug output",
+            "inherit": false
+          },
+          {
+            "long": "allow-insecure-registry",
+            "description": "whether to allow insecure connections to registries. Don't use this for anything but testing",
+            "inherit": false
+          },
+          {
+            "long": "attachment-tag-prefix",
+            "description": "optional custom prefix to use for attached image tags. Attachment images are tagged as: `[AttachmentTagPrefix]sh",
+            "inherit": false,
+            "value": {
+              "name": "attachment-tag-prefix",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "b64",
+            "description": "whether to base64 encode the output",
+            "inherit": false
+          },
+          {
+            "long": "bundle",
+            "description": "write everything required to verify the blob to a FILE",
+            "inherit": false,
+            "value": {
+              "name": "bundle"
+            }
+          },
+          {
+            "long": "fulcio-url",
+            "description": "[EXPERIMENTAL] address of sigstore PKI server",
+            "inherit": false,
+            "value": {
+              "name": "fulcio-url"
+            }
+          },
+          {
+            "long": "identity-token",
+            "description": "[EXPERIMENTAL] identity token to use for certificate from fulcio",
+            "inherit": false,
+            "value": {
+              "name": "identity-token"
+            }
+          },
+          {
+            "long": "insecure-skip-verify",
+            "description": "[EXPERIMENTAL] skip verifying fulcio published to the SCT (this should only be used for testing)",
+            "inherit": false
+          },
+          {
+            "long": "k8s-keychain",
+            "description": "whether to use the kubernetes keychain instead of the default keychain (supports workload identity)",
+            "inherit": false
+          },
+          {
+            "long": "key",
+            "description": "path to the private key file, kms URI or Kubernetes Secret",
+            "inherit": false,
+            "value": {
+              "name": "key",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "oidc-client-id",
+            "description": "[EXPERIMENTAL] oidc client ID for application",
+            "inherit": false,
+            "value": {
+              "name": "oidc-client-id"
+            }
+          },
+          {
+            "long": "oidc-client-secret",
+            "description": "[EXPERIMENTAL] oidc client secret for application",
+            "inherit": false,
+            "value": {
+              "name": "oidc-client-secret"
+            }
+          },
+          {
+            "long": "oidc-issuer",
+            "description": "[EXPERIMENTAL] oidc provider to be used to issue ID token",
+            "inherit": false,
+            "value": {
+              "name": "oidc-issuer"
+            }
+          },
+          {
+            "long": "output",
+            "description": "write the signature to FILE",
+            "inherit": false,
+            "value": {
+              "name": "output",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "output-certificate",
+            "description": "write the certificate to FILE",
+            "inherit": false,
+            "value": {
+              "name": "output-certificate",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "output-signature",
+            "description": "write the signature to FILE",
+            "inherit": false,
+            "value": {
+              "name": "output-signature",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "rekor-url",
+            "description": "[EXPERIMENTAL] address of rekor STL server",
+            "inherit": false,
+            "value": {
+              "name": "rekor-url"
+            }
+          },
+          {
+            "long": "sk",
+            "description": "whether to use a hardware security key",
+            "inherit": false
+          },
+          {
+            "long": "slot",
+            "description": "security key slot to use for generated key (default: signature) (authentication|signature|card-authentication|ke",
+            "inherit": false,
+            "value": {
+              "name": "slot"
+            }
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "help for sign-blob",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "tree",
+        "description": "display supply chain security related artifacts for an image such as signatures, SBOMs and attestations",
+        "options": [
+          {
+            "long": "output-file",
+            "description": "log output to a file",
+            "inherit": false,
+            "value": {
+              "name": "output-file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "timeout",
+            "short": "t",
+            "description": "timeout for commands",
+            "inherit": false,
+            "value": {
+              "name": "timeout"
+            }
+          },
+          {
+            "long": "verbose",
+            "short": "d",
+            "description": "log debug output",
+            "inherit": false
+          },
+          {
+            "long": "allow-insecure-registry",
+            "description": "whether to allow insecure connections to registries. Don't use this for anything but testing",
+            "inherit": false
+          },
+          {
+            "long": "attachment-tag-prefix",
+            "description": "optional custom prefix to use for attached image tags. Attachment images are tagged as: `[AttachmentTagPrefix]sh",
+            "inherit": false,
+            "value": {
+              "name": "attachment-tag-prefix",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "k8s-keychain",
+            "description": "whether to use the kubernetes keychain instead of the default keychain (supports workload identity)",
+            "inherit": false
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "help for tree",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "triangulate",
+        "description": "outputs the located cosign image reference. This is the location cosign stores the specified artifact type",
+        "options": [
+          {
+            "long": "output-file",
+            "description": "log output to a file",
+            "inherit": false,
+            "value": {
+              "name": "output-file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "timeout",
+            "short": "t",
+            "description": "timeout for commands",
+            "inherit": false,
+            "value": {
+              "name": "timeout"
+            }
+          },
+          {
+            "long": "verbose",
+            "short": "d",
+            "description": "log debug output",
+            "inherit": false
+          },
+          {
+            "long": "allow-insecure-registry",
+            "description": "whether to allow insecure connections to registries. Don't use this for anything but testing",
+            "inherit": false
+          },
+          {
+            "long": "attachment-tag-prefix",
+            "description": "optional custom prefix to use for attached image tags. Attachment images are tagged as: `[AttachmentTagPrefix]sh",
+            "inherit": false,
+            "value": {
+              "name": "attachment-tag-prefix",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "k8s-keychain",
+            "description": "whether to use the kubernetes keychain instead of the default keychain (supports workload identity)",
+            "inherit": false
+          },
+          {
+            "long": "type",
+            "description": "related attachment to triangulate (attestation|sbom|signature), default signature",
+            "inherit": false,
+            "value": {
+              "name": "type"
+            }
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "help for triangulate",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "upload",
+        "description": "provides utilities for uploading artifacts to a registry",
+        "options": [
+          {
+            "long": "output-file",
+            "description": "log output to a file",
+            "inherit": false,
+            "value": {
+              "name": "output-file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "timeout",
+            "short": "t",
+            "description": "timeout for commands",
+            "inherit": false,
+            "value": {
+              "name": "timeout"
+            }
+          },
+          {
+            "long": "verbose",
+            "short": "d",
+            "description": "log debug output",
+            "inherit": false
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "help for upload",
+            "inherit": false
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "blob",
+            "description": "upload one or more blobs to the supplied container image address",
+            "options": [
+              {
+                "long": "output-file",
+                "description": "log output to a file",
+                "inherit": false,
+                "value": {
+                  "name": "output-file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "timeout",
+                "short": "t",
+                "description": "timeout for commands",
+                "inherit": false,
+                "value": {
+                  "name": "timeout"
+                }
+              },
+              {
+                "long": "verbose",
+                "short": "d",
+                "description": "log debug output",
+                "inherit": false
+              },
+              {
+                "long": "allow-insecure-registry",
+                "description": "whether to allow insecure connections to registries. Don't use this for anything but testing",
+                "inherit": false
+              },
+              {
+                "long": "attachment-tag-prefix",
+                "description": "optional custom prefix to use for attached image tags. Attachment images are tagged as: `[AttachmentTagPrefix]sh",
+                "inherit": false,
+                "value": {
+                  "name": "attachment-tag-prefix",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "ct",
+                "description": "content type to set",
+                "inherit": false,
+                "value": {
+                  "name": "ct"
+                }
+              },
+              {
+                "long": "files",
+                "short": "f",
+                "description": "<filepath>:[platform/arch]",
+                "inherit": false,
+                "value": {
+                  "name": "files",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "k8s-keychain",
+                "description": "whether to use the kubernetes keychain instead of the default keychain (supports workload identity)",
+                "inherit": false
+              },
+              {
+                "long": "help",
+                "short": "h",
+                "description": "help for blob",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "wasm",
+            "description": "upload a wasm module to the supplied container image reference",
+            "options": [
+              {
+                "long": "output-file",
+                "description": "log output to a file",
+                "inherit": false,
+                "value": {
+                  "name": "output-file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "timeout",
+                "short": "t",
+                "description": "timeout for commands",
+                "inherit": false,
+                "value": {
+                  "name": "timeout"
+                }
+              },
+              {
+                "long": "verbose",
+                "short": "d",
+                "description": "log debug output",
+                "inherit": false
+              },
+              {
+                "long": "allow-insecure-registry",
+                "description": "whether to allow insecure connections to registries. Don't use this for anything but testing",
+                "inherit": false
+              },
+              {
+                "long": "attachment-tag-prefix",
+                "description": "optional custom prefix to use for attached image tags. Attachment images are tagged as: `[AttachmentTagPrefix]sh",
+                "inherit": false,
+                "value": {
+                  "name": "attachment-tag-prefix",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "file",
+                "short": "f",
+                "description": "path to the wasm file to upload",
+                "inherit": false,
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "k8s-keychain",
+                "description": "whether to use the kubernetes keychain instead of the default keychain (supports workload identity)",
+                "inherit": false
+              },
+              {
+                "long": "help",
+                "short": "h",
+                "description": "help for wasm",
+                "inherit": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "verify",
+        "description": "verify a signature on the supplied container image",
+        "options": [
+          {
+            "long": "output-file",
+            "description": "log output to a file",
+            "inherit": false,
+            "value": {
+              "name": "output-file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "timeout",
+            "short": "t",
+            "description": "timeout for commands",
+            "inherit": false,
+            "value": {
+              "name": "timeout"
+            }
+          },
+          {
+            "long": "verbose",
+            "short": "d",
+            "description": "log debug output",
+            "inherit": false
+          },
+          {
+            "long": "allow-insecure-registry",
+            "description": "whether to allow insecure connections to registries. Don't use this for anything but testing",
+            "inherit": false
+          },
+          {
+            "long": "annotations",
+            "short": "a",
+            "description": "extra key=value pairs to sign",
+            "inherit": false,
+            "value": {
+              "name": "annotations"
+            }
+          },
+          {
+            "long": "attachment",
+            "description": "related image attachment to sign (sbom), default none",
+            "inherit": false,
+            "value": {
+              "name": "attachment",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "attachment-tag-prefix",
+            "description": "optional custom prefix to use for attached image tags. Attachment images are tagged as: `[AttachmentTagPrefix]sh",
+            "inherit": false,
+            "value": {
+              "name": "attachment-tag-prefix",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "cert",
+            "description": "path to the public certificate",
+            "inherit": false,
+            "value": {
+              "name": "cert",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "cert-email",
+            "description": "the email expected in a valid Fulcio certificate",
+            "inherit": false,
+            "value": {
+              "name": "cert-email",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "cert-oidc-issuer",
+            "description": "the oidc issuer expected in a valid Fulcio certificate, e.g. https://token.actions.githubusercontent.com or http",
+            "inherit": false,
+            "value": {
+              "name": "cert-oidc-issuer",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "check-claims",
+            "description": "whether to check the claims found",
+            "inherit": false
+          },
+          {
+            "long": "k8s-keychain",
+            "description": "whether to use the kubernetes keychain instead of the default keychain (supports workload identity)",
+            "inherit": false
+          },
+          {
+            "long": "key",
+            "description": "path to the public key file, kms URI or Kubernetes Secret",
+            "inherit": false,
+            "value": {
+              "name": "key",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "local-image",
+            "description": "whether the specified image is a path to an image saved locally via 'cosign save'",
+            "inherit": false
+          },
+          {
+            "long": "output",
+            "short": "o",
+            "description": "output format for the signing image information (json|text)",
+            "inherit": false,
+            "value": {
+              "name": "output",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "rekor-url",
+            "description": "[EXPERIMENTAL] address of rekor STL server",
+            "inherit": false,
+            "value": {
+              "name": "rekor-url"
+            }
+          },
+          {
+            "long": "signature",
+            "description": "signature content or path or remote URL",
+            "inherit": false,
+            "value": {
+              "name": "signature"
+            }
+          },
+          {
+            "long": "signature-digest-algorithm",
+            "description": "digest algorithm to use when processing a signature (sha224|sha256|sha384|sha512)",
+            "inherit": false,
+            "value": {
+              "name": "signature-digest-algorithm"
+            }
+          },
+          {
+            "long": "sk",
+            "description": "whether to use a hardware security key",
+            "inherit": false
+          },
+          {
+            "long": "slot",
+            "description": "security key slot to use for generated key (default: signature) (authentication|signature|card-authentication|ke",
+            "inherit": false,
+            "value": {
+              "name": "slot"
+            }
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "help for verify",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "verify-attestation",
+        "description": "verify an attestation on the supplied container image",
+        "options": [
+          {
+            "long": "output-file",
+            "description": "log output to a file",
+            "inherit": false,
+            "value": {
+              "name": "output-file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "timeout",
+            "short": "t",
+            "description": "timeout for commands",
+            "inherit": false,
+            "value": {
+              "name": "timeout"
+            }
+          },
+          {
+            "long": "verbose",
+            "short": "d",
+            "description": "log debug output",
+            "inherit": false
+          },
+          {
+            "long": "allow-insecure-registry",
+            "description": "whether to allow insecure connections to registries. Don't use this for anything but testing",
+            "inherit": false
+          },
+          {
+            "long": "attachment-tag-prefix",
+            "description": "optional custom prefix to use for attached image tags. Attachment images are tagged as: `[AttachmentTagPrefix]sh",
+            "inherit": false,
+            "value": {
+              "name": "attachment-tag-prefix",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "cert",
+            "description": "path to the public certificate",
+            "inherit": false,
+            "value": {
+              "name": "cert",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "cert-email",
+            "description": "the email expected in a valid Fulcio certificate",
+            "inherit": false,
+            "value": {
+              "name": "cert-email",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "cert-oidc-issuer",
+            "description": "the oidc issuer expected in a valid Fulcio certificate, e.g. https://token.actions.githubusercontent.com or http",
+            "inherit": false,
+            "value": {
+              "name": "cert-oidc-issuer",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "check-claims",
+            "description": "whether to check the claims found",
+            "inherit": false
+          },
+          {
+            "long": "k8s-keychain",
+            "description": "whether to use the kubernetes keychain instead of the default keychain (supports workload identity)",
+            "inherit": false
+          },
+          {
+            "long": "key",
+            "description": "path to the public key file, kms URI or Kubernetes Secret",
+            "inherit": false,
+            "value": {
+              "name": "key",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "local-image",
+            "description": "whether the specified image is a path to an image saved locally via 'cosign save'",
+            "inherit": false
+          },
+          {
+            "long": "output",
+            "short": "o",
+            "description": "output format for the signing image information (json|text)",
+            "inherit": false,
+            "value": {
+              "name": "output",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "policy",
+            "description": "specify CUE or Rego files will be using for validation",
+            "inherit": false,
+            "value": {
+              "name": "policy"
+            }
+          },
+          {
+            "long": "rekor-url",
+            "description": "[EXPERIMENTAL] address of rekor STL server",
+            "inherit": false,
+            "value": {
+              "name": "rekor-url"
+            }
+          },
+          {
+            "long": "sk",
+            "description": "whether to use a hardware security key",
+            "inherit": false
+          },
+          {
+            "long": "slot",
+            "description": "security key slot to use for generated key (default: signature) (authentication|signature|card-authentication|ke",
+            "inherit": false,
+            "value": {
+              "name": "slot"
+            }
+          },
+          {
+            "long": "type",
+            "description": "specify a predicate type (slsaprovenance|link|spdx|vuln|custom) or an URI",
+            "inherit": false,
+            "value": {
+              "name": "type"
+            }
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "help for verify-attestation",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "verify-blob",
+        "description": "verify a signature on the supplied blob",
+        "options": [
+          {
+            "long": "output-file",
+            "description": "log output to a file",
+            "inherit": false,
+            "value": {
+              "name": "output-file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "timeout",
+            "short": "t",
+            "description": "timeout for commands",
+            "inherit": false,
+            "value": {
+              "name": "timeout"
+            }
+          },
+          {
+            "long": "verbose",
+            "short": "d",
+            "description": "log debug output",
+            "inherit": false
+          },
+          {
+            "long": "allow-insecure-registry",
+            "description": "whether to allow insecure connections to registries. Don't use this for anything but testing",
+            "inherit": false
+          },
+          {
+            "long": "attachment-tag-prefix",
+            "description": "optional custom prefix to use for attached image tags. Attachment images are tagged as: `[AttachmentTagPrefix]sh",
+            "inherit": false,
+            "value": {
+              "name": "attachment-tag-prefix",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "bundle",
+            "description": "path to bundle FILE",
+            "inherit": false,
+            "value": {
+              "name": "bundle"
+            }
+          },
+          {
+            "long": "cert",
+            "description": "path to the public certificate",
+            "inherit": false,
+            "value": {
+              "name": "cert",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "cert-email",
+            "description": "the email expected in a valid Fulcio certificate",
+            "inherit": false,
+            "value": {
+              "name": "cert-email",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "cert-oidc-issuer",
+            "description": "the oidc issuer expected in a valid Fulcio certificate, e.g. https://token.actions.githubusercontent.com or http",
+            "inherit": false,
+            "value": {
+              "name": "cert-oidc-issuer",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "k8s-keychain",
+            "description": "whether to use the kubernetes keychain instead of the default keychain (supports workload identity)",
+            "inherit": false
+          },
+          {
+            "long": "key",
+            "description": "path to the public key file, kms URI or Kubernetes Secret",
+            "inherit": false,
+            "value": {
+              "name": "key",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "rekor-url",
+            "description": "[EXPERIMENTAL] address of rekor STL server",
+            "inherit": false,
+            "value": {
+              "name": "rekor-url"
+            }
+          },
+          {
+            "long": "signature",
+            "description": "signature content or path or remote URL",
+            "inherit": false,
+            "value": {
+              "name": "signature"
+            }
+          },
+          {
+            "long": "sk",
+            "description": "whether to use a hardware security key",
+            "inherit": false
+          },
+          {
+            "long": "slot",
+            "description": "security key slot to use for generated key (default: signature) (authentication|signature|card-authentication|ke",
+            "inherit": false,
+            "value": {
+              "name": "slot"
+            }
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "help for verify-blob",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "version",
+        "description": "prints the version",
+        "options": [
+          {
+            "long": "output-file",
+            "description": "log output to a file",
+            "inherit": false,
+            "value": {
+              "name": "output-file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "timeout",
+            "short": "t",
+            "description": "timeout for commands",
+            "inherit": false,
+            "value": {
+              "name": "timeout"
+            }
+          },
+          {
+            "long": "verbose",
+            "short": "d",
+            "description": "log debug output",
+            "inherit": false
+          },
+          {
+            "long": "json",
+            "description": "print JSON instead of text",
+            "inherit": false
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "help for version",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "help",
+        "description": "help about any command",
+        "options": [
+          {
+            "long": "output-file",
+            "description": "log output to a file",
+            "inherit": false,
+            "value": {
+              "name": "output-file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "timeout",
+            "short": "t",
+            "description": "timeout for commands",
+            "inherit": false,
+            "value": {
+              "name": "timeout"
+            }
+          },
+          {
+            "long": "verbose",
+            "short": "d",
+            "description": "log debug output",
+            "inherit": false
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "help for help",
+            "inherit": false
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "attach",
+            "description": "provides utilities for attaching artifacts to other artifacts in a registry",
+            "options": [
+              {
+                "long": "output-file",
+                "description": "log output to a file",
+                "inherit": false,
+                "value": {
+                  "name": "output-file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "timeout",
+                "short": "t",
+                "description": "timeout for commands",
+                "inherit": false,
+                "value": {
+                  "name": "timeout"
+                }
+              },
+              {
+                "long": "verbose",
+                "short": "d",
+                "description": "log debug output",
+                "inherit": false
+              },
+              {
+                "long": "help",
+                "short": "h",
+                "description": "help for version",
+                "inherit": false
+              }
+            ],
+            "subcommands": [
+              {
+                "name": "attestation",
+                "description": "attach attestation to the supplied container image",
+                "options": [
+                  {
+                    "long": "output-file",
+                    "description": "log output to a file",
+                    "inherit": false,
+                    "value": {
+                      "name": "output-file",
+                      "provider": "builtin.files"
+                    }
+                  },
+                  {
+                    "long": "timeout",
+                    "short": "t",
+                    "description": "timeout for commands",
+                    "inherit": false,
+                    "value": {
+                      "name": "timeout"
+                    }
+                  },
+                  {
+                    "long": "verbose",
+                    "short": "d",
+                    "description": "log debug output",
+                    "inherit": false
+                  },
+                  {
+                    "long": "allow-insecure-registry",
+                    "description": "whether to allow insecure connections to registries. Don't use this for anything but testing",
+                    "inherit": false
+                  },
+                  {
+                    "long": "attachment-tag-prefix",
+                    "description": "optional custom prefix to use for attached image tags. Attachment images are tagged as: `[AttachmentTagPrefix]sh",
+                    "inherit": false,
+                    "value": {
+                      "name": "attachment-tag-prefix",
+                      "provider": "builtin.files"
+                    }
+                  },
+                  {
+                    "long": "attestation",
+                    "description": "path to the attestation envelope",
+                    "inherit": false,
+                    "value": {
+                      "name": "attestation"
+                    }
+                  },
+                  {
+                    "long": "k8s-keychain",
+                    "description": "whether to use the kubernetes keychain instead of the default keychain (supports workload identity)",
+                    "inherit": false
+                  },
+                  {
+                    "long": "help",
+                    "short": "h",
+                    "description": "help for attestation",
+                    "inherit": false
+                  }
+                ]
+              },
+              {
+                "name": "sbom",
+                "description": "attach sbom to the supplied container image",
+                "options": [
+                  {
+                    "long": "output-file",
+                    "description": "log output to a file",
+                    "inherit": false,
+                    "value": {
+                      "name": "output-file",
+                      "provider": "builtin.files"
+                    }
+                  },
+                  {
+                    "long": "timeout",
+                    "short": "t",
+                    "description": "timeout for commands",
+                    "inherit": false,
+                    "value": {
+                      "name": "timeout"
+                    }
+                  },
+                  {
+                    "long": "verbose",
+                    "short": "d",
+                    "description": "log debug output",
+                    "inherit": false
+                  },
+                  {
+                    "long": "allow-insecure-registry",
+                    "description": "whether to allow insecure connections to registries. Don't use this for anything but testing",
+                    "inherit": false
+                  },
+                  {
+                    "long": "attachment-tag-prefix",
+                    "description": "optional custom prefix to use for attached image tags. Attachment images are tagged as: `[AttachmentTagPrefix]sh",
+                    "inherit": false,
+                    "value": {
+                      "name": "attachment-tag-prefix",
+                      "provider": "builtin.files"
+                    }
+                  },
+                  {
+                    "long": "k8s-keychain",
+                    "description": "whether to use the kubernetes keychain instead of the default keychain (supports workload identity)",
+                    "inherit": false
+                  },
+                  {
+                    "long": "sbom",
+                    "description": "path to the sbom, or {-} for stdin",
+                    "inherit": false,
+                    "value": {
+                      "name": "sbom"
+                    }
+                  },
+                  {
+                    "long": "type",
+                    "description": "type of sbom (spdx|cyclonedx|syft)",
+                    "inherit": false,
+                    "value": {
+                      "name": "type"
+                    }
+                  },
+                  {
+                    "long": "help",
+                    "short": "h",
+                    "description": "help for sbom",
+                    "inherit": false
+                  }
+                ]
+              },
+              {
+                "name": "signature",
+                "description": "attach signatures to the supplied container image",
+                "options": [
+                  {
+                    "long": "output-file",
+                    "description": "log output to a file",
+                    "inherit": false,
+                    "value": {
+                      "name": "output-file",
+                      "provider": "builtin.files"
+                    }
+                  },
+                  {
+                    "long": "timeout",
+                    "short": "t",
+                    "description": "timeout for commands",
+                    "inherit": false,
+                    "value": {
+                      "name": "timeout"
+                    }
+                  },
+                  {
+                    "long": "verbose",
+                    "short": "d",
+                    "description": "log debug output",
+                    "inherit": false
+                  },
+                  {
+                    "long": "allow-insecure-registry",
+                    "description": "whether to allow insecure connections to registries. Don't use this for anything but testing",
+                    "inherit": false
+                  },
+                  {
+                    "long": "attachment-tag-prefix",
+                    "description": "optional custom prefix to use for attached image tags. Attachment images are tagged as: `[AttachmentTagPrefix]sh",
+                    "inherit": false,
+                    "value": {
+                      "name": "attachment-tag-prefix",
+                      "provider": "builtin.files"
+                    }
+                  },
+                  {
+                    "long": "k8s-keychain",
+                    "description": "whether to use the kubernetes keychain instead of the default keychain (supports workload identity)",
+                    "inherit": false
+                  },
+                  {
+                    "long": "payload",
+                    "description": "path to the payload covered by the signature (if using another format)",
+                    "inherit": false,
+                    "value": {
+                      "name": "payload"
+                    }
+                  },
+                  {
+                    "long": "signature",
+                    "description": "the signature, path to the signature, or {-} for stdin",
+                    "inherit": false,
+                    "value": {
+                      "name": "signature"
+                    }
+                  },
+                  {
+                    "long": "help",
+                    "short": "h",
+                    "description": "help for signature",
+                    "inherit": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "attest",
+            "description": "attest the supplied container image",
+            "options": [
+              {
+                "long": "output-file",
+                "description": "log output to a file",
+                "inherit": false,
+                "value": {
+                  "name": "output-file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "timeout",
+                "short": "t",
+                "description": "timeout for commands",
+                "inherit": false,
+                "value": {
+                  "name": "timeout"
+                }
+              },
+              {
+                "long": "verbose",
+                "short": "d",
+                "description": "log debug output",
+                "inherit": false
+              },
+              {
+                "long": "help",
+                "short": "h",
+                "description": "help for version",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "clean",
+            "description": "remove all signatures from an image",
+            "options": [
+              {
+                "long": "output-file",
+                "description": "log output to a file",
+                "inherit": false,
+                "value": {
+                  "name": "output-file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "timeout",
+                "short": "t",
+                "description": "timeout for commands",
+                "inherit": false,
+                "value": {
+                  "name": "timeout"
+                }
+              },
+              {
+                "long": "verbose",
+                "short": "d",
+                "description": "log debug output",
+                "inherit": false
+              },
+              {
+                "long": "help",
+                "short": "h",
+                "description": "help for version",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "completion",
+            "description": "generate completion script",
+            "options": [
+              {
+                "long": "output-file",
+                "description": "log output to a file",
+                "inherit": false,
+                "value": {
+                  "name": "output-file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "timeout",
+                "short": "t",
+                "description": "timeout for commands",
+                "inherit": false,
+                "value": {
+                  "name": "timeout"
+                }
+              },
+              {
+                "long": "verbose",
+                "short": "d",
+                "description": "log debug output",
+                "inherit": false
+              },
+              {
+                "long": "help",
+                "short": "h",
+                "description": "help for version",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "copy",
+            "description": "copy the supplied container image and signatures",
+            "options": [
+              {
+                "long": "output-file",
+                "description": "log output to a file",
+                "inherit": false,
+                "value": {
+                  "name": "output-file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "timeout",
+                "short": "t",
+                "description": "timeout for commands",
+                "inherit": false,
+                "value": {
+                  "name": "timeout"
+                }
+              },
+              {
+                "long": "verbose",
+                "short": "d",
+                "description": "log debug output",
+                "inherit": false
+              },
+              {
+                "long": "help",
+                "short": "h",
+                "description": "help for version",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "dockerfile",
+            "description": "provides utilities for discovering images in and performing operations on Dockerfiles",
+            "options": [
+              {
+                "long": "output-file",
+                "description": "log output to a file",
+                "inherit": false,
+                "value": {
+                  "name": "output-file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "timeout",
+                "short": "t",
+                "description": "timeout for commands",
+                "inherit": false,
+                "value": {
+                  "name": "timeout"
+                }
+              },
+              {
+                "long": "verbose",
+                "short": "d",
+                "description": "log debug output",
+                "inherit": false
+              },
+              {
+                "long": "help",
+                "short": "h",
+                "description": "help for version",
+                "inherit": false
+              }
+            ],
+            "subcommands": [
+              {
+                "name": "verify",
+                "description": "verify a signature on the base image specified in the Dockerfile",
+                "options": [
+                  {
+                    "long": "output-file",
+                    "description": "log output to a file",
+                    "inherit": false,
+                    "value": {
+                      "name": "output-file",
+                      "provider": "builtin.files"
+                    }
+                  },
+                  {
+                    "long": "timeout",
+                    "short": "t",
+                    "description": "timeout for commands",
+                    "inherit": false,
+                    "value": {
+                      "name": "timeout"
+                    }
+                  },
+                  {
+                    "long": "verbose",
+                    "short": "d",
+                    "description": "log debug output",
+                    "inherit": false
+                  },
+                  {
+                    "long": "allow-insecure-registry",
+                    "description": "whether to allow insecure connections to registries. Don't use this for anything but testing",
+                    "inherit": false
+                  },
+                  {
+                    "long": "annotations",
+                    "short": "a",
+                    "description": "extra key=value pairs to sign",
+                    "inherit": false,
+                    "value": {
+                      "name": "annotations"
+                    }
+                  },
+                  {
+                    "long": "attachment",
+                    "description": "related image attachment to sign (sbom), default none",
+                    "inherit": false,
+                    "value": {
+                      "name": "attachment",
+                      "provider": "builtin.files"
+                    }
+                  },
+                  {
+                    "long": "attachment-tag-prefix",
+                    "description": "optional custom prefix to use for attached image tags. Attachment images are tagged as: `[AttachmentTagPrefix]sh",
+                    "inherit": false,
+                    "value": {
+                      "name": "attachment-tag-prefix",
+                      "provider": "builtin.files"
+                    }
+                  },
+                  {
+                    "long": "base-image-only",
+                    "description": "only verify the base image (the last FROM image in the Dockerfile)",
+                    "inherit": false
+                  },
+                  {
+                    "long": "cert",
+                    "description": "path to the public certificate",
+                    "inherit": false,
+                    "value": {
+                      "name": "cert",
+                      "provider": "builtin.files"
+                    }
+                  },
+                  {
+                    "long": "cert-email",
+                    "description": "the email expected in a valid Fulcio certificate",
+                    "inherit": false,
+                    "value": {
+                      "name": "cert-email",
+                      "provider": "builtin.files"
+                    }
+                  },
+                  {
+                    "long": "cert-oidc-issuer",
+                    "description": "the oidc issuer expected in a valid Fulcio certificate, e.g. https://token.actions.githubusercontent.com or http",
+                    "inherit": false,
+                    "value": {
+                      "name": "cert-oidc-issuer",
+                      "provider": "builtin.files"
+                    }
+                  },
+                  {
+                    "long": "check-claims",
+                    "description": "whether to check the claims found",
+                    "inherit": false
+                  },
+                  {
+                    "long": "k8s-keychain",
+                    "description": "whether to use the kubernetes keychain instead of the default keychain (supports workload identity)",
+                    "inherit": false
+                  },
+                  {
+                    "long": "key",
+                    "description": "path to the public key file, kms URI or Kubernetes Secret",
+                    "inherit": false,
+                    "value": {
+                      "name": "key",
+                      "provider": "builtin.files"
+                    }
+                  },
+                  {
+                    "long": "local-image",
+                    "description": "whether the specified image is a path to an image saved locally via 'cosign save'",
+                    "inherit": false
+                  },
+                  {
+                    "long": "output",
+                    "short": "o",
+                    "description": "output format for the signing image information (json|text)",
+                    "inherit": false,
+                    "value": {
+                      "name": "output",
+                      "provider": "builtin.files"
+                    }
+                  },
+                  {
+                    "long": "rekor-url",
+                    "description": "[EXPERIMENTAL] address of rekor STL server",
+                    "inherit": false,
+                    "value": {
+                      "name": "rekor-url"
+                    }
+                  },
+                  {
+                    "long": "signature",
+                    "description": "signature content or path or remote URL",
+                    "inherit": false,
+                    "value": {
+                      "name": "signature"
+                    }
+                  },
+                  {
+                    "long": "signature-digest-algorithm",
+                    "description": "digest algorithm to use when processing a signature (sha224|sha256|sha384|sha512)",
+                    "inherit": false,
+                    "value": {
+                      "name": "signature-digest-algorithm"
+                    }
+                  },
+                  {
+                    "long": "sk",
+                    "description": "whether to use a hardware security key",
+                    "inherit": false
+                  },
+                  {
+                    "long": "slot",
+                    "description": "security key slot to use for generated key (default: signature) (authentication|signature|card-authentication|ke",
+                    "inherit": false,
+                    "value": {
+                      "name": "slot"
+                    }
+                  },
+                  {
+                    "long": "help",
+                    "short": "h",
+                    "description": "help for verify",
+                    "inherit": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "download",
+            "description": "provides utilities for downloading artifacts and attached artifacts in a registry",
+            "options": [
+              {
+                "long": "output-file",
+                "description": "log output to a file",
+                "inherit": false,
+                "value": {
+                  "name": "output-file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "timeout",
+                "short": "t",
+                "description": "timeout for commands",
+                "inherit": false,
+                "value": {
+                  "name": "timeout"
+                }
+              },
+              {
+                "long": "verbose",
+                "short": "d",
+                "description": "log debug output",
+                "inherit": false
+              },
+              {
+                "long": "help",
+                "short": "h",
+                "description": "help for version",
+                "inherit": false
+              }
+            ],
+            "subcommands": [
+              {
+                "name": "attestation",
+                "description": "download in-toto attestations from the supplied container image",
+                "options": [
+                  {
+                    "long": "output-file",
+                    "description": "log output to a file",
+                    "inherit": false,
+                    "value": {
+                      "name": "output-file",
+                      "provider": "builtin.files"
+                    }
+                  },
+                  {
+                    "long": "timeout",
+                    "short": "t",
+                    "description": "timeout for commands",
+                    "inherit": false,
+                    "value": {
+                      "name": "timeout"
+                    }
+                  },
+                  {
+                    "long": "verbose",
+                    "short": "d",
+                    "description": "log debug output",
+                    "inherit": false
+                  },
+                  {
+                    "long": "allow-insecure-registry",
+                    "description": "whether to allow insecure connections to registries. Don't use this for anything but testing",
+                    "inherit": false
+                  },
+                  {
+                    "long": "attachment-tag-prefix",
+                    "description": "optional custom prefix to use for attached image tags. Attachment images are tagged as: `[AttachmentTagPrefix]sh",
+                    "inherit": false,
+                    "value": {
+                      "name": "attachment-tag-prefix",
+                      "provider": "builtin.files"
+                    }
+                  },
+                  {
+                    "long": "k8s-keychain",
+                    "description": "whether to use the kubernetes keychain instead of the default keychain (supports workload identity)",
+                    "inherit": false
+                  },
+                  {
+                    "long": "help",
+                    "short": "h",
+                    "description": "help for attestation",
+                    "inherit": false
+                  }
+                ]
+              },
+              {
+                "name": "sbom",
+                "description": "download SBOMs from the supplied container image",
+                "options": [
+                  {
+                    "long": "output-file",
+                    "description": "log output to a file",
+                    "inherit": false,
+                    "value": {
+                      "name": "output-file",
+                      "provider": "builtin.files"
+                    }
+                  },
+                  {
+                    "long": "timeout",
+                    "short": "t",
+                    "description": "timeout for commands",
+                    "inherit": false,
+                    "value": {
+                      "name": "timeout"
+                    }
+                  },
+                  {
+                    "long": "verbose",
+                    "short": "d",
+                    "description": "log debug output",
+                    "inherit": false
+                  },
+                  {
+                    "long": "allow-insecure-registry",
+                    "description": "whether to allow insecure connections to registries. Don't use this for anything but testing",
+                    "inherit": false
+                  },
+                  {
+                    "long": "attachment-tag-prefix",
+                    "description": "optional custom prefix to use for attached image tags. Attachment images are tagged as: `[AttachmentTagPrefix]sh",
+                    "inherit": false,
+                    "value": {
+                      "name": "attachment-tag-prefix",
+                      "provider": "builtin.files"
+                    }
+                  },
+                  {
+                    "long": "k8s-keychain",
+                    "description": "whether to use the kubernetes keychain instead of the default keychain (supports workload identity)",
+                    "inherit": false
+                  },
+                  {
+                    "long": "help",
+                    "short": "h",
+                    "description": "help for sbom",
+                    "inherit": false
+                  }
+                ]
+              },
+              {
+                "name": "signature",
+                "description": "download signatures from the supplied container image",
+                "options": [
+                  {
+                    "long": "output-file",
+                    "description": "log output to a file",
+                    "inherit": false,
+                    "value": {
+                      "name": "output-file",
+                      "provider": "builtin.files"
+                    }
+                  },
+                  {
+                    "long": "timeout",
+                    "short": "t",
+                    "description": "timeout for commands",
+                    "inherit": false,
+                    "value": {
+                      "name": "timeout"
+                    }
+                  },
+                  {
+                    "long": "verbose",
+                    "short": "d",
+                    "description": "log debug output",
+                    "inherit": false
+                  },
+                  {
+                    "long": "allow-insecure-registry",
+                    "description": "whether to allow insecure connections to registries. Don't use this for anything but testing",
+                    "inherit": false
+                  },
+                  {
+                    "long": "attachment-tag-prefix",
+                    "description": "optional custom prefix to use for attached image tags. Attachment images are tagged as: `[AttachmentTagPrefix]sh",
+                    "inherit": false,
+                    "value": {
+                      "name": "attachment-tag-prefix",
+                      "provider": "builtin.files"
+                    }
+                  },
+                  {
+                    "long": "k8s-keychain",
+                    "description": "whether to use the kubernetes keychain instead of the default keychain (supports workload identity)",
+                    "inherit": false
+                  },
+                  {
+                    "long": "help",
+                    "short": "h",
+                    "description": "help for signature",
+                    "inherit": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "generate",
+            "description": "generates (unsigned) signature payloads from the supplied container image",
+            "options": [
+              {
+                "long": "output-file",
+                "description": "log output to a file",
+                "inherit": false,
+                "value": {
+                  "name": "output-file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "timeout",
+                "short": "t",
+                "description": "timeout for commands",
+                "inherit": false,
+                "value": {
+                  "name": "timeout"
+                }
+              },
+              {
+                "long": "verbose",
+                "short": "d",
+                "description": "log debug output",
+                "inherit": false
+              },
+              {
+                "long": "help",
+                "short": "h",
+                "description": "help for version",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "generate-key-pair",
+            "description": "generates a key-pair",
+            "options": [
+              {
+                "long": "output-file",
+                "description": "log output to a file",
+                "inherit": false,
+                "value": {
+                  "name": "output-file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "timeout",
+                "short": "t",
+                "description": "timeout for commands",
+                "inherit": false,
+                "value": {
+                  "name": "timeout"
+                }
+              },
+              {
+                "long": "verbose",
+                "short": "d",
+                "description": "log debug output",
+                "inherit": false
+              },
+              {
+                "long": "help",
+                "short": "h",
+                "description": "help for version",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "import-key-pair",
+            "description": "imports a PEM-encoded RSA or EC private key",
+            "options": [
+              {
+                "long": "output-file",
+                "description": "log output to a file",
+                "inherit": false,
+                "value": {
+                  "name": "output-file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "timeout",
+                "short": "t",
+                "description": "timeout for commands",
+                "inherit": false,
+                "value": {
+                  "name": "timeout"
+                }
+              },
+              {
+                "long": "verbose",
+                "short": "d",
+                "description": "log debug output",
+                "inherit": false
+              },
+              {
+                "long": "help",
+                "short": "h",
+                "description": "help for version",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "initialize",
+            "description": "initializes SigStore root to retrieve trusted certificate and key targets for verification",
+            "options": [
+              {
+                "long": "output-file",
+                "description": "log output to a file",
+                "inherit": false,
+                "value": {
+                  "name": "output-file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "timeout",
+                "short": "t",
+                "description": "timeout for commands",
+                "inherit": false,
+                "value": {
+                  "name": "timeout"
+                }
+              },
+              {
+                "long": "verbose",
+                "short": "d",
+                "description": "log debug output",
+                "inherit": false
+              },
+              {
+                "long": "help",
+                "short": "h",
+                "description": "help for version",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "load",
+            "description": "load a signed image on disk to a remote registry",
+            "options": [
+              {
+                "long": "output-file",
+                "description": "log output to a file",
+                "inherit": false,
+                "value": {
+                  "name": "output-file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "timeout",
+                "short": "t",
+                "description": "timeout for commands",
+                "inherit": false,
+                "value": {
+                  "name": "timeout"
+                }
+              },
+              {
+                "long": "verbose",
+                "short": "d",
+                "description": "log debug output",
+                "inherit": false
+              },
+              {
+                "long": "help",
+                "short": "h",
+                "description": "help for version",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "login",
+            "description": "log in to a registry",
+            "options": [
+              {
+                "long": "output-file",
+                "description": "log output to a file",
+                "inherit": false,
+                "value": {
+                  "name": "output-file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "timeout",
+                "short": "t",
+                "description": "timeout for commands",
+                "inherit": false,
+                "value": {
+                  "name": "timeout"
+                }
+              },
+              {
+                "long": "verbose",
+                "short": "d",
+                "description": "log debug output",
+                "inherit": false
+              },
+              {
+                "long": "help",
+                "short": "h",
+                "description": "help for version",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "manifest",
+            "description": "provides utilities for discovering images in and performing operations on Kubernetes manifests",
+            "options": [
+              {
+                "long": "output-file",
+                "description": "log output to a file",
+                "inherit": false,
+                "value": {
+                  "name": "output-file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "timeout",
+                "short": "t",
+                "description": "timeout for commands",
+                "inherit": false,
+                "value": {
+                  "name": "timeout"
+                }
+              },
+              {
+                "long": "verbose",
+                "short": "d",
+                "description": "log debug output",
+                "inherit": false
+              },
+              {
+                "long": "help",
+                "short": "h",
+                "description": "help for version",
+                "inherit": false
+              }
+            ],
+            "subcommands": [
+              {
+                "name": "verify",
+                "description": "verify all signatures of images specified in the manifest",
+                "options": [
+                  {
+                    "long": "output-file",
+                    "description": "log output to a file",
+                    "inherit": false,
+                    "value": {
+                      "name": "output-file",
+                      "provider": "builtin.files"
+                    }
+                  },
+                  {
+                    "long": "timeout",
+                    "short": "t",
+                    "description": "timeout for commands",
+                    "inherit": false,
+                    "value": {
+                      "name": "timeout"
+                    }
+                  },
+                  {
+                    "long": "verbose",
+                    "short": "d",
+                    "description": "log debug output",
+                    "inherit": false
+                  },
+                  {
+                    "long": "allow-insecure-registry",
+                    "description": "whether to allow insecure connections to registries. Don't use this for anything but testing",
+                    "inherit": false
+                  },
+                  {
+                    "long": "annotations",
+                    "short": "a",
+                    "description": "extra key=value pairs to sign",
+                    "inherit": false,
+                    "value": {
+                      "name": "annotations"
+                    }
+                  },
+                  {
+                    "long": "attachment",
+                    "description": "related image attachment to sign (sbom), default none",
+                    "inherit": false,
+                    "value": {
+                      "name": "attachment",
+                      "provider": "builtin.files"
+                    }
+                  },
+                  {
+                    "long": "attachment-tag-prefix",
+                    "description": "optional custom prefix to use for attached image tags. Attachment images are tagged as: `[AttachmentTagPrefix]sh",
+                    "inherit": false,
+                    "value": {
+                      "name": "attachment-tag-prefix",
+                      "provider": "builtin.files"
+                    }
+                  },
+                  {
+                    "long": "cert",
+                    "description": "path to the public certificate",
+                    "inherit": false,
+                    "value": {
+                      "name": "cert",
+                      "provider": "builtin.files"
+                    }
+                  },
+                  {
+                    "long": "cert-email",
+                    "description": "the email expected in a valid Fulcio certificate",
+                    "inherit": false,
+                    "value": {
+                      "name": "cert-email",
+                      "provider": "builtin.files"
+                    }
+                  },
+                  {
+                    "long": "cert-oidc-issuer",
+                    "description": "the oidc issuer expected in a valid Fulcio certificate, e.g. https://token.actions.githubusercontent.com or http",
+                    "inherit": false,
+                    "value": {
+                      "name": "cert-oidc-issuer",
+                      "provider": "builtin.files"
+                    }
+                  },
+                  {
+                    "long": "check-claims",
+                    "description": "whether to check the claims found",
+                    "inherit": false
+                  },
+                  {
+                    "long": "k8s-keychain",
+                    "description": "whether to use the kubernetes keychain instead of the default keychain (supports workload identity)",
+                    "inherit": false
+                  },
+                  {
+                    "long": "key",
+                    "description": "path to the public key file, kms URI or Kubernetes Secret",
+                    "inherit": false,
+                    "value": {
+                      "name": "key",
+                      "provider": "builtin.files"
+                    }
+                  },
+                  {
+                    "long": "local-image",
+                    "description": "whether the specified image is a path to an image saved locally via 'cosign save'",
+                    "inherit": false
+                  },
+                  {
+                    "long": "output",
+                    "short": "o",
+                    "description": "output format for the signing image information (json|text)",
+                    "inherit": false,
+                    "value": {
+                      "name": "output",
+                      "provider": "builtin.files"
+                    }
+                  },
+                  {
+                    "long": "rekor-url",
+                    "description": "[EXPERIMENTAL] address of rekor STL server",
+                    "inherit": false,
+                    "value": {
+                      "name": "rekor-url"
+                    }
+                  },
+                  {
+                    "long": "signature",
+                    "description": "signature content or path or remote URL",
+                    "inherit": false,
+                    "value": {
+                      "name": "signature"
+                    }
+                  },
+                  {
+                    "long": "signature-digest-algorithm",
+                    "description": "digest algorithm to use when processing a signature (sha224|sha256|sha384|sha512)",
+                    "inherit": false,
+                    "value": {
+                      "name": "signature-digest-algorithm"
+                    }
+                  },
+                  {
+                    "long": "sk",
+                    "description": "whether to use a hardware security key",
+                    "inherit": false
+                  },
+                  {
+                    "long": "slot",
+                    "description": "security key slot to use for generated key (default: signature) (authentication|signature|card-authentication|ke",
+                    "inherit": false,
+                    "value": {
+                      "name": "slot"
+                    }
+                  },
+                  {
+                    "long": "help",
+                    "short": "h",
+                    "description": "help for verify",
+                    "inherit": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "piv-tool",
+            "description": "this cosign was not built with piv-tool support!",
+            "options": [
+              {
+                "long": "output-file",
+                "description": "log output to a file",
+                "inherit": false,
+                "value": {
+                  "name": "output-file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "timeout",
+                "short": "t",
+                "description": "timeout for commands",
+                "inherit": false,
+                "value": {
+                  "name": "timeout"
+                }
+              },
+              {
+                "long": "verbose",
+                "short": "d",
+                "description": "log debug output",
+                "inherit": false
+              },
+              {
+                "long": "help",
+                "short": "h",
+                "description": "help for version",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "pkcs11-tool",
+            "description": "this cosign was not built with pkcs11-tool support!",
+            "options": [
+              {
+                "long": "output-file",
+                "description": "log output to a file",
+                "inherit": false,
+                "value": {
+                  "name": "output-file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "timeout",
+                "short": "t",
+                "description": "timeout for commands",
+                "inherit": false,
+                "value": {
+                  "name": "timeout"
+                }
+              },
+              {
+                "long": "verbose",
+                "short": "d",
+                "description": "log debug output",
+                "inherit": false
+              },
+              {
+                "long": "help",
+                "short": "h",
+                "description": "help for version",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "policy",
+            "description": "subcommand to manage a keyless policy",
+            "options": [
+              {
+                "long": "output-file",
+                "description": "log output to a file",
+                "inherit": false,
+                "value": {
+                  "name": "output-file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "timeout",
+                "short": "t",
+                "description": "timeout for commands",
+                "inherit": false,
+                "value": {
+                  "name": "timeout"
+                }
+              },
+              {
+                "long": "verbose",
+                "short": "d",
+                "description": "log debug output",
+                "inherit": false
+              },
+              {
+                "long": "help",
+                "short": "h",
+                "description": "help for version",
+                "inherit": false
+              }
+            ],
+            "subcommands": [
+              {
+                "name": "init",
+                "description": "generate a new keyless policy",
+                "options": [
+                  {
+                    "long": "output-file",
+                    "description": "log output to a file",
+                    "inherit": false,
+                    "value": {
+                      "name": "output-file",
+                      "provider": "builtin.files"
+                    }
+                  },
+                  {
+                    "long": "timeout",
+                    "short": "t",
+                    "description": "timeout for commands",
+                    "inherit": false,
+                    "value": {
+                      "name": "timeout"
+                    }
+                  },
+                  {
+                    "long": "verbose",
+                    "short": "d",
+                    "description": "log debug output",
+                    "inherit": false
+                  },
+                  {
+                    "long": "allow-insecure-registry",
+                    "description": "whether to allow insecure connections to registries. Don't use this for anything but testing",
+                    "inherit": false
+                  },
+                  {
+                    "long": "attachment-tag-prefix",
+                    "description": "optional custom prefix to use for attached image tags. Attachment images are tagged as: `[AttachmentTagPrefix]sh",
+                    "inherit": false,
+                    "value": {
+                      "name": "attachment-tag-prefix",
+                      "provider": "builtin.files"
+                    }
+                  },
+                  {
+                    "long": "expires",
+                    "description": "total expire duration in days",
+                    "inherit": false,
+                    "value": {
+                      "name": "expires"
+                    }
+                  },
+                  {
+                    "long": "issuer",
+                    "description": "trusted issuer to use for identity tokens, e.g. https://accounts.google.com",
+                    "inherit": false,
+                    "value": {
+                      "name": "issuer"
+                    }
+                  },
+                  {
+                    "long": "k8s-keychain",
+                    "description": "whether to use the kubernetes keychain instead of the default keychain (supports workload identity)",
+                    "inherit": false
+                  },
+                  {
+                    "long": "maintainers",
+                    "short": "m",
+                    "description": "list of maintainers to add to the root policy",
+                    "inherit": false,
+                    "value": {
+                      "name": "maintainers"
+                    }
+                  },
+                  {
+                    "long": "namespace",
+                    "description": "registry namespace that the root policy belongs to",
+                    "inherit": false,
+                    "value": {
+                      "name": "namespace"
+                    }
+                  },
+                  {
+                    "long": "out",
+                    "description": "output policy locally",
+                    "inherit": false,
+                    "value": {
+                      "name": "out"
+                    }
+                  },
+                  {
+                    "long": "threshold",
+                    "description": "threshold for root policy signers",
+                    "inherit": false,
+                    "value": {
+                      "name": "threshold"
+                    }
+                  },
+                  {
+                    "long": "help",
+                    "short": "h",
+                    "description": "help for init",
+                    "inherit": false
+                  }
+                ]
+              },
+              {
+                "name": "sign",
+                "description": "sign a keyless policy",
+                "options": [
+                  {
+                    "long": "output-file",
+                    "description": "log output to a file",
+                    "inherit": false,
+                    "value": {
+                      "name": "output-file",
+                      "provider": "builtin.files"
+                    }
+                  },
+                  {
+                    "long": "timeout",
+                    "short": "t",
+                    "description": "timeout for commands",
+                    "inherit": false,
+                    "value": {
+                      "name": "timeout"
+                    }
+                  },
+                  {
+                    "long": "verbose",
+                    "short": "d",
+                    "description": "log debug output",
+                    "inherit": false
+                  },
+                  {
+                    "long": "allow-insecure-registry",
+                    "description": "whether to allow insecure connections to registries. Don't use this for anything but testing",
+                    "inherit": false
+                  },
+                  {
+                    "long": "attachment-tag-prefix",
+                    "description": "optional custom prefix to use for attached image tags. Attachment images are tagged as: `[AttachmentTagPrefix]sh",
+                    "inherit": false,
+                    "value": {
+                      "name": "attachment-tag-prefix",
+                      "provider": "builtin.files"
+                    }
+                  },
+                  {
+                    "long": "fulcio-url",
+                    "description": "[EXPERIMENTAL] address of sigstore PKI server",
+                    "inherit": false,
+                    "value": {
+                      "name": "fulcio-url"
+                    }
+                  },
+                  {
+                    "long": "identity-token",
+                    "description": "[EXPERIMENTAL] identity token to use for certificate from fulcio",
+                    "inherit": false,
+                    "value": {
+                      "name": "identity-token"
+                    }
+                  },
+                  {
+                    "long": "insecure-skip-verify",
+                    "description": "[EXPERIMENTAL] skip verifying fulcio published to the SCT (this should only be used for testing)",
+                    "inherit": false
+                  },
+                  {
+                    "long": "k8s-keychain",
+                    "description": "whether to use the kubernetes keychain instead of the default keychain (supports workload identity)",
+                    "inherit": false
+                  },
+                  {
+                    "long": "namespace",
+                    "description": "registry namespace that the root policy belongs to",
+                    "inherit": false,
+                    "value": {
+                      "name": "namespace"
+                    }
+                  },
+                  {
+                    "long": "oidc-client-id",
+                    "description": "[EXPERIMENTAL] oidc client ID for application",
+                    "inherit": false,
+                    "value": {
+                      "name": "oidc-client-id"
+                    }
+                  },
+                  {
+                    "long": "oidc-client-secret",
+                    "description": "[EXPERIMENTAL] oidc client secret for application",
+                    "inherit": false,
+                    "value": {
+                      "name": "oidc-client-secret"
+                    }
+                  },
+                  {
+                    "long": "oidc-issuer",
+                    "description": "[EXPERIMENTAL] oidc provider to be used to issue ID token",
+                    "inherit": false,
+                    "value": {
+                      "name": "oidc-issuer"
+                    }
+                  },
+                  {
+                    "long": "out",
+                    "description": "output policy locally",
+                    "inherit": false,
+                    "value": {
+                      "name": "out"
+                    }
+                  },
+                  {
+                    "long": "rekor-url",
+                    "description": "[EXPERIMENTAL] address of rekor STL server",
+                    "inherit": false,
+                    "value": {
+                      "name": "rekor-url"
+                    }
+                  },
+                  {
+                    "long": "help",
+                    "short": "h",
+                    "description": "help for sign",
+                    "inherit": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "public-key",
+            "description": "gets a public key from the key-pair",
+            "options": [
+              {
+                "long": "output-file",
+                "description": "log output to a file",
+                "inherit": false,
+                "value": {
+                  "name": "output-file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "timeout",
+                "short": "t",
+                "description": "timeout for commands",
+                "inherit": false,
+                "value": {
+                  "name": "timeout"
+                }
+              },
+              {
+                "long": "verbose",
+                "short": "d",
+                "description": "log debug output",
+                "inherit": false
+              },
+              {
+                "long": "help",
+                "short": "h",
+                "description": "help for version",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "save",
+            "description": "save the container image and associated signatures to disk at the specified directory",
+            "options": [
+              {
+                "long": "output-file",
+                "description": "log output to a file",
+                "inherit": false,
+                "value": {
+                  "name": "output-file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "timeout",
+                "short": "t",
+                "description": "timeout for commands",
+                "inherit": false,
+                "value": {
+                  "name": "timeout"
+                }
+              },
+              {
+                "long": "verbose",
+                "short": "d",
+                "description": "log debug output",
+                "inherit": false
+              },
+              {
+                "long": "help",
+                "short": "h",
+                "description": "help for version",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "sign",
+            "description": "sign the supplied container image",
+            "options": [
+              {
+                "long": "output-file",
+                "description": "log output to a file",
+                "inherit": false,
+                "value": {
+                  "name": "output-file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "timeout",
+                "short": "t",
+                "description": "timeout for commands",
+                "inherit": false,
+                "value": {
+                  "name": "timeout"
+                }
+              },
+              {
+                "long": "verbose",
+                "short": "d",
+                "description": "log debug output",
+                "inherit": false
+              },
+              {
+                "long": "help",
+                "short": "h",
+                "description": "help for version",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "sign-blob",
+            "description": "sign the supplied blob, outputting the base64-encoded signature to stdout",
+            "options": [
+              {
+                "long": "output-file",
+                "description": "log output to a file",
+                "inherit": false,
+                "value": {
+                  "name": "output-file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "timeout",
+                "short": "t",
+                "description": "timeout for commands",
+                "inherit": false,
+                "value": {
+                  "name": "timeout"
+                }
+              },
+              {
+                "long": "verbose",
+                "short": "d",
+                "description": "log debug output",
+                "inherit": false
+              },
+              {
+                "long": "help",
+                "short": "h",
+                "description": "help for version",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "tree",
+            "description": "display supply chain security related artifacts for an image such as signatures, SBOMs and attestations",
+            "options": [
+              {
+                "long": "output-file",
+                "description": "log output to a file",
+                "inherit": false,
+                "value": {
+                  "name": "output-file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "timeout",
+                "short": "t",
+                "description": "timeout for commands",
+                "inherit": false,
+                "value": {
+                  "name": "timeout"
+                }
+              },
+              {
+                "long": "verbose",
+                "short": "d",
+                "description": "log debug output",
+                "inherit": false
+              },
+              {
+                "long": "help",
+                "short": "h",
+                "description": "help for version",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "triangulate",
+            "description": "outputs the located cosign image reference. This is the location cosign stores the specified artifact type",
+            "options": [
+              {
+                "long": "output-file",
+                "description": "log output to a file",
+                "inherit": false,
+                "value": {
+                  "name": "output-file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "timeout",
+                "short": "t",
+                "description": "timeout for commands",
+                "inherit": false,
+                "value": {
+                  "name": "timeout"
+                }
+              },
+              {
+                "long": "verbose",
+                "short": "d",
+                "description": "log debug output",
+                "inherit": false
+              },
+              {
+                "long": "help",
+                "short": "h",
+                "description": "help for version",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "upload",
+            "description": "provides utilities for uploading artifacts to a registry",
+            "options": [
+              {
+                "long": "output-file",
+                "description": "log output to a file",
+                "inherit": false,
+                "value": {
+                  "name": "output-file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "timeout",
+                "short": "t",
+                "description": "timeout for commands",
+                "inherit": false,
+                "value": {
+                  "name": "timeout"
+                }
+              },
+              {
+                "long": "verbose",
+                "short": "d",
+                "description": "log debug output",
+                "inherit": false
+              },
+              {
+                "long": "help",
+                "short": "h",
+                "description": "help for version",
+                "inherit": false
+              }
+            ],
+            "subcommands": [
+              {
+                "name": "blob",
+                "description": "upload one or more blobs to the supplied container image address",
+                "options": [
+                  {
+                    "long": "output-file",
+                    "description": "log output to a file",
+                    "inherit": false,
+                    "value": {
+                      "name": "output-file",
+                      "provider": "builtin.files"
+                    }
+                  },
+                  {
+                    "long": "timeout",
+                    "short": "t",
+                    "description": "timeout for commands",
+                    "inherit": false,
+                    "value": {
+                      "name": "timeout"
+                    }
+                  },
+                  {
+                    "long": "verbose",
+                    "short": "d",
+                    "description": "log debug output",
+                    "inherit": false
+                  },
+                  {
+                    "long": "allow-insecure-registry",
+                    "description": "whether to allow insecure connections to registries. Don't use this for anything but testing",
+                    "inherit": false
+                  },
+                  {
+                    "long": "attachment-tag-prefix",
+                    "description": "optional custom prefix to use for attached image tags. Attachment images are tagged as: `[AttachmentTagPrefix]sh",
+                    "inherit": false,
+                    "value": {
+                      "name": "attachment-tag-prefix",
+                      "provider": "builtin.files"
+                    }
+                  },
+                  {
+                    "long": "ct",
+                    "description": "content type to set",
+                    "inherit": false,
+                    "value": {
+                      "name": "ct"
+                    }
+                  },
+                  {
+                    "long": "files",
+                    "short": "f",
+                    "description": "<filepath>:[platform/arch]",
+                    "inherit": false,
+                    "value": {
+                      "name": "files",
+                      "provider": "builtin.files"
+                    }
+                  },
+                  {
+                    "long": "k8s-keychain",
+                    "description": "whether to use the kubernetes keychain instead of the default keychain (supports workload identity)",
+                    "inherit": false
+                  },
+                  {
+                    "long": "help",
+                    "short": "h",
+                    "description": "help for blob",
+                    "inherit": false
+                  }
+                ]
+              },
+              {
+                "name": "wasm",
+                "description": "upload a wasm module to the supplied container image reference",
+                "options": [
+                  {
+                    "long": "output-file",
+                    "description": "log output to a file",
+                    "inherit": false,
+                    "value": {
+                      "name": "output-file",
+                      "provider": "builtin.files"
+                    }
+                  },
+                  {
+                    "long": "timeout",
+                    "short": "t",
+                    "description": "timeout for commands",
+                    "inherit": false,
+                    "value": {
+                      "name": "timeout"
+                    }
+                  },
+                  {
+                    "long": "verbose",
+                    "short": "d",
+                    "description": "log debug output",
+                    "inherit": false
+                  },
+                  {
+                    "long": "allow-insecure-registry",
+                    "description": "whether to allow insecure connections to registries. Don't use this for anything but testing",
+                    "inherit": false
+                  },
+                  {
+                    "long": "attachment-tag-prefix",
+                    "description": "optional custom prefix to use for attached image tags. Attachment images are tagged as: `[AttachmentTagPrefix]sh",
+                    "inherit": false,
+                    "value": {
+                      "name": "attachment-tag-prefix",
+                      "provider": "builtin.files"
+                    }
+                  },
+                  {
+                    "long": "file",
+                    "short": "f",
+                    "description": "path to the wasm file to upload",
+                    "inherit": false,
+                    "value": {
+                      "name": "file",
+                      "provider": "builtin.files"
+                    }
+                  },
+                  {
+                    "long": "k8s-keychain",
+                    "description": "whether to use the kubernetes keychain instead of the default keychain (supports workload identity)",
+                    "inherit": false
+                  },
+                  {
+                    "long": "help",
+                    "short": "h",
+                    "description": "help for wasm",
+                    "inherit": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "verify",
+            "description": "verify a signature on the supplied container image",
+            "options": [
+              {
+                "long": "output-file",
+                "description": "log output to a file",
+                "inherit": false,
+                "value": {
+                  "name": "output-file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "timeout",
+                "short": "t",
+                "description": "timeout for commands",
+                "inherit": false,
+                "value": {
+                  "name": "timeout"
+                }
+              },
+              {
+                "long": "verbose",
+                "short": "d",
+                "description": "log debug output",
+                "inherit": false
+              },
+              {
+                "long": "help",
+                "short": "h",
+                "description": "help for version",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "verify-attestation",
+            "description": "verify an attestation on the supplied container image",
+            "options": [
+              {
+                "long": "output-file",
+                "description": "log output to a file",
+                "inherit": false,
+                "value": {
+                  "name": "output-file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "timeout",
+                "short": "t",
+                "description": "timeout for commands",
+                "inherit": false,
+                "value": {
+                  "name": "timeout"
+                }
+              },
+              {
+                "long": "verbose",
+                "short": "d",
+                "description": "log debug output",
+                "inherit": false
+              },
+              {
+                "long": "help",
+                "short": "h",
+                "description": "help for version",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "verify-blob",
+            "description": "verify a signature on the supplied blob",
+            "options": [
+              {
+                "long": "output-file",
+                "description": "log output to a file",
+                "inherit": false,
+                "value": {
+                  "name": "output-file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "timeout",
+                "short": "t",
+                "description": "timeout for commands",
+                "inherit": false,
+                "value": {
+                  "name": "timeout"
+                }
+              },
+              {
+                "long": "verbose",
+                "short": "d",
+                "description": "log debug output",
+                "inherit": false
+              },
+              {
+                "long": "help",
+                "short": "h",
+                "description": "help for version",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "version",
+            "description": "prints the version",
+            "options": [
+              {
+                "long": "output-file",
+                "description": "log output to a file",
+                "inherit": false,
+                "value": {
+                  "name": "output-file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "timeout",
+                "short": "t",
+                "description": "timeout for commands",
+                "inherit": false,
+                "value": {
+                  "name": "timeout"
+                }
+              },
+              {
+                "long": "verbose",
+                "short": "d",
+                "description": "log debug output",
+                "inherit": false
+              },
+              {
+                "long": "help",
+                "short": "h",
+                "description": "help for version",
+                "inherit": false
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "builtin.directories": {
+        "builtin": "directories"
+      }
+    }
+  }
+}
