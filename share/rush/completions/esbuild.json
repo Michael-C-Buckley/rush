@@ -1,0 +1,664 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "esbuild",
+    "description": "bundle JavaScript and TypeScript",
+    "options": [
+      {
+        "long": "bundle",
+        "description": "bundle dependencies into output files",
+        "inherit": false
+      },
+      {
+        "long": "define",
+        "description": "replace an identifier with a value",
+        "inherit": false,
+        "value": {
+          "name": "name=value",
+          "style": "attached"
+        }
+      },
+      {
+        "long": "external",
+        "description": "exclude a module from the build",
+        "repeatable": true,
+        "inherit": false,
+        "value": {
+          "name": "module",
+          "style": "attached"
+        }
+      },
+      {
+        "long": "format",
+        "description": "set the output format",
+        "inherit": false,
+        "value": {
+          "name": "format",
+          "style": "equals",
+          "provider": "esbuild.formats"
+        }
+      },
+      {
+        "long": "loader",
+        "description": "set the loader for a file extension",
+        "repeatable": true,
+        "inherit": false,
+        "value": {
+          "name": "ext=loader",
+          "style": "attached",
+          "provider": "esbuild.loaders"
+        }
+      },
+      {
+        "long": "minify",
+        "description": "minify the output",
+        "inherit": false
+      },
+      {
+        "long": "outdir",
+        "description": "write outputs to a directory",
+        "inherit": false,
+        "value": {
+          "name": "directory",
+          "style": "equals",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "outfile",
+        "description": "write output to a file",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "style": "equals",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "platform",
+        "description": "set the target platform",
+        "inherit": false,
+        "value": {
+          "name": "platform",
+          "style": "equals",
+          "provider": "esbuild.platforms"
+        }
+      },
+      {
+        "long": "serve",
+        "description": "start a local HTTP server",
+        "inherit": false,
+        "value": {
+          "name": "[address:]port",
+          "required": false,
+          "style": "optional"
+        }
+      },
+      {
+        "long": "splitting",
+        "description": "enable code splitting",
+        "inherit": false
+      },
+      {
+        "long": "target",
+        "description": "set the environment target",
+        "repeatable": true,
+        "inherit": false,
+        "value": {
+          "name": "target",
+          "style": "equals",
+          "provider": "esbuild.targets"
+        }
+      },
+      {
+        "long": "watch",
+        "description": "rebuild on file system changes",
+        "inherit": false,
+        "value": {
+          "name": "mode",
+          "required": false,
+          "style": "optional",
+          "provider": {
+            "values": [
+              "forever"
+            ]
+          }
+        }
+      },
+      {
+        "long": "allow-overwrite",
+        "description": "allow output files to overwrite input files",
+        "inherit": false
+      },
+      {
+        "long": "analyze",
+        "description": "print a bundle analysis report",
+        "inherit": false,
+        "value": {
+          "name": "mode",
+          "required": false,
+          "style": "optional",
+          "provider": {
+            "values": [
+              "verbose"
+            ]
+          }
+        }
+      },
+      {
+        "long": "asset-names",
+        "description": "set the file-loader asset name template",
+        "inherit": false,
+        "value": {
+          "name": "template",
+          "style": "equals"
+        }
+      },
+      {
+        "long": "banner",
+        "description": "prepend text to output file types",
+        "repeatable": true,
+        "inherit": false,
+        "value": {
+          "name": "ext=text",
+          "style": "attached"
+        }
+      },
+      {
+        "long": "charset",
+        "description": "set output character escaping",
+        "inherit": false,
+        "value": {
+          "name": "charset",
+          "style": "equals",
+          "provider": {
+            "values": [
+              "utf8"
+            ]
+          }
+        }
+      },
+      {
+        "long": "chunk-names",
+        "description": "set code splitting chunk name template",
+        "inherit": false,
+        "value": {
+          "name": "template",
+          "style": "equals"
+        }
+      },
+      {
+        "long": "color",
+        "description": "force terminal colors on or off",
+        "inherit": false,
+        "value": {
+          "name": "enabled",
+          "style": "equals",
+          "provider": "esbuild.booleans"
+        }
+      },
+      {
+        "long": "drop",
+        "description": "remove selected constructs",
+        "repeatable": true,
+        "inherit": false,
+        "value": {
+          "name": "construct",
+          "style": "attached",
+          "provider": {
+            "values": [
+              "console",
+              "debugger"
+            ]
+          }
+        }
+      },
+      {
+        "long": "entry-names",
+        "description": "set entry point output path template",
+        "inherit": false,
+        "value": {
+          "name": "template",
+          "style": "equals"
+        }
+      },
+      {
+        "long": "footer",
+        "description": "append text to output file types",
+        "repeatable": true,
+        "inherit": false,
+        "value": {
+          "name": "ext=text",
+          "style": "attached"
+        }
+      },
+      {
+        "long": "global-name",
+        "description": "set the global name for iife output",
+        "inherit": false,
+        "value": {
+          "name": "name",
+          "style": "equals"
+        }
+      },
+      {
+        "long": "ignore-annotations",
+        "description": "ignore tree-shaking annotations",
+        "inherit": false
+      },
+      {
+        "long": "inject",
+        "description": "inject an imported file into all inputs",
+        "repeatable": true,
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "style": "attached",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "jsx",
+        "description": "set JSX transform mode",
+        "inherit": false,
+        "value": {
+          "name": "mode",
+          "style": "equals",
+          "provider": "esbuild.jsx-modes"
+        }
+      },
+      {
+        "long": "jsx-dev",
+        "description": "enable development mode for automatic JSX runtime",
+        "inherit": false
+      },
+      {
+        "long": "jsx-factory",
+        "description": "set the JSX factory",
+        "inherit": false,
+        "value": {
+          "name": "factory",
+          "style": "equals",
+          "provider": {
+            "values": [
+              "React.createElement",
+              "h",
+              "preact.h"
+            ]
+          }
+        }
+      },
+      {
+        "long": "jsx-fragment",
+        "description": "set the JSX fragment factory",
+        "inherit": false,
+        "value": {
+          "name": "fragment",
+          "style": "equals",
+          "provider": {
+            "values": [
+              "React.Fragment",
+              "Fragment"
+            ]
+          }
+        }
+      },
+      {
+        "long": "jsx-import-source",
+        "description": "set automatic JSX runtime import source",
+        "inherit": false,
+        "value": {
+          "name": "source",
+          "style": "equals"
+        }
+      },
+      {
+        "long": "keep-names",
+        "description": "preserve function and class names",
+        "inherit": false
+      },
+      {
+        "long": "legal-comments",
+        "description": "set where legal comments are placed",
+        "inherit": false,
+        "value": {
+          "name": "location",
+          "style": "equals",
+          "provider": "esbuild.legal-comments"
+        }
+      },
+      {
+        "long": "log-level",
+        "description": "set the log level",
+        "inherit": false,
+        "value": {
+          "name": "level",
+          "style": "equals",
+          "provider": "esbuild.log-levels"
+        }
+      },
+      {
+        "long": "log-limit",
+        "description": "set the maximum log message count",
+        "inherit": false,
+        "value": {
+          "name": "count",
+          "style": "equals"
+        }
+      },
+      {
+        "long": "main-fields",
+        "description": "override package.json main field order",
+        "inherit": false,
+        "value": {
+          "name": "fields",
+          "style": "equals"
+        }
+      },
+      {
+        "long": "mangle-cache",
+        "description": "save mangle decisions to a JSON file",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "style": "equals",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "mangle-props",
+        "description": "mangle properties matching a regex",
+        "inherit": false,
+        "value": {
+          "name": "regex",
+          "style": "equals"
+        }
+      },
+      {
+        "long": "mangle-quoted",
+        "description": "mangle quoted properties",
+        "inherit": false,
+        "value": {
+          "name": "enabled",
+          "style": "equals",
+          "provider": "esbuild.booleans"
+        }
+      },
+      {
+        "long": "metafile",
+        "description": "write build metadata to a JSON file",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "style": "equals",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "minify-whitespace",
+        "description": "remove unnecessary whitespace",
+        "inherit": false
+      },
+      {
+        "long": "minify-identifiers",
+        "description": "shorten identifiers",
+        "inherit": false
+      },
+      {
+        "long": "minify-syntax",
+        "description": "use equivalent shorter syntax",
+        "inherit": false
+      },
+      {
+        "long": "out-extension",
+        "description": "set output extensions",
+        "repeatable": true,
+        "inherit": false,
+        "value": {
+          "name": "ext=new",
+          "style": "attached"
+        }
+      },
+      {
+        "long": "outbase",
+        "description": "set the output base directory",
+        "inherit": false,
+        "value": {
+          "name": "directory",
+          "style": "equals",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "preserve-symlinks",
+        "description": "disable symlink resolution",
+        "inherit": false
+      },
+      {
+        "long": "public-path",
+        "description": "set the base URL for file loader output",
+        "inherit": false,
+        "value": {
+          "name": "path",
+          "style": "equals"
+        }
+      },
+      {
+        "long": "pure",
+        "description": "mark a function call as pure",
+        "repeatable": true,
+        "inherit": false,
+        "value": {
+          "name": "name",
+          "style": "attached"
+        }
+      },
+      {
+        "long": "reserve-props",
+        "description": "do not mangle matching properties",
+        "inherit": false,
+        "value": {
+          "name": "regex",
+          "style": "equals"
+        }
+      },
+      {
+        "long": "resolve-extensions",
+        "description": "set implicit resolve extensions",
+        "inherit": false,
+        "value": {
+          "name": "extensions",
+          "style": "equals"
+        }
+      },
+      {
+        "long": "servedir",
+        "description": "serve files from a directory",
+        "inherit": false,
+        "value": {
+          "name": "directory",
+          "style": "equals",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "source-root",
+        "description": "set sourceRoot in source maps",
+        "inherit": false,
+        "value": {
+          "name": "url",
+          "style": "equals"
+        }
+      },
+      {
+        "long": "sourcefile",
+        "description": "set source file name for stdin source maps",
+        "inherit": false,
+        "value": {
+          "name": "name",
+          "style": "equals"
+        }
+      },
+      {
+        "long": "sourcemap",
+        "description": "generate source maps",
+        "inherit": false,
+        "value": {
+          "name": "mode",
+          "required": false,
+          "style": "optional",
+          "provider": "esbuild.sourcemaps"
+        }
+      },
+      {
+        "long": "sources-content",
+        "description": "include sourcesContent in source maps",
+        "inherit": false,
+        "value": {
+          "name": "enabled",
+          "style": "equals",
+          "provider": {
+            "values": [
+              "false"
+            ]
+          }
+        }
+      },
+      {
+        "long": "supported",
+        "description": "override syntax support",
+        "repeatable": true,
+        "inherit": false,
+        "value": {
+          "name": "syntax=status",
+          "style": "attached"
+        }
+      },
+      {
+        "long": "tree-shaking",
+        "description": "force tree shaking on or off",
+        "inherit": false,
+        "value": {
+          "name": "enabled",
+          "style": "equals",
+          "provider": "esbuild.booleans"
+        }
+      },
+      {
+        "long": "tsconfig",
+        "description": "use a TypeScript config file",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "style": "equals",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "version",
+        "description": "print version information",
+        "inherit": false
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "entry-points",
+          "description": "entry point files",
+          "provider": "builtin.files",
+          "index": 0,
+          "repeatable": true
+        }
+      ]
+    },
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "esbuild.booleans": {
+        "values": [
+          "true",
+          "false"
+        ]
+      },
+      "esbuild.formats": {
+        "values": [
+          "iife",
+          "cjs",
+          "esm"
+        ]
+      },
+      "esbuild.jsx-modes": {
+        "values": [
+          "preserve",
+          "automatic"
+        ]
+      },
+      "esbuild.legal-comments": {
+        "values": [
+          "none",
+          "inline",
+          "eof",
+          "linked",
+          "external"
+        ]
+      },
+      "esbuild.loaders": {
+        "values": [
+          "js",
+          "jsx",
+          "ts",
+          "tsx",
+          "css",
+          "json",
+          "text",
+          "base64",
+          "file",
+          "dataurl",
+          "binary",
+          "copy"
+        ]
+      },
+      "esbuild.log-levels": {
+        "values": [
+          "verbose",
+          "debug",
+          "info",
+          "warning",
+          "error",
+          "silent"
+        ]
+      },
+      "esbuild.platforms": {
+        "values": [
+          "browser",
+          "node",
+          "neutral"
+        ]
+      },
+      "esbuild.sourcemaps": {
+        "values": [
+          "external",
+          "inline"
+        ]
+      },
+      "esbuild.targets": {
+        "values": [
+          "esnext",
+          "es2016",
+          "es2022",
+          "chrome",
+          "firefox",
+          "ie",
+          "node",
+          "safari",
+          "opera"
+        ]
+      }
+    }
+  }
+}
