@@ -1,0 +1,47 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "cloudflared",
+    "description": "manage cloudflare tunnels",
+    "providers": {
+      "builtin.files": { "builtin": "files" },
+      "builtin.directories": { "builtin": "directories" }
+    },
+    "options": [
+      { "long": "config", "description": "set config file", "inherit": true, "value": { "name": "file", "provider": "builtin.files" } },
+      { "long": "origincert", "description": "set origin certificate file", "inherit": true, "value": { "name": "file", "provider": "builtin.files" } },
+      { "long": "autoupdate-freq", "description": "set autoupdate frequency", "inherit": true, "value": { "name": "duration" } },
+      { "long": "no-autoupdate", "description": "disable autoupdate", "inherit": true }
+    ],
+    "subcommands": [
+      { "name": "update", "description": "update cloudflared" },
+      { "name": "version", "description": "show version" },
+      { "name": "proxy-dns", "description": "run a dns over https proxy" },
+      { "name": "service", "description": "manage the system service", "subcommands": [
+        { "name": "install", "description": "install service" },
+        { "name": "uninstall", "description": "uninstall service" }
+      ] },
+      { "name": "access", "description": "manage access applications", "subcommands": [
+        { "name": "login", "description": "authenticate to an access application", "arguments": { "states": [{ "name": "url", "index": 0 }] } },
+        { "name": "curl", "description": "run curl with access credentials", "arguments": { "states": [{ "name": "url", "index": 0 }] } },
+        { "name": "ssh", "description": "connect with ssh through access", "arguments": { "states": [{ "name": "host", "index": 0 }] } },
+        { "name": "tcp", "description": "proxy tcp through access" }
+      ] },
+      { "name": "tunnel", "description": "manage tunnels", "subcommands": [
+        { "name": "login", "description": "log in to cloudflare" },
+        { "name": "create", "description": "create a tunnel", "arguments": { "states": [{ "name": "name", "index": 0 }] } },
+        { "name": "list", "description": "list tunnels" },
+        { "name": "info", "description": "show tunnel info", "arguments": { "states": [{ "name": "tunnel", "index": 0 }] } },
+        { "name": "delete", "description": "delete a tunnel", "arguments": { "states": [{ "name": "tunnel", "index": 0 }] } },
+        { "name": "route", "description": "manage tunnel routes", "subcommands": [
+          { "name": "dns", "description": "route dns to a tunnel" },
+          { "name": "ip", "description": "route ip network to a tunnel" }
+        ] },
+        { "name": "run", "description": "run a tunnel", "arguments": { "states": [{ "name": "tunnel", "index": 0 }] } },
+        { "name": "cleanup", "description": "clean up tunnel connections" }
+      ] },
+      { "name": "help", "description": "show help" }
+    ]
+  }
+}
