@@ -1,0 +1,197 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "dscl",
+    "description": "manage Directory Service data",
+    "options": [
+      { "short": "p", "description": "prompt for password", "inherit": true },
+      { "short": "u", "description": "authenticate as user", "inherit": true, "value": { "name": "user" } },
+      { "short": "P", "description": "authenticate with password", "inherit": true, "value": { "name": "password" } },
+      { "short": "f", "description": "use a local node database file", "inherit": true, "value": { "name": "file", "provider": "builtin.files" } },
+      { "spellings": ["-raw"], "description": "show raw DirectoryService constants", "inherit": true },
+      { "spellings": ["-plist"], "description": "print XML plist output", "inherit": true },
+      { "spellings": ["-url"], "description": "print URL-encoded values", "inherit": true },
+      { "short": "q", "description": "suppress interactive prompts", "inherit": true }
+    ],
+    "arguments": {
+      "states": [
+        { "name": "datasource", "description": "directory service data source", "provider": "dscl.datasources", "index": 0 }
+      ]
+    },
+    "subcommands": [
+      {
+        "name": ["read", "-read"],
+        "description": "print a record",
+        "arguments": { "states": [
+          { "name": "path", "index": 0 },
+          { "name": "keys", "index": 1, "repeatable": true }
+        ] }
+      },
+      {
+        "name": ["readall", "-readall"],
+        "description": "print all records of a type",
+        "arguments": { "states": [
+          { "name": "path", "index": 0 },
+          { "name": "keys", "index": 1, "repeatable": true }
+        ] }
+      },
+      {
+        "name": ["readpl", "-readpl"],
+        "description": "print a plist value",
+        "arguments": { "states": [
+          { "name": "path", "index": 0 },
+          { "name": "key", "index": 1 },
+          { "name": "plist-path", "index": 2 }
+        ] }
+      },
+      {
+        "name": ["readpli", "-readpli"],
+        "description": "print an indexed plist value",
+        "arguments": { "states": [
+          { "name": "path", "index": 0 },
+          { "name": "key", "index": 1 },
+          { "name": "value-index", "index": 2 },
+          { "name": "plist-path", "index": 3 }
+        ] }
+      },
+      {
+        "name": ["list", "-list", "ls", "-ls"],
+        "description": "list child records",
+        "arguments": { "states": [
+          { "name": "path", "index": 0 },
+          { "name": "key", "index": 1 }
+        ] }
+      },
+      {
+        "name": ["search", "-search"],
+        "description": "search records by value",
+        "arguments": { "states": [
+          { "name": "path", "index": 0 },
+          { "name": "key", "index": 1 },
+          { "name": "value", "index": 2 }
+        ] }
+      },
+      {
+        "name": ["create", "-create", "mk", "-mk"],
+        "description": "create a record or value",
+        "arguments": { "states": [
+          { "name": "path", "index": 0 },
+          { "name": "key", "index": 1 },
+          { "name": "values", "index": 2, "repeatable": true }
+        ] }
+      },
+      {
+        "name": ["createpl", "-createpl"],
+        "description": "create a plist value",
+        "arguments": { "states": [
+          { "name": "path", "index": 0 },
+          { "name": "key", "index": 1 },
+          { "name": "plist-path", "index": 2 },
+          { "name": "value", "index": 3 },
+          { "name": "values", "index": 4, "repeatable": true }
+        ] }
+      },
+      {
+        "name": ["createpli", "-createpli"],
+        "description": "create an indexed plist value",
+        "arguments": { "states": [
+          { "name": "path", "index": 0 },
+          { "name": "key", "index": 1 },
+          { "name": "value-index", "index": 2 },
+          { "name": "plist-path", "index": 3 },
+          { "name": "value", "index": 4 },
+          { "name": "values", "index": 5, "repeatable": true }
+        ] }
+      },
+      {
+        "name": ["append", "-append"],
+        "description": "append values to a property",
+        "arguments": { "states": [
+          { "name": "path", "index": 0 },
+          { "name": "key", "index": 1 },
+          { "name": "values", "index": 2, "repeatable": true }
+        ] }
+      },
+      {
+        "name": ["merge", "-merge"],
+        "description": "append missing values to a property",
+        "arguments": { "states": [
+          { "name": "path", "index": 0 },
+          { "name": "key", "index": 1 },
+          { "name": "values", "index": 2, "repeatable": true }
+        ] }
+      },
+      {
+        "name": ["delete", "-delete", "rm", "-rm"],
+        "description": "delete a record, property, or value",
+        "arguments": { "states": [
+          { "name": "path", "index": 0 },
+          { "name": "key", "index": 1 },
+          { "name": "values", "index": 2, "repeatable": true }
+        ] }
+      },
+      {
+        "name": ["deletepl", "-deletepl"],
+        "description": "delete a plist value",
+        "arguments": { "states": [
+          { "name": "path", "index": 0 },
+          { "name": "key", "index": 1 },
+          { "name": "plist-path", "index": 2 },
+          { "name": "values", "index": 3, "repeatable": true }
+        ] }
+      },
+      {
+        "name": ["deletepli", "-deletepli"],
+        "description": "delete an indexed plist value",
+        "arguments": { "states": [
+          { "name": "path", "index": 0 },
+          { "name": "key", "index": 1 },
+          { "name": "value-index", "index": 2 },
+          { "name": "plist-path", "index": 3 },
+          { "name": "values", "index": 4, "repeatable": true }
+        ] }
+      },
+      {
+        "name": ["change", "-change"],
+        "description": "replace a property value",
+        "arguments": { "states": [
+          { "name": "path", "index": 0 },
+          { "name": "key", "index": 1 },
+          { "name": "old-value", "index": 2 },
+          { "name": "new-value", "index": 3 }
+        ] }
+      },
+      {
+        "name": ["changei", "-changei"],
+        "description": "replace a property value by index",
+        "arguments": { "states": [
+          { "name": "path", "index": 0 },
+          { "name": "key", "index": 1 },
+          { "name": "value-index", "index": 2 },
+          { "name": "new-value", "index": 3 }
+        ] }
+      },
+      {
+        "name": ["diff", "-diff"],
+        "description": "compare records",
+        "arguments": { "states": [
+          { "name": "path1", "index": 0 },
+          { "name": "path2", "index": 1 },
+          { "name": "keys", "index": 2, "repeatable": true }
+        ] }
+      },
+      {
+        "name": ["passwd", "-passwd"],
+        "description": "change a user password",
+        "arguments": { "states": [
+          { "name": "path", "index": 0 },
+          { "name": "new-password", "index": 1 }
+        ] }
+      }
+    ],
+    "providers": {
+      "dscl.datasources": { "values": [".", "..", "localhost", "localonly"] }
+    }
+  }
+}
