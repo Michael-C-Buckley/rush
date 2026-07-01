@@ -1,0 +1,125 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "du",
+    "description": "display disk usage statistics",
+    "options": [
+      {
+        "short": "a",
+        "description": "display an entry for each file in a file hierarchy",
+        "inherit": false,
+        "exclusiveGroup": "du.depth"
+      },
+      {
+        "short": "c",
+        "description": "display a grand total",
+        "inherit": false
+      },
+      {
+        "short": "H",
+        "description": "symbolic links on the command line are followed, symbolic links in file hierarchies are not followed",
+        "inherit": false,
+        "exclusiveGroup": "du.symlinks"
+      },
+      {
+        "short": "h",
+        "description": "display human-readable sizes",
+        "inherit": false,
+        "exclusiveGroup": "du.units"
+      },
+      {
+        "short": "g",
+        "description": "display block counts in 1073741824-byte (1-Gbyte) blocks",
+        "inherit": false,
+        "exclusiveGroup": "du.units"
+      },
+      {
+        "short": "k",
+        "description": "display block counts in 1024-byte (1-Kbyte) blocks",
+        "inherit": false,
+        "exclusiveGroup": "du.units"
+      },
+      {
+        "short": "m",
+        "description": "display block counts in 1048576-byte (1-Mbyte) blocks",
+        "inherit": false,
+        "exclusiveGroup": "du.units"
+      },
+      {
+        "short": "I",
+        "description": "ignore files and directories matching the specified mask",
+        "inherit": false,
+        "value": {
+          "name": "mask"
+        }
+      },
+      {
+        "short": "L",
+        "description": "symbolic links on the command line and in file hierarchies are followed",
+        "inherit": false,
+        "exclusiveGroup": "du.symlinks"
+      },
+      {
+        "short": "r",
+        "description": "show errors for unreadable files and directories",
+        "inherit": false
+      },
+      {
+        "short": "P",
+        "description": "no symbolic links are followed. This is the default",
+        "inherit": false,
+        "exclusiveGroup": "du.symlinks"
+      },
+      {
+        "short": "d",
+        "description": "display an entry for all files and directories depth directories deep",
+        "inherit": false,
+        "value": {
+          "name": "depth",
+          "provider": {
+            "values": [
+              "0",
+              "1",
+              "2"
+            ]
+          }
+        },
+        "exclusiveGroup": "du.depth"
+      },
+      {
+        "short": "s",
+        "description": "display only a total for each operand",
+        "inherit": false,
+        "exclusiveGroup": "du.depth"
+      },
+      {
+        "short": "x",
+        "description": "stay on the same file system",
+        "inherit": false
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "files",
+          "provider": [
+            "builtin.files",
+            "builtin.directories"
+          ],
+          "index": 0,
+          "repeatable": true,
+          "description": "files or directories to measure"
+        }
+      ]
+    },
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
