@@ -1,0 +1,182 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "astro",
+    "description": "develop and build astro projects",
+    "options": [
+      {
+        "long": "config",
+        "description": "use config file",
+        "inherit": true,
+        "value": {
+          "name": "path",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "root",
+        "description": "set project root",
+        "inherit": true,
+        "value": {
+          "name": "path",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "site",
+        "description": "set project site",
+        "inherit": true,
+        "value": {
+          "name": "url"
+        }
+      },
+      {
+        "long": "base",
+        "description": "set project base path",
+        "inherit": true,
+        "value": {
+          "name": "pathname",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "verbose",
+        "description": "enable verbose logging",
+        "inherit": true
+      },
+      {
+        "long": "silent",
+        "description": "disable logging",
+        "inherit": true
+      },
+      {
+        "long": "version",
+        "description": "show version",
+        "inherit": true
+      },
+      {
+        "long": "help",
+        "description": "show help",
+        "inherit": true
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "add",
+        "description": "add an integration",
+        "options": [
+          {
+            "long": "yes",
+            "description": "accept all prompts",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "integration",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "build",
+        "description": "build project",
+        "options": [
+          {
+            "long": "drafts",
+            "description": "include markdown drafts",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "check",
+        "description": "check project for errors",
+        "options": [
+          {
+            "long": "watch",
+            "description": "rerun checks on changes",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "dev",
+        "description": "start development server",
+        "options": [
+          {
+            "long": "port",
+            "description": "set listen port",
+            "inherit": false,
+            "value": {
+              "name": "port"
+            }
+          },
+          {
+            "long": "host",
+            "description": "set listen address",
+            "inherit": false,
+            "value": {
+              "name": "custom-address",
+              "required": false,
+              "style": "optional"
+            }
+          },
+          {
+            "long": "open",
+            "description": "open browser on start",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "docs",
+        "description": "open documentation"
+      },
+      {
+        "name": "preview",
+        "description": "preview build locally",
+        "options": [
+          {
+            "long": "open",
+            "description": "open browser on start",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "sync",
+        "description": "generate content collection types"
+      },
+      {
+        "name": "telemetry",
+        "description": "configure telemetry",
+        "subcommands": [
+          {
+            "name": "enable",
+            "description": "enable anonymous data collection"
+          },
+          {
+            "name": "disable",
+            "description": "disable anonymous data collection"
+          },
+          {
+            "name": "reset",
+            "description": "reset anonymous data collection settings"
+          }
+        ]
+      }
+    ],
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
