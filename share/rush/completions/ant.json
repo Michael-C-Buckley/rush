@@ -1,0 +1,263 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "ant",
+    "description": "automate software builds",
+    "options": [
+      {
+        "long": "help",
+        "short": "h",
+        "spellings": [
+          "-help"
+        ],
+        "description": "show help",
+        "inherit": false
+      },
+      {
+        "long": "noconfig",
+        "description": "skip ant configuration files",
+        "inherit": false
+      },
+      {
+        "long": "usejikes",
+        "description": "enable jikes by default",
+        "inherit": false
+      },
+      {
+        "long": "execdebug",
+        "description": "print generated exec line",
+        "inherit": false
+      },
+      {
+        "short": "p",
+        "spellings": [
+          "-projecthelp"
+        ],
+        "description": "print project help",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-version"
+        ],
+        "description": "show version",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-diagnostics"
+        ],
+        "description": "print diagnostic information",
+        "inherit": false
+      },
+      {
+        "short": "q",
+        "spellings": [
+          "-quiet"
+        ],
+        "description": "decrease output",
+        "inherit": false
+      },
+      {
+        "short": "S",
+        "spellings": [
+          "-silent"
+        ],
+        "description": "print only task output and failures",
+        "inherit": false
+      },
+      {
+        "short": "v",
+        "spellings": [
+          "-verbose"
+        ],
+        "description": "increase output",
+        "inherit": false
+      },
+      {
+        "short": "d",
+        "spellings": [
+          "-debug"
+        ],
+        "description": "print debug information",
+        "inherit": false
+      },
+      {
+        "short": "e",
+        "spellings": [
+          "-emacs"
+        ],
+        "description": "use emacs-style logging",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-lib"
+        ],
+        "description": "add jar and class search path",
+        "inherit": false,
+        "value": {
+          "name": "directory",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "short": "l",
+        "spellings": [
+          "-logfile"
+        ],
+        "description": "write log to file",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "spellings": [
+          "-logger"
+        ],
+        "description": "set logger class",
+        "inherit": false,
+        "value": {
+          "name": "classname"
+        }
+      },
+      {
+        "spellings": [
+          "-listener"
+        ],
+        "description": "add project listener class",
+        "inherit": false,
+        "value": {
+          "name": "classname"
+        }
+      },
+      {
+        "spellings": [
+          "-noinput"
+        ],
+        "description": "disable interactive input",
+        "inherit": false
+      },
+      {
+        "short": "f",
+        "spellings": [
+          "-buildfile",
+          "-file"
+        ],
+        "description": "use build file",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "short": "k",
+        "spellings": [
+          "-keep-going"
+        ],
+        "description": "keep going after target failures",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-propertyfile"
+        ],
+        "description": "load property file",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "spellings": [
+          "-inputhandler"
+        ],
+        "description": "set input handler class",
+        "inherit": false,
+        "value": {
+          "name": "class"
+        }
+      },
+      {
+        "short": "s",
+        "spellings": [
+          "-find"
+        ],
+        "description": "find build file upward",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "spellings": [
+          "-nice"
+        ],
+        "description": "set main thread niceness",
+        "inherit": false,
+        "value": {
+          "name": "number"
+        }
+      },
+      {
+        "spellings": [
+          "-nouserlib"
+        ],
+        "description": "skip user ant library",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-noclasspath"
+        ],
+        "description": "ignore classpath",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-autoproxy"
+        ],
+        "description": "use os proxy settings",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-main"
+        ],
+        "description": "override ant entry point",
+        "inherit": false,
+        "value": {
+          "name": "class"
+        }
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "target",
+          "index": 0,
+          "repeatable": true,
+          "description": "target to run",
+          "provider": "ant.targets"
+        }
+      ]
+    },
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "ant.targets": {
+        "function": "__rush_complete_ant_targets"
+      }
+    }
+  }
+}

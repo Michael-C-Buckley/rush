@@ -1,0 +1,22 @@
+__rush_complete_ant_targets() {
+  tmp=$(mktemp)
+  ant -p > "$tmp" 2>/dev/null || {
+    rm -f "$tmp"
+    return 0
+  }
+  while IFS= read -r line; do
+    case "$line" in
+      " "*) ;;
+      *) continue ;;
+    esac
+    set -- $line
+    target=$1
+    test -n "$target" || continue
+    case "$target" in
+      Main|Subtargets:|Buildfile:|Default) continue ;;
+    esac
+    description=${line#*$target}
+    rush_complete candidate "$target" --kind plain --description "${description:-ant target}"
+  done < "$tmp"
+  rm -f "$tmp"
+}
