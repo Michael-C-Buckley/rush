@@ -189,6 +189,46 @@
             .status = 0,
         },
         .{
+            .name = "here document star joins positional parameters with the first IFS byte",
+            .script =
+            \\set -- '' '' one '' 'thr ee' '' '' six '' '' '' ten '' '' '' ''
+            \\IFS=
+            \\v=$(cat <<EOF
+            \\$*
+            \\EOF
+            \\)
+            \\printf '<%s>\n' "$v"
+            \\IFS=@x
+            \\v=$(cat <<EOF
+            \\$*
+            \\EOF
+            \\)
+            \\printf '<%s>\n' "$v"
+            ,
+            .stdout =
+            \\<onethr eesixten>
+            \\<@@one@@thr ee@@@six@@@@ten@@@@>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "here document expands positional and special parameters",
+            .script =
+            \\set -- alpha beta gamma delta epsilon zeta eta theta iota kappa
+            \\cat <<EOF
+            \\<$#><$1><$10><${10}><$?><${#}><${1}>
+            \\EOF
+            ,
+            .stdout =
+            \\<10><alpha><alpha0><kappa><0><10><alpha>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "parameter operators preserve quoted star field",
             .script =
             \\set -- abc 'def ghi' jkl

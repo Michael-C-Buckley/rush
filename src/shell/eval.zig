@@ -2626,20 +2626,12 @@ fn expandHereDocBody(shell: anytype, body: []const u8) EvalError![]const u8 {
                     index = close_index + 1;
                     continue;
                 }
-                if (index + 1 < body.len and body[index + 1] == '?') {
-                    try output.appendSlice(shell.scratchAllocator(), try formatExitStatus(shell, shell.state.last_status));
-                    index += 2;
+                if (try expandHereDocParameter(shell, body, &index)) |value| {
+                    try output.appendSlice(shell.scratchAllocator(), value);
                     continue;
                 }
-                const name_start = index + 1;
-                const name_end = scanHereDocParameterName(body, name_start);
-                if (name_end == name_start) {
-                    try output.append(shell.scratchAllocator(), '$');
-                    index += 1;
-                    continue;
-                }
-                if (parameterValue(shell, body[name_start..name_end])) |value| try output.appendSlice(shell.scratchAllocator(), value);
-                index = name_end;
+                try output.append(shell.scratchAllocator(), '$');
+                index += 1;
             },
             else => {
                 try output.append(shell.scratchAllocator(), body[index]);
@@ -2648,6 +2640,41 @@ fn expandHereDocBody(shell: anytype, body: []const u8) EvalError![]const u8 {
         }
     }
     return output.toOwnedSlice(shell.scratchAllocator());
+}
+
+fn expandHereDocParameter(shell: anytype, body: []const u8, index: *usize) EvalError!?[]const u8 {
+    std.debug.assert(index.* < body.len and body[index.*] == '$');
+    const parameter_start = index.* + 1;
+    if (parameter_start >= body.len) return null;
+
+    if (std.ascii.isDigit(body[parameter_start])) {
+        index.* = parameter_start + 1;
+        return positionalValue(shell, body[parameter_start] - '0') orelse "";
+    }
+    if (arithmeticSpecialParameter(body[parameter_start])) |special| {
+        index.* = parameter_start + 1;
+        return try expandHereDocSpecialParameter(shell, special);
+    }
+    if (body[parameter_start] == '{') {
+        const content_start = parameter_start + 1;
+        const content_end = scanArithmeticBracedParameterEnd(body, content_start) orelse return null;
+        const content = body[content_start..content_end];
+        const parameter = parseArithmeticBracedParameter(content) orelse return null;
+        index.* = content_end + 1;
+        return try expandParameter(shell, parameter);
+    }
+
+    const name_end = scanHereDocParameterName(body, parameter_start);
+    if (name_end == parameter_start) return null;
+    index.* = name_end;
+    return parameterValue(shell, body[parameter_start..name_end]) orelse "";
+}
+
+fn expandHereDocSpecialParameter(shell: anytype, special: ast.SpecialParameter) EvalError![]const u8 {
+    return switch (special) {
+        .star, .at => try joinPositionals(shell, ifsFirstCharacter(shell)),
+        else => expandParameter(shell, .{ .parameter = .{ .special = special } }),
+    };
 }
 
 fn scanHereDocCommandSubstitution(body: []const u8, open_index: usize) ?usize {
