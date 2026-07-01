@@ -1,0 +1,379 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "charm",
+    "description": "manage charm cloud resources",
+    "options": [
+      {
+        "long": "help",
+        "short": "h",
+        "description": "help for charm",
+        "inherit": false
+      },
+      {
+        "long": "version",
+        "short": "v",
+        "description": "version for charm",
+        "inherit": false
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "backup-keys",
+        "description": "backup your charm account keys"
+      },
+      {
+        "name": "completion",
+        "description": "generate shell completion"
+      },
+      {
+        "name": "crypt",
+        "description": "use charm encryption",
+        "subcommands": [
+          {
+            "name": "decrypt",
+            "description": "decrypt stdin with your charm account encryption key"
+          },
+          {
+            "name": "decrypt-lookup",
+            "description": "decrypt arg deterministically"
+          },
+          {
+            "name": "encrypt",
+            "description": "encrypt stdin with your charm account encryption key"
+          },
+          {
+            "name": "encrypt-lookup",
+            "description": "encrypt arg deterministically"
+          }
+        ]
+      },
+      {
+        "name": "fs",
+        "description": "use the charm file systems",
+        "subcommands": [
+          {
+            "name": "cat",
+            "description": "output the content of the file at path",
+            "arguments": {
+              "states": [
+                {
+                  "name": "[charm:]path",
+                  "index": 0,
+                  "provider": "builtin.files"
+                }
+              ]
+            }
+          },
+          {
+            "name": "cp",
+            "description": "copy a file, preface source or destination with \"charm:\" to specify a remote path",
+            "options": [
+              {
+                "long": "recursive",
+                "short": "r",
+                "description": "copy directories recursively",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "[charm:]path",
+                  "index": 0,
+                  "provider": "builtin.files"
+                },
+                {
+                  "name": "[charm:]path",
+                  "index": 1,
+                  "provider": "builtin.files"
+                }
+              ]
+            }
+          },
+          {
+            "name": "ls",
+            "description": "list file or directory at path",
+            "arguments": {
+              "states": [
+                {
+                  "name": "[charm:]path",
+                  "index": 0,
+                  "provider": "builtin.files"
+                }
+              ]
+            }
+          },
+          {
+            "name": "mv",
+            "description": "move a file, preface source or destination with \"charm\" to specify a remote path",
+            "arguments": {
+              "states": [
+                {
+                  "name": "[charm:]path",
+                  "index": 0,
+                  "provider": "builtin.files"
+                },
+                {
+                  "name": "[charm:]path",
+                  "index": 1,
+                  "provider": "builtin.files"
+                }
+              ]
+            }
+          },
+          {
+            "name": "rm",
+            "description": "remove file or directory at path",
+            "arguments": {
+              "states": [
+                {
+                  "name": "[charm:]path",
+                  "index": 0,
+                  "provider": "builtin.files"
+                }
+              ]
+            }
+          },
+          {
+            "name": "tree",
+            "description": "print a file system tree from path",
+            "arguments": {
+              "states": [
+                {
+                  "name": "[charm:]path",
+                  "index": 0,
+                  "provider": "builtin.files"
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "help",
+        "description": "help about any command"
+      },
+      {
+        "name": "id",
+        "description": "print your charm ID"
+      },
+      {
+        "name": "import-keys",
+        "description": "import previously backed up charm account keys",
+        "options": [
+          {
+            "long": "force-overwrite",
+            "short": "f",
+            "description": "overwrite if keys exist; don't prompt for input",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "backup.tar",
+              "index": 0,
+              "values": [
+                "BACKUP.tar"
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "name": "jwt",
+        "description": "print a JWT"
+      },
+      {
+        "name": "keys",
+        "description": "browse or print linked SSH keys",
+        "options": [
+          {
+            "long": "randomart",
+            "short": "r",
+            "description": "print SSH 5.1 randomart for each key (the Drunken Bishop algorithm)",
+            "inherit": false
+          },
+          {
+            "long": "simple",
+            "short": "s",
+            "description": "simple, non-interactive output (good for scripts)",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "kv",
+        "description": "use the charm key value store",
+        "subcommands": [
+          {
+            "name": "delete",
+            "description": "delete a key with an optional @ db",
+            "arguments": {
+              "states": [
+                {
+                  "name": "key[@db]",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "get",
+            "description": "get a value for a key with an optional @ db",
+            "arguments": {
+              "states": [
+                {
+                  "name": "key[@db]",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "list",
+            "description": "list all key value pairs with an optional @ db",
+            "arguments": {
+              "states": [
+                {
+                  "name": "key[@db]",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "reset",
+            "description": "delete local db and pull down fresh copy from charm Cloud",
+            "arguments": {
+              "states": [
+                {
+                  "name": "key[@db]",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "set",
+            "description": "set a value for a key with an optional @ db",
+            "arguments": {
+              "states": [
+                {
+                  "name": "key[@db]",
+                  "index": 0
+                },
+                {
+                  "name": "value",
+                  "index": 1
+                }
+              ]
+            }
+          },
+          {
+            "name": "sync",
+            "description": "sync local db with latest charm Cloud db",
+            "arguments": {
+              "states": [
+                {
+                  "name": "key[@db]",
+                  "index": 0
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "link",
+        "description": "link multiple machines to your charm account",
+        "arguments": {
+          "states": [
+            {
+              "name": "code",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "name",
+        "description": "username stuff",
+        "arguments": {
+          "states": [
+            {
+              "name": "username",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "serve",
+        "description": "start a self-hosted charm Cloud server",
+        "options": [
+          {
+            "long": "data-dir",
+            "description": "directory to store SQLite db, SSH keys and file data",
+            "inherit": false,
+            "value": {
+              "name": "data_dir",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "health-port",
+            "description": "health port to listen on",
+            "inherit": false,
+            "value": {
+              "name": "health_port",
+              "values": [
+                "35356"
+              ]
+            }
+          },
+          {
+            "long": "http-port",
+            "description": "hTTP port to listen on",
+            "inherit": false,
+            "value": {
+              "name": "http_port",
+              "values": [
+                "35354"
+              ]
+            }
+          },
+          {
+            "long": "ssh-port",
+            "description": "sSH port to listen on",
+            "inherit": false,
+            "value": {
+              "name": "ssh_port",
+              "values": [
+                "35353"
+              ]
+            }
+          },
+          {
+            "long": "stats-port",
+            "description": "stats port to listen on",
+            "inherit": false,
+            "value": {
+              "name": "stats_port",
+              "values": [
+                "35355"
+              ]
+            }
+          }
+        ]
+      }
+    ],
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
