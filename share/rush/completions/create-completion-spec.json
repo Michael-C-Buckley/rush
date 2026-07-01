@@ -1,0 +1,48 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "create-completion-spec",
+    "description": "create a completion spec",
+    "options": [
+      {
+        "long": "here",
+        "description": "set if the spec should be created in the current folder",
+        "inherit": false
+      },
+      {
+        "short": "h",
+        "long": "help",
+        "description": "display help for command",
+        "inherit": false
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "name",
+          "index": 0
+        }
+      ]
+    },
+    "subcommands": [
+      {
+        "name": "help",
+        "description": "display help for command",
+        "arguments": {
+          "states": [
+            {
+              "name": "command",
+              "index": 0
+            }
+          ]
+        }
+      }
+    ],
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      }
+    }
+  }
+}
