@@ -38,6 +38,7 @@ pub const Id = enum {
     getopts,
     hash,
     kill,
+    local,
     prompt,
     prompt_async,
     prompt_pwd,
@@ -92,6 +93,7 @@ pub const core_definitions: DefinitionMap = .initComptime(.{
     .{ "getopts", Definition{ .name = "getopts", .id = .getopts, .kind = .regular } },
     .{ "hash", Definition{ .name = "hash", .id = .hash, .kind = .regular } },
     .{ "kill", Definition{ .name = "kill", .id = .kill, .kind = .regular } },
+    .{ "local", Definition{ .name = "local", .id = .local, .kind = .regular } },
     .{ "printf", Definition{ .name = "printf", .id = .printf, .kind = .regular } },
     .{ "pwd", Definition{ .name = "pwd", .id = .pwd, .kind = .regular } },
     .{ "read", Definition{ .name = "read", .id = .read, .kind = .regular } },
@@ -162,7 +164,7 @@ pub fn lookup(name: []const u8) ?Definition {
 
 pub fn lookupInMode(name: []const u8, mode: state_mod.Mode) ?Definition {
     const definition = lookup(name) orelse return null;
-    if (mode == .posix and (definition.id == .source or definition.id == .shopt)) return null;
+    if (mode == .posix and (definition.id == .local or definition.id == .source or definition.id == .shopt)) return null;
     return definition;
 }
 
@@ -181,6 +183,7 @@ pub fn eval(shell: anytype, definition: Definition, args: []const []const u8) !r
         .getopts => evalGetopts(shell, args),
         .hash => evalHash(shell, args),
         .kill => evalKill(shell, args),
+        .local => evalLocal(shell, args),
         .printf => evalPrintf(shell, args),
         .readonly => evalReadonly(shell, args),
         .return_ => evalReturn(shell, args),
@@ -641,6 +644,34 @@ fn evalPrintf(shell: anytype, args: []const []const u8) !result.EvalResult {
     const status = try printf.evaluate(Writer, shell.scratchAllocator(), args, &stdout, &stderr);
     try stdout.flush();
     try stderr.flush();
+    return .{ .status = status };
+}
+
+fn evalLocal(shell: anytype, args: []const []const u8) !result.EvalResult {
+    var status: result.ExitStatus = 0;
+    for (args[1..]) |arg| {
+        const equal_index = std.mem.indexOfScalar(u8, arg, '=');
+        const name = if (equal_index) |index| arg[0..index] else arg;
+        if (!isAssignmentName(name)) {
+            try shell.host.writeAll(
+                .stderr,
+                try std.fmt.allocPrint(shell.scratchAllocator(), "local: `{s}': not a valid identifier\n", .{arg}),
+            );
+            status = 1;
+            continue;
+        }
+        const value = if (equal_index) |index| arg[index + 1 ..] else if (shell.state.getVariable(name)) |variable| variable.value else "";
+        shell.state.putVariable(.{ .name = name, .value = value }) catch |err| switch (err) {
+            error.ReadonlyVariable => {
+                try shell.host.writeAll(
+                    .stderr,
+                    try std.fmt.allocPrint(shell.scratchAllocator(), "{s}: readonly variable\n", .{name}),
+                );
+                status = 1;
+            },
+            else => return err,
+        };
+    }
     return .{ .status = status };
 }
 
