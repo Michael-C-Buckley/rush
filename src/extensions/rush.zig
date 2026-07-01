@@ -18,6 +18,7 @@ pub const definitions = [_]builtin.Definition{
     builtin.extensionDefinition("prompt_async", .prompt_async),
     builtin.extensionDefinition("prompt_duration", .prompt_duration),
     builtin.extensionDefinition("prompt_pwd", .prompt_pwd),
+    builtin.extensionDefinition("rush_complete", .rush_complete),
     builtin.extensionDefinition("rush_env", .rush_env),
 };
 
@@ -35,6 +36,70 @@ pub const EventHandler = struct {
     next_tick_ms: ?u64 = null,
 };
 
+pub const CompletionParsedOption = struct {
+    spelling: []const u8,
+    name: []const u8,
+    key: []const u8,
+    value: ?[]const u8 = null,
+};
+
+pub const CompletionParsedOperand = struct {
+    value: []const u8,
+    index: usize,
+};
+
+pub const CompletionContext = struct {
+    allocator: std.mem.Allocator,
+    prefix: []const u8,
+    replace_start: usize,
+    replace_end: usize,
+    argument_index: usize,
+    options_terminated: bool,
+    value_position: []const u8,
+    parsed_options: []const CompletionParsedOption,
+    operands: []const CompletionParsedOperand,
+    candidates: std.ArrayList(completion.Candidate) = .empty,
+    next_source_order: usize = 0,
+
+    pub fn init(
+        allocator: std.mem.Allocator,
+        prefix: []const u8,
+        replace_start: usize,
+        replace_end: usize,
+        argument_index: usize,
+        options_terminated: bool,
+        value_position: []const u8,
+        parsed_options: []const CompletionParsedOption,
+        operands: []const CompletionParsedOperand,
+    ) CompletionContext {
+        return .{
+            .allocator = allocator,
+            .prefix = prefix,
+            .replace_start = replace_start,
+            .replace_end = replace_end,
+            .argument_index = argument_index,
+            .options_terminated = options_terminated,
+            .value_position = value_position,
+            .parsed_options = parsed_options,
+            .operands = operands,
+        };
+    }
+
+    pub fn deinit(self: *CompletionContext) void {
+        if (self.candidates.items.len != 0) {
+            const candidates = self.candidates.toOwnedSlice(self.allocator) catch unreachable;
+            completion.freeCandidates(self.allocator, candidates);
+        } else self.candidates.deinit(self.allocator);
+        self.* = undefined;
+    }
+
+    pub fn takeCandidates(self: *CompletionContext) ![]completion.Candidate {
+        const candidates = try self.candidates.toOwnedSlice(self.allocator);
+        self.candidates = .empty;
+        return candidates;
+    }
+};
+
 pub const State = struct {
     allocator: std.mem.Allocator,
     abbreviations: std.StringHashMapUnmanaged([]const u8) = .empty,
@@ -42,6 +107,7 @@ pub const State = struct {
     prompt_buffer: std.ArrayListUnmanaged(u8) = .empty,
     building_prompt: bool = false,
     previous_duration_ms: ?i64 = null,
+    completion_context: ?*CompletionContext = null,
 
     pub fn init(allocator: std.mem.Allocator) State {
         return .{ .allocator = allocator };
@@ -80,6 +146,7 @@ pub const State = struct {
             .prompt_async => evalPromptAsync(sh, args),
             .prompt_duration => evalPromptDuration(self, sh, args),
             .prompt_pwd => evalPromptPwd(sh, args),
+            .rush_complete => evalRushComplete(self, sh, args),
             .rush_env => evalRushEnv(sh, args),
             else => .{ .status = 127 },
         };
@@ -644,6 +711,220 @@ fn importJsonEnv(sh: anytype, input: []const u8) !result.EvalResult {
         }
     }
     return .{};
+}
+
+fn evalRushComplete(state: *State, sh: anytype, args: []const []const u8) !result.EvalResult {
+    const context = state.completion_context orelse {
+        try sh.host.writeAll(.stderr, "rush_complete: only available during completion providers\n");
+        return .{ .status = 2 };
+    };
+    if (args.len < 2) return .{ .status = 2 };
+    if (std.mem.eql(u8, args[1], "candidate")) return rushCompleteCandidate(context, args);
+    if (std.mem.eql(u8, args[1], "files")) return rushCompletePaths(context, sh, args, false);
+    if (std.mem.eql(u8, args[1], "directories")) return rushCompletePaths(context, sh, args, true);
+    if (std.mem.eql(u8, args[1], "aliases")) return rushCompleteNames(context, sh.state.aliases, .plain, "alias");
+    if (std.mem.eql(u8, args[1], "variables")) return rushCompleteNames(context, sh.state.variables, .variable, "variable");
+    if (std.mem.eql(u8, args[1], "functions")) return rushCompleteFunctions(context, sh);
+    if (std.mem.eql(u8, args[1], "jobs")) return rushCompleteJobs(context, sh);
+    if (std.mem.eql(u8, args[1], "option-present")) return rushCompleteOptionPresent(context, args);
+    if (std.mem.eql(u8, args[1], "option-values")) return rushCompleteOptionValues(context, sh, args);
+    if (std.mem.eql(u8, args[1], "operand")) return rushCompleteOperand(context, sh, args);
+    return .{ .status = 2 };
+}
+
+fn rushCompleteCandidate(context: *CompletionContext, args: []const []const u8) !result.EvalResult {
+    if (args.len < 3) return .{ .status = 2 };
+    var candidate: completion.Candidate = .{
+        .value = try context.allocator.dupe(u8, args[2]),
+        .replace_start = context.replace_start,
+        .replace_end = context.replace_end,
+        .source_order = context.next_source_order,
+    };
+    errdefer freeCompletionCandidateFields(context.allocator, candidate);
+
+    var index: usize = 3;
+    while (index < args.len) : (index += 1) {
+        const arg = args[index];
+        if (std.mem.eql(u8, arg, "--kind")) {
+            index += 1;
+            if (index >= args.len) return .{ .status = 2 };
+            candidate.kind = parseCompletionKind(args[index]) orelse return .{ .status = 2 };
+        } else if (std.mem.eql(u8, arg, "--description")) {
+            index += 1;
+            if (index >= args.len) return .{ .status = 2 };
+            candidate.description = try context.allocator.dupe(u8, args[index]);
+        } else if (std.mem.eql(u8, arg, "--display")) {
+            index += 1;
+            if (index >= args.len) return .{ .status = 2 };
+            candidate.display = try context.allocator.dupe(u8, args[index]);
+        } else if (std.mem.eql(u8, arg, "--insert")) {
+            index += 1;
+            if (index >= args.len) return .{ .status = 2 };
+            candidate.insert = try context.allocator.dupe(u8, args[index]);
+        } else if (std.mem.eql(u8, arg, "--tag")) {
+            index += 1;
+            if (index >= args.len) return .{ .status = 2 };
+            candidate.tag = try context.allocator.dupe(u8, args[index]);
+        } else if (std.mem.eql(u8, arg, "--suffix")) {
+            index += 1;
+            if (index >= args.len) return .{ .status = 2 };
+            candidate.suffix = try context.allocator.dupe(u8, args[index]);
+        } else if (std.mem.eql(u8, arg, "--priority")) {
+            index += 1;
+            if (index >= args.len) return .{ .status = 2 };
+            candidate.priority = std.fmt.parseInt(i8, args[index], 10) catch return .{ .status = 2 };
+        } else if (std.mem.eql(u8, arg, "--no-space")) {
+            candidate.append_space = false;
+        } else return .{ .status = 2 };
+    }
+    try context.candidates.append(context.allocator, candidate);
+    context.next_source_order += 1;
+    return .{};
+}
+
+fn rushCompletePaths(context: *CompletionContext, sh: anytype, args: []const []const u8, directories_only: bool) !result.EvalResult {
+    for (args[2..]) |arg| if (!std.mem.eql(u8, arg, "--append-slash")) return .{ .status = 2 };
+    try appendPathCompletionCandidates(context, sh, directories_only);
+    return .{};
+}
+
+fn rushCompleteNames(context: *CompletionContext, map: anytype, kind: completion.Kind, description: []const u8) !result.EvalResult {
+    var iterator = map.iterator();
+    while (iterator.next()) |entry| try appendCompletionCandidate(context, entry.key_ptr.*, kind, description, 0);
+    return .{};
+}
+
+fn rushCompleteFunctions(context: *CompletionContext, sh: anytype) !result.EvalResult {
+    var iterator = sh.state.functions.iterator();
+    while (iterator.next()) |entry| {
+        if (!sh.state.isFunctionAutoloadSuppressed(entry.key_ptr.*)) {
+            try appendCompletionCandidate(context, entry.key_ptr.*, .function, "function", 0);
+        }
+    }
+    return .{};
+}
+
+fn rushCompleteJobs(context: *CompletionContext, sh: anytype) !result.EvalResult {
+    for (sh.state.background_jobs.items) |job| {
+        const value = try std.fmt.allocPrint(context.allocator, "%{d}", .{job.id});
+        defer context.allocator.free(value);
+        try appendCompletionCandidate(context, value, .plain, "job", 0);
+    }
+    return .{};
+}
+
+fn rushCompleteOptionPresent(context: *CompletionContext, args: []const []const u8) result.EvalResult {
+    const selector = parseCompletionOptionSelector(args) orelse return .{ .status = 2 };
+    for (context.parsed_options) |option| {
+        if (completionOptionMatchesSelector(option, selector)) return .{};
+    }
+    return .{ .status = 1 };
+}
+
+fn rushCompleteOptionValues(context: *CompletionContext, sh: anytype, args: []const []const u8) !result.EvalResult {
+    const selector = parseCompletionOptionSelector(args) orelse return .{ .status = 2 };
+    for (context.parsed_options) |option| {
+        if (!completionOptionMatchesSelector(option, selector)) continue;
+        if (option.value) |value| {
+            try sh.host.writeAll(.stdout, value);
+            try sh.host.writeAll(.stdout, "\n");
+        }
+    }
+    return .{};
+}
+
+fn rushCompleteOperand(context: *CompletionContext, sh: anytype, args: []const []const u8) !result.EvalResult {
+    if (args.len != 3) return .{ .status = 2 };
+    const wanted = std.fmt.parseInt(usize, args[2], 10) catch return .{ .status = 2 };
+    for (context.operands) |operand| {
+        if (operand.index != wanted) continue;
+        try sh.host.writeAll(.stdout, operand.value);
+        try sh.host.writeAll(.stdout, "\n");
+        return .{};
+    }
+    return .{ .status = 1 };
+}
+
+const CompletionOptionSelector = union(enum) {
+    long: []const u8,
+    short: []const u8,
+};
+
+fn parseCompletionOptionSelector(args: []const []const u8) ?CompletionOptionSelector {
+    if (args.len != 4) return null;
+    if (std.mem.eql(u8, args[2], "--long")) return .{ .long = args[3] };
+    if (std.mem.eql(u8, args[2], "--short")) return .{ .short = args[3] };
+    return null;
+}
+
+fn completionOptionMatchesSelector(option: CompletionParsedOption, selector: CompletionOptionSelector) bool {
+    return switch (selector) {
+        .long => |name| std.mem.eql(u8, option.name, name) or
+            (option.spelling.len == name.len + 2 and std.mem.eql(u8, option.spelling[0..2], "--") and
+                std.mem.eql(u8, option.spelling[2..], name)),
+        .short => |name| std.mem.eql(u8, option.name, name) or
+            (option.spelling.len == name.len + 1 and option.spelling[0] == '-' and
+                std.mem.eql(u8, option.spelling[1..], name)),
+    };
+}
+
+fn appendPathCompletionCandidates(context: *CompletionContext, sh: anytype, directories_only: bool) !void {
+    const slash = std.mem.lastIndexOfScalar(u8, context.prefix, '/');
+    const dir_prefix = if (slash) |index| context.prefix[0 .. index + 1] else "";
+    const entry_prefix = if (slash) |index| context.prefix[index + 1 ..] else context.prefix;
+    const dir_path = if (dir_prefix.len == 0) "." else if (std.mem.eql(u8, dir_prefix, "/")) "/" else std.mem.trimEnd(u8, dir_prefix, "/");
+    var entries = sh.host.listDir(context.allocator, dir_path) catch return;
+    defer entries.deinit();
+    const include_hidden = std.mem.startsWith(u8, entry_prefix, ".");
+    for (entries.entries) |entry| {
+        if (entry.name.len == 0 or std.mem.eql(u8, entry.name, ".") or std.mem.eql(u8, entry.name, "..")) continue;
+        if (!include_hidden and entry.name[0] == '.') continue;
+        if (!std.mem.startsWith(u8, entry.name, entry_prefix)) continue;
+        const is_directory = entry.kind == .directory;
+        if (directories_only and !is_directory) continue;
+        const value = if (is_directory)
+            try std.fmt.allocPrint(context.allocator, "{s}{s}/", .{ dir_prefix, entry.name })
+        else
+            try std.fmt.allocPrint(context.allocator, "{s}{s}", .{ dir_prefix, entry.name });
+        defer context.allocator.free(value);
+        try appendCompletionCandidate(context, value, if (is_directory) .directory else .file, if (is_directory) "directory" else "file", 0);
+    }
+}
+
+fn appendCompletionCandidate(
+    context: *CompletionContext,
+    value: []const u8,
+    kind: completion.Kind,
+    description: ?[]const u8,
+    priority: i8,
+) !void {
+    const owned_value = try context.allocator.dupe(u8, value);
+    errdefer context.allocator.free(owned_value);
+    const owned_description = if (description) |text| try context.allocator.dupe(u8, text) else null;
+    errdefer if (owned_description) |text| context.allocator.free(text);
+    try context.candidates.append(context.allocator, .{
+        .value = owned_value,
+        .description = owned_description,
+        .kind = kind,
+        .priority = priority,
+        .replace_start = context.replace_start,
+        .replace_end = context.replace_end,
+        .source_order = context.next_source_order,
+    });
+    context.next_source_order += 1;
+}
+
+fn parseCompletionKind(value: []const u8) ?completion.Kind {
+    inline for (std.meta.fields(completion.Kind)) |field| {
+        if (std.mem.eql(u8, value, field.name)) return @enumFromInt(field.value);
+    }
+    return null;
+}
+
+fn freeCompletionCandidateFields(allocator: std.mem.Allocator, candidate: completion.Candidate) void {
+    const owned = allocator.alloc(completion.Candidate, 1) catch unreachable;
+    owned[0] = candidate;
+    completion.freeCandidates(allocator, owned);
 }
 
 fn importShEnv(sh: anytype, input: []const u8) !result.EvalResult {

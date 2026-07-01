@@ -46,6 +46,7 @@ pub const Id = enum {
     prompt_async,
     prompt_duration,
     prompt_pwd,
+    rush_complete,
     rush_env,
     printf,
     pwd,
@@ -208,7 +209,7 @@ pub fn eval(shell: anytype, definition: Definition, args: []const []const u8) !r
         .umask => evalUmask(shell, args),
         .unalias => evalUnalias(shell, args),
         .unset => evalUnset(shell, args),
-        .abbr, .color, .event, .prompt, .prompt_async, .prompt_duration, .prompt_pwd, .rush_env => unreachable,
+        .abbr, .color, .event, .prompt, .prompt_async, .prompt_duration, .prompt_pwd, .rush_complete, .rush_env => unreachable,
     };
 }
 

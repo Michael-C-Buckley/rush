@@ -2,6 +2,7 @@
 
 const std = @import("std");
 
+const completion = @import("completion.zig");
 const editor = @import("editor.zig");
 const extensions = @import("extensions.zig");
 const function_autoload = @import("function_autoload.zig");
@@ -126,6 +127,7 @@ const InteractiveSession = struct {
             .prompt = prompt_text,
             .history = self.history_service.lineEditorView(self.io),
             .completion_context = self.sh,
+            .complete = completion.complete,
             .expand_abbreviation = expandRushAbbreviation,
             .theme = interactive_style.theme(self.sh.state),
             .style_context = self.sh,
