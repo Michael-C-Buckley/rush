@@ -1,0 +1,1767 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "bw",
+    "options": [
+      {
+        "long": "pretty",
+        "description": "format output. JSON is tabbed with two spaces",
+        "inherit": true,
+        "exclusiveGroup": "bw.output"
+      },
+      {
+        "long": "raw",
+        "description": "return raw output instead of a descriptive message",
+        "inherit": true,
+        "exclusiveGroup": "bw.output"
+      },
+      {
+        "long": "response",
+        "description": "return a JSON formatted version of response output",
+        "inherit": true,
+        "exclusiveGroup": "bw.output"
+      },
+      {
+        "long": "cleanexit",
+        "description": "exit with a success exit code (0) unless an error is thrown",
+        "inherit": true
+      },
+      {
+        "long": "quiet",
+        "description": "don't return anything to stdout",
+        "inherit": true,
+        "exclusiveGroup": "bw.output"
+      },
+      {
+        "long": "nointeraction",
+        "description": "do not prompt for interactive user input",
+        "inherit": true
+      },
+      {
+        "long": "session",
+        "description": "pass session key instead of reading from env",
+        "inherit": true,
+        "value": {
+          "name": "session",
+          "description": "session Key"
+        }
+      },
+      {
+        "short": "v",
+        "long": "version",
+        "description": "output BW cli tool version number",
+        "inherit": false
+      },
+      {
+        "short": "h",
+        "long": "help",
+        "description": "display help for command",
+        "inherit": false
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "login",
+        "description": "log into a user account",
+        "options": [
+          {
+            "long": "method",
+            "description": "two-step login method",
+            "inherit": false,
+            "value": {
+              "name": "method",
+              "description": "authenticator = 0, Email = 1, YubiKey = 3",
+              "values": [
+                {
+                  "value": "0",
+                  "description": "Authenticator"
+                },
+                {
+                  "value": "1",
+                  "description": "Email"
+                },
+                {
+                  "value": "3",
+                  "description": "YubiKey"
+                }
+              ]
+            }
+          },
+          {
+            "long": "code",
+            "description": "two-step login code",
+            "inherit": false,
+            "value": {
+              "name": "code",
+              "description": "valid TOTP Code"
+            }
+          },
+          {
+            "long": "sso",
+            "description": "log in with Single-Sign On",
+            "inherit": false,
+            "exclusiveGroup": "bw.login-method"
+          },
+          {
+            "long": "apikey",
+            "description": "log in with an Api Key",
+            "inherit": false,
+            "exclusiveGroup": "bw.login-method"
+          },
+          {
+            "long": "passwordenv",
+            "description": "environment variable storing your password",
+            "inherit": false,
+            "value": {
+              "name": "passwordenv",
+              "description": "environmental Variable Name"
+            },
+            "exclusiveGroup": "bw.password-source"
+          },
+          {
+            "long": "passwordfile",
+            "description": "path to a file containing your password as its first line",
+            "inherit": false,
+            "value": {
+              "name": "passwordfile",
+              "description": "path to a file containing your password",
+              "provider": "builtin.files"
+            },
+            "exclusiveGroup": "bw.password-source"
+          },
+          {
+            "long": "check",
+            "description": "check login status",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "display help for login command",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "email",
+              "description": "email Address of bitwarden Account",
+              "index": 0
+            },
+            {
+              "name": "password",
+              "description": "master Password of bitwarden vault",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "logout",
+        "description": "log out of the current user account",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "display help for logout command",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "lock",
+        "description": "lock the vault and destroy active session keys",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "display help for lock command",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "unlock",
+        "description": "unlock the vault and return a new session key",
+        "options": [
+          {
+            "long": "check",
+            "description": "check lock status",
+            "inherit": false
+          },
+          {
+            "long": "passwordenv",
+            "description": "supply an environment variable storing your password",
+            "inherit": false,
+            "value": {
+              "name": "passwordenv",
+              "description": "environmental variable containing your password"
+            },
+            "exclusiveGroup": "bw.password-source"
+          },
+          {
+            "long": "passwordfile",
+            "description": "path to a file containing your password as its first line",
+            "inherit": false,
+            "value": {
+              "name": "passwordfile",
+              "description": "file containing your password",
+              "provider": "builtin.files"
+            },
+            "exclusiveGroup": "bw.password-source"
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "display help for unlock command",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "password",
+              "description": "master Password for the vault to be unlocked",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "sync",
+        "description": "pull the latest vault data from server",
+        "options": [
+          {
+            "short": "f",
+            "long": "force",
+            "description": "force a full sync",
+            "inherit": false
+          },
+          {
+            "long": "last",
+            "description": "show details of the last sync",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "display help for sync command",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "generate",
+        "description": "generate a password/passphrase",
+        "options": [
+          {
+            "short": "u",
+            "long": "uppercase",
+            "description": "include uppercase characters",
+            "inherit": false
+          },
+          {
+            "short": "l",
+            "long": "lowercase",
+            "description": "include lowercase characters",
+            "inherit": false
+          },
+          {
+            "short": "n",
+            "long": "number",
+            "description": "include numeric characters",
+            "inherit": false
+          },
+          {
+            "short": "s",
+            "long": "special",
+            "description": "include special characters",
+            "inherit": false
+          },
+          {
+            "long": "length",
+            "description": "define password length",
+            "inherit": false,
+            "value": {
+              "name": "length",
+              "description": "output length"
+            }
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "display help for generate command",
+            "inherit": false
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "-p",
+            "aliases": [],
+            "description": "generate a passphrase",
+            "options": [
+              {
+                "long": "words",
+                "description": "number of words to include in passphrase",
+                "inherit": false,
+                "value": {
+                  "name": "number-of-words",
+                  "description": "number of words to include in passphrase"
+                }
+              },
+              {
+                "short": "c",
+                "long": "capitalize",
+                "description": "title case passphrase",
+                "inherit": false
+              },
+              {
+                "long": "separator",
+                "description": "define word separator",
+                "inherit": false,
+                "value": {
+                  "name": "separator",
+                  "description": "character to delineate words in generated passphrase"
+                }
+              },
+              {
+                "long": "includeNumber",
+                "description": "include a number in output",
+                "inherit": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "encode",
+        "description": "base 64 encode stdin",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "display help for encode command",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "config",
+        "description": "configure cli settings",
+        "options": [
+          {
+            "long": "web-vault",
+            "description": "provides a custom web vault url that differs from the base url",
+            "inherit": false,
+            "value": {
+              "name": "url",
+              "description": "url for a self-hosted bitwarden Server"
+            }
+          },
+          {
+            "long": "api",
+            "description": "provides a custom API url that differs from the base url",
+            "inherit": false,
+            "value": {
+              "name": "url",
+              "description": "aPI url for a self-hosted bitwarden Server"
+            }
+          },
+          {
+            "long": "identity",
+            "description": "provides a custom identity url that differs from the base url",
+            "inherit": false,
+            "value": {
+              "name": "url",
+              "description": "custom Identity url that differs from the base url"
+            }
+          },
+          {
+            "long": "icons",
+            "description": "provides a custom icon service url that differs from the base url",
+            "inherit": false,
+            "value": {
+              "name": "url",
+              "description": "custom icon service url that differs from the base url"
+            }
+          },
+          {
+            "long": "notifications",
+            "description": "provides a custom notifications url that differs from the base url",
+            "inherit": false,
+            "value": {
+              "name": "url",
+              "description": "custom notifications url that differs from the base url"
+            }
+          },
+          {
+            "long": "events",
+            "description": "provides a custom events url that differs from the base url",
+            "inherit": false,
+            "value": {
+              "name": "url",
+              "description": "custom events url that differs from the base url"
+            }
+          },
+          {
+            "long": "key-connector",
+            "description": "provides the url for your Key Connector server",
+            "inherit": false,
+            "value": {
+              "name": "url",
+              "description": "custom Key Connector url that differs from the base url"
+            }
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "display help for the config command",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "setting",
+              "description": "setting to configure",
+              "index": 0,
+              "values": [
+                "server"
+              ]
+            },
+            {
+              "name": "value",
+              "description": "value to set",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "update",
+        "description": "check for updates",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "display help for update command",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "completion",
+        "description": "generate shell completions",
+        "options": [
+          {
+            "long": "shell",
+            "description": "shell to generate completions for",
+            "inherit": false,
+            "value": {
+              "name": "shell",
+              "description": "shell to generate completions for",
+              "values": [
+                "zsh"
+              ]
+            }
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "display help for completion command",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "status",
+        "description": "show server details, last sync time & date, user information, and vault status",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "display help for status command",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "serve",
+        "description": "start a RESTful API webserver",
+        "options": [
+          {
+            "long": "hostname",
+            "description": "the hostname to bind your API webserver to",
+            "inherit": false,
+            "value": {
+              "name": "hostname"
+            }
+          },
+          {
+            "long": "port",
+            "description": "the port to run your API webserver on",
+            "inherit": false,
+            "value": {
+              "name": "port"
+            }
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "display help for serve command",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "list",
+        "description": "retrieves an array of objects (items, folders, collections, org-collections, org-members, organizations) from yo",
+        "options": [
+          {
+            "long": "search",
+            "description": "perform a search on the listed objects",
+            "inherit": false,
+            "value": {
+              "name": "search"
+            }
+          },
+          {
+            "long": "url",
+            "description": "filter items of type login with a url-match search",
+            "inherit": false,
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "folderid",
+            "description": "filter items by folder id",
+            "inherit": false,
+            "value": {
+              "name": "folderid"
+            }
+          },
+          {
+            "long": "collectionid",
+            "description": "filter items by collection id",
+            "inherit": false,
+            "value": {
+              "name": "collectionid"
+            }
+          },
+          {
+            "long": "organizationid",
+            "description": "filter items or collections by organization id",
+            "inherit": false,
+            "value": {
+              "name": "organizationid"
+            }
+          },
+          {
+            "long": "trash",
+            "description": "filter items that are in the trash",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "display help for the list command",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "object",
+              "index": 0,
+              "values": [
+                "items",
+                "folders",
+                "collections",
+                "org-collections",
+                "org-members",
+                "organizations"
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "name": "get",
+        "description": "get an object from the vault",
+        "options": [
+          {
+            "long": "id",
+            "description": "exact id of the object",
+            "inherit": false,
+            "value": {
+              "name": "id",
+              "description": "object id"
+            }
+          },
+          {
+            "long": "organizationid",
+            "description": "organization id for an organization object",
+            "inherit": false,
+            "value": {
+              "name": "organizationid",
+              "description": "organization id"
+            }
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "display help for the get command",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "object",
+              "description": "type of object to get from the vault",
+              "index": 0,
+              "values": [
+                "item",
+                "username",
+                "password",
+                "uri",
+                "totp",
+                "exposed",
+                "folder",
+                "collection"
+              ]
+            },
+            {
+              "name": "id",
+              "description": "search term or object's globally unique id",
+              "index": 1
+            }
+          ]
+        },
+        "subcommands": [
+          {
+            "name": "template",
+            "description": "type of template to get",
+            "arguments": {
+              "states": [
+                {
+                  "name": "object",
+                  "index": 0,
+                  "values": [
+                    "item",
+                    "item.field",
+                    "item.login",
+                    "item.login.uri",
+                    "item.card",
+                    "item.identity",
+                    "item.securenote",
+                    "folder",
+                    "collection",
+                    "item-collections",
+                    "org-collection",
+                    "send.text",
+                    "send.file"
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "name": "attachment",
+            "options": [
+              {
+                "long": "itemid",
+                "description": "vault Item id containing attachment",
+                "inherit": false,
+                "value": {
+                  "name": "itemid",
+                  "description": "id of vault Item containing attachment"
+                }
+              },
+              {
+                "long": "output",
+                "description": "output directory and/or filename",
+                "inherit": false,
+                "value": {
+                  "name": "output",
+                  "description": "output directory and/or filename",
+                  "provider": "builtin.files"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "create",
+        "description": "create an object in the vault",
+        "options": [
+          {
+            "long": "file",
+            "description": "path to file for attachment",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "description": "file to attach",
+              "provider": "builtin.files"
+            },
+            "exclusiveGroup": "bw.send-data"
+          },
+          {
+            "long": "itemid",
+            "description": "attachment's item id",
+            "inherit": false,
+            "value": {
+              "name": "itemid",
+              "description": "item id"
+            }
+          },
+          {
+            "long": "organizationid",
+            "description": "organization id for an organization object",
+            "inherit": false,
+            "value": {
+              "name": "organizationid",
+              "description": "organization id"
+            }
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "display help for the create command",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "object",
+              "description": "object to be created",
+              "index": 0,
+              "values": [
+                "item",
+                "attachment",
+                "folder",
+                "org-collection"
+              ]
+            },
+            {
+              "name": "encodedjson",
+              "description": "encoded JSON instead of uploading to vault",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "edit",
+        "description": "edit an object from the vault",
+        "options": [
+          {
+            "long": "organizationid",
+            "description": "organization id for an organization object",
+            "inherit": false,
+            "value": {
+              "name": "organizationid",
+              "description": "organization id"
+            }
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "display help for the edit command",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "object",
+              "description": "type of vault Object to edit",
+              "index": 0,
+              "values": [
+                "item",
+                "item-collections",
+                "folder",
+                "org-collection"
+              ]
+            },
+            {
+              "name": "id",
+              "description": "object's globally unique id",
+              "index": 1
+            },
+            {
+              "name": "encodedjson",
+              "description": "encoded JSON of the object to create",
+              "index": 2
+            }
+          ]
+        }
+      },
+      {
+        "name": "delete",
+        "description": "delete an object from the vault",
+        "options": [
+          {
+            "long": "itemid",
+            "description": "attachment's item id",
+            "priority": -10,
+            "inherit": false,
+            "value": {
+              "name": "itemid",
+              "description": "item Id"
+            }
+          },
+          {
+            "long": "organizationid",
+            "description": "organization id for an organization object",
+            "priority": -10,
+            "inherit": false,
+            "value": {
+              "name": "organizationid",
+              "description": "organization Id"
+            }
+          },
+          {
+            "short": "p",
+            "long": "permanent",
+            "description": "permanently deletes the item instead of soft-deleting it (item only)",
+            "priority": -10,
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "display help for the delete command",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "object",
+              "description": "object to delete",
+              "index": 0,
+              "values": [
+                "item",
+                "attachment",
+                "folder",
+                "org-collection"
+              ]
+            },
+            {
+              "name": "id",
+              "description": "unique vault id",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "restore",
+        "description": "restores an object from the trash",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "display help for the restore command",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "object",
+              "index": 0
+            },
+            {
+              "name": "id",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "move",
+        "description": "transfers a vault item to an Organization",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "display help for the move command",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "id",
+              "index": 0
+            },
+            {
+              "name": "organizationid",
+              "index": 1
+            },
+            {
+              "name": "encodedjson",
+              "index": 2
+            }
+          ]
+        }
+      },
+      {
+        "name": "confirm",
+        "description": "confirm an object to the organization",
+        "options": [
+          {
+            "long": "organizationid",
+            "description": "organization id for an organization object",
+            "inherit": false,
+            "value": {
+              "name": "organizationid",
+              "description": "organization id"
+            }
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "display help for the confirm command",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "object",
+              "description": "valid objects are: org-member",
+              "index": 0
+            },
+            {
+              "name": "id",
+              "description": "organization id for an organization object",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "import",
+        "description": "import vault data from a file",
+        "options": [
+          {
+            "long": "formats",
+            "description": "list supported file formats",
+            "inherit": false
+          },
+          {
+            "long": "organizationid",
+            "description": "id of the organization to import to",
+            "inherit": false,
+            "value": {
+              "name": "organizationid",
+              "description": "organization id to be imported to"
+            }
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "display help for the import command",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "format",
+              "description": "format of import file",
+              "index": 0,
+              "values": [
+                "1password1pif",
+                "1password1pux",
+                "1passwordmaccsv",
+                "1passwordwincsv",
+                "ascendocsv",
+                "avastcsv",
+                "avastjson",
+                "aviracsv",
+                "bitwardencsv",
+                "bitwardenjson",
+                "blackberrycsv",
+                "blurcsv",
+                "buttercupcsv",
+                "chromecsv",
+                "clipperzhtml",
+                "codebookcsv",
+                "dashlanecsv",
+                "dashlanejson",
+                "encryptrcsv",
+                "enpasscsv",
+                "enpassjson",
+                "firefoxcsv",
+                "fsecurefsk",
+                "gnomejson",
+                "kasperskytxt",
+                "keepass2xml",
+                "keepassxcsv",
+                "keepercsv",
+                "lastpasscsv",
+                "logmeoncecsv",
+                "meldiumcsv",
+                "msecurecsv",
+                "mykicsv",
+                "nordpasscsv",
+                "operacsv",
+                "padlockcsv",
+                "passboltcsv",
+                "passkeepcsv",
+                "passmanjson",
+                "passpackcsv",
+                "passwordagentcsv",
+                "passwordbossjson",
+                "passworddragonxml",
+                "passwordwallettxt",
+                "pwsafexml",
+                "remembearcsv",
+                "roboformcsv",
+                "safaricsv",
+                "safeincloudxml",
+                "saferpasscsv",
+                "securesafecsv",
+                "splashidcsv",
+                "stickypasswordxml",
+                "truekeycsv",
+                "upmcsv",
+                "vivaldicsv",
+                "yoticsv",
+                "zohovaultcsv"
+              ]
+            },
+            {
+              "name": "input",
+              "description": "file to be imported",
+              "provider": "builtin.files",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "export",
+        "description": "export vault data to a CSV or JSON file",
+        "options": [
+          {
+            "long": "output",
+            "description": "set output directory or filename",
+            "inherit": false,
+            "value": {
+              "name": "output",
+              "description": "path to export to",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "format",
+            "description": "export file format",
+            "inherit": false,
+            "value": {
+              "name": "format",
+              "description": "export format",
+              "values": [
+                "csv",
+                "json",
+                "encrypted_json"
+              ]
+            }
+          },
+          {
+            "long": "password",
+            "description": "use a password to encrypt instead of your bitwarden account encryption key. Only applies to the encrypted_JSON f",
+            "inherit": false,
+            "value": {
+              "name": "password",
+              "description": "password that will encrypt this export",
+              "required": false,
+              "style": "optional"
+            },
+            "exclusiveGroup": "bw.password-source"
+          },
+          {
+            "long": "organizationid",
+            "description": "enter organization id for an organization",
+            "inherit": false,
+            "value": {
+              "name": "organizationid",
+              "description": "organization id"
+            }
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "display help for the export command",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "share",
+        "description": "--DEPRECATED-- Move an item to an organization",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "display help for the share command",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "id",
+              "description": "object's globally unique id",
+              "index": 0
+            },
+            {
+              "name": "organizationid",
+              "description": "organization's globally unique id",
+              "index": 1
+            },
+            {
+              "name": "encodedjson",
+              "description": "encoded JSON of an array of collection ids. Can also be piped into stdin",
+              "index": 2
+            }
+          ]
+        }
+      },
+      {
+        "name": "send",
+        "description": "work with bitwarden Sends. A Send can be quickly created using this command or subcommands can be used to fine-t",
+        "options": [
+          {
+            "short": "f",
+            "long": "file",
+            "description": "specifies that <data> is a filepath",
+            "inherit": false,
+            "exclusiveGroup": "bw.send-data"
+          },
+          {
+            "short": "d",
+            "long": "deleteInDays",
+            "description": "the number of days in the future to set deletion date (defaults to 7 if not specified)",
+            "inherit": false,
+            "value": {
+              "name": "days",
+              "required": false,
+              "style": "optional"
+            }
+          },
+          {
+            "short": "a",
+            "long": "maxAccessCount",
+            "description": "the max number of accesses allowed for this Send",
+            "inherit": false,
+            "value": {
+              "name": "amount",
+              "description": "max number of accesses allowed"
+            }
+          },
+          {
+            "long": "hidden",
+            "description": "hide <data> in web by default. Valid only if --file is not set",
+            "inherit": false
+          },
+          {
+            "short": "n",
+            "long": "name",
+            "description": "the name of the Send. Defaults to a guid for text Sends and the filename for files",
+            "inherit": false,
+            "value": {
+              "name": "name",
+              "description": "send name"
+            }
+          },
+          {
+            "long": "notes",
+            "description": "notes to add to the Send",
+            "inherit": false,
+            "value": {
+              "name": "notes",
+              "description": "notes to add to the Send"
+            }
+          },
+          {
+            "long": "fullObject",
+            "description": "specifies that the full Send object should be returned rather than just the access url",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "display help for the Send command",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "data",
+              "description": "encoded JSON data",
+              "index": 0
+            }
+          ]
+        },
+        "subcommands": [
+          {
+            "name": "list",
+            "description": "list all the Sends owned by you",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "display help for the Send command",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "template",
+            "description": "get JSON templates for Send objects",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "display help for the template sub-command",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "object",
+                  "description": "jSON template to fetch",
+                  "index": 0,
+                  "values": [
+                    "send.text",
+                    "send.file"
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "name": "get",
+            "description": "get Sends owned by you",
+            "options": [
+              {
+                "long": "output",
+                "description": "output directory or filename for attachment",
+                "inherit": false,
+                "value": {
+                  "name": "output",
+                  "description": "",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "text",
+                "description": "specifies to return the text content of a Send",
+                "inherit": false,
+                "exclusiveGroup": "bw.send-data"
+              },
+              {
+                "short": "h",
+                "long": "help",
+                "description": "display help for the Send get sub-command",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "send-id",
+                  "description": "send id",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "receive",
+            "description": "access a bitwarden Send from a url",
+            "options": [
+              {
+                "long": "password",
+                "description": "password needed to access the Send",
+                "inherit": false,
+                "value": {
+                  "name": "password",
+                  "description": "password for Send"
+                },
+                "exclusiveGroup": "bw.password-source"
+              },
+              {
+                "long": "passwordenv",
+                "description": "environment variable storing the Send's password",
+                "inherit": false,
+                "value": {
+                  "name": "passwordenv",
+                  "description": "environment variable containing Send's password"
+                },
+                "exclusiveGroup": "bw.password-source"
+              },
+              {
+                "long": "passwordfile",
+                "description": "path to a file containing the Send's password as its first line",
+                "inherit": false,
+                "value": {
+                  "name": "passwordfile",
+                  "description": "file containing Send's password",
+                  "provider": "builtin.files"
+                },
+                "exclusiveGroup": "bw.password-source"
+              },
+              {
+                "long": "obj",
+                "description": "return the Send's JSON object rather than the Send's content",
+                "inherit": false
+              },
+              {
+                "long": "output",
+                "description": "specify a file path to save a File-type Send to",
+                "inherit": false,
+                "value": {
+                  "name": "location",
+                  "description": "path to save File-type Send",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "short": "h",
+                "long": "help",
+                "description": "display help for the receive sub-command",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "send-url",
+                  "description": "url of Send to download",
+                  "index": 0,
+                  "provider": "builtin.files"
+                }
+              ]
+            }
+          },
+          {
+            "name": "create",
+            "description": "create a Send",
+            "options": [
+              {
+                "long": "file",
+                "description": "file to Send. Can also be specified in parent's JSON",
+                "inherit": false,
+                "value": {
+                  "name": "path",
+                  "description": "path to file to attach as content",
+                  "provider": "builtin.files"
+                },
+                "exclusiveGroup": "bw.send-data"
+              },
+              {
+                "long": "text",
+                "description": "text to Send. Can also be specified in parent's JSON",
+                "inherit": false,
+                "value": {
+                  "name": "text",
+                  "description": "text to include as content"
+                },
+                "exclusiveGroup": "bw.send-data"
+              },
+              {
+                "long": "hidden",
+                "description": "text hidden flag. Valid only with the --text option",
+                "inherit": false
+              },
+              {
+                "long": "password",
+                "description": "optional password to access this Send. Can also be specified in JSON",
+                "inherit": false,
+                "value": {
+                  "name": "password",
+                  "description": "password to secure the Send"
+                },
+                "exclusiveGroup": "bw.password-source"
+              },
+              {
+                "short": "h",
+                "long": "help",
+                "description": "display help for the create sub-command",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "encodedjson",
+                  "description": "encoded JSON to be uploaded",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "edit",
+            "description": "edit a Send",
+            "options": [
+              {
+                "long": "itemid",
+                "description": "overrides the itemId provided in [encodedJSON]",
+                "inherit": false,
+                "value": {
+                  "name": "itemid",
+                  "description": "itemid"
+                }
+              },
+              {
+                "short": "h",
+                "long": "help",
+                "description": "display help for the edit sub-command",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "encodedjson",
+                  "description": "encoded JSON",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "remove-password",
+            "description": "removes the saved password from a Send",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "display help for the remove-password sub-command",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "send-id",
+                  "description": "id of the Send to remove password from",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "delete",
+            "description": "delete a Send",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "display help for the delete sub-command",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "send-id",
+                  "description": "id of the Send to delete",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "help",
+            "description": "display help for the Send command",
+            "arguments": {
+              "states": [
+                {
+                  "name": "command",
+                  "index": 0
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "device-approval",
+        "description": "manage device approval requests sent to organizations that use SSO with trusted devices",
+        "subcommands": [
+          {
+            "name": "list",
+            "description": "list all pending requests for an organisation",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "display help for the list sub-command",
+                "inherit": false
+              },
+              {
+                "long": "organizationid",
+                "description": "the organisation id (required)",
+                "inherit": false,
+                "value": {
+                  "name": "organizationid",
+                  "description": "organisation id"
+                }
+              }
+            ]
+          },
+          {
+            "name": "approve",
+            "description": "approve a pending request",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "display help for the approve sub-command",
+                "inherit": false
+              },
+              {
+                "spellings": [
+                  "requestId"
+                ],
+                "description": "the id of the request to approve",
+                "inherit": false,
+                "value": {
+                  "name": "requestid",
+                  "description": "the id of the request to approve"
+                }
+              },
+              {
+                "long": "organizationid",
+                "description": "the organisation id (required)",
+                "inherit": false,
+                "value": {
+                  "name": "organizationid",
+                  "description": "organisation id"
+                }
+              }
+            ]
+          },
+          {
+            "name": "approve-all",
+            "description": "approve all pending requests for an organisation",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "display help for the approve-all sub-command",
+                "inherit": false
+              },
+              {
+                "long": "organizationid",
+                "description": "the organisation id (required)",
+                "inherit": false,
+                "value": {
+                  "name": "organizationid",
+                  "description": "organisation id"
+                }
+              }
+            ]
+          },
+          {
+            "name": "deny",
+            "description": "deny a pending request",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "display help for the deny sub-command",
+                "inherit": false
+              },
+              {
+                "spellings": [
+                  "requestId"
+                ],
+                "description": "the id of the request to deny",
+                "inherit": false,
+                "value": {
+                  "name": "requestid",
+                  "description": "the id of the request to approve"
+                }
+              },
+              {
+                "long": "organizationid",
+                "description": "the organisation id (required)",
+                "inherit": false,
+                "value": {
+                  "name": "organizationid",
+                  "description": "organisation id"
+                }
+              }
+            ]
+          },
+          {
+            "name": "deny-all",
+            "description": "deny all pending requests for an organisation",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "display help for the deny-all sub-command",
+                "inherit": false
+              },
+              {
+                "long": "organizationid",
+                "description": "the organisation id (required)",
+                "inherit": false,
+                "value": {
+                  "name": "organizationid",
+                  "description": "organisation id"
+                }
+              }
+            ]
+          },
+          {
+            "name": "help",
+            "description": "display help for command",
+            "arguments": {
+              "states": [
+                {
+                  "name": "command",
+                  "index": 0
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "receive",
+        "description": "access a bitwarden Send from a url",
+        "options": [
+          {
+            "long": "password",
+            "description": "password needed to access the Send",
+            "inherit": false,
+            "value": {
+              "name": "password",
+              "description": "password for Send"
+            },
+            "exclusiveGroup": "bw.password-source"
+          },
+          {
+            "long": "passwordenv",
+            "description": "environment variable storing the Send's password",
+            "inherit": false,
+            "value": {
+              "name": "passwordenv",
+              "description": "environment variable containing Send's password"
+            },
+            "exclusiveGroup": "bw.password-source"
+          },
+          {
+            "long": "passwordfile",
+            "description": "path to a file containing the Send's password as its first line",
+            "inherit": false,
+            "value": {
+              "name": "passwordfile",
+              "description": "file containing Send's password",
+              "provider": "builtin.files"
+            },
+            "exclusiveGroup": "bw.password-source"
+          },
+          {
+            "long": "obj",
+            "description": "return the Send's JSON object rather than the Send's content",
+            "inherit": false
+          },
+          {
+            "long": "output",
+            "description": "specify a file path to save a File-type Send to",
+            "inherit": false,
+            "value": {
+              "name": "location",
+              "description": "path to save File-type Send",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "display help for the receive sub-command",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "send-url",
+              "description": "url of Send to download",
+              "index": 0,
+              "provider": "builtin.files"
+            }
+          ]
+        }
+      },
+      {
+        "name": "help",
+        "description": "display help for the bitwarden cli tool",
+        "arguments": {
+          "states": [
+            {
+              "name": "command",
+              "description": "subcommand to display help for",
+              "index": 0,
+              "values": [
+                "login",
+                "logout",
+                "lock",
+                "unlock",
+                "sync",
+                "generate",
+                "encode",
+                "config",
+                "update",
+                "completion",
+                "status",
+                "serve",
+                "list",
+                "get",
+                "create",
+                "edit",
+                "delete",
+                "restore",
+                "move",
+                "confirm",
+                "import",
+                "export",
+                "share",
+                "send",
+                "receive",
+                "device-approval"
+              ]
+            }
+          ]
+        }
+      }
+    ],
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "builtin.directories": {
+        "builtin": "directories"
+      }
+    },
+    "description": "manage bitwarden vaults"
+  }
+}
