@@ -1,0 +1,359 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "blitz",
+    "description": "manage blitz.js applications",
+    "subcommands": [
+      {
+        "name": "build",
+        "aliases": [
+          "b"
+        ],
+        "description": "creates a production build"
+      },
+      {
+        "name": "codegen",
+        "aliases": [
+          "cg"
+        ],
+        "description": "generates Routes Manifest"
+      },
+      {
+        "name": "console",
+        "aliases": [
+          "c"
+        ],
+        "description": "run the blitz console REPL"
+      },
+      {
+        "name": "db",
+        "description": "run database commands",
+        "arguments": {
+          "states": [
+            {
+              "name": "command",
+              "description": "run specific db command",
+              "index": 0,
+              "values": [
+                {
+                  "value": "seed",
+                  "description": "Generates seeded data in database via Prisma 2. You need db/seeds.ts or db/seeds/index.ts"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "name": "dev",
+        "aliases": [
+          "d"
+        ],
+        "description": "start a development server",
+        "options": [
+          {
+            "short": "p",
+            "long": "port",
+            "description": "set port number",
+            "inherit": false,
+            "value": {
+              "name": "port"
+            }
+          },
+          {
+            "short": "H",
+            "long": "hostname",
+            "description": "set server hostname",
+            "inherit": false,
+            "value": {
+              "name": "hostname"
+            }
+          },
+          {
+            "long": "inspect",
+            "description": "enable the Node.js inspector",
+            "inherit": false
+          },
+          {
+            "long": "no-incremental-build",
+            "description": "disable incremental build and start from a fresh cache",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "export",
+        "aliases": [
+          "e"
+        ],
+        "description": "exports a static page",
+        "options": [
+          {
+            "short": "o",
+            "long": "outdir",
+            "description": "set the output dir (defaults to 'out')",
+            "inherit": false,
+            "value": {
+              "name": "outdir",
+              "provider": "builtin.directories"
+            }
+          }
+        ]
+      },
+      {
+        "name": "generate",
+        "aliases": [
+          "g"
+        ],
+        "description": "generate new files for your blitz project",
+        "options": [
+          {
+            "short": "c",
+            "long": "context",
+            "description": "provide a context folder within which we'll place the generated files for better code organization. You can",
+            "inherit": false,
+            "value": {
+              "name": "context",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "short": "p",
+            "long": "parent",
+            "description": "specify a parent model to be used for generating nested routes for dependent data when generating pages, or",
+            "inherit": false,
+            "value": {
+              "name": "parent"
+            }
+          },
+          {
+            "short": "d",
+            "long": "dry-run",
+            "description": "show what files will be created without writing them to disk",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "type",
+              "description": "what files to generate",
+              "index": 0,
+              "values": [
+                "all",
+                "crud",
+                "model",
+                "pages",
+                "queries",
+                "query",
+                "mutations",
+                "mutation",
+                "resource"
+              ]
+            },
+            {
+              "name": "model",
+              "description": "the name of your model, like \"user\". Can be singular or plural - same result",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "help",
+        "aliases": [
+          "h"
+        ],
+        "description": "display help for <%= config.bin %>",
+        "options": [
+          {
+            "long": "all",
+            "description": "see all commands in cli",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "command",
+              "description": "command to show help for",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "install",
+        "aliases": [
+          "i"
+        ],
+        "description": "install a Recipe into your blitz app",
+        "arguments": {
+          "states": [
+            {
+              "name": "recipe",
+              "description": "name of a blitz recipe from @blitzjs/blitz/recipes, or a file path to a local recipe definition",
+              "index": 0,
+              "provider": "builtin.files"
+            },
+            {
+              "name": "recipe-flags",
+              "description": "a list of flags to pass to the recipe. blitz will only parse these in the form key=value",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "new",
+        "description": "create a new blitz project",
+        "options": [
+          {
+            "long": "npm",
+            "description": "use npm as the package manager",
+            "inherit": false,
+            "exclusiveGroup": "blitz.package-manager"
+          },
+          {
+            "long": "yarn",
+            "description": "use yarn as the package manager",
+            "inherit": false,
+            "exclusiveGroup": "blitz.package-manager"
+          },
+          {
+            "long": "form",
+            "description": "a form library",
+            "inherit": false,
+            "value": {
+              "name": "form",
+              "values": [
+                "react-final-form",
+                "react-hook-form",
+                "formik"
+              ]
+            }
+          },
+          {
+            "short": "d",
+            "long": "dry-run",
+            "description": "show what files will be created without writing them to disk",
+            "inherit": false
+          },
+          {
+            "long": "no-git",
+            "description": "skip git repository creation",
+            "inherit": false
+          },
+          {
+            "long": "skip-upgrade",
+            "description": "skip blitz upgrade if outdated",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "name",
+              "description": "name of your new project",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "prisma",
+        "aliases": [
+          "p"
+        ],
+        "description": "loads env variables then proxies all args to prisma cli"
+      },
+      {
+        "name": "routes",
+        "aliases": [
+          "r"
+        ],
+        "description": "display all blitz url Routes"
+      },
+      {
+        "name": "start",
+        "aliases": [
+          "s"
+        ],
+        "description": "start the production server",
+        "options": [
+          {
+            "short": "p",
+            "long": "port",
+            "description": "set port number",
+            "inherit": false,
+            "value": {
+              "name": "port"
+            }
+          },
+          {
+            "short": "H",
+            "long": "hostname",
+            "description": "set server hostname",
+            "inherit": false,
+            "value": {
+              "name": "hostname"
+            }
+          },
+          {
+            "long": "inspect",
+            "description": "enable the Node.js inspector",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "autocomplete",
+        "description": "display autocomplete installation instructions",
+        "options": [
+          {
+            "short": "r",
+            "long": "refresh-cache",
+            "description": "refresh cache (ignores displaying instructions)",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "shell",
+              "description": "shell type",
+              "index": 0,
+              "values": [
+                "zsh",
+                "bash"
+              ]
+            }
+          ]
+        }
+      }
+    ],
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "builtin.directories": {
+        "builtin": "directories"
+      }
+    },
+    "options": [
+      {
+        "short": "v",
+        "long": "version",
+        "description": "show version",
+        "inherit": false
+      },
+      {
+        "short": "h",
+        "long": "help",
+        "description": "show help",
+        "inherit": false
+      }
+    ]
+  }
+}
