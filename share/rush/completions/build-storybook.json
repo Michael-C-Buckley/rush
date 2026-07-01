@@ -1,0 +1,75 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "build-storybook",
+    "description": "build a storybook site",
+    "options": [
+      {
+        "short": "o",
+        "long": "output-dir",
+        "description": "directory where to store built files",
+        "inherit": false,
+        "value": {
+          "name": "directory",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "short": "w",
+        "long": "watch",
+        "description": "enables watch mode",
+        "inherit": false
+      },
+      {
+        "long": "loglevel",
+        "description": "controls level of logging during build",
+        "inherit": false,
+        "value": {
+          "name": "level",
+          "values": [
+            "silly",
+            "verbose",
+            "info",
+            "warn",
+            "error",
+            "silent"
+          ]
+        }
+      },
+      {
+        "short": "c",
+        "long": "config-dir",
+        "description": "set storybook config directory",
+        "inherit": false,
+        "value": {
+          "name": "directory",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "docs",
+        "description": "build documentation only",
+        "inherit": false
+      },
+      {
+        "long": "debug-webpack",
+        "description": "display final webpack config",
+        "inherit": false
+      },
+      {
+        "long": "quiet",
+        "description": "suppress verbose build output",
+        "inherit": false
+      }
+    ],
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
