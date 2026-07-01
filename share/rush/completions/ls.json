@@ -1,0 +1,81 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "ls",
+    "description": "list directory contents",
+    "providers": {
+      "builtin.files": { "builtin": "files" },
+      "ls.color-modes": {
+        "values": [
+          { "value": "always", "description": "always output color" },
+          { "value": "yes", "description": "always output color" },
+          { "value": "force", "description": "always output color" },
+          { "value": "auto", "description": "color only on supported terminals" },
+          { "value": "never", "description": "never output color" },
+          { "value": "no", "description": "never output color" },
+          { "value": "none", "description": "never output color" }
+        ]
+      }
+    },
+    "options": [
+      { "short": "@", "description": "show extended attribute keys and sizes" },
+      { "short": "1", "description": "list one entry per line" },
+      { "short": "A", "description": "list almost all entries" },
+      { "short": "a", "description": "include hidden entries" },
+      { "short": "B", "description": "print non-printable characters as octal escapes" },
+      { "short": "b", "description": "print non-printable characters with C escapes" },
+      { "short": "C", "description": "list entries in columns" },
+      { "short": "c", "description": "sort or print by status-change time" },
+      { "short": "d", "description": "list directories themselves" },
+      { "short": "e", "description": "show access control lists" },
+      { "short": "F", "description": "append file type indicators" },
+      { "short": "f", "description": "do not sort; imply -a" },
+      { "short": "G", "description": "enable color output" },
+      { "short": "g", "description": "long format without owner" },
+      { "short": "H", "description": "follow command-line symlinks" },
+      { "short": "h", "description": "use human-readable sizes with -l" },
+      { "short": "i", "description": "show inode numbers" },
+      { "short": "k", "description": "show block counts in kibibytes" },
+      { "short": "L", "description": "follow symlinks" },
+      { "short": "l", "description": "use long listing format" },
+      { "short": "m", "description": "separate entries with commas" },
+      { "short": "n", "description": "show numeric user and group ids" },
+      { "short": "O", "description": "show file flags" },
+      { "short": "o", "description": "long format without group" },
+      { "short": "P", "description": "do not follow symlinks" },
+      { "short": "p", "description": "append slash to directories" },
+      { "short": "q", "description": "print non-graphic characters as ?" },
+      { "short": "R", "description": "list subdirectories recursively" },
+      { "short": "r", "description": "reverse sort order" },
+      { "short": "S", "description": "sort by size" },
+      { "short": "s", "description": "show allocated blocks" },
+      { "short": "T", "description": "show complete timestamp with -l" },
+      { "short": "t", "description": "sort by modification time" },
+      { "short": "u", "description": "use access time" },
+      { "short": "U", "description": "use creation time" },
+      { "short": "v", "description": "print non-graphic characters unchanged" },
+      { "short": "W", "description": "show whiteouts" },
+      { "short": "w", "description": "print non-printable characters raw" },
+      { "short": "x", "description": "list columns across rows" },
+      { "short": "%", "description": "mark dataless files" },
+      { "short": ",", "requires": ["-l"], "description": "group file sizes with thousands separators" },
+      {
+        "long": "color",
+        "value": { "name": "when", "style": "equals", "provider": "ls.color-modes" },
+        "description": "choose when to use color output"
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "path",
+          "index": 0,
+          "repeatable": true,
+          "provider": "builtin.files",
+          "description": "path to list"
+        }
+      ]
+    }
+  }
+}

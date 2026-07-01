@@ -147,6 +147,9 @@
         "repeatable": {
           "type": "boolean"
         },
+        "inherit": {
+          "type": "boolean"
+        },
         "exclusiveGroup": {
           "$ref": "#/$defs/name"
         },

@@ -71,11 +71,14 @@
     <span class="str">"provider"</span>: <span class="str">"builtin.directories"</span>
   },
   <span class="str">"repeatable"</span>: <span class="kw">true</span>,
+  <span class="str">"inherit"</span>: <span class="kw">false</span>,
   <span class="str">"priority"</span>: <span class="kw">10</span>,
   <span class="str">"description"</span>: <span class="str">"run from path"</span>
 }</pre>
 
   <p><code>spellings</code> is for literal option tokens that do not fit short or long sugar, such as single-dash long options or plus-prefixed toggles. <code>value</code> may be one value object or an array of value objects for multi-word option values.</p>
+
+  <p><code>inherit</code> controls whether an option remains available below subcommands. Omit it for the engine default, or set it to <code>false</code> for options that only apply to the command object where they are defined.</p>
 
   <p><code>priority</code> is a signed 8-bit ranking hint. Omit it for <code>0</code>. Use positive values to promote candidates and negative values to derank fallbacks.</p>
 
