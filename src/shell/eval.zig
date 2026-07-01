@@ -3498,6 +3498,7 @@ fn appendPathnameExpandedPattern(shell: anytype, fields: *std.ArrayList([]const 
         try fields.append(shell.scratchAllocator(), pattern.text);
         return;
     }
+    if (try appendFinalPathnameExpansion(shell, fields, pattern)) return;
 
     var matches: std.ArrayList([]const u8) = .empty;
     const allocator = shell.scratchAllocator();
@@ -3509,6 +3510,49 @@ fn appendPathnameExpandedPattern(shell: anytype, fields: *std.ArrayList([]const 
     }
     std.mem.sort([]const u8, matches.items, {}, stringLessThan);
     try fields.appendSlice(allocator, matches.items);
+}
+
+const FinalPathnamePattern = struct {
+    prefix: []const u8,
+    component: PathnamePattern,
+};
+
+fn appendFinalPathnameExpansion(shell: anytype, fields: *std.ArrayList([]const u8), pattern: PathnamePattern) !bool {
+    const final = finalPathnamePattern(pattern) orelse return false;
+    const allocator = shell.scratchAllocator();
+    const directory_path = if (final.prefix.len == 0) "." else final.prefix;
+    const directory = shell.host.listDir(allocator, directory_path) catch {
+        try fields.append(allocator, pattern.text);
+        return true;
+    };
+
+    var names: std.ArrayList([]const u8) = .empty;
+    try appendMatchingEntryNames(allocator, &names, final.component, directory.entries);
+    if (names.items.len == 0) {
+        try fields.append(allocator, pattern.text);
+        return true;
+    }
+
+    std.mem.sort([]const u8, names.items, {}, stringLessThan);
+    try fields.ensureUnusedCapacity(allocator, names.items.len);
+    for (names.items) |name| {
+        const field = if (final.prefix.len == 0) name else try joinPathComponent(allocator, final.prefix, name);
+        fields.appendAssumeCapacity(field);
+    }
+    return true;
+}
+
+fn finalPathnamePattern(pattern: PathnamePattern) ?FinalPathnamePattern {
+    const slash_index = std.mem.lastIndexOfScalar(u8, pattern.text, '/');
+    if (slash_index) |index| {
+        if (index == pattern.text.len - 1) return null;
+        const prefix_end = if (index == 0) 1 else index;
+        const prefix = pattern.slice(0, prefix_end);
+        if (containsPatternMeta(prefix)) return null;
+        const component = pattern.slice(index + 1, pattern.text.len);
+        return .{ .prefix = prefix.text, .component = component };
+    }
+    return .{ .prefix = "", .component = pattern };
 }
 
 fn expandPathnamePattern(
@@ -3597,6 +3641,27 @@ fn expandPathnamePattern(
     }
 }
 
+fn appendMatchingEntryNames(
+    allocator: std.mem.Allocator,
+    names: *std.ArrayList([]const u8),
+    component: PathnamePattern,
+    entries: []const host_mod.DirectoryEntry,
+) error{OutOfMemory}!void {
+    var saw_dot = false;
+    var saw_dotdot = false;
+    for (entries) |entry| {
+        if (std.mem.eql(u8, entry.name, ".")) saw_dot = true;
+        if (std.mem.eql(u8, entry.name, "..")) saw_dotdot = true;
+        if (entry.name[0] == '.' and component.text[0] != '.') continue;
+        if (!globMatches(component, entry.name)) continue;
+        try names.append(allocator, entry.name);
+    }
+    if (component.text[0] == '.') {
+        if (!saw_dot and globMatches(component, ".")) try names.append(allocator, ".");
+        if (!saw_dotdot and globMatches(component, "..")) try names.append(allocator, "..");
+    }
+}
+
 fn appendSyntheticDotPathnameMatch(
     shell: anytype,
     allocator: std.mem.Allocator,
@@ -3620,8 +3685,17 @@ fn appendSyntheticDotPathnameMatch(
 
 fn joinPathComponent(allocator: std.mem.Allocator, prefix: []const u8, component: []const u8) ![]const u8 {
     if (prefix.len == 0) return allocator.dupe(u8, component);
-    if (std.mem.eql(u8, prefix, "/")) return std.fmt.allocPrint(allocator, "/{s}", .{component});
-    return std.fmt.allocPrint(allocator, "{s}/{s}", .{ prefix, component });
+    const needs_separator = !std.mem.eql(u8, prefix, "/");
+    const len = prefix.len + @intFromBool(needs_separator) + component.len;
+    const path = try allocator.alloc(u8, len);
+    @memcpy(path[0..prefix.len], prefix);
+    var index = prefix.len;
+    if (needs_separator) {
+        path[index] = '/';
+        index += 1;
+    }
+    @memcpy(path[index..][0..component.len], component);
+    return path;
 }
 
 fn pathIsDirectory(shell: anytype, path: []const u8, kind: host_mod.FileKind) !bool {
