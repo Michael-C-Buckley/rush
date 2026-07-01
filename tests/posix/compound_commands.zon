@@ -380,6 +380,34 @@
             .status = 0,
         },
         .{
+            .name = "for command word list accepts reserved word tokens before separator",
+            .script =
+            \\for x in ! { } case do done elif else esac fi for if then until while; do
+            \\    printf '<%s>\n' "$x"
+            \\done
+            ,
+            .stdout =
+            \\<!>
+            \\<{>
+            \\<}>
+            \\<case>
+            \\<do>
+            \\<done>
+            \\<elif>
+            \\<else>
+            \\<esac>
+            \\<fi>
+            \\<for>
+            \\<if>
+            \\<then>
+            \\<until>
+            \\<while>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "for command preserves semantic output before inherited external output per iteration",
             .script =
             \\for x in a b

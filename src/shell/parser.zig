@@ -250,8 +250,8 @@ const Parser = struct {
         if (self.eatReserved(.in_kw) != null) {
             var word_list: std.ArrayList(ast.Word) = .empty;
             errdefer word_list.deinit(self.allocator);
-            while (!self.at(.eof) and !self.at(.semicolon) and !self.at(.newline) and !self.atReserved(.do_kw)) {
-                try word_list.append(self.allocator, try self.parseWordToken(self.eat(.word) orelse return error.UnexpectedToken));
+            while (!self.at(.eof) and !self.at(.semicolon) and !self.at(.newline)) {
+                try word_list.append(self.allocator, try self.parseWordToken(self.eatForWordListWord() orelse return error.UnexpectedToken));
             }
             words = .{ .words = try word_list.toOwnedSlice(self.allocator) };
         }
@@ -860,6 +860,14 @@ const Parser = struct {
         if (self.eat(.word)) |word| return word;
         if (!self.at(.bang)) return null;
         return self.eatOperatorAsWord();
+    }
+
+    fn eatForWordListWord(self: *Parser) ?token.Token {
+        if (self.eat(.word)) |word| return word;
+        return switch (self.tokens[self.index].kind) {
+            .bang, .left_brace, .right_brace => self.eatOperatorAsWord(),
+            else => null,
+        };
     }
 
     fn eatOperatorAsWord(self: *Parser) token.Token {
