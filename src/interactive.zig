@@ -37,8 +37,10 @@ pub fn run(
     });
     defer sh.deinit();
 
+    const prompted_stdin = !sh.host.isTerminalFd(.stdin);
+
     var source_id: shell.source.SourceId = 1;
-    if (try sourceStartup(&sh, &source_id, options.login)) |status| return status;
+    if (try sourceStartup(&sh, &source_id, options.login, !prompted_stdin)) |status| return status;
 
     var command_history = history.History.init(allocator);
     defer command_history.deinit();
@@ -55,6 +57,10 @@ pub fn run(
     }
     command_history.session_id = history.sessionId(allocator, io) catch "";
     var history_service = history.InteractiveHistoryService.init(&command_history);
+
+    if (prompted_stdin) {
+        return runPromptedStdin(allocator, &sh, &source_id);
+    }
 
     var terminal = editor.driver.TerminalSession.init(allocator, io) catch {
         try sh.host.writeAll(.stderr, "rush: cannot initialize terminal\n");
@@ -133,8 +139,71 @@ pub fn run(
     }
 }
 
-fn sourceStartup(sh: *RushShell, source_id: *shell.source.SourceId, login: bool) !?u8 {
-    if (try sourceStartupText(sh, source_id, "default_config", default_config)) |status| return status;
+fn runPromptedStdin(
+    allocator: std.mem.Allocator,
+    sh: *RushShell,
+    source_id: *shell.source.SourceId,
+) !u8 {
+    while (true) {
+        const prompt_text = try promptedStdinPrompt(allocator, sh);
+        defer allocator.free(prompt_text);
+        try sh.host.writeAll(.stderr, prompt_text);
+
+        const line = try readInteractiveStdinLine(allocator, sh) orelse {
+            return shell.eval.runExitTrap(sh, sh.state.last_status) catch {
+                try sh.host.writeAll(.stderr, "rush: shell error\n");
+                return 2;
+            };
+        };
+        defer allocator.free(line);
+
+        const src: shell.source.Source = .{
+            .id = source_id.*,
+            .kind = .interactive,
+            .name = "interactive",
+            .text = line,
+        };
+        source_id.* +%= 1;
+
+        const evaluated = sh.evalSource(src) catch {
+            try sh.host.writeAll(.stderr, "rush: shell error\n");
+            continue;
+        };
+        switch (evaluated.flow) {
+            .exit => |status| return shell.eval.runExitTrap(sh, status) catch {
+                try sh.host.writeAll(.stderr, "rush: shell error\n");
+                return 2;
+            },
+            else => {},
+        }
+    }
+}
+
+fn readInteractiveStdinLine(allocator: std.mem.Allocator, sh: *RushShell) !?[]const u8 {
+    var line: std.ArrayList(u8) = .empty;
+    defer line.deinit(allocator);
+
+    while (true) {
+        var byte: [1]u8 = undefined;
+        const read_len = try sh.host.read(.stdin, &byte);
+        if (read_len == 0) {
+            if (line.items.len == 0) return null;
+            return try line.toOwnedSlice(allocator);
+        }
+        if (byte[0] == '\n') return try line.toOwnedSlice(allocator);
+        try line.append(allocator, byte[0]);
+    }
+}
+
+fn sourceStartup(
+    sh: *RushShell,
+    source_id: *shell.source.SourceId,
+    login: bool,
+    source_default_config: bool,
+) !?u8 {
+    if (source_default_config) {
+        if (try sourceStartupText(sh, source_id, "default_config", default_config)) |status| return status;
+    }
 
     if (envValue(sh.env, "ENV")) |env_path| {
         if (try sourceStartupFileIfExists(sh, source_id, env_path)) |status| return status;
@@ -225,6 +294,12 @@ fn prompt(allocator: std.mem.Allocator, sh: *RushShell) ![]const u8 {
     if (sh.state.getVariable("PS1")) |variable| return allocator.dupe(u8, variable.value);
     if (envValue(sh.env, "PS1")) |value| return allocator.dupe(u8, value);
     return allocator.dupe(u8, "rush> ");
+}
+
+fn promptedStdinPrompt(allocator: std.mem.Allocator, sh: *RushShell) ![]const u8 {
+    if (sh.state.getVariable("PS1")) |variable| return allocator.dupe(u8, variable.value);
+    if (envValue(sh.env, "PS1")) |value| return allocator.dupe(u8, value);
+    return allocator.dupe(u8, "$ ");
 }
 
 fn expandRushAbbreviation(
