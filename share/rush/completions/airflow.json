@@ -1,0 +1,4507 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "airflow",
+    "description": "manage apache airflow",
+    "options": [
+      {
+        "short": "h",
+        "long": "help",
+        "description": "show help",
+        "inherit": false
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "celery",
+        "description": "celery components",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "flower",
+            "description": "start a Celery Flower",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              },
+              {
+                "short": "A",
+                "long": "basic-auth",
+                "description": "securing Flower with Basic Authentication. Accepts user:password pa...",
+                "inherit": false,
+                "value": {
+                  "name": "user-password",
+                  "description": "basic auth user:password pair",
+                  "grammar": {
+                    "kind": "keyValue",
+                    "separator": ":",
+                    "key": {
+                      "name": "user"
+                    },
+                    "value": {
+                      "name": "password"
+                    }
+                  }
+                }
+              },
+              {
+                "short": "a",
+                "long": "broker-api",
+                "description": "broker API",
+                "inherit": false,
+                "value": {
+                  "name": "broker_api",
+                  "description": "broker API"
+                }
+              },
+              {
+                "short": "D",
+                "long": "daemon",
+                "description": "daemonize instead of running in the foreground",
+                "inherit": false
+              },
+              {
+                "short": "c",
+                "long": "flower-conf",
+                "description": "configuration file for flower",
+                "inherit": false,
+                "value": {
+                  "name": "flower_conf",
+                  "description": "configuration file for flower"
+                }
+              },
+              {
+                "short": "H",
+                "long": "hostname",
+                "description": "set the hostname on which to run the server",
+                "inherit": false,
+                "value": {
+                  "name": "hostname",
+                  "description": "set the hostname on which to run the server"
+                }
+              },
+              {
+                "short": "l",
+                "long": "log-file",
+                "description": "location of the log file",
+                "inherit": false,
+                "value": {
+                  "name": "log_file",
+                  "description": "location of the log file"
+                }
+              },
+              {
+                "long": "pid",
+                "description": "pID file location",
+                "inherit": false,
+                "value": {
+                  "name": "pid",
+                  "description": "pID file location",
+                  "required": false,
+                  "style": "optional"
+                }
+              },
+              {
+                "short": "p",
+                "long": "port",
+                "description": "the port on which to run the server",
+                "inherit": false,
+                "value": {
+                  "name": "port",
+                  "description": "the port on which to run the server"
+                }
+              },
+              {
+                "long": "stderr",
+                "description": "redirect stderr to this file",
+                "inherit": false,
+                "value": {
+                  "name": "stderr",
+                  "description": "redirect stderr to this file"
+                }
+              },
+              {
+                "long": "stdout",
+                "description": "redirect stdout to this file",
+                "inherit": false,
+                "value": {
+                  "name": "stdout",
+                  "description": "redirect stdout to this file"
+                }
+              },
+              {
+                "short": "u",
+                "long": "url-prefix",
+                "description": "uRL prefix for Flower",
+                "inherit": false,
+                "value": {
+                  "name": "url_prefix",
+                  "description": "uRL prefix for Flower"
+                }
+              }
+            ]
+          },
+          {
+            "name": "stop",
+            "description": "stop the Celery worker gracefully",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              },
+              {
+                "long": "pid",
+                "description": "pID file location",
+                "inherit": false,
+                "value": {
+                  "name": "pid",
+                  "description": "pID file location",
+                  "required": false,
+                  "style": "optional"
+                }
+              }
+            ]
+          },
+          {
+            "name": "worker",
+            "description": "start a Celery worker node",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              },
+              {
+                "short": "a",
+                "long": "autoscale",
+                "description": "minimum and Maximum number of worker to autoscale",
+                "inherit": false,
+                "value": {
+                  "name": "autoscale",
+                  "description": "minimum and Maximum number of worker to autoscale"
+                }
+              },
+              {
+                "short": "H",
+                "long": "celery-hostname",
+                "description": "set the hostname of celery worker if you have multiple workers on a...",
+                "inherit": false,
+                "value": {
+                  "name": "celery_hostname",
+                  "description": "set the hostname of celery worker if you have multiple workers on a..."
+                }
+              },
+              {
+                "short": "c",
+                "long": "concurrency",
+                "description": "the number of worker processes",
+                "inherit": false,
+                "value": {
+                  "name": "concurrency",
+                  "description": "the number of worker processes"
+                }
+              },
+              {
+                "short": "D",
+                "long": "daemon",
+                "description": "daemonize instead of running in the foreground",
+                "inherit": false
+              },
+              {
+                "short": "l",
+                "long": "log-file",
+                "description": "location of the log file",
+                "inherit": false,
+                "value": {
+                  "name": "log_file",
+                  "description": "location of the log file"
+                }
+              },
+              {
+                "long": "pid",
+                "description": "pID file location",
+                "inherit": false,
+                "value": {
+                  "name": "pid",
+                  "description": "pID file location",
+                  "required": false,
+                  "style": "optional"
+                }
+              },
+              {
+                "short": "q",
+                "long": "queues",
+                "description": "comma delimited list of queues to serve",
+                "inherit": false,
+                "value": {
+                  "name": "queues",
+                  "description": "comma delimited list of queues to serve"
+                }
+              },
+              {
+                "short": "s",
+                "long": "skip-serve-logs",
+                "description": "don't start the serve logs process along with the workers",
+                "inherit": false
+              },
+              {
+                "long": "stderr",
+                "description": "redirect stderr to this file",
+                "inherit": false,
+                "value": {
+                  "name": "stderr",
+                  "description": "redirect stderr to this file"
+                }
+              },
+              {
+                "long": "stdout",
+                "description": "redirect stdout to this file",
+                "inherit": false,
+                "value": {
+                  "name": "stdout",
+                  "description": "redirect stdout to this file"
+                }
+              },
+              {
+                "short": "u",
+                "long": "umask",
+                "description": "set the umask of celery worker in daemon mode",
+                "inherit": false,
+                "value": {
+                  "name": "umask",
+                  "description": "set the umask of celery worker in daemon mode"
+                }
+              },
+              {
+                "long": "without-gossip",
+                "description": "don't subscribe to other workers events",
+                "inherit": false
+              },
+              {
+                "long": "without-mingle",
+                "description": "don't synchronize with other workers at start-up",
+                "inherit": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "cheat-sheet",
+        "description": "display cheat sheet",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          },
+          {
+            "short": "v",
+            "long": "verbose",
+            "description": "make logging output more verbose",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "config",
+        "description": "view configuration",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "get-value",
+            "description": "print the value of the configuration",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "section",
+                  "description": "The section name",
+                  "index": 0
+                },
+                {
+                  "name": "option",
+                  "description": "The option name",
+                  "index": 1
+                }
+              ]
+            }
+          },
+          {
+            "name": "list",
+            "description": "list options for the configuration",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              },
+              {
+                "long": "color",
+                "description": "do emit colored output (default: auto)",
+                "inherit": false,
+                "value": {
+                  "name": "color",
+                  "description": "do emit colored output (default: auto)",
+                  "provider": {
+                    "values": [
+                      "off",
+                      "auto",
+                      "on"
+                    ]
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "connections",
+        "description": "manage connections",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "add",
+            "description": "add a connection",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              },
+              {
+                "long": "conn-description",
+                "description": "connection description, optional when adding a connection",
+                "inherit": false,
+                "value": {
+                  "name": "conn_description",
+                  "description": "connection description, optional when adding a connection"
+                }
+              },
+              {
+                "long": "conn-extra",
+                "description": "connection `Extra` field, optional when adding a connection",
+                "inherit": false,
+                "value": {
+                  "name": "conn_extra",
+                  "description": "connection `Extra` field, optional when adding a connection"
+                }
+              },
+              {
+                "long": "conn-host",
+                "description": "connection host, optional when adding a connection",
+                "inherit": false,
+                "value": {
+                  "name": "conn_host",
+                  "description": "connection host, optional when adding a connection"
+                }
+              },
+              {
+                "long": "conn-json",
+                "description": "connection JSON, required to add a connection using JSON representa...",
+                "inherit": false,
+                "value": {
+                  "name": "conn_json",
+                  "description": "connection JSON, required to add a connection using JSON representa..."
+                }
+              },
+              {
+                "long": "conn-login",
+                "description": "connection login, optional when adding a connection",
+                "inherit": false,
+                "value": {
+                  "name": "conn_login",
+                  "description": "connection login, optional when adding a connection"
+                }
+              },
+              {
+                "long": "conn-password",
+                "description": "connection password, optional when adding a connection",
+                "inherit": false,
+                "value": {
+                  "name": "conn_password",
+                  "description": "connection password, optional when adding a connection"
+                }
+              },
+              {
+                "long": "conn-port",
+                "description": "connection port, optional when adding a connection",
+                "inherit": false,
+                "value": {
+                  "name": "conn_port",
+                  "description": "connection port, optional when adding a connection"
+                }
+              },
+              {
+                "long": "conn-schema",
+                "description": "connection schema, optional when adding a connection",
+                "inherit": false,
+                "value": {
+                  "name": "conn_schema",
+                  "description": "connection schema, optional when adding a connection"
+                }
+              },
+              {
+                "long": "conn-type",
+                "description": "connection type, required to add a connection without conn_uri",
+                "inherit": false,
+                "value": {
+                  "name": "conn_type",
+                  "description": "connection type, required to add a connection without conn_uri"
+                }
+              },
+              {
+                "long": "conn-uri",
+                "description": "connection URI, required to add a connection without conn_type",
+                "inherit": false,
+                "value": {
+                  "name": "conn_uri",
+                  "description": "connection URI, required to add a connection without conn_type"
+                }
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "conn_id",
+                  "description": "Connection id, required to get/add/delete a connection",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "delete",
+            "description": "delete a connection",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              },
+              {
+                "long": "color",
+                "description": "do emit colored output (default: auto)",
+                "inherit": false,
+                "value": {
+                  "name": "color",
+                  "description": "do emit colored output (default: auto)",
+                  "provider": {
+                    "values": [
+                      "off",
+                      "auto",
+                      "on"
+                    ]
+                  }
+                }
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "conn_id",
+                  "description": "Connection id, required to get/add/delete a connection",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "export",
+            "description": "export all connections",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              },
+              {
+                "long": "file-format",
+                "description": "file format for the export",
+                "inherit": false,
+                "value": {
+                  "name": "file_format",
+                  "description": "file format for the export",
+                  "provider": {
+                    "values": [
+                      "json",
+                      "yaml",
+                      "env"
+                    ]
+                  }
+                }
+              },
+              {
+                "long": "format",
+                "description": "deprecated -- use `--file-format` instead. File format to use for t...",
+                "inherit": false,
+                "value": {
+                  "name": "format",
+                  "description": "deprecated -- use `--file-format` instead. File format to use for t...",
+                  "provider": {
+                    "values": [
+                      "json",
+                      "yaml",
+                      "env"
+                    ]
+                  }
+                }
+              },
+              {
+                "long": "serialization-format",
+                "description": "when exporting as `.env` format, defines how connections should be...",
+                "inherit": false,
+                "value": {
+                  "name": "serialization_format",
+                  "description": "when exporting as `.env` format, defines how connections should be...",
+                  "provider": {
+                    "values": [
+                      "json",
+                      "uri"
+                    ]
+                  }
+                }
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "file",
+                  "description": "Output file path for exporting the connections",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "get",
+            "description": "get a connection",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              },
+              {
+                "long": "color",
+                "description": "do emit colored output (default: auto)",
+                "inherit": false,
+                "value": {
+                  "name": "color",
+                  "description": "do emit colored output (default: auto)",
+                  "provider": {
+                    "values": [
+                      "off",
+                      "auto",
+                      "on"
+                    ]
+                  }
+                }
+              },
+              {
+                "short": "o",
+                "long": "output",
+                "description": "output format. Allowed values: json, yaml, plain, table (default: t...",
+                "inherit": false,
+                "value": {
+                  "name": "(table,-json,-yaml,-plain)",
+                  "description": "output format. Allowed values: json, yaml, plain, table (default: t...",
+                  "provider": {
+                    "values": [
+                      "table",
+                      "json",
+                      "yaml",
+                      "plain"
+                    ]
+                  }
+                }
+              },
+              {
+                "short": "v",
+                "long": "verbose",
+                "description": "make logging output more verbose",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "conn_id",
+                  "description": "Connection id, required to get/add/delete a connection",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "import",
+            "description": "import connections from a file",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "file",
+                  "description": "Import connections from a file",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "list",
+            "description": "list connections",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              },
+              {
+                "long": "conn-id",
+                "description": "if passed, only items with the specified connection ID will be disp...",
+                "inherit": false,
+                "value": {
+                  "name": "conn_id",
+                  "description": "if passed, only items with the specified connection ID will be disp..."
+                }
+              },
+              {
+                "short": "o",
+                "long": "output",
+                "description": "output format. Allowed values: json, yaml, plain, table (default: t...",
+                "inherit": false,
+                "value": {
+                  "name": "(table,-json,-yaml,-plain)",
+                  "description": "output format. Allowed values: json, yaml, plain, table (default: t...",
+                  "provider": {
+                    "values": [
+                      "table",
+                      "json",
+                      "yaml",
+                      "plain"
+                    ]
+                  }
+                }
+              },
+              {
+                "short": "v",
+                "long": "verbose",
+                "description": "make logging output more verbose",
+                "inherit": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "dag-processor",
+        "description": "start a standalone Dag Processor instance",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          },
+          {
+            "short": "D",
+            "long": "daemon",
+            "description": "daemonize instead of running in the foreground",
+            "inherit": false
+          },
+          {
+            "short": "p",
+            "long": "do-pickle",
+            "description": "attempt to pickle the DAG object to send over to the workers, inste...",
+            "inherit": false
+          },
+          {
+            "short": "l",
+            "long": "log-file",
+            "description": "location of the log file",
+            "inherit": false,
+            "value": {
+              "name": "log_file",
+              "description": "location of the log file"
+            }
+          },
+          {
+            "short": "n",
+            "long": "num-runs",
+            "description": "set the number of runs to execute before exiting",
+            "inherit": false,
+            "value": {
+              "name": "num_runs",
+              "description": "set the number of runs to execute before exiting"
+            }
+          },
+          {
+            "long": "pid",
+            "description": "pID file location",
+            "inherit": false,
+            "value": {
+              "name": "pid",
+              "description": "pID file location",
+              "required": false,
+              "style": "optional"
+            }
+          },
+          {
+            "long": "stderr",
+            "description": "redirect stderr to this file",
+            "inherit": false,
+            "value": {
+              "name": "stderr",
+              "description": "redirect stderr to this file"
+            }
+          },
+          {
+            "long": "stdout",
+            "description": "redirect stdout to this file",
+            "inherit": false,
+            "value": {
+              "name": "stdout",
+              "description": "redirect stdout to this file"
+            }
+          },
+          {
+            "short": "S",
+            "long": "subdir",
+            "description": "file location or directory from which to look for the dag. Defaults...",
+            "inherit": false,
+            "value": {
+              "name": "subdir",
+              "description": "file location or directory from which to look for the dag. Defaults..."
+            }
+          }
+        ]
+      },
+      {
+        "name": "dags",
+        "description": "manage DAGs",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "backfill",
+            "description": "run subsections of a DAG for a specified date range",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              },
+              {
+                "short": "c",
+                "long": "conf",
+                "description": "jSON string that gets pickled into the DagRun's conf attribute",
+                "inherit": false,
+                "value": {
+                  "name": "conf",
+                  "description": "jSON string that gets pickled into the DagRun's conf attribute"
+                }
+              },
+              {
+                "long": "continue-on-failures",
+                "description": "if set, the backfill will keep going even if some of the tasks failed",
+                "inherit": false
+              },
+              {
+                "long": "delay-on-limit",
+                "description": "amount of time in seconds to wait when the limit on maximum active...",
+                "inherit": false,
+                "value": {
+                  "name": "delay_on_limit",
+                  "description": "amount of time in seconds to wait when the limit on maximum active..."
+                }
+              },
+              {
+                "short": "x",
+                "long": "donot-pickle",
+                "description": "do not attempt to pickle the DAG object to send over to the workers...",
+                "inherit": false
+              },
+              {
+                "short": "n",
+                "long": "dry-run",
+                "description": "perform a dry run for each task. Only renders Template Fields for e...",
+                "inherit": false
+              },
+              {
+                "short": "e",
+                "long": "end-date",
+                "description": "override end_date YYYY-MM-DD",
+                "inherit": false,
+                "value": {
+                  "name": "end_date",
+                  "description": "override end_date YYYY-MM-DD"
+                }
+              },
+              {
+                "short": "i",
+                "long": "ignore-dependencies",
+                "description": "skip upstream tasks, run only the tasks matching the regexp. Only w...",
+                "inherit": false
+              },
+              {
+                "short": "I",
+                "long": "ignore-first-depends-on-past",
+                "description": "ignores depends_on_past dependencies for the first set of tasks onl...",
+                "inherit": false
+              },
+              {
+                "short": "l",
+                "long": "local",
+                "description": "run the task using the LocalExecutor",
+                "inherit": false
+              },
+              {
+                "short": "m",
+                "long": "mark-success",
+                "description": "mark jobs as succeeded without running them",
+                "inherit": false
+              },
+              {
+                "long": "pool",
+                "description": "resource pool to use",
+                "inherit": false,
+                "value": {
+                  "name": "pool",
+                  "description": "resource pool to use"
+                }
+              },
+              {
+                "long": "rerun-failed-tasks",
+                "description": "if set, the backfill will auto-rerun all the failed tasks for the b...",
+                "inherit": false
+              },
+              {
+                "long": "reset-dagruns",
+                "description": "if set, the backfill will delete existing backfill-related DAG runs...",
+                "inherit": false
+              },
+              {
+                "short": "B",
+                "long": "run-backwards",
+                "description": "if set, the backfill will run tasks from the most recent day first....",
+                "inherit": false
+              },
+              {
+                "short": "s",
+                "long": "start-date",
+                "description": "override start_date YYYY-MM-DD",
+                "inherit": false,
+                "value": {
+                  "name": "start_date",
+                  "description": "override start_date YYYY-MM-DD"
+                }
+              },
+              {
+                "short": "S",
+                "long": "subdir",
+                "description": "file location or directory from which to look for the dag. Defaults...",
+                "inherit": false,
+                "value": {
+                  "name": "subdir",
+                  "description": "file location or directory from which to look for the dag. Defaults..."
+                }
+              },
+              {
+                "short": "t",
+                "long": "task-regex",
+                "description": "the regex to filter specific task_ids to backfill (optional)",
+                "inherit": false,
+                "value": {
+                  "name": "task_regex",
+                  "description": "the regex to filter specific task_ids to backfill (optional)"
+                }
+              },
+              {
+                "long": "treat-dag-as-regex",
+                "description": "if set, dag_id will be treated as regex instead of an exact string",
+                "inherit": false
+              },
+              {
+                "short": "v",
+                "long": "verbose",
+                "description": "make logging output more verbose",
+                "inherit": false
+              },
+              {
+                "short": "y",
+                "long": "yes",
+                "description": "do not prompt to confirm. Use with care!",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "dag_id",
+                  "description": "The id of the dag",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "delete",
+            "description": "delete all DB records related to the specified DAG",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              },
+              {
+                "short": "y",
+                "long": "yes",
+                "description": "do not prompt to confirm. Use with care!",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "dag_id",
+                  "description": "The id of the dag",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "list",
+            "description": "list all the DAGs",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              },
+              {
+                "short": "o",
+                "long": "output",
+                "description": "output format. Allowed values: json, yaml, plain, table (default: t...",
+                "inherit": false,
+                "value": {
+                  "name": "(table,-json,-yaml,-plain)",
+                  "description": "output format. Allowed values: json, yaml, plain, table (default: t...",
+                  "provider": {
+                    "values": [
+                      "table",
+                      "json",
+                      "yaml",
+                      "plain"
+                    ]
+                  }
+                }
+              },
+              {
+                "short": "S",
+                "long": "subdir",
+                "description": "file location or directory from which to look for the dag. Defaults...",
+                "inherit": false,
+                "value": {
+                  "name": "subdir",
+                  "description": "file location or directory from which to look for the dag. Defaults..."
+                }
+              },
+              {
+                "short": "v",
+                "long": "verbose",
+                "description": "make logging output more verbose",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "list-import-errors",
+            "description": "list all the DAGs that have import errors",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              },
+              {
+                "short": "o",
+                "long": "output",
+                "description": "output format. Allowed values: json, yaml, plain, table (default: t...",
+                "inherit": false,
+                "value": {
+                  "name": "(table,-json,-yaml,-plain)",
+                  "description": "output format. Allowed values: json, yaml, plain, table (default: t...",
+                  "provider": {
+                    "values": [
+                      "table",
+                      "json",
+                      "yaml",
+                      "plain"
+                    ]
+                  }
+                }
+              },
+              {
+                "short": "S",
+                "long": "subdir",
+                "description": "file location or directory from which to look for the dag. Defaults...",
+                "inherit": false,
+                "value": {
+                  "name": "subdir",
+                  "description": "file location or directory from which to look for the dag. Defaults..."
+                }
+              },
+              {
+                "short": "v",
+                "long": "verbose",
+                "description": "make logging output more verbose",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "list-jobs",
+            "description": "list the jobs",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              },
+              {
+                "short": "d",
+                "long": "dag-id",
+                "description": "the id of the dag",
+                "inherit": false,
+                "value": {
+                  "name": "dag_id",
+                  "description": "the id of the dag"
+                }
+              },
+              {
+                "long": "limit",
+                "description": "return a limited number of records",
+                "inherit": false,
+                "value": {
+                  "name": "limit",
+                  "description": "return a limited number of records"
+                }
+              },
+              {
+                "short": "o",
+                "long": "output",
+                "description": "output format. Allowed values: json, yaml, plain, table (default: t...",
+                "inherit": false,
+                "value": {
+                  "name": "(table,-json,-yaml,-plain)",
+                  "description": "output format. Allowed values: json, yaml, plain, table (default: t...",
+                  "provider": {
+                    "values": [
+                      "table",
+                      "json",
+                      "yaml",
+                      "plain"
+                    ]
+                  }
+                }
+              },
+              {
+                "long": "state",
+                "description": "only list the dag runs corresponding to the state",
+                "inherit": false,
+                "value": {
+                  "name": "state",
+                  "description": "only list the dag runs corresponding to the state"
+                }
+              },
+              {
+                "short": "v",
+                "long": "verbose",
+                "description": "make logging output more verbose",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "list-runs",
+            "description": "list DAG runs given a DAG id",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              },
+              {
+                "short": "d",
+                "long": "dag-id",
+                "description": "the id of the dag",
+                "inherit": false,
+                "value": {
+                  "name": "dag_id",
+                  "description": "the id of the dag"
+                }
+              },
+              {
+                "short": "e",
+                "long": "end-date",
+                "description": "override end_date YYYY-MM-DD",
+                "inherit": false,
+                "value": {
+                  "name": "end_date",
+                  "description": "override end_date YYYY-MM-DD"
+                }
+              },
+              {
+                "long": "no-backfill",
+                "description": "filter all the backfill dagruns given the dag id",
+                "inherit": false
+              },
+              {
+                "short": "o",
+                "long": "output",
+                "description": "output format. Allowed values: json, yaml, plain, table (default: t...",
+                "inherit": false,
+                "value": {
+                  "name": "(table,-json,-yaml,-plain)",
+                  "description": "output format. Allowed values: json, yaml, plain, table (default: t...",
+                  "provider": {
+                    "values": [
+                      "table",
+                      "json",
+                      "yaml",
+                      "plain"
+                    ]
+                  }
+                }
+              },
+              {
+                "short": "s",
+                "long": "start-date",
+                "description": "override start_date YYYY-MM-DD",
+                "inherit": false,
+                "value": {
+                  "name": "start_date",
+                  "description": "override start_date YYYY-MM-DD"
+                }
+              },
+              {
+                "long": "state",
+                "description": "only list the dag runs corresponding to the state",
+                "inherit": false,
+                "value": {
+                  "name": "state",
+                  "description": "only list the dag runs corresponding to the state"
+                }
+              },
+              {
+                "short": "v",
+                "long": "verbose",
+                "description": "make logging output more verbose",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "next-execution",
+            "description": "get the next execution datetimes of a DAG",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              },
+              {
+                "short": "n",
+                "long": "num-executions",
+                "description": "the number of next execution datetimes to show",
+                "inherit": false,
+                "value": {
+                  "name": "num_executions",
+                  "description": "the number of next execution datetimes to show"
+                }
+              },
+              {
+                "short": "S",
+                "long": "subdir",
+                "description": "file location or directory from which to look for the dag. Defaults...",
+                "inherit": false,
+                "value": {
+                  "name": "subdir",
+                  "description": "file location or directory from which to look for the dag. Defaults..."
+                }
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "dag_id",
+                  "description": "The id of the dag",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "pause",
+            "description": "pause a DAG",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              },
+              {
+                "short": "S",
+                "long": "subdir",
+                "description": "file location or directory from which to look for the dag. Defaults...",
+                "inherit": false,
+                "value": {
+                  "name": "subdir",
+                  "description": "file location or directory from which to look for the dag. Defaults..."
+                }
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "dag_id",
+                  "description": "The id of the dag",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "report",
+            "description": "show DagBag loading report",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              },
+              {
+                "short": "o",
+                "long": "output",
+                "description": "output format. Allowed values: json, yaml, plain, table (default: t...",
+                "inherit": false,
+                "value": {
+                  "name": "(table,-json,-yaml,-plain)",
+                  "description": "output format. Allowed values: json, yaml, plain, table (default: t...",
+                  "provider": {
+                    "values": [
+                      "table",
+                      "json",
+                      "yaml",
+                      "plain"
+                    ]
+                  }
+                }
+              },
+              {
+                "short": "S",
+                "long": "subdir",
+                "description": "file location or directory from which to look for the dag. Defaults...",
+                "inherit": false,
+                "value": {
+                  "name": "subdir",
+                  "description": "file location or directory from which to look for the dag. Defaults..."
+                }
+              },
+              {
+                "short": "v",
+                "long": "verbose",
+                "description": "make logging output more verbose",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "reserialize",
+            "description": "reserialize all DAGs by parsing the DagBag files",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              },
+              {
+                "long": "clear-only",
+                "description": "if passed, serialized DAGs will be cleared but not reserialized",
+                "inherit": false
+              },
+              {
+                "short": "S",
+                "long": "subdir",
+                "description": "file location or directory from which to look for the dag. Defaults...",
+                "inherit": false,
+                "value": {
+                  "name": "subdir",
+                  "description": "file location or directory from which to look for the dag. Defaults..."
+                }
+              }
+            ]
+          },
+          {
+            "name": "show",
+            "description": "displays DAG's tasks with their dependencies",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              },
+              {
+                "long": "imgcat",
+                "description": "displays graph using the imgcat tool",
+                "inherit": false
+              },
+              {
+                "short": "s",
+                "long": "save",
+                "description": "saves the result to the indicated file",
+                "inherit": false,
+                "value": {
+                  "name": "save",
+                  "description": "saves the result to the indicated file"
+                }
+              },
+              {
+                "short": "S",
+                "long": "subdir",
+                "description": "file location or directory from which to look for the dag. Defaults...",
+                "inherit": false,
+                "value": {
+                  "name": "subdir",
+                  "description": "file location or directory from which to look for the dag. Defaults..."
+                }
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "dag_id",
+                  "description": "The id of the dag",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "show-dependencies",
+            "description": "displays DAGs with their dependencies",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              },
+              {
+                "long": "imgcat",
+                "description": "displays graph using the imgcat tool",
+                "inherit": false
+              },
+              {
+                "short": "s",
+                "long": "save",
+                "description": "saves the result to the indicated file",
+                "inherit": false,
+                "value": {
+                  "name": "save",
+                  "description": "saves the result to the indicated file"
+                }
+              },
+              {
+                "short": "S",
+                "long": "subdir",
+                "description": "file location or directory from which to look for the dag. Defaults...",
+                "inherit": false,
+                "value": {
+                  "name": "subdir",
+                  "description": "file location or directory from which to look for the dag. Defaults..."
+                }
+              }
+            ]
+          },
+          {
+            "name": "state",
+            "description": "get the status of a dag run",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              },
+              {
+                "short": "S",
+                "long": "subdir",
+                "description": "file location or directory from which to look for the dag. Defaults...",
+                "inherit": false,
+                "value": {
+                  "name": "subdir",
+                  "description": "file location or directory from which to look for the dag. Defaults..."
+                }
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "dag_id",
+                  "description": "The id of the dag",
+                  "index": 0
+                },
+                {
+                  "name": "execution_date",
+                  "description": "The execution date of the DAG",
+                  "index": 1
+                }
+              ]
+            }
+          },
+          {
+            "name": "test",
+            "description": "execute one single DagRun",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              },
+              {
+                "short": "c",
+                "long": "conf",
+                "description": "jSON string that gets pickled into the DagRun's conf attribute",
+                "inherit": false,
+                "value": {
+                  "name": "conf",
+                  "description": "jSON string that gets pickled into the DagRun's conf attribute"
+                }
+              },
+              {
+                "long": "imgcat-dagrun",
+                "description": "after completing the dag run, prints a diagram on the screen for th...",
+                "inherit": false
+              },
+              {
+                "long": "save-dagrun",
+                "description": "after completing the backfill, saves the diagram for current DAG Ru...",
+                "inherit": false,
+                "value": {
+                  "name": "save_dagrun",
+                  "description": "after completing the backfill, saves the diagram for current DAG Ru..."
+                }
+              },
+              {
+                "long": "show-dagrun",
+                "description": "after completing the backfill, shows the diagram for current DAG Ru...",
+                "inherit": false
+              },
+              {
+                "short": "S",
+                "long": "subdir",
+                "description": "file location or directory from which to look for the dag. Defaults...",
+                "inherit": false,
+                "value": {
+                  "name": "subdir",
+                  "description": "file location or directory from which to look for the dag. Defaults..."
+                }
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "dag_id",
+                  "description": "The id of the dag",
+                  "index": 0
+                },
+                {
+                  "name": "execution_date",
+                  "description": "The execution date of the DAG (optional)",
+                  "index": 1
+                }
+              ]
+            }
+          },
+          {
+            "name": "trigger",
+            "description": "trigger a DAG run",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              },
+              {
+                "short": "c",
+                "long": "conf",
+                "description": "jSON string that gets pickled into the DagRun's conf attribute",
+                "inherit": false,
+                "value": {
+                  "name": "conf",
+                  "description": "jSON string that gets pickled into the DagRun's conf attribute"
+                }
+              },
+              {
+                "short": "e",
+                "long": "exec-date",
+                "description": "the execution date of the DAG",
+                "inherit": false,
+                "value": {
+                  "name": "exec_date",
+                  "description": "the execution date of the DAG"
+                }
+              },
+              {
+                "short": "r",
+                "long": "run-id",
+                "description": "helps to identify this run",
+                "inherit": false,
+                "value": {
+                  "name": "run_id",
+                  "description": "helps to identify this run"
+                }
+              },
+              {
+                "short": "S",
+                "long": "subdir",
+                "description": "file location or directory from which to look for the dag. Defaults...",
+                "inherit": false,
+                "value": {
+                  "name": "subdir",
+                  "description": "file location or directory from which to look for the dag. Defaults..."
+                }
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "dag_id",
+                  "description": "The id of the dag",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "unpause",
+            "description": "resume a paused DAG",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              },
+              {
+                "short": "S",
+                "long": "subdir",
+                "description": "file location or directory from which to look for the dag. Defaults...",
+                "inherit": false,
+                "value": {
+                  "name": "subdir",
+                  "description": "file location or directory from which to look for the dag. Defaults..."
+                }
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "dag_id",
+                  "description": "The id of the dag",
+                  "index": 0
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "db",
+        "description": "database operations",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "check",
+            "description": "check if the database can be reached",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "check-migrations",
+            "description": "check if migration have finished",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              },
+              {
+                "short": "t",
+                "long": "migration-wait-timeout",
+                "description": "timeout to wait for db to migrate",
+                "inherit": false,
+                "value": {
+                  "name": "migration_wait_timeout",
+                  "description": "timeout to wait for db to migrate"
+                }
+              }
+            ]
+          },
+          {
+            "name": "clean",
+            "description": "purge old records in metastore tables",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              },
+              {
+                "long": "clean-before-timestamp",
+                "description": "the date or timestamp before which data should be purged. If no tim...",
+                "inherit": false,
+                "value": {
+                  "name": "clean_before_timestamp",
+                  "description": "the date or timestamp before which data should be purged. If no tim..."
+                }
+              },
+              {
+                "long": "dry-run",
+                "description": "perform a dry run",
+                "inherit": false
+              },
+              {
+                "long": "skip-archive",
+                "description": "don't preserve purged records in an archive table",
+                "inherit": false
+              },
+              {
+                "short": "t",
+                "long": "tables",
+                "description": "table names to perform maintenance on (use comma-separated list). O...",
+                "inherit": false,
+                "value": {
+                  "name": "tables",
+                  "description": "table names to perform maintenance on (use comma-separated list). O..."
+                }
+              },
+              {
+                "short": "v",
+                "long": "verbose",
+                "description": "make logging output more verbose",
+                "inherit": false
+              },
+              {
+                "short": "y",
+                "long": "yes",
+                "description": "do not prompt to confirm. Use with care!",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "downgrade",
+            "description": "downgrade the schema of the metadata database",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              },
+              {
+                "long": "from-revision",
+                "description": "(Optional) If generating sql, may supply a *from* Alembic revision",
+                "inherit": false,
+                "value": {
+                  "name": "from_revision",
+                  "description": "(Optional) If generating sql, may supply a *from* Alembic revision"
+                }
+              },
+              {
+                "long": "from-version",
+                "description": "(Optional) If generating sql, may supply a *from* version",
+                "inherit": false,
+                "value": {
+                  "name": "from_version",
+                  "description": "(Optional) If generating sql, may supply a *from* version"
+                }
+              },
+              {
+                "short": "s",
+                "long": "show-sql-only",
+                "description": "don't actually run migrations; just print out sql scripts for offli...",
+                "inherit": false
+              },
+              {
+                "short": "r",
+                "long": "to-revision",
+                "description": "the Alembic revision to downgrade to. Note: must provide either `--...",
+                "inherit": false,
+                "value": {
+                  "name": "to_revision",
+                  "description": "the Alembic revision to downgrade to. Note: must provide either `--..."
+                }
+              },
+              {
+                "short": "n",
+                "long": "to-version",
+                "description": "(Optional) If provided, only run migrations up to this version",
+                "inherit": false,
+                "value": {
+                  "name": "to_version",
+                  "description": "(Optional) If provided, only run migrations up to this version"
+                }
+              },
+              {
+                "short": "y",
+                "long": "yes",
+                "description": "do not prompt to confirm. Use with care!",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "init",
+            "description": "initialize the metadata database",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "reset",
+            "description": "burn down and rebuild the metadata database",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              },
+              {
+                "short": "s",
+                "long": "skip-init",
+                "description": "only remove tables; do not perform db init",
+                "inherit": false
+              },
+              {
+                "short": "y",
+                "long": "yes",
+                "description": "do not prompt to confirm. Use with care!",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "shell",
+            "description": "runs a shell to access the database",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "upgrade",
+            "description": "upgrade the metadata database to latest version",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              },
+              {
+                "long": "from-revision",
+                "description": "(Optional) If generating sql, may supply a *from* Alembic revision",
+                "inherit": false,
+                "value": {
+                  "name": "from_revision",
+                  "description": "(Optional) If generating sql, may supply a *from* Alembic revision"
+                }
+              },
+              {
+                "long": "from-version",
+                "description": "(Optional) If generating sql, may supply a *from* version",
+                "inherit": false,
+                "value": {
+                  "name": "from_version",
+                  "description": "(Optional) If generating sql, may supply a *from* version"
+                }
+              },
+              {
+                "short": "s",
+                "long": "show-sql-only",
+                "description": "don't actually run migrations; just print out sql scripts for offli...",
+                "inherit": false
+              },
+              {
+                "short": "r",
+                "long": "to-revision",
+                "description": "(Optional) If provided, only run migrations up to and including thi...",
+                "inherit": false,
+                "value": {
+                  "name": "to_revision",
+                  "description": "(Optional) If provided, only run migrations up to and including thi..."
+                }
+              },
+              {
+                "short": "n",
+                "long": "to-version",
+                "description": "(Optional) The airflow version to upgrade to. Note: must provide ei...",
+                "inherit": false,
+                "value": {
+                  "name": "to_version",
+                  "description": "(Optional) The airflow version to upgrade to. Note: must provide ei..."
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "info",
+        "description": "show information about current Airflow and environment",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          },
+          {
+            "long": "anonymize",
+            "description": "minimize any personal identifiable information. Use it when sharing...",
+            "inherit": false
+          },
+          {
+            "long": "file-io",
+            "description": "send output to file.io service and returns link",
+            "inherit": false
+          },
+          {
+            "short": "o",
+            "long": "output",
+            "description": "output format. Allowed values: json, yaml, plain, table (default: t...",
+            "inherit": false,
+            "value": {
+              "name": "(table,-json,-yaml,-plain)",
+              "description": "output format. Allowed values: json, yaml, plain, table (default: t...",
+              "provider": {
+                "values": [
+                  "table",
+                  "json",
+                  "yaml",
+                  "plain"
+                ]
+              }
+            }
+          },
+          {
+            "short": "v",
+            "long": "verbose",
+            "description": "make logging output more verbose",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "jobs",
+        "description": "manage jobs",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "check",
+            "description": "checks if job(s) are still alive",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              },
+              {
+                "long": "allow-multiple",
+                "description": "if passed, this command will be successful even if multiple matchin...",
+                "inherit": false
+              },
+              {
+                "long": "hostname",
+                "description": "the hostname of job(s) that will be checked",
+                "inherit": false,
+                "value": {
+                  "name": "hostname",
+                  "description": "the hostname of job(s) that will be checked"
+                }
+              },
+              {
+                "long": "job-type",
+                "description": "the type of job(s) that will be checked",
+                "inherit": false,
+                "value": {
+                  "name": "job_type",
+                  "description": "the type of job(s) that will be checked",
+                  "provider": {
+                    "values": [
+                      "BackfillJob",
+                      "LocalTaskJob",
+                      "SchedulerJob",
+                      "TriggererJob"
+                    ]
+                  }
+                }
+              },
+              {
+                "long": "limit",
+                "description": "the number of recent jobs that will be checked. To disable limit, s...",
+                "inherit": false,
+                "value": {
+                  "name": "limit",
+                  "description": "the number of recent jobs that will be checked. To disable limit, s..."
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "kerberos",
+        "description": "start a kerberos ticket renewer",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          },
+          {
+            "short": "D",
+            "long": "daemon",
+            "description": "daemonize instead of running in the foreground",
+            "inherit": false
+          },
+          {
+            "short": "k",
+            "long": "keytab",
+            "description": "keytab",
+            "inherit": false,
+            "value": {
+              "name": "keytab",
+              "description": "keytab",
+              "required": false,
+              "style": "optional"
+            }
+          },
+          {
+            "short": "l",
+            "long": "log-file",
+            "description": "location of the log file",
+            "inherit": false,
+            "value": {
+              "name": "log_file",
+              "description": "location of the log file"
+            }
+          },
+          {
+            "long": "pid",
+            "description": "pID file location",
+            "inherit": false,
+            "value": {
+              "name": "pid",
+              "description": "pID file location",
+              "required": false,
+              "style": "optional"
+            }
+          },
+          {
+            "long": "stderr",
+            "description": "redirect stderr to this file",
+            "inherit": false,
+            "value": {
+              "name": "stderr",
+              "description": "redirect stderr to this file"
+            }
+          },
+          {
+            "long": "stdout",
+            "description": "redirect stdout to this file",
+            "inherit": false,
+            "value": {
+              "name": "stdout",
+              "description": "redirect stdout to this file"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "principal",
+              "description": "Kerberos principal",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "kubernetes",
+        "description": "tools to help run the KubernetesExecutor",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "cleanup-pods",
+            "description": "clean up Kubernetes pods (created by KubernetesExecutor/KubernetesP...",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              },
+              {
+                "long": "min-pending-minutes",
+                "description": "pending pods created before the time interval are to be cleaned up,...",
+                "inherit": false,
+                "value": {
+                  "name": "min_pending_minutes",
+                  "description": "pending pods created before the time interval are to be cleaned up,..."
+                }
+              },
+              {
+                "long": "namespace",
+                "description": "kubernetes Namespace. Default value is `[kubernetes] namespace` in...",
+                "inherit": false,
+                "value": {
+                  "name": "namespace",
+                  "description": "kubernetes Namespace. Default value is `[kubernetes] namespace` in..."
+                }
+              }
+            ]
+          },
+          {
+            "name": "generate-dag-yaml",
+            "description": "generate YAML files for all tasks in DAG. Useful for debugging task...",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              },
+              {
+                "short": "o",
+                "long": "output-path",
+                "description": "the output for generated yaml files",
+                "inherit": false,
+                "value": {
+                  "name": "output_path",
+                  "description": "the output for generated yaml files"
+                }
+              },
+              {
+                "short": "S",
+                "long": "subdir",
+                "description": "file location or directory from which to look for the dag. Defaults...",
+                "inherit": false,
+                "value": {
+                  "name": "subdir",
+                  "description": "file location or directory from which to look for the dag. Defaults..."
+                }
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "dag_id",
+                  "description": "The id of the dag",
+                  "index": 0
+                },
+                {
+                  "name": "execution_date",
+                  "description": "The execution date of the DAG",
+                  "index": 1
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "plugins",
+        "description": "dump information about loaded plugins",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          },
+          {
+            "short": "o",
+            "long": "output",
+            "description": "output format. Allowed values: json, yaml, plain, table (default: t...",
+            "inherit": false,
+            "value": {
+              "name": "(table,-json,-yaml,-plain)",
+              "description": "output format. Allowed values: json, yaml, plain, table (default: t...",
+              "provider": {
+                "values": [
+                  "table",
+                  "json",
+                  "yaml",
+                  "plain"
+                ]
+              }
+            }
+          },
+          {
+            "short": "v",
+            "long": "verbose",
+            "description": "make logging output more verbose",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "pools",
+        "description": "manage pools",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "delete",
+            "description": "delete pool",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              },
+              {
+                "short": "o",
+                "long": "output",
+                "description": "output format. Allowed values: json, yaml, plain, table (default: t...",
+                "inherit": false,
+                "value": {
+                  "name": "(table,-json,-yaml,-plain)",
+                  "description": "output format. Allowed values: json, yaml, plain, table (default: t...",
+                  "provider": {
+                    "values": [
+                      "table",
+                      "json",
+                      "yaml",
+                      "plain"
+                    ]
+                  }
+                }
+              },
+              {
+                "short": "v",
+                "long": "verbose",
+                "description": "make logging output more verbose",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "NAME",
+                  "description": "Pool name",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "export",
+            "description": "export all pools",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "FILEPATH",
+                  "description": "Export all pools to JSON file",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "get",
+            "description": "get pool size",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              },
+              {
+                "short": "o",
+                "long": "output",
+                "description": "output format. Allowed values: json, yaml, plain, table (default: t...",
+                "inherit": false,
+                "value": {
+                  "name": "(table,-json,-yaml,-plain)",
+                  "description": "output format. Allowed values: json, yaml, plain, table (default: t...",
+                  "provider": {
+                    "values": [
+                      "table",
+                      "json",
+                      "yaml",
+                      "plain"
+                    ]
+                  }
+                }
+              },
+              {
+                "short": "v",
+                "long": "verbose",
+                "description": "make logging output more verbose",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "NAME",
+                  "description": "Pool name",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "import",
+            "description": "import pools",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              },
+              {
+                "short": "v",
+                "long": "verbose",
+                "description": "make logging output more verbose",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "FILEPATH",
+                  "description": "Import pools from JSON file. Example format:: { \"pool_1\": {\"slots\": 5, \"description\": \"\"}, \"pool_2\": {\"slots\": 10, \"description\": \"test\"} }",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "list",
+            "description": "list pools",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              },
+              {
+                "short": "o",
+                "long": "output",
+                "description": "output format. Allowed values: json, yaml, plain, table (default: t...",
+                "inherit": false,
+                "value": {
+                  "name": "(table,-json,-yaml,-plain)",
+                  "description": "output format. Allowed values: json, yaml, plain, table (default: t...",
+                  "provider": {
+                    "values": [
+                      "table",
+                      "json",
+                      "yaml",
+                      "plain"
+                    ]
+                  }
+                }
+              },
+              {
+                "short": "v",
+                "long": "verbose",
+                "description": "make logging output more verbose",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "set",
+            "description": "configure pool",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              },
+              {
+                "short": "o",
+                "long": "output",
+                "description": "output format. Allowed values: json, yaml, plain, table (default: t...",
+                "inherit": false,
+                "value": {
+                  "name": "(table,-json,-yaml,-plain)",
+                  "description": "output format. Allowed values: json, yaml, plain, table (default: t...",
+                  "provider": {
+                    "values": [
+                      "table",
+                      "json",
+                      "yaml",
+                      "plain"
+                    ]
+                  }
+                }
+              },
+              {
+                "short": "v",
+                "long": "verbose",
+                "description": "make logging output more verbose",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "NAME",
+                  "description": "Pool name",
+                  "index": 0
+                },
+                {
+                  "name": "slots",
+                  "description": "Pool slots",
+                  "index": 1
+                },
+                {
+                  "name": "description",
+                  "description": "Pool description",
+                  "index": 2
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "providers",
+        "description": "display providers",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "auth",
+            "description": "get information about API auth backends provided",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              },
+              {
+                "short": "o",
+                "long": "output",
+                "description": "output format. Allowed values: json, yaml, plain, table (default: t...",
+                "inherit": false,
+                "value": {
+                  "name": "(table,-json,-yaml,-plain)",
+                  "description": "output format. Allowed values: json, yaml, plain, table (default: t...",
+                  "provider": {
+                    "values": [
+                      "table",
+                      "json",
+                      "yaml",
+                      "plain"
+                    ]
+                  }
+                }
+              },
+              {
+                "short": "v",
+                "long": "verbose",
+                "description": "make logging output more verbose",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "behaviours",
+            "description": "get information about registered connection types with custom behav...",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              },
+              {
+                "short": "o",
+                "long": "output",
+                "description": "output format. Allowed values: json, yaml, plain, table (default: t...",
+                "inherit": false,
+                "value": {
+                  "name": "(table,-json,-yaml,-plain)",
+                  "description": "output format. Allowed values: json, yaml, plain, table (default: t...",
+                  "provider": {
+                    "values": [
+                      "table",
+                      "json",
+                      "yaml",
+                      "plain"
+                    ]
+                  }
+                }
+              },
+              {
+                "short": "v",
+                "long": "verbose",
+                "description": "make logging output more verbose",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "get",
+            "description": "get detailed information about a provider",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              },
+              {
+                "long": "color",
+                "description": "do emit colored output (default: auto)",
+                "inherit": false,
+                "value": {
+                  "name": "color",
+                  "description": "do emit colored output (default: auto)",
+                  "provider": {
+                    "values": [
+                      "off",
+                      "auto",
+                      "on"
+                    ]
+                  }
+                }
+              },
+              {
+                "short": "f",
+                "long": "full",
+                "description": "full information about the provider, including documentation inform...",
+                "inherit": false
+              },
+              {
+                "short": "o",
+                "long": "output",
+                "description": "output format. Allowed values: json, yaml, plain, table (default: t...",
+                "inherit": false,
+                "value": {
+                  "name": "(table,-json,-yaml,-plain)",
+                  "description": "output format. Allowed values: json, yaml, plain, table (default: t...",
+                  "provider": {
+                    "values": [
+                      "table",
+                      "json",
+                      "yaml",
+                      "plain"
+                    ]
+                  }
+                }
+              },
+              {
+                "short": "v",
+                "long": "verbose",
+                "description": "make logging output more verbose",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "provider_name",
+                  "description": "Provider name, required to get provider information",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "hooks",
+            "description": "list registered provider hooks",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              },
+              {
+                "short": "o",
+                "long": "output",
+                "description": "output format. Allowed values: json, yaml, plain, table (default: t...",
+                "inherit": false,
+                "value": {
+                  "name": "(table,-json,-yaml,-plain)",
+                  "description": "output format. Allowed values: json, yaml, plain, table (default: t...",
+                  "provider": {
+                    "values": [
+                      "table",
+                      "json",
+                      "yaml",
+                      "plain"
+                    ]
+                  }
+                }
+              },
+              {
+                "short": "v",
+                "long": "verbose",
+                "description": "make logging output more verbose",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "links",
+            "description": "list extra links registered by the providers",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              },
+              {
+                "short": "o",
+                "long": "output",
+                "description": "output format. Allowed values: json, yaml, plain, table (default: t...",
+                "inherit": false,
+                "value": {
+                  "name": "(table,-json,-yaml,-plain)",
+                  "description": "output format. Allowed values: json, yaml, plain, table (default: t...",
+                  "provider": {
+                    "values": [
+                      "table",
+                      "json",
+                      "yaml",
+                      "plain"
+                    ]
+                  }
+                }
+              },
+              {
+                "short": "v",
+                "long": "verbose",
+                "description": "make logging output more verbose",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "list",
+            "description": "list installed providers",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              },
+              {
+                "short": "o",
+                "long": "output",
+                "description": "output format. Allowed values: json, yaml, plain, table (default: t...",
+                "inherit": false,
+                "value": {
+                  "name": "(table,-json,-yaml,-plain)",
+                  "description": "output format. Allowed values: json, yaml, plain, table (default: t...",
+                  "provider": {
+                    "values": [
+                      "table",
+                      "json",
+                      "yaml",
+                      "plain"
+                    ]
+                  }
+                }
+              },
+              {
+                "short": "v",
+                "long": "verbose",
+                "description": "make logging output more verbose",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "logging",
+            "description": "get information about task logging handlers provided",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              },
+              {
+                "short": "o",
+                "long": "output",
+                "description": "output format. Allowed values: json, yaml, plain, table (default: t...",
+                "inherit": false,
+                "value": {
+                  "name": "(table,-json,-yaml,-plain)",
+                  "description": "output format. Allowed values: json, yaml, plain, table (default: t...",
+                  "provider": {
+                    "values": [
+                      "table",
+                      "json",
+                      "yaml",
+                      "plain"
+                    ]
+                  }
+                }
+              },
+              {
+                "short": "v",
+                "long": "verbose",
+                "description": "make logging output more verbose",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "secrets",
+            "description": "get information about secrets backends provided",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              },
+              {
+                "short": "o",
+                "long": "output",
+                "description": "output format. Allowed values: json, yaml, plain, table (default: t...",
+                "inherit": false,
+                "value": {
+                  "name": "(table,-json,-yaml,-plain)",
+                  "description": "output format. Allowed values: json, yaml, plain, table (default: t...",
+                  "provider": {
+                    "values": [
+                      "table",
+                      "json",
+                      "yaml",
+                      "plain"
+                    ]
+                  }
+                }
+              },
+              {
+                "short": "v",
+                "long": "verbose",
+                "description": "make logging output more verbose",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "widgets",
+            "description": "get information about registered connection form widgets",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              },
+              {
+                "short": "o",
+                "long": "output",
+                "description": "output format. Allowed values: json, yaml, plain, table (default: t...",
+                "inherit": false,
+                "value": {
+                  "name": "(table,-json,-yaml,-plain)",
+                  "description": "output format. Allowed values: json, yaml, plain, table (default: t...",
+                  "provider": {
+                    "values": [
+                      "table",
+                      "json",
+                      "yaml",
+                      "plain"
+                    ]
+                  }
+                }
+              },
+              {
+                "short": "v",
+                "long": "verbose",
+                "description": "make logging output more verbose",
+                "inherit": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "roles",
+        "description": "manage roles",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "create",
+            "description": "create role",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              },
+              {
+                "short": "v",
+                "long": "verbose",
+                "description": "make logging output more verbose",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "role",
+                  "description": "The name of a role",
+                  "index": 0,
+                  "repeatable": true
+                }
+              ]
+            }
+          },
+          {
+            "name": "delete",
+            "description": "delete role",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              },
+              {
+                "short": "v",
+                "long": "verbose",
+                "description": "make logging output more verbose",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "role",
+                  "description": "The name of a role",
+                  "index": 0,
+                  "repeatable": true
+                }
+              ]
+            }
+          },
+          {
+            "name": "export",
+            "description": "export roles (without permissions) from db to JSON file",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              },
+              {
+                "short": "p",
+                "long": "pretty",
+                "description": "format output JSON file by sorting role names and indenting by 4 sp...",
+                "inherit": false
+              },
+              {
+                "short": "v",
+                "long": "verbose",
+                "description": "make logging output more verbose",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "file",
+                  "description": "Export all roles to JSON file",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "import",
+            "description": "import roles (without permissions) from JSON file to db",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              },
+              {
+                "short": "v",
+                "long": "verbose",
+                "description": "make logging output more verbose",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "file",
+                  "description": "Import roles from JSON file",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "list",
+            "description": "list roles",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              },
+              {
+                "short": "o",
+                "long": "output",
+                "description": "output format. Allowed values: json, yaml, plain, table (default: t...",
+                "inherit": false,
+                "value": {
+                  "name": "(table,-json,-yaml,-plain)",
+                  "description": "output format. Allowed values: json, yaml, plain, table (default: t...",
+                  "provider": {
+                    "values": [
+                      "table",
+                      "json",
+                      "yaml",
+                      "plain"
+                    ]
+                  }
+                }
+              },
+              {
+                "short": "v",
+                "long": "verbose",
+                "description": "make logging output more verbose",
+                "inherit": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "rotate-fernet-key",
+        "description": "rotate encrypted connection credentials and variables",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "scheduler",
+        "description": "start a scheduler instance",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          },
+          {
+            "short": "D",
+            "long": "daemon",
+            "description": "daemonize instead of running in the foreground",
+            "inherit": false
+          },
+          {
+            "short": "p",
+            "long": "do-pickle",
+            "description": "attempt to pickle the DAG object to send over to the workers, inste...",
+            "inherit": false
+          },
+          {
+            "short": "l",
+            "long": "log-file",
+            "description": "location of the log file",
+            "inherit": false,
+            "value": {
+              "name": "log_file",
+              "description": "location of the log file"
+            }
+          },
+          {
+            "short": "n",
+            "long": "num-runs",
+            "description": "set the number of runs to execute before exiting",
+            "inherit": false,
+            "value": {
+              "name": "num_runs",
+              "description": "set the number of runs to execute before exiting"
+            }
+          },
+          {
+            "long": "pid",
+            "description": "pID file location",
+            "inherit": false,
+            "value": {
+              "name": "pid",
+              "description": "pID file location",
+              "required": false,
+              "style": "optional"
+            }
+          },
+          {
+            "short": "s",
+            "long": "skip-serve-logs",
+            "description": "don't start the serve logs process along with the workers",
+            "inherit": false
+          },
+          {
+            "long": "stderr",
+            "description": "redirect stderr to this file",
+            "inherit": false,
+            "value": {
+              "name": "stderr",
+              "description": "redirect stderr to this file"
+            }
+          },
+          {
+            "long": "stdout",
+            "description": "redirect stdout to this file",
+            "inherit": false,
+            "value": {
+              "name": "stdout",
+              "description": "redirect stdout to this file"
+            }
+          },
+          {
+            "short": "S",
+            "long": "subdir",
+            "description": "file location or directory from which to look for the dag. Defaults...",
+            "inherit": false,
+            "value": {
+              "name": "subdir",
+              "description": "file location or directory from which to look for the dag. Defaults..."
+            }
+          }
+        ]
+      },
+      {
+        "name": "standalone",
+        "description": "run an all-in-one copy of Airflow",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "sync-perm",
+        "description": "update permissions for existing roles and optionally DAGs",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          },
+          {
+            "long": "include-dags",
+            "description": "if passed, DAG specific permissions will also be synced",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "tasks",
+        "description": "manage tasks",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "clear",
+            "description": "clear a set of task instance, as if they never ran",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              },
+              {
+                "short": "R",
+                "long": "dag-regex",
+                "description": "search dag_id as regex instead of exact string",
+                "inherit": false
+              },
+              {
+                "short": "d",
+                "long": "downstream",
+                "description": "include downstream tasks",
+                "inherit": false
+              },
+              {
+                "short": "e",
+                "long": "end-date",
+                "description": "override end_date YYYY-MM-DD",
+                "inherit": false,
+                "value": {
+                  "name": "end_date",
+                  "description": "override end_date YYYY-MM-DD"
+                }
+              },
+              {
+                "short": "X",
+                "long": "exclude-parentdag",
+                "description": "exclude ParentDAGS if the task cleared is a part of a SubDAG",
+                "inherit": false
+              },
+              {
+                "short": "x",
+                "long": "exclude-subdags",
+                "description": "exclude subdags",
+                "inherit": false
+              },
+              {
+                "short": "f",
+                "long": "only-failed",
+                "description": "only failed jobs",
+                "inherit": false
+              },
+              {
+                "short": "r",
+                "long": "only-running",
+                "description": "only running jobs",
+                "inherit": false
+              },
+              {
+                "short": "s",
+                "long": "start-date",
+                "description": "override start_date YYYY-MM-DD",
+                "inherit": false,
+                "value": {
+                  "name": "start_date",
+                  "description": "override start_date YYYY-MM-DD"
+                }
+              },
+              {
+                "short": "S",
+                "long": "subdir",
+                "description": "file location or directory from which to look for the dag. Defaults...",
+                "inherit": false,
+                "value": {
+                  "name": "subdir",
+                  "description": "file location or directory from which to look for the dag. Defaults..."
+                }
+              },
+              {
+                "short": "t",
+                "long": "task-regex",
+                "description": "the regex to filter specific task_ids to backfill (optional)",
+                "inherit": false,
+                "value": {
+                  "name": "task_regex",
+                  "description": "the regex to filter specific task_ids to backfill (optional)"
+                }
+              },
+              {
+                "short": "u",
+                "long": "upstream",
+                "description": "include upstream tasks",
+                "inherit": false
+              },
+              {
+                "short": "y",
+                "long": "yes",
+                "description": "do not prompt to confirm. Use with care!",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "dag_id",
+                  "description": "The id of the dag",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "failed-deps",
+            "description": "returns the unmet dependencies for a task instance",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              },
+              {
+                "long": "map-index",
+                "description": "mapped task index",
+                "inherit": false,
+                "value": {
+                  "name": "map_index",
+                  "description": "mapped task index"
+                }
+              },
+              {
+                "short": "S",
+                "long": "subdir",
+                "description": "file location or directory from which to look for the dag. Defaults...",
+                "inherit": false,
+                "value": {
+                  "name": "subdir",
+                  "description": "file location or directory from which to look for the dag. Defaults..."
+                }
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "dag_id",
+                  "description": "The id of the dag",
+                  "index": 0
+                },
+                {
+                  "name": "task_id",
+                  "description": "The id of the task",
+                  "index": 1
+                },
+                {
+                  "name": "execution_date_or_run_id",
+                  "description": "The execution_date of the DAG or run_id of the DAGRun",
+                  "index": 2
+                }
+              ]
+            }
+          },
+          {
+            "name": "list",
+            "description": "list the tasks within a DAG",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              },
+              {
+                "short": "S",
+                "long": "subdir",
+                "description": "file location or directory from which to look for the dag. Defaults...",
+                "inherit": false,
+                "value": {
+                  "name": "subdir",
+                  "description": "file location or directory from which to look for the dag. Defaults..."
+                }
+              },
+              {
+                "short": "t",
+                "long": "tree",
+                "description": "tree view",
+                "inherit": false
+              },
+              {
+                "short": "v",
+                "long": "verbose",
+                "description": "make logging output more verbose",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "dag_id",
+                  "description": "The id of the dag",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "render",
+            "description": "render a task instance's template(s)",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              },
+              {
+                "long": "map-index",
+                "description": "mapped task index",
+                "inherit": false,
+                "value": {
+                  "name": "map_index",
+                  "description": "mapped task index"
+                }
+              },
+              {
+                "short": "S",
+                "long": "subdir",
+                "description": "file location or directory from which to look for the dag. Defaults...",
+                "inherit": false,
+                "value": {
+                  "name": "subdir",
+                  "description": "file location or directory from which to look for the dag. Defaults..."
+                }
+              },
+              {
+                "short": "v",
+                "long": "verbose",
+                "description": "make logging output more verbose",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "dag_id",
+                  "description": "The id of the dag",
+                  "index": 0
+                },
+                {
+                  "name": "task_id",
+                  "description": "The id of the task",
+                  "index": 1
+                },
+                {
+                  "name": "execution_date_or_run_id",
+                  "description": "The execution_date of the DAG or run_id of the DAGRun",
+                  "index": 2
+                }
+              ]
+            }
+          },
+          {
+            "name": "run",
+            "description": "run a single task instance",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              },
+              {
+                "long": "cfg-path",
+                "description": "path to config file to use instead of airflow.cfg",
+                "inherit": false,
+                "value": {
+                  "name": "cfg_path",
+                  "description": "path to config file to use instead of airflow.cfg"
+                }
+              },
+              {
+                "short": "f",
+                "long": "force",
+                "description": "ignore previous task instance state, rerun regardless if task alrea...",
+                "inherit": false
+              },
+              {
+                "short": "A",
+                "long": "ignore-all-dependencies",
+                "description": "ignores all non-critical dependencies, including ignore_ti_state an...",
+                "inherit": false
+              },
+              {
+                "short": "i",
+                "long": "ignore-dependencies",
+                "description": "ignore task-specific dependencies, e.g. upstream, depends_on_past,...",
+                "inherit": false
+              },
+              {
+                "short": "I",
+                "long": "ignore-depends-on-past",
+                "description": "ignore depends_on_past dependencies (but respect upstream dependenc...",
+                "inherit": false
+              },
+              {
+                "short": "N",
+                "long": "interactive",
+                "description": "do not capture standard output and error streams (useful for intera...",
+                "inherit": false
+              },
+              {
+                "short": "j",
+                "long": "job-id",
+                "inherit": false,
+                "hidden": true,
+                "value": {
+                  "name": "job_id"
+                }
+              },
+              {
+                "short": "l",
+                "long": "local",
+                "description": "run the task using the LocalExecutor",
+                "inherit": false
+              },
+              {
+                "long": "map-index",
+                "description": "mapped task index",
+                "inherit": false,
+                "value": {
+                  "name": "map_index",
+                  "description": "mapped task index"
+                }
+              },
+              {
+                "short": "m",
+                "long": "mark-success",
+                "description": "mark jobs as succeeded without running them",
+                "inherit": false
+              },
+              {
+                "long": "no-shut-down-logging",
+                "inherit": false,
+                "hidden": true
+              },
+              {
+                "short": "p",
+                "long": "pickle",
+                "description": "serialized pickle object of the entire dag (used internally)",
+                "inherit": false,
+                "value": {
+                  "name": "pickle",
+                  "description": "serialized pickle object of the entire dag (used internally)"
+                }
+              },
+              {
+                "long": "pool",
+                "description": "resource pool to use",
+                "inherit": false,
+                "value": {
+                  "name": "pool",
+                  "description": "resource pool to use"
+                }
+              },
+              {
+                "short": "r",
+                "long": "raw",
+                "inherit": false,
+                "hidden": true
+              },
+              {
+                "long": "ship-dag",
+                "description": "pickles (serializes) the DAG and ships it to the worker",
+                "inherit": false
+              },
+              {
+                "short": "S",
+                "long": "subdir",
+                "description": "file location or directory from which to look for the dag. Defaults...",
+                "inherit": false,
+                "value": {
+                  "name": "subdir",
+                  "description": "file location or directory from which to look for the dag. Defaults..."
+                }
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "dag_id",
+                  "description": "The id of the dag",
+                  "index": 0
+                },
+                {
+                  "name": "task_id",
+                  "description": "The id of the task",
+                  "index": 1
+                },
+                {
+                  "name": "execution_date_or_run_id",
+                  "description": "The execution_date of the DAG or run_id of the DAGRun",
+                  "index": 2
+                }
+              ]
+            }
+          },
+          {
+            "name": "state",
+            "description": "get the status of a task instance",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              },
+              {
+                "long": "map-index",
+                "description": "mapped task index",
+                "inherit": false,
+                "value": {
+                  "name": "map_index",
+                  "description": "mapped task index"
+                }
+              },
+              {
+                "short": "S",
+                "long": "subdir",
+                "description": "file location or directory from which to look for the dag. Defaults...",
+                "inherit": false,
+                "value": {
+                  "name": "subdir",
+                  "description": "file location or directory from which to look for the dag. Defaults..."
+                }
+              },
+              {
+                "short": "v",
+                "long": "verbose",
+                "description": "make logging output more verbose",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "dag_id",
+                  "description": "The id of the dag",
+                  "index": 0
+                },
+                {
+                  "name": "task_id",
+                  "description": "The id of the task",
+                  "index": 1
+                },
+                {
+                  "name": "execution_date_or_run_id",
+                  "description": "The execution_date of the DAG or run_id of the DAGRun",
+                  "index": 2
+                }
+              ]
+            }
+          },
+          {
+            "name": "states-for-dag-run",
+            "description": "get the status of all task instances in a dag run",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              },
+              {
+                "short": "o",
+                "long": "output",
+                "description": "output format. Allowed values: json, yaml, plain, table (default: t...",
+                "inherit": false,
+                "value": {
+                  "name": "(table,-json,-yaml,-plain)",
+                  "description": "output format. Allowed values: json, yaml, plain, table (default: t...",
+                  "provider": {
+                    "values": [
+                      "table",
+                      "json",
+                      "yaml",
+                      "plain"
+                    ]
+                  }
+                }
+              },
+              {
+                "short": "v",
+                "long": "verbose",
+                "description": "make logging output more verbose",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "dag_id",
+                  "description": "The id of the dag",
+                  "index": 0
+                },
+                {
+                  "name": "execution_date_or_run_id",
+                  "description": "The execution_date of the DAG or run_id of the DAGRun",
+                  "index": 1
+                }
+              ]
+            }
+          },
+          {
+            "name": "test",
+            "description": "test a task instance",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              },
+              {
+                "short": "n",
+                "long": "dry-run",
+                "description": "perform a dry run for each task. Only renders Template Fields for e...",
+                "inherit": false
+              },
+              {
+                "long": "env-vars",
+                "description": "set env var in both parsing time and runtime for each of entry supp...",
+                "inherit": false,
+                "value": {
+                  "name": "env_vars",
+                  "description": "set env var in both parsing time and runtime for each of entry supp..."
+                }
+              },
+              {
+                "long": "map-index",
+                "description": "mapped task index",
+                "inherit": false,
+                "value": {
+                  "name": "map_index",
+                  "description": "mapped task index"
+                }
+              },
+              {
+                "short": "m",
+                "long": "post-mortem",
+                "description": "open debugger on uncaught exception",
+                "inherit": false
+              },
+              {
+                "short": "S",
+                "long": "subdir",
+                "description": "file location or directory from which to look for the dag. Defaults...",
+                "inherit": false,
+                "value": {
+                  "name": "subdir",
+                  "description": "file location or directory from which to look for the dag. Defaults..."
+                }
+              },
+              {
+                "short": "t",
+                "long": "task-params",
+                "description": "sends a JSON params dict to the task",
+                "inherit": false,
+                "value": {
+                  "name": "task_params",
+                  "description": "sends a JSON params dict to the task"
+                }
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "dag_id",
+                  "description": "The id of the dag",
+                  "index": 0
+                },
+                {
+                  "name": "task_id",
+                  "description": "The id of the task",
+                  "index": 1
+                },
+                {
+                  "name": "execution_date_or_run_id",
+                  "description": "The execution_date of the DAG or run_id of the DAGRun (optional)",
+                  "index": 2
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "triggerer",
+        "description": "start a triggerer instance",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          },
+          {
+            "long": "capacity",
+            "description": "the maximum number of triggers that a Triggerer will run at one time",
+            "inherit": false,
+            "value": {
+              "name": "capacity",
+              "description": "the maximum number of triggers that a Triggerer will run at one time"
+            }
+          },
+          {
+            "short": "D",
+            "long": "daemon",
+            "description": "daemonize instead of running in the foreground",
+            "inherit": false
+          },
+          {
+            "short": "l",
+            "long": "log-file",
+            "description": "location of the log file",
+            "inherit": false,
+            "value": {
+              "name": "log_file",
+              "description": "location of the log file"
+            }
+          },
+          {
+            "long": "pid",
+            "description": "pID file location",
+            "inherit": false,
+            "value": {
+              "name": "pid",
+              "description": "pID file location",
+              "required": false,
+              "style": "optional"
+            }
+          },
+          {
+            "long": "stderr",
+            "description": "redirect stderr to this file",
+            "inherit": false,
+            "value": {
+              "name": "stderr",
+              "description": "redirect stderr to this file"
+            }
+          },
+          {
+            "long": "stdout",
+            "description": "redirect stdout to this file",
+            "inherit": false,
+            "value": {
+              "name": "stdout",
+              "description": "redirect stdout to this file"
+            }
+          }
+        ]
+      },
+      {
+        "name": "users",
+        "description": "manage users",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "add-role",
+            "description": "add role to a user",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              },
+              {
+                "short": "e",
+                "long": "email",
+                "description": "email of the user",
+                "inherit": false,
+                "value": {
+                  "name": "email",
+                  "description": "email of the user"
+                }
+              },
+              {
+                "short": "r",
+                "long": "role",
+                "description": "role of the user. Existing roles include Admin, User, Op, Viewer, a...",
+                "inherit": false,
+                "value": {
+                  "name": "role",
+                  "description": "role of the user. Existing roles include Admin, User, Op, Viewer, a..."
+                }
+              },
+              {
+                "short": "u",
+                "long": "username",
+                "description": "username of the user",
+                "inherit": false,
+                "value": {
+                  "name": "username",
+                  "description": "username of the user"
+                }
+              }
+            ]
+          },
+          {
+            "name": "create",
+            "description": "create a user",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              },
+              {
+                "short": "e",
+                "long": "email",
+                "description": "email of the user",
+                "inherit": false,
+                "value": {
+                  "name": "email",
+                  "description": "email of the user"
+                }
+              },
+              {
+                "short": "f",
+                "long": "firstname",
+                "description": "first name of the user",
+                "inherit": false,
+                "value": {
+                  "name": "firstname",
+                  "description": "first name of the user"
+                }
+              },
+              {
+                "short": "l",
+                "long": "lastname",
+                "description": "last name of the user",
+                "inherit": false,
+                "value": {
+                  "name": "lastname",
+                  "description": "last name of the user"
+                }
+              },
+              {
+                "short": "p",
+                "long": "password",
+                "description": "password of the user, required to create a user without --use-rando...",
+                "inherit": false,
+                "value": {
+                  "name": "password",
+                  "description": "password of the user, required to create a user without --use-rando..."
+                }
+              },
+              {
+                "short": "r",
+                "long": "role",
+                "description": "role of the user. Existing roles include Admin, User, Op, Viewer, a...",
+                "inherit": false,
+                "value": {
+                  "name": "role",
+                  "description": "role of the user. Existing roles include Admin, User, Op, Viewer, a..."
+                }
+              },
+              {
+                "long": "use-random-password",
+                "description": "do not prompt for password. Use random string instead. Required to...",
+                "inherit": false
+              },
+              {
+                "short": "u",
+                "long": "username",
+                "description": "username of the user",
+                "inherit": false,
+                "value": {
+                  "name": "username",
+                  "description": "username of the user"
+                }
+              }
+            ]
+          },
+          {
+            "name": "delete",
+            "description": "delete a user",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              },
+              {
+                "short": "e",
+                "long": "email",
+                "description": "email of the user",
+                "inherit": false,
+                "value": {
+                  "name": "email",
+                  "description": "email of the user"
+                }
+              },
+              {
+                "short": "u",
+                "long": "username",
+                "description": "username of the user",
+                "inherit": false,
+                "value": {
+                  "name": "username",
+                  "description": "username of the user"
+                }
+              }
+            ]
+          },
+          {
+            "name": "export",
+            "description": "export all users",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "FILEPATH",
+                  "description": "Export all users to JSON file",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "import",
+            "description": "import users",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "FILEPATH",
+                  "description": "Import users from JSON file. Example format:: [ { \"email\": \"foo@bar.org\", \"firstname\": \"Jon\", \"lastname\": \"Doe\", \"roles\": [\"Public\"], \"username\": \"jondoe\" } ]",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "list",
+            "description": "list users",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              },
+              {
+                "short": "o",
+                "long": "output",
+                "description": "output format. Allowed values: json, yaml, plain, table (default: t...",
+                "inherit": false,
+                "value": {
+                  "name": "(table,-json,-yaml,-plain)",
+                  "description": "output format. Allowed values: json, yaml, plain, table (default: t...",
+                  "provider": {
+                    "values": [
+                      "table",
+                      "json",
+                      "yaml",
+                      "plain"
+                    ]
+                  }
+                }
+              },
+              {
+                "short": "v",
+                "long": "verbose",
+                "description": "make logging output more verbose",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "remove-role",
+            "description": "remove role from a user",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              },
+              {
+                "short": "e",
+                "long": "email",
+                "description": "email of the user",
+                "inherit": false,
+                "value": {
+                  "name": "email",
+                  "description": "email of the user"
+                }
+              },
+              {
+                "short": "r",
+                "long": "role",
+                "description": "role of the user. Existing roles include Admin, User, Op, Viewer, a...",
+                "inherit": false,
+                "value": {
+                  "name": "role",
+                  "description": "role of the user. Existing roles include Admin, User, Op, Viewer, a..."
+                }
+              },
+              {
+                "short": "u",
+                "long": "username",
+                "description": "username of the user",
+                "inherit": false,
+                "value": {
+                  "name": "username",
+                  "description": "username of the user"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "variables",
+        "description": "manage variables",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "delete",
+            "description": "delete variable",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "key",
+                  "description": "Variable key",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "export",
+            "description": "export all variables",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "file",
+                  "description": "Export all variables to JSON file",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "get",
+            "description": "get variable",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              },
+              {
+                "short": "d",
+                "long": "default",
+                "description": "default value returned if variable does not exist",
+                "inherit": false,
+                "value": {
+                  "name": "VAL",
+                  "description": "default value returned if variable does not exist"
+                }
+              },
+              {
+                "short": "j",
+                "long": "json",
+                "description": "deserialize JSON variable",
+                "inherit": false
+              },
+              {
+                "short": "v",
+                "long": "verbose",
+                "description": "make logging output more verbose",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "key",
+                  "description": "Variable key",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "import",
+            "description": "import variables",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "file",
+                  "description": "Import variables from JSON file",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "list",
+            "description": "list variables",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              },
+              {
+                "short": "o",
+                "long": "output",
+                "description": "output format. Allowed values: json, yaml, plain, table (default: t...",
+                "inherit": false,
+                "value": {
+                  "name": "(table,-json,-yaml,-plain)",
+                  "description": "output format. Allowed values: json, yaml, plain, table (default: t...",
+                  "provider": {
+                    "values": [
+                      "table",
+                      "json",
+                      "yaml",
+                      "plain"
+                    ]
+                  }
+                }
+              },
+              {
+                "short": "v",
+                "long": "verbose",
+                "description": "make logging output more verbose",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "set",
+            "description": "set variable",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              },
+              {
+                "short": "j",
+                "long": "json",
+                "description": "serialize JSON variable",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "key",
+                  "description": "Variable key",
+                  "index": 0
+                },
+                {
+                  "name": "VALUE",
+                  "description": "Variable value",
+                  "index": 1
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "version",
+        "description": "show the version",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "webserver",
+        "description": "start a Airflow webserver instance",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          },
+          {
+            "short": "A",
+            "long": "access-logfile",
+            "description": "the logfile to store the webserver access log. Use '-' to print to...",
+            "inherit": false,
+            "value": {
+              "name": "access_logfile",
+              "description": "the logfile to store the webserver access log. Use '-' to print to..."
+            }
+          },
+          {
+            "short": "L",
+            "long": "access-logformat",
+            "description": "the access log format for gunicorn logs",
+            "inherit": false,
+            "value": {
+              "name": "access_logformat",
+              "description": "the access log format for gunicorn logs"
+            }
+          },
+          {
+            "short": "D",
+            "long": "daemon",
+            "description": "daemonize instead of running in the foreground",
+            "inherit": false
+          },
+          {
+            "short": "d",
+            "long": "debug",
+            "description": "use the server that ships with Flask in debug mode",
+            "inherit": false
+          },
+          {
+            "short": "E",
+            "long": "error-logfile",
+            "description": "the logfile to store the webserver error log. Use '-' to print to s...",
+            "inherit": false,
+            "value": {
+              "name": "error_logfile",
+              "description": "the logfile to store the webserver error log. Use '-' to print to s..."
+            }
+          },
+          {
+            "short": "H",
+            "long": "hostname",
+            "description": "set the hostname on which to run the web server",
+            "inherit": false,
+            "value": {
+              "name": "hostname",
+              "description": "set the hostname on which to run the web server"
+            }
+          },
+          {
+            "short": "l",
+            "long": "log-file",
+            "description": "location of the log file",
+            "inherit": false,
+            "value": {
+              "name": "log_file",
+              "description": "location of the log file"
+            }
+          },
+          {
+            "long": "pid",
+            "description": "pID file location",
+            "inherit": false,
+            "value": {
+              "name": "pid",
+              "description": "pID file location",
+              "required": false,
+              "style": "optional"
+            }
+          },
+          {
+            "short": "p",
+            "long": "port",
+            "description": "the port on which to run the server",
+            "inherit": false,
+            "value": {
+              "name": "port",
+              "description": "the port on which to run the server"
+            }
+          },
+          {
+            "long": "ssl-cert",
+            "description": "path to the SSL certificate for the webserver",
+            "inherit": false,
+            "value": {
+              "name": "ssl_cert",
+              "description": "path to the SSL certificate for the webserver"
+            }
+          },
+          {
+            "long": "ssl-key",
+            "description": "path to the key to use with the SSL certificate",
+            "inherit": false,
+            "value": {
+              "name": "ssl_key",
+              "description": "path to the key to use with the SSL certificate"
+            }
+          },
+          {
+            "long": "stderr",
+            "description": "redirect stderr to this file",
+            "inherit": false,
+            "value": {
+              "name": "stderr",
+              "description": "redirect stderr to this file"
+            }
+          },
+          {
+            "long": "stdout",
+            "description": "redirect stdout to this file",
+            "inherit": false,
+            "value": {
+              "name": "stdout",
+              "description": "redirect stdout to this file"
+            }
+          },
+          {
+            "short": "t",
+            "long": "worker-timeout",
+            "description": "the timeout for waiting on webserver workers",
+            "inherit": false,
+            "value": {
+              "name": "worker_timeout",
+              "description": "the timeout for waiting on webserver workers"
+            }
+          },
+          {
+            "short": "k",
+            "long": "workerclass",
+            "description": "the worker class to use for Gunicorn",
+            "inherit": false,
+            "value": {
+              "name": "workerclass",
+              "description": "the worker class to use for Gunicorn",
+              "provider": {
+                "values": [
+                  "sync",
+                  "eventlet",
+                  "gevent",
+                  "tornado"
+                ]
+              }
+            }
+          },
+          {
+            "short": "w",
+            "long": "workers",
+            "description": "number of workers to run the webserver on",
+            "inherit": false,
+            "value": {
+              "name": "workers",
+              "description": "number of workers to run the webserver on"
+            }
+          }
+        ]
+      }
+    ]
+  }
+}
