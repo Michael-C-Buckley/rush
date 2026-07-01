@@ -1659,6 +1659,9 @@ fn isIntegerComparisonOperator(operator: []const u8) bool {
 
 fn evalFileUnaryTest(shell: anytype, operator: []const u8, operand: []const u8) EvalError!?bool {
     if (std.mem.eql(u8, operator, "-t")) return evalTerminalTest(shell, operand);
+    if (std.mem.eql(u8, operator, "-r")) return try fileAccess(shell, operand, .read);
+    if (std.mem.eql(u8, operator, "-w")) return try fileAccess(shell, operand, .write);
+    if (std.mem.eql(u8, operator, "-x")) return try fileAccess(shell, operand, .execute);
 
     const follow_symlinks = !std.mem.eql(u8, operator, "-h") and !std.mem.eql(u8, operator, "-L");
     const status = try fileStatus(shell, operand, follow_symlinks);
@@ -1671,12 +1674,9 @@ fn evalFileUnaryTest(shell: anytype, operator: []const u8, operand: []const u8) 
     if (std.mem.eql(u8, operator, "-h")) return if (status) |st| st.kind == .symlink else false;
     if (std.mem.eql(u8, operator, "-L")) return if (status) |st| st.kind == .symlink else false;
     if (std.mem.eql(u8, operator, "-p")) return if (status) |st| st.kind == .named_pipe else false;
-    if (std.mem.eql(u8, operator, "-r")) return try fileAccess(shell, operand, .read);
     if (std.mem.eql(u8, operator, "-S")) return if (status) |st| st.kind == .socket else false;
     if (std.mem.eql(u8, operator, "-s")) return if (status) |st| st.size > 0 else false;
     if (std.mem.eql(u8, operator, "-u")) return if (status) |st| st.mode & 0o4000 != 0 else false;
-    if (std.mem.eql(u8, operator, "-w")) return try fileAccess(shell, operand, .write);
-    if (std.mem.eql(u8, operator, "-x")) return try fileAccess(shell, operand, .execute);
     return null;
 }
 
@@ -3553,50 +3553,123 @@ fn containsPatternMeta(pattern: PathnamePattern) bool {
 }
 
 fn globMatches(pattern: PathnamePattern, text: []const u8) bool {
-    return globMatchesFrom(pattern, 0, text, 0);
-}
+    if (simpleStarGlobMatches(pattern, text)) |matches| return matches;
 
-fn globMatchesFrom(pattern: PathnamePattern, pattern_index: usize, text: []const u8, text_index: usize) bool {
-    if (pattern_index == pattern.text.len) return text_index == text.len;
-    if (pattern.byteIsSpecial(pattern_index) and pattern.text[pattern_index] == '\\' and pattern_index + 1 < pattern.text.len) {
-        if (text_index == text.len) return false;
-        const pattern_len = utf8SequenceLength(pattern.text[pattern_index + 1 ..]);
-        if (pattern_index + 1 + pattern_len > pattern.text.len or text_index + pattern_len > text.len) return false;
-        if (!std.mem.eql(u8, pattern.text[pattern_index + 1 ..][0..pattern_len], text[text_index..][0..pattern_len])) {
+    var pattern_index: usize = 0;
+    var text_index: usize = 0;
+    var star_pattern_index: ?usize = null;
+    var star_text_index: ?usize = null;
+
+    while (true) {
+        if (pattern_index < pattern.text.len and pattern.byteIsSpecial(pattern_index) and
+            pattern.text[pattern_index] == '*')
+        {
+            pattern_index = skipConsecutiveStars(pattern, pattern_index);
+            star_pattern_index = pattern_index;
+            star_text_index = text_index;
+            continue;
+        }
+
+        if (pattern_index == pattern.text.len) {
+            if (text_index == text.len) return true;
+            if (backtrackGlobStar(star_pattern_index, &star_text_index, text)) |next_text| {
+                pattern_index = star_pattern_index.?;
+                text_index = next_text;
+                continue;
+            }
             return false;
         }
-        return globMatchesFrom(pattern, pattern_index + 1 + pattern_len, text, text_index + pattern_len);
-    }
-    if (pattern.byteIsSpecial(pattern_index) and pattern.text[pattern_index] == '*') {
-        var next_pattern = pattern_index + 1;
-        while (next_pattern < pattern.text.len and pattern.byteIsSpecial(next_pattern) and
-            pattern.text[next_pattern] == '*')
-        {
-            next_pattern += 1;
+
+        if (matchGlobAtom(pattern, pattern_index, text, text_index)) |matched| {
+            pattern_index = matched.pattern_index;
+            text_index = matched.text_index;
+            continue;
         }
-        var next_text = text_index;
-        while (next_text <= text.len) : (next_text += if (next_text < text.len) utf8SequenceLength(text[next_text..]) else 1) {
-            if (globMatchesFrom(pattern, next_pattern, text, next_text)) return true;
-            if (next_text == text.len) break;
+
+        if (backtrackGlobStar(star_pattern_index, &star_text_index, text)) |next_text| {
+            pattern_index = star_pattern_index.?;
+            text_index = next_text;
+            continue;
         }
         return false;
     }
-    if (text_index == text.len) return false;
+}
+
+fn simpleStarGlobMatches(pattern: PathnamePattern, text: []const u8) ?bool {
+    var star_start: ?usize = null;
+    var star_end: usize = 0;
+    var index: usize = 0;
+    while (index < pattern.text.len) : (index += 1) {
+        if (!pattern.byteIsSpecial(index)) continue;
+        switch (pattern.text[index]) {
+            '*' => {
+                if (star_start != null and index != star_end) return null;
+                if (star_start == null) star_start = index;
+                star_end = index + 1;
+            },
+            '?', '[', '\\' => return null,
+            else => {},
+        }
+    }
+
+    const star = star_start orelse return std.mem.eql(u8, pattern.text, text);
+    const prefix = pattern.text[0..star];
+    const suffix = pattern.text[star_end..];
+    return text.len >= prefix.len + suffix.len and
+        std.mem.startsWith(u8, text, prefix) and
+        std.mem.endsWith(u8, text, suffix);
+}
+
+fn skipConsecutiveStars(pattern: PathnamePattern, start: usize) usize {
+    std.debug.assert(pattern.byteIsSpecial(start) and pattern.text[start] == '*');
+    var index = start + 1;
+    while (index < pattern.text.len and pattern.byteIsSpecial(index) and pattern.text[index] == '*') {
+        index += 1;
+    }
+    return index;
+}
+
+fn backtrackGlobStar(star_pattern_index: ?usize, star_text_index: *?usize, text: []const u8) ?usize {
+    _ = star_pattern_index orelse return null;
+    const previous_text = star_text_index.*.?;
+    if (previous_text == text.len) return null;
+    const next_text = previous_text + utf8SequenceLength(text[previous_text..]);
+    star_text_index.* = next_text;
+    return next_text;
+}
+
+const GlobAtomMatch = struct {
+    pattern_index: usize,
+    text_index: usize,
+};
+
+fn matchGlobAtom(pattern: PathnamePattern, pattern_index: usize, text: []const u8, text_index: usize) ?GlobAtomMatch {
+    if (pattern.byteIsSpecial(pattern_index) and pattern.text[pattern_index] == '\\' and pattern_index + 1 < pattern.text.len) {
+        if (text_index == text.len) return null;
+        const pattern_len = utf8SequenceLength(pattern.text[pattern_index + 1 ..]);
+        if (pattern_index + 1 + pattern_len > pattern.text.len or text_index + pattern_len > text.len) return null;
+        if (!std.mem.eql(u8, pattern.text[pattern_index + 1 ..][0..pattern_len], text[text_index..][0..pattern_len])) {
+            return null;
+        }
+        return .{ .pattern_index = pattern_index + 1 + pattern_len, .text_index = text_index + pattern_len };
+    }
+    if (text_index == text.len) return null;
     const text_len = utf8SequenceLength(text[text_index..]);
     if (pattern.byteIsSpecial(pattern_index) and pattern.text[pattern_index] == '?') {
-        return globMatchesFrom(pattern, pattern_index + 1, text, text_index + text_len);
+        return .{ .pattern_index = pattern_index + 1, .text_index = text_index + text_len };
     }
     if (pattern.byteIsSpecial(pattern_index) and pattern.text[pattern_index] == '[') {
         if (bracketExpressionMatches(pattern, pattern_index, text[text_index..][0..text_len])) |matched| {
-            return matched.matched and globMatchesFrom(pattern, matched.end, text, text_index + text_len);
+            if (!matched.matched) return null;
+            return .{ .pattern_index = matched.end, .text_index = text_index + text_len };
         }
     }
     const pattern_len = utf8SequenceLength(pattern.text[pattern_index..]);
-    if (pattern_index + pattern_len > pattern.text.len or text_index + pattern_len > text.len) return false;
+    if (pattern_index + pattern_len > pattern.text.len or text_index + pattern_len > text.len) return null;
     if (!std.mem.eql(u8, pattern.text[pattern_index..][0..pattern_len], text[text_index..][0..pattern_len])) {
-        return false;
+        return null;
     }
-    return globMatchesFrom(pattern, pattern_index + pattern_len, text, text_index + pattern_len);
+    return .{ .pattern_index = pattern_index + pattern_len, .text_index = text_index + pattern_len };
 }
 
 const BracketMatch = struct {
