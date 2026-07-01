@@ -1,0 +1,52 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "adr",
+    "description": "manage architectural decision records",
+    "subcommands": [
+      {
+        "name": "init",
+        "description": "create an adr directory",
+        "arguments": {
+          "states": [
+            {
+              "name": "directory",
+              "index": 0,
+              "provider": { "builtin": "directories" },
+              "description": "directory to create"
+            }
+          ]
+        }
+      },
+      {
+        "name": "new",
+        "description": "create a numbered adr file",
+        "options": [
+          {
+            "short": "s",
+            "description": "supersede an existing adr",
+            "inherit": false,
+            "value": {
+              "name": "number",
+              "description": "adr number to supersede"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "title",
+              "description": "adr title",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "help",
+        "description": "show help"
+      }
+    ]
+  }
+}
