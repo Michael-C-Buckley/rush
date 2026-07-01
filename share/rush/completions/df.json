@@ -1,0 +1,97 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "df",
+    "description": "display free disk space",
+    "options": [
+      {
+        "short": "a",
+        "description": "show all mount points",
+        "inherit": false
+      },
+      {
+        "short": "b",
+        "spellings": [
+          "-P"
+        ],
+        "description": "use 512-byte blocks (default)",
+        "inherit": false,
+        "exclusiveGroup": "df.block-size"
+      },
+      {
+        "short": "g",
+        "description": "use 1073741824-byte (1-Gbyte) blocks",
+        "inherit": false,
+        "exclusiveGroup": "df.block-size"
+      },
+      {
+        "short": "m",
+        "description": "use 1048576-byte (1-Mbyte) blocks",
+        "inherit": false,
+        "exclusiveGroup": "df.block-size"
+      },
+      {
+        "short": "k",
+        "description": "use 1024-byte (1-Kbyte) blocks",
+        "inherit": false,
+        "exclusiveGroup": "df.block-size"
+      },
+      {
+        "short": "H",
+        "description": "\"Human-readable\" output, uses base 10 unit suffixes",
+        "inherit": false,
+        "exclusiveGroup": "df.human-readable"
+      },
+      {
+        "short": "h",
+        "description": "\"Human-readable\" output, uses base 2 unit suffixes",
+        "inherit": false,
+        "exclusiveGroup": "df.human-readable"
+      },
+      {
+        "short": "i",
+        "description": "include the number of free inodes",
+        "inherit": false
+      },
+      {
+        "short": "l",
+        "description": "only display information about locally-mounted filesystems",
+        "inherit": false
+      },
+      {
+        "short": "n",
+        "description": "print out the previously obtained statistics",
+        "inherit": false
+      },
+      {
+        "short": "T",
+        "description": "only print out statistics for filesystems of the specified types (comma separated)",
+        "inherit": false,
+        "value": {
+          "name": "filesystem"
+        }
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "file-or-filesystem",
+          "index": 0,
+          "provider": [
+            "builtin.files",
+            "builtin.directories"
+          ]
+        }
+      ]
+    },
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "builtin.directories": {
+        "builtin": "directories"
+      }
+    }
+  }
+}
