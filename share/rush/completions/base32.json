@@ -1,0 +1,66 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "base32",
+    "description": "encode or decode base32 data",
+    "options": [
+      {
+        "long": "help",
+        "short": "h",
+        "description": "display this help and exit",
+        "inherit": false
+      },
+      {
+        "long": "decode",
+        "short": "d",
+        "description": "decode data",
+        "inherit": false
+      },
+      {
+        "long": "ignore-garbage",
+        "short": "i",
+        "description": "when decoding, ignore non-alphabet characters",
+        "inherit": false
+      },
+      {
+        "long": "wrap",
+        "short": "w",
+        "description": "wrap encoded lines after columns character (default 76). Use 0 to disable line wrapping",
+        "inherit": false,
+        "value": {
+          "name": "cols",
+          "values": [
+            "76",
+            "78",
+            "80",
+            "100",
+            "120",
+            "160",
+            "0"
+          ]
+        }
+      },
+      {
+        "long": "version",
+        "description": "output version information and exit",
+        "inherit": false
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "file",
+          "description": "file to encode or decode",
+          "provider": "builtin.files",
+          "index": 0
+        }
+      ]
+    },
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
