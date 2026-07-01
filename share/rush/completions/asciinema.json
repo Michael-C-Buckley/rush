@@ -1,0 +1,225 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "asciinema",
+    "description": "record terminal sessions",
+    "options": [
+      {
+        "long": "version",
+        "description": "show version",
+        "inherit": false
+      },
+      {
+        "short": "h",
+        "long": "help",
+        "description": "show help",
+        "inherit": true
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "rec",
+        "description": "start recording",
+        "options": [
+          {
+            "long": "stdin",
+            "description": "Enable stdin (keyboard) recording",
+            "inherit": false
+          },
+          {
+            "long": "append",
+            "description": "Append to existing recording",
+            "inherit": false
+          },
+          {
+            "long": "raw",
+            "description": "Save raw output, without timing or other metadata",
+            "inherit": false
+          },
+          {
+            "long": "overwrite",
+            "description": "Overwrite the recording if it already exists",
+            "inherit": false
+          },
+          {
+            "short": "c",
+            "long": "command",
+            "description": "set command to record",
+            "inherit": false,
+            "value": {
+              "name": "command",
+              "provider": "builtin.executables",
+              "style": "equals"
+            }
+          },
+          {
+            "short": "e",
+            "long": "env",
+            "description": "capture environment variables",
+            "inherit": false,
+            "value": {
+              "name": "variables",
+              "style": "equals"
+            }
+          },
+          {
+            "short": "t",
+            "long": "title",
+            "description": "set recording title",
+            "inherit": false,
+            "value": {
+              "name": "title",
+              "style": "equals"
+            }
+          },
+          {
+            "short": "i",
+            "long": "idle-time-limit",
+            "description": "limit recorded idle time",
+            "inherit": false,
+            "value": {
+              "name": "seconds",
+              "style": "equals"
+            }
+          },
+          {
+            "long": "cols",
+            "description": "Override terminal columns for recorded process",
+            "inherit": false,
+            "value": {
+              "name": "cols",
+              "style": "equals"
+            }
+          },
+          {
+            "long": "rows",
+            "description": "Override terminal rows for recorded process",
+            "inherit": false,
+            "value": {
+              "name": "rows",
+              "style": "equals"
+            }
+          },
+          {
+            "short": "y",
+            "long": "yes",
+            "description": "answer yes to prompts",
+            "inherit": false
+          },
+          {
+            "short": "q",
+            "long": "quiet",
+            "description": "suppress notices and warnings",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "filename",
+              "index": 0,
+              "provider": "builtin.files",
+              "description": "recording file"
+            }
+          ]
+        }
+      },
+      {
+        "name": "play",
+        "description": "replay recording",
+        "options": [
+          {
+            "short": "i",
+            "long": "idle-time-linit",
+            "description": "limit replayed idle time",
+            "inherit": false,
+            "value": {
+              "name": "seconds",
+              "description": "Can be fractional",
+              "style": "equals"
+            }
+          },
+          {
+            "short": "s",
+            "long": "speed",
+            "description": "Playback speed",
+            "inherit": false,
+            "value": {
+              "name": "factor",
+              "description": "Can be fractional",
+              "style": "equals"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "file-or-url",
+              "provider": [
+                "asciinema.files-or-stdin",
+                "builtin.files"
+              ],
+              "index": 0,
+              "description": "recording file or url"
+            }
+          ]
+        }
+      },
+      {
+        "name": "cat",
+        "description": "print recording output",
+        "arguments": {
+          "states": [
+            {
+              "name": "file-or-url",
+              "provider": [
+                "asciinema.files-or-stdin",
+                "builtin.files"
+              ],
+              "index": 0,
+              "description": "recording file or url"
+            }
+          ]
+        }
+      },
+      {
+        "name": "upload",
+        "description": "upload recording",
+        "arguments": {
+          "states": [
+            {
+              "name": "file-or-url",
+              "provider": [
+                "asciinema.files-or-stdin",
+                "builtin.files"
+              ],
+              "index": 0,
+              "description": "recording file or url"
+            }
+          ]
+        }
+      },
+      {
+        "name": "auth",
+        "description": "manage asciinema account link"
+      }
+    ],
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "builtin.executables": {
+        "builtin": "executables"
+      },
+      "asciinema.files-or-stdin": {
+        "values": [
+          {
+            "value": "-",
+            "description": "stdin"
+          }
+        ]
+      }
+    }
+  }
+}
