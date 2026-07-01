@@ -1,0 +1,238 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "black",
+    "description": "format python code",
+    "options": [
+      {
+        "long": "code",
+        "short": "c",
+        "description": "format the code passed in as a string",
+        "inherit": false,
+        "value": {
+          "name": "string"
+        }
+      },
+      {
+        "long": "line-length",
+        "short": "l",
+        "description": "how many characters per line to allow",
+        "inherit": false,
+        "value": {
+          "name": "line-length"
+        }
+      },
+      {
+        "long": "target-version",
+        "short": "t",
+        "description": "python versions that should be supported",
+        "repeatable": true,
+        "inherit": false,
+        "value": {
+          "name": "python-version",
+          "values": [
+            "py33",
+            "py34",
+            "py35",
+            "py36",
+            "py37",
+            "py38",
+            "py39",
+            "py310",
+            "py311",
+            "py312",
+            "py313"
+          ]
+        }
+      },
+      {
+        "long": "pyi",
+        "description": "format all input files regardless of file extension",
+        "inherit": false
+      },
+      {
+        "long": "ipynb",
+        "description": "format all input files like Jupyter notebooks regardless of file extension",
+        "inherit": false
+      },
+      {
+        "long": "python-cell-magics",
+        "description": "add the given magic to the list of known python-magics",
+        "repeatable": true,
+        "inherit": false,
+        "value": {
+          "name": "python-magic",
+          "values": [
+            "python",
+            "python3",
+            "timeit",
+            "prun",
+            "time",
+            "pypy",
+            "capture"
+          ]
+        }
+      },
+      {
+        "long": "skip-string-normalization",
+        "short": "S",
+        "description": "don't normalize string quotes or prefixes",
+        "inherit": false
+      },
+      {
+        "long": "skip-magic-trailing-comma",
+        "short": "C",
+        "description": "don't use trailing commas as a reason to split lines",
+        "inherit": false
+      },
+      {
+        "long": "preview",
+        "description": "enable potentially disruptive style changes",
+        "inherit": false
+      },
+      {
+        "long": "check",
+        "description": "don't write the files back, just return the status",
+        "inherit": false
+      },
+      {
+        "long": "diff",
+        "description": "don't write the files back, just output a diff for each file on stdout",
+        "inherit": false
+      },
+      {
+        "long": "color",
+        "description": "show colored diff",
+        "inherit": false,
+        "exclusiveGroup": "black.color"
+      },
+      {
+        "long": "no-color",
+        "description": "show uncolored diff",
+        "inherit": false,
+        "exclusiveGroup": "black.color"
+      },
+      {
+        "long": "fast",
+        "description": "skip temporary sanity checks",
+        "inherit": false,
+        "exclusiveGroup": "black.safety"
+      },
+      {
+        "long": "safe",
+        "description": "run temporary sanity checks",
+        "inherit": false,
+        "exclusiveGroup": "black.safety"
+      },
+      {
+        "long": "required-version",
+        "description": "require a specific version of black",
+        "inherit": false,
+        "value": {
+          "name": "version"
+        }
+      },
+      {
+        "long": "include",
+        "description": "regex that matches files and directories that should be included on recursive searches",
+        "inherit": false,
+        "value": {
+          "name": "regex"
+        }
+      },
+      {
+        "long": "exclude",
+        "description": "regex that matches files and directories that should be excluded on recursive searches",
+        "inherit": false,
+        "value": {
+          "name": "regex"
+        }
+      },
+      {
+        "long": "extend-exclude",
+        "description": "additional exclusions",
+        "inherit": false,
+        "value": {
+          "name": "regex"
+        }
+      },
+      {
+        "long": "force-exclude",
+        "description": "exlude matching files and folders even when passed explicitly",
+        "inherit": false,
+        "value": {
+          "name": "regex"
+        }
+      },
+      {
+        "long": "stdin-filename",
+        "description": "the name of the file when passing it through stdin",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "workers",
+        "short": "W",
+        "description": "number of parallel workers",
+        "inherit": false,
+        "value": {
+          "name": "integer"
+        }
+      },
+      {
+        "long": "quiet",
+        "short": "q",
+        "description": "don't emit non-error messages to stderr",
+        "inherit": false,
+        "exclusiveGroup": "black.verbosity"
+      },
+      {
+        "long": "verbose",
+        "short": "v",
+        "description": "also emit messages about files that were not changed or were ignored due to exclusion patterns",
+        "inherit": false,
+        "exclusiveGroup": "black.verbosity"
+      },
+      {
+        "long": "version",
+        "description": "show the version",
+        "inherit": false
+      },
+      {
+        "long": "config",
+        "description": "read configuration from filepath",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "help",
+        "short": "h",
+        "description": "show usage information",
+        "inherit": false
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "path",
+          "provider": "builtin.files",
+          "index": 0,
+          "repeatable": true,
+          "description": "file or directory to format"
+        }
+      ]
+    },
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
