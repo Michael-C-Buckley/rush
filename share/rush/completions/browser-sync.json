@@ -1,0 +1,422 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "browser-sync",
+    "description": "sync browsers while building websites",
+    "options": [
+      {
+        "long": "version",
+        "description": "show version number",
+        "inherit": false
+      },
+      {
+        "long": "help",
+        "description": "show help",
+        "inherit": true
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "site-or-directory",
+          "provider": "builtin.directories",
+          "index": 0,
+          "repeatable": true
+        }
+      ]
+    },
+    "subcommands": [
+      {
+        "name": "start",
+        "description": "start browser-sync",
+        "options": [
+          {
+            "short": "s",
+            "long": "server",
+            "description": "run a Local server (uses your cwd as the web root)",
+            "inherit": false
+          },
+          {
+            "long": "cwd",
+            "description": "working directory",
+            "inherit": false,
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "json",
+            "description": "if true, certain logs will output as json only",
+            "inherit": false
+          },
+          {
+            "long": "serveStatic",
+            "aliases": [
+              "ss"
+            ],
+            "description": "directories to serve static files from",
+            "inherit": false,
+            "value": {
+              "name": "directories",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "port",
+            "description": "specify a port to use",
+            "inherit": false,
+            "value": {
+              "name": "port"
+            }
+          },
+          {
+            "short": "p",
+            "long": "proxy",
+            "description": "proxy an existing server",
+            "inherit": false
+          },
+          {
+            "long": "ws",
+            "description": "proxy mode only - enable websocket proxying",
+            "inherit": false
+          },
+          {
+            "short": "b",
+            "long": "browser",
+            "description": "choose which browser should be auto-opened",
+            "inherit": false,
+            "value": {
+              "name": "name"
+            }
+          },
+          {
+            "short": "w",
+            "long": "watch",
+            "description": "watch files",
+            "inherit": false
+          },
+          {
+            "long": "ignore",
+            "description": "ignore patterns for file watchers",
+            "inherit": false,
+            "value": {
+              "name": "patterns"
+            }
+          },
+          {
+            "short": "f",
+            "long": "files",
+            "description": "file paths to watch",
+            "inherit": false,
+            "value": {
+              "name": "paths",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "index",
+            "description": "specify which file should be used as the index page",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "plugins",
+            "description": "load browser-sync plugins",
+            "inherit": false,
+            "value": {
+              "name": "plugins"
+            }
+          },
+          {
+            "long": "extensions",
+            "description": "specify file extension fallbacks",
+            "inherit": false,
+            "value": {
+              "name": "extensions"
+            }
+          },
+          {
+            "long": "startPath",
+            "description": "specify the start path for the opened browser",
+            "inherit": false,
+            "value": {
+              "name": "start-path"
+            }
+          },
+          {
+            "long": "single",
+            "description": "if true, the connect-history-api-fallback middleware will be added",
+            "inherit": false
+          },
+          {
+            "long": "https",
+            "description": "enable SSL for local development",
+            "inherit": false
+          },
+          {
+            "long": "directory",
+            "description": "show a directory listing for the server",
+            "inherit": false
+          },
+          {
+            "long": "xip",
+            "description": "use xip.io domain routing",
+            "inherit": false
+          },
+          {
+            "long": "tunnel",
+            "description": "use a public url",
+            "inherit": false
+          },
+          {
+            "long": "open",
+            "description": "choose which url is auto-opened (local, external or tunnel), or provide a url",
+            "inherit": false,
+            "value": {
+              "name": "string",
+              "values": [
+                "local",
+                "external",
+                "tunnel"
+              ]
+            }
+          },
+          {
+            "long": "cors",
+            "description": "add Access Control headers to every request",
+            "inherit": false
+          },
+          {
+            "short": "c",
+            "long": "config",
+            "description": "specify a path to a configuration file",
+            "inherit": false,
+            "value": {
+              "name": "path",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "host",
+            "description": "specify a hostname to use",
+            "inherit": false,
+            "value": {
+              "name": "hostname"
+            }
+          },
+          {
+            "long": "listen",
+            "description": "specify a hostname bind to (this will prevent binding to all interfaces)",
+            "inherit": false,
+            "value": {
+              "name": "hostname"
+            }
+          },
+          {
+            "long": "logLevel",
+            "description": "set the logger output level (silent, info or debug)",
+            "inherit": false,
+            "value": {
+              "name": "level",
+              "values": [
+                "silent",
+                "info",
+                "debug"
+              ]
+            }
+          },
+          {
+            "long": "reload-delay",
+            "description": "time in milliseconds to delay the reload event following file changes",
+            "inherit": false,
+            "value": {
+              "name": "milliseconds"
+            }
+          },
+          {
+            "long": "reload-debounce",
+            "description": "restrict the frequency in which browser:reload events can be emitted to connected clients",
+            "inherit": false,
+            "value": {
+              "name": "milliseconds"
+            }
+          },
+          {
+            "long": "ui-port",
+            "description": "specify a port for the UI to use",
+            "inherit": false,
+            "value": {
+              "name": "port"
+            }
+          },
+          {
+            "long": "watchEvents",
+            "description": "specify which file events to respond to",
+            "inherit": false,
+            "value": {
+              "name": "events"
+            }
+          },
+          {
+            "long": "no-notify",
+            "description": "disable the notify element in browsers",
+            "inherit": false
+          },
+          {
+            "long": "no-open",
+            "description": "don't open a new browser window",
+            "inherit": false
+          },
+          {
+            "long": "no-snippet",
+            "description": "disable the snippet injection",
+            "inherit": false
+          },
+          {
+            "long": "no-online",
+            "description": "force offline usage",
+            "inherit": false
+          },
+          {
+            "long": "no-ui",
+            "description": "don't start the user interface",
+            "inherit": false
+          },
+          {
+            "long": "no-ghost-mode",
+            "description": "disable Ghost Mode",
+            "inherit": false
+          },
+          {
+            "long": "no-inject-changes",
+            "description": "reload on every file change",
+            "inherit": false
+          },
+          {
+            "long": "no-reload-on-restart",
+            "description": "don't auto-reload all browsers following a restart",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "init",
+        "description": "create a configuration file",
+        "options": [
+          {
+            "long": "cwd",
+            "description": "working directory",
+            "inherit": false,
+            "value": {
+              "name": "string",
+              "provider": "builtin.directories"
+            }
+          }
+        ]
+      },
+      {
+        "name": "reload",
+        "description": "send a reload event over http protocol",
+        "options": [
+          {
+            "short": "f",
+            "long": "files",
+            "description": "file paths to reload",
+            "inherit": false,
+            "value": {
+              "name": "paths",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "short": "p",
+            "long": "port",
+            "description": "target a running instance by port number",
+            "inherit": false,
+            "value": {
+              "name": "port"
+            }
+          },
+          {
+            "short": "u",
+            "long": "url",
+            "description": "provide the full url to the running browsersync isntance",
+            "inherit": false,
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "cwd",
+            "description": "working directory",
+            "inherit": false,
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          }
+        ]
+      },
+      {
+        "name": "recipe",
+        "description": "generate the files for a recipe",
+        "options": [
+          {
+            "long": "cwd",
+            "description": "working directory",
+            "inherit": false,
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "short": "o",
+            "long": "output",
+            "description": "specify an output directory",
+            "inherit": false,
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "recipe-name",
+              "index": 0,
+              "values": [
+                "gulp.sass",
+                "gulp.task",
+                "grunt.sass",
+                "proxy",
+                "server",
+                "static"
+              ]
+            }
+          ]
+        },
+        "subcommands": [
+          {
+            "name": "ls",
+            "description": "list recipes"
+          }
+        ]
+      }
+    ],
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "builtin.directories": {
+        "builtin": "directories"
+      }
+    }
+  }
+}
