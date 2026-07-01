@@ -304,6 +304,7 @@ fn staticExternalPipelineStageRequest(
 
     const fields = try shell.scratchAllocator().alloc([]const u8, simple.words.len);
     for (simple.words, 0..) |word, index| {
+        if (wordExpandsLeadingTilde(shell, word)) return null;
         fields[index] = staticLiteralWord(word) orelse return null;
     }
     if (builtin.lookup(fields[0]) != null or shell.state.getFunction(fields[0]) != null) return null;
@@ -558,6 +559,7 @@ fn expandForWordFields(shell: anytype, words: []const ast.Word) ![]const []const
     for (words) |word| {
         if (try appendUnquotedAtFields(shell, &fields, word) or
             try appendUnquotedStarFields(shell, &fields, word) or
+            try appendEmbeddedUnquotedPositionalFields(shell, &fields, word) or
             try appendSpecialQuotedFields(shell, &fields, word))
         {
             continue;
@@ -747,6 +749,49 @@ fn appendUnquotedStarFields(shell: anytype, fields: *std.ArrayList([]const u8), 
     if (!wordIsUnquotedStar(word)) return false;
     try appendUnquotedPositionalFields(shell, fields);
     return true;
+}
+
+fn appendEmbeddedUnquotedPositionalFields(shell: anytype, fields: *std.ArrayList([]const u8), word: ast.Word) !bool {
+    const parts = switch (word.data) {
+        .literal => return false,
+        .parts => |parts| parts,
+    };
+    if (parts.len < 2) return false;
+
+    var has_positional = false;
+    for (parts) |part| switch (part) {
+        .literal => {},
+        .parameter => |parameter| {
+            if (!isUnquotedPositionalListParameter(parameter)) return false;
+            has_positional = true;
+        },
+        else => return false,
+    };
+    if (!has_positional) return false;
+
+    const allocator = shell.scratchAllocator();
+    var logical_fields: std.ArrayList([]const u8) = .empty;
+    try logical_fields.append(allocator, "");
+    for (parts) |part| switch (part) {
+        .literal => |literal| try appendTextToLastField(shell, &logical_fields, literal),
+        .parameter => {
+            const positionals = shell.state.positionals;
+            if (positionals.len == 0) continue;
+            try appendTextToLastField(shell, &logical_fields, positionals[0]);
+            if (positionals.len > 1) try logical_fields.appendSlice(allocator, positionals[1..]);
+        },
+        else => unreachable,
+    };
+
+    for (logical_fields.items) |field| try appendSplitFields(shell, fields, field, true);
+    return true;
+}
+
+fn isUnquotedPositionalListParameter(parameter: ast.ParameterExpansion) bool {
+    return parameter.op == null and parameter.parameter == .special and switch (parameter.parameter.special) {
+        .at, .star => true,
+        else => false,
+    };
 }
 
 fn appendUnquotedPositionalFields(shell: anytype, fields: *std.ArrayList([]const u8)) !void {
@@ -2160,6 +2205,7 @@ fn evalEvalBuiltin(shell: anytype, args: []const []const u8) EvalError!result.Ev
     return shell.evalSourceNested(src) catch |err| switch (err) {
         error.ExpectedCommand,
         error.ExpectedRedirectionTarget,
+        error.InvalidParameterExpansion,
         error.UnclosedCommandSubstitution,
         error.UnclosedQuote,
         error.UnexpectedToken,
@@ -2941,6 +2987,7 @@ fn expandWordFields(
     for (words) |word| {
         if (try appendUnquotedAtFields(shell, &fields, word) or
             try appendUnquotedStarFields(shell, &fields, word) or
+            try appendEmbeddedUnquotedPositionalFields(shell, &fields, word) or
             try appendSpecialQuotedFields(shell, &fields, word))
         {
             continue;
@@ -3232,6 +3279,8 @@ fn expandPathnamePattern(
     if (component.text.len == 0) {
         if (prefix.len == 0 and slash_index == 0 and rest.text.len != 0) {
             try expandPathnamePattern(shell, allocator, matches, "/", rest);
+        } else if (slash_index != null and rest.text.len != 0) {
+            try expandPathnamePattern(shell, allocator, matches, try std.fmt.allocPrint(allocator, "{s}/", .{prefix}), rest);
         }
         return;
     }

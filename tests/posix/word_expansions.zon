@@ -53,6 +53,16 @@
             .status = 0,
         },
         .{
+            .name = "empty braced parameter expansion is an error",
+            .script =
+            \\: ${}
+            \\printf bad
+            ,
+            .stdout = "",
+            .stderr_match = .nonempty,
+            .status_match = .nonzero,
+        },
+        .{
             .name = "parameter expansion removes backslash newline in default word",
             .script = "unset A; printf '<%s>\\n' ${A:-o\\\nk}\n",
             .stdout =
@@ -494,6 +504,19 @@
             ,
             .stdout =
             \\start
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "tilde expansion applies in command substitution external commands",
+            .script =
+            \\expanded=$(echo ~)
+            \\case $expanded in "$HOME") printf 'tilde\n';; *) printf 'bad:%s\n' "$expanded";; esac
+            ,
+            .stdout =
+            \\tilde
             \\
             ,
             .stderr = "",
@@ -1173,6 +1196,22 @@
             .status = 0,
         },
         .{
+            .name = "embedded unquoted positional star preserves empty IFS fields",
+            .script =
+            \\IFS=
+            \\set -- a 'b  e   e' c
+            \\printf '<%s>\n' HI$*BYE
+            ,
+            .stdout =
+            \\<HIa>
+            \\<b  e   e>
+            \\<cBYE>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "quoted parameter default with unquoted star joins with first IFS character",
             .script =
             \\set -- 'abc' 'def ghi' 'jkl'
@@ -1633,6 +1672,22 @@
             .stdout =
             \\<root.txt>
             \\<dir/file.txt>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "pathname expansion traverses redundant slash separators",
+            .script =
+            \\mkdir dir
+            \\: >dir/a
+            \\: >dir/b
+            \\printf '<%s>\n' dir//*
+            ,
+            .stdout =
+            \\<dir//a>
+            \\<dir//b>
             \\
             ,
             .stderr = "",

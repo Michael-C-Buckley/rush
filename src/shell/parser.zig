@@ -13,6 +13,7 @@ pub const ParseError = error{
     ExpectedCommand,
     ExpectedRedirectionTarget,
     IncompleteHereDoc,
+    InvalidParameterExpansion,
     UnclosedCommandSubstitution,
     UnclosedQuote,
     UnexpectedToken,
@@ -622,6 +623,7 @@ const Parser = struct {
                             literal_start = index;
                             continue;
                         }
+                        return error.InvalidParameterExpansion;
                     }
                     if (name_start < end) {
                         if (parseSingleParameter(text[name_start])) |parameter| {
