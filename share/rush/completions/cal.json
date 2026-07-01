@@ -1,0 +1,58 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "cal",
+    "description": "display a calendar",
+    "options": [
+      {
+        "short": "h",
+        "description": "turns off highlighting of today",
+        "inherit": false
+      },
+      {
+        "short": "j",
+        "description": "display Julian days (days one-based, numbered from January 1)",
+        "inherit": false
+      },
+      {
+        "short": "m",
+        "description": "display the specified month. If month is specified as a decimal number, it may be followed by the letter \u2018f\u2019 or \u2018p\u2019 to indicate the following or preceding month",
+        "inherit": false,
+        "value": {
+          "name": "month",
+          "values": [
+            "january",
+            "february",
+            "march",
+            "april",
+            "may",
+            "june",
+            "july",
+            "august",
+            "september",
+            "october",
+            "november",
+            "december"
+          ]
+        },
+        "exclusiveGroup": "cal.range"
+      },
+      {
+        "short": "y",
+        "description": "display a calendar for the specified year",
+        "inherit": false,
+        "exclusiveGroup": "cal.range"
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "year",
+          "description": "year to display",
+          "index": 0
+        }
+      ]
+    }
+  }
+}
