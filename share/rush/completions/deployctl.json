@@ -1,0 +1,99 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "deployctl",
+    "description": "deploy projects to Deno Deploy",
+    "options": [
+      {
+        "long": "help",
+        "short": "h",
+        "description": "show help",
+        "inherit": true
+      },
+      {
+        "short": "V",
+        "long": "version",
+        "description": "show the version",
+        "inherit": false
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "deploy",
+        "description": "deploy a script to Deno Deploy",
+        "options": [
+          {
+            "long": "exclude",
+            "description": "exclude files matching a pattern",
+            "inherit": false,
+            "value": {
+              "name": "pattern"
+            }
+          },
+          {
+            "long": "include",
+            "description": "only upload files matching a pattern",
+            "inherit": false,
+            "value": {
+              "name": "pattern"
+            }
+          },
+          {
+            "long": "no-static",
+            "description": "do not include CWD files as static files",
+            "inherit": false
+          },
+          {
+            "long": "prod",
+            "description": "create a production deployment",
+            "inherit": false
+          },
+          {
+            "short": "p",
+            "long": "project",
+            "description": "set the project to deploy to",
+            "inherit": false,
+            "value": {
+              "name": "name"
+            }
+          },
+          {
+            "long": "token",
+            "description": "set the API token",
+            "inherit": false,
+            "value": {
+              "name": "token"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "entrypoint",
+              "index": 0,
+              "provider": "builtin.files"
+            }
+          ]
+        }
+      },
+      {
+        "name": "upgrade",
+        "description": "upgrade deployctl",
+        "arguments": {
+          "states": [
+            {
+              "name": "version",
+              "index": 0
+            }
+          ]
+        }
+      }
+    ],
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
