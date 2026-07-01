@@ -1047,6 +1047,7 @@ fn evalSimpleScoped(shell: anytype, command: ast.SimpleCommand) EvalError!result
         if (definition.id == .command) {
             return evalCommandBuiltin(shell, fields, command.assignments, &redirections, &restore_redirections);
         }
+        if (definition.id == .source) return evalDotBuiltin(shell, fields);
         if (definition.id == .pwd) return evalPwdBuiltin(shell, fields);
         if (definition.id == .read) return evalReadBuiltin(shell, fields, command.assignments);
         if (definition.id == .test_ or definition.id == .bracket) {
@@ -1283,6 +1284,7 @@ fn evalDotBuiltin(shell: anytype, args: []const []const u8) EvalError!result.Eva
     var restored_positionals = false;
     errdefer if (!restored_positionals) restorePositionals(shell, saved_positionals) catch {};
 
+    const keep_positional_changes = args.len > 2 and shell.state.options.mode == .bash;
     if (args.len > 2) try shell.state.setPositionals(args[2..]);
 
     const src: source_mod.Source = .{
@@ -1292,7 +1294,7 @@ fn evalDotBuiltin(shell: anytype, args: []const []const u8) EvalError!result.Eva
         .text = script,
     };
     const evaluated = try shell.evalSourceNested(src);
-    try restorePositionals(shell, saved_positionals);
+    if (!keep_positional_changes) try restorePositionals(shell, saved_positionals);
     restored_positionals = true;
     if (evaluated.flow == .return_) return .{ .status = evaluated.status };
     return evaluated;
@@ -1412,6 +1414,12 @@ fn evalCommandBuiltin(
                 restoreVariables(shell, saved);
                 restored_assignments = true;
                 return suppressFatalFlow(evaluated);
+            },
+            .source => {
+                const evaluated = try evalDotBuiltin(shell, args[index..]);
+                restoreVariables(shell, saved);
+                restored_assignments = true;
+                return evaluated;
             },
             .eval => {
                 const evaluated = try evalEvalBuiltin(shell, args[index..]);

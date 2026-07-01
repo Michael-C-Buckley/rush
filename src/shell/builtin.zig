@@ -48,6 +48,7 @@ pub const Id = enum {
     return_,
     set,
     shift,
+    source,
     test_,
     times,
     trap,
@@ -97,6 +98,7 @@ pub const core_definitions: DefinitionMap = .initComptime(.{
     .{ "return", Definition{ .name = "return", .id = .return_, .kind = .special } },
     .{ "set", Definition{ .name = "set", .id = .set, .kind = .special } },
     .{ "shift", Definition{ .name = "shift", .id = .shift, .kind = .special } },
+    .{ "source", Definition{ .name = "source", .id = .source, .kind = .regular } },
     .{ "test", Definition{ .name = "test", .id = .test_, .kind = .regular } },
     .{ "times", Definition{ .name = "times", .id = .times, .kind = .special } },
     .{ "trap", Definition{ .name = "trap", .id = .trap, .kind = .special } },
@@ -156,6 +158,12 @@ pub fn lookup(name: []const u8) ?Definition {
     return default_registry.lookup(name);
 }
 
+pub fn lookupInMode(name: []const u8, mode: state_mod.Mode) ?Definition {
+    const definition = lookup(name) orelse return null;
+    if (mode == .posix and definition.id == .source) return null;
+    return definition;
+}
+
 pub fn eval(shell: anytype, definition: Definition, args: []const []const u8) !result.EvalResult {
     definition.validate();
     std.debug.assert(args.len != 0);
@@ -176,6 +184,7 @@ pub fn eval(shell: anytype, definition: Definition, args: []const []const u8) !r
         .return_ => evalReturn(shell, args),
         .set => evalSet(shell, args),
         .shift => evalShift(shell, args),
+        .source => unreachable,
         .times => evalTimes(shell, args),
         .trap => evalTrap(shell, args),
         .ulimit => .{},
