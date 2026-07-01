@@ -1,0 +1,16 @@
+__rush_complete_cordova_platforms() {
+  if test -d platforms; then
+    find platforms -mindepth 1 -maxdepth 1 -type d 2>/dev/null | sed 's#^platforms/##'
+  else
+    printf '%s
+' android ios browser electron
+  fi | while IFS= read -r platform; do
+    test -n "$platform" && rush_complete candidate "$platform" --kind plain --description platform
+  done
+}
+
+__rush_complete_cordova_plugins() {
+  find plugins -mindepth 1 -maxdepth 1 -type d 2>/dev/null | sed 's#^plugins/##' | while IFS= read -r plugin; do
+    test -n "$plugin" && rush_complete candidate "$plugin" --kind plain --description plugin
+  done
+}
