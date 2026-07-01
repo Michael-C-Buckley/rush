@@ -670,19 +670,21 @@ fn appendQuotedAtPartsFields(shell: anytype, fields: *std.ArrayList([]const u8),
     const positionals = shell.state.positionals;
     const allocator = shell.scratchAllocator();
     const start_len = fields.items.len;
+    var expanded_positionals = false;
     try fields.append(allocator, "");
     var segment_start: usize = 0;
     for (quoted, 0..) |part, index| {
         if (!wordPartIsAtParameter(part)) continue;
         try appendTextToLastField(shell, fields, try expandWordParts(shell, quoted[segment_start..index], null));
         if (positionals.len != 0) {
+            expanded_positionals = true;
             try appendTextToLastField(shell, fields, positionals[0]);
             if (positionals.len > 1) try fields.appendSlice(allocator, positionals[1..]);
         }
         segment_start = index + 1;
     }
     try appendTextToLastField(shell, fields, try expandWordParts(shell, quoted[segment_start..], null));
-    if (fields.items.len == start_len + 1 and fields.items[start_len].len == 0) {
+    if (!expanded_positionals and fields.items.len == start_len + 1 and fields.items[start_len].len == 0) {
         _ = fields.pop();
     }
 }

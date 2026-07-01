@@ -346,6 +346,21 @@
             .status = 0,
         },
         .{
+            .name = "quoted at preserves one empty positional parameter",
+            .script =
+            \\set -- ''
+            \\printf '<%s>\n' "$#"
+            \\for x in "$@"; do printf '[%s]\n' "$x"; done
+            ,
+            .stdout =
+            \\<1>
+            \\[]
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "quoted star joins positional parameters with the first IFS character",
             .script =
             \\IFS=,
