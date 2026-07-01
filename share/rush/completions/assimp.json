@@ -1,0 +1,336 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "assimp",
+    "description": "inspect and convert 3d assets",
+    "options": [
+      {
+        "short": "h",
+        "long": "help",
+        "description": "show help",
+        "inherit": false
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "listext",
+        "description": "List all known file extensions available for import"
+      },
+      {
+        "name": "listexport",
+        "description": "List all supported export formats"
+      },
+      {
+        "name": "knowext",
+        "description": "List all known file extensions available for import",
+        "arguments": {
+          "states": [
+            {
+              "name": "extension",
+              "description": "Check whether a particular file extension is known by us",
+              "index": 0,
+              "provider": "assimp.import-extensions"
+            }
+          ]
+        }
+      },
+      {
+        "name": "exportinfo",
+        "description": "Show basic information on a specific export format",
+        "arguments": {
+          "states": [
+            {
+              "name": "extension",
+              "description": "Specific file extension",
+              "index": 0,
+              "provider": "assimp.export-extensions"
+            }
+          ]
+        }
+      },
+      {
+        "name": "info",
+        "description": "Load a model file and print basic statistics. Full postprocessing i...",
+        "options": [
+          {
+            "short": "r",
+            "long": "raw",
+            "description": "No postprocessing, do a raw import",
+            "inherit": false
+          },
+          {
+            "short": "v",
+            "long": "verbose",
+            "description": "Print verbose info such as node transform data",
+            "inherit": false
+          },
+          {
+            "short": "s",
+            "long": "silent",
+            "description": "Print only minimal info",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show command help",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "file",
+              "description": "Print basic structure of a 3D model",
+              "provider": "builtin.files",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "export",
+        "description": "Export a file to one of the supported output formats",
+        "options": [
+          {
+            "short": "f",
+            "long": "format",
+            "description": "Export file formats supported by Assimp",
+            "inherit": false,
+            "value": {
+              "name": "format",
+              "provider": "assimp.export-extensions"
+            }
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show command help",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "model",
+              "description": "Relative or absolute path to the input model",
+              "provider": "builtin.files",
+              "index": 0
+            },
+            {
+              "name": "out",
+              "description": "Relative or absolute path to write the output export to",
+              "provider": "builtin.directories",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "extract",
+        "description": "Extract embedded texture images",
+        "options": [
+          {
+            "short": "t",
+            "long": "texture",
+            "description": "Zero-based index of the texture to be extracted",
+            "inherit": false,
+            "value": {
+              "name": "index"
+            }
+          },
+          {
+            "spellings": [
+              "-ba",
+              "--bmp-with-alpha"
+            ],
+            "description": "Specifies whether output BMPs contain an alpha channel or not",
+            "inherit": false
+          },
+          {
+            "short": "f",
+            "long": "format",
+            "description": "set output texture format",
+            "inherit": false,
+            "value": {
+              "name": "format",
+              "provider": "assimp.texture-formats"
+            }
+          },
+          {
+            "short": "s",
+            "spellings": [
+              "--nosuffix"
+            ],
+            "description": "Prevents the tool from adding the _img<n> suffix to all filenames. This option must be specified together with -t to ensure that just one image is written",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show command help",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-cfast"
+            ],
+            "description": "use fast post-processing",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-cdefault"
+            ],
+            "description": "use default post-processing",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-cfull"
+            ],
+            "description": "use full post-processing",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "model",
+              "description": "Relative or absolute path to the input model",
+              "provider": "builtin.files",
+              "index": 0
+            },
+            {
+              "name": "out",
+              "description": "Relative or absolute path to write the output images to",
+              "provider": "builtin.directories",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "dump",
+        "description": "Convert models to a binary or textual dump (ASSBIN/ASSXML)",
+        "options": [
+          {
+            "short": "b",
+            "long": "binary",
+            "description": "If true, the dump is written in binary format",
+            "inherit": false
+          },
+          {
+            "short": "s",
+            "long": "short",
+            "description": "If true, the dump is shortened to include only min/max values for all vertex components and animation channels",
+            "inherit": false
+          },
+          {
+            "short": "z",
+            "long": "compressed",
+            "description": "If true, Compressed",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show command help",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-cfast"
+            ],
+            "description": "use fast post-processing",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-cdefault"
+            ],
+            "description": "use default post-processing",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-cfull"
+            ],
+            "description": "use full post-processing",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "model",
+              "description": "Relative or absolute path to the input model",
+              "provider": "builtin.files",
+              "index": 0
+            },
+            {
+              "name": "out",
+              "description": "Relative or absolute path to write the output dump to. If it is omitted, the dump is written to '<model>-dump.txt'",
+              "provider": "builtin.directories",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "cmpdump",
+        "description": "Compare dumps created using 'assimp dump <file> -s ...'",
+        "arguments": {
+          "states": [
+            {
+              "name": "actual",
+              "description": "Mini dump now",
+              "provider": "builtin.files",
+              "index": 0
+            },
+            {
+              "name": "expected",
+              "description": "Archived dump from some point in the past",
+              "provider": "builtin.files",
+              "index": 1
+            }
+          ]
+        },
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show command help",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "version",
+        "description": "Display Assimp version"
+      }
+    ],
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "assimp.import-extensions": {
+        "function": "__rush_complete_assimp_import_extensions"
+      },
+      "assimp.export-extensions": {
+        "function": "__rush_complete_assimp_export_extensions"
+      },
+      "assimp.texture-formats": {
+        "values": [
+          "bmp",
+          "tga"
+        ]
+      }
+    }
+  }
+}

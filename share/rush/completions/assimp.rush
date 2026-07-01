@@ -1,0 +1,11 @@
+__rush_complete_assimp_import_extensions() {
+  assimp listext 2>/dev/null | tr ';' '\n' | while read ext; do
+    test -n "$ext" && rush_complete candidate "$ext" --kind plain --description extension
+  done
+}
+
+__rush_complete_assimp_export_extensions() {
+  assimp listexport 2>/dev/null | while read ext; do
+    test -n "$ext" && rush_complete candidate "$ext" --kind plain --description extension
+  done
+}
