@@ -1,0 +1,114 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "basenc",
+    "description": "encode or decode data with base encodings",
+    "options": [
+      {
+        "long": "help",
+        "short": "h",
+        "description": "display this help and exit",
+        "inherit": false
+      },
+      {
+        "long": "base64",
+        "description": "same as 'base64' program (RFC4648 section 4)",
+        "inherit": false,
+        "exclusiveGroup": "basenc.encoding"
+      },
+      {
+        "long": "base64url",
+        "description": "file- and url-safe base64 (RFC4648 section 5)",
+        "inherit": false,
+        "exclusiveGroup": "basenc.encoding"
+      },
+      {
+        "long": "base32",
+        "description": "same as 'base32' program (RFC4648 section 6)",
+        "inherit": false,
+        "exclusiveGroup": "basenc.encoding"
+      },
+      {
+        "long": "base32hex",
+        "description": "extended hex alphabet base32 (RFC4648 section 7)",
+        "inherit": false,
+        "exclusiveGroup": "basenc.encoding"
+      },
+      {
+        "long": "base16",
+        "description": "hex encoding (RFC4648 section 8)",
+        "inherit": false,
+        "exclusiveGroup": "basenc.encoding"
+      },
+      {
+        "long": "base2msbf",
+        "description": "bit string with most significant bit (msb) first",
+        "inherit": false,
+        "exclusiveGroup": "basenc.encoding"
+      },
+      {
+        "long": "base2lsbf",
+        "description": "bit string with least significant bit (lsb) first",
+        "inherit": false,
+        "exclusiveGroup": "basenc.encoding"
+      },
+      {
+        "long": "decode",
+        "short": "d",
+        "description": "decode data",
+        "inherit": false
+      },
+      {
+        "long": "ignore-garbage",
+        "short": "i",
+        "description": "when decoding, ignore non-alphabet characters",
+        "inherit": false
+      },
+      {
+        "long": "wrap",
+        "short": "w",
+        "description": "wrap encoded lines after columns character (default 76). Use 0 to disable line wrapping",
+        "inherit": false,
+        "value": {
+          "name": "cols",
+          "values": [
+            "76",
+            "78",
+            "80",
+            "100",
+            "120",
+            "160",
+            "0"
+          ]
+        }
+      },
+      {
+        "long": "z85",
+        "description": "ascii85-like encoding (ZeroMQ spec:32/Z85); when encoding, input length must be a multiple of 4; when decoding, input length must be a multiple of 5",
+        "inherit": false,
+        "exclusiveGroup": "basenc.encoding"
+      },
+      {
+        "long": "version",
+        "description": "output version information and exit",
+        "inherit": false
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "file",
+          "description": "file to encode or decode",
+          "provider": "builtin.files",
+          "index": 0
+        }
+      ]
+    },
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
