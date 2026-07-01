@@ -621,40 +621,47 @@ fn appendEmbeddedQuotedAtFields(shell: anytype, fields: *std.ArrayList([]const u
             else => return false,
         } else return false,
     };
-    const at_index = quotedAtPartIndex(quoted) orelse return false;
-    if (shell.state.positionals.len == 0) {
-        const expanded = try expandWordParts(shell, quoted, null);
-        if (expanded.len != 0) try fields.append(shell.scratchAllocator(), expanded);
-        return true;
-    }
+    if (!wordPartsContainAtParameter(quoted)) return false;
 
-    const prefix = try expandWordParts(shell, quoted[0..at_index], null);
-    const suffix = try expandWordParts(shell, quoted[at_index + 1 ..], null);
     const positionals = shell.state.positionals;
     const allocator = shell.scratchAllocator();
-    try fields.append(allocator, try std.fmt.allocPrint(allocator, "{s}{s}", .{ prefix, positionals[0] }));
-    if (positionals.len > 2) try fields.appendSlice(allocator, positionals[1 .. positionals.len - 1]);
-    if (positionals.len > 1) {
-        try fields.append(allocator, try std.fmt.allocPrint(allocator, "{s}{s}", .{ positionals[positionals.len - 1], suffix }));
-    } else if (suffix.len != 0) {
-        const last = &fields.items[fields.items.len - 1];
-        last.* = try std.fmt.allocPrint(allocator, "{s}{s}", .{ last.*, suffix });
+    const start_len = fields.items.len;
+    try fields.append(allocator, "");
+    var segment_start: usize = 0;
+    for (quoted, 0..) |part, index| {
+        if (!wordPartIsAtParameter(part)) continue;
+        try appendTextToLastField(shell, fields, try expandWordParts(shell, quoted[segment_start..index], null));
+        if (positionals.len != 0) {
+            try appendTextToLastField(shell, fields, positionals[0]);
+            if (positionals.len > 1) try fields.appendSlice(allocator, positionals[1..]);
+        }
+        segment_start = index + 1;
+    }
+    try appendTextToLastField(shell, fields, try expandWordParts(shell, quoted[segment_start..], null));
+    if (fields.items.len == start_len + 1 and fields.items[start_len].len == 0) {
+        _ = fields.pop();
     }
     return true;
 }
 
-fn quotedAtPartIndex(parts: []const ast.WordPart) ?usize {
-    var found: ?usize = null;
-    for (parts, 0..) |part, index| switch (part) {
+fn appendTextToLastField(shell: anytype, fields: *std.ArrayList([]const u8), text: []const u8) !void {
+    if (text.len == 0) return;
+    const last = &fields.items[fields.items.len - 1];
+    last.* = try std.fmt.allocPrint(shell.scratchAllocator(), "{s}{s}", .{ last.*, text });
+}
+
+fn wordPartsContainAtParameter(parts: []const ast.WordPart) bool {
+    for (parts) |part| if (wordPartIsAtParameter(part)) return true;
+    return false;
+}
+
+fn wordPartIsAtParameter(part: ast.WordPart) bool {
+    return switch (part) {
         .parameter => |parameter| {
-            if (parameter.op != null or parameter.parameter != .special or parameter.parameter.special != .at) continue;
-            if (found != null) return null;
-            found = index;
+            return parameter.op == null and parameter.parameter == .special and parameter.parameter.special == .at;
         },
-        .double_quoted => return null,
-        else => {},
+        else => false,
     };
-    return found;
 }
 
 fn singleDoubleQuotedParameter(word: ast.Word) ?ast.ParameterExpansion {

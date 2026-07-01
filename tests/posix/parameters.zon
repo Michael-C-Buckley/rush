@@ -120,6 +120,25 @@
             .status = 0,
         },
         .{
+            .name = "repeated double-quoted at concatenates adjacent boundary fields",
+            .script =
+            \\set -- abc 'def ghi' jkl
+            \\set "$@$@"
+            \\printf '<%s>\n' "$#" "$1" "$2" "$3" "$4" "$5"
+            ,
+            .stdout =
+            \\<5>
+            \\<abc>
+            \\<def ghi>
+            \\<jklabc>
+            \\<def ghi>
+            \\<jkl>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "double-quoted star joins positional parameters with the first IFS byte",
             .script =
             \\set -- a 'b c' d
