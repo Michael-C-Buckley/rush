@@ -37,6 +37,7 @@ pub fn Shell(comptime Host: type) type {
                 .arenas = memory.Arenas.init(allocator),
             };
             shell.state.putVariable(.{ .name = "PS4", .value = "+ " }) catch unreachable;
+            shell.state.putVariable(.{ .name = "IFS", .value = " \t\n" }) catch unreachable;
             shell.state.arg_zero = options.arg_zero;
             shell.state.positionals = options.positionals;
             return shell;
@@ -176,4 +177,14 @@ test "Shell caches exec environment pointer array" {
     try std.testing.expectEqualStrings("A=1", std.mem.span(first[0].?));
     try std.testing.expectEqualStrings("B=2", std.mem.span(first[1].?));
     try std.testing.expectEqual(@as(?[*:0]const u8, null), first[2]);
+}
+
+test "Shell initializes IFS from the shell default instead of the environment" {
+    const TestHost = struct {};
+    const env = [_][*:0]const u8{"IFS=abc"};
+
+    var shell = Shell(TestHost).init(std.testing.allocator, .{}, .{ .env = &env });
+    defer shell.deinit();
+
+    try std.testing.expectEqualStrings(" \t\n", shell.state.getVariable("IFS").?.value);
 }
