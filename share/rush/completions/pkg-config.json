@@ -1,0 +1,211 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "pkg-config",
+    "description": "query installed library metadata",
+    "options": [
+      {
+        "long": "mod-version",
+        "description": "show module versions",
+        "inherit": false
+      },
+      {
+        "long": "version",
+        "description": "show pkg-config version",
+        "inherit": false
+      },
+      {
+        "long": "atleast-pkgconfig-version",
+        "description": "require a pkg-config version",
+        "inherit": false,
+        "value": {
+          "name": "version"
+        }
+      },
+      {
+        "long": "help",
+        "description": "show help",
+        "inherit": false
+      },
+      {
+        "long": "print-errors",
+        "description": "print module lookup errors",
+        "inherit": false
+      },
+      {
+        "long": "short-errors",
+        "description": "print short errors",
+        "inherit": false
+      },
+      {
+        "long": "silence-errors",
+        "description": "suppress module lookup errors",
+        "inherit": false
+      },
+      {
+        "long": "errors-to-stdout",
+        "description": "print errors to stdout",
+        "inherit": false
+      },
+      {
+        "long": "debug",
+        "description": "print debugging information",
+        "inherit": false
+      },
+      {
+        "long": "cflags",
+        "description": "print compiler flags",
+        "inherit": false
+      },
+      {
+        "long": "cflags-only-I",
+        "description": "print include path flags",
+        "inherit": false
+      },
+      {
+        "long": "cflags-only-other",
+        "description": "print other compiler flags",
+        "inherit": false
+      },
+      {
+        "long": "libs",
+        "description": "print linker flags",
+        "inherit": false
+      },
+      {
+        "long": "libs-only-L",
+        "description": "print library path flags",
+        "inherit": false
+      },
+      {
+        "long": "libs-only-l",
+        "description": "print library link flags",
+        "inherit": false
+      },
+      {
+        "long": "libs-only-other",
+        "description": "print other linker flags",
+        "inherit": false
+      },
+      {
+        "long": "variable",
+        "description": "print a package variable",
+        "inherit": false,
+        "value": {
+          "name": "variable-name"
+        }
+      },
+      {
+        "long": "define-variable",
+        "description": "override a package variable",
+        "inherit": false,
+        "value": {
+          "name": "variable"
+        }
+      },
+      {
+        "long": "print-variables",
+        "description": "list package variables",
+        "inherit": false
+      },
+      {
+        "long": "uninstalled",
+        "description": "test for uninstalled packages",
+        "inherit": false
+      },
+      {
+        "long": "exists",
+        "description": "test whether modules exist",
+        "inherit": false
+      },
+      {
+        "long": "atleast-version",
+        "description": "require at least a module version",
+        "inherit": false,
+        "value": {
+          "name": "version"
+        }
+      },
+      {
+        "long": "exact-version",
+        "description": "require an exact module version",
+        "inherit": false,
+        "value": {
+          "name": "version"
+        }
+      },
+      {
+        "long": "max-version",
+        "description": "require at most a module version",
+        "inherit": false,
+        "value": {
+          "name": "version"
+        }
+      },
+      {
+        "long": "validate",
+        "description": "validate package files",
+        "inherit": false
+      },
+      {
+        "long": "msvc-syntax",
+        "description": "print MSVC-compatible flags",
+        "inherit": false
+      },
+      {
+        "long": "define-prefix",
+        "description": "derive prefix from .pc location",
+        "inherit": false
+      },
+      {
+        "long": "dont-define-prefix",
+        "description": "use prefix from .pc file",
+        "inherit": false
+      },
+      {
+        "long": "prefix-variable",
+        "description": "set prefix variable name",
+        "inherit": false,
+        "value": {
+          "name": "variable-name"
+        }
+      },
+      {
+        "long": "static",
+        "description": "print flags for static linking",
+        "inherit": false
+      },
+      {
+        "long": "list-all",
+        "description": "list all modules",
+        "inherit": false
+      },
+      {
+        "long": "print-provides",
+        "description": "list provided modules",
+        "inherit": false
+      },
+      {
+        "long": "print-requires",
+        "description": "list required modules",
+        "inherit": false
+      },
+      {
+        "long": "print-requires-private",
+        "description": "list private static requirements",
+        "inherit": false
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "module",
+          "index": 0,
+          "repeatable": true,
+          "description": "pkg-config module"
+        }
+      ]
+    }
+  }
+}
