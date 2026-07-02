@@ -1,0 +1,981 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "valet",
+    "description": "Laravel development environment for macOS",
+    "subcommands": [
+      {
+        "name": "diagnose",
+        "description": "output diagnostics to aid in debugging Valet",
+        "options": [
+          {
+            "short": "p",
+            "long": "print",
+            "description": "print diagnostics output while running"
+          },
+          {
+            "long": "plain",
+            "description": "format clipboard output as plain text"
+          }
+        ]
+      },
+      {
+        "name": "directory-listing",
+        "description": "determine directory-listing behavior. Default is off, which means a 404 will display",
+        "arguments": {
+          "states": [
+            {
+              "name": "status",
+              "description": "On or off. (default=off) will show a 404 page; [on] will display a listing if project folder exists but requested URI not found",
+              "provider": "status"
+            }
+          ]
+        }
+      },
+      {
+        "name": "fetch-share-url",
+        "description": "get the URL to the current share tunnel (for Expose or ngrok)",
+        "arguments": {
+          "states": [
+            {
+              "name": "domain"
+            }
+          ]
+        }
+      },
+      {
+        "name": "forget",
+        "description": "remove the current working (or specified) directory from Valet's list of paths",
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "provider": "directories"
+            }
+          ]
+        }
+      },
+      {
+        "name": "help",
+        "description": "display help for a command",
+        "options": [
+          {
+            "long": "format",
+            "description": "the output format (txt, xml, json, or md) [default: 'txt']",
+            "value": {
+              "name": "FORMAT",
+              "provider": {
+                "values": [
+                  {
+                    "value": "txt"
+                  },
+                  {
+                    "value": "xml"
+                  },
+                  {
+                    "value": "json"
+                  },
+                  {
+                    "value": "md"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "raw",
+            "description": "to output raw command help"
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "command",
+              "provider": "commands"
+            }
+          ]
+        }
+      },
+      {
+        "name": "install",
+        "description": "install the Valet services"
+      },
+      {
+        "name": "link",
+        "description": "link the current working directory to Valet",
+        "options": [
+          {
+            "long": "secure",
+            "description": "link the site with a trusted TLS certificate"
+          },
+          {
+            "long": "isolate",
+            "description": "isolate the site to the PHP version specified in the current working directory's .valetrc file"
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "name"
+            }
+          ]
+        }
+      },
+      {
+        "name": "links",
+        "description": "display all of the registered Valet links"
+      },
+      {
+        "name": "list",
+        "description": "list commands",
+        "options": [
+          {
+            "long": "raw",
+            "description": "to output raw command list"
+          },
+          {
+            "long": "format",
+            "description": "the output format (txt, xml, json, or md) [default: 'txt']",
+            "value": {
+              "name": "FORMAT",
+              "provider": {
+                "values": [
+                  {
+                    "value": "txt"
+                  },
+                  {
+                    "value": "xml"
+                  },
+                  {
+                    "value": "json"
+                  },
+                  {
+                    "value": "md"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "short",
+            "description": "to skip describing commands' arguments"
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "namespace"
+            }
+          ]
+        }
+      },
+      {
+        "name": "log",
+        "description": "tail log file",
+        "options": [
+          {
+            "short": "f",
+            "long": "follow"
+          },
+          {
+            "short": "l",
+            "long": "lines",
+            "value": {
+              "name": "LINES"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "key"
+            }
+          ]
+        }
+      },
+      {
+        "name": "loopback",
+        "description": "get or set the loopback address used for Valet sites",
+        "arguments": {
+          "states": [
+            {
+              "name": "loopback"
+            }
+          ]
+        }
+      },
+      {
+        "name": "on-latest-version",
+        "aliases": [
+          "latest"
+        ],
+        "description": "determine if this is the latest version of Valet"
+      },
+      {
+        "name": "open",
+        "description": "open the site for the current (or specified) directory in your browser",
+        "arguments": {
+          "states": [
+            {
+              "name": "domain"
+            }
+          ]
+        }
+      },
+      {
+        "name": "park",
+        "description": "register the current working (or specified) directory with Valet",
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "provider": "directories"
+            }
+          ]
+        }
+      },
+      {
+        "name": "parked",
+        "description": "display all the current sites within parked paths"
+      },
+      {
+        "name": "paths",
+        "description": "get all of the paths registered with Valet"
+      },
+      {
+        "name": "proxies",
+        "description": "display all of the proxy sites"
+      },
+      {
+        "name": "proxy",
+        "description": "create an Nginx proxy site for the specified host. Useful for docker, mailhog etc",
+        "options": [
+          {
+            "long": "secure",
+            "description": "create a proxy with a trusted TLS certificate"
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "domain"
+            },
+            {
+              "name": "host"
+            }
+          ]
+        }
+      },
+      {
+        "name": "restart",
+        "description": "restart the Valet services",
+        "arguments": {
+          "states": [
+            {
+              "name": "service"
+            }
+          ]
+        }
+      },
+      {
+        "name": "secure",
+        "description": "secure the given domain with a trusted TLS certificate",
+        "options": [
+          {
+            "spellings": [
+              "expireIn"
+            ],
+            "description": "the amount of days the self signed certificate is valid for. Default is set to 368"
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "domain"
+            }
+          ]
+        }
+      },
+      {
+        "name": "share",
+        "description": "generate a publicly accessible URL for your project",
+        "options": [
+          {
+            "long": "auth",
+            "description": "enforce basic auth on tunnel endpoint, 'user:password'"
+          },
+          {
+            "long": "authtoken",
+            "description": "ngrok.com authtoken identifying a user",
+            "value": {
+              "name": "token"
+            }
+          },
+          {
+            "long": "bind-tls",
+            "description": "listen for http, https or both: true/false/both",
+            "value": {
+              "name": "listen",
+              "provider": {
+                "values": [
+                  {
+                    "value": "true"
+                  },
+                  {
+                    "value": "false"
+                  },
+                  {
+                    "value": "both"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "config",
+            "description": "path to config files; they are merged if multiple",
+            "value": {
+              "name": "config",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "host-header",
+            "description": "set Host header; if 'rewrite' use local address hostname",
+            "value": {
+              "name": "host"
+            }
+          },
+          {
+            "long": "hostname",
+            "description": "host tunnel on custom hostname (requires DNS CNAME)"
+          },
+          {
+            "long": "inspect",
+            "description": "enable/disable http introspection"
+          },
+          {
+            "long": "log",
+            "description": "path to log file, 'stdout', 'stderr' or 'false'",
+            "value": {
+              "name": "path",
+              "provider": {
+                "values": [
+                  {
+                    "value": "stdout"
+                  },
+                  {
+                    "value": "stderr"
+                  },
+                  {
+                    "value": "false"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "log-format",
+            "description": "log record format: 'term', 'logfmt', 'json'",
+            "value": {
+              "name": "format",
+              "provider": {
+                "values": [
+                  {
+                    "value": "term"
+                  },
+                  {
+                    "value": "logfmt"
+                  },
+                  {
+                    "value": "json"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "log-level",
+            "description": "logging level",
+            "value": {
+              "name": "level",
+              "provider": {
+                "values": [
+                  {
+                    "value": "info"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "region",
+            "description": "ngrok server region [us, eu, au, ap, sa, jp, in] (default: us)",
+            "value": {
+              "name": "region",
+              "provider": {
+                "values": [
+                  {
+                    "value": "us"
+                  },
+                  {
+                    "value": "eu"
+                  },
+                  {
+                    "value": "au"
+                  },
+                  {
+                    "value": "ap"
+                  },
+                  {
+                    "value": "sa"
+                  },
+                  {
+                    "value": "jp"
+                  },
+                  {
+                    "value": "in"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "subdomain",
+            "description": "host tunnel on a custom subdomain"
+          }
+        ]
+      },
+      {
+        "name": "start",
+        "description": "start the Valet services",
+        "arguments": {
+          "states": [
+            {
+              "name": "service"
+            }
+          ]
+        }
+      },
+      {
+        "name": "stop",
+        "description": "stop the Valet services",
+        "arguments": {
+          "states": [
+            {
+              "name": "service"
+            }
+          ]
+        }
+      },
+      {
+        "name": "tld",
+        "aliases": [
+          "domain"
+        ],
+        "description": "get or set the TLD used for Valet sites",
+        "arguments": {
+          "states": [
+            {
+              "name": "tld",
+              "provider": "tlds"
+            }
+          ]
+        }
+      },
+      {
+        "name": "trust",
+        "description": "add sudoers files for Brew and Valet to make Valet commands run without passwords",
+        "options": [
+          {
+            "long": "off",
+            "description": "remove the sudoers files so normal sudo password prompts are required"
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "options"
+            }
+          ]
+        }
+      },
+      {
+        "name": "uninstall",
+        "description": "uninstall the Valet services",
+        "options": [
+          {
+            "long": "force",
+            "description": "do a forceful uninstall of Valet and related Homebrew pkgs"
+          }
+        ]
+      },
+      {
+        "name": "unlink",
+        "description": "remove the specified Valet link",
+        "arguments": {
+          "states": [
+            {
+              "name": "name"
+            }
+          ]
+        }
+      },
+      {
+        "name": "unproxy",
+        "description": "delete an Nginx proxy config",
+        "arguments": {
+          "states": [
+            {
+              "name": "domain"
+            }
+          ]
+        }
+      },
+      {
+        "name": "unsecure",
+        "description": "stop serving the given domain over HTTPS and remove the trusted TLS certificate",
+        "options": [
+          {
+            "long": "all"
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "domain"
+            }
+          ]
+        }
+      },
+      {
+        "name": "use",
+        "description": "change the version of PHP used by valet",
+        "options": [
+          {
+            "long": "force"
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "phpVersion",
+              "provider": "phpVersions"
+            }
+          ]
+        }
+      },
+      {
+        "name": "which",
+        "description": "determine which Valet driver serves the current working directory"
+      },
+      {
+        "name": "isolate",
+        "description": "change the version of PHP used by Valet to serve the current working directory",
+        "options": [
+          {
+            "long": "site",
+            "description": "name of the website you want to isolate",
+            "value": {
+              "name": "SITE"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "phpVersion",
+              "provider": "phpVersions"
+            }
+          ]
+        }
+      },
+      {
+        "name": "unisolate",
+        "description": "stop customizing the version of PHP used by Valet to serve the current working directory",
+        "options": [
+          {
+            "long": "site",
+            "description": "name of the website you want to unisolate",
+            "value": {
+              "name": "SITE"
+            }
+          }
+        ]
+      },
+      {
+        "name": "isolated",
+        "description": "list all sites using isolated versions of PHP"
+      },
+      {
+        "name": "php",
+        "description": "proxy PHP commands to the \"php\" executable on the isolated site",
+        "options": [
+          {
+            "long": "site",
+            "description": "specify the site to use to get the PHP version (e.g. if the site isn't linked as its directory name)",
+            "value": {
+              "name": "SITE"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "command"
+            }
+          ]
+        }
+      },
+      {
+        "name": "composer",
+        "description": "proxy Composer commands with the \"php\" executable on the isolated site",
+        "options": [
+          {
+            "long": "site",
+            "description": "specify the site to use to get the PHP version (e.g. if the site isn't linked as its directory name)",
+            "value": {
+              "name": "SITE"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "command"
+            }
+          ]
+        }
+      },
+      {
+        "name": "which-php",
+        "description": "get the PHP executable path for a site",
+        "arguments": {
+          "states": [
+            {
+              "name": "site"
+            }
+          ]
+        }
+      },
+      {
+        "name": "completion",
+        "description": "dump the shell completion script",
+        "options": [
+          {
+            "long": "debug",
+            "description": "tail the completion debug log"
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "shell",
+              "provider": "shells"
+            }
+          ]
+        }
+      },
+      {
+        "name": "secured",
+        "description": "display all of the currently secured sites"
+      },
+      {
+        "name": "set-ngrok-token",
+        "description": "set the Ngrok auth token",
+        "arguments": {
+          "states": [
+            {
+              "name": "token"
+            }
+          ]
+        }
+      },
+      {
+        "name": "share-tool",
+        "description": "get the name of the current share tool (Expose or ngrok)",
+        "arguments": {
+          "states": [
+            {
+              "name": "tool",
+              "provider": "shareTools"
+            }
+          ]
+        }
+      },
+      {
+        "name": "status",
+        "description": "output the status of Valet and its installed services and config"
+      }
+    ],
+    "providers": {
+      "directories": {
+        "builtin": "directories"
+      },
+      "commands": {
+        "values": [
+          {
+            "value": "diagnose",
+            "description": "valet command"
+          },
+          {
+            "value": "directory-listing",
+            "description": "valet command"
+          },
+          {
+            "value": "fetch-share-url",
+            "description": "valet command"
+          },
+          {
+            "value": "forget",
+            "description": "valet command"
+          },
+          {
+            "value": "help",
+            "description": "valet command"
+          },
+          {
+            "value": "install",
+            "description": "valet command"
+          },
+          {
+            "value": "link",
+            "description": "valet command"
+          },
+          {
+            "value": "links",
+            "description": "valet command"
+          },
+          {
+            "value": "list",
+            "description": "valet command"
+          },
+          {
+            "value": "log",
+            "description": "valet command"
+          },
+          {
+            "value": "loopback",
+            "description": "valet command"
+          },
+          {
+            "value": "on-latest-version",
+            "description": "valet command"
+          },
+          {
+            "value": "open",
+            "description": "valet command"
+          },
+          {
+            "value": "park",
+            "description": "valet command"
+          },
+          {
+            "value": "parked",
+            "description": "valet command"
+          },
+          {
+            "value": "paths",
+            "description": "valet command"
+          },
+          {
+            "value": "proxies",
+            "description": "valet command"
+          },
+          {
+            "value": "proxy",
+            "description": "valet command"
+          },
+          {
+            "value": "restart",
+            "description": "valet command"
+          },
+          {
+            "value": "secure",
+            "description": "valet command"
+          },
+          {
+            "value": "share",
+            "description": "valet command"
+          },
+          {
+            "value": "start",
+            "description": "valet command"
+          },
+          {
+            "value": "stop",
+            "description": "valet command"
+          },
+          {
+            "value": "tld",
+            "description": "valet command"
+          },
+          {
+            "value": "trust",
+            "description": "valet command"
+          },
+          {
+            "value": "uninstall",
+            "description": "valet command"
+          },
+          {
+            "value": "unlink",
+            "description": "valet command"
+          },
+          {
+            "value": "unproxy",
+            "description": "valet command"
+          },
+          {
+            "value": "unsecure",
+            "description": "valet command"
+          },
+          {
+            "value": "use",
+            "description": "valet command"
+          },
+          {
+            "value": "which",
+            "description": "valet command"
+          },
+          {
+            "value": "isolate",
+            "description": "valet command"
+          },
+          {
+            "value": "unisolate",
+            "description": "valet command"
+          },
+          {
+            "value": "isolated",
+            "description": "valet command"
+          },
+          {
+            "value": "php",
+            "description": "valet command"
+          },
+          {
+            "value": "composer",
+            "description": "valet command"
+          },
+          {
+            "value": "which-php",
+            "description": "valet command"
+          },
+          {
+            "value": "completion",
+            "description": "valet command"
+          },
+          {
+            "value": "secured",
+            "description": "valet command"
+          },
+          {
+            "value": "set-ngrok-token",
+            "description": "valet command"
+          },
+          {
+            "value": "share-tool",
+            "description": "valet command"
+          },
+          {
+            "value": "status",
+            "description": "valet command"
+          }
+        ]
+      },
+      "status": {
+        "values": [
+          "on",
+          "off"
+        ]
+      },
+      "tlds": {
+        "values": [
+          "local",
+          "test"
+        ]
+      },
+      "phpVersions": {
+        "values": [
+          "php@8.0",
+          "php@8.1",
+          "php@8.2"
+        ]
+      },
+      "shells": {
+        "values": [
+          "bash",
+          "fish"
+        ]
+      },
+      "shareTools": {
+        "values": [
+          "Expose",
+          "Ngrok"
+        ]
+      },
+      "verbosity": {
+        "values": [
+          {
+            "value": "1",
+            "description": "normal output"
+          },
+          {
+            "value": "2",
+            "description": "verbose output"
+          },
+          {
+            "value": "3",
+            "description": "debug output"
+          }
+        ]
+      }
+    },
+    "options": [
+      {
+        "short": "h",
+        "long": "help",
+        "description": "show help"
+      },
+      {
+        "short": "q",
+        "long": "quiet",
+        "description": "suppress output"
+      },
+      {
+        "short": "V",
+        "long": "version",
+        "description": "show version"
+      },
+      {
+        "long": "ansi",
+        "description": "force ANSI output"
+      },
+      {
+        "long": "no-ansi",
+        "description": "disable ANSI output"
+      },
+      {
+        "short": "n",
+        "long": "no-interaction",
+        "description": "do not ask interactive questions"
+      },
+      {
+        "spellings": [
+          "-v",
+          "-vv",
+          "-vvv",
+          "--verbose"
+        ],
+        "description": "increase verbosity",
+        "value": {
+          "name": "level",
+          "required": false,
+          "provider": "verbosity"
+        }
+      }
+    ]
+  }
+}
