@@ -1,0 +1,1049 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "rsync",
+    "description": "transfer and synchronize files with rsync",
+    "options": [
+      {
+        "short": "v",
+        "long": "verbose",
+        "description": "increase verbosity",
+        "inherit": false
+      },
+      {
+        "long": "info",
+        "description": "fine-grained informational verbosity",
+        "inherit": false,
+        "value": {
+          "name": "flag",
+          "provider": "rsync.info-flags"
+        }
+      },
+      {
+        "long": "debug",
+        "description": "fine-grained debug verbosity",
+        "inherit": false,
+        "value": {
+          "name": "flag",
+          "provider": "rsync.debug-flags"
+        }
+      },
+      {
+        "long": "msgs2stderr",
+        "description": "special output handling for debugging",
+        "inherit": false
+      },
+      {
+        "long": "quiet",
+        "short": "q",
+        "description": "suppress non-error messages",
+        "inherit": false
+      },
+      {
+        "long": "no-motd",
+        "description": "suppress daemon-mode MOTD (see manpage caveat)",
+        "inherit": false
+      },
+      {
+        "long": "checksum",
+        "short": "c",
+        "description": "skip based on checksum, not mod-time & size",
+        "inherit": false
+      },
+      {
+        "short": "a",
+        "long": "archive",
+        "description": "archive mode; equals -rlptgoD (no -H,-A,-X)",
+        "inherit": false,
+        "excludes": [
+          "-H",
+          "-A",
+          "-X"
+        ]
+      },
+      {
+        "long": "no-OPTION",
+        "description": "turn off an implied OPTION (e.g. --no-D)",
+        "inherit": false
+      },
+      {
+        "short": "r",
+        "long": "recursive",
+        "description": "recurse into directories",
+        "inherit": false
+      },
+      {
+        "short": "R",
+        "long": "relative",
+        "description": "use relative path names",
+        "inherit": false
+      },
+      {
+        "long": "no-implied-dirs",
+        "description": "don't send implied dirs with --relative",
+        "inherit": false,
+        "requires": [
+          "--relative"
+        ]
+      },
+      {
+        "short": "b",
+        "long": "backup",
+        "description": "make backups (see --suffix & --backup-dir)",
+        "inherit": false
+      },
+      {
+        "long": "backup-dir",
+        "description": "make backups into hierarchy based in DIR",
+        "inherit": false,
+        "value": {
+          "name": "dir",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "suffix",
+        "description": "set backup suffix (default ~ w/o --backup-dir)",
+        "inherit": false,
+        "value": {
+          "name": "suffix"
+        }
+      },
+      {
+        "short": "u",
+        "long": "update",
+        "description": "skip files that are newer on the receiver",
+        "inherit": false
+      },
+      {
+        "long": "inplace",
+        "description": "update destination files in-place (SEE MAN PAGE)",
+        "inherit": false
+      },
+      {
+        "long": "append",
+        "description": "append data onto shorter files",
+        "inherit": false
+      },
+      {
+        "long": "append-verify",
+        "description": "like --append, but with old data in file checksum",
+        "inherit": false
+      },
+      {
+        "short": "d",
+        "long": "dirs",
+        "description": "transfer directories without recursing",
+        "inherit": false,
+        "value": {
+          "name": "dir",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "short": "l",
+        "long": "links",
+        "description": "copy symlinks as symlinks",
+        "inherit": false
+      },
+      {
+        "short": "L",
+        "long": "copy-links",
+        "description": "transform symlink into referent file/dir",
+        "inherit": false
+      },
+      {
+        "long": "copy-unsafe-links",
+        "description": "only \"unsafe\" symlinks are transformed",
+        "inherit": false
+      },
+      {
+        "long": "safe-links",
+        "description": "ignore symlinks that point outside the source tree",
+        "inherit": false
+      },
+      {
+        "long": "munge-links",
+        "description": "munge symlinks to make them safer (but unusable)",
+        "inherit": false
+      },
+      {
+        "short": "k",
+        "long": "copy-dirlinks",
+        "description": "transform symlink to a dir into referent dir",
+        "inherit": false
+      },
+      {
+        "short": "K",
+        "long": "keep-dirlinks",
+        "description": "treat symlinked dir on receiver as dir",
+        "inherit": false
+      },
+      {
+        "short": "H",
+        "long": "hard-links",
+        "description": "preserve hard links",
+        "inherit": false
+      },
+      {
+        "short": "p",
+        "long": "perms",
+        "description": "preserve permissions",
+        "inherit": false
+      },
+      {
+        "short": "E",
+        "long": "executability",
+        "description": "preserve the file's executability",
+        "inherit": false
+      },
+      {
+        "long": "chmod",
+        "description": "affect file and/or directory permissions",
+        "inherit": false,
+        "value": {
+          "name": "chmod"
+        }
+      },
+      {
+        "short": "A",
+        "long": "acls",
+        "description": "preserve ACLs (implies --perms)",
+        "inherit": false,
+        "requires": [
+          "--perms"
+        ]
+      },
+      {
+        "short": "X",
+        "long": "xattrs",
+        "description": "preserve extended attributes",
+        "inherit": false
+      },
+      {
+        "short": "o",
+        "long": "owner",
+        "description": "preserve owner (super-user only)",
+        "inherit": false
+      },
+      {
+        "short": "g",
+        "long": "group",
+        "description": "preserve group",
+        "inherit": false
+      },
+      {
+        "long": "devices",
+        "description": "preserve device files (super-user only)",
+        "inherit": false
+      },
+      {
+        "long": "copy-devices",
+        "description": "copy device contents as regular file",
+        "inherit": false
+      },
+      {
+        "long": "specials",
+        "description": "preserve special files",
+        "inherit": false
+      },
+      {
+        "short": "D",
+        "description": "same as --devices --specials",
+        "inherit": false
+      },
+      {
+        "short": "t",
+        "long": "times",
+        "description": "preserve modification times",
+        "inherit": false
+      },
+      {
+        "short": "O",
+        "long": "omit-dir-times",
+        "description": "omit directories from --times",
+        "inherit": false,
+        "value": {
+          "name": "dir",
+          "provider": "builtin.directories"
+        },
+        "requires": [
+          "--times"
+        ]
+      },
+      {
+        "short": "J",
+        "long": "omit-link-times",
+        "description": "omit symlinks from --times",
+        "inherit": false,
+        "requires": [
+          "--times"
+        ]
+      },
+      {
+        "long": "super",
+        "description": "receiver attempts super-user activities",
+        "inherit": false
+      },
+      {
+        "long": "fake-super",
+        "description": "store/recover privileged attrs using xattrs",
+        "inherit": false
+      },
+      {
+        "short": "S",
+        "long": "sparse",
+        "description": "turn sequences of nulls into sparse blocks",
+        "inherit": false
+      },
+      {
+        "long": "preallocate",
+        "description": "allocate dest files before writing them",
+        "inherit": false
+      },
+      {
+        "short": "n",
+        "long": "dry-run",
+        "description": "perform a trial run with no changes made",
+        "inherit": false
+      },
+      {
+        "short": "W",
+        "long": "whole-file",
+        "description": "copy files whole (without delta-xfer algorithm)",
+        "inherit": false
+      },
+      {
+        "long": "checksum-choice",
+        "description": "choose the checksum algorithms",
+        "inherit": false,
+        "value": {
+          "name": "algorithm",
+          "provider": {
+            "values": [
+              "auto",
+              "md4",
+              "md5",
+              "none"
+            ]
+          }
+        }
+      },
+      {
+        "short": "x",
+        "long": "one-file-system",
+        "description": "don't cross filesystem boundaries",
+        "inherit": false
+      },
+      {
+        "short": "B",
+        "long": "block-size",
+        "description": "force a fixed checksum block-size",
+        "inherit": false,
+        "value": {
+          "name": "size"
+        }
+      },
+      {
+        "short": "e",
+        "long": "rsh",
+        "description": "specify the remote shell to use",
+        "inherit": false,
+        "value": {
+          "name": "command"
+        }
+      },
+      {
+        "long": "rsync-path",
+        "description": "specify the rsync to run on the remote machine",
+        "inherit": false,
+        "value": {
+          "name": "path",
+          "provider": [
+            "builtin.files",
+            "builtin.directories"
+          ]
+        }
+      },
+      {
+        "long": "existing",
+        "description": "skip creating new files on receiver",
+        "inherit": false
+      },
+      {
+        "long": "ignore-existing",
+        "description": "skip updating files that already exist on receiver",
+        "inherit": false
+      },
+      {
+        "long": "remove-source-files",
+        "description": "sender removes synchronized files (non-dirs)",
+        "inherit": false
+      },
+      {
+        "long": "delete",
+        "description": "delete extraneous files from destination dirs",
+        "inherit": false
+      },
+      {
+        "long": "delete-before",
+        "description": "receiver deletes before transfer, not during",
+        "inherit": false
+      },
+      {
+        "long": "delete-during",
+        "aliases": [
+          "del"
+        ],
+        "description": "receiver deletes during the transfer",
+        "inherit": false
+      },
+      {
+        "long": "delete-delay",
+        "description": "find deletions during, delete after",
+        "inherit": false
+      },
+      {
+        "long": "delete-after",
+        "description": "receiver deletes after transfer, not during",
+        "inherit": false
+      },
+      {
+        "long": "delete-excluded",
+        "description": "also delete excluded files from destination dirs",
+        "inherit": false
+      },
+      {
+        "long": "ignore-missing-args",
+        "description": "ignore missing source args without error",
+        "inherit": false
+      },
+      {
+        "long": "delete-missing-args",
+        "description": "delete missing source args from destination",
+        "inherit": false
+      },
+      {
+        "long": "ignore-errors",
+        "description": "delete even if there are I/O errors",
+        "inherit": false
+      },
+      {
+        "long": "force",
+        "description": "force deletion of directories even if not empty",
+        "inherit": false
+      },
+      {
+        "long": "max-delete",
+        "description": "don't delete more than NUM files",
+        "inherit": false,
+        "value": {
+          "name": "num"
+        }
+      },
+      {
+        "long": "max-size",
+        "description": "don't transfer any file larger than SIZE",
+        "inherit": false,
+        "value": {
+          "name": "size"
+        }
+      },
+      {
+        "long": "min-size",
+        "description": "don't transfer any file smaller than SIZE",
+        "inherit": false,
+        "value": {
+          "name": "size"
+        }
+      },
+      {
+        "long": "partial",
+        "description": "keep partially transferred files",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "--partial-dir=DIR"
+        ],
+        "description": "put a partially transferred file into DIR",
+        "inherit": false,
+        "value": {
+          "name": "dir",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "delay-updates",
+        "description": "put all updated files into place at transfer's end",
+        "inherit": false
+      },
+      {
+        "short": "m",
+        "long": "prune-empty-dirs",
+        "description": "prune empty directory chains from the file-list",
+        "inherit": false
+      },
+      {
+        "long": "numeric-ids",
+        "description": "don't map uid/gid values by user/group name",
+        "inherit": false
+      },
+      {
+        "long": "usermap",
+        "description": "custom username mapping",
+        "inherit": false,
+        "value": {
+          "name": "string"
+        }
+      },
+      {
+        "long": "groupmap",
+        "description": "custom groupname mapping",
+        "inherit": false,
+        "value": {
+          "name": "string"
+        }
+      },
+      {
+        "spellings": [
+          "--chown=USER:GROUP"
+        ],
+        "description": "simple username/groupname mapping",
+        "inherit": false,
+        "value": {
+          "name": "user:group"
+        }
+      },
+      {
+        "long": "timeout",
+        "description": "set I/O timeout in seconds",
+        "inherit": false,
+        "value": {
+          "name": "seconds"
+        }
+      },
+      {
+        "long": "contimeout",
+        "description": "set daemon connection timeout in seconds",
+        "inherit": false,
+        "value": {
+          "name": "seconds"
+        }
+      },
+      {
+        "short": "I",
+        "long": "ignore-times",
+        "description": "don't skip files that match in size and mod-time",
+        "inherit": false
+      },
+      {
+        "short": "M",
+        "description": "send OPTION to the remote side only",
+        "inherit": false,
+        "value": {
+          "name": "option"
+        }
+      },
+      {
+        "long": "remote-option",
+        "description": "send OPTION to the remote side only",
+        "inherit": false,
+        "value": {
+          "name": "option"
+        }
+      },
+      {
+        "long": "size-only",
+        "description": "skip files that match in size",
+        "inherit": false
+      },
+      {
+        "short": "@",
+        "description": "set the accuracy for mod-time comparisons",
+        "inherit": false,
+        "value": {
+          "name": "num"
+        }
+      },
+      {
+        "long": "modify-window",
+        "description": "set the accuracy for mod-time comparisons",
+        "inherit": false,
+        "value": {
+          "name": "num"
+        }
+      },
+      {
+        "short": "T",
+        "description": "create temporary files in directory DIR",
+        "inherit": false,
+        "value": {
+          "name": "dir",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "temp-dir",
+        "description": "create temporary files in directory DIR",
+        "inherit": false,
+        "value": {
+          "name": "dir",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "short": "y",
+        "long": "fuzzy",
+        "description": "find similar file for basis if no dest file",
+        "inherit": false
+      },
+      {
+        "long": "compare-dest",
+        "description": "also compare destination files relative to DIR",
+        "inherit": false,
+        "value": {
+          "name": "dir",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "copy-dest",
+        "description": "also compare destination files relative to DIR and include copies of unchanged files",
+        "inherit": false,
+        "value": {
+          "name": "dir",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "link-dest",
+        "description": "hardlink to files in DIR when unchanged",
+        "inherit": false,
+        "value": {
+          "name": "dir",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "short": "z",
+        "long": "compress",
+        "description": "compress file data during the transfer",
+        "inherit": false
+      },
+      {
+        "long": "compress-level",
+        "description": "explicitly set compression level",
+        "inherit": false,
+        "value": {
+          "name": "level",
+          "provider": "rsync.compress-levels"
+        }
+      },
+      {
+        "long": "skip-compress",
+        "description": "skip compressing files with a suffix in LIST",
+        "inherit": false,
+        "value": {
+          "name": "list"
+        }
+      },
+      {
+        "short": "C",
+        "long": "cvs-exclude",
+        "description": "auto-ignore files the same way CVS does",
+        "inherit": false
+      },
+      {
+        "short": "f",
+        "description": "add a file-filtering RULE",
+        "inherit": false,
+        "value": {
+          "name": "rule"
+        }
+      },
+      {
+        "long": "filter",
+        "description": "add a file-filtering RULE",
+        "inherit": false,
+        "value": {
+          "name": "rule"
+        }
+      },
+      {
+        "short": "F",
+        "description": "same as --filter='dir-merge /.rsync-filter'",
+        "inherit": false,
+        "value": {
+          "name": "dir",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "exclude",
+        "description": "exclude files matching PATTERN",
+        "inherit": false,
+        "value": {
+          "name": "pattern"
+        }
+      },
+      {
+        "long": "exclude-from",
+        "description": "read exclude patterns from FILE",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "include",
+        "description": "don't exclude files matching PATTERN",
+        "inherit": false,
+        "value": {
+          "name": "pattern"
+        }
+      },
+      {
+        "long": "include-from",
+        "description": "read include patterns from FILE",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "files-from",
+        "description": "read list of source-file names from FILE",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "short": "0",
+        "long": "from0",
+        "description": "all *-from/filter files are delimited by 0s",
+        "inherit": false
+      },
+      {
+        "short": "s",
+        "long": "protect-args",
+        "description": "no space-splitting; only wildcard special-chars",
+        "inherit": false
+      },
+      {
+        "long": "address",
+        "description": "bind address for outgoing socket to daemon",
+        "inherit": false,
+        "value": {
+          "name": "address"
+        }
+      },
+      {
+        "long": "port",
+        "description": "specify double-colon alternate port number",
+        "inherit": false,
+        "value": {
+          "name": "port"
+        }
+      },
+      {
+        "long": "sockopts",
+        "description": "specify custom TCP options",
+        "inherit": false,
+        "value": {
+          "name": "options"
+        }
+      },
+      {
+        "long": "blocking-io",
+        "description": "use blocking I/O for the remote shell",
+        "inherit": false
+      },
+      {
+        "long": "stats",
+        "description": "give some file-transfer stats",
+        "inherit": false
+      },
+      {
+        "short": "8",
+        "long": "8-bit-output",
+        "description": "leave high-bit chars unescaped in output",
+        "inherit": false
+      },
+      {
+        "short": "h",
+        "long": "human-readable",
+        "description": "output numbers in a human-readable format",
+        "inherit": false
+      },
+      {
+        "long": "progress",
+        "description": "show progress during transfer",
+        "inherit": false
+      },
+      {
+        "short": "P",
+        "description": "same as --partial --progress",
+        "inherit": false
+      },
+      {
+        "short": "i",
+        "long": "itemize-changes",
+        "description": "output a change-summary for all updates",
+        "inherit": false
+      },
+      {
+        "long": "out-format",
+        "description": "output updates using the specified FORMAT",
+        "inherit": false,
+        "value": {
+          "name": "format"
+        }
+      },
+      {
+        "long": "log-file",
+        "description": "log what we're doing to the specified FILE",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "log-file-format",
+        "description": "log updates using the specified FMT",
+        "inherit": false,
+        "value": {
+          "name": "fmt",
+          "provider": [
+            "builtin.files",
+            "builtin.directories"
+          ]
+        }
+      },
+      {
+        "long": "password-file",
+        "description": "read daemon-access password from FILE",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "list-only",
+        "description": "list the files instead of copying them",
+        "inherit": false
+      },
+      {
+        "long": "bwlimit",
+        "description": "limit socket I/O bandwidth",
+        "inherit": false,
+        "value": {
+          "name": "rate"
+        }
+      },
+      {
+        "long": "stop-at",
+        "description": "stop rsync at year-month-dayThour:minute",
+        "inherit": false,
+        "value": {
+          "name": "y-m-dth:m"
+        }
+      },
+      {
+        "long": "time-limit",
+        "description": "stop rsync after MINS minutes have elapsed",
+        "inherit": false,
+        "value": {
+          "name": "mins"
+        }
+      },
+      {
+        "long": "outbuf",
+        "description": "set output buffering to None, Line, or Block",
+        "inherit": false,
+        "value": {
+          "name": "buffer",
+          "provider": {
+            "values": [
+              "N",
+              "L",
+              "B"
+            ]
+          }
+        }
+      },
+      {
+        "long": "write-batch",
+        "description": "write a batched update to FILE",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "only-write-batch",
+        "description": "like --write-batch but w/o updating destination",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "read-batch",
+        "description": "read a batched update from FILE",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "protocol",
+        "description": "force an older protocol version to be used",
+        "inherit": false,
+        "value": {
+          "name": "num"
+        }
+      },
+      {
+        "long": "iconv",
+        "description": "request charset conversion of filenames",
+        "inherit": false,
+        "value": {
+          "name": "convert_spec"
+        }
+      },
+      {
+        "long": "checksum-seed",
+        "description": "set block/file checksum seed (advanced)",
+        "inherit": false,
+        "value": {
+          "name": "num"
+        }
+      },
+      {
+        "long": "noatime",
+        "description": "do not alter atime when opening source files",
+        "inherit": false
+      },
+      {
+        "short": "4",
+        "long": "ipv4",
+        "description": "prefer IPv4",
+        "inherit": false
+      },
+      {
+        "short": "6",
+        "long": "ipv6",
+        "description": "prefer IPv6",
+        "inherit": false
+      },
+      {
+        "long": "version",
+        "description": "print version number",
+        "inherit": false
+      },
+      {
+        "short": "h",
+        "long": "help",
+        "description": "show help for rsync (-h is --help only if used alone)",
+        "inherit": false
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "source",
+          "index": 0,
+          "repeatable": true,
+          "provider": [
+            "builtin.files",
+            "builtin.directories",
+            "rsync.hosts"
+          ]
+        },
+        {
+          "name": "destination",
+          "index": 1,
+          "provider": [
+            "builtin.files",
+            "builtin.directories",
+            "rsync.hosts"
+          ]
+        }
+      ]
+    },
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "rsync.hosts": {
+        "function": "__rush_complete_rsync_hosts"
+      },
+      "rsync.info-flags": {
+        "values": [
+          "BACKUP",
+          "COPY",
+          "DEL",
+          "FLIST",
+          "MISC",
+          "MOUNT",
+          "NAME",
+          "PROGRESS",
+          "REMOVE",
+          "SKIP",
+          "STATS",
+          "SYMSAFE",
+          "ALL",
+          "NONE",
+          "HELP"
+        ]
+      },
+      "rsync.debug-flags": {
+        "values": [
+          "BACKUP",
+          "COPY",
+          "DEL",
+          "FLIST",
+          "MISC",
+          "MOUNT",
+          "NAME",
+          "PROGRESS",
+          "REMOVE",
+          "SKIP",
+          "STATS",
+          "SYMSAFE",
+          "ALL",
+          "NONE",
+          "HELP"
+        ]
+      },
+      "rsync.compress-levels": {
+        "values": [
+          "0",
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7",
+          "8",
+          "9"
+        ]
+      }
+    }
+  }
+}
