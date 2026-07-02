@@ -1,0 +1,26 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "svokit",
+    "description": "run built svokit projects",
+    "options": [
+      {
+        "long": "help",
+        "short": "h",
+        "description": "show help",
+        "inherit": false
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "setup",
+        "description": "create svokit config"
+      },
+      {
+        "name": "run",
+        "description": "run a built svokit project"
+      }
+    ]
+  }
+}
