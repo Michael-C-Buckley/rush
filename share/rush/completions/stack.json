@@ -1,0 +1,483 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "stack",
+    "description": "build Haskell projects with Stack",
+    "options": [
+      {
+        "long": "help",
+        "short": "h",
+        "description": "show help for stack",
+        "inherit": false
+      },
+      {
+        "long": "version",
+        "description": "show version for stack",
+        "inherit": false
+      },
+      {
+        "long": "numeric-version",
+        "description": "show only the numeric version for stack",
+        "inherit": false
+      },
+      {
+        "long": "hpack-numeric-version",
+        "description": "show only hpack's version number",
+        "inherit": false
+      },
+      {
+        "long": "verbosity",
+        "description": "verbosity: silent, error, warn, info, debug",
+        "inherit": false
+      },
+      {
+        "long": "verbose",
+        "short": "v",
+        "description": "enable verbose mode: verbosity level \"debug\"",
+        "inherit": false
+      },
+      {
+        "long": "silent",
+        "description": "enable silent mode: verbosity level \"silent\"",
+        "inherit": false
+      },
+      {
+        "long": "stack-root",
+        "description": "absolute path to the global stack root directory (Overrides any STACK_ROOT environment variable)",
+        "inherit": false
+      },
+      {
+        "long": "work-dir",
+        "description": "relative path of work directory (Overrides any STACK_WORK environment variable, default is '.stack-work')",
+        "inherit": false
+      },
+      {
+        "long": "system-ghc",
+        "description": "enable using the system installed GHC (on the PATH) if it is available and its version matches. Disabled by default",
+        "inherit": false
+      },
+      {
+        "long": "no-system-ghc",
+        "description": "disable using the system installed GHC (on the PATH) if it is available and its version matches. Disabled by default",
+        "inherit": false
+      },
+      {
+        "long": "install-ghc",
+        "description": "enable downloading and installing GHC if necessary (can be done manually with stack setup). Enabled by default)",
+        "inherit": false
+      },
+      {
+        "long": "no-install-ghc",
+        "description": "disable downloading and installing GHC if necessary (can be done manually with stack setup). Enabled by default",
+        "inherit": false
+      },
+      {
+        "long": "ghc-variant",
+        "description": "specialized GHC variant, e.g. integersimple (incompatible with --system-ghc)",
+        "inherit": false
+      },
+      {
+        "long": "ghc-build",
+        "description": "specialized GHC build, e.g. 'gmp4' or 'standard' (usually auto-detected)",
+        "inherit": false
+      },
+      {
+        "long": "jobs",
+        "short": "j",
+        "description": "number of concurrent jobs to run. Should be provied as ARGS",
+        "inherit": false
+      },
+      {
+        "long": "extra-include-dirs",
+        "description": "extra directories to check for C header files",
+        "inherit": false
+      },
+      {
+        "long": "extra-lib-dir",
+        "description": "extra directories to check for libraries",
+        "inherit": false
+      },
+      {
+        "long": "custom-preprocessor-extensions",
+        "description": "extensions used for custom preprocessors",
+        "inherit": false
+      },
+      {
+        "long": "color",
+        "aliases": [
+          "colour"
+        ],
+        "description": "specify when to use color in output",
+        "inherit": false,
+        "value": {
+          "name": "WHEN",
+          "description": "wHEN is 'always', 'never', or 'auto'. On Windows versions before Windows 10, for terminals that do not support color codes, the default is 'never'; color may wo",
+          "provider": {
+            "values": [
+              "always",
+              "never",
+              "auto"
+            ]
+          }
+        }
+      },
+      {
+        "long": "compiler",
+        "description": "use the specified compiler",
+        "inherit": false,
+        "value": {
+          "name": "COMPILER"
+        }
+      },
+      {
+        "long": "terminal",
+        "description": "enable overriding terminal detection in the case of running in a false terminal",
+        "inherit": false
+      },
+      {
+        "long": "no-terminal",
+        "description": "disable overriding terminal detection in the case of running in a false terminal",
+        "inherit": false
+      },
+      {
+        "long": "stack-colors",
+        "aliases": [
+          "stack-colours"
+        ],
+        "description": "specify stack's output styles",
+        "inherit": false,
+        "value": {
+          "name": "STYLE",
+          "description": "it a colon-delimited sequence of key=value, where 'key' is a style name and 'value' is a semicolon-delimited list of 'ANSI' SGR (Select Graphic Rendition) contr"
+        }
+      },
+      {
+        "long": "terminal-width",
+        "description": "specify the width of the terminal, used for pretty-print messages",
+        "inherit": false,
+        "value": {
+          "name": "INT"
+        }
+      },
+      {
+        "long": "stack-yaml",
+        "description": "override project stack.yaml file (overrides any STACK_YAML environment variable)",
+        "inherit": false,
+        "value": {
+          "name": "STACK-YAML"
+        }
+      },
+      {
+        "long": "lock-file",
+        "description": "specify how to interact with lock files",
+        "inherit": false,
+        "value": {
+          "name": "ARG",
+          "description": "default: read/write. If resolver is overridden: read-only"
+        }
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "build",
+        "description": "build the package(s) in the current directory/configuration",
+        "options": [
+          {
+            "long": "resolver",
+            "description": "override resolver in project file",
+            "inherit": false,
+            "value": {
+              "name": "RESOLVER"
+            }
+          },
+          {
+            "long": "bench",
+            "description": "override resolver in project file",
+            "inherit": false
+          },
+          {
+            "long": "test",
+            "description": "run complete test suite",
+            "inherit": false
+          },
+          {
+            "long": "copy-bins",
+            "description": "enable copying any generated executables to the local bin path (default: disabled)",
+            "inherit": false
+          },
+          {
+            "long": "no-copy-bins",
+            "description": "disable copying any generated executables to the local bin path (default: disabled)",
+            "inherit": false
+          },
+          {
+            "long": "haddock",
+            "description": "enable generating Haddocks the package(s) in this directory/configuration (default: disabled)",
+            "inherit": false
+          },
+          {
+            "long": "no-haddock",
+            "description": "disable generating Haddocks the package(s) in this directory/configuration (default: disabled)",
+            "inherit": false
+          },
+          {
+            "long": "open",
+            "description": "enable opening the local Haddock",
+            "inherit": false
+          },
+          {
+            "long": "no-open",
+            "description": "disable opening the local Haddock",
+            "inherit": false
+          },
+          {
+            "long": "haddock-deps",
+            "description": "enable building Haddocks for dependencies (default: true if building Haddocks, false otherwise)",
+            "inherit": false
+          },
+          {
+            "long": "no-haddock-deps",
+            "description": "disable building Haddocks for dependencies (default: true if building Haddocks, false otherwise)",
+            "inherit": false
+          },
+          {
+            "long": "pedantic",
+            "description": "turn on all warnings(-Wall) and errors(-Werror)",
+            "inherit": false
+          },
+          {
+            "long": "only-locals",
+            "description": "only build packages in the local database, fail if the build plan includes the snapshot database",
+            "inherit": false
+          },
+          {
+            "long": "file-watch",
+            "description": "watch for changes in the files used to build the project, and kick off a new build when new changes are saved",
+            "inherit": false
+          },
+          {
+            "long": "watch-all",
+            "description": "watch all local files not taking targets into account",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-file-watch-poll"
+            ],
+            "description": "like --file-watch, but polling the filesystem instead of using events",
+            "inherit": false
+          },
+          {
+            "long": "only-snapshot",
+            "description": "only build packages for the snapshot database, not the local database",
+            "inherit": false
+          },
+          {
+            "long": "only-configure",
+            "description": "only perform the configure step, not any builds. Intended for tool usage, may break when used on multiple packages at once!",
+            "inherit": false
+          },
+          {
+            "long": "trace",
+            "description": "enable profiling in libraries, executables, etc. for all expressions and generate a backtrace on exception",
+            "inherit": false
+          },
+          {
+            "long": "profile",
+            "description": "runs profiling in libraries, executables, etc. for all expressions and generate a profiling report in tests or benchmarks",
+            "inherit": false
+          },
+          {
+            "long": "no-strip",
+            "description": "disable DWARF debugging symbol stripping in libraries, executables, etc. for all expressions, producing larger executables but allowing the use of standard debu",
+            "inherit": false
+          },
+          {
+            "long": "library-profiling",
+            "description": "enable library profiling for TARGETs and all its dependencies (default: disabled)",
+            "inherit": false
+          },
+          {
+            "long": "no-library-profiling",
+            "description": "disable library profiling for TARGETs and all its dependencies (default: disabled)",
+            "inherit": false
+          },
+          {
+            "long": "executable-profiling",
+            "description": "enable executable profiling for TARGETs and all its dependencies (default: disabled)",
+            "inherit": false
+          },
+          {
+            "long": "no-executable-profiling",
+            "description": "disable executable profiling for TARGETs and all its dependencies (default: disabled)",
+            "inherit": false
+          },
+          {
+            "long": "library-stripping",
+            "description": "enable library stripping for TARGETs and all its dependencies (default: enabled",
+            "inherit": false
+          },
+          {
+            "long": "no-library-stripping",
+            "description": "disable library stripping for TARGETs and all its dependencies (default: enabled",
+            "inherit": false
+          },
+          {
+            "long": "executable-stripping",
+            "description": "enable executable stripping for TARGETs and all its dependencies (default: enabled)",
+            "inherit": false
+          },
+          {
+            "long": "no-executable-stripping",
+            "description": "disable executable stripping for TARGETs and all its dependencies (default: enabled)",
+            "inherit": false
+          },
+          {
+            "long": "ghc-options",
+            "description": "specify additional options passed to GHC for all local targets. Does not affect extra-dep and snapshot packages at all",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          }
+        ]
+      },
+      {
+        "name": "install",
+        "description": "builds the package in current directory and copies it as an executable for system wide usage. Shortcut for 'build --copy-bins"
+      },
+      {
+        "name": "test",
+        "description": "shortcut for 'build --test'"
+      },
+      {
+        "name": "bench",
+        "description": "shortcut for 'build --bench'"
+      },
+      {
+        "name": "haddock",
+        "description": "shortcut for 'build --haddock'"
+      },
+      {
+        "name": "new",
+        "description": "create a new project from a template. Run `stack templates' to see available templates. Note: you can also specify a local file or a remote URL as a template"
+      },
+      {
+        "name": "templates",
+        "description": "show how to find templates available for `stack new'. `stack new' can accept a template from a remote repository (default: github), local file or remote URL. No"
+      },
+      {
+        "name": "init",
+        "description": "create stack project config from cabal or hpack package specifications'"
+      },
+      {
+        "name": "setup",
+        "description": "get the appropriate GHC for your project"
+      },
+      {
+        "name": "path",
+        "description": "print out handy path information"
+      },
+      {
+        "name": "ls",
+        "description": "list command. Supports snapshots, dependencies and stack's styles"
+      },
+      {
+        "name": "unpack",
+        "description": "unpack one or more packages locally"
+      },
+      {
+        "name": "update",
+        "description": "update the package index"
+      },
+      {
+        "name": "upgrade",
+        "description": "upgrade to the latest stack version"
+      },
+      {
+        "name": "upload",
+        "description": "upload a package to Hackage"
+      },
+      {
+        "name": "sdist",
+        "description": "create source distribution tarballs"
+      },
+      {
+        "name": "dot",
+        "description": "visualize your project's dependency graph using Graphviz dot"
+      },
+      {
+        "name": "hoogle",
+        "description": "run hoogle, the Haskell API search engine. Use the '-- ARGUMENT(S)' syntax to pass Hoogle arguments, e.g. stack hoogle -- --count=20, or stack hoogle --server -"
+      },
+      {
+        "name": "exec",
+        "description": "execute a command. If the command is absent, the first of any arguments is taken as the command",
+        "options": [
+          {
+            "long": "snapshot-location-base",
+            "description": "the base location of LTS/Nightly snapshots",
+            "inherit": false,
+            "value": {
+              "name": "URL"
+            }
+          },
+          {
+            "long": "cwd",
+            "description": "sets the working directory before executing the command",
+            "inherit": false,
+            "value": {
+              "name": "DIR",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "setup-info-yaml",
+            "description": "alternate URL or relative / absolute path for stack dependencies",
+            "inherit": false,
+            "value": {
+              "name": "URL"
+            }
+          },
+          {
+            "long": "ghc-package-path",
+            "description": "enable setting the GHC_PACKAGE_PATH variable for the subprocess (default: enabled)",
+            "inherit": false
+          },
+          {
+            "long": "no-ghc-package-path",
+            "description": "disable setting the GHC_PACKAGE_PATH variable for the subprocess (default: enabled)",
+            "inherit": false
+          },
+          {
+            "long": "package",
+            "description": "additional package(s) that must be installed",
+            "inherit": false,
+            "value": {
+              "name": "PACKAGE(S)"
+            }
+          },
+          {
+            "long": "stack-exe",
+            "description": "enable setting the STACK_EXE environment variable to the path for the stack executable (default: enabled)",
+            "inherit": false
+          },
+          {
+            "long": "no-stack-exe",
+            "description": "disable setting the STACK_EXE environment variable to the path for the stack executable (default: enabled)",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "run",
+        "description": "build and run an executable. Defaults to the first available executable if none is provided as the first argument"
+      },
+      {
+        "name": "repl",
+        "description": "load a REPL"
+      }
+    ]
+  }
+}
