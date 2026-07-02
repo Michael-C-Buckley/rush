@@ -1,0 +1,28 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "vi",
+    "description": "modal text editor",
+    "options": [
+      {
+        "short": "h",
+        "long": "help",
+        "description": "show help"
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "file",
+          "provider": "files"
+        }
+      ]
+    },
+    "providers": {
+      "files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
