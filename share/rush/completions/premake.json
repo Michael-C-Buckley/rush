@@ -1,0 +1,1382 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "premake",
+    "description": "generate project files with Premake",
+    "options": [
+      {
+        "long": "help",
+        "short": "h",
+        "description": "show actions",
+        "inherit": false
+      },
+      {
+        "long": "version",
+        "description": "show version",
+        "inherit": false
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "clean",
+        "description": "remove all binaries and generated files",
+        "options": [
+          {
+            "long": "file",
+            "description": "set premake5.lua file",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "debugger",
+            "description": "start MobDebug debugger",
+            "inherit": false
+          },
+          {
+            "long": "fatal",
+            "description": "treat script warnings as errors",
+            "inherit": false
+          },
+          {
+            "long": "insecure",
+            "description": "skip SSH certificate checks",
+            "inherit": false
+          },
+          {
+            "long": "interactive",
+            "description": "start interactive prompt",
+            "inherit": false
+          },
+          {
+            "long": "os",
+            "description": "set target operating system",
+            "inherit": false,
+            "value": {
+              "name": "os",
+              "provider": "premake.operating-systems"
+            }
+          },
+          {
+            "long": "scripts",
+            "description": "add scripts search path",
+            "inherit": false,
+            "value": {
+              "name": "path",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "systemscript",
+            "description": "set system script",
+            "inherit": false,
+            "value": {
+              "name": "script",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "verbose",
+            "description": "show debug output",
+            "inherit": false
+          },
+          {
+            "long": "cc",
+            "description": "set C/C++ compiler",
+            "inherit": false,
+            "value": {
+              "name": "cc",
+              "provider": "premake.c-compilers"
+            }
+          },
+          {
+            "long": "dc",
+            "description": "set D compiler",
+            "inherit": false,
+            "value": {
+              "name": "dc",
+              "provider": "premake.d-compilers"
+            }
+          },
+          {
+            "long": "dotnet",
+            "description": "set .NET compiler",
+            "inherit": false,
+            "value": {
+              "name": "dotnet",
+              "provider": "premake.dotnet-compilers"
+            }
+          }
+        ]
+      },
+      {
+        "name": "vs2022",
+        "description": "generate Visual Studio 2022 project files",
+        "options": [
+          {
+            "long": "file",
+            "description": "set premake5.lua file",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "debugger",
+            "description": "start MobDebug debugger",
+            "inherit": false
+          },
+          {
+            "long": "fatal",
+            "description": "treat script warnings as errors",
+            "inherit": false
+          },
+          {
+            "long": "insecure",
+            "description": "skip SSH certificate checks",
+            "inherit": false
+          },
+          {
+            "long": "interactive",
+            "description": "start interactive prompt",
+            "inherit": false
+          },
+          {
+            "long": "os",
+            "description": "set target operating system",
+            "inherit": false,
+            "value": {
+              "name": "os",
+              "provider": "premake.operating-systems"
+            }
+          },
+          {
+            "long": "scripts",
+            "description": "add scripts search path",
+            "inherit": false,
+            "value": {
+              "name": "path",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "systemscript",
+            "description": "set system script",
+            "inherit": false,
+            "value": {
+              "name": "script",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "verbose",
+            "description": "show debug output",
+            "inherit": false
+          },
+          {
+            "long": "cc",
+            "description": "set C/C++ compiler",
+            "inherit": false,
+            "value": {
+              "name": "cc",
+              "provider": "premake.c-compilers"
+            }
+          },
+          {
+            "long": "dc",
+            "description": "set D compiler",
+            "inherit": false,
+            "value": {
+              "name": "dc",
+              "provider": "premake.d-compilers"
+            }
+          },
+          {
+            "long": "dotnet",
+            "description": "set .NET compiler",
+            "inherit": false,
+            "value": {
+              "name": "dotnet",
+              "provider": "premake.dotnet-compilers"
+            }
+          }
+        ]
+      },
+      {
+        "name": "vs2019",
+        "description": "generate Visual Studio 2019 project files",
+        "options": [
+          {
+            "long": "file",
+            "description": "set premake5.lua file",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "debugger",
+            "description": "start MobDebug debugger",
+            "inherit": false
+          },
+          {
+            "long": "fatal",
+            "description": "treat script warnings as errors",
+            "inherit": false
+          },
+          {
+            "long": "insecure",
+            "description": "skip SSH certificate checks",
+            "inherit": false
+          },
+          {
+            "long": "interactive",
+            "description": "start interactive prompt",
+            "inherit": false
+          },
+          {
+            "long": "os",
+            "description": "set target operating system",
+            "inherit": false,
+            "value": {
+              "name": "os",
+              "provider": "premake.operating-systems"
+            }
+          },
+          {
+            "long": "scripts",
+            "description": "add scripts search path",
+            "inherit": false,
+            "value": {
+              "name": "path",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "systemscript",
+            "description": "set system script",
+            "inherit": false,
+            "value": {
+              "name": "script",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "verbose",
+            "description": "show debug output",
+            "inherit": false
+          },
+          {
+            "long": "cc",
+            "description": "set C/C++ compiler",
+            "inherit": false,
+            "value": {
+              "name": "cc",
+              "provider": "premake.c-compilers"
+            }
+          },
+          {
+            "long": "dc",
+            "description": "set D compiler",
+            "inherit": false,
+            "value": {
+              "name": "dc",
+              "provider": "premake.d-compilers"
+            }
+          },
+          {
+            "long": "dotnet",
+            "description": "set .NET compiler",
+            "inherit": false,
+            "value": {
+              "name": "dotnet",
+              "provider": "premake.dotnet-compilers"
+            }
+          }
+        ]
+      },
+      {
+        "name": "vs2017",
+        "description": "generate Visual Studio 2017 project files",
+        "options": [
+          {
+            "long": "file",
+            "description": "set premake5.lua file",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "debugger",
+            "description": "start MobDebug debugger",
+            "inherit": false
+          },
+          {
+            "long": "fatal",
+            "description": "treat script warnings as errors",
+            "inherit": false
+          },
+          {
+            "long": "insecure",
+            "description": "skip SSH certificate checks",
+            "inherit": false
+          },
+          {
+            "long": "interactive",
+            "description": "start interactive prompt",
+            "inherit": false
+          },
+          {
+            "long": "os",
+            "description": "set target operating system",
+            "inherit": false,
+            "value": {
+              "name": "os",
+              "provider": "premake.operating-systems"
+            }
+          },
+          {
+            "long": "scripts",
+            "description": "add scripts search path",
+            "inherit": false,
+            "value": {
+              "name": "path",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "systemscript",
+            "description": "set system script",
+            "inherit": false,
+            "value": {
+              "name": "script",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "verbose",
+            "description": "show debug output",
+            "inherit": false
+          },
+          {
+            "long": "cc",
+            "description": "set C/C++ compiler",
+            "inherit": false,
+            "value": {
+              "name": "cc",
+              "provider": "premake.c-compilers"
+            }
+          },
+          {
+            "long": "dc",
+            "description": "set D compiler",
+            "inherit": false,
+            "value": {
+              "name": "dc",
+              "provider": "premake.d-compilers"
+            }
+          },
+          {
+            "long": "dotnet",
+            "description": "set .NET compiler",
+            "inherit": false,
+            "value": {
+              "name": "dotnet",
+              "provider": "premake.dotnet-compilers"
+            }
+          }
+        ]
+      },
+      {
+        "name": "vs2015",
+        "description": "generate Visual Studio 2015 project files",
+        "options": [
+          {
+            "long": "file",
+            "description": "set premake5.lua file",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "debugger",
+            "description": "start MobDebug debugger",
+            "inherit": false
+          },
+          {
+            "long": "fatal",
+            "description": "treat script warnings as errors",
+            "inherit": false
+          },
+          {
+            "long": "insecure",
+            "description": "skip SSH certificate checks",
+            "inherit": false
+          },
+          {
+            "long": "interactive",
+            "description": "start interactive prompt",
+            "inherit": false
+          },
+          {
+            "long": "os",
+            "description": "set target operating system",
+            "inherit": false,
+            "value": {
+              "name": "os",
+              "provider": "premake.operating-systems"
+            }
+          },
+          {
+            "long": "scripts",
+            "description": "add scripts search path",
+            "inherit": false,
+            "value": {
+              "name": "path",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "systemscript",
+            "description": "set system script",
+            "inherit": false,
+            "value": {
+              "name": "script",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "verbose",
+            "description": "show debug output",
+            "inherit": false
+          },
+          {
+            "long": "cc",
+            "description": "set C/C++ compiler",
+            "inherit": false,
+            "value": {
+              "name": "cc",
+              "provider": "premake.c-compilers"
+            }
+          },
+          {
+            "long": "dc",
+            "description": "set D compiler",
+            "inherit": false,
+            "value": {
+              "name": "dc",
+              "provider": "premake.d-compilers"
+            }
+          },
+          {
+            "long": "dotnet",
+            "description": "set .NET compiler",
+            "inherit": false,
+            "value": {
+              "name": "dotnet",
+              "provider": "premake.dotnet-compilers"
+            }
+          }
+        ]
+      },
+      {
+        "name": "vs2013",
+        "description": "generate Visual Studio 2013 project files",
+        "options": [
+          {
+            "long": "file",
+            "description": "set premake5.lua file",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "debugger",
+            "description": "start MobDebug debugger",
+            "inherit": false
+          },
+          {
+            "long": "fatal",
+            "description": "treat script warnings as errors",
+            "inherit": false
+          },
+          {
+            "long": "insecure",
+            "description": "skip SSH certificate checks",
+            "inherit": false
+          },
+          {
+            "long": "interactive",
+            "description": "start interactive prompt",
+            "inherit": false
+          },
+          {
+            "long": "os",
+            "description": "set target operating system",
+            "inherit": false,
+            "value": {
+              "name": "os",
+              "provider": "premake.operating-systems"
+            }
+          },
+          {
+            "long": "scripts",
+            "description": "add scripts search path",
+            "inherit": false,
+            "value": {
+              "name": "path",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "systemscript",
+            "description": "set system script",
+            "inherit": false,
+            "value": {
+              "name": "script",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "verbose",
+            "description": "show debug output",
+            "inherit": false
+          },
+          {
+            "long": "cc",
+            "description": "set C/C++ compiler",
+            "inherit": false,
+            "value": {
+              "name": "cc",
+              "provider": "premake.c-compilers"
+            }
+          },
+          {
+            "long": "dc",
+            "description": "set D compiler",
+            "inherit": false,
+            "value": {
+              "name": "dc",
+              "provider": "premake.d-compilers"
+            }
+          },
+          {
+            "long": "dotnet",
+            "description": "set .NET compiler",
+            "inherit": false,
+            "value": {
+              "name": "dotnet",
+              "provider": "premake.dotnet-compilers"
+            }
+          }
+        ]
+      },
+      {
+        "name": "vs2012",
+        "description": "generate Visual Studio 2012 project files",
+        "options": [
+          {
+            "long": "file",
+            "description": "set premake5.lua file",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "debugger",
+            "description": "start MobDebug debugger",
+            "inherit": false
+          },
+          {
+            "long": "fatal",
+            "description": "treat script warnings as errors",
+            "inherit": false
+          },
+          {
+            "long": "insecure",
+            "description": "skip SSH certificate checks",
+            "inherit": false
+          },
+          {
+            "long": "interactive",
+            "description": "start interactive prompt",
+            "inherit": false
+          },
+          {
+            "long": "os",
+            "description": "set target operating system",
+            "inherit": false,
+            "value": {
+              "name": "os",
+              "provider": "premake.operating-systems"
+            }
+          },
+          {
+            "long": "scripts",
+            "description": "add scripts search path",
+            "inherit": false,
+            "value": {
+              "name": "path",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "systemscript",
+            "description": "set system script",
+            "inherit": false,
+            "value": {
+              "name": "script",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "verbose",
+            "description": "show debug output",
+            "inherit": false
+          },
+          {
+            "long": "cc",
+            "description": "set C/C++ compiler",
+            "inherit": false,
+            "value": {
+              "name": "cc",
+              "provider": "premake.c-compilers"
+            }
+          },
+          {
+            "long": "dc",
+            "description": "set D compiler",
+            "inherit": false,
+            "value": {
+              "name": "dc",
+              "provider": "premake.d-compilers"
+            }
+          },
+          {
+            "long": "dotnet",
+            "description": "set .NET compiler",
+            "inherit": false,
+            "value": {
+              "name": "dotnet",
+              "provider": "premake.dotnet-compilers"
+            }
+          }
+        ]
+      },
+      {
+        "name": "vs2010",
+        "description": "generate Visual Studio 2010 project files",
+        "options": [
+          {
+            "long": "file",
+            "description": "set premake5.lua file",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "debugger",
+            "description": "start MobDebug debugger",
+            "inherit": false
+          },
+          {
+            "long": "fatal",
+            "description": "treat script warnings as errors",
+            "inherit": false
+          },
+          {
+            "long": "insecure",
+            "description": "skip SSH certificate checks",
+            "inherit": false
+          },
+          {
+            "long": "interactive",
+            "description": "start interactive prompt",
+            "inherit": false
+          },
+          {
+            "long": "os",
+            "description": "set target operating system",
+            "inherit": false,
+            "value": {
+              "name": "os",
+              "provider": "premake.operating-systems"
+            }
+          },
+          {
+            "long": "scripts",
+            "description": "add scripts search path",
+            "inherit": false,
+            "value": {
+              "name": "path",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "systemscript",
+            "description": "set system script",
+            "inherit": false,
+            "value": {
+              "name": "script",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "verbose",
+            "description": "show debug output",
+            "inherit": false
+          },
+          {
+            "long": "cc",
+            "description": "set C/C++ compiler",
+            "inherit": false,
+            "value": {
+              "name": "cc",
+              "provider": "premake.c-compilers"
+            }
+          },
+          {
+            "long": "dc",
+            "description": "set D compiler",
+            "inherit": false,
+            "value": {
+              "name": "dc",
+              "provider": "premake.d-compilers"
+            }
+          },
+          {
+            "long": "dotnet",
+            "description": "set .NET compiler",
+            "inherit": false,
+            "value": {
+              "name": "dotnet",
+              "provider": "premake.dotnet-compilers"
+            }
+          }
+        ]
+      },
+      {
+        "name": "vs2008",
+        "description": "generate Visual Studio 2008 project files",
+        "options": [
+          {
+            "long": "file",
+            "description": "set premake5.lua file",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "debugger",
+            "description": "start MobDebug debugger",
+            "inherit": false
+          },
+          {
+            "long": "fatal",
+            "description": "treat script warnings as errors",
+            "inherit": false
+          },
+          {
+            "long": "insecure",
+            "description": "skip SSH certificate checks",
+            "inherit": false
+          },
+          {
+            "long": "interactive",
+            "description": "start interactive prompt",
+            "inherit": false
+          },
+          {
+            "long": "os",
+            "description": "set target operating system",
+            "inherit": false,
+            "value": {
+              "name": "os",
+              "provider": "premake.operating-systems"
+            }
+          },
+          {
+            "long": "scripts",
+            "description": "add scripts search path",
+            "inherit": false,
+            "value": {
+              "name": "path",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "systemscript",
+            "description": "set system script",
+            "inherit": false,
+            "value": {
+              "name": "script",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "verbose",
+            "description": "show debug output",
+            "inherit": false
+          },
+          {
+            "long": "cc",
+            "description": "set C/C++ compiler",
+            "inherit": false,
+            "value": {
+              "name": "cc",
+              "provider": "premake.c-compilers"
+            }
+          },
+          {
+            "long": "dc",
+            "description": "set D compiler",
+            "inherit": false,
+            "value": {
+              "name": "dc",
+              "provider": "premake.d-compilers"
+            }
+          },
+          {
+            "long": "dotnet",
+            "description": "set .NET compiler",
+            "inherit": false,
+            "value": {
+              "name": "dotnet",
+              "provider": "premake.dotnet-compilers"
+            }
+          }
+        ]
+      },
+      {
+        "name": "vs2005",
+        "description": "generate Visual Studio 2005 project files",
+        "options": [
+          {
+            "long": "file",
+            "description": "set premake5.lua file",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "debugger",
+            "description": "start MobDebug debugger",
+            "inherit": false
+          },
+          {
+            "long": "fatal",
+            "description": "treat script warnings as errors",
+            "inherit": false
+          },
+          {
+            "long": "insecure",
+            "description": "skip SSH certificate checks",
+            "inherit": false
+          },
+          {
+            "long": "interactive",
+            "description": "start interactive prompt",
+            "inherit": false
+          },
+          {
+            "long": "os",
+            "description": "set target operating system",
+            "inherit": false,
+            "value": {
+              "name": "os",
+              "provider": "premake.operating-systems"
+            }
+          },
+          {
+            "long": "scripts",
+            "description": "add scripts search path",
+            "inherit": false,
+            "value": {
+              "name": "path",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "systemscript",
+            "description": "set system script",
+            "inherit": false,
+            "value": {
+              "name": "script",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "verbose",
+            "description": "show debug output",
+            "inherit": false
+          },
+          {
+            "long": "cc",
+            "description": "set C/C++ compiler",
+            "inherit": false,
+            "value": {
+              "name": "cc",
+              "provider": "premake.c-compilers"
+            }
+          },
+          {
+            "long": "dc",
+            "description": "set D compiler",
+            "inherit": false,
+            "value": {
+              "name": "dc",
+              "provider": "premake.d-compilers"
+            }
+          },
+          {
+            "long": "dotnet",
+            "description": "set .NET compiler",
+            "inherit": false,
+            "value": {
+              "name": "dotnet",
+              "provider": "premake.dotnet-compilers"
+            }
+          }
+        ]
+      },
+      {
+        "name": "gmake",
+        "description": "generate GNU Makefiles (This generator is deprecated by gmake2)",
+        "options": [
+          {
+            "long": "file",
+            "description": "set premake5.lua file",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "debugger",
+            "description": "start MobDebug debugger",
+            "inherit": false
+          },
+          {
+            "long": "fatal",
+            "description": "treat script warnings as errors",
+            "inherit": false
+          },
+          {
+            "long": "insecure",
+            "description": "skip SSH certificate checks",
+            "inherit": false
+          },
+          {
+            "long": "interactive",
+            "description": "start interactive prompt",
+            "inherit": false
+          },
+          {
+            "long": "os",
+            "description": "set target operating system",
+            "inherit": false,
+            "value": {
+              "name": "os",
+              "provider": "premake.operating-systems"
+            }
+          },
+          {
+            "long": "scripts",
+            "description": "add scripts search path",
+            "inherit": false,
+            "value": {
+              "name": "path",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "systemscript",
+            "description": "set system script",
+            "inherit": false,
+            "value": {
+              "name": "script",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "verbose",
+            "description": "show debug output",
+            "inherit": false
+          },
+          {
+            "long": "cc",
+            "description": "set C/C++ compiler",
+            "inherit": false,
+            "value": {
+              "name": "cc",
+              "provider": "premake.c-compilers"
+            }
+          },
+          {
+            "long": "dc",
+            "description": "set D compiler",
+            "inherit": false,
+            "value": {
+              "name": "dc",
+              "provider": "premake.d-compilers"
+            }
+          },
+          {
+            "long": "dotnet",
+            "description": "set .NET compiler",
+            "inherit": false,
+            "value": {
+              "name": "dotnet",
+              "provider": "premake.dotnet-compilers"
+            }
+          }
+        ]
+      },
+      {
+        "name": "gmake2",
+        "description": "generate GNU Makefiles (including Cygwin and MinGW)",
+        "options": [
+          {
+            "long": "file",
+            "description": "set premake5.lua file",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "debugger",
+            "description": "start MobDebug debugger",
+            "inherit": false
+          },
+          {
+            "long": "fatal",
+            "description": "treat script warnings as errors",
+            "inherit": false
+          },
+          {
+            "long": "insecure",
+            "description": "skip SSH certificate checks",
+            "inherit": false
+          },
+          {
+            "long": "interactive",
+            "description": "start interactive prompt",
+            "inherit": false
+          },
+          {
+            "long": "os",
+            "description": "set target operating system",
+            "inherit": false,
+            "value": {
+              "name": "os",
+              "provider": "premake.operating-systems"
+            }
+          },
+          {
+            "long": "scripts",
+            "description": "add scripts search path",
+            "inherit": false,
+            "value": {
+              "name": "path",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "systemscript",
+            "description": "set system script",
+            "inherit": false,
+            "value": {
+              "name": "script",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "verbose",
+            "description": "show debug output",
+            "inherit": false
+          },
+          {
+            "long": "cc",
+            "description": "set C/C++ compiler",
+            "inherit": false,
+            "value": {
+              "name": "cc",
+              "provider": "premake.c-compilers"
+            }
+          },
+          {
+            "long": "dc",
+            "description": "set D compiler",
+            "inherit": false,
+            "value": {
+              "name": "dc",
+              "provider": "premake.d-compilers"
+            }
+          },
+          {
+            "long": "dotnet",
+            "description": "set .NET compiler",
+            "inherit": false,
+            "value": {
+              "name": "dotnet",
+              "provider": "premake.dotnet-compilers"
+            }
+          }
+        ]
+      },
+      {
+        "name": "xcode4",
+        "description": "generate Apple Xcode 4 project files",
+        "options": [
+          {
+            "long": "file",
+            "description": "set premake5.lua file",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "debugger",
+            "description": "start MobDebug debugger",
+            "inherit": false
+          },
+          {
+            "long": "fatal",
+            "description": "treat script warnings as errors",
+            "inherit": false
+          },
+          {
+            "long": "insecure",
+            "description": "skip SSH certificate checks",
+            "inherit": false
+          },
+          {
+            "long": "interactive",
+            "description": "start interactive prompt",
+            "inherit": false
+          },
+          {
+            "long": "os",
+            "description": "set target operating system",
+            "inherit": false,
+            "value": {
+              "name": "os",
+              "provider": "premake.operating-systems"
+            }
+          },
+          {
+            "long": "scripts",
+            "description": "add scripts search path",
+            "inherit": false,
+            "value": {
+              "name": "path",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "systemscript",
+            "description": "set system script",
+            "inherit": false,
+            "value": {
+              "name": "script",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "verbose",
+            "description": "show debug output",
+            "inherit": false
+          },
+          {
+            "long": "cc",
+            "description": "set C/C++ compiler",
+            "inherit": false,
+            "value": {
+              "name": "cc",
+              "provider": "premake.c-compilers"
+            }
+          },
+          {
+            "long": "dc",
+            "description": "set D compiler",
+            "inherit": false,
+            "value": {
+              "name": "dc",
+              "provider": "premake.d-compilers"
+            }
+          },
+          {
+            "long": "dotnet",
+            "description": "set .NET compiler",
+            "inherit": false,
+            "value": {
+              "name": "dotnet",
+              "provider": "premake.dotnet-compilers"
+            }
+          }
+        ]
+      },
+      {
+        "name": "codelite",
+        "description": "generate CodeLite project files",
+        "options": [
+          {
+            "long": "file",
+            "description": "set premake5.lua file",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "debugger",
+            "description": "start MobDebug debugger",
+            "inherit": false
+          },
+          {
+            "long": "fatal",
+            "description": "treat script warnings as errors",
+            "inherit": false
+          },
+          {
+            "long": "insecure",
+            "description": "skip SSH certificate checks",
+            "inherit": false
+          },
+          {
+            "long": "interactive",
+            "description": "start interactive prompt",
+            "inherit": false
+          },
+          {
+            "long": "os",
+            "description": "set target operating system",
+            "inherit": false,
+            "value": {
+              "name": "os",
+              "provider": "premake.operating-systems"
+            }
+          },
+          {
+            "long": "scripts",
+            "description": "add scripts search path",
+            "inherit": false,
+            "value": {
+              "name": "path",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "systemscript",
+            "description": "set system script",
+            "inherit": false,
+            "value": {
+              "name": "script",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "verbose",
+            "description": "show debug output",
+            "inherit": false
+          },
+          {
+            "long": "cc",
+            "description": "set C/C++ compiler",
+            "inherit": false,
+            "value": {
+              "name": "cc",
+              "provider": "premake.c-compilers"
+            }
+          },
+          {
+            "long": "dc",
+            "description": "set D compiler",
+            "inherit": false,
+            "value": {
+              "name": "dc",
+              "provider": "premake.d-compilers"
+            }
+          },
+          {
+            "long": "dotnet",
+            "description": "set .NET compiler",
+            "inherit": false,
+            "value": {
+              "name": "dotnet",
+              "provider": "premake.dotnet-compilers"
+            }
+          }
+        ]
+      }
+    ],
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "premake.operating-systems": {
+        "values": [
+          "aix",
+          "android",
+          "bsd",
+          "haiku",
+          "hurd",
+          "ios",
+          "linux",
+          "macosx",
+          "solaris",
+          "windows"
+        ]
+      },
+      "premake.c-compilers": {
+        "values": [
+          "clang",
+          "gcc",
+          "mingw"
+        ]
+      },
+      "premake.d-compilers": {
+        "values": [
+          "dmd",
+          "gdc",
+          "ldc"
+        ]
+      },
+      "premake.dotnet-compilers": {
+        "values": [
+          "mono",
+          "msnet",
+          "pnet"
+        ]
+      }
+    }
+  }
+}
