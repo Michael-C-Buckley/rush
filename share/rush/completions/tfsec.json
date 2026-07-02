@@ -1,0 +1,254 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "tfsec",
+    "description": "scan Terraform for security issues",
+    "options": [
+      {
+        "long": "concise-output",
+        "description": "reduce the amount of output and no statistics",
+        "inherit": false
+      },
+      {
+        "long": "config-file",
+        "description": "config file to use during run",
+        "inherit": false,
+        "value": {
+          "name": "config-file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "custom-check-dir",
+        "description": "explicitly the custom checks dir location",
+        "inherit": false,
+        "value": {
+          "name": "custom-check-dir",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "debug",
+        "description": "enable debug logging (same as verbose)",
+        "inherit": false
+      },
+      {
+        "short": "G",
+        "long": "disable-grouping",
+        "description": "disable grouping of similar results",
+        "inherit": false
+      },
+      {
+        "short": "e",
+        "long": "exclude",
+        "description": "provide comma-separated list of rule IDs to exclude from run",
+        "inherit": false,
+        "value": {
+          "name": "excludelist"
+        }
+      },
+      {
+        "long": "exclude-downloaded-modules",
+        "description": "remove results for downloaded modules in .terraform folder",
+        "inherit": false
+      },
+      {
+        "long": "exclude-path",
+        "description": "folder path to exclude, can be used multiple times and evaluated in order of specification",
+        "inherit": false,
+        "value": {
+          "name": "excludepath",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "filter-results",
+        "description": "filter results to return specific checks only (supports comma-delimited input)",
+        "inherit": false,
+        "value": {
+          "name": "filterresults"
+        }
+      },
+      {
+        "long": "force-all-dirs",
+        "description": "don't search for tf files, include everything below provided directory",
+        "inherit": false
+      },
+      {
+        "short": "f",
+        "long": "format",
+        "description": "set output format",
+        "inherit": false,
+        "value": {
+          "name": "format",
+          "provider": {
+            "values": [
+              "default",
+              "json",
+              "csv",
+              "checkstyle",
+              "junit",
+              "sarif"
+            ]
+          }
+        }
+      },
+      {
+        "short": "h",
+        "long": "help",
+        "description": "show help",
+        "inherit": false
+      },
+      {
+        "long": "ignore-hcl-errors",
+        "description": "stop and report an error if an HCL parse error is encountered",
+        "inherit": false
+      },
+      {
+        "long": "include-ignored",
+        "description": "include ignored checks in the result output",
+        "inherit": false
+      },
+      {
+        "long": "include-passed",
+        "description": "include passed checks in the result output",
+        "inherit": false
+      },
+      {
+        "long": "migrate-ignores",
+        "description": "migrate ignore codes to the new ID structure",
+        "inherit": false
+      },
+      {
+        "short": "m",
+        "long": "minimum-severity",
+        "description": "set minimum severity",
+        "inherit": false,
+        "value": {
+          "name": "minimumseverity",
+          "provider": {
+            "values": [
+              "CRITICAL",
+              "HIGH",
+              "MEDIUM",
+              "LOW"
+            ]
+          }
+        }
+      },
+      {
+        "long": "no-color",
+        "description": "disable colored output (American style!)",
+        "inherit": false
+      },
+      {
+        "long": "no-colour",
+        "description": "disable coloured output",
+        "inherit": false
+      },
+      {
+        "long": "no-ignores",
+        "description": "do not apply any ignore rules - normally ignored checks will fail",
+        "inherit": false
+      },
+      {
+        "long": "no-module-downloads",
+        "description": "do not download remote modules",
+        "inherit": false
+      },
+      {
+        "short": "O",
+        "long": "out",
+        "description": "set output file",
+        "inherit": false,
+        "value": {
+          "name": "output-file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "print-rego-input",
+        "description": "print a JSON representation of the input supplied to rego policies",
+        "inherit": false
+      },
+      {
+        "long": "rego-policy-dir",
+        "description": "directory to load rego policies from (recursively)",
+        "inherit": false,
+        "value": {
+          "name": "regopolicydir",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "run-statistics",
+        "description": "view statistics table of current findings",
+        "inherit": false
+      },
+      {
+        "long": "single-thread",
+        "description": "run checks using a single thread",
+        "inherit": false
+      },
+      {
+        "short": "s",
+        "long": "soft-fail",
+        "description": "runs checks but suppresses error code",
+        "inherit": false
+      },
+      {
+        "long": "tfvars-file",
+        "description": "path to .tfvars file, can be used multiple times and evaluated in order of specification",
+        "inherit": false,
+        "value": {
+          "name": "tfvarsfile",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "update",
+        "description": "update to latest version",
+        "inherit": false
+      },
+      {
+        "long": "verbose",
+        "description": "enable verbose logging (same as debug)",
+        "inherit": false
+      },
+      {
+        "short": "v",
+        "long": "version",
+        "description": "show version",
+        "inherit": false
+      },
+      {
+        "short": "W",
+        "long": "workspace",
+        "description": "set workspace",
+        "inherit": false,
+        "value": {
+          "name": "workspace"
+        }
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "directory",
+          "provider": "builtin.directories",
+          "index": 0,
+          "description": "directory to scan"
+        }
+      ]
+    },
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "builtin.directories": {
+        "builtin": "directories"
+      }
+    }
+  }
+}
