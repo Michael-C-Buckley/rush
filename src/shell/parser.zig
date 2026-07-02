@@ -1182,6 +1182,19 @@ const Parser = struct {
         const content = try self.removeBackslashNewlines(raw_content);
         if (parseBracedSimpleParameter(content)) |parameter| return .{ .parameter = parameter, .span = span };
         if (try self.parseBracedArrayParameter(content)) |parameter| return .{ .parameter = parameter, .span = span };
+        if (content.len >= 2 and content[0] == '!') {
+            if (try self.parseBracedArrayParameter(content[1..])) |parameter| {
+                switch (parameter.array.subscript) {
+                    .all => return .{
+                        .parameter = parameter,
+                        .array_indices = true,
+                        .span = span,
+                    },
+                    .index => {},
+                }
+            }
+            return null;
+        }
         if (content.len >= 2 and content[0] == '#') {
             const length_parameter = if (try self.parseBracedArrayParameter(content[1..])) |array_parameter|
                 array_parameter

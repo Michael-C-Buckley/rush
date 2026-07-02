@@ -980,6 +980,7 @@ fn expandForWordFields(shell: anytype, words: []const ast.Word) ![]const []const
     for (words) |word| {
         if (try appendUnquotedAtFields(shell, &fields, word) or
             try appendUnquotedStarFields(shell, &fields, word) or
+            try appendUnquotedArrayIndexFields(shell, &fields, word) or
             try appendEmbeddedUnquotedPositionalFields(shell, &fields, word) or
             try appendSpecialQuotedFields(shell, &fields, word))
         {
@@ -1139,12 +1140,23 @@ fn appendQuotedArrayAtPartsFields(
     try fields.append(allocator, "");
     var segment_start: usize = 0;
     for (quoted, 0..) |part, index| {
-        const name = wordPartArrayAtName(part) orelse continue;
+        const expansion = wordPartArrayAtExpansion(part) orelse continue;
         try appendTextToLastField(shell, fields, try expandWordParts(shell, quoted[segment_start..index], null));
-        if (shell.state.getArray(name)) |array| if (array.elements.len != 0) {
+        if (shell.state.getArray(expansion.name)) |array| if (array.elements.len != 0) {
             expanded_array = true;
-            try appendTextToLastField(shell, fields, array.elements[0].value);
-            for (array.elements[1..]) |element| try fields.append(allocator, element.value);
+            if (expansion.indices) {
+                try appendTextToLastField(
+                    shell,
+                    fields,
+                    try std.fmt.allocPrint(allocator, "{}", .{array.elements[0].index}),
+                );
+                for (array.elements[1..]) |element| {
+                    try fields.append(allocator, try std.fmt.allocPrint(allocator, "{}", .{element.index}));
+                }
+            } else {
+                try appendTextToLastField(shell, fields, array.elements[0].value);
+                for (array.elements[1..]) |element| try fields.append(allocator, element.value);
+            }
         };
         segment_start = index + 1;
     }
@@ -1166,17 +1178,25 @@ fn wordPartsContainAtParameter(parts: []const ast.WordPart) bool {
 }
 
 fn wordPartsContainArrayAtParameter(parts: []const ast.WordPart) bool {
-    for (parts) |part| if (wordPartArrayAtName(part) != null) return true;
+    for (parts) |part| if (wordPartArrayAtExpansion(part) != null) return true;
     return false;
 }
 
-fn wordPartArrayAtName(part: ast.WordPart) ?[]const u8 {
+const ArrayAtExpansion = struct {
+    name: []const u8,
+    indices: bool,
+};
+
+fn wordPartArrayAtExpansion(part: ast.WordPart) ?ArrayAtExpansion {
     return switch (part) {
         .parameter => |parameter| {
             if (parameter.length or parameter.op != null or parameter.parameter != .array) return null;
             const array = parameter.parameter.array;
             return switch (array.subscript) {
-                .all => |special| if (special == .at) array.name else null,
+                .all => |special| if (special == .at) .{
+                    .name = array.name,
+                    .indices = parameter.array_indices,
+                } else null,
                 else => null,
             };
         },
@@ -1221,6 +1241,16 @@ fn singleParameterWord(word: ast.Word) ?ast.ParameterExpansion {
     };
 }
 
+fn singleUnquotedParameter(word: ast.Word) ?ast.ParameterExpansion {
+    return switch (word.data) {
+        .literal => null,
+        .parts => |parts| if (parts.len == 1) switch (parts[0]) {
+            .parameter => |parameter| parameter,
+            else => null,
+        } else null,
+    };
+}
+
 fn appendUnquotedAtFields(shell: anytype, fields: *std.ArrayList([]const u8), word: ast.Word) !bool {
     if (!wordIsUnquotedAt(word)) return false;
     try appendUnquotedPositionalFields(shell, fields);
@@ -1230,6 +1260,25 @@ fn appendUnquotedAtFields(shell: anytype, fields: *std.ArrayList([]const u8), wo
 fn appendUnquotedStarFields(shell: anytype, fields: *std.ArrayList([]const u8), word: ast.Word) !bool {
     if (!wordIsUnquotedStar(word)) return false;
     try appendUnquotedPositionalFields(shell, fields);
+    return true;
+}
+
+fn appendUnquotedArrayIndexFields(shell: anytype, fields: *std.ArrayList([]const u8), word: ast.Word) !bool {
+    const parameter = singleUnquotedParameter(word) orelse return false;
+    if (!parameter.array_indices or parameter.parameter != .array) return false;
+    const array_parameter = parameter.parameter.array;
+    switch (array_parameter.subscript) {
+        .all => {},
+        .index => return false,
+    }
+    const array = shell.state.getArray(array_parameter.name) orelse return true;
+    for (array.elements) |element| {
+        try fields.append(shell.scratchAllocator(), try std.fmt.allocPrint(
+            shell.scratchAllocator(),
+            "{}",
+            .{element.index},
+        ));
+    }
     return true;
 }
 
@@ -4113,6 +4162,7 @@ fn copyParameterExpansion(allocator: std.mem.Allocator, parameter: ast.Parameter
     return .{
         .parameter = try copyParameter(allocator, parameter.parameter),
         .length = parameter.length,
+        .array_indices = parameter.array_indices,
         .colon = parameter.colon,
         .op = parameter.op,
         .word = if (parameter.word) |word| try copyWord(allocator, word) else null,
@@ -4467,7 +4517,7 @@ fn hereDocAtParameter(part: ast.WordPart) bool {
         .parameter => |parameter| parameter,
         else => return false,
     };
-    if (parameter.op != null or parameter.length) return false;
+    if (parameter.op != null or parameter.length or parameter.array_indices) return false;
     return switch (parameter.parameter) {
         .special => |special| special == .at,
         else => false,
@@ -4755,6 +4805,7 @@ fn appendExpandedWordFields(
 
     if (try appendUnquotedAtFields(shell, fields, word) or
         try appendUnquotedStarFields(shell, fields, word) or
+        try appendUnquotedArrayIndexFields(shell, fields, word) or
         try appendEmbeddedUnquotedPositionalFields(shell, fields, word) or
         try appendSpecialQuotedFields(shell, fields, word))
     {
@@ -4855,7 +4906,11 @@ fn appendBraceParameterAtoms(
 }
 
 fn unbracedParameterExpansionText(shell: anytype, expansion: ast.ParameterExpansion) !?[]const u8 {
-    if (expansion.length or expansion.colon or expansion.op != null or expansion.word != null) return null;
+    if (expansion.length or expansion.array_indices or expansion.colon or
+        expansion.op != null or expansion.word != null)
+    {
+        return null;
+    }
 
     const expected_len: usize = switch (expansion.parameter) {
         .variable => |name| 1 + name.len,
@@ -6897,6 +6952,7 @@ fn readCommandSubstitutionOutput(shell: anytype, fd: host_mod.Fd) ![]const u8 {
 fn expandParameter(shell: anytype, parameter: ast.ParameterExpansion) EvalError![]const u8 {
     validateAst(parameter);
     if (parameter.length) return expandParameterLength(shell, parameter);
+    if (parameter.array_indices) return (try arrayIndicesParameterValue(shell, parameter.parameter.array)) orelse "";
 
     if (parameter.op) |operator| {
         return switch (operator) {
@@ -7175,6 +7231,32 @@ fn arrayParameterValue(shell: anytype, parameter: ast.ArrayParameter) !?[]const 
             else => unreachable,
         },
     };
+}
+
+fn arrayIndicesParameterValue(shell: anytype, parameter: ast.ArrayParameter) !?[]const u8 {
+    return switch (parameter.subscript) {
+        .all => |special| if (shell.state.getArray(parameter.name)) |array| {
+            if (array.elements.len == 0) return null;
+            const separator = if (special == .star) ifsFirstCharacter(shell) else " ";
+            return try joinArrayElementIndices(shell, array.elements, separator);
+        } else null,
+        .index => null,
+    };
+}
+
+fn joinArrayElementIndices(
+    shell: anytype,
+    elements: []const state_mod.ArrayElement,
+    separator: []const u8,
+) ![]const u8 {
+    std.debug.assert(elements.len != 0);
+    var output: std.Io.Writer.Allocating = .init(shell.scratchAllocator());
+    defer output.deinit();
+    for (elements, 0..) |element, index| {
+        if (index != 0) try output.writer.writeAll(separator);
+        try output.writer.print("{}", .{element.index});
+    }
+    return output.toOwnedSlice();
 }
 
 const FunctionStackField = enum {

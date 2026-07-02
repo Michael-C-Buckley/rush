@@ -383,6 +383,27 @@
             .status = 0,
         },
         .{
+            .name = "indexed array bang expansion lists assigned indices",
+            .script =
+            \\arr[2]=a
+            \\arr[5]=b
+            \\IFS=:
+            \\printf 'unquoted=<%s>\n' ${!arr[@]}
+            \\printf 'quoted=<%s>\n' "${!arr[@]}"
+            \\printf 'star=<%s> missing=<%s>\n' "${!arr[*]}" "${!missing[@]}"
+            ,
+            .stdout =
+            \\unquoted=<2>
+            \\unquoted=<5>
+            \\quoted=<2>
+            \\quoted=<5>
+            \\star=<2:5> missing=<>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "parameter substring expansion supports offsets and lengths",
             .script =
             \\value=abcdef

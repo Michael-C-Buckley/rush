@@ -221,6 +221,7 @@ pub const SpecialParameter = enum {
 pub const ParameterExpansion = struct {
     parameter: Parameter,
     length: bool = false,
+    array_indices: bool = false,
     colon: bool = false,
     op: ?ParameterOperator = null,
     word: ?Word = null,
@@ -236,6 +237,11 @@ pub const ParameterExpansion = struct {
             std.debug.assert(self.second_word == null);
         }
         if (self.length) std.debug.assert(self.op == null);
+        if (self.array_indices) {
+            std.debug.assert(!self.length);
+            std.debug.assert(self.op == null);
+            std.debug.assert(self.parameter == .array);
+        }
         if (self.word) |word| word.validate();
         if (self.second_word) |word| word.validate();
     }
