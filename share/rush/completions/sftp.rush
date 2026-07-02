@@ -1,0 +1,16 @@
+__rush_complete_sftp_hosts() {
+  for file in "$HOME/.ssh/config" "$HOME/.ssh/known_hosts" "$HOME/.ssh/known_hosts2"; do
+    test -r "$file" || continue
+    case "$file" in
+      */config)
+        awk 'tolower($1) == "host" { for (i = 2; i <= NF; i++) if ($i !~ /[*?!]/) print $i }' "$file"
+        ;;
+      */known_hosts*)
+        awk '{print $1}' "$file" | tr ',' '\n' | sed -e 's/^\[//' -e 's/\]:[0-9]*$//' -e 's/:.*$//' -e '/^|/d'
+        ;;
+    esac
+  done | sort -u | while IFS= read -r host; do
+    test -n "$host" && rush_complete candidate "$host" --kind plain --description 'ssh host'
+  done
+  rush_complete files
+}
