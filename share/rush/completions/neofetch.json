@@ -1,0 +1,1010 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "neofetch",
+    "description": "show system information",
+    "options": [
+      {
+        "long": "help",
+        "short": "h",
+        "description": "show help",
+        "inherit": false
+      },
+      {
+        "long": "disable",
+        "description": "Disable information line",
+        "inherit": false,
+        "value": {
+          "name": "info-line",
+          "provider": {
+            "values": [
+              "os",
+              "host",
+              "kernel",
+              "uptime",
+              "packages",
+              "shell",
+              "term",
+              "cpu",
+              "gpu",
+              "memory",
+              "disk",
+              "battery",
+              "resolution",
+              "wm",
+              "de",
+              "theme",
+              "wm_theme",
+              "icons"
+            ]
+          }
+        }
+      },
+      {
+        "long": "title_fqdn",
+        "description": "Hide/Show Fully Qualified Domain Name in title",
+        "inherit": false,
+        "value": {
+          "name": "on/off",
+          "provider": {
+            "values": [
+              "on",
+              "off"
+            ]
+          }
+        }
+      },
+      {
+        "long": "package_managers",
+        "description": "Hide/Show Package Manager names",
+        "inherit": false,
+        "value": {
+          "name": "on/off",
+          "provider": {
+            "values": [
+              "on",
+              "off",
+              "tiny"
+            ]
+          }
+        }
+      },
+      {
+        "long": "os_arch",
+        "description": "Hide/Show OS architecture",
+        "inherit": false,
+        "value": {
+          "name": "on/off",
+          "provider": {
+            "values": [
+              "on",
+              "off"
+            ]
+          }
+        }
+      },
+      {
+        "long": "speed_type",
+        "description": "Change the type of cpu speed to display",
+        "inherit": false,
+        "value": {
+          "name": "type",
+          "provider": {
+            "values": [
+              "current",
+              "min",
+              "bios",
+              "scaling_current",
+              "scaling_min",
+              "scaling_max"
+            ]
+          }
+        }
+      },
+      {
+        "long": "speed_shorthand",
+        "description": "Whether or not to show decimals in CPU speed",
+        "inherit": false,
+        "value": {
+          "name": "on/off",
+          "provider": {
+            "values": [
+              "on",
+              "off"
+            ]
+          }
+        }
+      },
+      {
+        "long": "cpu_brand",
+        "description": "Enable/Disable CPU brand in output",
+        "inherit": false,
+        "value": {
+          "name": "on/off",
+          "provider": {
+            "values": [
+              "on",
+              "off"
+            ]
+          }
+        }
+      },
+      {
+        "long": "cpu_cores",
+        "description": "Whether or not to display the number of CPU cores",
+        "inherit": false,
+        "value": {
+          "name": "type",
+          "provider": {
+            "values": [
+              "logical",
+              "physical",
+              "off"
+            ]
+          }
+        }
+      },
+      {
+        "long": "cpu_speed",
+        "description": "Hide/Show cpu speed",
+        "inherit": false,
+        "value": {
+          "name": "on/off",
+          "provider": {
+            "values": [
+              "on",
+              "off"
+            ]
+          }
+        }
+      },
+      {
+        "long": "cpu_temp",
+        "description": "Hide/Show cpu temperature",
+        "inherit": false,
+        "value": {
+          "name": "unit/off",
+          "provider": {
+            "values": [
+              "C",
+              "F",
+              "off"
+            ]
+          }
+        }
+      },
+      {
+        "long": "distro_shorthand",
+        "description": "Shorten the output of distro",
+        "inherit": false,
+        "value": {
+          "name": "on/off",
+          "provider": {
+            "values": [
+              "on",
+              "off",
+              "tiny"
+            ]
+          }
+        }
+      },
+      {
+        "long": "kernel_shorthand",
+        "description": "Shorten the output of kernel",
+        "inherit": false,
+        "value": {
+          "name": "on/off",
+          "provider": {
+            "values": [
+              "on",
+              "off",
+              "tiny"
+            ]
+          }
+        }
+      },
+      {
+        "long": "uptime_shorthand",
+        "description": "Shorten the output of uptime",
+        "inherit": false,
+        "value": {
+          "name": "on/off",
+          "provider": {
+            "values": [
+              "on",
+              "off",
+              "tiny"
+            ]
+          }
+        }
+      },
+      {
+        "long": "refresh_rate",
+        "description": "Whether to display the refresh rate of each monitor",
+        "inherit": false,
+        "value": {
+          "name": "on/off",
+          "provider": {
+            "values": [
+              "on",
+              "off"
+            ]
+          }
+        }
+      },
+      {
+        "long": "gpu_brand",
+        "description": "Enable/Disable GPU brand in output",
+        "inherit": false,
+        "value": {
+          "name": "on/off",
+          "provider": {
+            "values": [
+              "on",
+              "off"
+            ]
+          }
+        }
+      },
+      {
+        "long": "gpu_type",
+        "description": "Which GPU to display",
+        "inherit": false,
+        "value": {
+          "name": "type",
+          "provider": {
+            "values": [
+              "all",
+              "dedicated",
+              "integrated"
+            ]
+          }
+        }
+      },
+      {
+        "long": "de_version",
+        "description": "Show/Hide Desktop Environment version",
+        "inherit": false,
+        "value": {
+          "name": "on/off",
+          "provider": {
+            "values": [
+              "on",
+              "off"
+            ]
+          }
+        }
+      },
+      {
+        "long": "gtk_shorthand",
+        "description": "Shorten output of gtk theme/icons",
+        "inherit": false,
+        "value": {
+          "name": "on/off",
+          "provider": {
+            "values": [
+              "on",
+              "off",
+              "tiny"
+            ]
+          }
+        }
+      },
+      {
+        "long": "gtk2",
+        "description": "Enable/Disable gtk2 theme/font/icons output",
+        "inherit": false,
+        "value": {
+          "name": "on/off",
+          "provider": {
+            "values": [
+              "on",
+              "off"
+            ]
+          }
+        }
+      },
+      {
+        "long": "gtk3",
+        "description": "Enable/Disable gtk3 theme/font/icons output",
+        "inherit": false,
+        "value": {
+          "name": "on/off",
+          "provider": {
+            "values": [
+              "on",
+              "off"
+            ]
+          }
+        }
+      },
+      {
+        "long": "shell_path",
+        "description": "Enable/Disable showing $SHELL path",
+        "inherit": false,
+        "value": {
+          "name": "on/off",
+          "provider": {
+            "values": [
+              "on",
+              "off"
+            ]
+          }
+        }
+      },
+      {
+        "long": "shell_version",
+        "description": "Enable/Disable showing $SHELL version",
+        "inherit": false,
+        "value": {
+          "name": "on/off",
+          "provider": {
+            "values": [
+              "on",
+              "off"
+            ]
+          }
+        }
+      },
+      {
+        "long": "disk_show",
+        "description": "Which disks to display",
+        "inherit": false,
+        "value": {
+          "name": "disk",
+          "provider": {
+            "values": [
+              "/dev/sd",
+              "/dev/nvme",
+              "/dev/mmcblk",
+              "/dev/mapper",
+              "/mnt",
+              "/run/media"
+            ]
+          }
+        }
+      },
+      {
+        "long": "disk_subtitle",
+        "description": "What information to append to the Disk subtitle",
+        "inherit": false,
+        "value": {
+          "name": "type",
+          "provider": {
+            "values": [
+              "name",
+              "mount",
+              "dir",
+              "none"
+            ]
+          }
+        }
+      },
+      {
+        "long": "disk_percent",
+        "description": "Hide/Show disk percent",
+        "inherit": false,
+        "value": {
+          "name": "on/off",
+          "provider": {
+            "values": [
+              "on",
+              "off"
+            ]
+          }
+        }
+      },
+      {
+        "long": "ip_host",
+        "description": "URL to query for public IP",
+        "inherit": false,
+        "value": {
+          "name": "https://..."
+        }
+      },
+      {
+        "long": "ip_timeout",
+        "description": "Public IP timeout",
+        "inherit": false,
+        "value": {
+          "name": "X-seconds"
+        }
+      },
+      {
+        "long": "memory_percent",
+        "description": "Display memory percentage",
+        "inherit": false,
+        "value": {
+          "name": "on/off",
+          "provider": {
+            "values": [
+              "on",
+              "off"
+            ]
+          }
+        }
+      },
+      {
+        "long": "memory_unit",
+        "description": "Memory output unit",
+        "inherit": false,
+        "value": {
+          "name": "unit",
+          "provider": {
+            "values": [
+              "kib",
+              "mib",
+              "gib"
+            ]
+          }
+        }
+      },
+      {
+        "long": "colors",
+        "description": "Changes the text colors",
+        "inherit": false,
+        "value": [
+          {
+            "name": "Title"
+          },
+          {
+            "name": "@"
+          },
+          {
+            "name": "Underline"
+          },
+          {
+            "name": "Subtitle"
+          },
+          {
+            "name": "Colon"
+          },
+          {
+            "name": "Info"
+          }
+        ]
+      },
+      {
+        "long": "underline",
+        "description": "Enable/Disable the underline",
+        "inherit": false,
+        "value": {
+          "name": "on/off",
+          "provider": {
+            "values": [
+              "on",
+              "off"
+            ]
+          }
+        }
+      },
+      {
+        "long": "underline_char",
+        "description": "Character to use when underlining title",
+        "inherit": false,
+        "value": {
+          "name": "char"
+        }
+      },
+      {
+        "long": "bold",
+        "description": "Enable/Disable bold text",
+        "inherit": false,
+        "value": {
+          "name": "on/off",
+          "provider": {
+            "values": [
+              "on",
+              "off"
+            ]
+          }
+        }
+      },
+      {
+        "long": "separator",
+        "description": "Changes the default ':' separator to the specified string",
+        "inherit": false,
+        "value": {
+          "name": "string"
+        }
+      },
+      {
+        "long": "color_blocks",
+        "description": "Enable/Disable the color blocks",
+        "inherit": false,
+        "value": {
+          "name": "on/off",
+          "provider": {
+            "values": [
+              "on",
+              "off"
+            ]
+          }
+        }
+      },
+      {
+        "long": "col_offset",
+        "description": "Left-padding of color blocks",
+        "inherit": false,
+        "value": {
+          "name": "number",
+          "provider": {
+            "values": [
+              "auto"
+            ]
+          }
+        }
+      },
+      {
+        "long": "block_width",
+        "description": "Width of color blocks in spaces",
+        "inherit": false,
+        "value": {
+          "name": "number"
+        }
+      },
+      {
+        "long": "block_height",
+        "description": "Height of color blocks in lines",
+        "inherit": false,
+        "value": {
+          "name": "number"
+        }
+      },
+      {
+        "long": "block_range",
+        "description": "Range of colors to print as blocks",
+        "inherit": false,
+        "value": [
+          {
+            "name": "start"
+          },
+          {
+            "name": "end"
+          }
+        ]
+      },
+      {
+        "long": "bar_char",
+        "description": "Characters to use when drawing bars",
+        "inherit": false,
+        "value": [
+          {
+            "name": "Elapsed-char"
+          },
+          {
+            "name": "Total-char"
+          }
+        ]
+      },
+      {
+        "long": "bar_border",
+        "description": "Whether or not to surround the bar with '[]'",
+        "inherit": false,
+        "value": {
+          "name": "on/off",
+          "provider": {
+            "values": [
+              "on",
+              "off"
+            ]
+          }
+        }
+      },
+      {
+        "long": "bar_length",
+        "description": "Length in spaces to make the bars",
+        "inherit": false,
+        "value": {
+          "name": "number"
+        }
+      },
+      {
+        "long": "bar_colors",
+        "description": "Colors to make the bar",
+        "inherit": false,
+        "value": [
+          {
+            "name": "Elapsed"
+          },
+          {
+            "name": "Total"
+          }
+        ]
+      },
+      {
+        "long": "cpu_display",
+        "description": "CPU bar mode",
+        "inherit": false,
+        "value": {
+          "name": "mode",
+          "provider": {
+            "values": [
+              "bar",
+              "infobar",
+              "barinfo",
+              "off"
+            ]
+          }
+        }
+      },
+      {
+        "long": "memory_display",
+        "description": "Memory display mode",
+        "inherit": false,
+        "value": {
+          "name": "mode",
+          "provider": {
+            "values": [
+              "bar",
+              "infobar",
+              "barinfo",
+              "off"
+            ]
+          }
+        }
+      },
+      {
+        "long": "battery_display",
+        "description": "Battery display mode",
+        "inherit": false,
+        "value": {
+          "name": "mode",
+          "provider": {
+            "values": [
+              "bar",
+              "infobar",
+              "barinfo",
+              "off"
+            ]
+          }
+        }
+      },
+      {
+        "long": "disk_display",
+        "description": "Disk display mode",
+        "inherit": false,
+        "value": {
+          "name": "mode",
+          "provider": {
+            "values": [
+              "bar",
+              "infobar",
+              "barinfo",
+              "off"
+            ]
+          }
+        }
+      },
+      {
+        "long": "backend",
+        "description": "Which image backend to use",
+        "inherit": false,
+        "value": {
+          "name": "backend",
+          "provider": {
+            "values": [
+              "ascii",
+              "caca",
+              "chafa",
+              "jp2a",
+              "iterm2",
+              "off",
+              "pixterm",
+              "pot",
+              "sixel",
+              "termpix",
+              "tycat",
+              "w3m",
+              "kitty"
+            ]
+          }
+        }
+      },
+      {
+        "long": "source",
+        "description": "Which image or ascii file to use",
+        "inherit": false,
+        "value": {
+          "name": "source",
+          "provider": [
+            {
+              "values": [
+                "auto",
+                "ascii",
+                "wallpaper"
+              ]
+            },
+            "builtin.files"
+          ]
+        }
+      },
+      {
+        "long": "ascii",
+        "description": "Same as --backend ascii",
+        "inherit": false
+      },
+      {
+        "long": "caca",
+        "description": "Same as --backend caca",
+        "inherit": false
+      },
+      {
+        "long": "chafa",
+        "description": "Same as --backend chafa",
+        "inherit": false
+      },
+      {
+        "long": "iterm2",
+        "description": "Same as --backend iterm2",
+        "inherit": false
+      },
+      {
+        "long": "jp2a",
+        "description": "Same as --backend jp2a",
+        "inherit": false
+      },
+      {
+        "long": "kitty",
+        "description": "Same as --backend kitty",
+        "inherit": false
+      },
+      {
+        "long": "pot",
+        "description": "Same as --backend pot",
+        "inherit": false
+      },
+      {
+        "long": "pixterm",
+        "description": "Same as --backend pixterm",
+        "inherit": false
+      },
+      {
+        "long": "sixel",
+        "description": "Same as --backend sixel",
+        "inherit": false
+      },
+      {
+        "long": "termpix",
+        "description": "Same as --backend termpix",
+        "inherit": false
+      },
+      {
+        "long": "tycat",
+        "description": "Same as --backend tycat",
+        "inherit": false
+      },
+      {
+        "long": "w3m",
+        "description": "Same as --backend w3m",
+        "inherit": false
+      },
+      {
+        "long": "off",
+        "description": "Same as --backend off",
+        "inherit": false
+      },
+      {
+        "long": "ascii_colors",
+        "description": "Colors to print the ascii art",
+        "inherit": false,
+        "value": [
+          {
+            "name": "Color-1"
+          },
+          {
+            "name": "Color-2"
+          },
+          {
+            "name": "Color-3"
+          },
+          {
+            "name": "Color-4"
+          },
+          {
+            "name": "Color-5"
+          },
+          {
+            "name": "Color-6"
+          }
+        ]
+      },
+      {
+        "long": "ascii_distro",
+        "description": "Which Distro's ascii art to print",
+        "inherit": false,
+        "value": {
+          "name": "OS"
+        }
+      },
+      {
+        "long": "ascii_bold",
+        "description": "Whether or not to bold the ascii logo",
+        "inherit": false,
+        "value": {
+          "name": "on/off",
+          "provider": {
+            "values": [
+              "on",
+              "off"
+            ]
+          }
+        }
+      },
+      {
+        "short": "L",
+        "long": "logo",
+        "description": "Hide the info text and only show the ascii logo",
+        "inherit": false
+      },
+      {
+        "long": "loop",
+        "description": "Redraw the image constantly until Ctrl+C is used",
+        "inherit": false
+      },
+      {
+        "long": "size",
+        "description": "How to size the image",
+        "inherit": false,
+        "value": {
+          "name": "size",
+          "provider": {
+            "values": [
+              "auto"
+            ]
+          }
+        }
+      },
+      {
+        "long": "crop_mode",
+        "description": "Which crop mode to use",
+        "inherit": false,
+        "value": {
+          "name": "mode",
+          "provider": {
+            "values": [
+              "normal",
+              "fit",
+              "fill"
+            ]
+          }
+        }
+      },
+      {
+        "long": "crop_offset",
+        "description": "Change the crop offset for normal mode",
+        "inherit": false,
+        "value": {
+          "name": "offset",
+          "provider": {
+            "values": [
+              "northwest",
+              "north",
+              "northeast"
+            ]
+          }
+        }
+      },
+      {
+        "long": "xoffset",
+        "description": "How close the image will be to the left edge of the window. This only works with w3m",
+        "inherit": false,
+        "value": {
+          "name": "number"
+        }
+      },
+      {
+        "long": "yoffset",
+        "description": "How close the image will be to the top edge of the window. This only works with w3m",
+        "inherit": false,
+        "value": {
+          "name": "number"
+        }
+      },
+      {
+        "long": "gap",
+        "description": "Gap between image and text",
+        "inherit": false,
+        "value": {
+          "name": "number"
+        }
+      },
+      {
+        "long": "clean",
+        "description": "Delete cached files and thumbnails",
+        "inherit": false
+      },
+      {
+        "long": "config",
+        "description": "Specify a path to a custom config file",
+        "inherit": false,
+        "value": {
+          "name": "file/none",
+          "provider": [
+            {
+              "values": [
+                "none"
+              ]
+            },
+            "builtin.files"
+          ]
+        }
+      },
+      {
+        "long": "no_config",
+        "description": "Don't create the user config file",
+        "inherit": false
+      },
+      {
+        "long": "print_config",
+        "description": "Print the default config file to stdout",
+        "inherit": false
+      },
+      {
+        "long": "stdout",
+        "description": "Turn off all colors and disables any ASCII/image backend",
+        "inherit": false
+      },
+      {
+        "long": "version",
+        "description": "Show neofetch version",
+        "inherit": false
+      },
+      {
+        "short": "v",
+        "description": "Display error messages",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-vv"
+        ],
+        "description": "Display a verbose log for error reporting",
+        "inherit": false
+      },
+      {
+        "long": "gen-man",
+        "description": "Generate a manpage for neofetch in your PWD",
+        "inherit": false
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "info-line",
+          "index": 0,
+          "repeatable": true,
+          "required": false,
+          "provider": {
+            "values": [
+              "os",
+              "host",
+              "kernel",
+              "uptime",
+              "packages",
+              "shell",
+              "term",
+              "cpu",
+              "gpu",
+              "memory",
+              "disk",
+              "battery",
+              "resolution",
+              "wm",
+              "de",
+              "theme",
+              "wm_theme",
+              "icons"
+            ]
+          }
+        }
+      ]
+    },
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
