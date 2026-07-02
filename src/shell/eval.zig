@@ -2638,8 +2638,7 @@ fn parseWaitPid(arg: []const u8) ?host_mod.Pid {
 // ziglint-ignore: Z024 preserve existing readable expression shape; lint-only cleanup
 fn evalReadBuiltin(shell: anytype, args: []const []const u8, assignments: []const ast.Assignment) EvalError!result.EvalResult {
     std.debug.assert(args.len != 0);
-    var raw = false;
-    var delimiter: u8 = '\n';
+    var options: ReadOptions = .{};
     var index: usize = 1;
     while (index < args.len) : (index += 1) {
         const arg = args[index];
@@ -2650,16 +2649,43 @@ fn evalReadBuiltin(shell: anytype, args: []const []const u8, assignments: []cons
         }
         var option_index: usize = 1;
         while (option_index < arg.len) : (option_index += 1) switch (arg[option_index]) {
-            'r' => raw = true,
+            'r' => options.raw = true,
             'd' => {
                 if (option_index + 1 < arg.len) {
-                    delimiter = arg[option_index + 1];
+                    options.delimiter = arg[option_index + 1];
                     option_index = arg.len;
                 } else {
                     index += 1;
                     if (index >= args.len or args[index].len == 0) return .{ .status = 2 };
-                    delimiter = args[index][0];
+                    options.delimiter = args[index][0];
                 }
+                break;
+            },
+            'n', 'N' => |option| {
+                if (shell.state.options.mode == .posix) return .{ .status = 2 };
+                const exact = option == 'N';
+                const count_text = if (option_index + 1 < arg.len) count: {
+                    defer option_index = arg.len;
+                    break :count arg[option_index + 1 ..];
+                } else count: {
+                    index += 1;
+                    if (index >= args.len) return .{ .status = 2 };
+                    break :count args[index];
+                };
+                options.count = parseReadCount(count_text) orelse return .{ .status = 2 };
+                options.exact_count = exact;
+                break;
+            },
+            'p' => {
+                if (shell.state.options.mode == .posix) return .{ .status = 2 };
+                options.prompt = if (option_index + 1 < arg.len) prompt: {
+                    defer option_index = arg.len;
+                    break :prompt arg[option_index + 1 ..];
+                } else prompt: {
+                    index += 1;
+                    if (index >= args.len) return .{ .status = 2 };
+                    break :prompt args[index];
+                };
                 break;
             },
             else => return .{ .status = 2 },
@@ -2669,13 +2695,20 @@ fn evalReadBuiltin(shell: anytype, args: []const []const u8, assignments: []cons
     const names = if (index < args.len) args[index..] else &[_][]const u8{"REPLY"};
     for (names) |name| if (!isAssignmentName(name)) return .{ .status = 2 };
 
-    const line_result = try readBuiltinLine(shell, raw, delimiter);
+    if (options.prompt) |prompt| {
+        if (shell.host.isTerminalFd(.stdin)) try shell.host.writeAll(.stderr, prompt);
+    }
+
+    const line_result = try readBuiltinLine(shell, options);
     const saved = try saveAssignmentVariables(shell, assignments);
     var restored_assignments = false;
     errdefer if (!restored_assignments) restoreVariables(shell, saved);
     try applyAssignments(shell, assignments);
     const ifs = parameterValue(shell, "IFS") orelse " \t\n";
-    const values = try readFieldValues(shell, line_result.line, names.len, ifs);
+    const values = if (options.exact_count)
+        try readExactFieldValues(shell, line_result.line, names.len)
+    else
+        try readFieldValues(shell, line_result.line, names.len, ifs);
     restoreVariables(shell, saved);
     restored_assignments = true;
 
@@ -2685,6 +2718,19 @@ fn evalReadBuiltin(shell: anytype, args: []const []const u8, assignments: []cons
     return .{ .status = if (line_result.found_delimiter) 0 else 1 };
 }
 
+const ReadOptions = struct {
+    raw: bool = false,
+    delimiter: u8 = '\n',
+    count: ?usize = null,
+    exact_count: bool = false,
+    prompt: ?[]const u8 = null,
+};
+
+fn parseReadCount(text: []const u8) ?usize {
+    if (text.len == 0) return null;
+    return std.fmt.parseUnsigned(usize, text, 10) catch null;
+}
+
 const ReadLineResult = struct {
     line: []const u8,
     found_delimiter: bool,
@@ -2692,26 +2738,60 @@ const ReadLineResult = struct {
 
 const read_escape_marker: u8 = 0;
 
-fn readBuiltinLine(shell: anytype, raw: bool, delimiter: u8) !ReadLineResult {
+fn readBuiltinLine(shell: anytype, options: ReadOptions) !ReadLineResult {
     var line: std.ArrayList(u8) = .empty;
+    if (options.count == 0) return .{ .line = try line.toOwnedSlice(shell.scratchAllocator()), .found_delimiter = true };
+
+    var characters_read: usize = 0;
     var byte: [1]u8 = undefined;
     while (true) {
         const read_len = try shell.host.read(.stdin, &byte);
         // ziglint-ignore: Z024 preserve existing readable expression shape; lint-only cleanup
         if (read_len == 0) return .{ .line = try line.toOwnedSlice(shell.scratchAllocator()), .found_delimiter = false };
         // ziglint-ignore: Z024 preserve existing readable expression shape; lint-only cleanup
-        if (byte[0] == delimiter) return .{ .line = try line.toOwnedSlice(shell.scratchAllocator()), .found_delimiter = true };
-        if (!raw and byte[0] == '\\') {
+        if (!options.exact_count and byte[0] == options.delimiter) {
+            return .{ .line = try line.toOwnedSlice(shell.scratchAllocator()), .found_delimiter = true };
+        }
+        if (!options.raw and byte[0] == '\\') {
             const escaped_len = try shell.host.read(.stdin, &byte);
             if (escaped_len == 0) {
                 try line.append(shell.scratchAllocator(), '\\');
                 return .{ .line = try line.toOwnedSlice(shell.scratchAllocator()), .found_delimiter = false };
             }
-            if (byte[0] == delimiter and delimiter == '\n') continue;
+            if (!options.exact_count and byte[0] == options.delimiter and options.delimiter == '\n') continue;
             try line.append(shell.scratchAllocator(), read_escape_marker);
         }
-        try line.append(shell.scratchAllocator(), byte[0]);
+        try appendReadCharacter(shell, &line, byte[0]);
+        if (options.count) |count| {
+            characters_read += 1;
+            if (characters_read >= count) return .{
+                .line = try line.toOwnedSlice(shell.scratchAllocator()),
+                .found_delimiter = true,
+            };
+        }
     }
+}
+
+fn appendReadCharacter(shell: anytype, line: *std.ArrayList(u8), first: u8) !void {
+    const allocator = shell.scratchAllocator();
+    try line.append(allocator, first);
+    const sequence_len = std.unicode.utf8ByteSequenceLength(first) catch 1;
+    if (sequence_len <= 1) return;
+    var byte: [1]u8 = undefined;
+    var remaining = sequence_len - 1;
+    while (remaining != 0) : (remaining -= 1) {
+        const read_len = try shell.host.read(.stdin, &byte);
+        if (read_len == 0) return;
+        try line.append(allocator, byte[0]);
+    }
+}
+
+fn readExactFieldValues(shell: anytype, line: []const u8, count: usize) ![]const []const u8 {
+    std.debug.assert(count != 0);
+    const values = try shell.scratchAllocator().alloc([]const u8, count);
+    @memset(values, "");
+    values[0] = try cleanReadField(shell, line);
+    return values;
 }
 
 fn readFieldValues(shell: anytype, line: []const u8, count: usize, ifs: []const u8) ![]const []const u8 {

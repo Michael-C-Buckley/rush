@@ -93,6 +93,86 @@
             .status = 0,
         },
         .{
+            .name = "read -n reads up to a character count or delimiter",
+            .script =
+            \\printf 'abc\ndef' | {
+            \\    read -r -n 2 first
+            \\    printf 'first=<%s> status=<%s>\n' "$first" "$?"
+            \\    read -r rest
+            \\    printf 'rest=<%s> status=<%s>\n' "$rest" "$?"
+            \\}
+            \\printf 'a\nbc' | {
+            \\    read -r -n 3 line
+            \\    printf 'line=<%s> status=<%s>\n' "$line" "$?"
+            \\}
+            ,
+            .stdout =
+            \\first=<ab> status=<0>
+            \\rest=<c> status=<0>
+            \\line=<a> status=<0>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "read -n counts multibyte characters",
+            .script =
+            \\printf 'éx' | {
+            \\    read -r -n 1 first
+            \\    printf 'first=<%s> status=<%s>\n' "$first" "$?"
+            \\    read -r rest
+            \\    printf 'rest=<%s> status=<%s>\n' "$rest" "$?"
+            \\}
+            ,
+            .stdout =
+            \\first=<é> status=<0>
+            \\rest=<x> status=<1>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "read -N reads exact characters without delimiter splitting",
+            .script =
+            \\printf 'a\nbc' | {
+            \\    read -r -N 3 value extra
+            \\    printf 'value=<%s> extra=<%s> status=<%s>\n' "$value" "$extra" "$?"
+            \\    read -r rest
+            \\    printf 'rest=<%s> status=<%s>\n' "$rest" "$?"
+            \\}
+            \\printf ' a ' | {
+            \\    read -r -N 3 value
+            \\    printf 'spaces=<%s> len=<%s>\n' "$value" "${#value}"
+            \\}
+            ,
+            .stdout =
+            \\value=<a
+            \\b> extra=<> status=<0>
+            \\rest=<c> status=<1>
+            \\spaces=< a > len=<3>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "read -p suppresses prompt when stdin is not a terminal",
+            .script =
+            \\printf 'answer\n' | {
+            \\    read -r -p 'prompt: ' value
+            \\    printf '<%s>\n' "$value"
+            \\}
+            ,
+            .stdout =
+            \\<answer>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "local variables restore function caller bindings",
             .script =
             \\x=global

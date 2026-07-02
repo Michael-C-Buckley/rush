@@ -433,6 +433,32 @@
             .status = 0,
         },
         .{
+            .name = "read count options are rejected in POSIX mode",
+            .script =
+            \\printf abc | { read -n 1 value; printf '<%s>:<%s>\n' "$value" "$?"; }
+            \\printf abc | { read -N 1 value; printf '<%s>:<%s>\n' "$value" "$?"; }
+            ,
+            .stdout =
+            \\<>:<2>
+            \\<>:<2>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "read prompt option is rejected in POSIX mode",
+            .script =
+            \\printf abc | { read -p prompt value; printf '<%s>:<%s>\n' "$value" "$?"; }
+            ,
+            .stdout =
+            \\<>:<2>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "pwd output can be redirected",
             .script =
             \\pwd >out
