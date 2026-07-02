@@ -1,0 +1,360 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "gcloud",
+    "description": "manage Google Cloud resources and developer workflow",
+    "subcommands": [
+      {
+        "name": "access-context-manager",
+        "description": "manage Access Context Manager resources"
+      },
+      {
+        "name": "active-directory",
+        "description": "manage Managed Microsoft AD resources"
+      },
+      {
+        "name": "ai-platform",
+        "description": "manage AI Platform jobs and models"
+      },
+      {
+        "name": "alpha",
+        "description": "alpha Alpha versions of gcloud commands"
+      },
+      {
+        "name": "anthos",
+        "description": "anthos command Group"
+      },
+      {
+        "name": "apigee",
+        "description": "manage Apigee resources"
+      },
+      {
+        "name": "app",
+        "description": "manage your App Engine deployments"
+      },
+      {
+        "name": "artifacts",
+        "description": "manage Artifact Registry resources"
+      },
+      {
+        "name": "asset",
+        "description": "manage the Cloud Asset Inventory"
+      },
+      {
+        "name": "auth",
+        "description": "manage oauth2 credentials for the Google Cloud SDK"
+      },
+      {
+        "name": "beta",
+        "description": "beta Beta versions of gcloud commands"
+      },
+      {
+        "name": "bigtable",
+        "description": "manage your Cloud Bigtable storage"
+      },
+      {
+        "name": "builds",
+        "description": "create and manage builds for Google Cloud Build"
+      },
+      {
+        "name": "cheat-sheet",
+        "description": "display gcloud cheat sheet"
+      },
+      {
+        "name": "cloud-shell",
+        "description": "manage Google Cloud Shell"
+      },
+      {
+        "name": "components",
+        "description": "list, install, update, or remove Google Cloud SDK components"
+      },
+      {
+        "name": "composer",
+        "description": "create and manage Cloud Composer Environments"
+      },
+      {
+        "name": "compute",
+        "description": "create and manipulate Compute Engine resources"
+      },
+      {
+        "name": "config",
+        "description": "view and edit Cloud SDK properties"
+      },
+      {
+        "name": "container",
+        "description": "deploy and manage clusters of machines for running containers"
+      },
+      {
+        "name": "data-catalog",
+        "description": "manage Cloud Data Catalog resources"
+      },
+      {
+        "name": "dataflow",
+        "description": "manage Google Cloud Dataflow resources"
+      },
+      {
+        "name": "dataproc",
+        "description": "create and manage Google Cloud Dataproc clusters and jobs"
+      },
+      {
+        "name": "datastore",
+        "description": "manage your Cloud Datastore resources"
+      },
+      {
+        "name": "debug",
+        "description": "commands for interacting with the Cloud Debugger"
+      },
+      {
+        "name": "deployment-manager",
+        "description": "manage deployments of cloud resources"
+      },
+      {
+        "name": "dns",
+        "description": "manage your Cloud DNS managed-zones and record-sets"
+      },
+      {
+        "name": "docker",
+        "description": "deprecated Enable Docker CLI access to Google Container Registry"
+      },
+      {
+        "name": "domains",
+        "description": "manage domains for your Google Cloud projects"
+      },
+      {
+        "name": "endpoints",
+        "description": "create, enable and manage API services"
+      },
+      {
+        "name": "feedback",
+        "description": "provide feedback to the Google Cloud SDK team"
+      },
+      {
+        "name": "filestore",
+        "description": "create and manipulate Cloud Filestore resources"
+      },
+      {
+        "name": "firebase",
+        "description": "work with Google Firebase"
+      },
+      {
+        "name": "firestore",
+        "description": "manage your Cloud Firestore resources"
+      },
+      {
+        "name": "functions",
+        "description": "manage Google Cloud Functions"
+      },
+      {
+        "name": "game",
+        "description": "managed Cloud Game Services"
+      },
+      {
+        "name": "healthcare",
+        "description": "manage Cloud Healthcare resources"
+      },
+      {
+        "name": "help",
+        "description": "search gcloud help text"
+      },
+      {
+        "name": "iam",
+        "description": "manage IAM service accounts and keys"
+      },
+      {
+        "name": "iap",
+        "description": "manage IAP policies"
+      },
+      {
+        "name": "identity",
+        "description": "manage Cloud Identity Groups and Memberships resources"
+      },
+      {
+        "name": "info",
+        "description": "display information about the current gcloud environment"
+      },
+      {
+        "name": "init",
+        "description": "initialize or reinitialize gcloud"
+      },
+      {
+        "name": "iot",
+        "description": "manage Cloud IoT resources"
+      },
+      {
+        "name": "kms",
+        "description": "manage cryptographic keys in the cloud"
+      },
+      {
+        "name": "logging",
+        "description": "manage Cloud Logging"
+      },
+      {
+        "name": "meta",
+        "description": "cloud meta introspection commands"
+      },
+      {
+        "name": "ml",
+        "description": "use Google Cloud machine learning capabilities"
+      },
+      {
+        "name": "ml-engine",
+        "description": "manage AI Platform jobs and models"
+      },
+      {
+        "name": "monitoring",
+        "description": "manage Cloud Monitoring dashboards"
+      },
+      {
+        "name": "network-management",
+        "description": "manage Network Management resources"
+      },
+      {
+        "name": "organizations",
+        "description": "create and manage Google Cloud Platform Organizations"
+      },
+      {
+        "name": "policy-troubleshoot",
+        "description": "troubleshoot Google Cloud Platform policies"
+      },
+      {
+        "name": "projects",
+        "description": "create and manage project access policies"
+      },
+      {
+        "name": "pubsub",
+        "description": "manage Cloud Pub/Sub topics, subscriptions, and snapshots"
+      },
+      {
+        "name": "recommender",
+        "description": "manage Cloud recommendations and recommendation rules"
+      },
+      {
+        "name": "redis",
+        "description": "manage Cloud Memorystore Redis resources"
+      },
+      {
+        "name": "resource-manager",
+        "description": "manage Cloud Resources"
+      },
+      {
+        "name": "run",
+        "description": "manage your Cloud Run applications"
+      },
+      {
+        "name": "scc",
+        "description": "manage Cloud SCC resources"
+      },
+      {
+        "name": "scheduler",
+        "description": "manage Cloud Scheduler jobs and schedules"
+      },
+      {
+        "name": "secrets",
+        "description": "manage secrets on Google Cloud"
+      },
+      {
+        "name": "services",
+        "description": "list, enable and disable APIs and services"
+      },
+      {
+        "name": "source",
+        "description": "cloud git repository commands"
+      },
+      {
+        "name": "spanner",
+        "description": "command groups for Cloud Spanner"
+      },
+      {
+        "name": "sql",
+        "description": "create and manage Google Cloud SQL databases"
+      },
+      {
+        "name": "survey",
+        "description": "invoke a customer satisfaction survey for Cloud SDK"
+      },
+      {
+        "name": "tasks",
+        "description": "manage Cloud Tasks queues and tasks"
+      },
+      {
+        "name": "topic",
+        "description": "gcloud supplementary help"
+      },
+      {
+        "name": "version",
+        "description": "print version information for Cloud SDK components"
+      }
+    ],
+    "options": [
+      {
+        "long": "help",
+        "description": "show help"
+      },
+      {
+        "long": "account",
+        "description": "Google Cloud account to use",
+        "value": {
+          "name": "account"
+        }
+      },
+      {
+        "long": "configuration",
+        "description": "Cloud SDK configuration to use",
+        "value": {
+          "name": "configuration"
+        }
+      },
+      {
+        "long": "project",
+        "description": "Google Cloud project to use",
+        "value": {
+          "name": "project"
+        }
+      },
+      {
+        "long": "quiet",
+        "description": "disable interactive prompts"
+      },
+      {
+        "long": "format",
+        "description": "set output format",
+        "value": {
+          "name": "format"
+        }
+      },
+      {
+        "long": "verbosity",
+        "description": "set log verbosity",
+        "value": {
+          "name": "level",
+          "provider": "gcloud.verbosity-levels"
+        }
+      }
+    ],
+    "providers": {
+      "gcloud.verbosity-levels": {
+        "candidates": [
+          {
+            "value": "debug"
+          },
+          {
+            "value": "info"
+          },
+          {
+            "value": "warning"
+          },
+          {
+            "value": "error"
+          },
+          {
+            "value": "critical"
+          },
+          {
+            "value": "none"
+          }
+        ]
+      }
+    }
+  }
+}
