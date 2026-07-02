@@ -1,0 +1,279 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "ps",
+    "description": "show process status",
+    "options": [
+      {
+        "short": "A",
+        "spellings": [
+          "-e"
+        ],
+        "description": "select all processes",
+        "inherit": false
+      },
+      {
+        "short": "a",
+        "description": "select non-session-leader processes",
+        "inherit": false,
+        "value": {
+          "name": "getsid"
+        }
+      },
+      {
+        "short": "d",
+        "description": "select non-session leaders",
+        "inherit": false
+      },
+      {
+        "long": "deselect",
+        "description": "negate process selection",
+        "inherit": false
+      },
+      {
+        "short": "N",
+        "description": "negate process selection",
+        "inherit": false
+      },
+      {
+        "long": "pid",
+        "description": "select process ids",
+        "inherit": false,
+        "value": {
+          "name": "pidlist"
+        }
+      },
+      {
+        "long": "ppid",
+        "description": "select parent process ids",
+        "inherit": false,
+        "value": {
+          "name": "pidlist"
+        }
+      },
+      {
+        "long": "sid",
+        "description": "select session ids",
+        "inherit": false,
+        "value": {
+          "name": "sesslist"
+        }
+      },
+      {
+        "long": "tty",
+        "description": "select terminals",
+        "inherit": false,
+        "value": {
+          "name": "ttylist"
+        }
+      },
+      {
+        "spellings": [
+          "U"
+        ],
+        "description": "Select by effective user ID (EUID) or name",
+        "inherit": false,
+        "value": {
+          "name": "userlist"
+        }
+      },
+      {
+        "short": "U",
+        "description": "select real users",
+        "inherit": false,
+        "value": {
+          "name": "userlist"
+        }
+      },
+      {
+        "short": "u",
+        "description": "select effective users",
+        "inherit": false,
+        "value": {
+          "name": "userlist"
+        }
+      },
+      {
+        "long": "User",
+        "description": "select real users",
+        "inherit": false,
+        "value": {
+          "name": "userlist"
+        }
+      },
+      {
+        "long": "user",
+        "description": "select effective users",
+        "inherit": false,
+        "value": {
+          "name": "userlist"
+        }
+      },
+      {
+        "short": "c",
+        "description": "show scheduler information",
+        "inherit": false
+      },
+      {
+        "long": "context",
+        "description": "show SELinux context",
+        "inherit": false
+      },
+      {
+        "short": "f",
+        "description": "use full format",
+        "inherit": false
+      },
+      {
+        "short": "F",
+        "description": "use extra full format",
+        "inherit": false
+      },
+      {
+        "long": "format",
+        "short": "o",
+        "spellings": [
+          "o"
+        ],
+        "description": "set output format",
+        "repeatable": true,
+        "inherit": false,
+        "value": {
+          "name": "format"
+        }
+      },
+      {
+        "short": "M",
+        "spellings": [
+          "Z"
+        ],
+        "description": "show SELinux context",
+        "inherit": false
+      },
+      {
+        "short": "y",
+        "spellings": [
+          "-l"
+        ],
+        "description": "omit flags in long format",
+        "inherit": false
+      },
+      {
+        "long": "cols",
+        "description": "set screen width",
+        "inherit": false,
+        "value": {
+          "name": "n"
+        }
+      },
+      {
+        "long": "columns",
+        "description": "set screen width",
+        "inherit": false,
+        "value": {
+          "name": "n"
+        }
+      },
+      {
+        "long": "cumulative",
+        "description": "include dead child process data",
+        "inherit": false
+      },
+      {
+        "long": "forest",
+        "description": "show process tree",
+        "inherit": false
+      },
+      {
+        "short": "H",
+        "description": "Show process hierarchy (forest)",
+        "inherit": false
+      },
+      {
+        "long": "headers",
+        "description": "repeat header lines",
+        "inherit": false
+      },
+      {
+        "short": "n",
+        "description": "set namelist file",
+        "inherit": false,
+        "value": {
+          "name": "namelist",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "lines",
+        "description": "set screen height",
+        "inherit": false,
+        "value": {
+          "name": "n"
+        }
+      },
+      {
+        "long": "no-headers",
+        "aliases": [
+          "no-heading"
+        ],
+        "description": "omit header line",
+        "inherit": false
+      },
+      {
+        "long": "rows",
+        "description": "set screen height",
+        "inherit": false,
+        "value": {
+          "name": "n"
+        }
+      },
+      {
+        "long": "sort",
+        "description": "set sort order",
+        "inherit": false,
+        "value": {
+          "name": "spec"
+        }
+      },
+      {
+        "long": "width",
+        "description": "set screen width",
+        "inherit": false,
+        "value": {
+          "name": "n"
+        }
+      },
+      {
+        "short": "L",
+        "description": "show threads",
+        "inherit": false
+      },
+      {
+        "short": "T",
+        "description": "show threads with SPID",
+        "inherit": false
+      },
+      {
+        "long": "help",
+        "description": "show help",
+        "inherit": false
+      },
+      {
+        "long": "info",
+        "description": "show debug info",
+        "inherit": false
+      },
+      {
+        "long": "version",
+        "description": "show version",
+        "inherit": false
+      }
+    ],
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
