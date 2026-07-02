@@ -1,0 +1,111 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "sidekiq",
+    "description": "run Sidekiq background jobs",
+    "options": [
+      {
+        "long": "concurrency",
+        "short": "c",
+        "description": "processor threads to use",
+        "inherit": false,
+        "value": {
+          "name": "INT"
+        }
+      },
+      {
+        "long": "environment",
+        "short": "e",
+        "description": "application environment",
+        "inherit": false,
+        "value": {
+          "name": "ENV"
+        }
+      },
+      {
+        "long": "tag",
+        "short": "g",
+        "description": "process tag for procline",
+        "inherit": false,
+        "value": {
+          "name": "TAG"
+        }
+      },
+      {
+        "long": "queue",
+        "short": "q",
+        "description": "queues to process with optional weights",
+        "inherit": false,
+        "value": [
+          {
+            "name": "QUEUE"
+          },
+          {
+            "name": "WEIGHT",
+            "required": false,
+            "style": "optional"
+          }
+        ]
+      },
+      {
+        "long": "require",
+        "short": "r",
+        "description": "location of Rails application with jobs or file to require",
+        "inherit": false,
+        "value": {
+          "name": "PATH|DIR",
+          "provider": [
+            "builtin.directories",
+            "builtin.files"
+          ]
+        }
+      },
+      {
+        "long": "timeout",
+        "short": "t",
+        "description": "shutdown timeout",
+        "inherit": false,
+        "value": {
+          "name": "NUM"
+        }
+      },
+      {
+        "long": "verbose",
+        "short": "v",
+        "description": "print more verbose output",
+        "inherit": false
+      },
+      {
+        "long": "config",
+        "short": "C",
+        "description": "path to YAML config file",
+        "inherit": false,
+        "value": {
+          "name": "PATH",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "help",
+        "short": "h",
+        "description": "show help for sidekiq run",
+        "inherit": false
+      },
+      {
+        "long": "version",
+        "short": "V",
+        "description": "print version and exit",
+        "inherit": false
+      }
+    ],
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
