@@ -1,0 +1,25 @@
+__rush_complete_nrm_dependencies() {
+  dir=$PWD
+  while test "$dir" != /; do
+    if test -f "$dir/package.json"; then
+      command -v node >/dev/null 2>&1 || return
+      node -e '
+const fs = require("fs");
+let pkg;
+try {
+  pkg = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+} catch (_) {
+  process.exit(0);
+}
+for (const section of ["dependencies", "devDependencies", "optionalDependencies", "peerDependencies"]) {
+  for (const name of Object.keys(pkg[section] || {})) console.log(name);
+}
+' "$dir/package.json" 2>/dev/null | while IFS= read -r dependency; do
+        test -n "$dependency" && rush_complete candidate "$dependency" --kind plain --description dependency --priority 20
+      done
+      return
+    fi
+    dir=${dir%/*}
+    test -n "$dir" || dir=/
+  done
+}

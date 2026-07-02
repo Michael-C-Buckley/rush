@@ -1,0 +1,56 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "nrm",
+    "description": "remove packages with the detected package manager",
+    "options": [
+      {
+        "short": "g",
+        "description": "remove global packages",
+        "inherit": false
+      },
+      {
+        "short": "D",
+        "description": "remove from devDependencies",
+        "inherit": false
+      },
+      {
+        "short": "P",
+        "description": "remove from peerDependencies",
+        "inherit": false
+      },
+      {
+        "short": "O",
+        "description": "remove from optionalDependencies",
+        "inherit": false
+      },
+      {
+        "long": "frozen",
+        "description": "fail if lockfile changes are needed",
+        "inherit": false
+      },
+      {
+        "short": "h",
+        "long": "help",
+        "description": "show help",
+        "inherit": false
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "package",
+          "provider": "nrm.dependencies",
+          "index": 0,
+          "repeatable": true
+        }
+      ]
+    },
+    "providers": {
+      "nrm.dependencies": {
+        "function": "__rush_complete_nrm_dependencies"
+      }
+    }
+  }
+}
