@@ -1,0 +1,1750 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "forc",
+    "description": "fuel orchestrator",
+    "providers": {
+      "forc.build-targets": {
+        "candidates": [
+          {
+            "value": "fuel"
+          },
+          {
+            "value": "evm"
+          },
+          {
+            "value": "midenvm"
+          }
+        ]
+      },
+      "forc.shells": {
+        "candidates": [
+          {
+            "value": "bash",
+            "description": "bash shell"
+          },
+          {
+            "value": "elvish",
+            "description": "elvish shell"
+          },
+          {
+            "value": "fish",
+            "description": "fish shell"
+          },
+          {
+            "value": "power-shell",
+            "description": "powershell"
+          },
+          {
+            "value": "zsh",
+            "description": "zsh shell"
+          },
+          {
+            "value": "fig",
+            "description": "fig"
+          }
+        ]
+      },
+      "forc.key-types": {
+        "candidates": [
+          {
+            "value": "block-production"
+          },
+          {
+            "value": "peering"
+          }
+        ]
+      }
+    },
+    "options": [
+      {
+        "short": "h",
+        "long": "help",
+        "description": "print help information"
+      },
+      {
+        "short": "v",
+        "description": "use verbose output"
+      },
+      {
+        "short": "s",
+        "description": "silence all output"
+      },
+      {
+        "short": "L",
+        "description": "set the log level",
+        "value": {
+          "name": "level"
+        }
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "addr2line",
+        "description": "show location and context of an opcode address in its source file",
+        "options": [
+          {
+            "short": "S",
+            "description": "search for the project root",
+            "value": {
+              "name": "path",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "short": "g",
+            "description": "source file mapping in JSON format",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "short": "c",
+            "description": "number of context lines to show",
+            "value": {
+              "name": "lines"
+            }
+          },
+          {
+            "short": "i",
+            "description": "opcode index",
+            "value": {
+              "name": "index"
+            }
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "print help information"
+          }
+        ]
+      },
+      {
+        "name": "build",
+        "description": "compile the current or target project",
+        "options": [
+          {
+            "short": "p",
+            "description": "path to the project",
+            "value": {
+              "name": "path",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "short": "t",
+            "description": "use terse output"
+          },
+          {
+            "short": "o",
+            "description": "output script bytes as a binary file"
+          },
+          {
+            "short": "g",
+            "description": "output source file mapping as JSON"
+          },
+          {
+            "long": "offline",
+            "description": "build without network access"
+          },
+          {
+            "long": "output-directory",
+            "description": "write build output to directory",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "locked",
+            "description": "require lockfile to remain unchanged"
+          },
+          {
+            "long": "json-abi-with-callpaths",
+            "description": "include call paths in JSON ABI"
+          },
+          {
+            "long": "ipfs-node",
+            "description": "set the IPFS node URL",
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "json-abi",
+            "description": "output JSON ABI"
+          },
+          {
+            "long": "json-storage-slots",
+            "description": "output JSON storage slots"
+          },
+          {
+            "long": "ast",
+            "description": "output parsed AST"
+          },
+          {
+            "long": "dca-graph",
+            "description": "output dead code analysis graph"
+          },
+          {
+            "long": "dca-graph-url-format",
+            "description": "set DCA graph URL format",
+            "value": {
+              "name": "format"
+            }
+          },
+          {
+            "long": "finalized-asm",
+            "description": "output finalized assembly"
+          },
+          {
+            "long": "intermediate-asm",
+            "description": "output intermediate assembly"
+          },
+          {
+            "long": "ir",
+            "description": "output IR"
+          },
+          {
+            "long": "time-phases",
+            "description": "time compiler phases"
+          },
+          {
+            "long": "reverse-order",
+            "description": "reverse output order"
+          },
+          {
+            "long": "metrics-outfile",
+            "description": "write metrics to file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "build-profile",
+            "description": "set build profile",
+            "value": {
+              "name": "profile"
+            }
+          },
+          {
+            "long": "release",
+            "description": "build in release mode"
+          },
+          {
+            "long": "error-on-warnings",
+            "description": "treat warnings as errors"
+          },
+          {
+            "long": "build-target",
+            "description": "set build target",
+            "value": {
+              "name": "target",
+              "provider": "forc.build-targets"
+            }
+          },
+          {
+            "long": "experimental-new-encoding",
+            "description": "use experimental new encoding"
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "print help information"
+          }
+        ]
+      },
+      {
+        "name": "check",
+        "description": "check the current or target project and dependencies for errors",
+        "options": [
+          {
+            "short": "p",
+            "description": "path to the project",
+            "value": {
+              "name": "path",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "short": "t",
+            "description": "use terse output"
+          },
+          {
+            "long": "build-target",
+            "description": "set build target",
+            "value": {
+              "name": "target",
+              "provider": "forc.build-targets"
+            }
+          },
+          {
+            "long": "offline-mode",
+            "description": "check without network access"
+          },
+          {
+            "long": "locked",
+            "description": "require lockfile to remain unchanged"
+          },
+          {
+            "long": "disable-tests",
+            "description": "disable tests"
+          },
+          {
+            "long": "ipfs-node",
+            "description": "set the IPFS node URL",
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "print help information"
+          }
+        ]
+      },
+      {
+        "name": "clean",
+        "description": "remove the default compiler output directory",
+        "options": [
+          {
+            "short": "p",
+            "description": "path to the project",
+            "value": {
+              "name": "path",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "print help information"
+          }
+        ]
+      },
+      {
+        "name": "completions",
+        "description": "generate tab-completion scripts",
+        "options": [
+          {
+            "short": "T",
+            "description": "specify completion shell",
+            "value": {
+              "name": "target",
+              "provider": "forc.shells"
+            }
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "print help information"
+          }
+        ]
+      },
+      {
+        "name": "new",
+        "description": "create a new Forc project",
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "index": 0,
+              "description": "project path",
+              "provider": "builtin.directories"
+            }
+          ]
+        },
+        "options": [
+          {
+            "long": "contract",
+            "description": "create a contract project"
+          },
+          {
+            "long": "script",
+            "description": "create a script project"
+          },
+          {
+            "long": "predicate",
+            "description": "create a predicate project"
+          },
+          {
+            "long": "library",
+            "description": "create a library project"
+          },
+          {
+            "long": "workspace",
+            "description": "create a workspace"
+          },
+          {
+            "long": "name",
+            "description": "set project name",
+            "value": {
+              "name": "name"
+            }
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "print help information"
+          }
+        ]
+      },
+      {
+        "name": "init",
+        "description": "create a new Forc project in an existing directory",
+        "options": [
+          {
+            "long": "path",
+            "description": "set project path",
+            "value": {
+              "name": "path",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "contract",
+            "description": "create a contract project"
+          },
+          {
+            "long": "script",
+            "description": "create a script project"
+          },
+          {
+            "long": "predicate",
+            "description": "create a predicate project"
+          },
+          {
+            "long": "library",
+            "description": "create a library project"
+          },
+          {
+            "long": "workspace",
+            "description": "create a workspace"
+          },
+          {
+            "long": "name",
+            "description": "set project name",
+            "value": {
+              "name": "name"
+            }
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "print help information"
+          }
+        ]
+      },
+      {
+        "name": "parse-bytecode",
+        "description": "parse bytecode file into a debug format",
+        "arguments": {
+          "states": [
+            {
+              "name": "file-path",
+              "index": 0,
+              "description": "bytecode file",
+              "provider": "builtin.files"
+            }
+          ]
+        },
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "print help information"
+          }
+        ]
+      },
+      {
+        "name": "test",
+        "description": "run Sway unit tests for the current project",
+        "arguments": {
+          "states": [
+            {
+              "name": "filter",
+              "index": 0,
+              "description": "test filter"
+            }
+          ]
+        },
+        "options": [
+          {
+            "short": "p",
+            "description": "path to the project",
+            "value": {
+              "name": "path",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "short": "t",
+            "description": "use terse output"
+          },
+          {
+            "short": "o",
+            "description": "output script bytes as a binary file"
+          },
+          {
+            "short": "g",
+            "description": "output source file mapping as JSON"
+          },
+          {
+            "long": "offline",
+            "description": "build without network access"
+          },
+          {
+            "long": "output-directory",
+            "description": "write build output to directory",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "locked",
+            "description": "require lockfile to remain unchanged"
+          },
+          {
+            "long": "json-abi-with-callpaths",
+            "description": "include call paths in JSON ABI"
+          },
+          {
+            "long": "ipfs-node",
+            "description": "set the IPFS node URL",
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "json-abi",
+            "description": "output JSON ABI"
+          },
+          {
+            "long": "json-storage-slots",
+            "description": "output JSON storage slots"
+          },
+          {
+            "long": "ast",
+            "description": "output parsed AST"
+          },
+          {
+            "long": "dca-graph",
+            "description": "output dead code analysis graph"
+          },
+          {
+            "long": "dca-graph-url-format",
+            "description": "set DCA graph URL format",
+            "value": {
+              "name": "format"
+            }
+          },
+          {
+            "long": "finalized-asm",
+            "description": "output finalized assembly"
+          },
+          {
+            "long": "intermediate-asm",
+            "description": "output intermediate assembly"
+          },
+          {
+            "long": "ir",
+            "description": "output IR"
+          },
+          {
+            "long": "time-phases",
+            "description": "time compiler phases"
+          },
+          {
+            "long": "reverse-order",
+            "description": "reverse output order"
+          },
+          {
+            "long": "metrics-outfile",
+            "description": "write metrics to file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "build-profile",
+            "description": "set build profile",
+            "value": {
+              "name": "profile"
+            }
+          },
+          {
+            "long": "release",
+            "description": "build in release mode"
+          },
+          {
+            "long": "error-on-warnings",
+            "description": "treat warnings as errors"
+          },
+          {
+            "long": "build-target",
+            "description": "set build target",
+            "value": {
+              "name": "target",
+              "provider": "forc.build-targets"
+            }
+          },
+          {
+            "long": "experimental-new-encoding",
+            "description": "use experimental new encoding"
+          },
+          {
+            "short": "r",
+            "description": "pretty-print test logs"
+          },
+          {
+            "short": "l",
+            "description": "print log receipts"
+          },
+          {
+            "long": "filter-exact",
+            "description": "match test filter exactly"
+          },
+          {
+            "long": "test-threads",
+            "description": "number of test threads",
+            "value": {
+              "name": "threads"
+            }
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "print help information"
+          }
+        ]
+      },
+      {
+        "name": "update",
+        "description": "update dependencies in the Forc dependencies directory",
+        "options": [
+          {
+            "short": "p",
+            "description": "path to the project",
+            "value": {
+              "name": "path",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "short": "d",
+            "description": "dependency to update",
+            "value": {
+              "name": "dependency"
+            }
+          },
+          {
+            "short": "c",
+            "description": "check for updates without changing dependencies"
+          },
+          {
+            "long": "ipfs-node",
+            "description": "set the IPFS node URL",
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "print help information"
+          }
+        ]
+      },
+      {
+        "name": "plugins",
+        "description": "list all forc plugins",
+        "options": [
+          {
+            "short": "p",
+            "description": "print absolute plugin paths"
+          },
+          {
+            "short": "d",
+            "description": "print plugin descriptions"
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "print help information"
+          }
+        ]
+      },
+      {
+        "name": "template",
+        "description": "create a new Forc project from a git template",
+        "arguments": {
+          "states": [
+            {
+              "name": "project-name",
+              "index": 0,
+              "description": "project name"
+            }
+          ]
+        },
+        "options": [
+          {
+            "short": "u",
+            "description": "template git repository URL",
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "short": "t",
+            "description": "template name",
+            "value": {
+              "name": "name"
+            }
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "print help information"
+          }
+        ]
+      },
+      {
+        "name": "contract-id",
+        "description": "determine contract ids for a contract or workspace",
+        "options": [
+          {
+            "short": "p",
+            "description": "path to the project",
+            "value": {
+              "name": "path",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "short": "t",
+            "description": "use terse output"
+          },
+          {
+            "short": "o",
+            "description": "output script bytes as a binary file"
+          },
+          {
+            "short": "g",
+            "description": "output source file mapping as JSON"
+          },
+          {
+            "long": "offline",
+            "description": "build without network access"
+          },
+          {
+            "long": "output-directory",
+            "description": "write build output to directory",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "locked",
+            "description": "require lockfile to remain unchanged"
+          },
+          {
+            "long": "json-abi-with-callpaths",
+            "description": "include call paths in JSON ABI"
+          },
+          {
+            "long": "ipfs-node",
+            "description": "set the IPFS node URL",
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "json-abi",
+            "description": "output JSON ABI"
+          },
+          {
+            "long": "json-storage-slots",
+            "description": "output JSON storage slots"
+          },
+          {
+            "long": "ast",
+            "description": "output parsed AST"
+          },
+          {
+            "long": "dca-graph",
+            "description": "output dead code analysis graph"
+          },
+          {
+            "long": "dca-graph-url-format",
+            "description": "set DCA graph URL format",
+            "value": {
+              "name": "format"
+            }
+          },
+          {
+            "long": "finalized-asm",
+            "description": "output finalized assembly"
+          },
+          {
+            "long": "intermediate-asm",
+            "description": "output intermediate assembly"
+          },
+          {
+            "long": "ir",
+            "description": "output IR"
+          },
+          {
+            "long": "time-phases",
+            "description": "time compiler phases"
+          },
+          {
+            "long": "reverse-order",
+            "description": "reverse output order"
+          },
+          {
+            "long": "metrics-outfile",
+            "description": "write metrics to file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "build-profile",
+            "description": "set build profile",
+            "value": {
+              "name": "profile"
+            }
+          },
+          {
+            "long": "release",
+            "description": "build in release mode"
+          },
+          {
+            "long": "error-on-warnings",
+            "description": "treat warnings as errors"
+          },
+          {
+            "long": "build-target",
+            "description": "set build target",
+            "value": {
+              "name": "target",
+              "provider": "forc.build-targets"
+            }
+          },
+          {
+            "long": "experimental-new-encoding",
+            "description": "use experimental new encoding"
+          },
+          {
+            "long": "salt",
+            "description": "set contract salt",
+            "value": {
+              "name": "salt"
+            }
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "print help information"
+          }
+        ]
+      },
+      {
+        "name": "predicate-root",
+        "description": "determine predicate roots for a predicate or workspace",
+        "options": [
+          {
+            "short": "p",
+            "description": "path to the project",
+            "value": {
+              "name": "path",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "short": "t",
+            "description": "use terse output"
+          },
+          {
+            "short": "o",
+            "description": "output script bytes as a binary file"
+          },
+          {
+            "short": "g",
+            "description": "output source file mapping as JSON"
+          },
+          {
+            "long": "offline",
+            "description": "build without network access"
+          },
+          {
+            "long": "output-directory",
+            "description": "write build output to directory",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "locked",
+            "description": "require lockfile to remain unchanged"
+          },
+          {
+            "long": "json-abi-with-callpaths",
+            "description": "include call paths in JSON ABI"
+          },
+          {
+            "long": "ipfs-node",
+            "description": "set the IPFS node URL",
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "json-abi",
+            "description": "output JSON ABI"
+          },
+          {
+            "long": "json-storage-slots",
+            "description": "output JSON storage slots"
+          },
+          {
+            "long": "ast",
+            "description": "output parsed AST"
+          },
+          {
+            "long": "dca-graph",
+            "description": "output dead code analysis graph"
+          },
+          {
+            "long": "dca-graph-url-format",
+            "description": "set DCA graph URL format",
+            "value": {
+              "name": "format"
+            }
+          },
+          {
+            "long": "finalized-asm",
+            "description": "output finalized assembly"
+          },
+          {
+            "long": "intermediate-asm",
+            "description": "output intermediate assembly"
+          },
+          {
+            "long": "ir",
+            "description": "output IR"
+          },
+          {
+            "long": "time-phases",
+            "description": "time compiler phases"
+          },
+          {
+            "long": "reverse-order",
+            "description": "reverse output order"
+          },
+          {
+            "long": "metrics-outfile",
+            "description": "write metrics to file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "build-profile",
+            "description": "set build profile",
+            "value": {
+              "name": "profile"
+            }
+          },
+          {
+            "long": "release",
+            "description": "build in release mode"
+          },
+          {
+            "long": "error-on-warnings",
+            "description": "treat warnings as errors"
+          },
+          {
+            "long": "build-target",
+            "description": "set build target",
+            "value": {
+              "name": "target",
+              "provider": "forc.build-targets"
+            }
+          },
+          {
+            "long": "experimental-new-encoding",
+            "description": "use experimental new encoding"
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "print help information"
+          }
+        ]
+      },
+      {
+        "name": "debug",
+        "description": "debug forc projects",
+        "arguments": {
+          "states": [
+            {
+              "name": "api-url",
+              "index": 0,
+              "description": "API URL"
+            }
+          ]
+        },
+        "options": [
+          {
+            "short": "s",
+            "description": "start the DAP server"
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "print help information"
+          }
+        ]
+      },
+      {
+        "name": "run",
+        "description": "run a script project against a node",
+        "arguments": {
+          "states": [
+            {
+              "name": "signing-key",
+              "index": 0,
+              "description": "signing key"
+            }
+          ]
+        },
+        "options": [
+          {
+            "short": "p",
+            "description": "path to the project",
+            "value": {
+              "name": "path",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "short": "t",
+            "description": "use terse output"
+          },
+          {
+            "short": "o",
+            "description": "output script bytes as a binary file"
+          },
+          {
+            "short": "g",
+            "description": "output source file mapping as JSON"
+          },
+          {
+            "long": "offline",
+            "description": "build without network access"
+          },
+          {
+            "long": "output-directory",
+            "description": "write build output to directory",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "locked",
+            "description": "require lockfile to remain unchanged"
+          },
+          {
+            "long": "json-abi-with-callpaths",
+            "description": "include call paths in JSON ABI"
+          },
+          {
+            "long": "ipfs-node",
+            "description": "set the IPFS node URL",
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "json-abi",
+            "description": "output JSON ABI"
+          },
+          {
+            "long": "json-storage-slots",
+            "description": "output JSON storage slots"
+          },
+          {
+            "long": "ast",
+            "description": "output parsed AST"
+          },
+          {
+            "long": "dca-graph",
+            "description": "output dead code analysis graph"
+          },
+          {
+            "long": "dca-graph-url-format",
+            "description": "set DCA graph URL format",
+            "value": {
+              "name": "format"
+            }
+          },
+          {
+            "long": "finalized-asm",
+            "description": "output finalized assembly"
+          },
+          {
+            "long": "intermediate-asm",
+            "description": "output intermediate assembly"
+          },
+          {
+            "long": "ir",
+            "description": "output IR"
+          },
+          {
+            "long": "time-phases",
+            "description": "time compiler phases"
+          },
+          {
+            "long": "reverse-order",
+            "description": "reverse output order"
+          },
+          {
+            "long": "metrics-outfile",
+            "description": "write metrics to file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "build-profile",
+            "description": "set build profile",
+            "value": {
+              "name": "profile"
+            }
+          },
+          {
+            "long": "release",
+            "description": "build in release mode"
+          },
+          {
+            "long": "error-on-warnings",
+            "description": "treat warnings as errors"
+          },
+          {
+            "long": "build-target",
+            "description": "set build target",
+            "value": {
+              "name": "target",
+              "provider": "forc.build-targets"
+            }
+          },
+          {
+            "long": "experimental-new-encoding",
+            "description": "use experimental new encoding"
+          },
+          {
+            "long": "price",
+            "description": "set gas price",
+            "value": {
+              "name": "price"
+            }
+          },
+          {
+            "long": "script-gas-limit",
+            "description": "set script gas limit",
+            "value": {
+              "name": "limit"
+            }
+          },
+          {
+            "long": "maturity",
+            "description": "set transaction maturity",
+            "value": {
+              "name": "maturity"
+            }
+          },
+          {
+            "long": "node-url",
+            "description": "set node URL",
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "target",
+            "description": "set target",
+            "value": {
+              "name": "target"
+            }
+          },
+          {
+            "long": "testnet",
+            "description": "use testnet"
+          },
+          {
+            "long": "default-signer",
+            "description": "use default signer"
+          },
+          {
+            "long": "unsigned",
+            "description": "do not sign transaction"
+          },
+          {
+            "long": "manual-signing",
+            "description": "use manual signing"
+          },
+          {
+            "short": "d",
+            "description": "hex input data for the script",
+            "value": {
+              "name": "data"
+            }
+          },
+          {
+            "short": "r",
+            "description": "pretty-print node outputs"
+          },
+          {
+            "long": "dry-run",
+            "description": "dry run the transaction"
+          },
+          {
+            "long": "contract",
+            "description": "set contract id",
+            "value": {
+              "name": "contract"
+            }
+          },
+          {
+            "long": "simulate",
+            "description": "simulate the transaction"
+          },
+          {
+            "long": "args",
+            "description": "script arguments",
+            "value": {
+              "name": "args"
+            }
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "print help information"
+          }
+        ]
+      },
+      {
+        "name": "crypto",
+        "description": "hash and convert cryptographic data",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "print help information"
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "keccak256",
+            "description": "hash an argument or file with keccak256",
+            "arguments": {
+              "states": [
+                {
+                  "name": "content-or-filepath",
+                  "index": 0,
+                  "description": "content or file path"
+                }
+              ]
+            },
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "print help information"
+              }
+            ]
+          },
+          {
+            "name": "sha256",
+            "description": "hash an argument or file with sha256",
+            "arguments": {
+              "states": [
+                {
+                  "name": "content-or-filepath",
+                  "index": 0,
+                  "description": "content or file path"
+                }
+              ]
+            },
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "print help information"
+              }
+            ]
+          },
+          {
+            "name": "address",
+            "description": "convert an address to another format",
+            "arguments": {
+              "states": [
+                {
+                  "name": "address",
+                  "index": 0,
+                  "description": "address"
+                }
+              ]
+            },
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "print help information"
+              }
+            ]
+          },
+          {
+            "name": "get-public-key",
+            "description": "get the public key from a message and signature",
+            "arguments": {
+              "states": [
+                {
+                  "name": "signature",
+                  "index": 0
+                },
+                {
+                  "name": "message",
+                  "index": 1
+                }
+              ]
+            },
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "print help information"
+              }
+            ]
+          },
+          {
+            "name": "new-key",
+            "description": "create a new key for fuel-core",
+            "options": [
+              {
+                "short": "k",
+                "description": "key type to generate",
+                "value": {
+                  "name": "key-type",
+                  "provider": "forc.key-types"
+                }
+              },
+              {
+                "short": "h",
+                "long": "help",
+                "description": "print help information"
+              }
+            ]
+          },
+          {
+            "name": "parse-secret",
+            "description": "parse a private key to view its public key",
+            "arguments": {
+              "states": [
+                {
+                  "name": "secret",
+                  "index": 0,
+                  "description": "secret"
+                }
+              ]
+            },
+            "options": [
+              {
+                "short": "k",
+                "description": "key type to generate",
+                "value": {
+                  "name": "key-type",
+                  "provider": "forc.key-types"
+                }
+              },
+              {
+                "short": "h",
+                "long": "help",
+                "description": "print help information"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "doc",
+        "description": "build Sway package documentation",
+        "options": [
+          {
+            "short": "s",
+            "description": "suppress warnings and errors"
+          },
+          {
+            "long": "manifest-path",
+            "description": "path to Forc.toml",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "document-private-items",
+            "description": "document private items"
+          },
+          {
+            "long": "open",
+            "description": "open documentation after build"
+          },
+          {
+            "long": "offline",
+            "description": "build without network access"
+          },
+          {
+            "long": "locked",
+            "description": "require lockfile to remain unchanged"
+          },
+          {
+            "long": "no-deps",
+            "description": "do not build dependency docs"
+          },
+          {
+            "long": "ipfs-node",
+            "description": "set the IPFS node URL",
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "print help information"
+          }
+        ]
+      },
+      {
+        "name": "fmt",
+        "description": "format Sway code",
+        "options": [
+          {
+            "short": "c",
+            "description": "run in check mode"
+          },
+          {
+            "short": "p",
+            "description": "path to the project",
+            "value": {
+              "name": "path",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "short": "f",
+            "description": "format a single .sw file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "print help information"
+          }
+        ]
+      },
+      {
+        "name": "submit",
+        "description": "submit a transaction to a Fuel node",
+        "arguments": {
+          "states": [
+            {
+              "name": "tx-path",
+              "index": 0,
+              "description": "transaction file",
+              "provider": "builtin.files"
+            }
+          ]
+        },
+        "options": [
+          {
+            "long": "node-url",
+            "description": "set node URL",
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "target",
+            "description": "set target",
+            "value": {
+              "name": "target"
+            }
+          },
+          {
+            "long": "testnet",
+            "description": "use testnet"
+          },
+          {
+            "long": "await",
+            "description": "wait for inclusion"
+          },
+          {
+            "long": "json",
+            "description": "output JSON"
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "print help information"
+          }
+        ]
+      },
+      {
+        "name": "deploy",
+        "description": "deploy a contract project",
+        "arguments": {
+          "states": [
+            {
+              "name": "signing-key",
+              "index": 0,
+              "description": "signing key"
+            }
+          ]
+        },
+        "options": [
+          {
+            "short": "p",
+            "description": "path to the project",
+            "value": {
+              "name": "path",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "short": "t",
+            "description": "use terse output"
+          },
+          {
+            "short": "o",
+            "description": "output script bytes as a binary file"
+          },
+          {
+            "short": "g",
+            "description": "output source file mapping as JSON"
+          },
+          {
+            "long": "offline",
+            "description": "build without network access"
+          },
+          {
+            "long": "output-directory",
+            "description": "write build output to directory",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "locked",
+            "description": "require lockfile to remain unchanged"
+          },
+          {
+            "long": "json-abi-with-callpaths",
+            "description": "include call paths in JSON ABI"
+          },
+          {
+            "long": "ipfs-node",
+            "description": "set the IPFS node URL",
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "json-abi",
+            "description": "output JSON ABI"
+          },
+          {
+            "long": "json-storage-slots",
+            "description": "output JSON storage slots"
+          },
+          {
+            "long": "ast",
+            "description": "output parsed AST"
+          },
+          {
+            "long": "dca-graph",
+            "description": "output dead code analysis graph"
+          },
+          {
+            "long": "dca-graph-url-format",
+            "description": "set DCA graph URL format",
+            "value": {
+              "name": "format"
+            }
+          },
+          {
+            "long": "finalized-asm",
+            "description": "output finalized assembly"
+          },
+          {
+            "long": "intermediate-asm",
+            "description": "output intermediate assembly"
+          },
+          {
+            "long": "ir",
+            "description": "output IR"
+          },
+          {
+            "long": "time-phases",
+            "description": "time compiler phases"
+          },
+          {
+            "long": "reverse-order",
+            "description": "reverse output order"
+          },
+          {
+            "long": "metrics-outfile",
+            "description": "write metrics to file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "build-profile",
+            "description": "set build profile",
+            "value": {
+              "name": "profile"
+            }
+          },
+          {
+            "long": "release",
+            "description": "build in release mode"
+          },
+          {
+            "long": "error-on-warnings",
+            "description": "treat warnings as errors"
+          },
+          {
+            "long": "build-target",
+            "description": "set build target",
+            "value": {
+              "name": "target",
+              "provider": "forc.build-targets"
+            }
+          },
+          {
+            "long": "experimental-new-encoding",
+            "description": "use experimental new encoding"
+          },
+          {
+            "long": "price",
+            "description": "set gas price",
+            "value": {
+              "name": "price"
+            }
+          },
+          {
+            "long": "script-gas-limit",
+            "description": "set script gas limit",
+            "value": {
+              "name": "limit"
+            }
+          },
+          {
+            "long": "maturity",
+            "description": "set transaction maturity",
+            "value": {
+              "name": "maturity"
+            }
+          },
+          {
+            "long": "node-url",
+            "description": "set node URL",
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "target",
+            "description": "set target",
+            "value": {
+              "name": "target"
+            }
+          },
+          {
+            "long": "testnet",
+            "description": "use testnet"
+          },
+          {
+            "long": "default-signer",
+            "description": "use default signer"
+          },
+          {
+            "long": "unsigned",
+            "description": "do not sign transaction"
+          },
+          {
+            "long": "manual-signing",
+            "description": "use manual signing"
+          },
+          {
+            "long": "salt",
+            "description": "set contract salt",
+            "value": {
+              "name": "salt"
+            }
+          },
+          {
+            "long": "default-salt",
+            "description": "use default salt"
+          },
+          {
+            "long": "JSON_FILE_PATH",
+            "description": "path to JSON file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "print help information"
+          }
+        ]
+      },
+      {
+        "name": "help",
+        "description": "print help for subcommands",
+        "arguments": {
+          "states": [
+            {
+              "name": "subcommand",
+              "index": 0,
+              "description": "subcommand"
+            }
+          ]
+        }
+      }
+    ]
+  }
+}
