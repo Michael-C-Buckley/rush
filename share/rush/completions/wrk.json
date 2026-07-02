@@ -1,0 +1,79 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "wrk",
+    "description": "HTTP benchmarking tool",
+    "options": [
+      {
+        "short": "c",
+        "description": "connections to keep open",
+        "value": {
+          "name": "Number"
+        }
+      },
+      {
+        "short": "d",
+        "long": "duration",
+        "description": "duration of test",
+        "value": {
+          "name": "Time"
+        }
+      },
+      {
+        "short": "t",
+        "long": "threads",
+        "description": "number of threads",
+        "value": {
+          "name": "Number"
+        }
+      },
+      {
+        "short": "s",
+        "long": "script",
+        "description": "load Lua script file",
+        "value": {
+          "name": "Script",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "short": "H",
+        "long": "header",
+        "description": "add header to request",
+        "value": {
+          "name": "Header"
+        }
+      },
+      {
+        "long": "latency",
+        "description": "print latency statistics"
+      },
+      {
+        "long": "timeout",
+        "description": "socket/request timeout",
+        "value": {
+          "name": "Time"
+        }
+      },
+      {
+        "short": "v",
+        "long": "version",
+        "description": "print version details"
+      },
+      {
+        "short": "h",
+        "long": "help",
+        "description": "output usage information"
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "url",
+          "index": 0
+        }
+      ]
+    }
+  }
+}
