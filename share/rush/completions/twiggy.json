@@ -1,0 +1,74 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "twiggy",
+    "description": "WebAssembly code-size profiler",
+    "options": [
+      {
+        "long": "help",
+        "short": "h",
+        "description": "prints help information",
+        "inherit": false
+      },
+      {
+        "long": "version",
+        "short": "v",
+        "description": "prints version information",
+        "inherit": false
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "diff",
+        "description": "diff the old and new versions of a binary to see what sizes changed"
+      },
+      {
+        "name": "dominators",
+        "description": "compute and display the dominator tree for a binary's call graph"
+      },
+      {
+        "name": "garbage",
+        "description": "find and display code and data that is not transitively referenced by any exports or public functions"
+      },
+      {
+        "name": "help",
+        "description": "prints this message or the help of the given subcommand(s)",
+        "arguments": {
+          "states": [
+            {
+              "name": "subcommand",
+              "index": 0,
+              "provider": "twiggy.subcommands"
+            }
+          ]
+        }
+      },
+      {
+        "name": "monos",
+        "description": "list the generic function monomorphizations that are contributing to code bloat"
+      },
+      {
+        "name": "paths",
+        "description": "find and display the call paths to a function in the given binary's call graph"
+      },
+      {
+        "name": "top",
+        "description": "list the top code size offenders in a binary"
+      }
+    ],
+    "providers": {
+      "twiggy.subcommands": {
+        "values": [
+          "diff",
+          "dominators",
+          "garbage",
+          "help",
+          "monos",
+          "paths",
+          "top"
+        ]
+      }
+    }
+  }
+}
