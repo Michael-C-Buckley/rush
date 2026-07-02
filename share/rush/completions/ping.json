@@ -1,0 +1,298 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "ping",
+    "description": "send ICMP echo requests",
+    "options": [
+      {
+        "short": "A",
+        "description": "ring when a packet is missed",
+        "inherit": false
+      },
+      {
+        "short": "a",
+        "description": "ring when a packet is received",
+        "inherit": false
+      },
+      {
+        "short": "b",
+        "description": "bind to an interface",
+        "inherit": false,
+        "value": {
+          "name": "boundif"
+        }
+      },
+      {
+        "short": "C",
+        "description": "avoid the cellular interface",
+        "inherit": false
+      },
+      {
+        "short": "c",
+        "description": "stop after count replies",
+        "inherit": false,
+        "value": {
+          "name": "count"
+        }
+      },
+      {
+        "short": "D",
+        "description": "set the don't-fragment bit",
+        "inherit": false
+      },
+      {
+        "short": "d",
+        "description": "enable socket debugging",
+        "inherit": false
+      },
+      {
+        "short": "f",
+        "description": "send flood pings",
+        "inherit": false
+      },
+      {
+        "short": "G",
+        "description": "set maximum sweep payload size",
+        "inherit": false,
+        "value": {
+          "name": "count"
+        }
+      },
+      {
+        "short": "g",
+        "description": "set initial sweep payload size",
+        "inherit": false,
+        "value": {
+          "name": "sweepminsize"
+        }
+      },
+      {
+        "short": "h",
+        "description": "set sweep payload increment",
+        "inherit": false,
+        "value": {
+          "name": "sweepincrsize"
+        }
+      },
+      {
+        "short": "I",
+        "description": "set multicast source interface",
+        "inherit": false,
+        "value": {
+          "name": "iface"
+        }
+      },
+      {
+        "short": "i",
+        "description": "set interval between packets",
+        "inherit": false,
+        "value": {
+          "name": "wait"
+        }
+      },
+      {
+        "short": "k",
+        "description": "set traffic class",
+        "inherit": false,
+        "value": {
+          "name": "trafficclass",
+          "provider": "ping.traffic-classes"
+        }
+      },
+      {
+        "short": "K",
+        "description": "set network service type",
+        "inherit": false,
+        "value": {
+          "name": "netservicetype",
+          "provider": "ping.network-service-types"
+        }
+      },
+      {
+        "short": "L",
+        "description": "suppress multicast loopback",
+        "inherit": false
+      },
+      {
+        "short": "l",
+        "description": "set preload packet count",
+        "inherit": false,
+        "value": {
+          "name": "preload"
+        }
+      },
+      {
+        "short": "M",
+        "description": "use mask or timestamp requests",
+        "inherit": false,
+        "value": {
+          "name": "request-type",
+          "provider": "ping.request-types"
+        }
+      },
+      {
+        "short": "m",
+        "description": "set outgoing packet TTL",
+        "inherit": false,
+        "value": {
+          "name": "ttl"
+        }
+      },
+      {
+        "short": "n",
+        "description": "show numeric addresses only",
+        "inherit": false
+      },
+      {
+        "short": "o",
+        "description": "exit after one reply",
+        "inherit": false
+      },
+      {
+        "short": "P",
+        "description": "set IPsec policy",
+        "inherit": false,
+        "value": {
+          "name": "policy"
+        }
+      },
+      {
+        "short": "p",
+        "description": "set packet padding pattern",
+        "inherit": false,
+        "value": {
+          "name": "pattern"
+        }
+      },
+      {
+        "short": "Q",
+        "description": "hide ICMP error messages",
+        "inherit": false
+      },
+      {
+        "short": "q",
+        "description": "show quiet output",
+        "inherit": false
+      },
+      {
+        "short": "R",
+        "description": "record route",
+        "inherit": false
+      },
+      {
+        "short": "r",
+        "description": "bypass routing tables",
+        "inherit": false
+      },
+      {
+        "short": "S",
+        "description": "set source address",
+        "inherit": false,
+        "value": {
+          "name": "src-addr"
+        }
+      },
+      {
+        "short": "s",
+        "description": "set payload size",
+        "inherit": false,
+        "value": {
+          "name": "packetsize"
+        }
+      },
+      {
+        "short": "T",
+        "description": "set multicast TTL",
+        "inherit": false,
+        "value": {
+          "name": "ttl"
+        }
+      },
+      {
+        "short": "t",
+        "description": "set timeout",
+        "inherit": false,
+        "value": {
+          "name": "timeout"
+        }
+      },
+      {
+        "short": "v",
+        "description": "show verbose output",
+        "inherit": false
+      },
+      {
+        "short": "W",
+        "description": "set reply wait time",
+        "inherit": false,
+        "value": {
+          "name": "waittime"
+        }
+      },
+      {
+        "short": "z",
+        "description": "set type of service",
+        "inherit": false,
+        "value": {
+          "name": "tos"
+        }
+      },
+      {
+        "long": "apple-connect",
+        "description": "connect socket to destination",
+        "inherit": false
+      },
+      {
+        "long": "apple-time",
+        "description": "print packet receive times",
+        "inherit": false
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "host",
+          "index": 0,
+          "description": "hostname or IP address"
+        }
+      ]
+    },
+    "providers": {
+      "ping.traffic-classes": {
+        "values": [
+          "BK_SYS",
+          "BK",
+          "BE",
+          "RD",
+          "OAM",
+          "AV",
+          "RV",
+          "VI",
+          "VO",
+          "CTL"
+        ]
+      },
+      "ping.network-service-types": {
+        "values": [
+          "BK_SYS",
+          "BK",
+          "BE",
+          "RV",
+          "AV",
+          "RD",
+          "OAM",
+          "VI",
+          "SIG",
+          "VO"
+        ]
+      },
+      "ping.request-types": {
+        "values": [
+          "mask",
+          "time"
+        ]
+      }
+    }
+  }
+}
