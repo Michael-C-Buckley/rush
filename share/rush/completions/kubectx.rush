@@ -1,0 +1,20 @@
+__rush_complete_kubectx_contexts() {
+  current=$(kubectx -c 2>/dev/null || true)
+  rush_complete candidate - --kind plain --description "previous context"
+  kubectx 2>/dev/null | while IFS= read -r context; do
+    test -n "$context" || continue
+    if test "$context" = "$current"; then
+      rush_complete candidate "$context" --kind plain --description "current context"
+    else
+      rush_complete candidate "$context" --kind plain --description "Kubernetes context"
+    fi
+  done
+}
+
+__rush_complete_kubectx_delete_contexts() {
+  rush_complete candidate . --kind plain --description "current context"
+  kubectx 2>/dev/null | while IFS= read -r context; do
+    test -n "$context" || continue
+    rush_complete candidate "$context" --kind plain --description "Kubernetes context"
+  done
+}

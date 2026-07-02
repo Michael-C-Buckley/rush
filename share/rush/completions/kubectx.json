@@ -1,0 +1,54 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "kubectx",
+    "description": "switch between Kubernetes contexts",
+    "options": [
+      {
+        "long": "help",
+        "short": "h",
+        "description": "show help for kubectx",
+        "inherit": false
+      },
+      {
+        "long": "current",
+        "short": "c",
+        "description": "show current context",
+        "inherit": false
+      },
+      {
+        "long": "unset",
+        "short": "u",
+        "description": "unset the current context",
+        "inherit": false
+      },
+      {
+        "short": "d",
+        "description": "delete context",
+        "priority": -10,
+        "inherit": false,
+        "value": {
+          "name": "context",
+          "repeatable": true,
+          "provider": {
+            "function": "__rush_complete_kubectx_delete_contexts"
+          }
+        }
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "context",
+          "index": 0,
+          "description": "context to switch to",
+          "required": false,
+          "provider": {
+            "function": "__rush_complete_kubectx_contexts"
+          }
+        }
+      ]
+    }
+  }
+}
