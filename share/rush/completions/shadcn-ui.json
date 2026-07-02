@@ -1,0 +1,111 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "shadcn-ui",
+    "description": "manage shadcn/ui components",
+    "subcommands": [
+      {
+        "name": "add",
+        "description": "add a component to your project",
+        "options": [
+          {
+            "short": "y",
+            "long": "yes",
+            "description": "skip confirmation prompt",
+            "inherit": false
+          },
+          {
+            "short": "o",
+            "long": "overwrite",
+            "description": "overwrite existing files",
+            "inherit": false
+          },
+          {
+            "short": "c",
+            "long": "cwd",
+            "description": "the working directory. defaults to the current directory",
+            "inherit": false,
+            "value": {
+              "name": "cwd",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "short": "p",
+            "long": "path",
+            "description": "the path to add the component to",
+            "inherit": false,
+            "value": {
+              "name": "path",
+              "provider": "builtin.directories"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "components",
+              "description": "the components to add",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "diff",
+        "description": "check for updates against the registry",
+        "options": [
+          {
+            "short": "y",
+            "long": "yes",
+            "description": "skip confirmation prompt",
+            "inherit": false
+          },
+          {
+            "short": "c",
+            "long": "cwd",
+            "description": "the working directory. defaults to the current directory",
+            "inherit": false,
+            "value": {
+              "name": "cwd",
+              "provider": "builtin.directories"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "component",
+              "description": "the component name",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "init",
+        "description": "initialize your project and install dependencies",
+        "options": [
+          {
+            "short": "y",
+            "long": "yes",
+            "description": "skip confirmation prompt",
+            "inherit": false
+          },
+          {
+            "short": "c",
+            "long": "cwd",
+            "description": "the working directory. defaults to the current directory",
+            "inherit": false,
+            "value": {
+              "name": "cwd",
+              "provider": "builtin.directories"
+            }
+          }
+        ]
+      }
+    ]
+  }
+}
