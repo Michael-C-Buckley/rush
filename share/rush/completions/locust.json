@@ -1,0 +1,333 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "locust",
+    "description": "run Python load tests with Locust",
+    "options": [
+      {
+        "short": "v",
+        "long": "version",
+        "description": "show program's version number and exit",
+        "inherit": false
+      },
+      {
+        "short": "h",
+        "long": "help",
+        "description": "show this help message and exit",
+        "inherit": false
+      },
+      {
+        "short": "f",
+        "long": "locustfile",
+        "description": "set Locust Python module or file",
+        "inherit": false,
+        "value": {
+          "name": "files...",
+          "description": "Python module to import, e.g. '../other_test.py'. Either a .py file, multiple comma-separated .py files or a package directory. Defaults to 'locustfile'",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "config",
+        "description": "config file path",
+        "inherit": false,
+        "value": {
+          "name": "files...",
+          "description": "Config file path",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "short": "H",
+        "long": "host",
+        "description": "host to load test in the following format: http://10.21.32.33",
+        "inherit": false,
+        "value": {
+          "name": "url"
+        }
+      },
+      {
+        "short": "u",
+        "long": "users",
+        "description": "peak number of concurrent Locust users. Primarily used together with --headless or --autostart",
+        "inherit": false,
+        "value": {
+          "name": "users"
+        }
+      },
+      {
+        "short": "r",
+        "long": "spawn-rate",
+        "description": "rate to spawn users at (users per second). Primarily used together with --headless or --autostart",
+        "inherit": false,
+        "value": {
+          "name": "rate"
+        }
+      },
+      {
+        "short": "t",
+        "long": "run-time",
+        "description": "stop after the specified amount of time, e.g. (300s, 20m, 3h, 1h30m, etc.)",
+        "inherit": false,
+        "value": {
+          "name": "duration"
+        }
+      },
+      {
+        "short": "l",
+        "long": "list",
+        "description": "show list of possible User classes and exit",
+        "inherit": false
+      },
+      {
+        "long": "web-host",
+        "description": "host to bind the web interface to. Defaults to '*' (all interfaces)",
+        "inherit": false,
+        "value": {
+          "name": "host"
+        }
+      },
+      {
+        "short": "P",
+        "long": "web-port",
+        "description": "port on which to run web host",
+        "inherit": false,
+        "value": {
+          "name": "port"
+        }
+      },
+      {
+        "long": "headless",
+        "description": "disable the web interface, and start the test immediately",
+        "inherit": false
+      },
+      {
+        "long": "autostart",
+        "description": "starts the test immediately (without disabling the web UI)",
+        "inherit": false
+      },
+      {
+        "long": "autoquit",
+        "description": "quits Locust entirely, X seconds after the run is finished",
+        "inherit": false,
+        "value": {
+          "name": "seconds"
+        }
+      },
+      {
+        "long": "web-auth",
+        "description": "turn on Basic Auth for the web interface. e.g. username:password",
+        "inherit": false,
+        "value": {
+          "name": "username:password"
+        }
+      },
+      {
+        "long": "tls-cert",
+        "description": "optional path to TLS certificate to use to serve over HTTPS",
+        "inherit": false,
+        "value": {
+          "name": "tls-cert",
+          "description": "Optional path to TLS certificate",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "tls-key",
+        "description": "optional path to TLS private key to use to serve over HTTPS",
+        "inherit": false,
+        "value": {
+          "name": "tls-key",
+          "description": "Optional path to TLS private key",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "class-picker",
+        "description": "enable select boxes in the web interface to choose from all available User classes and Shape classes",
+        "inherit": false
+      },
+      {
+        "long": "master",
+        "description": "set locust to run in distributed mode with this process as master",
+        "inherit": false
+      },
+      {
+        "long": "master-bind-host",
+        "description": "interfaces (hostname, ip) that locust master should bind to",
+        "inherit": false,
+        "value": {
+          "name": "host"
+        }
+      },
+      {
+        "long": "master-bind-port",
+        "description": "port that locust master should bind to",
+        "inherit": false,
+        "value": {
+          "name": "port"
+        }
+      },
+      {
+        "long": "expect-workers",
+        "description": "how many workers master should expect to connect before starting the test (only when --headless/autostart is used)",
+        "inherit": false,
+        "value": {
+          "name": "workers"
+        }
+      },
+      {
+        "long": "expect-workers-max-wait",
+        "description": "how long should the master wait for workers to connect before giving up. Defaults to wait forever",
+        "inherit": false,
+        "value": {
+          "name": "duration"
+        }
+      },
+      {
+        "long": "worker",
+        "description": "set locust to run in distributed mode with this process as worker",
+        "inherit": false
+      },
+      {
+        "long": "master-host",
+        "description": "host or IP address of locust master for distributed load testing. Only used when running with --worker. Defaults to 127.0.0.1",
+        "inherit": false,
+        "value": {
+          "name": "host"
+        }
+      },
+      {
+        "long": "master-port",
+        "description": "port of locust master for distributed load testing",
+        "inherit": false,
+        "value": {
+          "name": "port"
+        }
+      },
+      {
+        "long": "csv",
+        "description": "store current request stats to files in CSV format",
+        "inherit": false,
+        "value": {
+          "name": "prefix"
+        }
+      },
+      {
+        "long": "csv-full-history",
+        "description": "store each stats entry in CSV format to _stats_history.csv file. You must also specify the '--csv' argument to enable this",
+        "inherit": false
+      },
+      {
+        "long": "print-stats",
+        "description": "print stats in the console",
+        "inherit": false
+      },
+      {
+        "long": "only-summary",
+        "description": "only print the summary stats",
+        "inherit": false
+      },
+      {
+        "long": "reset-stats",
+        "description": "reset statistics once spawning has been completed. Should be set on both master and workers when running in distributed mode",
+        "inherit": false
+      },
+      {
+        "long": "html",
+        "description": "store HTML report to file path specified",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "skip-log-setup",
+        "description": "disable Locust's logging setup. Instead, the configuration is provided by the Locust test or Python defaults. --loglevel LOGLEVEL, -L LOGLEVEL",
+        "inherit": false
+      },
+      {
+        "long": "loglevel",
+        "description": "choose between DEBUG/INFO/WARNING/ERROR/CRITICAL. Default is INFO",
+        "inherit": false,
+        "value": {
+          "name": "loglevel",
+          "provider": {
+            "values": [
+              "INFO",
+              "WARNING",
+              "DEBUG",
+              "ERROR",
+              "CRITICAL"
+            ]
+          }
+        }
+      },
+      {
+        "long": "logfile",
+        "description": "path to log file. If not set, log will go to stderr",
+        "inherit": false,
+        "value": {
+          "name": "logfile",
+          "description": "Path to log file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "show-task-ratio",
+        "description": "print table of the User classes' task execution ratio. Use this with non-zero --user option if some classes define non-zero fixed_count attribute",
+        "inherit": false
+      },
+      {
+        "long": "show-task-ratio-json",
+        "description": "print json data of the User classes' task execution ratio. Use this with non-zero --user option if some classes define non-zero fixed_count attribute",
+        "inherit": false
+      },
+      {
+        "long": "exit-code-on-error",
+        "description": "sets the process exit code to use when a test result contain any failure or error",
+        "inherit": false,
+        "value": {
+          "name": "code"
+        }
+      },
+      {
+        "long": "equal-weights",
+        "description": "use equally distributed task weights, overriding the weights specified in the locustfile",
+        "inherit": false
+      },
+      {
+        "long": "enable-rebalancing",
+        "description": "allow to automatically rebalance users if new workers are added or removed during a test run",
+        "inherit": false
+      },
+      {
+        "short": "T",
+        "long": "tags",
+        "description": "list of tags to include in the test, so only tasks with any matching tags will be executed",
+        "inherit": false,
+        "value": {
+          "name": "tag",
+          "repeatable": true
+        }
+      },
+      {
+        "long": "exclude-tags",
+        "description": "list of tags to exclude from the test, so only tasks with no matching tags will be executed",
+        "inherit": false,
+        "short": "E",
+        "value": {
+          "name": "tag",
+          "repeatable": true
+        }
+      }
+    ],
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
