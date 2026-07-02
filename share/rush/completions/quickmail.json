@@ -1,0 +1,211 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "quickmail",
+    "description": "send mail from the terminal with quickmail",
+    "options": [
+      {
+        "short": "v",
+        "long": "version",
+        "description": "output cli version",
+        "inherit": false
+      },
+      {
+        "short": "h",
+        "long": "help",
+        "description": "output cli help",
+        "inherit": false
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "init",
+        "description": "initialise cli",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "get help regarding init command",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "provider": "builtin.files",
+              "index": 0,
+              "description": "file path"
+            }
+          ]
+        }
+      },
+      {
+        "name": "clear",
+        "description": "clear the files stored locally",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "get help regarding clear command",
+            "inherit": false
+          },
+          {
+            "short": "j",
+            "long": "justdoit",
+            "description": "clear entire cli storage including token",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "send",
+        "description": "send mail",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "get help regarding send command",
+            "inherit": false
+          },
+          {
+            "short": "r",
+            "long": "receiver",
+            "description": "receiver's email address",
+            "inherit": false,
+            "value": {
+              "name": "receiver"
+            }
+          },
+          {
+            "long": "subject",
+            "spellings": [
+              "-sub"
+            ],
+            "description": "subject of mail",
+            "inherit": false,
+            "value": {
+              "name": "subject"
+            }
+          },
+          {
+            "short": "t",
+            "long": "template",
+            "description": "templates for mail body",
+            "inherit": false,
+            "value": {
+              "name": "template",
+              "required": false,
+              "style": "optional",
+              "provider": "quickmail.templates"
+            }
+          },
+          {
+            "short": "b",
+            "long": "body",
+            "description": "body of the mail",
+            "inherit": false,
+            "value": {
+              "name": "body",
+              "required": false,
+              "style": "optional"
+            }
+          },
+          {
+            "short": "a",
+            "long": "attachment",
+            "description": "path to attachment file",
+            "inherit": false,
+            "value": {
+              "name": "attachment-file",
+              "required": false,
+              "style": "optional",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "short": "l",
+            "long": "lessgo",
+            "description": "skip confirmation, and send mail",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "template",
+        "description": "manage templates",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "get help regarding template command",
+            "inherit": false
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "add",
+            "description": "add a new template",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "get help regarding template add subcommand",
+                "inherit": false
+              },
+              {
+                "short": "n",
+                "description": "set template id",
+                "inherit": false,
+                "value": {
+                  "name": "template-id"
+                }
+              }
+            ]
+          },
+          {
+            "name": "listall",
+            "description": "list all templates stored",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "get help regarding template listall subcommand",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "edit",
+            "description": "edit any particular template",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "get help regarding template edit subcommand",
+                "inherit": false
+              },
+              {
+                "short": "n",
+                "description": "edit template by id",
+                "inherit": false,
+                "value": {
+                  "name": "template-id"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "quickmail.templates": {
+        "function": "__rush_complete_quickmail_templates"
+      }
+    }
+  }
+}

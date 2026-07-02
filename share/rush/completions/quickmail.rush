@@ -1,0 +1,6 @@
+__rush_complete_quickmail_templates() {
+  command -v quickmail >/dev/null 2>&1 || return
+  quickmail template listall 2>/dev/null | while IFS= read -r template; do
+    test -n "$template" && rush_complete candidate "$template" --kind value --description 'mail template'
+  done
+}
