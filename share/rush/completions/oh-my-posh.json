@@ -1,0 +1,347 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "oh-my-posh",
+    "description": "prompt theme engine",
+    "options": [
+      {
+        "long": "help",
+        "short": "h",
+        "description": "Show help for oh-my-posh",
+        "inherit": true
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "init",
+        "description": "initialize oh-my-posh for your shell",
+        "options": [
+          {
+            "short": "c",
+            "long": "config",
+            "description": "config file to use",
+            "inherit": true,
+            "value": {
+              "name": "config",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "print",
+            "short": "p",
+            "description": "print the init script",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "SHELL",
+              "provider": {
+                "values": [
+                  {
+                    "value": "zsh"
+                  },
+                  {
+                    "value": "fish"
+                  },
+                  {
+                    "value": "pwsh"
+                  },
+                  {
+                    "value": "powershell"
+                  },
+                  {
+                    "value": "cmd"
+                  },
+                  {
+                    "value": "bash"
+                  },
+                  {
+                    "value": "shell"
+                  }
+                ]
+              },
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "get",
+        "description": "get oh-my-posh values",
+        "arguments": {
+          "states": [
+            {
+              "name": "VALUE",
+              "provider": {
+                "values": [
+                  {
+                    "value": "millis",
+                    "description": "Get the current timestamp in milliseconds, example usage: 'oh-my-posh get millis'"
+                  },
+                  {
+                    "value": "shell",
+                    "description": "Get the current shell, example usage: 'oh-my-posh get shell'"
+                  }
+                ]
+              },
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "debug",
+        "description": "debug oh-my-posh",
+        "options": [
+          {
+            "short": "c",
+            "long": "config",
+            "description": "config file to use",
+            "inherit": true,
+            "value": {
+              "name": "config",
+              "provider": "builtin.files"
+            }
+          }
+        ]
+      },
+      {
+        "name": "config",
+        "description": "interact with the oh-my-posh configuration",
+        "subcommands": [
+          {
+            "name": "edit",
+            "description": "edit the config file"
+          },
+          {
+            "name": "migrate",
+            "description": "migrate the config file",
+            "options": [
+              {
+                "long": "write",
+                "short": "w",
+                "description": "write the migrated config to the configuration file",
+                "inherit": false
+              },
+              {
+                "short": "f",
+                "long": "format",
+                "description": "file format to use",
+                "inherit": false,
+                "value": {
+                  "name": "format",
+                  "provider": "oh-my-posh.formats"
+                }
+              }
+            ]
+          },
+          {
+            "name": "export",
+            "description": "export the config file",
+            "options": [
+              {
+                "long": "output",
+                "short": "o",
+                "description": "the file to output the migrated config to",
+                "inherit": false,
+                "value": {
+                  "name": "OUTPUT",
+                  "description": "The file to write to",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "short": "f",
+                "long": "format",
+                "description": "file format to use",
+                "inherit": false,
+                "value": {
+                  "name": "format",
+                  "provider": "oh-my-posh.formats"
+                }
+              }
+            ]
+          }
+        ],
+        "options": [
+          {
+            "short": "c",
+            "long": "config",
+            "description": "config file to use",
+            "inherit": true,
+            "value": {
+              "name": "config",
+              "provider": "builtin.files"
+            }
+          }
+        ]
+      },
+      {
+        "name": "print",
+        "description": "print a prompt",
+        "options": [
+          {
+            "short": "c",
+            "long": "config",
+            "description": "config file to use",
+            "inherit": true,
+            "value": {
+              "name": "config",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "terminal-width",
+            "short": "w",
+            "description": "the terminal width",
+            "inherit": false,
+            "value": {
+              "name": "WIDTH",
+              "description": "The terminal width"
+            }
+          },
+          {
+            "long": "command",
+            "description": "the current command for tooltips",
+            "inherit": false,
+            "value": {
+              "name": "COMMAND",
+              "description": "The tooltip command"
+            }
+          },
+          {
+            "long": "error",
+            "short": "e",
+            "description": "the last exit code",
+            "inherit": false,
+            "value": {
+              "name": "ERROR-CODE",
+              "description": "The last error code"
+            }
+          },
+          {
+            "long": "eval",
+            "description": "use eval to render the prompt",
+            "inherit": false
+          },
+          {
+            "long": "execution-time",
+            "description": "use last command execution time in millis",
+            "inherit": false,
+            "value": {
+              "name": "EXECUTION-TIME",
+              "description": "The last command's execution time"
+            }
+          },
+          {
+            "long": "plain",
+            "short": "p",
+            "description": "print a prompt without asni codes",
+            "inherit": false
+          },
+          {
+            "long": "pswd",
+            "description": "the current working directory according to powershell",
+            "inherit": false,
+            "value": {
+              "name": "POWERSHELL-WORKING-DIRECTORY",
+              "description": "The working directory according to PowerShell",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "pwd",
+            "description": "the current working directory",
+            "inherit": false,
+            "value": {
+              "name": "WORKING-DIRECTORY",
+              "description": "The working directory",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "shell",
+            "description": "the current shell",
+            "inherit": false,
+            "value": {
+              "name": "SHELL",
+              "description": "The shell used",
+              "provider": {
+                "values": [
+                  "zsh",
+                  "fish",
+                  "pwsh",
+                  "powershell",
+                  "cmd",
+                  "bash",
+                  "shell"
+                ]
+              }
+            }
+          },
+          {
+            "long": "stack-count",
+            "description": "the directory stack count",
+            "inherit": false,
+            "value": {
+              "name": "NUM",
+              "description": "The number of stacks"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "PROMPT",
+              "provider": {
+                "values": [
+                  {
+                    "value": "primary"
+                  },
+                  {
+                    "value": "secondary"
+                  },
+                  {
+                    "value": "right"
+                  },
+                  {
+                    "value": "transient"
+                  },
+                  {
+                    "value": "tooltip"
+                  },
+                  {
+                    "value": "valid"
+                  },
+                  {
+                    "value": "error"
+                  }
+                ]
+              },
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "version",
+        "description": "display the oh-my-posh version"
+      }
+    ],
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "oh-my-posh.formats": {
+        "values": [
+          "json",
+          "yaml",
+          "toml"
+        ]
+      }
+    }
+  }
+}
