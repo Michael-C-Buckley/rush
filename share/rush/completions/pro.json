@@ -1,0 +1,162 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "pro",
+    "description": "manage Ubuntu Pro services",
+    "subcommands": [
+      {
+        "name": "attach",
+        "description": "connect an Ubuntu Pro support contract to this machine",
+        "options": [
+          {
+            "long": "no-auto-enable",
+            "description": "disable the automatic enablement of recommended entitlements",
+            "inherit": false
+          },
+          {
+            "long": "attach-config",
+            "description": "provide a file with configuration options",
+            "inherit": false,
+            "value": {
+              "name": "file-path",
+              "provider": "builtin.files",
+              "style": "equals"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "token",
+              "description": "auth token",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "collect-logs",
+        "description": "create a tarball with all relevant logs and debug data",
+        "options": [
+          {
+            "short": "o",
+            "long": "output",
+            "description": "set output tarball path",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          }
+        ]
+      },
+      {
+        "name": "detach",
+        "description": "remove Ubuntu Pro from this machine"
+      },
+      {
+        "name": "disable",
+        "description": "disable this machine's access to an Ubuntu Pro service",
+        "arguments": {
+          "states": [
+            {
+              "name": "service",
+              "provider": "pro.services",
+              "index": 0,
+              "description": "Ubuntu Pro service"
+            }
+          ]
+        }
+      },
+      {
+        "name": "enable",
+        "description": "activate and configure this machine's access to an Ubuntu Pro service",
+        "arguments": {
+          "states": [
+            {
+              "name": "service",
+              "provider": "pro.services",
+              "index": 0,
+              "description": "Ubuntu Pro service"
+            }
+          ]
+        }
+      },
+      {
+        "name": "fix",
+        "description": "fix a CVE or USN on the system by upgrading the appropriate package(s)",
+        "arguments": {
+          "states": [
+            {
+              "name": "security-issue",
+              "index": 0,
+              "description": "CVE or USN"
+            }
+          ]
+        }
+      },
+      {
+        "name": "refresh",
+        "description": "refresh contract and service details from Canonical"
+      },
+      {
+        "name": "security-status",
+        "description": "show security updates for packages in the system, including all ava..."
+      },
+      {
+        "name": "status",
+        "description": "report current status of Ubuntu Pro services on system",
+        "options": [
+          {
+            "long": "format",
+            "description": "output format",
+            "inherit": false,
+            "value": {
+              "name": "value",
+              "provider": "pro.formats",
+              "style": "equals"
+            }
+          },
+          {
+            "long": "simulate-with-token",
+            "inherit": false,
+            "value": {
+              "name": "token"
+            },
+            "description": "simulate status with token"
+          },
+          {
+            "long": "all",
+            "description": "include beta and unavailable services",
+            "inherit": false
+          }
+        ]
+      }
+    ],
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "pro.services": {
+        "values": [
+          "cc-eal",
+          "cis",
+          "esm",
+          "fips",
+          "fips-updates",
+          "livepatch",
+          "ros",
+          "ros-updates"
+        ]
+      },
+      "pro.formats": {
+        "values": [
+          "tabular",
+          "json",
+          "yaml"
+        ]
+      }
+    }
+  }
+}
