@@ -1,0 +1,629 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "tmutil",
+    "description": "Time Machine utility",
+    "subcommands": [
+      {
+        "name": "version",
+        "description": "print the current version"
+      },
+      {
+        "name": "enable",
+        "description": "turn on automatic backups (required root + full disk access)"
+      },
+      {
+        "name": "disable",
+        "description": "turn off automatic backups (required root + full disk access)"
+      },
+      {
+        "name": "startbackup",
+        "description": "begin a backup if one is not already running",
+        "options": [
+          {
+            "short": "a",
+            "long": "auto",
+            "description": "run the backup in a mode similar to system-scheduled backups",
+            "inherit": false
+          },
+          {
+            "short": "b",
+            "long": "block",
+            "description": "wait (block) until the backup is finished before exiting",
+            "inherit": false
+          },
+          {
+            "short": "r",
+            "long": "rotation",
+            "description": "allow automatic destination rotation during backup",
+            "inherit": false
+          },
+          {
+            "short": "d",
+            "long": "destination",
+            "description": "perform the backup to the destination corresponding to the specified ID",
+            "inherit": false,
+            "value": {
+              "name": "destination-id"
+            }
+          }
+        ]
+      },
+      {
+        "name": "stopbackup",
+        "description": "cancel a backup currently in progress"
+      },
+      {
+        "name": "delete",
+        "description": "deletes backups with the specified timestamp from the backup volume mounted at the given mountpoint",
+        "options": [
+          {
+            "short": "d",
+            "description": "delete from the given mount point",
+            "inherit": false,
+            "value": {
+              "name": "backup-mount-point",
+              "provider": [
+                "builtin.files",
+                "builtin.directories"
+              ]
+            }
+          },
+          {
+            "short": "t",
+            "description": "delete backups with this timestamp",
+            "repeatable": true,
+            "inherit": false,
+            "value": {
+              "name": "timestamp"
+            }
+          },
+          {
+            "short": "p",
+            "description": "a specific path to delete (HFS backup disk)",
+            "inherit": false,
+            "value": {
+              "name": "path",
+              "provider": [
+                "builtin.files",
+                "builtin.directories"
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "deleteinprogress",
+        "description": "delete all in-progress backups for a machine directory",
+        "arguments": {
+          "states": [
+            {
+              "name": "machine-directory",
+              "index": 0,
+              "provider": [
+                "builtin.files",
+                "builtin.directories"
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "name": "restore",
+        "description": "restore the item `source`, which is inside a backup, to the location `destination`. Same semantics as `cp`",
+        "options": [
+          {
+            "short": "v",
+            "description": "be verbose, showing files as they are copied",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "source",
+              "index": 0,
+              "repeatable": true,
+              "provider": [
+                "builtin.files",
+                "builtin.directories"
+              ]
+            },
+            {
+              "name": "destination",
+              "index": 1,
+              "provider": [
+                "builtin.files",
+                "builtin.directories"
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "name": "compare",
+        "description": "perform a backup diff",
+        "options": [
+          {
+            "short": "@",
+            "description": "compare extended attributes",
+            "inherit": false
+          },
+          {
+            "short": "a",
+            "description": "compare all supported metadata",
+            "inherit": false
+          },
+          {
+            "short": "c",
+            "description": "compare creation times",
+            "inherit": false
+          },
+          {
+            "short": "d",
+            "description": "compare file data forks",
+            "inherit": false
+          },
+          {
+            "short": "e",
+            "description": "compare ACLs",
+            "inherit": false
+          },
+          {
+            "short": "f",
+            "description": "compare file flags",
+            "inherit": false
+          },
+          {
+            "short": "g",
+            "description": "compare GIDs",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "description": "unknown",
+            "inherit": false
+          },
+          {
+            "short": "l",
+            "description": "unknown",
+            "inherit": false
+          },
+          {
+            "short": "m",
+            "description": "compare file modes",
+            "inherit": false
+          },
+          {
+            "short": "n",
+            "description": "no metadata comparison",
+            "inherit": false
+          },
+          {
+            "short": "s",
+            "description": "compare sizes",
+            "inherit": false
+          },
+          {
+            "short": "t",
+            "description": "compare modification times",
+            "inherit": false
+          },
+          {
+            "short": "u",
+            "description": "compare UIDs",
+            "inherit": false
+          },
+          {
+            "short": "E",
+            "description": "don't take exclusions into account when comparing items inside volumes",
+            "inherit": false
+          },
+          {
+            "short": "U",
+            "description": "ignore logical volume identity (volume UUIDs) when directly comparing a local volume or volume store to a volume store",
+            "inherit": false
+          },
+          {
+            "short": "X",
+            "description": "print output in XML property list format",
+            "inherit": false
+          },
+          {
+            "short": "D",
+            "description": "limit traversal depth to depth levels from the beginning of iteration",
+            "inherit": false,
+            "value": {
+              "name": "depth"
+            }
+          },
+          {
+            "short": "I",
+            "description": "ignore paths with a path component equal to name during iteration",
+            "repeatable": true,
+            "inherit": false,
+            "value": {
+              "name": "name"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "backup-or-path",
+              "index": 0,
+              "provider": [
+                "builtin.files",
+                "builtin.directories"
+              ]
+            },
+            {
+              "name": "path-(if-not-backup)",
+              "index": 1,
+              "provider": [
+                "builtin.files",
+                "builtin.directories"
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "name": "setdestination",
+        "description": "configure a local HFS+ or APFS volume, AFP share, or SMB share as a backup destination (requires root + Full Disk Access)",
+        "options": [
+          {
+            "short": "a",
+            "description": "add the arg to the list of destinations, instead of replacing the list",
+            "inherit": false
+          },
+          {
+            "short": "p",
+            "description": "enter a password in a non-echoing interactive prompt",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "destination",
+              "index": 0,
+              "provider": [
+                "builtin.files",
+                "builtin.directories"
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "name": "removedestination",
+        "description": "remove the destination with the specified unique identifier from the Time Machine configuration (requires root + Full Disk Access)",
+        "arguments": {
+          "states": [
+            {
+              "name": "destination-id",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "destinationinfo",
+        "description": "print information about destinations currently configured for use with Time Machine",
+        "options": [
+          {
+            "short": "X",
+            "description": "print output in XML plist format",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "addexclusion",
+        "description": "configure an exclusion that tells Time Machine not to backup a file, directory, or volume during future backups",
+        "options": [
+          {
+            "short": "p",
+            "description": "configure fixed-path exclusions",
+            "inherit": false
+          },
+          {
+            "short": "v",
+            "description": "configure volume exclusions",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "item",
+              "index": 0,
+              "repeatable": true,
+              "provider": [
+                "builtin.files",
+                "builtin.directories"
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "name": "removeexclusion",
+        "description": "configure Time Machine to backup a file, directory, or volume during future backups",
+        "options": [
+          {
+            "short": "p",
+            "description": "configure fixed-path exclusions",
+            "inherit": false
+          },
+          {
+            "short": "v",
+            "description": "configure volume exclusions",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "item",
+              "index": 0,
+              "repeatable": true,
+              "provider": [
+                "builtin.files",
+                "builtin.directories"
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "name": "isexcluded",
+        "description": "determine if a file, directory, or volume are excluded from Time Machine backups",
+        "arguments": {
+          "states": [
+            {
+              "name": "item",
+              "index": 0,
+              "repeatable": true,
+              "provider": [
+                "builtin.files",
+                "builtin.directories"
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "name": "inheritbackup",
+        "description": "claim a machine directory or sparsebundle for use by the current machine",
+        "arguments": {
+          "states": [
+            {
+              "name": "machine-directory-or-sparsebundle",
+              "index": 0,
+              "provider": [
+                "builtin.files",
+                "builtin.directories"
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "name": "associatedisk",
+        "description": "bind a volume store directory to the specified local disk, thereby reconfiguring the backup history (requires root + Full Disk Access)",
+        "options": [
+          {
+            "short": "a",
+            "description": "find all volume stores in the same machine directory that match the identity of the volume backup directory",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "mount-point",
+              "index": 0,
+              "provider": [
+                "builtin.files",
+                "builtin.directories"
+              ]
+            },
+            {
+              "name": "volume-backup-directory",
+              "index": 1,
+              "provider": [
+                "builtin.files",
+                "builtin.directories"
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "name": "latestbackup",
+        "description": "list this computer's latest completed backup",
+        "options": [
+          {
+            "short": "d",
+            "description": "specify a destination volume to list backups from",
+            "inherit": false
+          },
+          {
+            "short": "m",
+            "description": "attempt to mount the backups and list their mounted paths",
+            "inherit": false
+          },
+          {
+            "short": "t",
+            "description": "only show the backup timestamp rather than the full name or path",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "listbackups",
+        "description": "list all of this computer's completed backups",
+        "options": [
+          {
+            "short": "d",
+            "description": "specify a destination volume to list backups from",
+            "inherit": false
+          },
+          {
+            "short": "m",
+            "description": "attempt to mount the backups and list their mounted paths",
+            "inherit": false
+          },
+          {
+            "short": "t",
+            "description": "only show the backup timestamp rather than the full name or path",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "machinedirectory",
+        "description": "print the path to the current machine directory for this computer"
+      },
+      {
+        "name": "calculatedrift",
+        "description": "analyze the backups in an HFS machine directory and determine the amount of change between each",
+        "arguments": {
+          "states": [
+            {
+              "name": "machine-directory",
+              "index": 0,
+              "provider": [
+                "builtin.files",
+                "builtin.directories"
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "name": "uniquesize",
+        "description": "analyze the specified path in an HFS+ backup or path to an APFS backup and determine its unique size",
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "provider": "builtin.files",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "verifychecksums",
+        "description": "compute a checksum of data contained within a backup and verify the results against checksum information computed at the time of backup",
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "provider": "builtin.files",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "localsnapshot",
+        "description": "create new local Time Machine snapshots of all APFS volumes included in the Time Machine backup"
+      },
+      {
+        "name": "listlocalsnapshots",
+        "description": "list local Time Machine snapshots of the specified volume",
+        "arguments": {
+          "states": [
+            {
+              "name": "mount-point",
+              "index": 0,
+              "provider": [
+                "builtin.files",
+                "builtin.directories"
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "name": "listlocalsnapshotdates",
+        "description": "list the creation dates of all local Time Machine snapshots",
+        "arguments": {
+          "states": [
+            {
+              "name": "mount-point",
+              "index": 0,
+              "provider": [
+                "builtin.files",
+                "builtin.directories"
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "name": "deletelocalsnapshots",
+        "description": "delete all local Time Machine snapshots on all mounted disks for the specified date or on the given disk",
+        "arguments": {
+          "states": [
+            {
+              "name": "mount-point-or-snapshot-date",
+              "index": 0,
+              "provider": [
+                "builtin.files",
+                "builtin.directories"
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "name": "thinlocalsnapshots",
+        "description": "thin local Time Machine snapshots for the specified volume",
+        "arguments": {
+          "states": [
+            {
+              "name": "mount-point",
+              "index": 0,
+              "provider": [
+                "builtin.files",
+                "builtin.directories"
+              ]
+            },
+            {
+              "name": "purge-amount-(bytes)",
+              "index": 1
+            },
+            {
+              "name": "urgency",
+              "provider": {
+                "values": [
+                  "1",
+                  "2",
+                  "3",
+                  "4"
+                ]
+              },
+              "index": 2
+            }
+          ]
+        }
+      }
+    ],
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
