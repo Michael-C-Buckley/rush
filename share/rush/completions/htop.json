@@ -1,0 +1,130 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "htop",
+    "description": "interactive process viewer",
+    "options": [
+      {
+        "long": "help",
+        "short": "h",
+        "description": "show help for htop",
+        "inherit": false
+      },
+      {
+        "long": "no-color",
+        "short": "C",
+        "description": "use a monochrome color scheme",
+        "inherit": false
+      },
+      {
+        "long": "delay",
+        "short": "d",
+        "description": "delay between updates, in tenths of sec",
+        "inherit": false,
+        "value": {
+          "name": "delay",
+          "provider": "htop-delays"
+        }
+      },
+      {
+        "long": "filter",
+        "short": "F",
+        "description": "filter commands",
+        "inherit": false,
+        "value": {
+          "name": "filter"
+        }
+      },
+      {
+        "long": "highlight-changes",
+        "short": "H",
+        "description": "highlight new and old processes",
+        "inherit": false,
+        "value": {
+          "name": "delay",
+          "description": "Delay between updates of highlights, in tenths of sec",
+          "required": false,
+          "style": "optional",
+          "provider": "htop-delays"
+        }
+      },
+      {
+        "long": "no-mouse",
+        "short": "M",
+        "description": "disable the mouse",
+        "inherit": false
+      },
+      {
+        "long": "pid",
+        "short": "p",
+        "description": "show only the given PIDs",
+        "inherit": false,
+        "value": {
+          "name": "pid"
+        }
+      },
+      {
+        "long": "sort-key",
+        "short": "s",
+        "description": "sort by COLUMN in list view",
+        "inherit": false,
+        "value": {
+          "name": "column"
+        }
+      },
+      {
+        "long": "tree",
+        "short": "t",
+        "description": "show the tree view",
+        "inherit": false
+      },
+      {
+        "long": "user",
+        "short": "u",
+        "description": "show only processes for a given user (or $USER)",
+        "inherit": false,
+        "value": {
+          "name": "user",
+          "required": false,
+          "style": "optional",
+          "provider": "htop-user-hints"
+        }
+      },
+      {
+        "long": "no-unicode",
+        "short": "U",
+        "description": "do not use unicode but plain ASCII",
+        "inherit": false
+      },
+      {
+        "long": "version",
+        "short": "V",
+        "description": "print version info",
+        "inherit": false
+      }
+    ],
+    "providers": {
+      "htop-delays": {
+        "values": [
+          {
+            "value": "10"
+          },
+          {
+            "value": "1"
+          },
+          {
+            "value": "60"
+          }
+        ]
+      },
+      "htop-user-hints": {
+        "values": [
+          {
+            "value": "$USER"
+          }
+        ]
+      }
+    }
+  }
+}
