@@ -8351,7 +8351,7 @@ fn dynamicParameterValue(shell: anytype, name: []const u8) ?[]const u8 {
             "{}.{d:0>6}",
             .{
                 @divFloor(now_ns, std.time.ns_per_s),
-                @divFloor(@mod(now_ns, std.time.ns_per_s), std.time.ns_per_us),
+                @as(u64, @intCast(@divFloor(@mod(now_ns, std.time.ns_per_s), std.time.ns_per_us))),
             },
         ) catch null;
     }

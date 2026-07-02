@@ -84,6 +84,22 @@
             .status = 0,
         },
         .{
+            .name = "RANDOM initializes from shell start time without overflow",
+            .script =
+            \\first=$RANDOM
+            \\second=$RANDOM
+            \\if [ "$first" -ge 0 ] && [ "$first" -le 32767 ]; then printf 'first=<ok>\n'; else printf 'first=<bad:%s>\n' "$first"; fi
+            \\if [ "$second" -ge 0 ] && [ "$second" -le 32767 ]; then printf 'second=<ok>\n'; else printf 'second=<bad:%s>\n' "$second"; fi
+            ,
+            .stdout =
+            \\first=<ok>
+            \\second=<ok>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "RANDOM is a seeded dynamic parameter",
             .script =
             \\RANDOM=7
@@ -110,7 +126,7 @@
             \\SECONDS=7
             \\printf 'seconds=<%s>\n' "$SECONDS"
             \\case "$EPOCHSECONDS" in ''|*[!0123456789]*) printf 'epoch-seconds=<bad:%s>\n' "$EPOCHSECONDS" ;; *) printf 'epoch-seconds=<ok>\n' ;; esac
-            \\case "$EPOCHREALTIME" in *.*) printf 'epoch-real=<ok>\n' ;; *) printf 'epoch-real=<bad:%s>\n' "$EPOCHREALTIME" ;; esac
+            \\case "$EPOCHREALTIME" in *.[0-9][0-9][0-9][0-9][0-9][0-9]) printf 'epoch-real=<ok>\n' ;; *) printf 'epoch-real=<bad:%s>\n' "$EPOCHREALTIME" ;; esac
             ,
             .stdout =
             \\seconds=<7>

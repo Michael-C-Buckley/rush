@@ -355,7 +355,7 @@ pub const State = struct {
 
     pub fn nextRandom(self: *State) u15 {
         const modulus: u64 = 2147483647;
-        self.random_state = (self.random_state * 16807) % modulus;
+        self.random_state = ((self.random_state % modulus) * 16807) % modulus;
         if (self.random_state == 0) self.random_state = 1;
         return @intCast(self.random_state % 32768);
     }
