@@ -1,0 +1,321 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "fvm",
+    "description": "manage Flutter SDK versions",
+    "options": [
+      {
+        "short": "h",
+        "long": "help",
+        "description": "print usage information",
+        "inherit": false
+      },
+      {
+        "long": "verbose",
+        "description": "print verbose output",
+        "inherit": false
+      },
+      {
+        "long": "version",
+        "description": "current FVM version",
+        "inherit": false
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "config",
+        "description": "set configuration for FVM",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "print usage information",
+            "inherit": false
+          },
+          {
+            "short": "c",
+            "long": "cache-path",
+            "description": "set the path which FVM will cache the version. Priority over FVM_HOME",
+            "inherit": false,
+            "value": {
+              "name": "path",
+              "description": "path to the Flutter versions cache",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "short": "s",
+            "long": "skip-setup",
+            "aliases": [
+              "no-skip-setup"
+            ],
+            "description": "skip setup after a version install",
+            "inherit": false
+          },
+          {
+            "short": "g",
+            "long": "git-cache",
+            "aliases": [
+              "no-git-cache"
+            ],
+            "description": "aDVANCED: Will cache a local version of Flutter repo for faster version install",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "dart",
+        "description": "proxies Dart commands",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "print usage information",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "args",
+              "index": 0,
+              "description": "dart arguments",
+              "rest": "command-line"
+            }
+          ]
+        }
+      },
+      {
+        "name": "doctor",
+        "description": "shows information about environment, and project configuration",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "print usage information",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "flavor",
+        "description": "switches between different project flavors",
+        "arguments": {
+          "states": [
+            {
+              "name": "flavor-name",
+              "description": "the flavor to switch to",
+              "index": 0
+            }
+          ]
+        },
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "print usage information",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "flutter",
+        "description": "proxies Flutter commands",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "print usage information",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "args",
+              "index": 0,
+              "description": "flutter arguments",
+              "rest": "command-line"
+            }
+          ]
+        }
+      },
+      {
+        "name": "global",
+        "description": "sets Flutter SDK version as global",
+        "arguments": {
+          "states": [
+            {
+              "name": "version",
+              "description": "flutter SDK to set for global flutter command",
+              "index": 0
+            }
+          ]
+        },
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "print usage information",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "install",
+        "description": "installs Flutter SDK version",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "print usage information",
+            "inherit": false
+          },
+          {
+            "short": "s",
+            "long": "skip-setup",
+            "description": "skips Flutter setup after install",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "version",
+              "provider": "fvm.channels",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "list",
+        "description": "lists installed Flutter SDK versions",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "print usage information",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "releases",
+        "description": "view all Flutter SDK releases available for install",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "print usage information",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "remove",
+        "description": "removes Flutter SDK version",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "print usage information",
+            "inherit": false
+          },
+          {
+            "long": "force",
+            "description": "skips version global check",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "version",
+              "description": "the installed Flutter version to remove",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "spawn",
+        "description": "spawn a Flutter SDK version command",
+        "arguments": {
+          "states": [
+            {
+              "name": "version",
+              "description": "the Flutter version from which to spawn a command",
+              "index": 0
+            }
+          ]
+        },
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "print usage information",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "use",
+        "description": "sets a Flutter SDK version to be used in a project",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "print usage information",
+            "inherit": false
+          },
+          {
+            "short": "f",
+            "long": "force",
+            "description": "skips command guards that does Flutter project checks",
+            "inherit": false
+          },
+          {
+            "short": "p",
+            "long": "pin",
+            "description": "if version provided is a channel. Will pin the latest release of the channel",
+            "inherit": false
+          },
+          {
+            "long": "flavor",
+            "description": "sets version for a project flavor",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "version",
+              "description": "the Flutter SDK version to use",
+              "index": 0
+            }
+          ]
+        }
+      }
+    ],
+    "providers": {
+      "fvm.channels": {
+        "candidates": [
+          {
+            "value": "stable",
+            "description": "latest stable release"
+          },
+          {
+            "value": "beta",
+            "description": "latest beta release"
+          },
+          {
+            "value": "dev",
+            "description": "latest dev release"
+          }
+        ]
+      }
+    }
+  }
+}
