@@ -1,0 +1,105 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "streamlit",
+    "description": "build and run Streamlit apps",
+    "options": [
+      {
+        "long": "log_level",
+        "description": "set the log level",
+        "inherit": false,
+        "value": {
+          "name": "level",
+          "provider": {
+            "values": [
+              {
+                "value": "error"
+              },
+              {
+                "value": "warning"
+              },
+              {
+                "value": "info"
+              },
+              {
+                "value": "debug"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "long": "help",
+        "description": "show help",
+        "inherit": false
+      },
+      {
+        "long": "version",
+        "description": "show version",
+        "inherit": false
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "activate",
+        "description": "activate Streamlit"
+      },
+      {
+        "name": "cache",
+        "description": "manage the cache",
+        "subcommands": [
+          {
+            "name": "clear",
+            "description": "clear Streamlit caches"
+          }
+        ]
+      },
+      {
+        "name": "config",
+        "description": "manage config settings",
+        "subcommands": [
+          {
+            "name": "show",
+            "description": "show config settings"
+          }
+        ]
+      },
+      {
+        "name": "docs",
+        "description": "open documentation"
+      },
+      {
+        "name": "hello",
+        "description": "run the hello app"
+      },
+      {
+        "name": "help",
+        "description": "show help"
+      },
+      {
+        "name": "run",
+        "description": "run a Python script",
+        "arguments": {
+          "states": [
+            {
+              "name": "file",
+              "description": "Python script",
+              "index": 0,
+              "provider": "builtin.files"
+            }
+          ]
+        }
+      },
+      {
+        "name": "version",
+        "description": "show version"
+      }
+    ],
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
