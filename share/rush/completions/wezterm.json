@@ -1,0 +1,742 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "wezterm",
+    "description": "WezTerm terminal emulator",
+    "providers": {
+      "files": {
+        "builtin": "files"
+      },
+      "directories": {
+        "builtin": "directories"
+      },
+      "executables": {
+        "builtin": "executables"
+      },
+      "formats": {
+        "values": [
+          "table",
+          "json"
+        ]
+      },
+      "shells": {
+        "values": [
+          "bash",
+          "elvish",
+          "fish",
+          "power-shell",
+          "zsh",
+          "fig"
+        ]
+      }
+    },
+    "options": [
+      {
+        "long": "config-file",
+        "description": "use configuration file",
+        "value": {
+          "name": "file",
+          "provider": "files"
+        }
+      },
+      {
+        "long": "config",
+        "description": "override configuration value",
+        "value": {
+          "name": "name=value"
+        },
+        "repeatable": true
+      },
+      {
+        "long": "help",
+        "short": "h",
+        "description": "print help"
+      },
+      {
+        "long": "version",
+        "short": "V",
+        "description": "print version"
+      },
+      {
+        "short": "n",
+        "description": "skip loading wezterm.lua"
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "start",
+        "description": "start GUI",
+        "options": [
+          {
+            "long": "cwd",
+            "description": "set working directory",
+            "value": {
+              "name": "directory",
+              "provider": "directories"
+            }
+          },
+          {
+            "long": "class",
+            "description": "override window class",
+            "value": {
+              "name": "class"
+            }
+          },
+          {
+            "long": "workspace",
+            "description": "set workspace",
+            "value": {
+              "name": "workspace"
+            }
+          },
+          {
+            "long": "position",
+            "description": "set window position",
+            "value": {
+              "name": "position"
+            }
+          },
+          {
+            "long": "no-auto-connect",
+            "description": "do not auto-connect domains"
+          },
+          {
+            "long": "always-new-process",
+            "description": "always start a new GUI process"
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "print help"
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "prog",
+              "provider": "executables",
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "ssh",
+        "description": "establish SSH session",
+        "options": [
+          {
+            "long": "ssh-option",
+            "short": "o",
+            "description": "override SSH option",
+            "value": {
+              "name": "name=value"
+            },
+            "repeatable": true
+          },
+          {
+            "long": "class",
+            "description": "override window class",
+            "value": {
+              "name": "class"
+            }
+          },
+          {
+            "long": "position",
+            "description": "override initial window position",
+            "value": {
+              "name": "position"
+            }
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "print help"
+          },
+          {
+            "short": "v",
+            "description": "enable verbose SSH tracing"
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "user-at-host-and-port"
+            },
+            {
+              "name": "prog",
+              "provider": "executables",
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "serial",
+        "description": "open serial port",
+        "options": [
+          {
+            "long": "baud",
+            "description": "set baud rate",
+            "value": {
+              "name": "baud"
+            }
+          },
+          {
+            "long": "class",
+            "description": "override window class",
+            "value": {
+              "name": "class"
+            }
+          },
+          {
+            "long": "position",
+            "description": "override initial window position",
+            "value": {
+              "name": "position"
+            }
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "print help"
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "port"
+            }
+          ]
+        }
+      },
+      {
+        "name": "connect",
+        "description": "connect to multiplexer",
+        "options": [
+          {
+            "long": "class",
+            "description": "override window class",
+            "value": {
+              "name": "class"
+            }
+          },
+          {
+            "long": "workspace",
+            "description": "set workspace",
+            "value": {
+              "name": "workspace"
+            }
+          },
+          {
+            "long": "position",
+            "description": "set position",
+            "value": {
+              "name": "position"
+            }
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "print help"
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "domain-name"
+            },
+            {
+              "name": "prog",
+              "provider": "executables",
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "ls-fonts",
+        "description": "display font information",
+        "options": [
+          {
+            "long": "text",
+            "description": "explain fonts for text",
+            "value": {
+              "name": "text"
+            }
+          },
+          {
+            "long": "list-system",
+            "description": "list system fonts"
+          },
+          {
+            "long": "rasterize-ascii",
+            "description": "show rasterized glyphs"
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "print help"
+          }
+        ]
+      },
+      {
+        "name": "show-keys",
+        "description": "show key assignments",
+        "options": [
+          {
+            "long": "key-table",
+            "description": "show key table",
+            "value": {
+              "name": "key-table"
+            }
+          },
+          {
+            "long": "lua",
+            "description": "show Lua config"
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "print help"
+          }
+        ]
+      },
+      {
+        "name": "cli",
+        "description": "interact with mux server",
+        "options": [
+          {
+            "long": "class",
+            "description": "select GUI class",
+            "value": {
+              "name": "class"
+            }
+          },
+          {
+            "long": "no-auto-start",
+            "description": "do not auto-start server"
+          },
+          {
+            "long": "prefer-mux",
+            "description": "prefer mux server"
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "print help"
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "list",
+            "description": "list windows, tabs, and panes",
+            "options": [
+              {
+                "long": "format",
+                "description": "set output format",
+                "value": {
+                  "name": "format",
+                  "provider": "formats"
+                }
+              },
+              {
+                "long": "help",
+                "short": "h",
+                "description": "print help"
+              }
+            ]
+          },
+          {
+            "name": "list-clients",
+            "description": "list clients",
+            "options": [
+              {
+                "long": "format",
+                "description": "set output format",
+                "value": {
+                  "name": "format",
+                  "provider": "formats"
+                }
+              },
+              {
+                "long": "help",
+                "short": "h",
+                "description": "print help"
+              }
+            ]
+          },
+          {
+            "name": "proxy",
+            "description": "start RPC proxy pipe",
+            "options": [
+              {
+                "long": "help",
+                "short": "h",
+                "description": "print help"
+              }
+            ]
+          },
+          {
+            "name": "tlscreds",
+            "description": "obtain TLS credentials",
+            "options": [
+              {
+                "long": "help",
+                "short": "h",
+                "description": "print help"
+              }
+            ]
+          },
+          {
+            "name": "move-pane-to-new-tab",
+            "description": "move pane into a new tab",
+            "options": [
+              {
+                "long": "pane-id",
+                "description": "select pane",
+                "value": {
+                  "name": "pane-id"
+                }
+              },
+              {
+                "long": "window-id",
+                "description": "select window",
+                "value": {
+                  "name": "window-id"
+                }
+              },
+              {
+                "long": "workspace",
+                "description": "set workspace",
+                "value": {
+                  "name": "workspace"
+                }
+              },
+              {
+                "long": "new-window",
+                "description": "create tab in a new window"
+              },
+              {
+                "long": "help",
+                "short": "h",
+                "description": "print help"
+              }
+            ]
+          },
+          {
+            "name": "split-pane",
+            "description": "split current pane",
+            "options": [
+              {
+                "long": "pane-id",
+                "description": "select pane",
+                "value": {
+                  "name": "pane-id"
+                }
+              },
+              {
+                "long": "cells",
+                "description": "set cell count",
+                "value": {
+                  "name": "cells"
+                }
+              },
+              {
+                "long": "percent",
+                "description": "set split percentage",
+                "value": {
+                  "name": "percent"
+                }
+              },
+              {
+                "long": "cwd",
+                "description": "set working directory",
+                "value": {
+                  "name": "directory",
+                  "provider": "directories"
+                }
+              },
+              {
+                "long": "move-pane-id",
+                "description": "move existing pane",
+                "value": {
+                  "name": "pane-id"
+                }
+              },
+              {
+                "long": "horizontal",
+                "description": "split horizontally"
+              },
+              {
+                "long": "left",
+                "description": "split left"
+              },
+              {
+                "long": "right",
+                "description": "split right"
+              },
+              {
+                "long": "top",
+                "description": "split top"
+              },
+              {
+                "long": "bottom",
+                "description": "split bottom"
+              },
+              {
+                "long": "top-level",
+                "description": "split entire window"
+              },
+              {
+                "long": "help",
+                "short": "h",
+                "description": "print help"
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "prog",
+                  "provider": "executables",
+                  "repeatable": true
+                }
+              ]
+            }
+          },
+          {
+            "name": "spawn",
+            "description": "spawn command in new tab or window",
+            "options": [
+              {
+                "long": "pane-id",
+                "description": "select pane",
+                "value": {
+                  "name": "pane-id"
+                }
+              },
+              {
+                "long": "domain-name",
+                "description": "set domain",
+                "value": {
+                  "name": "domain"
+                }
+              },
+              {
+                "long": "window-id",
+                "description": "select window",
+                "value": {
+                  "name": "window-id"
+                }
+              },
+              {
+                "long": "cwd",
+                "description": "set working directory",
+                "value": {
+                  "name": "directory",
+                  "provider": "directories"
+                }
+              },
+              {
+                "long": "workspace",
+                "description": "set workspace",
+                "value": {
+                  "name": "workspace"
+                }
+              },
+              {
+                "long": "new-window",
+                "description": "spawn in new window"
+              },
+              {
+                "long": "help",
+                "short": "h",
+                "description": "print help"
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "prog",
+                  "provider": "executables",
+                  "repeatable": true
+                }
+              ]
+            }
+          },
+          {
+            "name": "send-text",
+            "description": "send text to pane",
+            "options": [
+              {
+                "long": "pane-id",
+                "description": "select pane",
+                "value": {
+                  "name": "pane-id"
+                }
+              },
+              {
+                "long": "no-paste",
+                "description": "send text directly"
+              },
+              {
+                "long": "help",
+                "short": "h",
+                "description": "print help"
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "text"
+                }
+              ]
+            }
+          },
+          {
+            "name": "help",
+            "description": "show CLI help",
+            "arguments": {
+              "states": [
+                {
+                  "name": "subcommand"
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "imgcat",
+        "description": "output image to terminal",
+        "options": [
+          {
+            "long": "width",
+            "description": "set display width",
+            "value": {
+              "name": "width"
+            }
+          },
+          {
+            "long": "height",
+            "description": "set display height",
+            "value": {
+              "name": "height"
+            }
+          },
+          {
+            "long": "no-preserve-aspect-ratio",
+            "description": "ignore aspect ratio"
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "print help"
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "file",
+              "provider": "files"
+            }
+          ]
+        }
+      },
+      {
+        "name": "set-working-directory",
+        "description": "emit current working directory escape sequence",
+        "options": [
+          {
+            "long": "help",
+            "short": "h",
+            "description": "print help"
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "cwd",
+              "provider": "directories"
+            },
+            {
+              "name": "host"
+            }
+          ]
+        }
+      },
+      {
+        "name": "record",
+        "description": "record terminal session",
+        "options": [
+          {
+            "long": "help",
+            "short": "h",
+            "description": "print help"
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "prog",
+              "provider": "executables"
+            }
+          ]
+        }
+      },
+      {
+        "name": "replay",
+        "description": "replay asciicast",
+        "options": [
+          {
+            "long": "explain",
+            "description": "explain replay data"
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "print help"
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "cast-file",
+              "provider": "files"
+            }
+          ]
+        }
+      },
+      {
+        "name": "shell-completion",
+        "description": "generate shell completion",
+        "options": [
+          {
+            "long": "shell",
+            "description": "select shell",
+            "value": {
+              "name": "shell",
+              "provider": "shells"
+            }
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "print help"
+          }
+        ]
+      },
+      {
+        "name": "help",
+        "description": "show help",
+        "arguments": {
+          "states": [
+            {
+              "name": "subcommand"
+            }
+          ]
+        }
+      }
+    ]
+  }
+}
