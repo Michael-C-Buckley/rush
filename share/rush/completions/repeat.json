@@ -1,0 +1,16 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "repeat",
+    "description": "repeat a command multiple times",
+    "arguments": {
+      "states": [
+        {
+          "name": "command",
+          "rest": "command-line"
+        }
+      ]
+    }
+  }
+}
