@@ -1,0 +1,23 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "then",
+    "description": "execute command after successful test",
+    "arguments": {
+      "states": [
+        {
+          "name": "command",
+          "provider": "builtin.executables",
+          "index": 0,
+          "description": "command to run"
+        }
+      ]
+    },
+    "providers": {
+      "builtin.executables": {
+        "builtin": "executables"
+      }
+    }
+  }
+}
