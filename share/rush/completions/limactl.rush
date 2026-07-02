@@ -1,0 +1,6 @@
+__rush_complete_limactl_instances() {
+  limactl list --quiet 2>/dev/null | while IFS= read -r instance; do
+    test -n "$instance" || continue
+    rush_complete candidate "$instance" --kind plain --description "Lima instance"
+  done
+}

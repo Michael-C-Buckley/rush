@@ -1,0 +1,527 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "limactl",
+    "description": "control Lima virtual machines",
+    "options": [
+      {
+        "short": "h",
+        "long": "help",
+        "description": "show help",
+        "inherit": false
+      },
+      {
+        "long": "debug",
+        "description": "enable debug mode",
+        "inherit": false
+      },
+      {
+        "short": "v",
+        "long": "version",
+        "description": "show version",
+        "inherit": false
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "completion",
+        "description": "generate the autocompletion script for the specified shell",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          },
+          {
+            "long": "debug",
+            "description": "enable debug mode",
+            "inherit": false
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "bash",
+            "description": "generate bash completion script",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              },
+              {
+                "long": "debug",
+                "description": "enable debug mode",
+                "inherit": false
+              },
+              {
+                "long": "no-descriptions",
+                "description": "disable completion descriptions",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "fish",
+            "description": "generate fish completion script",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              },
+              {
+                "long": "debug",
+                "description": "enable debug mode",
+                "inherit": false
+              },
+              {
+                "long": "no-descriptions",
+                "description": "disable completion descriptions",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "powershell",
+            "description": "generate powershell completion script",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              },
+              {
+                "long": "debug",
+                "description": "enable debug mode",
+                "inherit": false
+              },
+              {
+                "long": "no-descriptions",
+                "description": "disable completion descriptions",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "zsh",
+            "description": "generate zsh completion script",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              },
+              {
+                "long": "debug",
+                "description": "enable debug mode",
+                "inherit": false
+              },
+              {
+                "long": "no-descriptions",
+                "description": "disable completion descriptions",
+                "inherit": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "copy",
+        "aliases": [
+          "cp"
+        ],
+        "description": "copy files between host and guest",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          },
+          {
+            "long": "debug",
+            "description": "enable debug mode",
+            "inherit": false
+          },
+          {
+            "short": "r",
+            "long": "recursive",
+            "description": "copy directories recursively",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "source",
+              "index": 0,
+              "repeatable": true,
+              "description": "source path or instance",
+              "provider": {
+                "function": "__rush_complete_limactl_instances"
+              }
+            },
+            {
+              "name": "target",
+              "index": 1,
+              "description": "target path or instance",
+              "provider": "builtin.files"
+            }
+          ]
+        }
+      },
+      {
+        "name": "delete",
+        "aliases": [
+          "remove",
+          "rm"
+        ],
+        "description": "delete an instance of Lima",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          },
+          {
+            "long": "debug",
+            "description": "enable debug mode",
+            "inherit": false
+          },
+          {
+            "short": "f",
+            "long": "force",
+            "description": "forcibly kill the processes",
+            "priority": -10,
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "instance",
+              "index": 0,
+              "repeatable": true,
+              "description": "Lima instance",
+              "provider": {
+                "function": "__rush_complete_limactl_instances"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "info",
+        "description": "show diagnostic information",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          },
+          {
+            "long": "debug",
+            "description": "enable debug mode",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "list",
+        "aliases": [
+          "ls"
+        ],
+        "description": "list instances of Lima",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          },
+          {
+            "long": "debug",
+            "description": "enable debug mode",
+            "inherit": false
+          },
+          {
+            "long": "json",
+            "description": "show JSON output",
+            "inherit": false
+          },
+          {
+            "short": "q",
+            "long": "quiet",
+            "description": "only show names",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "prune",
+        "description": "prune garbage objects",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          },
+          {
+            "long": "debug",
+            "description": "enable debug mode",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "shell",
+        "description": "lima command is provided as an alias for limactl shell $LIMA_INSTANCE. $LIMA_INSTANCE defaults to \"default\"",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          },
+          {
+            "long": "debug",
+            "description": "enable debug mode",
+            "inherit": false
+          },
+          {
+            "long": "workdir",
+            "description": "working directory",
+            "inherit": false,
+            "value": {
+              "name": "string"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "instance",
+              "index": 0,
+              "description": "Lima instance",
+              "provider": {
+                "function": "__rush_complete_limactl_instances"
+              }
+            },
+            {
+              "name": "command",
+              "provider": "builtin.executables",
+              "index": 1,
+              "repeatable": true,
+              "description": "command to run",
+              "required": false
+            }
+          ]
+        }
+      },
+      {
+        "name": "show-ssh",
+        "description": "show the ssh command line",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          },
+          {
+            "long": "debug",
+            "description": "enable debug mode",
+            "inherit": false
+          },
+          {
+            "short": "f",
+            "long": "format",
+            "description": "format: cmd, args, options, config (default \"cmd\")",
+            "inherit": false,
+            "value": {
+              "name": "string",
+              "provider": {
+                "values": [
+                  {
+                    "value": "cmd",
+                    "description": "Full ssh command line"
+                  },
+                  {
+                    "value": "args",
+                    "description": "Similar to the cmd format but omits \"ssh\" and the destination address"
+                  },
+                  {
+                    "value": "options",
+                    "description": "Ssh option key value pairs"
+                  },
+                  {
+                    "value": "config",
+                    "description": "~/.ssh/config format"
+                  }
+                ]
+              }
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "instance",
+              "index": 0,
+              "description": "Lima instance",
+              "provider": {
+                "function": "__rush_complete_limactl_instances"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "start",
+        "description": "start an instance of Lima. If the instance does not exist, open an editor for creating new one, with name \"default\"",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          },
+          {
+            "long": "debug",
+            "description": "enable debug mode",
+            "inherit": false
+          },
+          {
+            "long": "tty",
+            "description": "enable TUI interactions such as opening an editor, defaults to true when stdout is a terminal (default true)",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "name-or-file",
+              "index": 0,
+              "description": "instance name, YAML file, or URL",
+              "provider": "builtin.files"
+            }
+          ]
+        }
+      },
+      {
+        "name": "stop",
+        "description": "stop an instance",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          },
+          {
+            "long": "debug",
+            "description": "enable debug mode",
+            "inherit": false
+          },
+          {
+            "short": "f",
+            "long": "force",
+            "description": "force stop the instance",
+            "priority": -10,
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "instance",
+              "index": 0,
+              "description": "Lima instance",
+              "provider": {
+                "function": "__rush_complete_limactl_instances"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "sudoers",
+        "description": "generate /etc/sudoers.d/lima file for enabling vmnet.framework support. See /usr/local/share/doc/lima/docs/network.md for the usage",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          },
+          {
+            "long": "debug",
+            "description": "enable debug mode",
+            "inherit": false
+          },
+          {
+            "long": "check",
+            "description": "check that the sudoers file is up-to-date with \"~/.lima/_config/networks.yaml\"",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "sudoers-file",
+              "provider": "builtin.files",
+              "index": 0,
+              "description": "sudoers file",
+              "required": false
+            }
+          ]
+        }
+      },
+      {
+        "name": "validate",
+        "description": "validate YAML files",
+        "arguments": {
+          "states": [
+            {
+              "name": "yaml-file",
+              "index": 0,
+              "repeatable": true,
+              "description": "YAML file",
+              "provider": "builtin.files"
+            }
+          ]
+        },
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          },
+          {
+            "long": "debug",
+            "description": "enable debug mode",
+            "inherit": false
+          }
+        ]
+      }
+    ],
+    "providers": {
+      "builtin.executables": {
+        "builtin": "executables"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
