@@ -173,6 +173,46 @@
             .status = 0,
         },
         .{
+            .name = "command not found suggests close builtin names",
+            .script =
+            \\PATH=/nonexistent pritnf
+            ,
+            .stdout = "",
+            .stderr =
+            \\pritnf: not found; did you mean: printf?
+            \\
+            ,
+            .status = 127,
+        },
+        .{
+            .name = "command not found suggests close function and PATH names",
+            .script =
+            \\mkdir d
+            \\printf '%s\n' '#!/bin/sh' 'printf external\n' >d/git
+            \\chmod 755 d/git
+            \\gta() { :; }
+            \\PATH=./d gti
+            ,
+            .stdout = "",
+            .stderr =
+            \\gti: not found; did you mean: gta, git?
+            \\
+            ,
+            .status = 127,
+        },
+        .{
+            .name = "slash command names do not get did-you-mean suggestions",
+            .script =
+            \\PATH=/nonexistent ./pritnf
+            ,
+            .stdout = "",
+            .stderr =
+            \\./pritnf: not found
+            \\
+            ,
+            .status = 127,
+        },
+        .{
             .name = "temporary assignments before regular built-ins do not persist",
             .script =
             \\x=outer

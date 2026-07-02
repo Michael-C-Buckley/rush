@@ -17,6 +17,8 @@ const token_mod = @import("token.zig");
 pub const EvalError = anyerror;
 const CopyError = std.mem.Allocator.Error;
 const CommandLookupMode = enum { none, terse, verbose };
+const command_suggestion_limit = 2;
+const command_suggestion_max_distance = 2;
 const job_control_signals = [_]u8{
     builtin.signalNumber("TSTP").?,
     builtin.signalNumber("TTIN").?,
@@ -2123,8 +2125,7 @@ fn evalEnvBuiltin(shell: anytype, args: []const []const u8, assignments: []const
     // ziglint-ignore: Z024 preserve existing readable expression shape; lint-only cleanup
     const search_path = envEntriesPath(env_entries) orelse if (shell.state.getVariable("PATH")) |variable| variable.value else envPath(shell.env) orelse defaultUtilityPath();
     const command_path = try findCommandPath(shell, fields[0], search_path) orelse {
-        // ziglint-ignore: Z024 preserve existing readable expression shape; lint-only cleanup
-        try shell.host.writeAll(.stderr, try std.fmt.allocPrint(shell.scratchAllocator(), "{s}: not found\n", .{fields[0]}));
+        try writeCommandNotFoundDiagnostic(shell, fields[0], search_path);
         return .{ .status = 127 };
     };
     const argv = try makeExecArgv(shell, fields);
@@ -5677,8 +5678,7 @@ fn evalExternalWithSearchPath(
         return .{ .status = 126 };
     }
     const command_path = try findCommandPath(shell, fields[0], search_path) orelse {
-        // ziglint-ignore: Z024 preserve existing readable expression shape; lint-only cleanup
-        try shell.host.writeAll(.stderr, try std.fmt.allocPrint(shell.scratchAllocator(), "{s}: not found\n", .{fields[0]}));
+        try writeCommandNotFoundDiagnostic(shell, fields[0], search_path);
         restoreVariables(shell, saved);
         restored_assignments = true;
         return .{ .status = 127 };
@@ -5730,6 +5730,207 @@ fn externalCommandText(shell: anytype, fields: []const []const u8) ![]const u8 {
     }
     return output.toOwnedSlice(allocator);
 }
+
+fn writeCommandNotFoundDiagnostic(shell: anytype, command: []const u8, search_path: ?[]const u8) !void {
+    var suggestions = CommandSuggestions{};
+    defer suggestions.deinit(shell.scratchAllocator());
+    try collectCommandSuggestions(shell, command, search_path, &suggestions);
+    if (suggestions.count == 0) {
+        try shell.host.writeAll(.stderr, try std.fmt.allocPrint(shell.scratchAllocator(), "{s}: not found\n", .{command}));
+        return;
+    }
+
+    var message: std.ArrayList(u8) = .empty;
+    const allocator = shell.scratchAllocator();
+    const prefix = try std.fmt.allocPrint(allocator, "{s}: not found; did you mean: ", .{command});
+    try message.appendSlice(allocator, prefix);
+    for (suggestions.items[0..suggestions.count], 0..) |suggestion, index| {
+        if (index != 0) try message.appendSlice(allocator, ", ");
+        try message.appendSlice(allocator, suggestion.name);
+    }
+    try message.appendSlice(allocator, "?\n");
+    try shell.host.writeAll(.stderr, message.items);
+}
+
+fn collectCommandSuggestions(
+    shell: anytype,
+    command: []const u8,
+    search_path: ?[]const u8,
+    suggestions: *CommandSuggestions,
+) !void {
+    if (std.mem.indexOfScalar(u8, command, '/') != null) return;
+
+    var distance: EditDistance = .{};
+    const allocator = shell.scratchAllocator();
+    defer distance.deinit(allocator);
+
+    const core_builtin_names = builtin.core_definitions.kvs.keys[0..builtin.core_definitions.kvs.len];
+    for (core_builtin_names) |name| {
+        if (lookupBuiltin(shell, name) == null) continue;
+        try suggestions.consider(allocator, &distance, command, name);
+    }
+
+    var function_iterator = shell.state.functions.iterator();
+    while (function_iterator.next()) |entry| {
+        const name = entry.key_ptr.*;
+        if (shell.state.isFunctionAutoloadSuppressed(name)) continue;
+        try suggestions.consider(allocator, &distance, command, name);
+    }
+
+    try collectAbbreviationSuggestions(shell, allocator, &distance, command, suggestions);
+    try collectPathCommandSuggestions(shell, allocator, &distance, command, search_path, suggestions);
+}
+
+fn collectAbbreviationSuggestions(
+    shell: anytype,
+    allocator: std.mem.Allocator,
+    distance: *EditDistance,
+    command: []const u8,
+    suggestions: *CommandSuggestions,
+) !void {
+    const ExtensionState = @TypeOf(shell.extensions);
+    if (comptime !@hasField(ExtensionState, "abbreviations")) return;
+
+    var iterator = shell.extensions.abbreviations.iterator();
+    while (iterator.next()) |entry| try suggestions.consider(allocator, distance, command, entry.key_ptr.*);
+}
+
+fn collectPathCommandSuggestions(
+    shell: anytype,
+    allocator: std.mem.Allocator,
+    distance: *EditDistance,
+    command: []const u8,
+    search_path: ?[]const u8,
+    suggestions: *CommandSuggestions,
+) !void {
+    const HostType = switch (@typeInfo(@TypeOf(shell.host))) {
+        .pointer => |pointer| pointer.child,
+        else => @TypeOf(shell.host),
+    };
+    if (comptime !@hasDecl(HostType, "listDir") or !@hasDecl(HostType, "fileAccessZ")) return;
+
+    // ziglint-ignore: Z024 preserve existing readable expression shape; lint-only cleanup
+    const path = search_path orelse if (shell.state.getVariable("PATH")) |variable| variable.value else envPath(shell.env) orelse defaultUtilityPath();
+    var candidate_buffer: std.ArrayList(u8) = .empty;
+    defer candidate_buffer.deinit(allocator);
+    var iterator = std.mem.splitScalar(u8, path, ':');
+    while (iterator.next()) |raw_directory| {
+        const directory = if (raw_directory.len == 0) "." else raw_directory;
+        var entries = shell.host.listDir(allocator, directory) catch continue;
+        defer entries.deinit();
+
+        for (entries.entries) |entry| {
+            if (entry.name.len == 0 or entry.name[0] == '.') continue;
+            if (entry.kind == .directory) continue;
+            candidate_buffer.clearRetainingCapacity();
+            try candidate_buffer.appendSlice(allocator, directory);
+            if (!std.mem.endsWith(u8, directory, "/")) try candidate_buffer.append(allocator, '/');
+            try candidate_buffer.appendSlice(allocator, entry.name);
+            try candidate_buffer.append(allocator, 0);
+            const candidate = candidate_buffer.items[0 .. candidate_buffer.items.len - 1 :0];
+            if (!shell.host.fileAccessZ(candidate, .execute)) continue;
+            try suggestions.consider(allocator, distance, command, entry.name);
+        }
+    }
+}
+
+const CommandSuggestion = struct {
+    name: []const u8,
+    distance: usize,
+};
+
+const CommandSuggestions = struct {
+    items: [command_suggestion_limit]CommandSuggestion = undefined,
+    count: usize = 0,
+
+    fn deinit(self: *CommandSuggestions, allocator: std.mem.Allocator) void {
+        for (self.items[0..self.count]) |item| allocator.free(item.name);
+        self.* = undefined;
+    }
+
+    fn consider(
+        self: *CommandSuggestions,
+        allocator: std.mem.Allocator,
+        distance: *EditDistance,
+        command: []const u8,
+        candidate: []const u8,
+    ) !void {
+        if (candidate.len == 0) return;
+        if (self.contains(candidate)) return;
+        const candidate_distance = try distance.atMost(allocator, command, candidate, command_suggestion_max_distance) orelse return;
+        const suggestion: CommandSuggestion = .{
+            .name = try allocator.dupe(u8, candidate),
+            .distance = candidate_distance,
+        };
+
+        var insert_index: usize = 0;
+        while (insert_index < self.count and suggestionAfter(self.items[insert_index], suggestion)) : (insert_index += 1) {}
+        if (insert_index >= command_suggestion_limit) {
+            allocator.free(suggestion.name);
+            return;
+        }
+
+        if (self.count < command_suggestion_limit) {
+            self.count += 1;
+        } else {
+            allocator.free(self.items[self.count - 1].name);
+        }
+        var index = self.count - 1;
+        while (index > insert_index) : (index -= 1) self.items[index] = self.items[index - 1];
+        self.items[insert_index] = suggestion;
+    }
+
+    fn contains(self: CommandSuggestions, name: []const u8) bool {
+        for (self.items[0..self.count]) |item| if (std.mem.eql(u8, item.name, name)) return true;
+        return false;
+    }
+};
+
+fn suggestionAfter(existing: CommandSuggestion, candidate: CommandSuggestion) bool {
+    if (existing.distance != candidate.distance) return existing.distance < candidate.distance;
+    if (existing.name.len != candidate.name.len) return existing.name.len < candidate.name.len;
+    return std.mem.lessThan(u8, existing.name, candidate.name);
+}
+
+const EditDistance = struct {
+    previous: std.ArrayList(usize) = .empty,
+    current: std.ArrayList(usize) = .empty,
+
+    fn deinit(self: *EditDistance, allocator: std.mem.Allocator) void {
+        self.previous.deinit(allocator);
+        self.current.deinit(allocator);
+        self.* = undefined;
+    }
+
+    fn atMost(self: *EditDistance, allocator: std.mem.Allocator, a: []const u8, b: []const u8, max: usize) !?usize {
+        const length_delta = if (a.len > b.len) a.len - b.len else b.len - a.len;
+        if (length_delta > max) return null;
+
+        try self.previous.resize(allocator, b.len + 1);
+        try self.current.resize(allocator, b.len + 1);
+        for (self.previous.items, 0..) |*cell, index| cell.* = index;
+
+        for (a, 0..) |a_byte, a_index| {
+            self.current.items[0] = a_index + 1;
+            var row_min = self.current.items[0];
+            for (b, 0..) |b_byte, b_index| {
+                const column = b_index + 1;
+                const substitution_cost: usize = if (a_byte == b_byte) 0 else 1;
+                const insertion = self.current.items[column - 1] + 1;
+                const deletion = self.previous.items[column] + 1;
+                const substitution = self.previous.items[column - 1] + substitution_cost;
+                const value = @min(@min(insertion, deletion), substitution);
+                self.current.items[column] = value;
+                row_min = @min(row_min, value);
+            }
+            if (row_min > max) return null;
+            std.mem.swap(std.ArrayList(usize), &self.previous, &self.current);
+        }
+
+        const final_distance = self.previous.items[b.len];
+        return if (final_distance <= max) final_distance else null;
+    }
+};
 
 fn commandFoundButNotExecutable(shell: anytype, command: []const u8, search_path: ?[]const u8) !bool {
     const allocator = shell.scratchAllocator();
@@ -6009,4 +6210,30 @@ fn envValue(env: []const [*:0]const u8, name: []const u8) ?[]const u8 {
         if (std.mem.eql(u8, text[0..equals], name)) return text[equals + 1 ..];
     }
     return null;
+}
+
+test "bounded edit distance returns distances within cutoff" {
+    var distance: EditDistance = .{};
+    defer distance.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(?usize, 0), try distance.atMost(std.testing.allocator, "printf", "printf", 2));
+    try std.testing.expectEqual(@as(?usize, 1), try distance.atMost(std.testing.allocator, "prinf", "printf", 2));
+    try std.testing.expectEqual(@as(?usize, 2), try distance.atMost(std.testing.allocator, "pritnf", "printf", 2));
+    try std.testing.expectEqual(@as(?usize, null), try distance.atMost(std.testing.allocator, "abcdef", "printf", 2));
+}
+
+test "command suggestions keep the two nearest stable candidates" {
+    var distance: EditDistance = .{};
+    defer distance.deinit(std.testing.allocator);
+    var suggestions = CommandSuggestions{};
+    defer suggestions.deinit(std.testing.allocator);
+
+    try suggestions.consider(std.testing.allocator, &distance, "gti", "gta");
+    try suggestions.consider(std.testing.allocator, &distance, "gti", "git");
+    try suggestions.consider(std.testing.allocator, &distance, "gti", "gt");
+    try suggestions.consider(std.testing.allocator, &distance, "gti", "gtiiiii");
+
+    try std.testing.expectEqual(@as(usize, 2), suggestions.count);
+    try std.testing.expectEqualStrings("gt", suggestions.items[0].name);
+    try std.testing.expectEqualStrings("gta", suggestions.items[1].name);
 }
