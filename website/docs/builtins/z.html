@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>rush z builtin</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header class="site-header">
+    <div><a href="../../index.html">rush</a></div>
+    <nav class="site-nav" aria-label="Primary">
+      <a href="../index.html">docs</a>
+      <a href="https://github.com/rockorager/rush">source</a>
+    </nav>
+  </header>
+
+  <h1 id="z"><a href="#z">Z(1)</a></h1>
+
+  <h2 id="name"><a href="#name">NAME</a></h2>
+
+  <p>z - jump to frecent directories using zoxide-style history matching.</p>
+
+  <h2 id="synopsis"><a href="#synopsis">SYNOPSIS</a></h2>
+
+  <pre><span class="cmd">z</span> [<span class="var">keyword</span> ...]
+<span class="cmd">z</span> <span class="opt">-</span>
+<span class="cmd">z</span> <span class="opt">--</span> <span class="var">directory</span></pre>
+
+  <h2 id="description"><a href="#description">DESCRIPTION</a></h2>
+
+  <p><code>z</code> is a Rush-specific regular builtin. It changes the current working directory using zoxide-style matching over Rush command history. It is not available in POSIX mode; use <code>cd</code> for portable directory changes.</p>
+
+  <p>With no arguments, <code>z</code> changes to <code>$HOME</code>. <code>z -</code> changes to <code>$OLDPWD</code>. If a single argument names an existing directory, <code>z</code> changes to it directly instead of querying history. <code>z -- directory</code> also changes directly to <code>directory</code>.</p>
+
+  <p>Otherwise, arguments are treated as query keywords. Rush searches directories recorded in command history, excluding the current directory, and chooses the highest frecency match.</p>
+
+  <h2 id="matching"><a href="#matching">MATCHING</a></h2>
+
+  <p>Keyword matching mirrors zoxide's non-interactive query behavior:</p>
+
+  <ul>
+    <li>matching is case-insensitive;</li>
+    <li>keywords must appear in order, matched right-to-left;</li>
+    <li>the final keyword must match within the final path component;</li>
+    <li>overlapping keyword matches are rejected.</li>
+  </ul>
+
+  <p>For example, <code>z ba</code> can match <code>/foo/bar</code>, but <code>z fo</code> does not match <code>/foo/bar</code> because <code>fo</code> is not in the final path component.</p>
+
+  <h2 id="ranking"><a href="#ranking">RANKING</a></h2>
+
+  <p>Rush derives zoxide-style frecency from command history. A directory's rank is the number of commands recorded from that directory, and its last access time is the newest recorded command time for that directory.</p>
+
+  <p>The frecency score is <code>rank</code> multiplied by an age factor:</p>
+
+  <dl>
+    <dt>less than 1 hour old</dt><dd><code>rank * 4.0</code></dd>
+    <dt>less than 1 day old</dt><dd><code>rank * 2.0</code></dd>
+    <dt>less than 1 week old</dt><dd><code>rank * 0.5</code></dd>
+    <dt>1 week old or older</dt><dd><code>rank * 0.25</code></dd>
+  </dl>
+
+  <h2 id="exit-status"><a href="#exit-status">EXIT STATUS</a></h2>
+
+  <p><code>z</code> returns zero after a successful directory change. It returns non-zero when no match is found, required state such as <code>$HOME</code> or <code>$OLDPWD</code> is missing, or the selected directory cannot be entered.</p>
+
+  <h2 id="see-also"><a href="#see-also">SEE ALSO</a></h2>
+
+  <p><a href="index.html">rush-builtins(7)</a>, <a href="cd.html">cd(1)</a>, zoxide.</p>
+
+</body>
+</html>
