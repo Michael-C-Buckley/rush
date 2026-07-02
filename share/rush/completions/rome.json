@@ -1,0 +1,423 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "rome",
+    "description": "use the Rome CLI",
+    "options": [
+      {
+        "long": "colors",
+        "description": "set the formatting mode for markup",
+        "inherit": false,
+        "value": {
+          "name": "mode",
+          "provider": {
+            "values": [
+              "off",
+              "force"
+            ]
+          }
+        }
+      },
+      {
+        "long": "use-server",
+        "description": "connect to a running instance of the Rome daemon server",
+        "inherit": false
+      },
+      {
+        "long": "version",
+        "description": "show the Rome version information and quit",
+        "inherit": false
+      },
+      {
+        "long": "files-max-size",
+        "description": "the maximum allowed size for source code files in bytes",
+        "inherit": false,
+        "value": {
+          "name": "bytes"
+        }
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "check",
+        "description": "run the linter on a set of files",
+        "options": [
+          {
+            "long": "apply",
+            "description": "apply safe fixes",
+            "inherit": false
+          },
+          {
+            "long": "apply-unsafe",
+            "description": "apply safe and unsafe fixes",
+            "inherit": false
+          },
+          {
+            "long": "max-diagnostics",
+            "description": "cap the amount of diagnostics displayed",
+            "inherit": false,
+            "value": {
+              "name": "number"
+            }
+          },
+          {
+            "long": "config-path",
+            "description": "set the filesystem path to the config dir of the rome.json file",
+            "inherit": false,
+            "value": {
+              "name": "dir",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "verbose",
+            "description": "print additional verbose advices on diagnostics",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "provider": [
+                "builtin.files",
+                "builtin.directories"
+              ],
+              "index": 0,
+              "repeatable": true,
+              "description": "file or directory"
+            }
+          ]
+        }
+      },
+      {
+        "name": "ci",
+        "description": "run the linter and formatter check on a set of files",
+        "options": [
+          {
+            "long": "formatter-enabled",
+            "description": "allow to enable or disable the formatter check",
+            "inherit": false
+          },
+          {
+            "long": "linter-enabled",
+            "description": "allow to enable or disable the linter check",
+            "inherit": false
+          },
+          {
+            "long": "organize-imports-enabled",
+            "description": "allow to enable or disable the organize imports",
+            "inherit": false
+          },
+          {
+            "long": "max-diagnostics",
+            "description": "cap the amount of diagnostics displayed",
+            "inherit": false,
+            "value": {
+              "name": "number"
+            }
+          },
+          {
+            "long": "config-path",
+            "description": "set the filesystem path to the config dir of the rome.json file",
+            "inherit": false,
+            "value": {
+              "name": "dir",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "verbose",
+            "description": "print additional verbose advices on diagnostics",
+            "inherit": false
+          },
+          {
+            "long": "indent-style",
+            "description": "change the indention character",
+            "inherit": false,
+            "value": {
+              "name": "style",
+              "provider": {
+                "values": [
+                  "tabs",
+                  "space"
+                ]
+              }
+            }
+          },
+          {
+            "long": "indent-size",
+            "description": "how many spaces should be used for indentation",
+            "inherit": false,
+            "value": {
+              "name": "size"
+            }
+          },
+          {
+            "long": "line-width",
+            "description": "how many characters the formatter is allowed to print in a single line",
+            "inherit": false,
+            "value": {
+              "name": "width"
+            }
+          },
+          {
+            "long": "quote-style",
+            "description": "changes the quotation character for strings",
+            "inherit": false,
+            "value": {
+              "name": "style",
+              "provider": {
+                "values": [
+                  "single",
+                  "double"
+                ]
+              }
+            }
+          },
+          {
+            "long": "quote-properties",
+            "description": "changes when properties in object should be quoted",
+            "inherit": false,
+            "value": {
+              "name": "property",
+              "provider": {
+                "values": [
+                  "as-needed",
+                  "preserve"
+                ]
+              }
+            }
+          },
+          {
+            "long": "trailing-comma",
+            "description": "changes trailing commas in multi-line comma-separated syntactic structures",
+            "inherit": false,
+            "value": {
+              "name": "trailing",
+              "provider": {
+                "values": [
+                  "all",
+                  "es5",
+                  "none"
+                ]
+              }
+            }
+          },
+          {
+            "long": "semicolons",
+            "description": "changes when to print semicolons for statements",
+            "inherit": false,
+            "value": {
+              "name": "rule",
+              "provider": {
+                "values": [
+                  "always",
+                  "as-needed"
+                ]
+              }
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "provider": [
+                "builtin.files",
+                "builtin.directories"
+              ],
+              "index": 0,
+              "repeatable": true,
+              "description": "file or directory"
+            }
+          ]
+        }
+      },
+      {
+        "name": "format",
+        "description": "run the formatter on a set of files",
+        "options": [
+          {
+            "long": "write",
+            "description": "edit the files in place (beware!) instead of printing the diff to the console",
+            "inherit": false
+          },
+          {
+            "long": "skip-errors",
+            "description": "skip over files containing syntax errors instead of emitting an error diagnostic",
+            "inherit": false
+          },
+          {
+            "long": "max-diagnostics",
+            "description": "cap the amount of diagnostics displayed",
+            "inherit": false,
+            "value": {
+              "name": "number"
+            }
+          },
+          {
+            "long": "config-path",
+            "description": "set the filesystem path to the config dir of the rome.json file",
+            "inherit": false,
+            "value": {
+              "name": "dir",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "verbose",
+            "description": "print additional verbose advices on diagnostics",
+            "inherit": false
+          },
+          {
+            "long": "indent-style",
+            "description": "change the indention character",
+            "inherit": false,
+            "value": {
+              "name": "style",
+              "provider": {
+                "values": [
+                  "tabs",
+                  "space"
+                ]
+              }
+            }
+          },
+          {
+            "long": "indent-size",
+            "description": "how many spaces should be used for indentation",
+            "inherit": false,
+            "value": {
+              "name": "size"
+            }
+          },
+          {
+            "long": "line-width",
+            "description": "how many characters the formatter is allowed to print in a single line",
+            "inherit": false,
+            "value": {
+              "name": "width"
+            }
+          },
+          {
+            "long": "quote-style",
+            "description": "changes the quotation character for strings",
+            "inherit": false,
+            "value": {
+              "name": "style",
+              "provider": {
+                "values": [
+                  "single",
+                  "double"
+                ]
+              }
+            }
+          },
+          {
+            "long": "quote-properties",
+            "description": "changes when properties in object should be quoted",
+            "inherit": false,
+            "value": {
+              "name": "property",
+              "provider": {
+                "values": [
+                  "as-needed",
+                  "preserve"
+                ]
+              }
+            }
+          },
+          {
+            "long": "trailing-comma",
+            "description": "changes trailing commas in multi-line comma-separated syntactic structures",
+            "inherit": false,
+            "value": {
+              "name": "trailing",
+              "provider": {
+                "values": [
+                  "all",
+                  "es5",
+                  "none"
+                ]
+              }
+            }
+          },
+          {
+            "long": "semicolons",
+            "description": "changes when to print semicolons for statements",
+            "inherit": false,
+            "value": {
+              "name": "rule",
+              "provider": {
+                "values": [
+                  "always",
+                  "as-needed"
+                ]
+              }
+            }
+          },
+          {
+            "long": "stdin-file-path",
+            "description": "a file name with its extension to pass when reading from standard in",
+            "inherit": false,
+            "value": {
+              "name": "string"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "provider": [
+                "builtin.files",
+                "builtin.directories"
+              ],
+              "index": 0,
+              "repeatable": true,
+              "description": "file or directory"
+            }
+          ]
+        }
+      },
+      {
+        "name": "init",
+        "description": "bootstraps a new rome project"
+      },
+      {
+        "name": "start",
+        "description": "start the Rome daemon server process"
+      },
+      {
+        "name": "stop",
+        "description": "stop the Rome daemon server process"
+      },
+      {
+        "name": "lsp-proxy",
+        "description": "acts as a server for the Language Server Protocol over stdin/stdout"
+      },
+      {
+        "name": "rage",
+        "description": "prints information for debugging"
+      },
+      {
+        "name": "version",
+        "description": "shows the Rome version information and quit"
+      },
+      {
+        "name": "help",
+        "description": "prints help message"
+      }
+    ],
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
