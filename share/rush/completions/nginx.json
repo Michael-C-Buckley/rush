@@ -1,0 +1,122 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "nginx",
+    "description": "run the nginx web server",
+    "options": [
+      {
+        "short": "c",
+        "description": "Use an alternative configuration file",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "short": "e",
+        "description": "Use an alternative error log file. Special value stderr indicates that the standard error output should be used",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": [
+            {
+              "values": [
+                "stderr"
+              ]
+            },
+            "builtin.files"
+          ]
+        }
+      },
+      {
+        "short": "g",
+        "description": "Set global configuration directives",
+        "inherit": false,
+        "value": {
+          "name": "directives",
+          "description": "For all directives visit https://nginx.org/en/docs/dirindex.html"
+        }
+      },
+      {
+        "short": "p",
+        "description": "Set the prefix path. The default value is %%PREFIX%%",
+        "inherit": false,
+        "value": {
+          "name": "prefix",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "short": "q",
+        "description": "Suppress non-error messages during configuration testing",
+        "inherit": false
+      },
+      {
+        "short": "T",
+        "description": "Same as -t, but additionally dump configuration files to standard output",
+        "inherit": false
+      },
+      {
+        "short": "t",
+        "description": "Do not run, just test the configuration file. nginx checks the configuration file syntax and then tries to open files referenced in the configuration file",
+        "inherit": false
+      },
+      {
+        "short": "V",
+        "description": "Print the nginx version, compiler version, and configure script parameters",
+        "inherit": false
+      },
+      {
+        "short": "v",
+        "description": "Print the nginx version",
+        "inherit": false
+      },
+      {
+        "short": "?",
+        "spellings": [
+          "-h"
+        ],
+        "description": "show help",
+        "inherit": false
+      },
+      {
+        "short": "s",
+        "description": "Send a signal to the master process. The argument signal can be one of: stop, quit, reopen, reload",
+        "inherit": false,
+        "value": {
+          "name": "signal",
+          "provider": {
+            "values": [
+              {
+                "value": "stop",
+                "description": "Sends SIGTERM"
+              },
+              {
+                "value": "quit",
+                "description": "Sends SIGQUIT"
+              },
+              {
+                "value": "reopen",
+                "description": "Sends SIGUSR1"
+              },
+              {
+                "value": "reload",
+                "description": "Sends SIGHUP"
+              }
+            ]
+          }
+        }
+      }
+    ],
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
