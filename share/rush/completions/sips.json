@@ -1,0 +1,439 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "sips",
+    "description": "inspect and transform images with sips",
+    "options": [
+      {
+        "short": "g",
+        "long": "getProperty",
+        "description": "output the property value for key to stdout",
+        "inherit": false,
+        "value": {
+          "name": "key",
+          "provider": "sips.properties"
+        }
+      },
+      {
+        "short": "s",
+        "long": "setProperty",
+        "description": "set a property value for key to value",
+        "inherit": false,
+        "value": [
+          {
+            "name": "key",
+            "provider": "sips.properties"
+          },
+          {
+            "name": "value"
+          }
+        ]
+      },
+      {
+        "short": "d",
+        "long": "deleteProperty",
+        "description": "remove a property value for key",
+        "inherit": false,
+        "value": {
+          "name": "key",
+          "provider": "sips.properties"
+        }
+      },
+      {
+        "short": "X",
+        "long": "extractTag",
+        "description": "extract a profile tag element to tagFile",
+        "inherit": false,
+        "value": [
+          {
+            "name": "tag"
+          },
+          {
+            "name": "tagFile",
+            "provider": "builtin.files"
+          }
+        ]
+      },
+      {
+        "long": "verify",
+        "description": "verify any profile problems and log output to stdout",
+        "inherit": false
+      },
+      {
+        "short": "x",
+        "long": "extractProfile",
+        "description": "get the embedded profile from image and write it to profile",
+        "inherit": false,
+        "value": {
+          "name": "profile",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "deleteTag",
+        "description": "remove the tag element from a profile",
+        "inherit": false,
+        "value": {
+          "name": "tag"
+        }
+      },
+      {
+        "long": "copyTag",
+        "description": "copy the srcTag element of a profile to dstTag",
+        "inherit": false,
+        "value": [
+          {
+            "name": "srcTag"
+          },
+          {
+            "name": "dstTag"
+          }
+        ]
+      },
+      {
+        "long": "loadTag",
+        "description": "set the tag element of a profile to the contents of tagFile",
+        "inherit": false,
+        "value": [
+          {
+            "name": "tag"
+          },
+          {
+            "name": "tagFile",
+            "provider": "builtin.files"
+          }
+        ]
+      },
+      {
+        "long": "repair",
+        "description": "repair any profile problems and log output to stdout",
+        "inherit": false
+      },
+      {
+        "short": "e",
+        "long": "embedProfile",
+        "description": "embed profile in image",
+        "inherit": false,
+        "value": {
+          "name": "profile",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "short": "E",
+        "long": "embedProfileIfNone",
+        "description": "embed profile in image only if image doesn't have a profile",
+        "inherit": false,
+        "value": {
+          "name": "profile",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "short": "m",
+        "long": "matchTo",
+        "description": "color match image to profile",
+        "inherit": false,
+        "value": {
+          "name": "profile",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "short": "M",
+        "long": "matchToWithIntent",
+        "description": "color match image to profile with rendering intent perceptual | relative | saturation | absolute",
+        "inherit": false,
+        "value": [
+          {
+            "name": "profile",
+            "provider": "builtin.files"
+          },
+          {
+            "name": "intent",
+            "provider": {
+              "values": [
+                "perceptual",
+                "relative",
+                "saturation",
+                "absolute"
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "long": "deleteColorManagementProperties",
+        "description": "delete color management properties in TIFF, PNG, and EXIF dictionaries",
+        "inherit": false
+      },
+      {
+        "short": "r",
+        "long": "rotate",
+        "inherit": false,
+        "value": {
+          "name": "degreesCW"
+        }
+      },
+      {
+        "short": "f",
+        "long": "flip",
+        "inherit": false,
+        "value": {
+          "name": "axis",
+          "provider": {
+            "values": [
+              "horizontal",
+              "vertical"
+            ]
+          }
+        }
+      },
+      {
+        "short": "c",
+        "long": "cropToHeightWidth",
+        "description": "crop image to fit specified size",
+        "inherit": false,
+        "value": [
+          {
+            "name": "pixelsH"
+          },
+          {
+            "name": "pixelsW"
+          }
+        ]
+      },
+      {
+        "short": "p",
+        "long": "padToHeightWidth",
+        "description": "pad image with pixels to fit specified size",
+        "inherit": false,
+        "value": [
+          {
+            "name": "pixelsH"
+          },
+          {
+            "name": "pixelsW"
+          }
+        ]
+      },
+      {
+        "spellings": [
+          "-padColor"
+        ],
+        "description": "use this color when padding. White=FFFFFF, Red=FF0000, Default=Black=000000",
+        "inherit": false,
+        "value": {
+          "name": "hexcolor"
+        }
+      },
+      {
+        "short": "z",
+        "long": "resampleHeightWidth",
+        "description": "resample image at specified size. Image apsect ratio may be altered",
+        "inherit": false,
+        "value": [
+          {
+            "name": "pixelsH"
+          },
+          {
+            "name": "pixelsW"
+          }
+        ]
+      },
+      {
+        "long": "resampleWidth",
+        "description": "resample image to specified width",
+        "inherit": false,
+        "value": {
+          "name": "pixelsW"
+        }
+      },
+      {
+        "long": "resampleHeight",
+        "description": "resample image to specified height",
+        "inherit": false,
+        "value": {
+          "name": "pixelsH"
+        }
+      },
+      {
+        "short": "Z",
+        "long": "resampleHeightWidthMax",
+        "description": "resample image so height and width aren't greater than specified size",
+        "inherit": false,
+        "value": {
+          "name": "pixelsWH"
+        }
+      },
+      {
+        "short": "i",
+        "long": "addIcon",
+        "description": "add a Finder icon to image file",
+        "inherit": false,
+        "value": {
+          "name": "icon",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "debug",
+        "description": "enable debugging output",
+        "inherit": false
+      },
+      {
+        "short": "h",
+        "long": "help",
+        "description": "show help",
+        "inherit": false
+      },
+      {
+        "short": "H",
+        "long": "helpProperties",
+        "description": "show help for properties",
+        "inherit": false
+      },
+      {
+        "long": "man",
+        "description": "generate man pages",
+        "inherit": false
+      },
+      {
+        "short": "v",
+        "long": "version",
+        "description": "show the version",
+        "inherit": false
+      },
+      {
+        "long": "formats",
+        "description": "show the read/write formats",
+        "inherit": false
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "file",
+          "provider": "builtin.files",
+          "index": 0,
+          "description": "image file"
+        }
+      ]
+    },
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "sips.properties": {
+        "values": [
+          {
+            "value": "all"
+          },
+          {
+            "value": "allxml"
+          },
+          {
+            "value": "dpiHeight"
+          },
+          {
+            "value": "dpiWidth"
+          },
+          {
+            "value": "pixelHeight"
+          },
+          {
+            "value": "pixelWidth"
+          },
+          {
+            "value": "typeIdentifier"
+          },
+          {
+            "value": "format"
+          },
+          {
+            "value": "formatOptions"
+          },
+          {
+            "value": "space"
+          },
+          {
+            "value": "samplesPerPixel"
+          },
+          {
+            "value": "bitsPerSample"
+          },
+          {
+            "value": "creation"
+          },
+          {
+            "value": "make"
+          },
+          {
+            "value": "model"
+          },
+          {
+            "value": "software"
+          },
+          {
+            "value": "description"
+          },
+          {
+            "value": "copyright"
+          },
+          {
+            "value": "artist"
+          },
+          {
+            "value": "profile"
+          },
+          {
+            "value": "hasAlpha"
+          },
+          {
+            "value": "size"
+          },
+          {
+            "value": "cmm"
+          },
+          {
+            "value": "version"
+          },
+          {
+            "value": "class"
+          },
+          {
+            "value": "pcs"
+          },
+          {
+            "value": "platform"
+          },
+          {
+            "value": "quality"
+          },
+          {
+            "value": "deviceManufacturer"
+          },
+          {
+            "value": "deviceModel"
+          },
+          {
+            "value": "deviceAttributes0"
+          },
+          {
+            "value": "deviceAttributes1"
+          },
+          {
+            "value": "renderingIntent"
+          },
+          {
+            "value": "creator"
+          },
+          {
+            "value": "md5"
+          }
+        ]
+      }
+    }
+  }
+}
