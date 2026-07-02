@@ -1,0 +1,72 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "progressline",
+    "description": "track command progress on one line",
+    "options": [
+      {
+        "long": "help",
+        "short": "h",
+        "description": "show help",
+        "inherit": false
+      },
+      {
+        "long": "log-all",
+        "short": "a",
+        "description": "log all lines",
+        "inherit": false
+      },
+      {
+        "long": "static-text",
+        "short": "t",
+        "description": "set static display text",
+        "inherit": false,
+        "value": {
+          "name": "text"
+        }
+      },
+      {
+        "long": "activity-style",
+        "short": "s",
+        "description": "set activity indicator style",
+        "inherit": false,
+        "value": {
+          "name": "style",
+          "provider": "progressline.activity-styles"
+        }
+      },
+      {
+        "long": "original-log-path",
+        "short": "l",
+        "description": "save original log to file",
+        "inherit": false,
+        "value": {
+          "name": "path",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "log-matches",
+        "short": "m",
+        "description": "log matching lines",
+        "inherit": false,
+        "value": {
+          "name": "regex"
+        }
+      }
+    ],
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "progressline.activity-styles": {
+        "values": [
+          "dots",
+          "kitt",
+          "snake"
+        ]
+      }
+    }
+  }
+}
