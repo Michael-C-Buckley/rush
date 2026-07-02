@@ -1,0 +1,588 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "https",
+    "description": "command-line HTTPS client",
+    "options": [
+      {
+        "long": "json",
+        "short": "j",
+        "description": "data items from the command line are serialized as a JSON object. The Content-Type and Accept headers are set to application/json",
+        "inherit": false,
+        "exclusiveGroup": "http-body-mode"
+      },
+      {
+        "long": "form",
+        "short": "f",
+        "inherit": false,
+        "description": "serialize data items as form fields",
+        "exclusiveGroup": "http-body-mode"
+      },
+      {
+        "long": "multipart",
+        "description": "similar to --form, but always sends a multipart/form-data request (i.e., even without files)",
+        "inherit": false,
+        "exclusiveGroup": "http-body-mode"
+      },
+      {
+        "long": "boundary",
+        "description": "specify a custom boundary string for multipart/form-data requests. Has effect only together with --form",
+        "inherit": false,
+        "exclusiveGroup": "http-body-mode"
+      },
+      {
+        "long": "compress",
+        "short": "x",
+        "description": "content compressed (encoded) with Deflate algorithm. The Content-Encoding header is set to deflate",
+        "inherit": false
+      },
+      {
+        "long": "pretty",
+        "inherit": false,
+        "value": {
+          "name": "value",
+          "provider": "https-pretty-modes"
+        },
+        "description": "control output processing"
+      },
+      {
+        "long": "style",
+        "short": "s",
+        "inherit": false,
+        "value": {
+          "name": "style",
+          "provider": "https-pygments-styles"
+        }
+      },
+      {
+        "long": "unsorted",
+        "description": "disables all sorting while formatting output",
+        "inherit": false,
+        "exclusiveGroup": "http-sort-mode"
+      },
+      {
+        "long": "sorted",
+        "description": "re-enables all sorting options while formatting output",
+        "inherit": false,
+        "exclusiveGroup": "http-sort-mode"
+      },
+      {
+        "long": "format-options",
+        "description": "controls output formatting",
+        "repeatable": true,
+        "inherit": false,
+        "value": {
+          "name": "FORMAT_OPTIONS",
+          "provider": "https-format-options"
+        }
+      },
+      {
+        "long": "print",
+        "short": "p",
+        "description": "string specifying what the output should contain",
+        "inherit": false,
+        "value": {
+          "name": "what",
+          "provider": "https-print-parts"
+        }
+      },
+      {
+        "long": "headers",
+        "short": "h",
+        "description": "print only the response headers. Shortcut for --print=h",
+        "inherit": false
+      },
+      {
+        "long": "body",
+        "short": "b",
+        "description": "print only the response body. Shortcut for --print=b",
+        "inherit": false
+      },
+      {
+        "long": "verbose",
+        "short": "v",
+        "inherit": false,
+        "description": "print the whole request and response"
+      },
+      {
+        "long": "all",
+        "inherit": false,
+        "description": "show intermediary requests and responses"
+      },
+      {
+        "long": "history-print",
+        "short": "P",
+        "inherit": false,
+        "value": {
+          "name": "what",
+          "provider": "https-print-parts"
+        },
+        "description": "format intermediary requests and responses"
+      },
+      {
+        "long": "stream",
+        "short": "S",
+        "description": "always stream the response body by line, i.e., behave like `tail -f'",
+        "inherit": false
+      },
+      {
+        "long": "output",
+        "short": "o",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        },
+        "description": "save output to file"
+      },
+      {
+        "long": "download",
+        "short": "d",
+        "inherit": false,
+        "description": "download response body to a file"
+      },
+      {
+        "long": "continue",
+        "short": "c",
+        "description": "resume an interrupted download. Note that the --output option needs to be specified as well",
+        "inherit": false
+      },
+      {
+        "long": "quiet",
+        "short": "q",
+        "inherit": false,
+        "description": "suppress terminal output"
+      },
+      {
+        "long": "session",
+        "inherit": false,
+        "value": {
+          "name": "session-name-or-path",
+          "provider": "builtin.files"
+        },
+        "description": "create or update a session"
+      },
+      {
+        "long": "session-read-only",
+        "description": "create or read a session without updating it form the request/response exchange",
+        "inherit": false,
+        "value": {
+          "name": "session-name-or-path",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "auth",
+        "short": "a",
+        "description": "if only the username is provided (-a username), HTTPie will prompt for the password",
+        "inherit": false,
+        "value": {
+          "name": "USER[:PASS]"
+        }
+      },
+      {
+        "long": "auth-type",
+        "short": "A",
+        "description": "the authentication mechanism to be used. Defaults to \"basic\"",
+        "inherit": false,
+        "value": {
+          "name": "value",
+          "provider": "https-auth-types"
+        }
+      },
+      {
+        "long": "ignore-netrc",
+        "description": "ignore credentials from .netrc",
+        "inherit": false
+      },
+      {
+        "long": "offline",
+        "description": "build the request and print it but don\u2019t actually send it",
+        "inherit": false
+      },
+      {
+        "long": "proxy",
+        "inherit": false,
+        "value": {
+          "name": "PROTOCOL:PROXY_URL"
+        },
+        "description": "map a protocol to a proxy URL"
+      },
+      {
+        "long": "follow",
+        "short": "F",
+        "description": "follow 30x Location redirects",
+        "inherit": false
+      },
+      {
+        "long": "max-redirects",
+        "description": "by default, requests have a limit of 30 redirects (works with --follow)",
+        "inherit": false,
+        "value": {
+          "name": "max-redirects"
+        }
+      },
+      {
+        "long": "max-headers",
+        "description": "the maximum number of response headers to be read before giving up (default 0, i.e., no limit)",
+        "inherit": false,
+        "value": {
+          "name": "max-headers"
+        }
+      },
+      {
+        "long": "timeout",
+        "inherit": false,
+        "value": {
+          "name": "seconds"
+        },
+        "description": "set connection timeout in seconds"
+      },
+      {
+        "long": "check-status",
+        "inherit": false,
+        "description": "exit with an error for HTTP error statuses"
+      },
+      {
+        "long": "path-as-is",
+        "description": "bypass dot segment (/../ or /./) URL squashing",
+        "inherit": false
+      },
+      {
+        "long": "chunked",
+        "description": "enable streaming via chunked transfer encoding",
+        "inherit": false
+      },
+      {
+        "long": "verify",
+        "inherit": false,
+        "value": {
+          "name": "verify",
+          "provider": "https-verify-values"
+        },
+        "description": "verify SSL certificates or use a CA bundle"
+      },
+      {
+        "long": "ssl",
+        "inherit": false,
+        "value": {
+          "name": "value",
+          "provider": "https-ssl-versions"
+        },
+        "description": "set SSL protocol version"
+      },
+      {
+        "long": "ciphers",
+        "description": "a string in the OpenSSL cipher list format",
+        "inherit": false,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "cert",
+        "inherit": false,
+        "value": {
+          "name": "value",
+          "provider": "builtin.files"
+        },
+        "description": "client SSL certificate file"
+      },
+      {
+        "long": "cert-key",
+        "description": "the private key to use with SSL. Only needed if --cert is given and the certificate file does not contain the private key",
+        "inherit": false,
+        "value": {
+          "name": "value",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "ignore-stdin",
+        "short": "I",
+        "description": "do not attempt to read stdin",
+        "inherit": false
+      },
+      {
+        "long": "help",
+        "description": "show the help message and exit",
+        "inherit": false
+      },
+      {
+        "long": "version",
+        "description": "show version and exit",
+        "inherit": false
+      },
+      {
+        "long": "traceback",
+        "description": "prints the exception traceback should one occur",
+        "inherit": false
+      },
+      {
+        "long": "default-scheme",
+        "description": "the default scheme to use if not specified in the URL",
+        "inherit": false,
+        "value": {
+          "name": "default-scheme"
+        }
+      },
+      {
+        "long": "debug",
+        "inherit": false,
+        "description": "print HTTPie debugging information"
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "method",
+          "description": "the HTTP method to be used for the request (GET, POST, PUT, DELETE, ...)",
+          "provider": "https-methods",
+          "index": 0
+        },
+        {
+          "name": "url",
+          "description": "the scheme defaults to 'http://' if the URL does not include one",
+          "index": 1
+        },
+        {
+          "name": "request-item",
+          "description": "optional key-value pairs to be included in the request. The separator used determines the type",
+          "index": 2,
+          "repeatable": true
+        }
+      ]
+    },
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "https-pretty-modes": {
+        "values": [
+          {
+            "value": "all"
+          },
+          {
+            "value": "colors"
+          },
+          {
+            "value": "format"
+          },
+          {
+            "value": "none"
+          }
+        ]
+      },
+      "https-pygments-styles": {
+        "values": [
+          {
+            "value": "abap"
+          },
+          {
+            "value": "algol"
+          },
+          {
+            "value": "algol_nu"
+          },
+          {
+            "value": "arduino"
+          },
+          {
+            "value": "auto"
+          },
+          {
+            "value": "autumn"
+          },
+          {
+            "value": "borland"
+          },
+          {
+            "value": "bw"
+          },
+          {
+            "value": "colorful"
+          },
+          {
+            "value": "default"
+          },
+          {
+            "value": "emacs"
+          },
+          {
+            "value": "friendly"
+          },
+          {
+            "value": "fruity"
+          },
+          {
+            "value": "igor"
+          },
+          {
+            "value": "inkpot"
+          },
+          {
+            "value": "lovelace"
+          },
+          {
+            "value": "manni"
+          },
+          {
+            "value": "monokai"
+          },
+          {
+            "value": "murphy"
+          },
+          {
+            "value": "native"
+          },
+          {
+            "value": "paraiso-dark"
+          },
+          {
+            "value": "paraiso-light"
+          },
+          {
+            "value": "pastie"
+          },
+          {
+            "value": "perldoc"
+          },
+          {
+            "value": "rainbow_dash"
+          },
+          {
+            "value": "rrt"
+          },
+          {
+            "value": "sas"
+          },
+          {
+            "value": "solarized"
+          },
+          {
+            "value": "solarized-dark"
+          },
+          {
+            "value": "solarized-light"
+          },
+          {
+            "value": "stata"
+          },
+          {
+            "value": "stata-dark"
+          },
+          {
+            "value": "stata-light"
+          },
+          {
+            "value": "tango"
+          },
+          {
+            "value": "trac"
+          },
+          {
+            "value": "vim"
+          },
+          {
+            "value": "vs"
+          },
+          {
+            "value": "xcode"
+          }
+        ]
+      },
+      "https-format-options": {
+        "values": [
+          {
+            "value": "headers.sort:true"
+          },
+          {
+            "value": "json.format:true"
+          },
+          {
+            "value": "json.indent:4"
+          },
+          {
+            "value": "json.sort_keys:true"
+          }
+        ]
+      },
+      "https-auth-types": {
+        "values": [
+          {
+            "value": "basic"
+          },
+          {
+            "value": "digest"
+          }
+        ]
+      },
+      "https-verify-values": {
+        "values": [
+          {
+            "value": "no"
+          },
+          {
+            "value": "yes"
+          }
+        ]
+      },
+      "https-ssl-versions": {
+        "values": [
+          {
+            "value": "ssl2.3"
+          },
+          {
+            "value": "tls1"
+          },
+          {
+            "value": "tls1.1"
+          },
+          {
+            "value": "tls1.2"
+          }
+        ]
+      },
+      "https-methods": {
+        "values": [
+          {
+            "value": "GET"
+          },
+          {
+            "value": "POST"
+          },
+          {
+            "value": "PUT"
+          },
+          {
+            "value": "DELETE"
+          },
+          {
+            "value": "HEAD"
+          }
+        ]
+      },
+      "https-print-parts": {
+        "values": [
+          {
+            "value": "H",
+            "description": "request headers"
+          },
+          {
+            "value": "B",
+            "description": "request body"
+          },
+          {
+            "value": "h",
+            "description": "response headers"
+          },
+          {
+            "value": "b",
+            "description": "response body"
+          }
+        ]
+      }
+    }
+  }
+}
