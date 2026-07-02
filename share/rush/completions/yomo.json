@@ -1,0 +1,105 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "yomo",
+    "description": "YoMo CLI",
+    "options": [
+      {
+        "long": "help",
+        "short": "h",
+        "description": "show help for yomo"
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "init",
+        "description": "initialize an example StreamFunction",
+        "options": [
+          {
+            "long": "rx",
+            "description": "generate Rx code template"
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "function-name",
+              "description": "StreamFunction name to initialize locally",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "build",
+        "description": "build a StreamFunction to WebAssembly",
+        "options": [
+          {
+            "long": "target",
+            "description": "build to wasm or binary",
+            "value": {
+              "name": "target",
+              "provider": {
+                "values": [
+                  "wasm",
+                  "binary"
+                ]
+              }
+            }
+          },
+          {
+            "short": "m",
+            "long": "modfile",
+            "description": "custom go.mod filepath",
+            "value": {
+              "name": "module",
+              "provider": "builtin.files"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "go-file",
+              "description": "The .go file to build",
+              "index": 0,
+              "provider": "builtin.files"
+            }
+          ]
+        }
+      },
+      {
+        "name": "run",
+        "description": "run a wasm stream function",
+        "options": [
+          {
+            "short": "z",
+            "long": "zipper",
+            "description": "zipper endpoint this StreamFunction will connect to"
+          },
+          {
+            "short": "n",
+            "long": "name",
+            "description": "specify the name of this StreamFunction"
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "wasm-file",
+              "description": "The .wasm file to run",
+              "index": 0,
+              "provider": "builtin.files"
+            }
+          ]
+        }
+      }
+    ],
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
