@@ -1,0 +1,15 @@
+__rush_complete_ollama_models() {
+  command -v ollama >/dev/null 2>&1 || return
+  ollama list 2>/dev/null | tail -n +2 | while IFS= read -r line; do
+    set -- $line
+    test -n "$1" && rush_complete candidate "$1" --kind plain --description model --priority 40
+  done
+}
+
+__rush_complete_ollama_running_models() {
+  command -v ollama >/dev/null 2>&1 || return
+  ollama ps 2>/dev/null | tail -n +2 | while IFS= read -r line; do
+    set -- $line
+    test -n "$1" && rush_complete candidate "$1" --kind plain --description 'running model' --priority 40
+  done
+}

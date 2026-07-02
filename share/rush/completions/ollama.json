@@ -1,0 +1,199 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "ollama",
+    "description": "manage and run ollama models",
+    "options": [
+      {
+        "long": "help",
+        "short": "h",
+        "description": "Show help for ollama",
+        "inherit": true
+      },
+      {
+        "long": "version",
+        "short": "v",
+        "description": "Show version information",
+        "inherit": false
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "serve",
+        "description": "Start ollama"
+      },
+      {
+        "name": "create",
+        "description": "Create a model from a Modelfile",
+        "options": [
+          {
+            "short": "f",
+            "description": "Specify Modelfile",
+            "inherit": false,
+            "value": {
+              "name": "filename",
+              "provider": "builtin.files"
+            }
+          }
+        ]
+      },
+      {
+        "name": "show",
+        "description": "Show information for a model",
+        "arguments": {
+          "states": [
+            {
+              "name": "model",
+              "index": 0,
+              "provider": "ollama.models"
+            }
+          ]
+        }
+      },
+      {
+        "name": "run",
+        "description": "Run a model",
+        "options": [
+          {
+            "long": "verbose",
+            "description": "Enable verbose output",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "model",
+              "index": 0,
+              "provider": "ollama.models"
+            }
+          ]
+        }
+      },
+      {
+        "name": "stop",
+        "description": "Stop the ollama server",
+        "arguments": {
+          "states": [
+            {
+              "name": "model",
+              "index": 0,
+              "provider": "ollama.running-models"
+            }
+          ]
+        }
+      },
+      {
+        "name": "pull",
+        "description": "Pull a model from a registry"
+      },
+      {
+        "name": "push",
+        "description": "Push a model to a registry"
+      },
+      {
+        "name": "list",
+        "aliases": [
+          "ls"
+        ],
+        "description": "List models"
+      },
+      {
+        "name": "ps",
+        "description": "List running models"
+      },
+      {
+        "name": "cp",
+        "description": "Copy a model",
+        "arguments": {
+          "states": [
+            {
+              "name": "source",
+              "index": 0,
+              "provider": "ollama.models"
+            },
+            {
+              "name": "destination",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "rm",
+        "description": "Remove a model",
+        "arguments": {
+          "states": [
+            {
+              "name": "model",
+              "index": 0,
+              "provider": "ollama.models"
+            }
+          ]
+        }
+      },
+      {
+        "name": "help",
+        "description": "Help about any command",
+        "subcommands": [
+          {
+            "name": "serve",
+            "description": "Start ollama"
+          },
+          {
+            "name": "create",
+            "description": "Create a model from a Modelfile"
+          },
+          {
+            "name": "show",
+            "description": "Show information for a model"
+          },
+          {
+            "name": "run",
+            "description": "Run a model"
+          },
+          {
+            "name": "stop",
+            "description": "Stop the ollama server"
+          },
+          {
+            "name": "pull",
+            "description": "Pull a model from a registry"
+          },
+          {
+            "name": "push",
+            "description": "Push a model to a registry"
+          },
+          {
+            "name": "list",
+            "description": "List models"
+          },
+          {
+            "name": "ps",
+            "description": "List running models"
+          },
+          {
+            "name": "cp",
+            "description": "Copy a model"
+          },
+          {
+            "name": "rm",
+            "description": "Remove a model"
+          }
+        ]
+      }
+    ],
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "ollama.models": {
+        "function": "__rush_complete_ollama_models"
+      },
+      "ollama.running-models": {
+        "function": "__rush_complete_ollama_running_models"
+      }
+    }
+  }
+}
