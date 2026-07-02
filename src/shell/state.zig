@@ -53,18 +53,34 @@ pub const VariableAttributes = struct {
     }
 };
 
+pub const ArrayElement = struct {
+    index: usize,
+    value: []const u8,
+};
+
 pub const ArrayVariable = struct {
     name: []const u8,
-    values: [][]const u8,
+    elements: []ArrayElement,
 
     pub fn validate(self: ArrayVariable) void {
         std.debug.assert(self.name.len != 0);
+        for (self.elements, 0..) |element, index| {
+            if (index != 0) std.debug.assert(self.elements[index - 1].index < element.index);
+        }
+    }
+
+    pub fn elementValue(self: ArrayVariable, index: usize) ?[]const u8 {
+        for (self.elements) |element| {
+            if (element.index == index) return element.value;
+            if (element.index > index) return null;
+        }
+        return null;
     }
 
     fn deinit(self: ArrayVariable, allocator: std.mem.Allocator) void {
         allocator.free(self.name);
-        for (self.values) |value| allocator.free(value);
-        allocator.free(self.values);
+        for (self.elements) |element| allocator.free(element.value);
+        allocator.free(self.elements);
     }
 };
 
@@ -370,11 +386,11 @@ pub const State = struct {
 
         const owned_name = try self.allocator.dupe(u8, name);
         errdefer self.allocator.free(owned_name);
-        const owned_values = try self.dupeArrayValues(values);
-        errdefer freeArrayValues(self.allocator, owned_values);
+        const owned_elements = try self.dupeArrayValues(values);
+        errdefer freeArrayElements(self.allocator, owned_elements);
 
         self.removeVariable(name);
-        try self.arrays.put(self.allocator, owned_name, .{ .name = owned_name, .values = owned_values });
+        try self.arrays.put(self.allocator, owned_name, .{ .name = owned_name, .elements = owned_elements });
         self.removeVariableAttributes(name);
         self.clearFunctionAutoloadMissesIfSearchVariable(name);
     }
@@ -389,9 +405,7 @@ pub const State = struct {
         errdefer if (!value_transferred) self.allocator.free(owned_value);
 
         if (self.arrays.getPtr(name)) |array| {
-            if (index >= array.values.len) try self.resizeArray(array, index + 1);
-            self.allocator.free(array.values[index]);
-            array.values[index] = owned_value;
+            try self.putExistingArrayElement(array, index, owned_value);
             value_transferred = true;
             return;
         }
@@ -399,58 +413,57 @@ pub const State = struct {
         self.removeVariable(name);
         const owned_name = try self.allocator.dupe(u8, name);
         errdefer self.allocator.free(owned_name);
-        const values = try self.allocator.alloc([]const u8, index + 1);
-        var initialized: usize = 0;
-        errdefer {
-            for (values[0..initialized]) |copied| self.allocator.free(copied);
-            self.allocator.free(values);
-        }
-        for (values[0..index]) |*slot| {
-            slot.* = try self.allocator.dupe(u8, "");
-            initialized += 1;
-        }
-        values[index] = owned_value;
+        const elements = try self.allocator.alloc(ArrayElement, 1);
+        errdefer self.allocator.free(elements);
+        elements[0] = .{ .index = index, .value = owned_value };
         value_transferred = true;
-        initialized += 1;
-        try self.arrays.put(self.allocator, owned_name, .{ .name = owned_name, .values = values });
+        try self.arrays.put(self.allocator, owned_name, .{ .name = owned_name, .elements = elements });
         self.removeVariableAttributes(name);
         self.clearFunctionAutoloadMissesIfSearchVariable(name);
     }
 
-    fn resizeArray(self: *State, array: *ArrayVariable, new_len: usize) !void {
-        std.debug.assert(new_len > array.values.len);
-        const resized = try self.allocator.alloc([]const u8, new_len);
-        @memcpy(resized[0..array.values.len], array.values);
-        var initialized = array.values.len;
-        errdefer {
-            for (resized[array.values.len..initialized]) |copied| self.allocator.free(copied);
-            self.allocator.free(resized);
+    fn putExistingArrayElement(self: *State, array: *ArrayVariable, index: usize, owned_value: []const u8) !void {
+        for (array.elements, 0..) |*element, element_index| {
+            if (element.index == index) {
+                self.allocator.free(element.value);
+                element.value = owned_value;
+                return;
+            }
+            if (element.index > index) {
+                try self.insertArrayElement(array, element_index, .{ .index = index, .value = owned_value });
+                return;
+            }
         }
-        for (resized[array.values.len..]) |*slot| {
-            slot.* = try self.allocator.dupe(u8, "");
-            initialized += 1;
-        }
-        self.allocator.free(array.values);
-        array.values = resized;
+        try self.insertArrayElement(array, array.elements.len, .{ .index = index, .value = owned_value });
     }
 
-    fn dupeArrayValues(self: *State, values: []const []const u8) ![][]const u8 {
-        const owned = try self.allocator.alloc([]const u8, values.len);
+    fn insertArrayElement(self: *State, array: *ArrayVariable, insert_index: usize, element: ArrayElement) !void {
+        std.debug.assert(insert_index <= array.elements.len);
+        const resized = try self.allocator.alloc(ArrayElement, array.elements.len + 1);
+        @memcpy(resized[0..insert_index], array.elements[0..insert_index]);
+        resized[insert_index] = element;
+        @memcpy(resized[insert_index + 1 ..], array.elements[insert_index..]);
+        self.allocator.free(array.elements);
+        array.elements = resized;
+    }
+
+    fn dupeArrayValues(self: *State, values: []const []const u8) ![]ArrayElement {
+        const owned = try self.allocator.alloc(ArrayElement, values.len);
         var initialized: usize = 0;
         errdefer {
-            for (owned[0..initialized]) |copied| self.allocator.free(copied);
+            for (owned[0..initialized]) |element| self.allocator.free(element.value);
             self.allocator.free(owned);
         }
         for (values, 0..) |value, index| {
-            owned[index] = try self.allocator.dupe(u8, value);
+            owned[index] = .{ .index = index, .value = try self.allocator.dupe(u8, value) };
             initialized += 1;
         }
         return owned;
     }
 
-    fn freeArrayValues(allocator: std.mem.Allocator, values: []const []const u8) void {
-        for (values) |value| allocator.free(value);
-        allocator.free(values);
+    fn freeArrayElements(allocator: std.mem.Allocator, elements: []const ArrayElement) void {
+        for (elements) |element| allocator.free(element.value);
+        allocator.free(elements);
     }
 
     fn removeArray(self: *State, name: []const u8) void {

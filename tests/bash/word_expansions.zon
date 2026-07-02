@@ -294,6 +294,25 @@
             .status = 0,
         },
         .{
+            .name = "quoted indexed array at expansion preserves fields",
+            .script =
+            \\arr=("a b" "" c)
+            \\printf '<%s>\n' "${arr[@]}"
+            \\printf '<%s>\n' "x${arr[@]}y"
+            ,
+            .stdout =
+            \\<a b>
+            \\<>
+            \\<c>
+            \\<xa b>
+            \\<>
+            \\<cy>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "parameter substring expansion supports offsets and lengths",
             .script =
             \\value=abcdef

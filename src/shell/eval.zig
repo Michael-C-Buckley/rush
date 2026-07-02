@@ -998,6 +998,7 @@ fn expandForWordFields(shell: anytype, words: []const ast.Word) ![]const []const
 
 fn appendSpecialQuotedFields(shell: anytype, fields: *std.ArrayList([]const u8), word: ast.Word) !bool {
     if (try appendEmbeddedQuotedAtFields(shell, fields, word)) return true;
+    if (try appendEmbeddedQuotedArrayAtFields(shell, fields, word)) return true;
     if (wordIsQuotedAt(word)) {
         try fields.appendSlice(shell.scratchAllocator(), shell.state.positionals);
         return true;
@@ -1079,6 +1080,20 @@ fn appendEmbeddedQuotedAtFields(shell: anytype, fields: *std.ArrayList([]const u
     return true;
 }
 
+fn appendEmbeddedQuotedArrayAtFields(shell: anytype, fields: *std.ArrayList([]const u8), word: ast.Word) !bool {
+    const quoted = switch (word.data) {
+        .literal => return false,
+        .parts => |parts| if (parts.len == 1) switch (parts[0]) {
+            .double_quoted => |nested| nested,
+            else => return false,
+        } else return false,
+    };
+    if (!wordPartsContainArrayAtParameter(quoted)) return false;
+
+    try appendQuotedArrayAtPartsFields(shell, fields, quoted);
+    return true;
+}
+
 fn appendQuotedAtPartsFields(shell: anytype, fields: *std.ArrayList([]const u8), quoted: []const ast.WordPart) !void {
     const positionals = shell.state.positionals;
     const allocator = shell.scratchAllocator();
@@ -1102,6 +1117,32 @@ fn appendQuotedAtPartsFields(shell: anytype, fields: *std.ArrayList([]const u8),
     }
 }
 
+fn appendQuotedArrayAtPartsFields(
+    shell: anytype,
+    fields: *std.ArrayList([]const u8),
+    quoted: []const ast.WordPart,
+) !void {
+    const allocator = shell.scratchAllocator();
+    const start_len = fields.items.len;
+    var expanded_array = false;
+    try fields.append(allocator, "");
+    var segment_start: usize = 0;
+    for (quoted, 0..) |part, index| {
+        const name = wordPartArrayAtName(part) orelse continue;
+        try appendTextToLastField(shell, fields, try expandWordParts(shell, quoted[segment_start..index], null));
+        if (shell.state.getArray(name)) |array| if (array.elements.len != 0) {
+            expanded_array = true;
+            try appendTextToLastField(shell, fields, array.elements[0].value);
+            for (array.elements[1..]) |element| try fields.append(allocator, element.value);
+        };
+        segment_start = index + 1;
+    }
+    try appendTextToLastField(shell, fields, try expandWordParts(shell, quoted[segment_start..], null));
+    if (!expanded_array and fields.items.len == start_len + 1 and fields.items[start_len].len == 0) {
+        _ = fields.pop();
+    }
+}
+
 fn appendTextToLastField(shell: anytype, fields: *std.ArrayList([]const u8), text: []const u8) !void {
     if (text.len == 0) return;
     const last = &fields.items[fields.items.len - 1];
@@ -1111,6 +1152,25 @@ fn appendTextToLastField(shell: anytype, fields: *std.ArrayList([]const u8), tex
 fn wordPartsContainAtParameter(parts: []const ast.WordPart) bool {
     for (parts) |part| if (wordPartIsAtParameter(part)) return true;
     return false;
+}
+
+fn wordPartsContainArrayAtParameter(parts: []const ast.WordPart) bool {
+    for (parts) |part| if (wordPartArrayAtName(part) != null) return true;
+    return false;
+}
+
+fn wordPartArrayAtName(part: ast.WordPart) ?[]const u8 {
+    return switch (part) {
+        .parameter => |parameter| {
+            if (parameter.length or parameter.op != null or parameter.parameter != .array) return null;
+            const array = parameter.parameter.array;
+            return switch (array.subscript) {
+                .all => |special| if (special == .at) array.name else null,
+                else => null,
+            };
+        },
+        else => null,
+    };
 }
 
 fn wordPartIsAtParameter(part: ast.WordPart) bool {
@@ -3162,6 +3222,7 @@ fn staticDeclarationBuiltinName(shell: anytype, word: ast.Word) !?builtin.Id {
 const DeclarationOptions = struct {
     exported: bool = false,
     readonly: bool = false,
+    array: bool = false,
     print: bool = false,
     global: bool = false,
     first_operand: usize = 0,
@@ -3274,6 +3335,10 @@ fn parseDeclarationOptions(shell: anytype, id: builtin.Id, words: []const ast.Wo
         }
         if (literal.len < 2 or literal[0] != '-') break;
         for (literal[1..]) |option| switch (option) {
+            'a' => {
+                if (id != .declare and id != .typeset) return declarationUsageError(shell, id);
+                options.array = true;
+            },
             'p' => options.print = true,
             'r' => options.readonly = true,
             'x' => options.exported = true,
@@ -3341,6 +3406,10 @@ fn applyDeclaredVariable(
     options: DeclarationOptions,
     status: *result.ExitStatus,
 ) !void {
+    if (options.array) {
+        try applyDeclaredArrayVariable(shell, name, value, status);
+        return;
+    }
     if (applyDynamicVariableAssignment(shell, name, value)) return;
     const existing = shell.state.getVariable(name);
     if (declareUsesLocalScope(shell, options)) {
@@ -3378,6 +3447,10 @@ fn applyDeclaredName(
     options: DeclarationOptions,
     status: *result.ExitStatus,
 ) !void {
+    if (options.array) {
+        try applyDeclaredArrayName(shell, name, status);
+        return;
+    }
     const existing = shell.state.getVariable(name);
     if (declareUsesLocalScope(shell, options)) {
         shell.state.declareLocalWithAttributes(.{
@@ -3413,6 +3486,36 @@ fn applyDeclaredName(
             .readonly = options.readonly,
         });
     }
+}
+
+fn applyDeclaredArrayVariable(
+    shell: anytype,
+    name: []const u8,
+    value: []const u8,
+    status: *result.ExitStatus,
+) !void {
+    shell.state.putArray(name, &.{value}) catch |err| switch (err) {
+        error.ReadonlyVariable => {
+            try writeReadonlyDiagnostic(shell, name);
+            status.* = 1;
+        },
+        else => return err,
+    };
+}
+
+fn applyDeclaredArrayName(shell: anytype, name: []const u8, status: *result.ExitStatus) !void {
+    if (shell.state.getArray(name) != null) return;
+    if (shell.state.getVariable(name)) |variable| {
+        try applyDeclaredArrayVariable(shell, name, variable.value, status);
+        return;
+    }
+    shell.state.putArray(name, &.{}) catch |err| switch (err) {
+        error.ReadonlyVariable => {
+            try writeReadonlyDiagnostic(shell, name);
+            status.* = 1;
+        },
+        else => return err,
+    };
 }
 
 fn writeInvalidIdentifierDiagnostic(shell: anytype, id: builtin.Id, name: []const u8) !void {
@@ -3458,6 +3561,10 @@ fn evalDeclarationList(shell: anytype, id: builtin.Id) !result.EvalResult {
         if (!include) continue;
         try writeDeclarationEntry(shell, id, variable.name, variable.value, variable.exported, variable.readonly);
     }
+    if (id == .declare or id == .typeset) {
+        var array_iterator = shell.state.arrays.iterator();
+        while (array_iterator.next()) |entry| try writeArrayDeclarationEntry(shell, id, entry.value_ptr.*);
+    }
     return .{};
 }
 
@@ -3481,6 +3588,20 @@ fn evalDeclarationPrint(shell: anytype, id: builtin.Id, operands: []const ast.Wo
                     variable.exported,
                     variable.readonly,
                 );
+            } else if (shell.state.getArray(name)) |array| {
+                if (id == .declare or id == .typeset) {
+                    try writeArrayDeclarationEntry(shell, id, array);
+                } else {
+                    try shell.host.writeAll(
+                        .stderr,
+                        try std.fmt.allocPrint(
+                            shell.scratchAllocator(),
+                            "{s}: {s}: not found\n",
+                            .{ declarationName(id), name },
+                        ),
+                    );
+                    status = 1;
+                }
             } else if (shell.state.getVariableAttributes(name)) |attributes| {
                 try writeDeclarationEntry(shell, id, attributes.name, null, attributes.exported, attributes.readonly);
             } else {
@@ -3539,6 +3660,24 @@ fn writeDeclarationEntry(
         try shell.host.writeAll(.stdout, name);
         try shell.host.writeAll(.stdout, "\n");
     }
+}
+
+fn writeArrayDeclarationEntry(shell: anytype, id: builtin.Id, array: state_mod.ArrayVariable) !void {
+    std.debug.assert(id == .declare or id == .typeset);
+    try shell.host.writeAll(.stdout, "declare -a ");
+    try shell.host.writeAll(.stdout, array.name);
+    if (array.elements.len != 0) {
+        try shell.host.writeAll(.stdout, "=(");
+        for (array.elements, 0..) |element, index| {
+            if (index != 0) try shell.host.writeAll(.stdout, " ");
+            try shell.host.writeAll(.stdout, "[");
+            try shell.host.writeAll(.stdout, try std.fmt.allocPrint(shell.scratchAllocator(), "{}", .{element.index}));
+            try shell.host.writeAll(.stdout, "]=");
+            try shell.host.writeAll(.stdout, try doubleQuoteShell(shell.scratchAllocator(), element.value));
+        }
+        try shell.host.writeAll(.stdout, ")");
+    }
+    try shell.host.writeAll(.stdout, "\n");
 }
 
 fn declarationPrefix(id: builtin.Id) []const u8 {
@@ -4465,7 +4604,7 @@ fn expandAssignmentValue(
     const existing = if (assignment.index) |index_word| existing: {
         const index = try expandArrayIndex(shell, index_word);
         const array = shell.state.getArray(assignment.name) orelse break :existing "";
-        break :existing if (index < array.values.len) array.values[index] else "";
+        break :existing array.elementValue(index) orelse "";
     } else if (shell.state.getVariable(assignment.name)) |variable| variable.value else "";
     return std.mem.concat(shell.scratchAllocator(), u8, &.{ existing, value });
 }
@@ -6766,6 +6905,25 @@ fn joinValues(shell: anytype, values: []const []const u8, separator: []const u8)
     return output;
 }
 
+fn joinArrayElements(shell: anytype, elements: []const state_mod.ArrayElement, separator: []const u8) ![]const u8 {
+    if (elements.len == 0) return "";
+    var total_len = std.math.mul(usize, elements.len - 1, separator.len) catch return error.OutOfMemory;
+    // ziglint-ignore: Z024 preserve existing readable expression shape; lint-only cleanup
+    for (elements) |element| total_len = std.math.add(usize, total_len, element.value.len) catch return error.OutOfMemory;
+
+    const output = try shell.scratchAllocator().alloc(u8, total_len);
+    var cursor: usize = 0;
+    for (elements, 0..) |element, element_index| {
+        if (element_index != 0) {
+            @memcpy(output[cursor..][0..separator.len], separator);
+            cursor += separator.len;
+        }
+        @memcpy(output[cursor..][0..element.value.len], element.value);
+        cursor += element.value.len;
+    }
+    return output;
+}
+
 fn expandParameterLength(shell: anytype, parameter: ast.ParameterExpansion) EvalError![]const u8 {
     if (shell.state.options.mode == .bash) switch (parameter.parameter) {
         .special => |special| switch (special) {
@@ -6868,11 +7026,11 @@ fn arrayParameterValue(shell: anytype, parameter: ast.ArrayParameter) !?[]const 
     return switch (parameter.subscript) {
         .index => |word| value: {
             const index = try expandArrayIndex(shell, word);
-            break :value if (index < array.values.len) array.values[index] else null;
+            break :value array.elementValue(index);
         },
-        .all => |special| if (array.values.len == 0) null else switch (special) {
-            .at => try joinValues(shell, array.values, " "),
-            .star => try joinValues(shell, array.values, ifsFirstCharacter(shell)),
+        .all => |special| if (array.elements.len == 0) null else switch (special) {
+            .at => try joinArrayElements(shell, array.elements, " "),
+            .star => try joinArrayElements(shell, array.elements, ifsFirstCharacter(shell)),
             else => unreachable,
         },
     };

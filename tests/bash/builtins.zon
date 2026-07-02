@@ -322,6 +322,28 @@
             .status = 0,
         },
         .{
+            .name = "declare creates and prints indexed arrays",
+            .script =
+            \\declare -a arr
+            \\declare -p arr
+            \\arr[2]=z
+            \\declare -p arr
+            \\x=foo
+            \\declare -a x
+            \\declare -a y=bar
+            \\declare -p x y
+            ,
+            .stdout =
+            \\declare -a arr
+            \\declare -a arr=([2]="z")
+            \\declare -a x=([0]="foo")
+            \\declare -a y=([0]="bar")
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "declare uses function local scope unless global is requested",
             .script =
             \\value=global

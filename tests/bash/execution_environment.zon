@@ -84,6 +84,22 @@
             .status = 0,
         },
         .{
+            .name = "indexed array element assignments are sparse",
+            .script =
+            \\arr[3]=D
+            \\printf '<%s>\n' "${arr[*]}"
+            \\printf '<%s>\n' "${arr[0]}" "${arr[3]}"
+            ,
+            .stdout =
+            \\<D>
+            \\<>
+            \\<D>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "command substitution clears errexit by default",
             .script =
             \\set -e
