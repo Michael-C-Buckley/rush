@@ -169,7 +169,7 @@
             \\x=X
             \\xa=AXA
             \\xb=AXB
-            \\printf '<%s>\n' pre{a,b}post {{a,b},{c,d}} {,empty}
+            \\printf '<%s>\n' pre{a,b}post {{a,b},{c,d}} {,empty} {"",quoted}
             \\printf '<%s>\n' $x{a,b} ${x}{a,b} {$(printf cmd),word}
             \\printf '<%s>\n' ${unset:-{n,o}} "{q,r}" \{e,f\}
             ,
@@ -180,8 +180,9 @@
             \\<b>
             \\<c>
             \\<d>
-            \\<>
             \\<empty>
+            \\<>
+            \\<quoted>
             \\<AXA>
             \\<AXB>
             \\<Xa>

@@ -4335,6 +4335,11 @@ fn appendBraceExpandedWords(
     quoted: bool,
 ) !void {
     const match = try firstBraceMatch(shell, atoms) orelse {
+        // Bash removes unquoted words that brace expansion leaves fully
+        // empty, e.g. `{,x}` yields only `x`. Empty atom lists can only
+        // arise from a splice: the parser never produces an empty unquoted
+        // word, and braceExpandWord only atomizes words containing `{`.
+        if (atoms.len == 0 and !quoted) return;
         try words.append(shell.scratchAllocator(), try wordFromBraceAtoms(shell, atoms, span, quoted));
         return;
     };
