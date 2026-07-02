@@ -1,0 +1,416 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "hexo",
+    "description": "static site generator",
+    "options": [
+      {
+        "long": "config",
+        "description": "use a custom config file",
+        "inherit": true,
+        "value": {
+          "name": "config-file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "safe",
+        "description": "disable loading plugins and scripts",
+        "inherit": true
+      },
+      {
+        "long": "debug",
+        "description": "log verbose messages",
+        "inherit": true
+      },
+      {
+        "long": "silent",
+        "description": "silence output",
+        "inherit": true
+      },
+      {
+        "long": "draft",
+        "description": "display draft posts",
+        "inherit": true
+      },
+      {
+        "long": "cwd",
+        "description": "set current working directory",
+        "inherit": true,
+        "value": {
+          "name": "directory",
+          "provider": "builtin.directories"
+        }
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "config",
+        "description": "get or set configuration",
+        "arguments": {
+          "states": [
+            {
+              "name": "name",
+              "description": "setting name. Leave it blank if you want to show all configurations",
+              "index": 0
+            },
+            {
+              "name": "value",
+              "description": "new value of a setting. Leave it blank if you just want to show a single configuration",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "help",
+        "description": "display help for a command",
+        "arguments": {
+          "states": [
+            {
+              "name": "command",
+              "description": "the command to display help for",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "init",
+        "description": "create a new Hexo folder",
+        "options": [
+          {
+            "long": "no-clone",
+            "description": "copy files instead of cloning from GitHub",
+            "inherit": false
+          },
+          {
+            "long": "no-install",
+            "description": "skip npm install",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "destination",
+              "description": "folder path. Initialize in current folder if not specified",
+              "provider": "builtin.directories",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "new",
+        "description": "create a new article",
+        "options": [
+          {
+            "short": "p",
+            "long": "path",
+            "description": "set post path",
+            "inherit": false,
+            "value": {
+              "name": "path",
+              "description": "the path of the post",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "short": "r",
+            "long": "replace",
+            "description": "replace existing post",
+            "inherit": false
+          },
+          {
+            "short": "s",
+            "long": "slug",
+            "description": "set post slug",
+            "inherit": false,
+            "value": {
+              "name": "slug",
+              "description": "the slug of the post"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "layout",
+              "description": "the layout to use",
+              "provider": "hexo-layouts",
+              "index": 0
+            },
+            {
+              "name": "title",
+              "description": "the title of the post",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "generate",
+        "description": "generate static files",
+        "options": [
+          {
+            "short": "d",
+            "long": "deploy",
+            "description": "deploy after generation",
+            "inherit": false
+          },
+          {
+            "short": "f",
+            "long": "force",
+            "description": "force regeneration",
+            "inherit": false
+          },
+          {
+            "short": "w",
+            "long": "watch",
+            "description": "watch file changes",
+            "inherit": false
+          },
+          {
+            "short": "b",
+            "long": "bail",
+            "description": "bail on generation errors",
+            "inherit": false
+          },
+          {
+            "short": "c",
+            "long": "concurrency",
+            "description": "set generation concurrency",
+            "inherit": false,
+            "value": {
+              "name": "concurrency",
+              "description": "the number of files to generate in parallel",
+              "required": false,
+              "style": "optional"
+            }
+          }
+        ]
+      },
+      {
+        "name": "publish",
+        "description": "publish a draft",
+        "arguments": {
+          "states": [
+            {
+              "name": "layout",
+              "description": "the layout to use",
+              "provider": "hexo-layouts",
+              "index": 0
+            },
+            {
+              "name": "filename",
+              "description": "the name of the post",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "server",
+        "description": "start a local server",
+        "options": [
+          {
+            "short": "i",
+            "long": "ip",
+            "description": "set server bind address",
+            "inherit": false,
+            "value": {
+              "name": "ip",
+              "description": "the IP address to bind to"
+            }
+          },
+          {
+            "short": "p",
+            "long": "port",
+            "description": "set server port",
+            "inherit": false,
+            "value": {
+              "name": "port",
+              "description": "only serve static files"
+            }
+          },
+          {
+            "short": "s",
+            "long": "static",
+            "description": "serve static files from directory",
+            "inherit": false
+          },
+          {
+            "short": "l",
+            "long": "log",
+            "description": "enable logger and set format",
+            "inherit": false,
+            "value": {
+              "name": "format",
+              "description": "the morgan logger format. Can be predefined or customized",
+              "required": false,
+              "style": "optional",
+              "provider": "hexo-log-formats"
+            }
+          },
+          {
+            "short": "o",
+            "long": "open",
+            "description": "open server URL in browser",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "deploy",
+        "description": "deploy your website",
+        "options": [
+          {
+            "long": "setup",
+            "description": "setup without deployment",
+            "inherit": false
+          },
+          {
+            "short": "g",
+            "long": "generate",
+            "description": "generate before deploying",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "render",
+        "description": "render files with renderer plugins",
+        "options": [
+          {
+            "long": "engine",
+            "description": "set render engine",
+            "inherit": false
+          },
+          {
+            "short": "o",
+            "long": "output",
+            "description": "set output destination",
+            "inherit": false,
+            "value": {
+              "name": "output-directory",
+              "description": "the path to output directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "pretty",
+            "description": "prettify JSON output",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "file",
+              "description": "the file to render",
+              "provider": "builtin.files",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "migrate",
+        "description": "migrate content from other blog systems",
+        "arguments": {
+          "states": [
+            {
+              "name": "type",
+              "description": "the type of migration. check https://hexo.io/docs/migration for more details",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "clean",
+        "description": "clean cache and generated files"
+      },
+      {
+        "name": "list",
+        "description": "list routes",
+        "arguments": {
+          "states": [
+            {
+              "name": "type",
+              "description": "the type of routes to list",
+              "provider": "hexo-route-types",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "version",
+        "description": "display version information"
+      }
+    ],
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "hexo-layouts": {
+        "values": [
+          {
+            "value": "post"
+          },
+          {
+            "value": "page"
+          },
+          {
+            "value": "draft"
+          }
+        ]
+      },
+      "hexo-log-formats": {
+        "values": [
+          {
+            "value": "combined"
+          },
+          {
+            "value": "common"
+          },
+          {
+            "value": "tiny"
+          },
+          {
+            "value": "dev"
+          },
+          {
+            "value": "short"
+          }
+        ]
+      },
+      "hexo-route-types": {
+        "values": [
+          {
+            "value": "post"
+          },
+          {
+            "value": "route"
+          },
+          {
+            "value": "page"
+          },
+          {
+            "value": "tag"
+          },
+          {
+            "value": "category"
+          }
+        ]
+      }
+    }
+  }
+}
