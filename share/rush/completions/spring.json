@@ -1,0 +1,262 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "spring",
+    "description": "create and run Spring Boot projects",
+    "options": [
+      {
+        "long": "help",
+        "description": "show help for spring",
+        "inherit": false
+      },
+      {
+        "long": "version",
+        "description": "get spring CLI version",
+        "inherit": false
+      },
+      {
+        "long": "debug",
+        "description": "print additional status information for the command you are running",
+        "inherit": true
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "init",
+        "description": "initialize a new project using Spring Initializr",
+        "options": [
+          {
+            "short": "a",
+            "spellings": [
+              "---artifact-id"
+            ],
+            "description": "project coordinates",
+            "inherit": false,
+            "value": {
+              "name": "Name"
+            }
+          },
+          {
+            "short": "b",
+            "long": "boot-version",
+            "description": "spring Boot version",
+            "inherit": false,
+            "value": {
+              "name": "Version"
+            }
+          },
+          {
+            "long": "build",
+            "description": "build system to use",
+            "inherit": false,
+            "value": {
+              "name": "System",
+              "provider": {
+                "values": [
+                  "maven",
+                  "gradle"
+                ]
+              }
+            }
+          },
+          {
+            "short": "d",
+            "long": "dependencies",
+            "description": "comma-separated list of dependency identifiers to include in the generated project",
+            "inherit": false,
+            "value": {
+              "name": "Dependencies"
+            }
+          },
+          {
+            "long": "description",
+            "description": "project description",
+            "inherit": false,
+            "value": {
+              "name": "description"
+            }
+          },
+          {
+            "short": "f",
+            "long": "force",
+            "description": "force overwrite of existing files",
+            "priority": -10,
+            "inherit": false
+          },
+          {
+            "long": "format",
+            "description": "format of the generated content",
+            "inherit": false,
+            "value": {
+              "name": "Format",
+              "provider": {
+                "values": [
+                  "build",
+                  "project"
+                ]
+              }
+            }
+          },
+          {
+            "short": "g",
+            "long": "group-id",
+            "description": "project coordinates",
+            "inherit": false,
+            "value": {
+              "name": "Group-ID"
+            }
+          },
+          {
+            "short": "j",
+            "long": "java-version",
+            "description": "language level",
+            "inherit": false,
+            "value": {
+              "name": "Version"
+            }
+          },
+          {
+            "long": "list",
+            "description": "list the capabilities of the service",
+            "inherit": false
+          },
+          {
+            "short": "n",
+            "long": "name",
+            "description": "project name",
+            "inherit": false,
+            "value": {
+              "name": "Name"
+            }
+          },
+          {
+            "short": "p",
+            "long": "packaging",
+            "description": "project packaging",
+            "inherit": false,
+            "value": {
+              "name": "Packaging",
+              "provider": {
+                "values": [
+                  "jar",
+                  "war"
+                ]
+              }
+            }
+          },
+          {
+            "long": "package-name",
+            "description": "package name",
+            "inherit": false,
+            "value": {
+              "name": "Name"
+            }
+          },
+          {
+            "short": "t",
+            "long": "type",
+            "description": "project type",
+            "inherit": false,
+            "value": {
+              "name": "Type",
+              "provider": {
+                "values": [
+                  {
+                    "value": "gradle-build",
+                    "description": "generate a Gradle build file"
+                  },
+                  {
+                    "value": "gradle-project",
+                    "description": "generate a Gradle based project archive using the Groovy DSL"
+                  },
+                  {
+                    "value": "gradle-project-kotlin",
+                    "description": "generate a Gradle based project archive using the Kotlin DSL"
+                  },
+                  {
+                    "value": "maven-build",
+                    "description": "generate a Maven pom.xml"
+                  },
+                  {
+                    "value": "maven-project",
+                    "description": "generate a Maven based project archive"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "target",
+            "description": "uRL of the service to use",
+            "inherit": false,
+            "value": {
+              "name": "URL"
+            }
+          },
+          {
+            "short": "v",
+            "long": "version",
+            "description": "project version",
+            "inherit": false,
+            "value": {
+              "name": "Version"
+            }
+          },
+          {
+            "short": "x",
+            "long": "extract",
+            "description": "extract the project archive. Inferred if a location is specified without an extension",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "encodepassword",
+        "description": "encode a password for use with Spring Security",
+        "options": [
+          {
+            "short": "a",
+            "long": "algorithm",
+            "description": "the algorithm to use",
+            "inherit": false,
+            "value": {
+              "name": "Algorithm",
+              "provider": {
+                "values": [
+                  "default",
+                  "bcrypt",
+                  "pbkdf2"
+                ]
+              }
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "Password",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "shell",
+        "description": "start a nested shell"
+      },
+      {
+        "name": "help",
+        "description": "show help for other commands",
+        "arguments": {
+          "states": [
+            {
+              "name": "Command",
+              "index": 0
+            }
+          ]
+        }
+      }
+    ]
+  }
+}
