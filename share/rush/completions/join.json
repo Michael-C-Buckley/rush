@@ -1,0 +1,95 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "join",
+    "description": "join lines from two files",
+    "options": [
+      {
+        "short": "a",
+        "description": "in addition to the default output, produce a line for each unpairable line in file file_number",
+        "inherit": false,
+        "value": {
+          "name": "file_number"
+        }
+      },
+      {
+        "short": "e",
+        "description": "replace empty output fields with string",
+        "inherit": false,
+        "value": {
+          "name": "string"
+        }
+      },
+      {
+        "short": "o",
+        "description": "set output field list",
+        "inherit": false,
+        "value": {
+          "name": "list"
+        }
+      },
+      {
+        "short": "t",
+        "description": "use character char as a field delimiter for both input and output. Every occurrence of char in a line is significant",
+        "inherit": false,
+        "value": {
+          "name": "char"
+        }
+      },
+      {
+        "short": "v",
+        "description": "do not display the default output, but display a line for each unpairable line in file file_number. The options -v 1 and -v 2 may be specified at the same time",
+        "inherit": false,
+        "value": {
+          "name": "file_number"
+        }
+      },
+      {
+        "short": "1",
+        "description": "join on the field'th field of file1",
+        "inherit": false,
+        "value": {
+          "name": "field"
+        }
+      },
+      {
+        "short": "2",
+        "description": "join on the field'th field of file2",
+        "inherit": false,
+        "value": {
+          "name": "field"
+        }
+      },
+      {
+        "short": "j",
+        "description": "join on the field'th field of both file1 and file2",
+        "inherit": false,
+        "value": {
+          "name": "field"
+        }
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "file1",
+          "description": "first file in the join operation",
+          "index": 0,
+          "provider": "builtin.files"
+        },
+        {
+          "name": "file2",
+          "description": "second file in the join operation",
+          "index": 1,
+          "provider": "builtin.files"
+        }
+      ]
+    },
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
