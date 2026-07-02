@@ -1,0 +1,26 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "w",
+    "description": "show logged-in users and activity",
+    "options": [
+      {
+        "short": "h",
+        "description": "suppress the heading"
+      },
+      {
+        "short": "i",
+        "description": "output is sorted by idle time"
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "user",
+          "repeatable": true
+        }
+      ]
+    }
+  }
+}
