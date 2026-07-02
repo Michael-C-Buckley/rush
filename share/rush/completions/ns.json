@@ -1,0 +1,226 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "ns",
+    "description": "create, build, and deploy nativescript apps",
+    "providers": {
+      "builtin.files": { "builtin": "files" },
+      "builtin.directories": { "builtin": "directories" },
+      "ns.package-managers": { "values": ["npm", "yarn", "pnpm"] },
+      "ns.platforms": { "values": ["android", "ios"] },
+      "ns.test-frameworks": { "values": ["mocha", "jasmine", "qunit"] }
+    },
+    "options": [
+      { "short": "v", "long": "version", "description": "show nativescript cli version", "inherit": false }
+    ],
+    "subcommands": [
+      { "name": "help", "description": "open cli documentation", "options": [{ "short": "h", "long": "help", "description": "show help", "inherit": false }] },
+      { "name": "info", "description": "display version information", "options": [{ "short": "h", "long": "help", "description": "show help", "inherit": false }] },
+      {
+        "name": "update",
+        "description": "update project dependencies and runtimes",
+        "subcommands": [{ "name": "next", "description": "use the latest development release" }],
+        "arguments": { "states": [{ "name": "version", "index": 0, "required": false }] },
+        "options": [{ "short": "h", "long": "help", "description": "show help", "inherit": false }]
+      },
+      {
+        "name": "package-manager",
+        "description": "manage the configured package manager",
+        "subcommands": [
+          { "name": "get", "description": "print current package manager" },
+          { "name": "set", "description": "set package manager", "arguments": { "states": [{ "name": "manager", "index": 0, "provider": "ns.package-managers" }] } }
+        ],
+        "options": [{ "short": "h", "long": "help", "description": "show help", "inherit": false }]
+      },
+      {
+        "name": "doctor",
+        "description": "check system configuration",
+        "subcommands": [
+          { "name": "android", "description": "check android configuration" },
+          { "name": "ios", "description": "check ios configuration" }
+        ],
+        "options": [{ "short": "h", "long": "help", "description": "show help", "inherit": false }]
+      },
+      { "name": "migrate", "description": "migrate app dependencies", "options": [{ "short": "h", "long": "help", "description": "show help", "inherit": false }] },
+      {
+        "name": "proxy",
+        "description": "manage proxy settings",
+        "subcommands": [
+          { "name": "clear", "description": "clear proxy settings" },
+          {
+            "name": "set",
+            "description": "set proxy settings",
+            "arguments": { "states": [
+              { "name": "proxy-url", "index": 0 },
+              { "name": "username", "index": 1, "required": false },
+              { "name": "password", "index": 2, "required": false }
+            ] },
+            "options": [{ "long": "insecure", "description": "allow insecure ssl connections", "inherit": false }]
+          }
+        ],
+        "options": [{ "short": "h", "long": "help", "description": "show help", "inherit": false }]
+      },
+      {
+        "name": "usage-reporting",
+        "description": "configure anonymous usage reporting",
+        "subcommands": [{ "name": "status" }, { "name": "enable" }, { "name": "disable" }]
+      },
+      {
+        "name": "error-reporting",
+        "description": "configure anonymous error reporting",
+        "subcommands": [{ "name": "status" }, { "name": "enable" }, { "name": "disable" }]
+      },
+      {
+        "name": "create",
+        "description": "create a nativescript project",
+        "arguments": { "states": [{ "name": "application-name", "index": 0, "required": false }] },
+        "options": [
+          { "long": "template", "description": "create from a template", "inherit": false, "value": { "name": "template" } },
+          { "long": "angular", "aliases": ["ng"], "description": "use the angular template", "inherit": false },
+          { "long": "react", "description": "use the react template", "inherit": false },
+          { "long": "vue", "aliases": ["vuejs"], "description": "use the vue template", "inherit": false },
+          { "long": "svelte", "description": "use the svelte template", "inherit": false },
+          { "long": "typescript", "aliases": ["tsc", "ts"], "description": "use typescript", "inherit": false },
+          { "long": "javascript", "aliases": ["js"], "description": "use javascript", "inherit": false },
+          { "long": "path", "description": "project directory", "inherit": false, "value": { "name": "directory", "provider": "builtin.directories" } },
+          { "long": "appid", "description": "application identifier", "inherit": false, "value": { "name": "identifier" } },
+          { "short": "h", "long": "help", "description": "show help", "inherit": false }
+        ]
+      },
+      { "name": "clean", "description": "clean a nativescript project", "options": [{ "short": "h", "long": "help", "description": "show help", "inherit": false }] },
+      {
+        "name": "preview",
+        "description": "preview the app on a device",
+        "options": [
+          { "long": "force", "description": "force dependency installation", "inherit": false },
+          { "long": "no-hmr", "description": "disable hot module replacement", "inherit": false },
+          { "short": "h", "long": "help", "description": "show help", "inherit": false }
+        ]
+      },
+      {
+        "name": "platform",
+        "description": "manage target platforms",
+        "subcommands": [
+          { "name": "list", "description": "list target platforms" },
+          { "name": "add", "description": "add a platform", "arguments": { "states": [{ "name": "platform", "index": 0, "provider": "ns.platforms" }] }, "options": [{ "long": "framework-path", "description": "runtime package path", "inherit": false, "value": { "name": "path", "provider": "builtin.files" } }] },
+          { "name": "remove", "description": "remove a platform", "arguments": { "states": [{ "name": "platform", "index": 0, "provider": "ns.platforms" }] } },
+          { "name": "update", "description": "update a platform", "arguments": { "states": [{ "name": "platform", "index": 0, "provider": "ns.platforms" }] } }
+        ],
+        "options": [{ "short": "h", "long": "help", "description": "show help", "inherit": false }]
+      },
+      {
+        "name": "run",
+        "description": "run the app",
+        "subcommands": [
+          { "name": "android", "description": "run on android", "options": [{ "long": "emulator", "description": "use an emulator", "inherit": false }, { "long": "device", "description": "device id", "inherit": false, "value": { "name": "device-id" } }] },
+          { "name": "ios", "description": "run on ios", "options": [{ "long": "emulator", "description": "use an emulator", "inherit": false }, { "long": "device", "description": "device id", "inherit": false, "value": { "name": "device-id" } }] }
+        ],
+        "options": [
+          { "long": "clean", "description": "rebuild the native application", "inherit": false },
+          { "long": "force", "description": "force dependency installation", "inherit": false },
+          { "long": "no-hmr", "description": "disable hot module replacement", "inherit": false },
+          { "long": "release", "description": "produce a release build", "inherit": false },
+          { "long": "bundle", "description": "bundle the application", "inherit": false },
+          { "long": "timeout", "description": "debugger timeout in seconds", "inherit": false, "value": { "name": "seconds" } },
+          { "short": "h", "long": "help", "description": "show help", "inherit": false }
+        ]
+      },
+      {
+        "name": "debug",
+        "description": "start a debugging session",
+        "subcommands": [{ "name": "android" }, { "name": "ios" }],
+        "options": [
+          { "long": "debug-brk", "description": "break on first javascript line", "inherit": false },
+          { "long": "start", "description": "attach to a running app", "inherit": false },
+          { "long": "no-watch", "description": "disable livesync", "inherit": false },
+          { "long": "device", "description": "device id", "inherit": false, "value": { "name": "device-id" } },
+          { "short": "h", "long": "help", "description": "show help", "inherit": false }
+        ]
+      },
+      {
+        "name": "test",
+        "description": "run unit tests",
+        "subcommands": [
+          { "name": "init", "description": "configure unit testing", "options": [{ "long": "framework", "description": "test framework", "inherit": false, "value": { "name": "framework", "provider": "ns.test-frameworks" } }] },
+          { "name": "android" },
+          { "name": "ios" }
+        ],
+        "options": [{ "long": "watch", "description": "rerun tests on changes", "inherit": false }, { "long": "debug-brk", "description": "run tests under debugger", "inherit": false }, { "short": "h", "long": "help", "description": "show help", "inherit": false }]
+      },
+      {
+        "name": "plugin",
+        "description": "manage project plugins",
+        "subcommands": [
+          { "name": "add", "arguments": { "states": [{ "name": "plugin", "index": 0 }] } },
+          { "name": "remove", "arguments": { "states": [{ "name": "plugin", "index": 0 }] } },
+          { "name": "update", "arguments": { "states": [{ "name": "plugin", "index": 0, "repeatable": true }] } },
+          { "name": "build" },
+          { "name": "create", "arguments": { "states": [{ "name": "repository-name", "index": 0 }] }, "options": [{ "long": "path", "description": "project directory", "inherit": false, "value": { "name": "directory", "provider": "builtin.directories" } }, { "long": "username", "description": "github username", "inherit": false, "value": { "name": "username" } }, { "long": "pluginName", "description": "plugin name", "inherit": false, "value": { "name": "name" } }] }
+        ]
+      },
+      {
+        "name": "resources",
+        "description": "manage app resources",
+        "subcommands": [
+          { "name": "update", "description": "update app resources" },
+          { "name": "generate", "subcommands": [
+            { "name": "splashes", "arguments": { "states": [{ "name": "image", "index": 0, "provider": "builtin.files" }] }, "options": [{ "long": "background", "description": "splashscreen background color", "inherit": false, "value": { "name": "color" } }] },
+            { "name": "icons", "arguments": { "states": [{ "name": "image", "index": 0, "provider": "builtin.files" }] } }
+          ] }
+        ]
+      },
+      {
+        "name": "prepare",
+        "description": "prepare app resources and platforms",
+        "subcommands": [{ "name": "android" }, { "name": "ios" }],
+        "options": [{ "long": "hmr", "description": "enable hot module replacement", "inherit": false }, { "long": "force", "description": "force dependency installation", "inherit": false }, { "short": "h", "long": "help", "description": "show help", "inherit": false }]
+      },
+      {
+        "name": "build",
+        "description": "build the app",
+        "subcommands": [{ "name": "android" }, { "name": "ios" }],
+        "options": [
+          { "long": "release", "description": "produce a release build", "inherit": false },
+          { "long": "copy-to", "description": "copy output to path", "inherit": false, "value": { "name": "path", "provider": "builtin.directories" } },
+          { "long": "path", "description": "project directory", "inherit": false, "value": { "name": "directory", "provider": "builtin.directories" } },
+          { "long": "clean", "description": "rebuild the native application", "inherit": false },
+          { "long": "force", "description": "force dependency installation", "inherit": false },
+          { "short": "h", "long": "help", "description": "show help", "inherit": false }
+        ]
+      },
+      {
+        "name": "deploy",
+        "description": "deploy the app to a device or emulator",
+        "subcommands": [{ "name": "android" }, { "name": "ios" }],
+        "options": [{ "long": "device", "description": "device id", "inherit": false, "value": { "name": "device-id" } }, { "long": "release", "description": "deploy a release build", "inherit": false }, { "long": "clean", "description": "rebuild the native application", "inherit": false }, { "short": "h", "long": "help", "description": "show help", "inherit": false }]
+      },
+      {
+        "name": "install",
+        "description": "install project dependencies or modules",
+        "subcommands": [{ "name": "typescript", "description": "enable typescript support" }],
+        "arguments": { "states": [{ "name": "module", "index": 0, "required": false }] },
+        "options": [{ "long": "path", "description": "package directory", "inherit": false, "value": { "name": "directory", "provider": "builtin.directories" } }, { "short": "h", "long": "help", "description": "show help", "inherit": false }]
+      },
+      {
+        "name": "appstore",
+        "description": "manage app store uploads",
+        "subcommands": [{ "name": "upload", "description": "upload project to itunes connect", "options": [{ "long": "ipa", "description": "ipa file", "inherit": false, "value": { "name": "ipa", "provider": "builtin.files" } }] }],
+        "options": [{ "long": "team-id", "description": "apple team id", "inherit": false, "value": { "name": "team-id" } }, { "short": "h", "long": "help", "description": "show help", "inherit": false }]
+      },
+      {
+        "name": "device",
+        "aliases": ["devices"],
+        "description": "list and manage connected devices",
+        "subcommands": [
+          { "name": "android", "description": "list android devices" },
+          { "name": "ios", "description": "list ios devices" },
+          { "name": "log", "description": "open device log", "options": [{ "long": "device", "description": "device id", "inherit": false, "value": { "name": "device-id" } }] },
+          { "name": "list-applications", "description": "list installed applications", "options": [{ "long": "device", "description": "device id", "inherit": false, "value": { "name": "device-id" } }] },
+          { "name": "run", "description": "run an installed application", "arguments": { "states": [{ "name": "application-id", "index": 0 }] }, "options": [{ "long": "device", "description": "device id", "inherit": false, "value": { "name": "device-id" } }] }
+        ],
+        "options": [{ "long": "available-devices", "description": "list available devices", "inherit": false }, { "long": "json", "description": "output json", "inherit": false }, { "short": "h", "long": "help", "description": "show help", "inherit": false }]
+      }
+    ]
+  }
+}
