@@ -1,0 +1,517 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "ssh",
+    "description": "connect to remote hosts over SSH",
+    "options": [
+      {
+        "short": "1",
+        "description": "forces ssh to try protocol version 1 only",
+        "inherit": false
+      },
+      {
+        "short": "2",
+        "description": "forces ssh to try protocol version 2 only",
+        "inherit": false
+      },
+      {
+        "short": "4",
+        "description": "forces ssh to use IPv4 addresses only",
+        "inherit": false
+      },
+      {
+        "short": "6",
+        "description": "forces ssh to use IPv6 addresses only",
+        "inherit": false
+      },
+      {
+        "short": "A",
+        "description": "enables forwarding of the authentication agent connection",
+        "inherit": false
+      },
+      {
+        "short": "a",
+        "description": "disables forwarding of the authentication agent connection",
+        "inherit": false
+      },
+      {
+        "short": "b",
+        "description": "use bind_address on the local machine as the source address of the connection",
+        "inherit": false,
+        "value": {
+          "name": "bind-address",
+          "description": "source address of the connection"
+        }
+      },
+      {
+        "short": "C",
+        "description": "requests compression of all data (including stdin, stdout, stderr, and data for forwarded X11 and TCP connections)",
+        "inherit": false
+      },
+      {
+        "short": "c",
+        "description": "selects the cipher specification for encrypting the session",
+        "inherit": false,
+        "value": {
+          "name": "cipher-spec",
+          "description": "the selected cipher specification"
+        }
+      },
+      {
+        "short": "D",
+        "description": "specifies a local 'dynamic' application-level port forwarding",
+        "inherit": false,
+        "value": {
+          "name": "port",
+          "description": "port of the bind address"
+        }
+      },
+      {
+        "short": "e",
+        "description": "sets the escape character for sessions with a pty (default: '~')",
+        "inherit": false,
+        "value": {
+          "name": "escape-char",
+          "description": "specified escape character"
+        }
+      },
+      {
+        "short": "F",
+        "description": "specifies an alternative per-user configuration file",
+        "inherit": false,
+        "value": {
+          "name": "configfile",
+          "description": "path to alternative config file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "short": "f",
+        "description": "requests ssh to go to background just before command execution",
+        "inherit": false
+      },
+      {
+        "short": "g",
+        "description": "allows remote hosts to connect to local forwarded ports",
+        "inherit": false
+      },
+      {
+        "short": "I",
+        "description": "specify the PKCS#11 shared library ssh should use to communicate with a PKCS#11 token providing the user's private RSA key",
+        "inherit": false,
+        "value": {
+          "name": "pkcs11"
+        }
+      },
+      {
+        "short": "i",
+        "description": "selects a file from which the identity (private key) for public key authentication is read",
+        "repeatable": true,
+        "inherit": false,
+        "value": {
+          "name": "identity-file",
+          "description": "path to identity (private key)",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "short": "K",
+        "description": "enables GSSAPI-based authentication and forwarding (delegation) of GSSAPI credentials to the server",
+        "inherit": false
+      },
+      {
+        "short": "k",
+        "description": "disables forwarding (delegation) of GSSAPI credentials to the server",
+        "inherit": false
+      },
+      {
+        "short": "L",
+        "description": "specifies that the given port on the local (client) host is to be forwarded to the given host and port on the remote side",
+        "inherit": false,
+        "value": {
+          "name": "port:host:hostport",
+          "description": "local port, followed by host and host port to forward to"
+        }
+      },
+      {
+        "short": "l",
+        "description": "specifies the user to log in as on the remote machine",
+        "inherit": false,
+        "value": {
+          "name": "login-name",
+          "description": "name of user logging into remote machine"
+        }
+      },
+      {
+        "short": "M",
+        "description": "places the ssh client into ``master'' mode for connection sharing",
+        "repeatable": true,
+        "inherit": false
+      },
+      {
+        "short": "m",
+        "description": "additionally, for protocol version 2 a comma-separated list of MAC (message authentication code) algorithms can be specified in order of preference",
+        "inherit": false,
+        "value": {
+          "name": "mac-spec"
+        }
+      },
+      {
+        "short": "N",
+        "description": "do not execute a remote command",
+        "inherit": false
+      },
+      {
+        "short": "n",
+        "description": "redirects stdin from /dev/null (actually, prevents reading from stdin)",
+        "inherit": false
+      },
+      {
+        "short": "O",
+        "description": "control an active connection multiplexing master process",
+        "inherit": false,
+        "value": {
+          "name": "ctl-cmd",
+          "description": "command that's passed to the master process"
+        }
+      },
+      {
+        "short": "o",
+        "description": "can be used to give options in the format used in the configuration file",
+        "repeatable": true,
+        "inherit": false,
+        "value": {
+          "name": "option",
+          "description": "options that can be specified in the format of the config file",
+          "provider": {
+            "values": [
+              {
+                "value": "AddressFamily"
+              },
+              {
+                "value": "BatchMode"
+              },
+              {
+                "value": "BindAddress"
+              },
+              {
+                "value": "ChallengeResponseAuthentication"
+              },
+              {
+                "value": "CheckHostIP"
+              },
+              {
+                "value": "Cipher"
+              },
+              {
+                "value": "Ciphers"
+              },
+              {
+                "value": "ClearAllForwardings"
+              },
+              {
+                "value": "Compression"
+              },
+              {
+                "value": "CompressionLevel"
+              },
+              {
+                "value": "ConnectionAttempts"
+              },
+              {
+                "value": "ConnectTimeout"
+              },
+              {
+                "value": "ControlMaster"
+              },
+              {
+                "value": "ControlPath"
+              },
+              {
+                "value": "ControlPersist"
+              },
+              {
+                "value": "DynamicForward"
+              },
+              {
+                "value": "EscapeChar"
+              },
+              {
+                "value": "ExitOnForwardFailure"
+              },
+              {
+                "value": "ForwardAgent"
+              },
+              {
+                "value": "ForwardX11"
+              },
+              {
+                "value": "ForwardX11Timeout"
+              },
+              {
+                "value": "ForwardX11Trusted"
+              },
+              {
+                "value": "GatewayPorts"
+              },
+              {
+                "value": "GlobalKnownHostsFile"
+              },
+              {
+                "value": "GSSAPIAuthentication"
+              },
+              {
+                "value": "GSSAPIDelegateCredentials"
+              },
+              {
+                "value": "HashKnownHosts"
+              },
+              {
+                "value": "Host"
+              },
+              {
+                "value": "HostbasedAuthentication"
+              },
+              {
+                "value": "HostKeyAlgorithms"
+              },
+              {
+                "value": "HostKeyAlias"
+              },
+              {
+                "value": "HostName"
+              },
+              {
+                "value": "IdentityFile"
+              },
+              {
+                "value": "IdentitiesOnly"
+              },
+              {
+                "value": "IPQoS"
+              },
+              {
+                "value": "KbdInteractiveAuthentication"
+              },
+              {
+                "value": "KbdInteractiveDevices"
+              },
+              {
+                "value": "KexAlgorithms"
+              },
+              {
+                "value": "LocalCommand"
+              },
+              {
+                "value": "LocalForward"
+              },
+              {
+                "value": "LogLevel"
+              },
+              {
+                "value": "MACs"
+              },
+              {
+                "value": "NoHostAuthenticationForLocalhost"
+              },
+              {
+                "value": "NumberOfPasswordPrompts"
+              },
+              {
+                "value": "PasswordAuthentication"
+              },
+              {
+                "value": "PermitLocalCommand"
+              },
+              {
+                "value": "PKCS11Provider"
+              },
+              {
+                "value": "Port"
+              },
+              {
+                "value": "PreferredAuthentications"
+              },
+              {
+                "value": "Protocol"
+              },
+              {
+                "value": "ProxyCommand"
+              },
+              {
+                "value": "PubkeyAuthentication"
+              },
+              {
+                "value": "RekeyLimit"
+              },
+              {
+                "value": "RequestTTY"
+              },
+              {
+                "value": "RhostsRSAAuthentication"
+              },
+              {
+                "value": "RSAAuthentication"
+              },
+              {
+                "value": "SendEnv"
+              },
+              {
+                "value": "ServerAliveInterval"
+              },
+              {
+                "value": "ServerAliveCountMax"
+              },
+              {
+                "value": "StrictHostKeyChecking"
+              },
+              {
+                "value": "TCPKeepAlive"
+              },
+              {
+                "value": "Tunnel"
+              },
+              {
+                "value": "TunnelDevice"
+              },
+              {
+                "value": "UsePrivilegedPort"
+              },
+              {
+                "value": "User"
+              },
+              {
+                "value": "UserKnownHostsFile"
+              },
+              {
+                "value": "VerifyHostKeyDNS"
+              },
+              {
+                "value": "VisualHostKey"
+              },
+              {
+                "value": "XAuthLocation"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "short": "p",
+        "description": "port to connect to on the remote host",
+        "inherit": false,
+        "value": {
+          "name": "port",
+          "description": "port to connect to"
+        }
+      },
+      {
+        "short": "q",
+        "description": "quiet mode. Causes most warning and diagnostic messages to be suppressed",
+        "inherit": false
+      },
+      {
+        "short": "R",
+        "description": "specifies that the given port on the remote (server) host is to be forwarded to the given host and port on the local side",
+        "inherit": false,
+        "value": {
+          "name": "port:host:hostport",
+          "description": "local port, followed by host and host port to forward to"
+        }
+      },
+      {
+        "short": "S",
+        "description": "specifies the location of a control socket for connection sharing, or the string 'none' to disable connection sharing",
+        "inherit": false,
+        "value": {
+          "name": "ctl_path",
+          "description": "location of the control socket",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "short": "s",
+        "description": "may be used to request invocation of a subsystem on the remote system",
+        "inherit": false
+      },
+      {
+        "short": "T",
+        "description": "disable pseudo-tty allocation",
+        "inherit": false
+      },
+      {
+        "short": "t",
+        "description": "force pseudo-tty allocation",
+        "repeatable": true,
+        "inherit": false
+      },
+      {
+        "short": "V",
+        "description": "display the version number and exit",
+        "inherit": false
+      },
+      {
+        "short": "v",
+        "description": "verbose mode. Causes ssh to print debugging messages about its progress",
+        "inherit": false
+      },
+      {
+        "short": "W",
+        "description": "requests that standard input and output on the client be forwarded to host on port over the secure channel",
+        "inherit": false,
+        "value": {
+          "name": "host:port",
+          "description": "host and port to forward to"
+        }
+      },
+      {
+        "short": "w",
+        "description": "requests tunnel device forwarding with the specified tun(4) devices between the client (local_tun) and the server (remote_tun)",
+        "inherit": false,
+        "value": {
+          "name": "local-tun",
+          "description": "local device to forward to"
+        }
+      },
+      {
+        "short": "X",
+        "description": "enables X11 forwarding",
+        "inherit": false
+      },
+      {
+        "short": "x",
+        "description": "disables X11 forwarding",
+        "inherit": false
+      },
+      {
+        "short": "Y",
+        "description": "enables trusted X11 forwarding",
+        "inherit": false
+      },
+      {
+        "short": "y",
+        "description": "send log information using the syslog(3) system module",
+        "inherit": false
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "user@hostname",
+          "description": "host to connect to",
+          "index": 0,
+          "provider": "ssh.hosts"
+        }
+      ]
+    },
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "ssh.hosts": {
+        "function": "__rush_complete_ssh_hosts"
+      }
+    }
+  }
+}
