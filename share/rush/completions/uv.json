@@ -1,0 +1,3100 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "uv",
+    "description": "fast Python package manager",
+    "providers": {
+      "color": {
+        "values": [
+          "auto",
+          "always",
+          "never"
+        ]
+      },
+      "pythonPreference": {
+        "values": [
+          "only-managed",
+          "managed",
+          "system",
+          "only-system"
+        ]
+      },
+      "indexStrategy": {
+        "values": [
+          "first-index",
+          "unsafe-first-match",
+          "unsafe-best-match"
+        ]
+      },
+      "keyringProvider": {
+        "values": [
+          "disabled",
+          "subprocess"
+        ]
+      },
+      "linkMode": {
+        "values": [
+          "clone",
+          "copy",
+          "hardlink",
+          "symlink"
+        ]
+      },
+      "resolution": {
+        "values": [
+          "highest",
+          "lowest",
+          "lowest-direct"
+        ]
+      },
+      "prerelease": {
+        "values": [
+          "disallow",
+          "allow",
+          "if-necessary",
+          "explicit",
+          "if-necessary-or-explicit"
+        ]
+      },
+      "vcs": {
+        "values": [
+          "git",
+          "none"
+        ]
+      },
+      "buildBackend": {
+        "values": [
+          "hatch",
+          "flit",
+          "pdm",
+          "setuptools",
+          "maturin",
+          "scikit"
+        ]
+      },
+      "authorFrom": {
+        "values": [
+          "auto",
+          "git",
+          "none"
+        ]
+      },
+      "trustedPublishing": {
+        "values": [
+          "automatic",
+          "always",
+          "never"
+        ]
+      },
+      "outputFormat": {
+        "values": [
+          "text",
+          "json"
+        ]
+      },
+      "pythonPlatform": {
+        "values": [
+          "windows",
+          "linux",
+          "macos",
+          "x86_64-pc-windows-msvc",
+          "i686-pc-windows-msvc",
+          "x86_64-unknown-linux-gnu",
+          "aarch64-apple-darwin",
+          "x86_64-apple-darwin",
+          "aarch64-unknown-linux-gnu",
+          "aarch64-unknown-linux-musl",
+          "x86_64-unknown-linux-musl"
+        ]
+      },
+      "files": {
+        "builtin": "files"
+      },
+      "directories": {
+        "builtin": "directories"
+      },
+      "executables": {
+        "builtin": "executables"
+      }
+    },
+    "options": [
+      {
+        "short": "q",
+        "long": "quiet",
+        "description": "suppress output"
+      },
+      {
+        "short": "v",
+        "long": "verbose",
+        "description": "use verbose output"
+      },
+      {
+        "long": "color",
+        "description": "control color output",
+        "value": {
+          "name": "when",
+          "provider": "color"
+        }
+      },
+      {
+        "long": "native-tls",
+        "description": "use native TLS certificates",
+        "value": {
+          "name": "bool"
+        }
+      },
+      {
+        "long": "offline",
+        "description": "disable network access"
+      },
+      {
+        "long": "allow-insecure-host",
+        "description": "allow insecure host connections",
+        "value": {
+          "name": "host"
+        },
+        "repeatable": true
+      },
+      {
+        "long": "no-progress",
+        "description": "hide progress output"
+      },
+      {
+        "long": "directory",
+        "description": "change to directory before running",
+        "value": {
+          "name": "directory",
+          "provider": "directories"
+        }
+      },
+      {
+        "long": "project",
+        "description": "run within project directory",
+        "value": {
+          "name": "project",
+          "provider": "directories"
+        }
+      },
+      {
+        "long": "config-file",
+        "description": "use uv.toml configuration file",
+        "value": {
+          "name": "file",
+          "provider": "files"
+        }
+      },
+      {
+        "long": "no-config",
+        "description": "avoid discovering configuration files"
+      },
+      {
+        "short": "h",
+        "long": "help",
+        "description": "show help"
+      },
+      {
+        "short": "V",
+        "long": "version",
+        "description": "show version"
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "run",
+        "description": "run a command or script",
+        "options": [
+          {
+            "long": "extra",
+            "description": "include extra dependencies",
+            "value": {
+              "name": "extra"
+            },
+            "repeatable": true
+          },
+          {
+            "long": "all-extras",
+            "description": "include all extras"
+          },
+          {
+            "long": "no-extra",
+            "description": "exclude extra dependencies",
+            "value": {
+              "name": "extra"
+            },
+            "repeatable": true
+          },
+          {
+            "long": "no-dev",
+            "description": "omit development dependencies"
+          },
+          {
+            "long": "only-dev",
+            "description": "only include development dependencies"
+          },
+          {
+            "long": "group",
+            "description": "include dependency group",
+            "value": {
+              "name": "group"
+            },
+            "repeatable": true
+          },
+          {
+            "long": "no-group",
+            "description": "exclude dependency group",
+            "value": {
+              "name": "group"
+            },
+            "repeatable": true
+          },
+          {
+            "long": "only-group",
+            "description": "only include dependency group",
+            "value": {
+              "name": "group"
+            },
+            "repeatable": true
+          },
+          {
+            "long": "all-groups",
+            "description": "include all dependency groups"
+          },
+          {
+            "short": "m",
+            "long": "module",
+            "description": "run a Python module"
+          },
+          {
+            "short": "s",
+            "long": "script",
+            "description": "run a Python script"
+          },
+          {
+            "long": "env-file",
+            "description": "load environment from file",
+            "value": {
+              "name": "file",
+              "provider": "files"
+            }
+          },
+          {
+            "long": "with",
+            "description": "run with packages installed",
+            "value": {
+              "name": "package"
+            },
+            "repeatable": true
+          },
+          {
+            "long": "with-editable",
+            "description": "run with editable packages",
+            "value": {
+              "name": "package"
+            },
+            "repeatable": true
+          },
+          {
+            "long": "with-requirements",
+            "description": "run with requirements files",
+            "value": {
+              "name": "file",
+              "provider": "files"
+            },
+            "repeatable": true
+          },
+          {
+            "long": "isolated",
+            "description": "use an isolated environment"
+          },
+          {
+            "long": "no-sync",
+            "description": "avoid syncing environment"
+          },
+          {
+            "long": "locked",
+            "description": "require uv.lock to remain unchanged"
+          },
+          {
+            "long": "frozen",
+            "description": "use lockfile without updating"
+          },
+          {
+            "long": "all-packages",
+            "description": "run with all workspace packages"
+          },
+          {
+            "long": "package",
+            "description": "select workspace package",
+            "value": {
+              "name": "package"
+            }
+          },
+          {
+            "long": "no-project",
+            "description": "avoid project discovery"
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "command",
+              "rest": "command-line"
+            }
+          ]
+        }
+      },
+      {
+        "name": "init",
+        "description": "create a project",
+        "options": [
+          {
+            "long": "name",
+            "description": "set project name",
+            "value": {
+              "name": "name"
+            }
+          },
+          {
+            "long": "package",
+            "description": "create a package project"
+          },
+          {
+            "long": "no-package",
+            "description": "do not create a package project"
+          },
+          {
+            "long": "app",
+            "description": "create an application"
+          },
+          {
+            "long": "lib",
+            "description": "create a library"
+          },
+          {
+            "long": "script",
+            "description": "create a script"
+          },
+          {
+            "long": "vcs",
+            "description": "select version control system",
+            "value": {
+              "name": "vcs",
+              "provider": "vcs"
+            }
+          },
+          {
+            "long": "build-backend",
+            "description": "select build backend",
+            "value": {
+              "name": "backend",
+              "provider": "buildBackend"
+            }
+          },
+          {
+            "long": "no-readme",
+            "description": "skip README creation"
+          },
+          {
+            "long": "author-from",
+            "description": "populate author metadata from source",
+            "value": {
+              "name": "source",
+              "provider": "authorFrom"
+            }
+          },
+          {
+            "long": "no-pin-python",
+            "description": "skip .python-version"
+          },
+          {
+            "long": "no-workspace",
+            "description": "create a standalone project"
+          },
+          {
+            "long": "no-cache",
+            "description": "avoid cache reads and writes"
+          },
+          {
+            "long": "cache-dir",
+            "description": "set cache directory",
+            "value": {
+              "name": "directory",
+              "provider": "directories"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "provider": "directories"
+            }
+          ]
+        }
+      },
+      {
+        "name": "add",
+        "description": "add dependencies to a project",
+        "options": [
+          {
+            "short": "r",
+            "long": "requirements",
+            "description": "add packages from requirements file",
+            "value": {
+              "name": "file",
+              "provider": "files"
+            },
+            "repeatable": true
+          },
+          {
+            "long": "dev",
+            "description": "add to development dependencies"
+          },
+          {
+            "long": "optional",
+            "description": "add to optional dependency extra",
+            "value": {
+              "name": "extra"
+            }
+          },
+          {
+            "long": "group",
+            "description": "add to dependency group",
+            "value": {
+              "name": "group"
+            }
+          },
+          {
+            "long": "editable",
+            "description": "add as editable"
+          },
+          {
+            "long": "raw-sources",
+            "description": "write source requirements directly"
+          },
+          {
+            "long": "rev",
+            "description": "use Git revision",
+            "value": {
+              "name": "rev"
+            }
+          },
+          {
+            "long": "tag",
+            "description": "use Git tag",
+            "value": {
+              "name": "tag"
+            }
+          },
+          {
+            "long": "branch",
+            "description": "use Git branch",
+            "value": {
+              "name": "branch"
+            }
+          },
+          {
+            "long": "extra",
+            "description": "enable dependency extras",
+            "value": {
+              "name": "extra"
+            },
+            "repeatable": true
+          },
+          {
+            "long": "no-sync",
+            "description": "avoid syncing environment"
+          },
+          {
+            "long": "locked",
+            "description": "require uv.lock to remain unchanged"
+          },
+          {
+            "long": "frozen",
+            "description": "use lockfile without updating"
+          },
+          {
+            "long": "package",
+            "description": "select workspace package",
+            "value": {
+              "name": "package"
+            }
+          },
+          {
+            "long": "script",
+            "description": "add to Python script",
+            "value": {
+              "name": "file",
+              "provider": "files"
+            }
+          },
+          {
+            "long": "index",
+            "description": "add package index URL",
+            "value": {
+              "name": "url"
+            },
+            "repeatable": true
+          },
+          {
+            "long": "default-index",
+            "description": "set default package index URL",
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "index-url",
+            "description": "set Python package index URL",
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "extra-index-url",
+            "description": "add extra package index URL",
+            "value": {
+              "name": "url"
+            },
+            "repeatable": true
+          },
+          {
+            "long": "find-links",
+            "description": "add distribution search location",
+            "value": {
+              "name": "location",
+              "provider": "files"
+            },
+            "repeatable": true
+          },
+          {
+            "long": "no-index",
+            "description": "ignore registry indexes"
+          },
+          {
+            "long": "index-strategy",
+            "description": "set multi-index resolution strategy",
+            "value": {
+              "name": "strategy",
+              "provider": "indexStrategy"
+            }
+          },
+          {
+            "long": "keyring-provider",
+            "description": "use keyring authentication",
+            "value": {
+              "name": "provider",
+              "provider": "keyringProvider"
+            }
+          },
+          {
+            "short": "U",
+            "long": "upgrade-package",
+            "description": "allow package upgrades",
+            "value": {
+              "name": "package"
+            },
+            "repeatable": true
+          },
+          {
+            "long": "resolution",
+            "description": "select dependency resolution strategy",
+            "value": {
+              "name": "strategy",
+              "provider": "resolution"
+            }
+          },
+          {
+            "long": "prerelease",
+            "description": "set pre-release handling",
+            "value": {
+              "name": "policy",
+              "provider": "prerelease"
+            }
+          },
+          {
+            "long": "exclude-newer",
+            "description": "exclude packages newer than date",
+            "value": {
+              "name": "date"
+            }
+          },
+          {
+            "long": "no-sources",
+            "description": "ignore tool.uv.sources"
+          },
+          {
+            "long": "reinstall",
+            "description": "reinstall packages"
+          },
+          {
+            "long": "reinstall-package",
+            "description": "reinstall package",
+            "value": {
+              "name": "package"
+            },
+            "repeatable": true
+          },
+          {
+            "long": "link-mode",
+            "description": "set cache link mode",
+            "value": {
+              "name": "mode",
+              "provider": "linkMode"
+            }
+          },
+          {
+            "long": "compile-bytecode",
+            "description": "compile Python bytecode"
+          },
+          {
+            "short": "C",
+            "description": "pass PEP 517 setting",
+            "value": {
+              "name": "key=value"
+            },
+            "repeatable": true
+          },
+          {
+            "long": "no-build-isolation",
+            "description": "disable build isolation"
+          },
+          {
+            "long": "no-build-isolation-package",
+            "description": "disable build isolation for package",
+            "value": {
+              "name": "package"
+            },
+            "repeatable": true
+          },
+          {
+            "long": "no-build",
+            "description": "skip source distribution builds"
+          },
+          {
+            "long": "no-build-package",
+            "description": "skip source builds for package",
+            "value": {
+              "name": "package"
+            },
+            "repeatable": true
+          },
+          {
+            "long": "no-binary",
+            "description": "skip pre-built wheels"
+          },
+          {
+            "long": "no-binary-package",
+            "description": "skip wheels for package",
+            "value": {
+              "name": "package"
+            },
+            "repeatable": true
+          },
+          {
+            "long": "no-cache",
+            "description": "avoid cache reads and writes"
+          },
+          {
+            "long": "cache-dir",
+            "description": "set cache directory",
+            "value": {
+              "name": "directory",
+              "provider": "directories"
+            }
+          },
+          {
+            "long": "refresh",
+            "description": "refresh cached data"
+          },
+          {
+            "long": "refresh-package",
+            "description": "refresh a package cache",
+            "value": {
+              "name": "package"
+            },
+            "repeatable": true
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "packages",
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "remove",
+        "description": "remove dependencies from a project",
+        "options": [
+          {
+            "long": "dev",
+            "description": "remove from development dependencies"
+          },
+          {
+            "long": "optional",
+            "description": "remove from optional dependency extra",
+            "value": {
+              "name": "extra"
+            }
+          },
+          {
+            "long": "group",
+            "description": "remove from dependency group",
+            "value": {
+              "name": "group"
+            }
+          },
+          {
+            "long": "no-sync",
+            "description": "avoid syncing environment"
+          },
+          {
+            "long": "locked",
+            "description": "require uv.lock to remain unchanged"
+          },
+          {
+            "long": "frozen",
+            "description": "use lockfile without updating"
+          },
+          {
+            "long": "package",
+            "description": "select workspace package",
+            "value": {
+              "name": "package"
+            }
+          },
+          {
+            "long": "script",
+            "description": "remove from Python script",
+            "value": {
+              "name": "file",
+              "provider": "files"
+            }
+          },
+          {
+            "long": "index",
+            "description": "add package index URL",
+            "value": {
+              "name": "url"
+            },
+            "repeatable": true
+          },
+          {
+            "long": "default-index",
+            "description": "set default package index URL",
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "index-url",
+            "description": "set Python package index URL",
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "extra-index-url",
+            "description": "add extra package index URL",
+            "value": {
+              "name": "url"
+            },
+            "repeatable": true
+          },
+          {
+            "long": "find-links",
+            "description": "add distribution search location",
+            "value": {
+              "name": "location",
+              "provider": "files"
+            },
+            "repeatable": true
+          },
+          {
+            "long": "no-index",
+            "description": "ignore registry indexes"
+          },
+          {
+            "long": "index-strategy",
+            "description": "set multi-index resolution strategy",
+            "value": {
+              "name": "strategy",
+              "provider": "indexStrategy"
+            }
+          },
+          {
+            "long": "keyring-provider",
+            "description": "use keyring authentication",
+            "value": {
+              "name": "provider",
+              "provider": "keyringProvider"
+            }
+          },
+          {
+            "short": "U",
+            "long": "upgrade-package",
+            "description": "allow package upgrades",
+            "value": {
+              "name": "package"
+            },
+            "repeatable": true
+          },
+          {
+            "long": "resolution",
+            "description": "select dependency resolution strategy",
+            "value": {
+              "name": "strategy",
+              "provider": "resolution"
+            }
+          },
+          {
+            "long": "prerelease",
+            "description": "set pre-release handling",
+            "value": {
+              "name": "policy",
+              "provider": "prerelease"
+            }
+          },
+          {
+            "long": "exclude-newer",
+            "description": "exclude packages newer than date",
+            "value": {
+              "name": "date"
+            }
+          },
+          {
+            "long": "no-sources",
+            "description": "ignore tool.uv.sources"
+          },
+          {
+            "long": "reinstall",
+            "description": "reinstall packages"
+          },
+          {
+            "long": "reinstall-package",
+            "description": "reinstall package",
+            "value": {
+              "name": "package"
+            },
+            "repeatable": true
+          },
+          {
+            "long": "link-mode",
+            "description": "set cache link mode",
+            "value": {
+              "name": "mode",
+              "provider": "linkMode"
+            }
+          },
+          {
+            "long": "compile-bytecode",
+            "description": "compile Python bytecode"
+          },
+          {
+            "short": "C",
+            "description": "pass PEP 517 setting",
+            "value": {
+              "name": "key=value"
+            },
+            "repeatable": true
+          },
+          {
+            "long": "no-build-isolation",
+            "description": "disable build isolation"
+          },
+          {
+            "long": "no-build-isolation-package",
+            "description": "disable build isolation for package",
+            "value": {
+              "name": "package"
+            },
+            "repeatable": true
+          },
+          {
+            "long": "no-build",
+            "description": "skip source distribution builds"
+          },
+          {
+            "long": "no-build-package",
+            "description": "skip source builds for package",
+            "value": {
+              "name": "package"
+            },
+            "repeatable": true
+          },
+          {
+            "long": "no-binary",
+            "description": "skip pre-built wheels"
+          },
+          {
+            "long": "no-binary-package",
+            "description": "skip wheels for package",
+            "value": {
+              "name": "package"
+            },
+            "repeatable": true
+          },
+          {
+            "long": "no-cache",
+            "description": "avoid cache reads and writes"
+          },
+          {
+            "long": "cache-dir",
+            "description": "set cache directory",
+            "value": {
+              "name": "directory",
+              "provider": "directories"
+            }
+          },
+          {
+            "long": "refresh",
+            "description": "refresh cached data"
+          },
+          {
+            "long": "refresh-package",
+            "description": "refresh a package cache",
+            "value": {
+              "name": "package"
+            },
+            "repeatable": true
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "dependencies",
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "sync",
+        "description": "sync the project environment",
+        "options": [
+          {
+            "long": "extra",
+            "description": "include extra dependencies",
+            "value": {
+              "name": "extra"
+            },
+            "repeatable": true
+          },
+          {
+            "long": "all-extras",
+            "description": "include all extras"
+          },
+          {
+            "long": "no-extra",
+            "description": "exclude extra dependencies",
+            "value": {
+              "name": "extra"
+            },
+            "repeatable": true
+          },
+          {
+            "long": "no-dev",
+            "description": "omit development dependencies"
+          },
+          {
+            "long": "only-dev",
+            "description": "only include development dependencies"
+          },
+          {
+            "long": "group",
+            "description": "include dependency group",
+            "value": {
+              "name": "group"
+            },
+            "repeatable": true
+          },
+          {
+            "long": "no-group",
+            "description": "exclude dependency group",
+            "value": {
+              "name": "group"
+            },
+            "repeatable": true
+          },
+          {
+            "long": "only-group",
+            "description": "only include dependency group",
+            "value": {
+              "name": "group"
+            },
+            "repeatable": true
+          },
+          {
+            "long": "all-groups",
+            "description": "include all dependency groups"
+          },
+          {
+            "long": "no-editable",
+            "description": "install editables as non-editable"
+          },
+          {
+            "long": "inexact",
+            "description": "keep extraneous packages"
+          },
+          {
+            "long": "no-install-project",
+            "description": "do not install current project"
+          },
+          {
+            "long": "no-install-workspace",
+            "description": "do not install workspace members"
+          },
+          {
+            "long": "no-install-package",
+            "description": "skip installing package",
+            "value": {
+              "name": "package"
+            },
+            "repeatable": true
+          },
+          {
+            "long": "locked",
+            "description": "require uv.lock to remain unchanged"
+          },
+          {
+            "long": "frozen",
+            "description": "use lockfile without updating"
+          },
+          {
+            "long": "all-packages",
+            "description": "sync all workspace packages"
+          },
+          {
+            "long": "package",
+            "description": "select workspace package",
+            "value": {
+              "name": "package"
+            }
+          },
+          {
+            "long": "index",
+            "description": "add package index URL",
+            "value": {
+              "name": "url"
+            },
+            "repeatable": true
+          },
+          {
+            "long": "default-index",
+            "description": "set default package index URL",
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "index-url",
+            "description": "set Python package index URL",
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "extra-index-url",
+            "description": "add extra package index URL",
+            "value": {
+              "name": "url"
+            },
+            "repeatable": true
+          },
+          {
+            "long": "find-links",
+            "description": "add distribution search location",
+            "value": {
+              "name": "location",
+              "provider": "files"
+            },
+            "repeatable": true
+          },
+          {
+            "long": "no-index",
+            "description": "ignore registry indexes"
+          },
+          {
+            "long": "index-strategy",
+            "description": "set multi-index resolution strategy",
+            "value": {
+              "name": "strategy",
+              "provider": "indexStrategy"
+            }
+          },
+          {
+            "long": "keyring-provider",
+            "description": "use keyring authentication",
+            "value": {
+              "name": "provider",
+              "provider": "keyringProvider"
+            }
+          },
+          {
+            "short": "U",
+            "long": "upgrade-package",
+            "description": "allow package upgrades",
+            "value": {
+              "name": "package"
+            },
+            "repeatable": true
+          },
+          {
+            "long": "resolution",
+            "description": "select dependency resolution strategy",
+            "value": {
+              "name": "strategy",
+              "provider": "resolution"
+            }
+          },
+          {
+            "long": "prerelease",
+            "description": "set pre-release handling",
+            "value": {
+              "name": "policy",
+              "provider": "prerelease"
+            }
+          },
+          {
+            "long": "exclude-newer",
+            "description": "exclude packages newer than date",
+            "value": {
+              "name": "date"
+            }
+          },
+          {
+            "long": "no-sources",
+            "description": "ignore tool.uv.sources"
+          },
+          {
+            "long": "reinstall",
+            "description": "reinstall packages"
+          },
+          {
+            "long": "reinstall-package",
+            "description": "reinstall package",
+            "value": {
+              "name": "package"
+            },
+            "repeatable": true
+          },
+          {
+            "long": "link-mode",
+            "description": "set cache link mode",
+            "value": {
+              "name": "mode",
+              "provider": "linkMode"
+            }
+          },
+          {
+            "long": "compile-bytecode",
+            "description": "compile Python bytecode"
+          },
+          {
+            "short": "C",
+            "description": "pass PEP 517 setting",
+            "value": {
+              "name": "key=value"
+            },
+            "repeatable": true
+          },
+          {
+            "long": "no-build-isolation",
+            "description": "disable build isolation"
+          },
+          {
+            "long": "no-build-isolation-package",
+            "description": "disable build isolation for package",
+            "value": {
+              "name": "package"
+            },
+            "repeatable": true
+          },
+          {
+            "long": "no-build",
+            "description": "skip source distribution builds"
+          },
+          {
+            "long": "no-build-package",
+            "description": "skip source builds for package",
+            "value": {
+              "name": "package"
+            },
+            "repeatable": true
+          },
+          {
+            "long": "no-binary",
+            "description": "skip pre-built wheels"
+          },
+          {
+            "long": "no-binary-package",
+            "description": "skip wheels for package",
+            "value": {
+              "name": "package"
+            },
+            "repeatable": true
+          },
+          {
+            "long": "no-cache",
+            "description": "avoid cache reads and writes"
+          },
+          {
+            "long": "cache-dir",
+            "description": "set cache directory",
+            "value": {
+              "name": "directory",
+              "provider": "directories"
+            }
+          },
+          {
+            "long": "refresh",
+            "description": "refresh cached data"
+          },
+          {
+            "long": "refresh-package",
+            "description": "refresh a package cache",
+            "value": {
+              "name": "package"
+            },
+            "repeatable": true
+          }
+        ]
+      },
+      {
+        "name": "lock",
+        "description": "update the project lockfile",
+        "options": [
+          {
+            "long": "locked",
+            "description": "require uv.lock to remain unchanged"
+          },
+          {
+            "long": "frozen",
+            "description": "use lockfile without updating"
+          },
+          {
+            "long": "dry-run",
+            "description": "show changes without writing lockfile"
+          },
+          {
+            "long": "index",
+            "description": "add package index URL",
+            "value": {
+              "name": "url"
+            },
+            "repeatable": true
+          },
+          {
+            "long": "default-index",
+            "description": "set default package index URL",
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "index-url",
+            "description": "set Python package index URL",
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "extra-index-url",
+            "description": "add extra package index URL",
+            "value": {
+              "name": "url"
+            },
+            "repeatable": true
+          },
+          {
+            "long": "find-links",
+            "description": "add distribution search location",
+            "value": {
+              "name": "location",
+              "provider": "files"
+            },
+            "repeatable": true
+          },
+          {
+            "long": "no-index",
+            "description": "ignore registry indexes"
+          },
+          {
+            "long": "index-strategy",
+            "description": "set multi-index resolution strategy",
+            "value": {
+              "name": "strategy",
+              "provider": "indexStrategy"
+            }
+          },
+          {
+            "long": "keyring-provider",
+            "description": "use keyring authentication",
+            "value": {
+              "name": "provider",
+              "provider": "keyringProvider"
+            }
+          },
+          {
+            "short": "U",
+            "long": "upgrade-package",
+            "description": "allow package upgrades",
+            "value": {
+              "name": "package"
+            },
+            "repeatable": true
+          },
+          {
+            "long": "resolution",
+            "description": "select dependency resolution strategy",
+            "value": {
+              "name": "strategy",
+              "provider": "resolution"
+            }
+          },
+          {
+            "long": "prerelease",
+            "description": "set pre-release handling",
+            "value": {
+              "name": "policy",
+              "provider": "prerelease"
+            }
+          },
+          {
+            "long": "exclude-newer",
+            "description": "exclude packages newer than date",
+            "value": {
+              "name": "date"
+            }
+          },
+          {
+            "long": "no-sources",
+            "description": "ignore tool.uv.sources"
+          },
+          {
+            "short": "C",
+            "description": "pass PEP 517 setting",
+            "value": {
+              "name": "key=value"
+            },
+            "repeatable": true
+          },
+          {
+            "long": "no-build-isolation",
+            "description": "disable build isolation"
+          },
+          {
+            "long": "no-build-isolation-package",
+            "description": "disable build isolation for package",
+            "value": {
+              "name": "package"
+            },
+            "repeatable": true
+          },
+          {
+            "long": "no-build",
+            "description": "skip source distribution builds"
+          },
+          {
+            "long": "no-build-package",
+            "description": "skip source builds for package",
+            "value": {
+              "name": "package"
+            },
+            "repeatable": true
+          },
+          {
+            "long": "no-binary",
+            "description": "skip pre-built wheels"
+          },
+          {
+            "long": "no-binary-package",
+            "description": "skip wheels for package",
+            "value": {
+              "name": "package"
+            },
+            "repeatable": true
+          },
+          {
+            "long": "link-mode",
+            "description": "set cache link mode",
+            "value": {
+              "name": "mode",
+              "provider": "linkMode"
+            }
+          },
+          {
+            "long": "no-cache",
+            "description": "avoid cache reads and writes"
+          },
+          {
+            "long": "cache-dir",
+            "description": "set cache directory",
+            "value": {
+              "name": "directory",
+              "provider": "directories"
+            }
+          },
+          {
+            "long": "refresh",
+            "description": "refresh cached data"
+          },
+          {
+            "long": "refresh-package",
+            "description": "refresh a package cache",
+            "value": {
+              "name": "package"
+            },
+            "repeatable": true
+          }
+        ]
+      },
+      {
+        "name": "export",
+        "description": "export the project lockfile",
+        "options": [
+          {
+            "long": "format",
+            "description": "select export format",
+            "value": {
+              "name": "format"
+            }
+          },
+          {
+            "long": "all-packages",
+            "description": "export all workspace packages"
+          },
+          {
+            "long": "package",
+            "description": "select workspace package",
+            "value": {
+              "name": "package"
+            }
+          },
+          {
+            "long": "prune",
+            "description": "prune package from output",
+            "value": {
+              "name": "package"
+            },
+            "repeatable": true
+          },
+          {
+            "long": "extra",
+            "description": "include extra dependencies",
+            "value": {
+              "name": "extra"
+            },
+            "repeatable": true
+          },
+          {
+            "long": "all-extras",
+            "description": "include all extras"
+          },
+          {
+            "long": "no-extra",
+            "description": "exclude extra dependencies",
+            "value": {
+              "name": "extra"
+            },
+            "repeatable": true
+          },
+          {
+            "long": "no-dev",
+            "description": "omit development dependencies"
+          },
+          {
+            "long": "only-dev",
+            "description": "only include development dependencies"
+          },
+          {
+            "long": "group",
+            "description": "include dependency group",
+            "value": {
+              "name": "group"
+            },
+            "repeatable": true
+          },
+          {
+            "long": "no-group",
+            "description": "exclude dependency group",
+            "value": {
+              "name": "group"
+            },
+            "repeatable": true
+          },
+          {
+            "long": "only-group",
+            "description": "only include dependency group",
+            "value": {
+              "name": "group"
+            },
+            "repeatable": true
+          },
+          {
+            "long": "all-groups",
+            "description": "include all dependency groups"
+          },
+          {
+            "long": "no-header",
+            "description": "omit output header"
+          },
+          {
+            "long": "no-editable",
+            "description": "emit non-editable requirements"
+          },
+          {
+            "long": "no-hashes",
+            "description": "omit hashes"
+          },
+          {
+            "short": "o",
+            "description": "write output file",
+            "value": {
+              "name": "file",
+              "provider": "files"
+            }
+          },
+          {
+            "long": "no-emit-project",
+            "description": "omit current project"
+          },
+          {
+            "long": "no-emit-workspace",
+            "description": "omit workspace members"
+          },
+          {
+            "long": "no-emit-package",
+            "description": "omit package",
+            "value": {
+              "name": "package"
+            },
+            "repeatable": true
+          },
+          {
+            "long": "locked",
+            "description": "require uv.lock to remain unchanged"
+          },
+          {
+            "long": "frozen",
+            "description": "use lockfile without updating"
+          },
+          {
+            "long": "index",
+            "description": "add package index URL",
+            "value": {
+              "name": "url"
+            },
+            "repeatable": true
+          },
+          {
+            "long": "default-index",
+            "description": "set default package index URL",
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "index-url",
+            "description": "set Python package index URL",
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "extra-index-url",
+            "description": "add extra package index URL",
+            "value": {
+              "name": "url"
+            },
+            "repeatable": true
+          },
+          {
+            "long": "find-links",
+            "description": "add distribution search location",
+            "value": {
+              "name": "location",
+              "provider": "files"
+            },
+            "repeatable": true
+          },
+          {
+            "long": "no-index",
+            "description": "ignore registry indexes"
+          },
+          {
+            "long": "index-strategy",
+            "description": "set multi-index resolution strategy",
+            "value": {
+              "name": "strategy",
+              "provider": "indexStrategy"
+            }
+          },
+          {
+            "long": "keyring-provider",
+            "description": "use keyring authentication",
+            "value": {
+              "name": "provider",
+              "provider": "keyringProvider"
+            }
+          },
+          {
+            "short": "U",
+            "long": "upgrade-package",
+            "description": "allow package upgrades",
+            "value": {
+              "name": "package"
+            },
+            "repeatable": true
+          },
+          {
+            "long": "resolution",
+            "description": "select dependency resolution strategy",
+            "value": {
+              "name": "strategy",
+              "provider": "resolution"
+            }
+          },
+          {
+            "long": "prerelease",
+            "description": "set pre-release handling",
+            "value": {
+              "name": "policy",
+              "provider": "prerelease"
+            }
+          },
+          {
+            "long": "exclude-newer",
+            "description": "exclude packages newer than date",
+            "value": {
+              "name": "date"
+            }
+          },
+          {
+            "long": "no-sources",
+            "description": "ignore tool.uv.sources"
+          },
+          {
+            "short": "C",
+            "description": "pass PEP 517 setting",
+            "value": {
+              "name": "key=value"
+            },
+            "repeatable": true
+          },
+          {
+            "long": "no-build-isolation",
+            "description": "disable build isolation"
+          },
+          {
+            "long": "no-build-isolation-package",
+            "description": "disable build isolation for package",
+            "value": {
+              "name": "package"
+            },
+            "repeatable": true
+          },
+          {
+            "long": "no-build",
+            "description": "skip source distribution builds"
+          },
+          {
+            "long": "no-build-package",
+            "description": "skip source builds for package",
+            "value": {
+              "name": "package"
+            },
+            "repeatable": true
+          },
+          {
+            "long": "no-binary",
+            "description": "skip pre-built wheels"
+          },
+          {
+            "long": "no-binary-package",
+            "description": "skip wheels for package",
+            "value": {
+              "name": "package"
+            },
+            "repeatable": true
+          }
+        ]
+      },
+      {
+        "name": "tree",
+        "description": "display dependency tree",
+        "options": [
+          {
+            "long": "universal",
+            "description": "show platform-independent tree"
+          },
+          {
+            "short": "d",
+            "description": "set maximum depth",
+            "value": {
+              "name": "depth"
+            }
+          },
+          {
+            "long": "prune",
+            "description": "prune package from tree",
+            "value": {
+              "name": "package"
+            },
+            "repeatable": true
+          },
+          {
+            "long": "package",
+            "description": "display only package",
+            "value": {
+              "name": "package"
+            },
+            "repeatable": true
+          },
+          {
+            "long": "no-dedupe",
+            "description": "do not de-duplicate dependencies"
+          },
+          {
+            "long": "invert",
+            "description": "show reverse dependencies"
+          },
+          {
+            "long": "outdated",
+            "description": "show latest package versions"
+          },
+          {
+            "long": "extra",
+            "description": "include extra dependencies",
+            "value": {
+              "name": "extra"
+            },
+            "repeatable": true
+          },
+          {
+            "long": "all-extras",
+            "description": "include all extras"
+          },
+          {
+            "long": "no-extra",
+            "description": "exclude extra dependencies",
+            "value": {
+              "name": "extra"
+            },
+            "repeatable": true
+          },
+          {
+            "long": "no-dev",
+            "description": "omit development dependencies"
+          },
+          {
+            "long": "only-dev",
+            "description": "only include development dependencies"
+          },
+          {
+            "long": "group",
+            "description": "include dependency group",
+            "value": {
+              "name": "group"
+            },
+            "repeatable": true
+          },
+          {
+            "long": "no-group",
+            "description": "exclude dependency group",
+            "value": {
+              "name": "group"
+            },
+            "repeatable": true
+          },
+          {
+            "long": "only-group",
+            "description": "only include dependency group",
+            "value": {
+              "name": "group"
+            },
+            "repeatable": true
+          },
+          {
+            "long": "all-groups",
+            "description": "include all dependency groups"
+          },
+          {
+            "long": "locked",
+            "description": "require uv.lock to remain unchanged"
+          },
+          {
+            "long": "frozen",
+            "description": "use lockfile without updating"
+          },
+          {
+            "long": "python-version",
+            "description": "filter by Python version",
+            "value": {
+              "name": "version"
+            }
+          },
+          {
+            "long": "python-platform",
+            "description": "filter by Python platform",
+            "value": {
+              "name": "platform",
+              "provider": "pythonPlatform"
+            }
+          },
+          {
+            "long": "index",
+            "description": "add package index URL",
+            "value": {
+              "name": "url"
+            },
+            "repeatable": true
+          },
+          {
+            "long": "default-index",
+            "description": "set default package index URL",
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "index-url",
+            "description": "set Python package index URL",
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "extra-index-url",
+            "description": "add extra package index URL",
+            "value": {
+              "name": "url"
+            },
+            "repeatable": true
+          },
+          {
+            "long": "find-links",
+            "description": "add distribution search location",
+            "value": {
+              "name": "location",
+              "provider": "files"
+            },
+            "repeatable": true
+          },
+          {
+            "long": "no-index",
+            "description": "ignore registry indexes"
+          },
+          {
+            "long": "index-strategy",
+            "description": "set multi-index resolution strategy",
+            "value": {
+              "name": "strategy",
+              "provider": "indexStrategy"
+            }
+          },
+          {
+            "long": "keyring-provider",
+            "description": "use keyring authentication",
+            "value": {
+              "name": "provider",
+              "provider": "keyringProvider"
+            }
+          },
+          {
+            "short": "U",
+            "long": "upgrade-package",
+            "description": "allow package upgrades",
+            "value": {
+              "name": "package"
+            },
+            "repeatable": true
+          },
+          {
+            "long": "resolution",
+            "description": "select dependency resolution strategy",
+            "value": {
+              "name": "strategy",
+              "provider": "resolution"
+            }
+          },
+          {
+            "long": "prerelease",
+            "description": "set pre-release handling",
+            "value": {
+              "name": "policy",
+              "provider": "prerelease"
+            }
+          },
+          {
+            "long": "exclude-newer",
+            "description": "exclude packages newer than date",
+            "value": {
+              "name": "date"
+            }
+          },
+          {
+            "long": "no-sources",
+            "description": "ignore tool.uv.sources"
+          },
+          {
+            "long": "link-mode",
+            "description": "set cache link mode",
+            "value": {
+              "name": "mode",
+              "provider": "linkMode"
+            }
+          },
+          {
+            "short": "p",
+            "long": "python",
+            "description": "select Python interpreter",
+            "value": {
+              "name": "python"
+            }
+          },
+          {
+            "long": "python-preference",
+            "description": "prefer managed or system Python",
+            "value": {
+              "name": "preference",
+              "provider": "pythonPreference"
+            }
+          },
+          {
+            "long": "no-python-downloads",
+            "description": "disable Python downloads"
+          },
+          {
+            "long": "no-cache",
+            "description": "avoid cache reads and writes"
+          },
+          {
+            "long": "cache-dir",
+            "description": "set cache directory",
+            "value": {
+              "name": "directory",
+              "provider": "directories"
+            }
+          },
+          {
+            "long": "refresh",
+            "description": "refresh cached data"
+          },
+          {
+            "long": "refresh-package",
+            "description": "refresh a package cache",
+            "value": {
+              "name": "package"
+            },
+            "repeatable": true
+          }
+        ]
+      },
+      {
+        "name": "tool",
+        "description": "manage Python package commands",
+        "options": [
+          {
+            "long": "python-preference",
+            "description": "prefer managed or system Python",
+            "value": {
+              "name": "preference",
+              "provider": "pythonPreference"
+            }
+          },
+          {
+            "long": "no-python-downloads",
+            "description": "disable Python downloads"
+          },
+          {
+            "long": "no-cache",
+            "description": "avoid cache reads and writes"
+          },
+          {
+            "long": "cache-dir",
+            "description": "set cache directory",
+            "value": {
+              "name": "directory",
+              "provider": "directories"
+            }
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "run",
+            "description": "run a package-provided command",
+            "options": [
+              {
+                "long": "from",
+                "description": "select package providing command",
+                "value": {
+                  "name": "package"
+                }
+              },
+              {
+                "long": "with",
+                "description": "include package",
+                "value": {
+                  "name": "package"
+                },
+                "repeatable": true
+              },
+              {
+                "long": "with-editable",
+                "description": "include editable package",
+                "value": {
+                  "name": "package"
+                },
+                "repeatable": true
+              },
+              {
+                "long": "with-requirements",
+                "description": "include requirements file",
+                "value": {
+                  "name": "file",
+                  "provider": "files"
+                },
+                "repeatable": true
+              },
+              {
+                "long": "isolated",
+                "description": "use an isolated environment"
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "command",
+                  "rest": "command-line"
+                }
+              ]
+            }
+          },
+          {
+            "name": "install",
+            "description": "install package commands",
+            "options": [
+              {
+                "long": "editable",
+                "description": "install editable package"
+              },
+              {
+                "long": "with",
+                "description": "include extra requirements",
+                "value": {
+                  "name": "package"
+                },
+                "repeatable": true
+              },
+              {
+                "long": "with-editable",
+                "description": "include editable package",
+                "value": {
+                  "name": "package"
+                },
+                "repeatable": true
+              },
+              {
+                "long": "with-requirements",
+                "description": "include requirements file",
+                "value": {
+                  "name": "file",
+                  "provider": "files"
+                },
+                "repeatable": true
+              },
+              {
+                "long": "isolated",
+                "description": "use an isolated environment"
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "package"
+                }
+              ]
+            }
+          },
+          {
+            "name": "upgrade",
+            "description": "upgrade installed tools",
+            "options": [
+              {
+                "long": "all",
+                "description": "upgrade all tools"
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "tool"
+                }
+              ]
+            }
+          },
+          {
+            "name": "list",
+            "description": "list installed tools",
+            "options": [
+              {
+                "long": "show-paths",
+                "description": "show tool paths"
+              },
+              {
+                "long": "show-version-specifiers",
+                "description": "show version specifiers"
+              }
+            ]
+          },
+          {
+            "name": "uninstall",
+            "description": "uninstall tools",
+            "options": [
+              {
+                "long": "all",
+                "description": "uninstall all tools"
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "tool",
+                  "repeatable": true
+                }
+              ]
+            }
+          },
+          {
+            "name": "update-shell",
+            "description": "ensure tool directory is on PATH"
+          },
+          {
+            "name": "dir",
+            "description": "show tools directory",
+            "options": [
+              {
+                "long": "bin",
+                "description": "show executable directory"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "python",
+        "description": "manage Python installations",
+        "options": [
+          {
+            "long": "python-preference",
+            "description": "prefer managed or system Python",
+            "value": {
+              "name": "preference",
+              "provider": "pythonPreference"
+            }
+          },
+          {
+            "long": "no-python-downloads",
+            "description": "disable Python downloads"
+          },
+          {
+            "long": "no-cache",
+            "description": "avoid cache reads and writes"
+          },
+          {
+            "long": "cache-dir",
+            "description": "set cache directory",
+            "value": {
+              "name": "directory",
+              "provider": "directories"
+            }
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "list",
+            "description": "list Python installations",
+            "options": [
+              {
+                "long": "all-versions",
+                "description": "include old patch versions"
+              },
+              {
+                "long": "all-platforms",
+                "description": "list all platforms"
+              },
+              {
+                "long": "only-installed",
+                "description": "show only installed versions"
+              }
+            ]
+          },
+          {
+            "name": "install",
+            "description": "install Python versions",
+            "options": [
+              {
+                "long": "mirror",
+                "description": "set Python download mirror",
+                "value": {
+                  "name": "url"
+                }
+              },
+              {
+                "long": "pypy-mirror",
+                "description": "set PyPy download mirror",
+                "value": {
+                  "name": "url"
+                }
+              },
+              {
+                "long": "reinstall",
+                "description": "reinstall requested version"
+              },
+              {
+                "long": "force",
+                "description": "replace existing executables"
+              },
+              {
+                "long": "default",
+                "description": "make default version"
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "version",
+                  "repeatable": true
+                }
+              ]
+            }
+          },
+          {
+            "name": "find",
+            "description": "find a Python installation",
+            "options": [
+              {
+                "long": "no-project",
+                "description": "avoid project discovery"
+              },
+              {
+                "long": "system",
+                "description": "only find system Python"
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "request"
+                }
+              ]
+            }
+          },
+          {
+            "name": "pin",
+            "description": "pin a Python version",
+            "options": [
+              {
+                "long": "resolved",
+                "description": "write resolved interpreter path"
+              },
+              {
+                "long": "no-project",
+                "description": "avoid project discovery"
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "request"
+                }
+              ]
+            }
+          },
+          {
+            "name": "dir",
+            "description": "show Python installation directory",
+            "options": [
+              {
+                "long": "bin",
+                "description": "show executable directory"
+              }
+            ]
+          },
+          {
+            "name": "uninstall",
+            "description": "uninstall Python versions",
+            "options": [
+              {
+                "long": "all",
+                "description": "uninstall all versions"
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "version",
+                  "repeatable": true
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "pip",
+        "description": "use a pip-compatible interface",
+        "options": [
+          {
+            "long": "python-preference",
+            "description": "prefer managed or system Python",
+            "value": {
+              "name": "preference",
+              "provider": "pythonPreference"
+            }
+          },
+          {
+            "long": "no-python-downloads",
+            "description": "disable Python downloads"
+          },
+          {
+            "long": "no-cache",
+            "description": "avoid cache reads and writes"
+          },
+          {
+            "long": "cache-dir",
+            "description": "set cache directory",
+            "value": {
+              "name": "directory",
+              "provider": "directories"
+            }
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "compile",
+            "description": "compile requirements input",
+            "arguments": {
+              "states": [
+                {
+                  "name": "requirements",
+                  "provider": "files",
+                  "repeatable": true
+                }
+              ]
+            }
+          },
+          {
+            "name": "sync",
+            "description": "sync from requirements files",
+            "arguments": {
+              "states": [
+                {
+                  "name": "requirements",
+                  "provider": "files",
+                  "repeatable": true
+                }
+              ]
+            }
+          },
+          {
+            "name": "install",
+            "description": "install packages",
+            "arguments": {
+              "states": [
+                {
+                  "name": "packages",
+                  "repeatable": true
+                }
+              ]
+            }
+          },
+          {
+            "name": "uninstall",
+            "description": "uninstall packages",
+            "arguments": {
+              "states": [
+                {
+                  "name": "packages",
+                  "repeatable": true
+                }
+              ]
+            }
+          },
+          {
+            "name": "freeze",
+            "description": "list installed packages as requirements"
+          },
+          {
+            "name": "list",
+            "description": "list installed packages"
+          },
+          {
+            "name": "show",
+            "description": "show package information",
+            "arguments": {
+              "states": [
+                {
+                  "name": "packages",
+                  "repeatable": true
+                }
+              ]
+            }
+          },
+          {
+            "name": "tree",
+            "description": "display environment dependency tree"
+          },
+          {
+            "name": "check",
+            "description": "check installed dependencies"
+          }
+        ]
+      },
+      {
+        "name": "venv",
+        "description": "create a virtual environment",
+        "options": [
+          {
+            "short": "p",
+            "long": "python",
+            "description": "select Python interpreter",
+            "value": {
+              "name": "python"
+            }
+          },
+          {
+            "long": "python-preference",
+            "description": "prefer managed or system Python",
+            "value": {
+              "name": "preference",
+              "provider": "pythonPreference"
+            }
+          },
+          {
+            "long": "no-python-downloads",
+            "description": "disable Python downloads"
+          },
+          {
+            "long": "no-project",
+            "description": "avoid project discovery"
+          },
+          {
+            "long": "seed",
+            "description": "install seed packages"
+          },
+          {
+            "long": "allow-existing",
+            "description": "preserve existing target path"
+          },
+          {
+            "long": "prompt",
+            "description": "set virtualenv prompt",
+            "value": {
+              "name": "prompt"
+            }
+          },
+          {
+            "long": "system-site-packages",
+            "description": "include system site packages"
+          },
+          {
+            "long": "relocatable",
+            "description": "make environment relocatable"
+          },
+          {
+            "long": "index",
+            "description": "add package index URL",
+            "value": {
+              "name": "url"
+            },
+            "repeatable": true
+          },
+          {
+            "long": "default-index",
+            "description": "set default package index URL",
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "index-url",
+            "description": "set Python package index URL",
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "extra-index-url",
+            "description": "add extra package index URL",
+            "value": {
+              "name": "url"
+            },
+            "repeatable": true
+          },
+          {
+            "long": "find-links",
+            "description": "add distribution search location",
+            "value": {
+              "name": "location",
+              "provider": "files"
+            },
+            "repeatable": true
+          },
+          {
+            "long": "no-index",
+            "description": "ignore registry indexes"
+          },
+          {
+            "long": "index-strategy",
+            "description": "set multi-index resolution strategy",
+            "value": {
+              "name": "strategy",
+              "provider": "indexStrategy"
+            }
+          },
+          {
+            "long": "keyring-provider",
+            "description": "use keyring authentication",
+            "value": {
+              "name": "provider",
+              "provider": "keyringProvider"
+            }
+          },
+          {
+            "long": "no-cache",
+            "description": "avoid cache reads and writes"
+          },
+          {
+            "long": "cache-dir",
+            "description": "set cache directory",
+            "value": {
+              "name": "directory",
+              "provider": "directories"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "provider": "directories"
+            }
+          ]
+        }
+      },
+      {
+        "name": "build",
+        "description": "build source distributions and wheels",
+        "options": [
+          {
+            "long": "package",
+            "description": "select workspace package",
+            "value": {
+              "name": "package"
+            }
+          },
+          {
+            "long": "all-packages",
+            "description": "build all workspace packages"
+          },
+          {
+            "short": "o",
+            "description": "set output directory",
+            "value": {
+              "name": "directory",
+              "provider": "directories"
+            }
+          },
+          {
+            "long": "sdist",
+            "description": "build source distribution"
+          },
+          {
+            "long": "wheel",
+            "description": "build wheel"
+          },
+          {
+            "long": "no-build-logs",
+            "description": "hide build backend logs"
+          },
+          {
+            "long": "force-pep517",
+            "description": "always build through PEP 517"
+          },
+          {
+            "short": "b",
+            "description": "constrain build dependencies",
+            "value": {
+              "name": "file",
+              "provider": "files"
+            },
+            "repeatable": true
+          },
+          {
+            "long": "require-hashes",
+            "description": "require matching hashes"
+          },
+          {
+            "long": "no-verify-hashes",
+            "description": "disable hash validation"
+          },
+          {
+            "short": "p",
+            "long": "python",
+            "description": "select Python interpreter",
+            "value": {
+              "name": "python"
+            }
+          },
+          {
+            "long": "python-preference",
+            "description": "prefer managed or system Python",
+            "value": {
+              "name": "preference",
+              "provider": "pythonPreference"
+            }
+          },
+          {
+            "long": "no-python-downloads",
+            "description": "disable Python downloads"
+          },
+          {
+            "long": "index",
+            "description": "add package index URL",
+            "value": {
+              "name": "url"
+            },
+            "repeatable": true
+          },
+          {
+            "long": "default-index",
+            "description": "set default package index URL",
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "index-url",
+            "description": "set Python package index URL",
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "extra-index-url",
+            "description": "add extra package index URL",
+            "value": {
+              "name": "url"
+            },
+            "repeatable": true
+          },
+          {
+            "long": "find-links",
+            "description": "add distribution search location",
+            "value": {
+              "name": "location",
+              "provider": "files"
+            },
+            "repeatable": true
+          },
+          {
+            "long": "no-index",
+            "description": "ignore registry indexes"
+          },
+          {
+            "long": "index-strategy",
+            "description": "set multi-index resolution strategy",
+            "value": {
+              "name": "strategy",
+              "provider": "indexStrategy"
+            }
+          },
+          {
+            "long": "keyring-provider",
+            "description": "use keyring authentication",
+            "value": {
+              "name": "provider",
+              "provider": "keyringProvider"
+            }
+          },
+          {
+            "short": "U",
+            "long": "upgrade-package",
+            "description": "allow package upgrades",
+            "value": {
+              "name": "package"
+            },
+            "repeatable": true
+          },
+          {
+            "long": "resolution",
+            "description": "select dependency resolution strategy",
+            "value": {
+              "name": "strategy",
+              "provider": "resolution"
+            }
+          },
+          {
+            "long": "prerelease",
+            "description": "set pre-release handling",
+            "value": {
+              "name": "policy",
+              "provider": "prerelease"
+            }
+          },
+          {
+            "long": "exclude-newer",
+            "description": "exclude packages newer than date",
+            "value": {
+              "name": "date"
+            }
+          },
+          {
+            "long": "no-sources",
+            "description": "ignore tool.uv.sources"
+          },
+          {
+            "short": "C",
+            "description": "pass PEP 517 setting",
+            "value": {
+              "name": "key=value"
+            },
+            "repeatable": true
+          },
+          {
+            "long": "no-build-isolation",
+            "description": "disable build isolation"
+          },
+          {
+            "long": "no-build-isolation-package",
+            "description": "disable build isolation for package",
+            "value": {
+              "name": "package"
+            },
+            "repeatable": true
+          },
+          {
+            "long": "no-build",
+            "description": "skip source distribution builds"
+          },
+          {
+            "long": "no-build-package",
+            "description": "skip source builds for package",
+            "value": {
+              "name": "package"
+            },
+            "repeatable": true
+          },
+          {
+            "long": "no-binary",
+            "description": "skip pre-built wheels"
+          },
+          {
+            "long": "no-binary-package",
+            "description": "skip wheels for package",
+            "value": {
+              "name": "package"
+            },
+            "repeatable": true
+          },
+          {
+            "long": "link-mode",
+            "description": "set cache link mode",
+            "value": {
+              "name": "mode",
+              "provider": "linkMode"
+            }
+          },
+          {
+            "long": "no-cache",
+            "description": "avoid cache reads and writes"
+          },
+          {
+            "long": "cache-dir",
+            "description": "set cache directory",
+            "value": {
+              "name": "directory",
+              "provider": "directories"
+            }
+          },
+          {
+            "long": "refresh",
+            "description": "refresh cached data"
+          },
+          {
+            "long": "refresh-package",
+            "description": "refresh a package cache",
+            "value": {
+              "name": "package"
+            },
+            "repeatable": true
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "source",
+              "provider": "files"
+            }
+          ]
+        }
+      },
+      {
+        "name": "publish",
+        "description": "upload distributions to an index",
+        "options": [
+          {
+            "long": "publish-url",
+            "description": "set upload endpoint URL",
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "short": "u",
+            "description": "set upload username",
+            "value": {
+              "name": "username"
+            }
+          },
+          {
+            "short": "p",
+            "description": "set upload password",
+            "value": {
+              "name": "password"
+            }
+          },
+          {
+            "short": "t",
+            "description": "set upload token",
+            "value": {
+              "name": "token"
+            }
+          },
+          {
+            "long": "trusted-publishing",
+            "description": "configure trusted publishing",
+            "value": {
+              "name": "mode",
+              "provider": "trustedPublishing"
+            }
+          },
+          {
+            "long": "keyring-provider",
+            "description": "use keyring authentication",
+            "value": {
+              "name": "provider",
+              "provider": "keyringProvider"
+            }
+          },
+          {
+            "long": "check-url",
+            "description": "check existing files URL",
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "no-cache",
+            "description": "avoid cache reads and writes"
+          },
+          {
+            "long": "cache-dir",
+            "description": "set cache directory",
+            "value": {
+              "name": "directory",
+              "provider": "directories"
+            }
+          },
+          {
+            "long": "python-preference",
+            "description": "prefer managed or system Python",
+            "value": {
+              "name": "preference",
+              "provider": "pythonPreference"
+            }
+          },
+          {
+            "long": "no-python-downloads",
+            "description": "disable Python downloads"
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "files",
+              "provider": "files",
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "cache",
+        "description": "manage uv cache",
+        "options": [
+          {
+            "long": "no-cache",
+            "description": "avoid cache reads and writes"
+          },
+          {
+            "long": "cache-dir",
+            "description": "set cache directory",
+            "value": {
+              "name": "directory",
+              "provider": "directories"
+            }
+          },
+          {
+            "long": "python-preference",
+            "description": "prefer managed or system Python",
+            "value": {
+              "name": "preference",
+              "provider": "pythonPreference"
+            }
+          },
+          {
+            "long": "no-python-downloads",
+            "description": "disable Python downloads"
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "clean",
+            "description": "clear cache",
+            "arguments": {
+              "states": [
+                {
+                  "name": "package",
+                  "repeatable": true
+                }
+              ]
+            }
+          },
+          {
+            "name": "prune",
+            "description": "prune unreachable cache objects"
+          },
+          {
+            "name": "dir",
+            "description": "show cache directory"
+          }
+        ]
+      },
+      {
+        "name": "self",
+        "description": "manage the uv executable",
+        "options": [
+          {
+            "long": "no-cache",
+            "description": "avoid cache reads and writes"
+          },
+          {
+            "long": "cache-dir",
+            "description": "set cache directory",
+            "value": {
+              "name": "directory",
+              "provider": "directories"
+            }
+          },
+          {
+            "long": "python-preference",
+            "description": "prefer managed or system Python",
+            "value": {
+              "name": "preference",
+              "provider": "pythonPreference"
+            }
+          },
+          {
+            "long": "no-python-downloads",
+            "description": "disable Python downloads"
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "update",
+            "description": "update uv",
+            "options": [
+              {
+                "long": "token",
+                "description": "use GitHub token",
+                "value": {
+                  "name": "token"
+                }
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "version"
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "version",
+        "description": "display uv version",
+        "options": [
+          {
+            "long": "output-format",
+            "description": "select output format",
+            "value": {
+              "name": "format",
+              "provider": "outputFormat"
+            }
+          },
+          {
+            "long": "no-cache",
+            "description": "avoid cache reads and writes"
+          },
+          {
+            "long": "cache-dir",
+            "description": "set cache directory",
+            "value": {
+              "name": "directory",
+              "provider": "directories"
+            }
+          },
+          {
+            "long": "python-preference",
+            "description": "prefer managed or system Python",
+            "value": {
+              "name": "preference",
+              "provider": "pythonPreference"
+            }
+          },
+          {
+            "long": "no-python-downloads",
+            "description": "disable Python downloads"
+          }
+        ]
+      },
+      {
+        "name": "help",
+        "description": "display command documentation",
+        "options": [
+          {
+            "long": "no-pager",
+            "description": "disable pager"
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "command",
+              "repeatable": true
+            }
+          ]
+        }
+      }
+    ]
+  }
+}
