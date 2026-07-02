@@ -1,0 +1,365 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "pkgutil",
+    "description": "query macOS installer packages",
+    "options": [
+      {
+        "short": "h",
+        "long": "help",
+        "description": "show help",
+        "inherit": false
+      },
+      {
+        "short": "f",
+        "long": "force",
+        "description": "skip confirmation prompts",
+        "inherit": false
+      },
+      {
+        "short": "v",
+        "long": "verbose",
+        "description": "show human-readable output",
+        "inherit": false
+      },
+      {
+        "long": "volume",
+        "description": "set target volume",
+        "inherit": false,
+        "value": {
+          "name": "volume",
+          "description": "Volume to perform operations on",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "edit-pkg",
+        "description": "set receipt to edit",
+        "inherit": false,
+        "value": {
+          "name": "package-id",
+          "description": "Package ID of the receipt to modify",
+          "provider": "pkgutil.package-ids"
+        }
+      },
+      {
+        "long": "only-files",
+        "description": "list only files",
+        "inherit": false
+      },
+      {
+        "long": "only-dirs",
+        "description": "list only directories",
+        "inherit": false
+      },
+      {
+        "long": "regexp",
+        "description": "match package ids with regex",
+        "inherit": false
+      },
+      {
+        "long": "pkgs",
+        "description": "list installed package ids",
+        "inherit": false,
+        "value": {
+          "name": "regexp",
+          "description": "Regular expression",
+          "style": "equals"
+        }
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "--packages",
+        "aliases": [],
+        "description": "list installed package ids"
+      },
+      {
+        "name": "--pkgs-plist",
+        "description": "list installed package ids as plist"
+      },
+      {
+        "name": "--files",
+        "description": "list files installed by a package",
+        "arguments": {
+          "states": [
+            {
+              "name": "package-id",
+              "description": "the package ID to list the files of",
+              "index": 0,
+              "provider": "pkgutil.package-ids"
+            }
+          ]
+        }
+      },
+      {
+        "name": "--export-plist",
+        "description": "print package receipt as plist",
+        "arguments": {
+          "states": [
+            {
+              "name": "package-id",
+              "description": "the package ID to export the plist of",
+              "index": 0,
+              "provider": "pkgutil.package-ids"
+            }
+          ]
+        }
+      },
+      {
+        "name": "--verify",
+        "description": "verify a package receipt",
+        "arguments": {
+          "states": [
+            {
+              "name": "package-id",
+              "description": "the package ID to verify",
+              "index": 0,
+              "provider": "pkgutil.package-ids"
+            }
+          ]
+        }
+      },
+      {
+        "name": "--repair",
+        "description": "repair a package receipt",
+        "arguments": {
+          "states": [
+            {
+              "name": "package-id",
+              "description": "the package ID to repair",
+              "index": 0,
+              "provider": "pkgutil.package-ids"
+            }
+          ]
+        }
+      },
+      {
+        "name": "--pkg-info",
+        "description": "print package information",
+        "arguments": {
+          "states": [
+            {
+              "name": "package-id",
+              "description": "the package ID to print the info of",
+              "index": 0,
+              "provider": "pkgutil.package-ids"
+            }
+          ]
+        }
+      },
+      {
+        "name": "--pkg-info-plist",
+        "description": "print package information as plist",
+        "arguments": {
+          "states": [
+            {
+              "name": "package-id",
+              "description": "the package ID to print the info of",
+              "index": 0,
+              "provider": "pkgutil.package-ids"
+            }
+          ]
+        }
+      },
+      {
+        "name": "--forget",
+        "description": "forget package receipt data",
+        "arguments": {
+          "states": [
+            {
+              "name": "package-id",
+              "description": "the package ID to forget",
+              "index": 0,
+              "provider": "pkgutil.package-ids"
+            }
+          ]
+        }
+      },
+      {
+        "name": "--learn",
+        "description": "update receipt ACLs for a path",
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "description": "the path to update ACLs on",
+              "index": 0,
+              "provider": "pkgutil.receipt-files"
+            }
+          ]
+        }
+      },
+      {
+        "name": "--pkg-groups",
+        "description": "list groups for a package",
+        "arguments": {
+          "states": [
+            {
+              "name": "package-id",
+              "description": "the package ID to list the groups of",
+              "index": 0,
+              "provider": "pkgutil.package-ids"
+            }
+          ]
+        }
+      },
+      {
+        "name": "--groups",
+        "description": "list package groups"
+      },
+      {
+        "name": "--group-plist",
+        "description": "list package groups as plist"
+      },
+      {
+        "name": "--group-pkgs",
+        "description": "list packages in a group",
+        "arguments": {
+          "states": [
+            {
+              "name": "group-id",
+              "description": "the group ID to list the packages of",
+              "index": 0,
+              "provider": "pkgutil.group-ids"
+            }
+          ]
+        }
+      },
+      {
+        "name": "--file-info",
+        "description": "show file metadata",
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "description": "the path to show the metadata of",
+              "provider": "builtin.files",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "--file-info-plist",
+        "description": "show file metadata as plist",
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "description": "the path to show the metadata of",
+              "provider": "builtin.files",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "--expand",
+        "description": "expand a flat package",
+        "arguments": {
+          "states": [
+            {
+              "name": "pkg-path",
+              "description": "the path to the flat package to expand",
+              "provider": "builtin.files",
+              "index": 0
+            },
+            {
+              "name": "dir-path",
+              "description": "the path to the directory to expand the package into",
+              "provider": "builtin.directories",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "--flatten",
+        "description": "flatten a package directory",
+        "arguments": {
+          "states": [
+            {
+              "name": "dir-path",
+              "description": "the path to the directory to flatten",
+              "provider": "builtin.directories",
+              "index": 0
+            },
+            {
+              "name": "pkg-path",
+              "description": "the path to the flat package to create",
+              "provider": "builtin.files",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "--bom",
+        "description": "extract BOM files from a package",
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "description": "the path to the flat package to extract the BOM from",
+              "index": 0,
+              "provider": "pkgutil.bom-files"
+            }
+          ]
+        }
+      },
+      {
+        "name": "--payload-files",
+        "description": "list files in a flat package",
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "description": "the path to the flat package to list the archived files of",
+              "index": 0,
+              "provider": "pkgutil.pkg-files"
+            }
+          ]
+        }
+      },
+      {
+        "name": "--check-signature",
+        "description": "check package signature",
+        "arguments": {
+          "states": [
+            {
+              "name": "pkg-path",
+              "description": "the path to the flat package to check the signature of",
+              "index": 0,
+              "provider": "pkgutil.pkg-files"
+            }
+          ]
+        }
+      }
+    ],
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "pkgutil.package-ids": {
+        "function": "__rush_complete_pkgutil_package_ids"
+      },
+      "pkgutil.group-ids": {
+        "function": "__rush_complete_pkgutil_group_ids"
+      },
+      "pkgutil.pkg-files": {
+        "function": "__rush_complete_pkgutil_pkg_files"
+      },
+      "pkgutil.bom-files": {
+        "function": "__rush_complete_pkgutil_bom_files"
+      },
+      "pkgutil.receipt-files": {
+        "function": "__rush_complete_pkgutil_receipt_files"
+      }
+    }
+  }
+}

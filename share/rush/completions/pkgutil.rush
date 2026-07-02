@@ -1,0 +1,45 @@
+__rush_complete_pkgutil_package_ids() {
+  pkgutil --pkgs 2>/dev/null | while IFS= read -r package; do
+    if [ -n "$package" ]; then
+      rush_complete candidate "$package" --kind value --description "package id"
+    fi
+  done
+}
+
+__rush_complete_pkgutil_group_ids() {
+  pkgutil --groups 2>/dev/null | while IFS= read -r group; do
+    if [ -n "$group" ]; then
+      rush_complete candidate "$group" --kind value --description "group id"
+    fi
+  done
+}
+
+__rush_complete_pkgutil_pkg_files() {
+  find . -maxdepth 1 -type f -name '*.pkg' 2>/dev/null | while IFS= read -r path; do
+    path=${path#./}
+    if [ -n "$path" ]; then
+      rush_complete candidate "$path" --kind file --description "package file"
+    fi
+  done
+}
+
+__rush_complete_pkgutil_bom_files() {
+  find . -maxdepth 1 -type f -name '*.bom' 2>/dev/null | while IFS= read -r path; do
+    path=${path#./}
+    if [ -n "$path" ]; then
+      rush_complete candidate "$path" --kind file --description "BOM file"
+    fi
+  done
+}
+
+__rush_complete_pkgutil_receipt_files() {
+  package=$(rush_complete option-values --long edit-pkg 2>/dev/null | tail -n 1)
+  if [ -z "$package" ]; then
+    return
+  fi
+  pkgutil --files "$package" 2>/dev/null | while IFS= read -r path; do
+    if [ -n "$path" ]; then
+      rush_complete candidate "$path" --kind file --description "receipt path"
+    fi
+  done
+}
