@@ -1,0 +1,64 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "nhost",
+    "description": "manage Nhost projects",
+    "subcommands": [
+      {
+        "name": "deploy",
+        "description": "deploy local migrations and metadata changes to Nhost production"
+      },
+      {
+        "name": "dev",
+        "description": "start Nhost project for local development"
+      },
+      {
+        "name": "down",
+        "description": "stop and remove local Nhost backend started by `nhost dev`"
+      },
+      {
+        "name": "env",
+        "aliases": [
+          "env:ls"
+        ],
+        "description": "list environment variables"
+      },
+      {
+        "name": "env:pull",
+        "description": "sync remote environment variables to your local environment"
+      },
+      {
+        "name": "help",
+        "description": "display help for nhost"
+      },
+      {
+        "name": "init",
+        "description": "initialize current working directory as a Nhost project"
+      },
+      {
+        "name": "link",
+        "description": "link Nhost Project"
+      },
+      {
+        "name": "login",
+        "description": "login to your Nhost account",
+        "options": [
+          {
+            "long": "email",
+            "short": "e",
+            "description": "Email address",
+            "inherit": false,
+            "value": {
+              "name": "email"
+            }
+          }
+        ]
+      },
+      {
+        "name": "logout",
+        "description": "logout from your Nhost account"
+      }
+    ]
+  }
+}
