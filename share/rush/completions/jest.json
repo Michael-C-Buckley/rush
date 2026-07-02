@@ -1,0 +1,443 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "jest",
+    "description": "JavaScript testing framework",
+    "options": [
+      {
+        "long": "bail",
+        "short": "b",
+        "description": "exit the test suite immediately upon n number of failing test suite. Defaults to 1",
+        "inherit": false,
+        "value": {
+          "name": "n"
+        }
+      },
+      {
+        "long": "cache",
+        "description": "use the cache",
+        "inherit": false
+      },
+      {
+        "long": "no-cache",
+        "description": "disable the cache",
+        "inherit": false
+      },
+      {
+        "long": "changedFilesWithAncestor",
+        "description": "runs tests related to the current changes and the changes made in the last commit",
+        "inherit": false
+      },
+      {
+        "long": "changedSince",
+        "description": "runs tests related to the changes since the provided branch or commit hash",
+        "inherit": false,
+        "value": {
+          "name": "since"
+        }
+      },
+      {
+        "long": "ci",
+        "description": "instead of the regular behavior of storing a new snapshot automatically, will fail the test and require Jest to be run with --updateSnapshot",
+        "inherit": false
+      },
+      {
+        "long": "clearCache",
+        "description": "deletes the Jest cache directory and then exits without running tests",
+        "inherit": false,
+        "value": {
+          "name": "cacheDirectory"
+        }
+      },
+      {
+        "long": "collectCoverageFrom",
+        "description": "a glob pattern relative to rootDir matching the files that coverage info needs to be collected from",
+        "inherit": false,
+        "value": {
+          "name": "glob",
+          "style": "equals"
+        }
+      },
+      {
+        "long": "colors",
+        "description": "forces test results output highlighting even if stdout is not a TTY",
+        "inherit": false
+      },
+      {
+        "long": "config",
+        "short": "c",
+        "description": "the path to a Jest config file specifying how to find and execute tests",
+        "inherit": false,
+        "value": {
+          "name": "path",
+          "provider": "builtin.files",
+          "style": "equals"
+        }
+      },
+      {
+        "long": "coverage",
+        "description": "enable or disable coverage, disabled by default",
+        "inherit": false,
+        "value": {
+          "name": "true-or-false",
+          "provider": "jest-booleans",
+          "style": "equals"
+        }
+      },
+      {
+        "long": "coverageProvider",
+        "description": "indicates which provider should be used to instrument code for coverage",
+        "inherit": false,
+        "value": {
+          "name": "babel-or-v8",
+          "provider": "jest-coverage-providers",
+          "style": "equals"
+        }
+      },
+      {
+        "long": "debug",
+        "description": "print debugging info about your Jest config",
+        "inherit": false
+      },
+      {
+        "long": "detectOpenHandles",
+        "description": "attempt to collect and print open handles preventing Jest from exiting cleanly",
+        "inherit": false
+      },
+      {
+        "long": "env",
+        "description": "the test environment used for all tests",
+        "inherit": false,
+        "value": {
+          "name": "jsdom-or-node-or-path/to/env.js",
+          "provider": "jest-environments",
+          "style": "equals"
+        }
+      },
+      {
+        "long": "errorOnDeprecated",
+        "description": "make calling deprecated APIs throw helpful error messages",
+        "inherit": false
+      },
+      {
+        "long": "expand",
+        "short": "e",
+        "description": "use this flag to show full diffs and errors instead of a patch",
+        "inherit": false
+      },
+      {
+        "long": "findRelatedTests",
+        "description": "find and run the tests that cover a space separated list of source files that were passed in as arguments",
+        "inherit": false,
+        "value": {
+          "name": "path1>-<pathN"
+        }
+      },
+      {
+        "long": "forceExit",
+        "description": "force Jest to exit after all tests have completed running",
+        "inherit": false
+      },
+      {
+        "long": "help",
+        "description": "show the help information",
+        "inherit": false
+      },
+      {
+        "long": "init",
+        "description": "generate a basic configuration file",
+        "inherit": false
+      },
+      {
+        "long": "injectGlobals",
+        "description": "insert Jest's globals (expect, test, describe, beforeEach etc.) into the global environment",
+        "inherit": false
+      },
+      {
+        "long": "json",
+        "description": "prints the test results in JSON",
+        "inherit": false
+      },
+      {
+        "long": "outputFile",
+        "description": "write test results to a file when the --json option is also specified",
+        "inherit": false,
+        "value": {
+          "name": "filename",
+          "style": "equals"
+        }
+      },
+      {
+        "long": "lastCommit",
+        "description": "run all tests affected by file changes in the last commit made",
+        "inherit": false
+      },
+      {
+        "long": "listTests",
+        "description": "lists all tests as JSON that Jest will run given the arguments, and exits",
+        "inherit": false
+      },
+      {
+        "long": "logHeapUsage",
+        "description": "logs the heap usage after every test",
+        "inherit": false
+      },
+      {
+        "long": "maxConcurrency",
+        "description": "prevents Jest from executing more than the specified amount of tests at the same time",
+        "inherit": false,
+        "value": {
+          "name": "num",
+          "style": "equals"
+        }
+      },
+      {
+        "long": "maxWorkers",
+        "short": "w",
+        "description": "specifies the maximum number of workers the worker-pool will spawn for running tests",
+        "inherit": false,
+        "value": {
+          "name": "num>-or-<string",
+          "style": "equals"
+        }
+      },
+      {
+        "long": "noStackTrace",
+        "description": "disables stack trace in test results output",
+        "inherit": false
+      },
+      {
+        "long": "notify",
+        "description": "activates notifications for test results",
+        "inherit": false
+      },
+      {
+        "long": "onlyChanged",
+        "short": "o",
+        "description": "attempts to identify which tests to run based on which files have changed in the current repository",
+        "inherit": false
+      },
+      {
+        "long": "passWithNoTests",
+        "description": "allows the test suite to pass when no files are found",
+        "inherit": false
+      },
+      {
+        "long": "projects",
+        "description": "run tests from one or more projects, found in the specified paths; also takes path globs",
+        "inherit": false,
+        "value": {
+          "name": "path1>-<pathN",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "reporters",
+        "description": "run tests with specified reporters",
+        "inherit": false,
+        "value": {
+          "name": "reporter",
+          "style": "equals"
+        }
+      },
+      {
+        "long": "roots",
+        "description": "a list of paths to directories that Jest should use to search for files in",
+        "inherit": false,
+        "value": {
+          "name": "path1>-<pathN",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "runInBand",
+        "short": "i",
+        "description": "run all tests serially in the current process, rather than creating a worker pool of child processes that run tests",
+        "inherit": false
+      },
+      {
+        "long": "selectProjects",
+        "description": "run only the tests of the specified projects",
+        "inherit": false,
+        "value": {
+          "name": "<project1>-...-<projectN>"
+        }
+      },
+      {
+        "long": "runTestsByPath",
+        "description": "run only the tests that were specified with their exact paths",
+        "inherit": false
+      },
+      {
+        "long": "setupTestFrameworkScriptFile",
+        "description": "the path to a module that runs some code to configure or set up the testing framework before each test",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files",
+          "style": "equals"
+        }
+      },
+      {
+        "long": "showConfig",
+        "description": "print your Jest config and then exits",
+        "inherit": false
+      },
+      {
+        "long": "silent",
+        "description": "prevent tests from printing messages through the console",
+        "inherit": false
+      },
+      {
+        "long": "testNamePattern",
+        "short": "t",
+        "description": "run only tests with a name that matches the regex",
+        "inherit": false,
+        "value": {
+          "name": "regex",
+          "style": "equals"
+        }
+      },
+      {
+        "long": "testLocationInResults",
+        "description": "adds a location field to test results",
+        "inherit": false
+      },
+      {
+        "long": "testPathPattern",
+        "description": "a regexp pattern string that is matched against all tests paths before executing the test",
+        "inherit": false,
+        "value": {
+          "name": "regex",
+          "style": "equals"
+        }
+      },
+      {
+        "long": "testPathIgnorePatterns",
+        "description": "an array of regexp pattern strings that are tested against all tests paths before executing the test",
+        "inherit": false,
+        "value": {
+          "name": "array",
+          "style": "equals"
+        }
+      },
+      {
+        "long": "testRunner",
+        "description": "lets you specify a custom test runner",
+        "inherit": false,
+        "value": {
+          "name": "path",
+          "provider": "builtin.files",
+          "style": "equals"
+        }
+      },
+      {
+        "long": "testSequencer",
+        "description": "lets you specify a custom test sequencer",
+        "inherit": false,
+        "value": {
+          "name": "path",
+          "provider": "builtin.files",
+          "style": "equals"
+        }
+      },
+      {
+        "long": "testTimeout",
+        "description": "default timeout of a test in milliseconds",
+        "inherit": false,
+        "value": {
+          "name": "timeout-in-ms"
+        }
+      },
+      {
+        "long": "updateSnapshot",
+        "short": "u",
+        "description": "use this flag to re-record every snapshot that fails during this test run",
+        "inherit": false
+      },
+      {
+        "long": "useStderr",
+        "description": "divert all output to stderr",
+        "inherit": false
+      },
+      {
+        "long": "verbose",
+        "description": "display individual test results with the test suite hierarchy",
+        "inherit": false
+      },
+      {
+        "long": "version",
+        "short": "v",
+        "description": "print the version and exit",
+        "inherit": false
+      },
+      {
+        "long": "watch",
+        "description": "watch files for changes and rerun tests related to changed files",
+        "inherit": false
+      },
+      {
+        "long": "watchAll",
+        "description": "watch files for changes and rerun all tests when something changes",
+        "inherit": false
+      },
+      {
+        "long": "watchman",
+        "description": "use watchman for file crawling",
+        "inherit": false
+      },
+      {
+        "long": "no-watchman",
+        "description": "disable watchman for file crawling",
+        "inherit": false
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "test-pattern",
+          "index": 0
+        }
+      ]
+    },
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "jest-booleans": {
+        "values": [
+          {
+            "value": "true"
+          },
+          {
+            "value": "false"
+          }
+        ]
+      },
+      "jest-coverage-providers": {
+        "values": [
+          {
+            "value": "babel"
+          },
+          {
+            "value": "v8"
+          }
+        ]
+      },
+      "jest-environments": {
+        "values": [
+          {
+            "value": "jsdom"
+          },
+          {
+            "value": "node"
+          }
+        ]
+      }
+    }
+  }
+}
