@@ -143,6 +143,8 @@ fn tokenStartsCommandPosition(kind: token.Kind) bool {
         .left_paren,
         .right_paren,
         .left_brace,
+        .here_doc_body,
+        .here_doc_body_unterminated,
         => true,
         else => false,
     };
@@ -182,47 +184,235 @@ fn aliasEndsWithBlank(value: []const u8) bool {
     };
 }
 
+const HereDocDelimiter = struct {
+    text: []const u8,
+    quoted: bool,
+};
+
+/// Performs quote removal on a raw here-document delimiter word.
+///
+/// Expansions inside the delimiter are unspecified by POSIX and are kept
+/// as literal text here.
+fn hereDocDelimiter(allocator: std.mem.Allocator, raw: []const u8) std.mem.Allocator.Error!HereDocDelimiter {
+    if (std.mem.indexOfAny(u8, raw, "'\"\\") == null) return .{ .text = raw, .quoted = false };
+
+    var text: std.ArrayList(u8) = .empty;
+    errdefer text.deinit(allocator);
+    var quoted = false;
+    var index: usize = 0;
+    while (index < raw.len) {
+        switch (raw[index]) {
+            '\'' => {
+                quoted = true;
+                index += 1;
+                while (index < raw.len and raw[index] != '\'') : (index += 1) {
+                    try text.append(allocator, raw[index]);
+                }
+                if (index < raw.len) index += 1;
+            },
+            '"' => {
+                quoted = true;
+                index += 1;
+                while (index < raw.len and raw[index] != '"') {
+                    if (raw[index] == '\\' and index + 1 < raw.len) {
+                        switch (raw[index + 1]) {
+                            '$', '`', '"', '\\' => index += 1,
+                            '\n' => {
+                                index += 2;
+                                continue;
+                            },
+                            else => {},
+                        }
+                    }
+                    try text.append(allocator, raw[index]);
+                    index += 1;
+                }
+                if (index < raw.len) index += 1;
+            },
+            '\\' => {
+                if (index + 1 < raw.len and raw[index + 1] == '\n') {
+                    index += 2;
+                    continue;
+                }
+                quoted = true;
+                index += 1;
+                if (index < raw.len) {
+                    try text.append(allocator, raw[index]);
+                    index += 1;
+                }
+            },
+            else => {
+                try text.append(allocator, raw[index]);
+                index += 1;
+            },
+        }
+    }
+    return .{ .text = try text.toOwnedSlice(allocator), .quoted = quoted };
+}
+
+fn stripLeadingTabs(line: []const u8) []const u8 {
+    var index: usize = 0;
+    while (index < line.len and line[index] == '\t') index += 1;
+    return line[index..];
+}
+
 const Lexer = struct {
     allocator: std.mem.Allocator,
     source: source_mod.Source,
     position: source_mod.Position,
+    pending_here_docs: std.ArrayList(PendingHereDoc) = .empty,
+    here_doc_delimiter_expected: ?bool = null,
+
+    const PendingHereDoc = struct {
+        delimiter: []const u8,
+        strip_tabs: bool,
+        quoted: bool,
+    };
 
     fn lex(self: *Lexer) std.mem.Allocator.Error![]const token.Token {
         var tokens: std.ArrayList(token.Token) = .empty;
         errdefer tokens.deinit(self.allocator);
+        defer self.pending_here_docs.deinit(self.allocator);
 
         while (!self.atEnd()) {
-            switch (self.peek()) {
-                ' ', '\t', '\r' => self.advanceOne(),
-                '\n' => try self.appendSingle(&tokens, .newline),
-                '\\' => if (self.peekNextIs('\n'))
-                    self.skipLineContinuation()
-                else if (self.startsIoNumber())
-                    try self.appendIoNumber(&tokens)
-                else
-                    try self.appendWord(&tokens),
-                ';' => try self.appendSemicolon(&tokens),
-                '&' => try self.appendAmpersand(&tokens),
-                '|' => try self.appendPipe(&tokens),
-                '!' => if (self.peekByte(1)) |next|
-                    if (isWordTerminator(next)) try self.appendSingle(&tokens, .bang) else try self.appendWord(&tokens)
-                else
-                    try self.appendSingle(&tokens, .bang),
-                '(' => try self.appendSingle(&tokens, .left_paren),
-                ')' => try self.appendSingle(&tokens, .right_paren),
-                // ziglint-ignore: Z024 preserve existing readable expression shape; lint-only cleanup
-                '{' => if (self.nextStartsWord()) try self.appendWord(&tokens) else try self.appendSingle(&tokens, .left_brace),
-                // ziglint-ignore: Z024 preserve existing readable expression shape; lint-only cleanup
-                '}' => if (self.nextStartsWord()) try self.appendWord(&tokens) else try self.appendSingle(&tokens, .right_brace),
-                '<', '>' => try self.appendRedirectionOperator(&tokens),
-                '#' => self.skipComment(),
-                else => if (self.startsIoNumber()) try self.appendIoNumber(&tokens) else try self.appendWord(&tokens),
-            }
+            const count_before = tokens.items.len;
+            try self.lexOne(&tokens);
+            try self.trackHereDocs(&tokens, count_before);
         }
+        // Here-document bodies delimited by end of input (no trailing
+        // newline) still get body tokens so the parser never scans text.
+        if (self.pending_here_docs.items.len != 0) try self.lexHereDocBodies(&tokens);
 
         // ziglint-ignore: Z024 preserve existing readable expression shape; lint-only cleanup
         try tokens.append(self.allocator, .{ .kind = .eof, .span = source_mod.Span.init(self.position, self.position.byte_offset) });
         return tokens.toOwnedSlice(self.allocator);
+    }
+
+    fn lexOne(self: *Lexer, tokens: *std.ArrayList(token.Token)) std.mem.Allocator.Error!void {
+        switch (self.peek()) {
+            ' ', '\t', '\r' => self.advanceOne(),
+            '\n' => try self.appendSingle(tokens, .newline),
+            '\\' => if (self.peekNextIs('\n'))
+                self.skipLineContinuation()
+            else if (self.startsIoNumber())
+                try self.appendIoNumber(tokens)
+            else
+                try self.appendWord(tokens),
+            ';' => try self.appendSemicolon(tokens),
+            '&' => try self.appendAmpersand(tokens),
+            '|' => try self.appendPipe(tokens),
+            '!' => if (self.peekByte(1)) |next|
+                if (isWordTerminator(next)) try self.appendSingle(tokens, .bang) else try self.appendWord(tokens)
+            else
+                try self.appendSingle(tokens, .bang),
+            '(' => try self.appendSingle(tokens, .left_paren),
+            ')' => try self.appendSingle(tokens, .right_paren),
+            // ziglint-ignore: Z024 preserve existing readable expression shape; lint-only cleanup
+            '{' => if (self.nextStartsWord()) try self.appendWord(tokens) else try self.appendSingle(tokens, .left_brace),
+            // ziglint-ignore: Z024 preserve existing readable expression shape; lint-only cleanup
+            '}' => if (self.nextStartsWord()) try self.appendWord(tokens) else try self.appendSingle(tokens, .right_brace),
+            '<', '>' => try self.appendRedirectionOperator(tokens),
+            '#' => self.skipComment(),
+            else => if (self.startsIoNumber()) try self.appendIoNumber(tokens) else try self.appendWord(tokens),
+        }
+    }
+
+    /// Follows here-document operators through the token stream: the word
+    /// after `<<` or `<<-` is the delimiter, and the bodies for every
+    /// pending here-document start on the line after the next newline
+    /// token. Bodies are lexed immediately as dedicated tokens so no body
+    /// byte is ever tokenized as command text (or alias-substituted).
+    fn trackHereDocs(
+        self: *Lexer,
+        tokens: *std.ArrayList(token.Token),
+        first_new: usize,
+    ) std.mem.Allocator.Error!void {
+        var index = first_new;
+        while (index < tokens.items.len) : (index += 1) {
+            const tok = tokens.items[index];
+            if (self.here_doc_delimiter_expected) |strip_tabs| {
+                self.here_doc_delimiter_expected = null;
+                if (tok.kind == .word) {
+                    const raw = self.source.text[tok.span.start..tok.span.end];
+                    const delimiter = try hereDocDelimiter(self.allocator, raw);
+                    try self.pending_here_docs.append(self.allocator, .{
+                        .delimiter = delimiter.text,
+                        .strip_tabs = strip_tabs,
+                        .quoted = delimiter.quoted,
+                    });
+                }
+            }
+            switch (tok.kind) {
+                .less_less => self.here_doc_delimiter_expected = false,
+                .less_less_dash => self.here_doc_delimiter_expected = true,
+                .newline => if (self.pending_here_docs.items.len != 0) {
+                    try self.lexHereDocBodies(tokens);
+                },
+                else => {},
+            }
+        }
+    }
+
+    fn lexHereDocBodies(self: *Lexer, tokens: *std.ArrayList(token.Token)) std.mem.Allocator.Error!void {
+        for (self.pending_here_docs.items) |pending| {
+            try self.lexHereDocBody(tokens, pending);
+        }
+        self.pending_here_docs.clearRetainingCapacity();
+    }
+
+    fn lexHereDocBody(
+        self: *Lexer,
+        tokens: *std.ArrayList(token.Token),
+        pending: PendingHereDoc,
+    ) std.mem.Allocator.Error!void {
+        const text = self.source.text;
+        const start = self.position;
+
+        var stripped: std.ArrayList(u8) = .empty;
+        errdefer stripped.deinit(self.allocator);
+        var offset = start.byte_offset;
+        var body_end = offset;
+        var terminated = false;
+        var continued = false;
+        while (offset <= text.len) {
+            const line_start = offset;
+            const newline_index = std.mem.findScalarPos(u8, text, offset, '\n');
+            const line_end = newline_index orelse text.len;
+            const next_offset = if (newline_index) |newline| newline + 1 else text.len;
+            const raw_line = text[line_start..line_end];
+            const strip = pending.strip_tabs and !continued;
+            const candidate = if (strip) stripLeadingTabs(raw_line) else raw_line;
+            if (!continued and std.mem.eql(u8, candidate, pending.delimiter)) {
+                terminated = true;
+                offset = next_offset;
+                break;
+            }
+
+            if (pending.strip_tabs) {
+                try stripped.appendSlice(self.allocator, candidate);
+                if (newline_index != null) try stripped.append(self.allocator, '\n');
+            }
+            continued = !pending.quoted and candidate.len != 0 and candidate[candidate.len - 1] == '\\';
+            body_end = next_offset;
+            if (next_offset == offset) break;
+            offset = next_offset;
+        }
+        if (!terminated) offset = text.len;
+
+        const body: []const u8 = if (pending.strip_tabs)
+            try stripped.toOwnedSlice(self.allocator)
+        else
+            text[start.byte_offset..body_end];
+        self.position.advance(text[start.byte_offset..offset]);
+
+        const tok: token.Token = .{
+            .kind = if (terminated) .here_doc_body else .here_doc_body_unterminated,
+            .span = source_mod.Span.init(start, offset),
+            .text = body,
+            .quoted = pending.quoted,
+        };
+        tok.validate();
+        try tokens.append(self.allocator, tok);
     }
 
     fn atEnd(self: Lexer) bool {
@@ -1051,4 +1241,50 @@ test "lexer keeps brace characters inside word tokens" {
     try std.testing.expectEqualStrings("x{}", tokens[2].text);
     try std.testing.expectEqualStrings("{}x", tokens[3].text);
     try std.testing.expectEqualStrings("a{b}", tokens[4].text);
+}
+
+test "lexer emits here-document bodies as dedicated tokens" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const src: source_mod.Source = .{
+        .id = 1,
+        .kind = .script_file,
+        .name = "test",
+        .text = "cat <<-E\n\tbody\n\tE\necho next\n",
+    };
+    const tokens = try lex(allocator, src);
+
+    var body: ?token.Token = null;
+    for (tokens) |tok| {
+        if (tok.kind == .here_doc_body) body = tok;
+        // No body byte may leak into ordinary word tokens.
+        if (tok.kind == .word) try std.testing.expect(!std.mem.eql(u8, tok.text, "body"));
+    }
+    const body_token = body orelse return error.ExpectedHereDocBody;
+    try std.testing.expectEqualStrings("body\n", body_token.text);
+    try std.testing.expect(!body_token.quoted);
+    // The span covers the raw body including tabs and the delimiter line.
+    try std.testing.expectEqualStrings("\tbody\n\tE\n", src.text[body_token.span.start..body_token.span.end]);
+}
+
+test "alias substitution copies here-document bodies verbatim" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var shell_state = state_mod.State.init(std.testing.allocator, .{ .mode = .posix });
+    defer shell_state.deinit();
+    try shell_state.putAlias(.{ .name = "hi", .value = "printf hi" });
+
+    const src: source_mod.Source = .{
+        .id = 1,
+        .kind = .script_file,
+        .name = "test",
+        .text = "cat <<E\nhi\nE\nhi\n",
+    };
+    const lexed = try lexWithAliasesSource(allocator, src, shell_state);
+
+    // The command-position `hi` after the body expands; the body line does not.
+    try std.testing.expectEqualStrings("cat <<E\nhi\nE\nprintf hi\n", lexed.source.text);
 }

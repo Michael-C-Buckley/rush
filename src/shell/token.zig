@@ -31,6 +31,15 @@ pub const Kind = enum {
     greater_ampersand,
     clobber,
     io_number,
+    /// Processed here-document body emitted after the newline that starts
+    /// it. The span covers the raw body including the delimiter line; the
+    /// text holds the body with <tab> stripping already applied and the
+    /// delimiter line excluded. `quoted` records a quoted delimiter, which
+    /// suppresses expansion of the body.
+    here_doc_body,
+    /// A here-document body whose delimiter line was not found before the
+    /// end of input; the body runs to the end of the input.
+    here_doc_body_unterminated,
     eof,
 };
 
@@ -90,7 +99,8 @@ pub const Token = struct {
         }
         switch (self.kind) {
             .word, .io_number => std.debug.assert(self.text.len != 0),
-            else => {},
+            .here_doc_body, .here_doc_body_unterminated => {},
+            else => std.debug.assert(!self.quoted),
         }
     }
 };

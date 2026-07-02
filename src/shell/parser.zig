@@ -144,7 +144,7 @@ pub const Incremental = struct {
         // allowed, so a stray leading semicolon still errors.
         if (!self.started) {
             self.started = true;
-            p.skipSeparators();
+            try p.skipSeparators();
         }
         if (p.at(.eof)) return null;
 
@@ -157,18 +157,18 @@ pub const Incremental = struct {
             if (p.eat(.semicolon) != null) terminator = .sequence;
             if (p.eat(.ampersand) != null) terminator = .background;
             var complete = false;
-            if (p.eat(.newline)) |newline| {
+            if (p.eat(.newline) != null) {
                 if (terminator == null) terminator = .sequence;
-                try p.parsePendingHereDocs(newline.span.end);
-                while (p.eat(.newline) != null) {}
+                try p.parsePendingHereDocs();
+                try p.skipLinebreak();
                 complete = true;
+            } else if (p.atHereDocBody()) {
+                // Bodies delimited by end of input arrive without a newline.
+                try p.parsePendingHereDocs();
             }
             try entries.append(p.allocator, .{ .and_or = and_or, .terminator = terminator });
             if (complete) break;
         }
-        // Here-document bodies delimited by end of input (no trailing
-        // newline): parse them now so no redirection is left without a body.
-        if (p.pending_here_docs.items.len != 0) try p.parsePendingHereDocs(p.source.text.len);
 
         const program: ast.Program = .{
             .source_id = p.source.id,
@@ -198,17 +198,14 @@ const Parser = struct {
 
     const PendingHereDoc = struct {
         redirection: *ast.Redirection,
-        delimiter: []const u8,
-        strip_tabs: bool,
-        delimiter_quoted: bool,
     };
 
     fn parseProgram(self: *Parser) !ast.Program {
         const body = try self.parseList(.eof);
         try self.expect(.eof);
-        // Here-document bodies delimited by end of input (no trailing
-        // newline): parse them now so no redirection is left without a body.
-        if (self.pending_here_docs.items.len != 0) try self.parsePendingHereDocs(self.source.text.len);
+        // The lexer emits a body token for every here-document it saw, so
+        // a leftover pending here-document means malformed input.
+        if (self.pending_here_docs.items.len != 0) return error.IncompleteHereDoc;
         const program: ast.Program = .{ .source_id = self.source.id, .body = body };
         program.validate();
         return program;
@@ -231,16 +228,19 @@ const Parser = struct {
         var entries: std.ArrayList(ast.ListEntry) = .empty;
         errdefer entries.deinit(self.allocator);
 
-        self.skipSeparators();
+        try self.skipSeparators();
         while (!self.atListEnd(end_kind)) {
             const and_or = try self.parseAndOr();
             var terminator: ?ast.ListTerminator = null;
             if (self.eat(.semicolon) != null) terminator = .sequence;
             if (self.eat(.ampersand) != null) terminator = .background;
-            if (self.eat(.newline)) |newline| {
+            if (self.eat(.newline) != null) {
                 if (terminator == null) terminator = .sequence;
-                try self.parsePendingHereDocs(newline.span.end);
-                while (self.eat(.newline) != null) {}
+                try self.parsePendingHereDocs();
+                try self.skipLinebreak();
+            } else if (self.atHereDocBody()) {
+                // Bodies delimited by end of input arrive without a newline.
+                try self.parsePendingHereDocs();
             }
             try entries.append(self.allocator, .{ .and_or = and_or, .terminator = terminator });
         }
@@ -254,7 +254,7 @@ const Parser = struct {
 
         try pipelines.append(self.allocator, .{ .pipeline = try self.parsePipeline() });
         while (self.eatAndOrOperator()) |operator| {
-            while (self.eat(.newline) != null) {}
+            try self.skipLinebreak();
             try pipelines.append(self.allocator, .{
                 .operator = operator,
                 .pipeline = try self.parsePipeline(),
@@ -272,7 +272,7 @@ const Parser = struct {
 
         try stages.append(self.allocator, try self.parseCommand());
         while (self.eat(.pipe) != null) {
-            while (self.eat(.newline) != null) {}
+            try self.skipLinebreak();
             try stages.append(self.allocator, try self.parseCommand());
         }
 
@@ -301,7 +301,7 @@ const Parser = struct {
         }
 
         self.index += 3;
-        self.skipSeparators();
+        try self.skipSeparators();
         const compound = (try self.parseCompoundCommand()) orelse return error.ExpectedCommand;
 
         const definition: ast.FunctionDefinition = .{
@@ -316,7 +316,7 @@ const Parser = struct {
     fn parseBashFunctionDefinition(self: *Parser) ParserError!?ast.FunctionDefinition {
         if (self.mode() == .posix) return null;
         _ = self.eatReserved(.function_kw).?;
-        self.skipSeparators();
+        try self.skipSeparators();
 
         const name_token = self.eat(.word) orelse return error.UnexpectedToken;
         if (name_token.quoted or !isAssignmentName(name_token.text)) return error.UnexpectedToken;
@@ -324,7 +324,7 @@ const Parser = struct {
         if (self.eat(.left_paren) != null) {
             try self.expect(.right_paren);
         }
-        self.skipSeparators();
+        try self.skipSeparators();
         const compound = (try self.parseCompoundCommand()) orelse return error.ExpectedCommand;
 
         const definition: ast.FunctionDefinition = .{
@@ -416,7 +416,7 @@ const Parser = struct {
         if (!isAssignmentName(name_token.text) and self.mode() == .posix) return error.UnexpectedToken;
 
         var words: ast.ForWords = .positional_parameters;
-        self.skipSeparators();
+        try self.skipSeparators();
         if (self.eatReserved(.in_kw) != null) {
             var word_list: std.ArrayList(ast.Word) = .empty;
             errdefer word_list.deinit(self.allocator);
@@ -427,7 +427,7 @@ const Parser = struct {
             words = .{ .words = try word_list.toOwnedSlice(self.allocator) };
         }
 
-        self.skipSeparators();
+        try self.skipSeparators();
         _ = self.eatReserved(.do_kw) orelse return error.UnexpectedToken;
         const body = try self.parseList(.done);
         _ = self.eatReserved(.done_kw) orelse return error.UnexpectedToken;
@@ -440,15 +440,15 @@ const Parser = struct {
     fn parseCaseCommand(self: *Parser) ParserError!?ast.CaseCommand {
         if (self.eatReserved(.case_kw) == null) return null;
         const word = try self.parseWordToken(self.eat(.word) orelse return error.UnexpectedToken);
-        self.skipSeparators();
+        try self.skipSeparators();
         _ = self.eatReserved(.in_kw) orelse return error.UnexpectedToken;
-        self.skipSeparators();
+        try self.skipSeparators();
 
         var arms: std.ArrayList(ast.CaseArm) = .empty;
         errdefer arms.deinit(self.allocator);
         while (!self.atReserved(.esac_kw)) {
             try arms.append(self.allocator, try self.parseCaseArm());
-            self.skipSeparators();
+            try self.skipSeparators();
         }
         _ = self.eatReserved(.esac_kw).?;
 
@@ -551,13 +551,7 @@ const Parser = struct {
     fn registerPendingHereDocs(self: *Parser, redirections: []ast.Redirection) !void {
         for (redirections) |*redirection| {
             if (redirection.op == .here_doc or redirection.op == .here_doc_strip_tabs) {
-                const delimiter = try self.hereDocDelimiter(redirection.target);
-                try self.pending_here_docs.append(self.allocator, .{
-                    .redirection = redirection,
-                    .delimiter = delimiter.text,
-                    .strip_tabs = redirection.op == .here_doc_strip_tabs,
-                    .delimiter_quoted = delimiter.quoted,
-                });
+                try self.pending_here_docs.append(self.allocator, .{ .redirection = redirection });
             }
         }
     }
@@ -629,12 +623,22 @@ const Parser = struct {
 
         var parts: std.ArrayList(ast.WordPart) = .empty;
         errdefer parts.deinit(self.allocator);
-        try self.appendWordParts(&parts, text, 0, text.len, null, span);
+        try self.appendWordParts(&parts, text, 0, text.len, .plain, span);
 
         const word: ast.Word = .{ .data = .{ .parts = try parts.toOwnedSlice(self.allocator) }, .span = span };
         word.validate();
         return word;
     }
+
+    /// Quoting context for word-part construction. Here-documents follow
+    /// double-quote rules except that the double-quote character is
+    /// ordinary and backslash escapes only '$', '`', '\', and <newline>
+    /// (POSIX 2.7.4).
+    const QuoteContext = enum {
+        plain,
+        double,
+        here_doc,
+    };
 
     fn appendWordParts(
         self: *Parser,
@@ -642,14 +646,14 @@ const Parser = struct {
         text: []const u8,
         start: usize,
         end: usize,
-        quote: ?u8,
+        context: QuoteContext,
         span: source_mod.Span,
     ) ParserError!void {
         var index = start;
         var literal_start = start;
         while (index < end) {
             switch (text[index]) {
-                '\'' => if (quote == null) {
+                '\'' => if (context == .plain) {
                     // ziglint-ignore: Z024 preserve existing readable expression shape; lint-only cleanup
                     if (literal_start < index) try parts.append(self.allocator, .{ .literal = text[literal_start..index] });
                     const quote_start = index + 1;
@@ -661,7 +665,7 @@ const Parser = struct {
                     literal_start = index;
                     continue;
                 },
-                '"' => if (quote == null) {
+                '"' => if (context == .plain) {
                     // ziglint-ignore: Z024 preserve existing readable expression shape; lint-only cleanup
                     if (literal_start < index) try parts.append(self.allocator, .{ .literal = text[literal_start..index] });
                     const quote_start = index + 1;
@@ -669,7 +673,7 @@ const Parser = struct {
 
                     var quoted_parts: std.ArrayList(ast.WordPart) = .empty;
                     errdefer quoted_parts.deinit(self.allocator);
-                    try self.appendWordParts(&quoted_parts, text, quote_start, index, '"', span);
+                    try self.appendWordParts(&quoted_parts, text, quote_start, index, .double, span);
                     try parts.append(self.allocator, .{
                         .double_quoted = try quoted_parts.toOwnedSlice(self.allocator),
                     });
@@ -679,7 +683,12 @@ const Parser = struct {
                     continue;
                 },
                 '\\' => {
-                    if (quote == '"' and index + 1 < end and !doubleQuoteEscapes(text[index + 1])) {
+                    const backslash_literal = switch (context) {
+                        .plain => false,
+                        .double => index + 1 < end and !doubleQuoteEscapes(text[index + 1]),
+                        .here_doc => index + 1 < end and !hereDocEscapes(text[index + 1]),
+                    };
+                    if (backslash_literal) {
                         index += 1;
                         continue;
                     }
@@ -714,7 +723,7 @@ const Parser = struct {
                 },
                 '$' => {
                     const name_start = index + 1;
-                    if (quote == null and name_start < end and text[name_start] == '\'') {
+                    if (context == .plain and name_start < end and text[name_start] == '\'') {
                         // ziglint-ignore: Z024 preserve existing readable expression shape; lint-only cleanup
                         if (literal_start < index) try parts.append(self.allocator, .{ .literal = text[literal_start..index] });
                         const quote_start = name_start + 1;
@@ -1019,8 +1028,29 @@ const Parser = struct {
         return source_mod.Span.init(position, span.start + end);
     }
 
-    fn skipSeparators(self: *Parser) void {
-        while (self.eat(.newline) != null or self.eat(.semicolon) != null) {}
+    fn skipSeparators(self: *Parser) ParserError!void {
+        while (true) {
+            if (self.eat(.newline) != null) {
+                try self.parsePendingHereDocs();
+                continue;
+            }
+            if (self.eat(.semicolon) != null) continue;
+            return;
+        }
+    }
+
+    /// Skips newlines between parts of a command, parsing any pending
+    /// here-document bodies that begin after each newline (POSIX 2.3: the
+    /// body starts after the next NEWLINE token, even one that continues a
+    /// pipeline or AND-OR list).
+    fn skipLinebreak(self: *Parser) ParserError!void {
+        while (self.eat(.newline) != null) {
+            try self.parsePendingHereDocs();
+        }
+    }
+
+    fn atHereDocBody(self: Parser) bool {
+        return self.at(.here_doc_body) or self.at(.here_doc_body_unterminated);
     }
 
     fn expect(self: *Parser, kind: token.Kind) ParseError!void {
@@ -1101,101 +1131,47 @@ const Parser = struct {
         return if (self.alias_state) |shell_state| shell_state.options.mode else .bash;
     }
 
-    const HereDocDelimiter = struct {
-        text: []const u8,
-        quoted: bool,
-    };
-
-    fn hereDocDelimiter(self: *Parser, word: ast.Word) ParserError!HereDocDelimiter {
-        var quoted = false;
-        const text = try self.hereDocDelimiterText(word, &quoted);
-        return .{ .text = text, .quoted = quoted };
-    }
-
-    fn hereDocDelimiterText(self: *Parser, word: ast.Word, quoted: *bool) ParserError![]const u8 {
-        return switch (word.data) {
-            .literal => |literal| literal,
-            .parts => |parts| self.hereDocDelimiterParts(parts, quoted),
-        };
-    }
-
-    fn hereDocDelimiterParts(self: *Parser, parts: []const ast.WordPart, quoted: *bool) ParserError![]const u8 {
-        var output: std.ArrayList(u8) = .empty;
-        for (parts) |part| switch (part) {
-            .literal => |bytes| try output.appendSlice(self.allocator, bytes),
-            .escaped => |bytes| {
-                quoted.* = true;
-                try output.appendSlice(self.allocator, bytes);
-            },
-            .single_quoted => |bytes| {
-                quoted.* = true;
-                try output.appendSlice(self.allocator, bytes);
-            },
-            .double_quoted => |nested| {
-                quoted.* = true;
-                try output.appendSlice(self.allocator, try self.hereDocDelimiterParts(nested, quoted));
-            },
-            .parameter, .command_substitution, .arithmetic => quoted.* = true,
-        };
-        return output.toOwnedSlice(self.allocator);
-    }
-
-    fn parsePendingHereDocs(self: *Parser, start_offset: usize) ParserError!void {
+    /// Attaches lexer-produced body tokens to the pending here-document
+    /// redirections, in operator order, and parses each unquoted body into
+    /// word parts for evaluation-time expansion.
+    fn parsePendingHereDocs(self: *Parser) ParserError!void {
         if (self.pending_here_docs.items.len == 0) return;
 
-        var offset = start_offset;
         for (self.pending_here_docs.items) |pending| {
-            const parsed = try self.parseHereDocBody(offset, pending);
+            const body_token = self.eatHereDocBody() orelse return error.IncompleteHereDoc;
+            // ziglint-ignore: Z024 preserve existing readable expression shape; lint-only cleanup
+            if (body_token.kind == .here_doc_body_unterminated and self.require_complete_here_docs) return error.IncompleteHereDoc;
             pending.redirection.here_doc = .{
-                .body = parsed.body,
-                .delimiter_quoted = pending.delimiter_quoted,
+                .body = body_token.text,
+                .delimiter_quoted = body_token.quoted,
+                .parts = if (body_token.quoted) &.{} else try self.parseHereDocParts(body_token),
             };
-            offset = parsed.next_offset;
         }
         self.pending_here_docs.clearRetainingCapacity();
-
-        while (self.index < self.tokens.len and self.tokens[self.index].span.start < offset) self.index += 1;
-        if (self.index >= self.tokens.len) self.index = self.tokens.len - 1;
     }
 
-    const ParsedHereDoc = struct {
-        body: []const u8,
-        next_offset: usize,
-    };
+    fn eatHereDocBody(self: *Parser) ?token.Token {
+        if (self.eat(.here_doc_body)) |tok| return tok;
+        return self.eat(.here_doc_body_unterminated);
+    }
 
-    fn parseHereDocBody(self: *Parser, start_offset: usize, pending: PendingHereDoc) ParserError!ParsedHereDoc {
-        var body: std.ArrayList(u8) = .empty;
-        errdefer body.deinit(self.allocator);
-        var offset = start_offset;
-        var continued = false;
-        while (offset <= self.source.text.len) {
-            const line_start = offset;
-            // ziglint-ignore: Z011 deprecated API left unchanged to avoid semantic drift in lint-only pass
-            const newline_index = std.mem.indexOfScalarPos(u8, self.source.text, offset, '\n');
-            const line_end = newline_index orelse self.source.text.len;
-            const next_offset = if (newline_index) |newline| newline + 1 else self.source.text.len;
-            const raw_line = self.source.text[line_start..line_end];
-            const strip_tabs = pending.strip_tabs and !continued;
-            const delimiter_line = if (strip_tabs) stripLeadingTabs(raw_line) else raw_line;
-            if (!continued and std.mem.eql(u8, delimiter_line, pending.delimiter)) {
-                return .{
-                    .body = try body.toOwnedSlice(self.allocator),
-                    .next_offset = next_offset,
-                };
-            }
-
-            const body_line = if (strip_tabs) delimiter_line else raw_line;
-            try body.appendSlice(self.allocator, body_line);
-            if (newline_index != null) try body.append(self.allocator, '\n');
-            continued = !pending.delimiter_quoted and body_line.len != 0 and body_line[body_line.len - 1] == '\\';
-            if (next_offset == offset) break;
-            offset = next_offset;
-        }
-        if (self.require_complete_here_docs) return error.IncompleteHereDoc;
-        return .{
-            .body = try body.toOwnedSlice(self.allocator),
-            .next_offset = offset,
-        };
+    /// Parses an unquoted here-document body into word parts. POSIX 2.7.4
+    /// gives the body double-quote semantics except that the double-quote
+    /// character is not special and backslash only escapes '$', '`', '\',
+    /// and <newline>. Malformed expansions keep the body literal, matching
+    /// the previous evaluation-time leniency.
+    fn parseHereDocParts(self: *Parser, body_token: token.Token) ParserError![]const ast.WordPart {
+        var parts: std.ArrayList(ast.WordPart) = .empty;
+        errdefer parts.deinit(self.allocator);
+        self.appendWordParts(&parts, body_token.text, 0, body_token.text.len, .here_doc, body_token.span) catch |err|
+            switch (err) {
+                error.OutOfMemory => return error.OutOfMemory,
+                else => {
+                    parts.clearRetainingCapacity();
+                    try parts.append(self.allocator, .{ .literal = body_token.text });
+                },
+            };
+        return parts.toOwnedSlice(self.allocator);
     }
 
     fn at(self: Parser, kind: token.Kind) bool {
@@ -1417,6 +1393,13 @@ fn appendOctalEscape(allocator: std.mem.Allocator, output: *std.ArrayList(u8), t
 fn doubleQuoteEscapes(byte: u8) bool {
     return switch (byte) {
         '$', '`', '"', '\\', '\n' => true,
+        else => false,
+    };
+}
+
+fn hereDocEscapes(byte: u8) bool {
+    return switch (byte) {
+        '$', '`', '\\', '\n' => true,
         else => false,
     };
 }
@@ -1861,4 +1844,49 @@ test "parser accepts here-document delimited by end of input" {
     const redirection = program.body.entries[0].and_or.pipelines[0].pipeline.stages[0].simple.redirections[0];
 
     try std.testing.expectEqualStrings("", redirection.here_doc.?.body);
+}
+
+test "here-document bodies parse into word parts with here-doc quoting rules" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const src: source_mod.Source = .{
+        .id = 1,
+        .kind = .script_file,
+        .name = "test",
+        .text = "cat <<E\n$X \"q\" \\$Y \\a\nE\n",
+    };
+    const tokens = try lexer.lex(allocator, src);
+    const program = try parse(allocator, src, tokens);
+    const here_doc = program.body.entries[0].and_or.pipelines[0].pipeline.stages[0].simple.redirections[0].here_doc.?;
+
+    try std.testing.expect(!here_doc.delimiter_quoted);
+    try std.testing.expectEqualStrings("$X \"q\" \\$Y \\a\n", here_doc.body);
+    try std.testing.expectEqualStrings("X", here_doc.parts[0].parameter.parameter.variable);
+    // The double-quote character is not special inside a here-document.
+    try std.testing.expectEqualStrings(" \"q\" ", here_doc.parts[1].literal);
+    // Backslash escapes '$' but stays literal before other characters.
+    try std.testing.expectEqualStrings("$", here_doc.parts[2].escaped);
+    try std.testing.expectEqualStrings("Y \\a\n", here_doc.parts[3].literal);
+}
+
+test "quoted here-document delimiters keep the body literal with no parts" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const src: source_mod.Source = .{
+        .id = 1,
+        .kind = .script_file,
+        .name = "test",
+        .text = "cat <<'E'\n$X `cmd`\nE\n",
+    };
+    const tokens = try lexer.lex(allocator, src);
+    const program = try parse(allocator, src, tokens);
+    const here_doc = program.body.entries[0].and_or.pipelines[0].pipeline.stages[0].simple.redirections[0].here_doc.?;
+
+    try std.testing.expect(here_doc.delimiter_quoted);
+    try std.testing.expectEqualStrings("$X `cmd`\n", here_doc.body);
+    try std.testing.expectEqual(@as(usize, 0), here_doc.parts.len);
 }

@@ -254,10 +254,13 @@ pub const RedirectionOperator = enum {
 pub const HereDoc = struct {
     body: []const u8,
     delimiter_quoted: bool = false,
+    /// Body parsed into word parts for evaluation-time expansion; empty
+    /// when the delimiter was quoted and the body is taken literally.
+    parts: []const WordPart = &.{},
 
     pub fn validate(self: HereDoc, op: RedirectionOperator) void {
-        _ = self;
         std.debug.assert(op == .here_doc or op == .here_doc_strip_tabs);
+        if (self.delimiter_quoted) std.debug.assert(self.parts.len == 0);
     }
 };
 

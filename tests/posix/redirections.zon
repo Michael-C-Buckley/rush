@@ -1251,5 +1251,36 @@
             .stderr = "",
             .status = 0,
         },
+        .{
+            .name = "here-document body follows the newline that continues a pipeline",
+            .script =
+            \\cat <<EOF |
+            \\body
+            \\EOF
+            \\wc -c
+            ,
+            .stdout =
+            \\5
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "here-document body follows the newline that continues an AND list",
+            .script =
+            \\cat <<EOF &&
+            \\body
+            \\EOF
+            \\printf 'ok\n'
+            ,
+            .stdout =
+            \\body
+            \\ok
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
     },
 }

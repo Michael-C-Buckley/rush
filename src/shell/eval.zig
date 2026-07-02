@@ -3162,6 +3162,7 @@ fn copyRedirections(allocator: std.mem.Allocator, redirections: []const ast.Redi
             .here_doc = if (redirection.here_doc) |here_doc| .{
                 .body = try allocator.dupe(u8, here_doc.body),
                 .delimiter_quoted = here_doc.delimiter_quoted,
+                .parts = try copyWordParts(allocator, here_doc.parts),
             } else null,
             .span = redirection.span,
         };
@@ -3344,8 +3345,37 @@ fn applyDuplicateRedirection(
 }
 
 fn applyHereDocRedirection(shell: anytype, target: host_mod.Fd, here_doc: ast.HereDoc) !host_mod.Pid {
-    const body = if (here_doc.delimiter_quoted) here_doc.body else try expandHereDocBody(shell, here_doc.body);
+    const body = if (here_doc.delimiter_quoted) here_doc.body else try expandHereDocParts(shell, here_doc.parts);
     return applyPipeInputRedirection(shell, target, body);
+}
+
+/// Expands a parsed here-document body. Expansion follows the normal word
+/// part rules except that a bare $@ joins the positional parameters with
+/// the first IFS character like $* does, matching dash; field splitting
+/// never applies inside a here-document.
+fn expandHereDocParts(shell: anytype, parts: []const ast.WordPart) EvalError![]const u8 {
+    const allocator = shell.scratchAllocator();
+    var output: std.ArrayList(u8) = .empty;
+    for (parts) |part| {
+        const bytes = if (hereDocAtParameter(part))
+            try joinPositionals(shell, ifsFirstCharacter(shell))
+        else
+            try expandWordPart(shell, part, null);
+        try output.appendSlice(allocator, bytes);
+    }
+    return output.toOwnedSlice(allocator);
+}
+
+fn hereDocAtParameter(part: ast.WordPart) bool {
+    const parameter = switch (part) {
+        .parameter => |parameter| parameter,
+        else => return false,
+    };
+    if (parameter.op != null or parameter.length) return false;
+    return switch (parameter.parameter) {
+        .special => |special| special == .at,
+        else => false,
+    };
 }
 
 fn applyPipeInputRedirection(shell: anytype, target: host_mod.Fd, body: []const u8) !host_mod.Pid {
@@ -3373,196 +3403,6 @@ fn applyPipeInputRedirection(shell: anytype, target: host_mod.Fd, body: []const 
         try shell.host.setCloseOnExec(target, false);
     }
     return pid;
-}
-
-fn expandHereDocBody(shell: anytype, body: []const u8) EvalError![]const u8 {
-    var output: std.ArrayList(u8) = .empty;
-    var index: usize = 0;
-    while (index < body.len) {
-        switch (body[index]) {
-            '\\' => {
-                if (index + 1 >= body.len) {
-                    try output.append(shell.scratchAllocator(), '\\');
-                    index += 1;
-                    continue;
-                }
-                const next = body[index + 1];
-                if (next == '\n') {
-                    index += 2;
-                } else if (next == '\\' or next == '$' or next == '`') {
-                    try output.append(shell.scratchAllocator(), next);
-                    index += 2;
-                } else {
-                    try output.append(shell.scratchAllocator(), '\\');
-                    try output.append(shell.scratchAllocator(), next);
-                    index += 2;
-                }
-            },
-            '$' => {
-                if (index + 1 < body.len and body[index + 1] == '(') {
-                    const close_index = scanHereDocCommandSubstitution(body, index + 1) orelse {
-                        try output.append(shell.scratchAllocator(), body[index]);
-                        index += 1;
-                        continue;
-                    };
-                    const source_text = body[index + 2 .. close_index];
-                    const expanded = try expandCommandSubstitution(shell, .{ .source_text = source_text }, null);
-                    try output.appendSlice(shell.scratchAllocator(), expanded);
-                    index = close_index + 1;
-                    continue;
-                }
-                if (try expandHereDocParameter(shell, body, &index)) |value| {
-                    try output.appendSlice(shell.scratchAllocator(), value);
-                    continue;
-                }
-                try output.append(shell.scratchAllocator(), '$');
-                index += 1;
-            },
-            '`' => {
-                const close_index = scanHereDocBackquoteSubstitution(body, index) orelse {
-                    try output.append(shell.scratchAllocator(), '`');
-                    index += 1;
-                    continue;
-                };
-                const source_text = try hereDocBackquoteSourceText(shell, body[index + 1 .. close_index]);
-                const expanded = try expandCommandSubstitution(shell, .{ .source_text = source_text }, null);
-                try output.appendSlice(shell.scratchAllocator(), expanded);
-                index = close_index + 1;
-            },
-            else => {
-                try output.append(shell.scratchAllocator(), body[index]);
-                index += 1;
-            },
-        }
-    }
-    return output.toOwnedSlice(shell.scratchAllocator());
-}
-
-fn expandHereDocParameter(shell: anytype, body: []const u8, index: *usize) EvalError!?[]const u8 {
-    // ziglint-ignore: Z016 compound assert documents a single invariant; preserve readability
-    std.debug.assert(index.* < body.len and body[index.*] == '$');
-    const parameter_start = index.* + 1;
-    if (parameter_start >= body.len) return null;
-
-    if (std.ascii.isDigit(body[parameter_start])) {
-        index.* = parameter_start + 1;
-        return positionalValue(shell, body[parameter_start] - '0') orelse "";
-    }
-    if (arithmeticSpecialParameter(body[parameter_start])) |special| {
-        index.* = parameter_start + 1;
-        return try expandHereDocSpecialParameter(shell, special);
-    }
-    if (body[parameter_start] == '{') {
-        const content_start = parameter_start + 1;
-        const content_end = scanArithmeticBracedParameterEnd(body, content_start) orelse return null;
-        const content = body[content_start..content_end];
-        // ziglint-ignore: Z024 preserve existing readable expression shape; lint-only cleanup
-        const parameter = try parser.parseBracedParameterExpansion(shell.astAllocator(), content, .{}) orelse return null;
-        index.* = content_end + 1;
-        return try expandParameter(shell, parameter);
-    }
-
-    const name_end = scanHereDocParameterName(body, parameter_start);
-    if (name_end == parameter_start) return null;
-    index.* = name_end;
-    return parameterValue(shell, body[parameter_start..name_end]) orelse "";
-}
-
-fn expandHereDocSpecialParameter(shell: anytype, special: ast.SpecialParameter) EvalError![]const u8 {
-    return switch (special) {
-        .star, .at => try joinPositionals(shell, ifsFirstCharacter(shell)),
-        else => expandParameter(shell, .{ .parameter = .{ .special = special } }),
-    };
-}
-
-fn scanHereDocBackquoteSubstitution(body: []const u8, open_index: usize) ?usize {
-    std.debug.assert(body[open_index] == '`');
-    var index = open_index + 1;
-    while (index < body.len) {
-        if (body[index] == '\\' and index + 1 < body.len) {
-            index += 2;
-            continue;
-        }
-        if (body[index] == '`') return index;
-        index += 1;
-    }
-    return null;
-}
-
-fn hereDocBackquoteSourceText(shell: anytype, raw: []const u8) EvalError![]const u8 {
-    var output: std.ArrayList(u8) = .empty;
-    const allocator = shell.scratchAllocator();
-    var index: usize = 0;
-    while (index < raw.len) {
-        if (raw[index] == '\\' and index + 1 < raw.len) {
-            switch (raw[index + 1]) {
-                '`' => {
-                    try output.append(allocator, '`');
-                    index += 2;
-                },
-                '\\' => {
-                    try output.append(allocator, '\\');
-                    index += 2;
-                },
-                '\n' => index += 2,
-                else => {
-                    try output.append(allocator, raw[index]);
-                    try output.append(allocator, raw[index + 1]);
-                    index += 2;
-                },
-            }
-        } else {
-            try output.append(allocator, raw[index]);
-            index += 1;
-        }
-    }
-    return output.toOwnedSlice(allocator);
-}
-
-fn scanHereDocCommandSubstitution(body: []const u8, open_index: usize) ?usize {
-    std.debug.assert(body[open_index] == '(');
-    var depth: usize = 1;
-    var quote: ?u8 = null;
-    var index = open_index + 1;
-    while (index < body.len) : (index += 1) {
-        const byte = body[index];
-        if (quote) |delimiter| {
-            if (byte == delimiter) quote = null;
-            if (byte == '\\' and delimiter == '"' and index + 1 < body.len) index += 1;
-            continue;
-        }
-        if (byte == '\'' or byte == '"') {
-            quote = byte;
-        } else if (byte == '$' and index + 1 < body.len and body[index + 1] == '(') {
-            depth += 1;
-            index += 1;
-        } else if (byte == ')') {
-            depth -= 1;
-            if (depth == 0) return index;
-        }
-    }
-    return null;
-}
-
-fn scanHereDocParameterName(body: []const u8, start: usize) usize {
-    if (start >= body.len or !isNameStart(body[start])) return start;
-    var index = start + 1;
-    while (index < body.len and isNameContinue(body[index])) index += 1;
-    return index;
-}
-
-fn isNameStart(byte: u8) bool {
-    return switch (byte) {
-        'A'...'Z', 'a'...'z', '_' => true,
-        else => false,
-    };
-}
-
-fn isNameContinue(byte: u8) bool {
-    return isNameStart(byte) or switch (byte) {
-        '0'...'9' => true,
-        else => false,
-    };
 }
 
 fn restoreFrames(shell: anytype, frames: []const RedirectionFrame) !void {
