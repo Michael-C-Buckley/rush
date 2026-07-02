@@ -1,0 +1,613 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "jupyter",
+    "description": "interactive notebook environment",
+    "options": [
+      {
+        "long": "help",
+        "short": "h",
+        "description": "show help for jupyter",
+        "inherit": false
+      },
+      {
+        "long": "version",
+        "description": "show the jupyter command's version and exit",
+        "inherit": false
+      },
+      {
+        "long": "config-dir",
+        "description": "show Jupyter config dir",
+        "inherit": false
+      },
+      {
+        "long": "data-dir",
+        "description": "show Jupyter data dir",
+        "inherit": false
+      },
+      {
+        "long": "runtime-dir",
+        "description": "show Jupyter runtime dir",
+        "inherit": false
+      },
+      {
+        "long": "paths",
+        "description": "show all Jupyter paths. Add --json for machine-readable format",
+        "inherit": false
+      },
+      {
+        "long": "json",
+        "description": "output paths as machine-readable json",
+        "inherit": false
+      },
+      {
+        "long": "debug",
+        "description": "output debug information about paths",
+        "inherit": false
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "bundlerextension",
+        "description": "work with Jupyter bundler extensions",
+        "options": [
+          {
+            "long": "debug",
+            "description": "set log level to debug",
+            "inherit": false
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help",
+            "inherit": false
+          },
+          {
+            "long": "log-level",
+            "description": "set log level",
+            "inherit": false,
+            "value": {
+              "name": "level"
+            }
+          },
+          {
+            "long": "config",
+            "description": "choose config file",
+            "inherit": false,
+            "value": {
+              "name": "config",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "user",
+            "description": "apply the operation only for the given user",
+            "inherit": false,
+            "value": {
+              "name": "user"
+            }
+          },
+          {
+            "long": "system",
+            "description": "apply the operation system-wide",
+            "inherit": false
+          },
+          {
+            "long": "sys-prefix",
+            "description": "use sys.prefix as the prefix for installing nbextensions (for environments, packaging)",
+            "inherit": false
+          },
+          {
+            "long": "py",
+            "aliases": [
+              "python"
+            ],
+            "description": "install from a Python package",
+            "inherit": false
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "enable",
+            "description": "enable a bundler extension"
+          },
+          {
+            "name": "disable",
+            "description": "disable a bundler extension"
+          },
+          {
+            "name": "list",
+            "description": "list bundler extensions"
+          }
+        ]
+      },
+      {
+        "name": "kernel",
+        "description": "run a kernel locally in a subprocess",
+        "options": [
+          {
+            "long": "debug",
+            "description": "set log level to debug",
+            "inherit": false
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help",
+            "inherit": false
+          },
+          {
+            "long": "kernel",
+            "inherit": false,
+            "value": {
+              "name": "KernelApp.kernel_name"
+            }
+          },
+          {
+            "long": "ip",
+            "inherit": false,
+            "value": {
+              "name": "KernelManager.ip"
+            }
+          }
+        ]
+      },
+      {
+        "name": "kernelspec",
+        "description": "manage Jupyter kernel specifications",
+        "subcommands": [
+          {
+            "name": "list",
+            "options": [
+              {
+                "long": "json",
+                "description": "output spec name and location as json",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "install",
+            "description": "install a kernel specification directory",
+            "arguments": {
+              "states": [
+                {
+                  "name": "kernel",
+                  "index": 0,
+                  "options": [
+                    {
+                      "long": "debug",
+                      "description": "set log level to debug",
+                      "inherit": false
+                    },
+                    {
+                      "long": "help",
+                      "short": "h",
+                      "description": "show help",
+                      "inherit": false
+                    }
+                  ]
+                }
+              ]
+            },
+            "options": [
+              {
+                "long": "debug",
+                "description": "set log level to debug",
+                "inherit": false
+              },
+              {
+                "long": "help",
+                "short": "h",
+                "description": "show help",
+                "inherit": false
+              },
+              {
+                "long": "log-level",
+                "description": "set log level",
+                "inherit": false,
+                "value": {
+                  "name": "level"
+                }
+              },
+              {
+                "long": "config",
+                "description": "choose config file",
+                "inherit": false,
+                "value": {
+                  "name": "config",
+                  "provider": "builtin.files"
+                }
+              }
+            ]
+          },
+          {
+            "name": "uninstall",
+            "description": "alias for remove",
+            "arguments": {
+              "states": [
+                {
+                  "name": "kernel",
+                  "index": 0,
+                  "options": [
+                    {
+                      "long": "debug",
+                      "description": "set log level to debug",
+                      "inherit": false
+                    },
+                    {
+                      "long": "help",
+                      "short": "h",
+                      "description": "show help",
+                      "inherit": false
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "name": "remove",
+            "description": "remove one or more Jupyter kernelspecs by name",
+            "arguments": {
+              "states": [
+                {
+                  "name": "kernel",
+                  "index": 0,
+                  "options": [
+                    {
+                      "long": "debug",
+                      "description": "set log level to debug",
+                      "inherit": false
+                    },
+                    {
+                      "long": "help",
+                      "short": "h",
+                      "description": "show help",
+                      "inherit": false
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "migrate",
+        "description": "migrate configuration and data from .ipython prior to 4.0 to Jupyter locations",
+        "options": [
+          {
+            "long": "debug",
+            "description": "set log level to debug",
+            "inherit": false
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help",
+            "inherit": false
+          },
+          {
+            "long": "log-level",
+            "description": "set log level",
+            "inherit": false,
+            "value": {
+              "name": "level"
+            }
+          },
+          {
+            "long": "config",
+            "description": "choose config file",
+            "inherit": false,
+            "value": {
+              "name": "config",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "generate-config",
+            "description": "generate default config file",
+            "inherit": false
+          },
+          {
+            "short": "y",
+            "description": "answer yes to any questions instead of prompting",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "nbconvert",
+        "description": "this application is used to convert notebook files (*.ipynb) to various other formats",
+        "arguments": {
+          "states": [
+            {
+              "name": "file",
+              "provider": "builtin.files",
+              "index": 0
+            }
+          ]
+        },
+        "options": [
+          {
+            "long": "debug",
+            "description": "set log level to debug",
+            "inherit": false
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help",
+            "inherit": false
+          },
+          {
+            "long": "log-level",
+            "description": "set log level",
+            "inherit": false,
+            "value": {
+              "name": "level"
+            }
+          },
+          {
+            "long": "config",
+            "description": "choose config file",
+            "inherit": false,
+            "value": {
+              "name": "config",
+              "provider": "builtin.files"
+            }
+          }
+        ]
+      },
+      {
+        "name": "nbextension",
+        "description": "",
+        "subcommands": [
+          {
+            "name": "install",
+            "description": "install an nbextension",
+            "arguments": {
+              "states": [
+                {
+                  "name": "extension",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "uninstall",
+            "description": "uninstall an nbextension",
+            "arguments": {
+              "states": [
+                {
+                  "name": "extension",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "enable",
+            "description": "enable an nbextension",
+            "arguments": {
+              "states": [
+                {
+                  "name": "extension",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "disable",
+            "description": "disable an nbextension",
+            "arguments": {
+              "states": [
+                {
+                  "name": "extension",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "list",
+            "description": "list nbextensions"
+          }
+        ],
+        "options": [
+          {
+            "long": "debug",
+            "description": "set log level to debug",
+            "inherit": false
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help",
+            "inherit": false
+          },
+          {
+            "long": "log-level",
+            "description": "set log level",
+            "inherit": false,
+            "value": {
+              "name": "level"
+            }
+          },
+          {
+            "long": "config",
+            "description": "choose config file",
+            "inherit": false,
+            "value": {
+              "name": "config",
+              "provider": "builtin.files"
+            }
+          }
+        ]
+      },
+      {
+        "name": "notebook",
+        "description": "run the Jupyter notebook server",
+        "subcommands": [
+          {
+            "name": "list",
+            "description": "list currently running notebook servers"
+          },
+          {
+            "name": "stop",
+            "description": "stop currently running notebook server"
+          },
+          {
+            "name": "password",
+            "description": "set a password for the notebook server"
+          }
+        ],
+        "options": [
+          {
+            "long": "debug",
+            "description": "set log level to debug",
+            "inherit": false
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help",
+            "inherit": false
+          },
+          {
+            "long": "log-level",
+            "description": "set log level",
+            "inherit": false,
+            "value": {
+              "name": "level"
+            }
+          },
+          {
+            "long": "config",
+            "description": "choose config file",
+            "inherit": false,
+            "value": {
+              "name": "config",
+              "provider": "builtin.files"
+            }
+          }
+        ]
+      },
+      {
+        "name": "run",
+        "description": "run a notebook",
+        "options": [
+          {
+            "long": "debug",
+            "description": "set log level to debug",
+            "inherit": false
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help",
+            "inherit": false
+          },
+          {
+            "long": "log-level",
+            "description": "set log level",
+            "inherit": false,
+            "value": {
+              "name": "level"
+            }
+          },
+          {
+            "long": "config",
+            "description": "choose config file",
+            "inherit": false,
+            "value": {
+              "name": "config",
+              "provider": "builtin.files"
+            }
+          }
+        ]
+      },
+      {
+        "name": "serverextension",
+        "description": "manage server extensions",
+        "options": [
+          {
+            "long": "debug",
+            "description": "set log level to debug",
+            "inherit": false
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help",
+            "inherit": false
+          },
+          {
+            "long": "log-level",
+            "description": "set log level",
+            "inherit": false,
+            "value": {
+              "name": "level"
+            }
+          },
+          {
+            "long": "config",
+            "description": "choose config file",
+            "inherit": false,
+            "value": {
+              "name": "config",
+              "provider": "builtin.files"
+            }
+          }
+        ]
+      },
+      {
+        "name": "troubleshoot",
+        "description": "log for troubleshooting"
+      },
+      {
+        "name": "trust",
+        "description": "manage trust",
+        "options": [
+          {
+            "long": "debug",
+            "description": "set log level to debug",
+            "inherit": false
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help",
+            "inherit": false
+          },
+          {
+            "long": "log-level",
+            "description": "set log level",
+            "inherit": false,
+            "value": {
+              "name": "level"
+            }
+          },
+          {
+            "long": "config",
+            "description": "choose config file",
+            "inherit": false,
+            "value": {
+              "name": "config",
+              "provider": "builtin.files"
+            }
+          }
+        ]
+      }
+    ],
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
