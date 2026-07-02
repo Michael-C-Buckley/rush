@@ -1,0 +1,332 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "maigret",
+    "description": "collect OSINT profiles by username",
+    "options": [
+      {
+        "short": "a",
+        "long": "all-sites",
+        "description": "use all sites for scan",
+        "inherit": false
+      },
+      {
+        "long": "version",
+        "description": "display version information and dependencies",
+        "inherit": false
+      },
+      {
+        "long": "timeout",
+        "description": "time in seconds to wait for response to requests (default {settings.timeout}s). A longer timeout will be more likely to get results from slow sites. On the othe",
+        "inherit": false,
+        "value": {
+          "name": "Timeout",
+          "description": "Timeout in seconds"
+        }
+      },
+      {
+        "long": "retries",
+        "description": "attempts to restart temporarily failed requests",
+        "inherit": false,
+        "value": {
+          "name": "Retries",
+          "description": "Number of attempts"
+        }
+      },
+      {
+        "short": "n",
+        "long": "max-connections",
+        "description": "allowed number of concurrent connections (default {settings.max_connections})",
+        "inherit": false,
+        "value": {
+          "name": "Connections",
+          "description": "Number connections"
+        }
+      },
+      {
+        "long": "no-recursion",
+        "description": "disable recursive search by additional data extracted from pages",
+        "inherit": false
+      },
+      {
+        "long": "no-extracting",
+        "description": "disable parsing pages for additional data and other usernames",
+        "inherit": false
+      },
+      {
+        "long": "id-type",
+        "description": "specify identifier(s) type (default: username)",
+        "inherit": false,
+        "value": {
+          "name": "Type",
+          "description": "Type of identifier",
+          "provider": {
+            "values": [
+              "username",
+              "yandex_public_id",
+              "gaia_id",
+              "vk_id",
+              "ok_id",
+              "wikimapia_uid",
+              "steam_id",
+              "uidme_uguid",
+              "yelp_userid"
+            ]
+          }
+        }
+      },
+      {
+        "long": "db",
+        "description": "load Maigret database from a JSON file or HTTP web resource",
+        "inherit": false,
+        "value": {
+          "name": "DB-path",
+          "description": "DB path",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "cookies-jar-file",
+        "description": "file with cookies",
+        "inherit": false,
+        "value": {
+          "name": "Cookie-file",
+          "description": "Cookie file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "ignore-ids",
+        "description": "do not make search by the specified username or other ids",
+        "inherit": false,
+        "value": {
+          "name": "Ignored-ids",
+          "description": "Ignored ids",
+          "repeatable": true
+        }
+      },
+      {
+        "long": "folderoutput",
+        "spellings": [
+          "-fo"
+        ],
+        "description": "if using multiple usernames, the output of the results will be saved to this folder",
+        "inherit": false,
+        "value": {
+          "name": "Reports-path",
+          "description": "Reports path",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "short": "p",
+        "long": "proxy",
+        "description": "make requests over a proxy. e.g. socks5://127.0.0.1:1080",
+        "inherit": false,
+        "value": {
+          "name": "Proxy-URL",
+          "description": "Proxy URL"
+        }
+      },
+      {
+        "long": "tor-proxy",
+        "description": "specify URL of your Tor gateway. Default is socks5://127.0.0.1:9050",
+        "inherit": false,
+        "value": {
+          "name": "Tor-Proxy-URL",
+          "description": "Tor Proxy URL"
+        }
+      },
+      {
+        "long": "i2p-proxy",
+        "description": "specify URL of your I2P gateway. Default is http://127.0.0.1:4444",
+        "inherit": false,
+        "value": {
+          "name": "I2P-URL",
+          "description": "I2P URL"
+        }
+      },
+      {
+        "long": "with-domains",
+        "description": "enable (experimental) feature of checking domains on usernames",
+        "inherit": false
+      },
+      {
+        "long": "tags",
+        "description": "specify tags of sites (see `--stats`)",
+        "inherit": false,
+        "value": {
+          "name": "Tags",
+          "repeatable": true
+        }
+      },
+      {
+        "long": "site",
+        "description": "limit analysis to just the specified sites (multiple option)",
+        "inherit": false,
+        "value": {
+          "name": "Site-name",
+          "repeatable": true
+        }
+      },
+      {
+        "long": "use-disabled-sites",
+        "description": "use disabled sites to search (may cause many false positives)",
+        "inherit": false
+      },
+      {
+        "long": "parse",
+        "description": "parse page by URL and extract username and IDs to use for search",
+        "inherit": false,
+        "value": {
+          "name": "Parse-URL"
+        }
+      },
+      {
+        "long": "submit",
+        "description": "uRL of existing profile in new site to submit",
+        "inherit": false,
+        "value": {
+          "name": "Site-URL"
+        }
+      },
+      {
+        "long": "self-check",
+        "description": "do self check for sites and database and disable non-working ones",
+        "inherit": false
+      },
+      {
+        "long": "stats",
+        "description": "show database statistics (most frequent sites engines and tags)",
+        "inherit": false
+      },
+      {
+        "long": "print-not-found",
+        "description": "print sites where the username was not found",
+        "inherit": false
+      },
+      {
+        "long": "print-errors",
+        "description": "print errors messages: connection, captcha, site country ban, etc",
+        "inherit": false
+      },
+      {
+        "short": "v",
+        "long": "verbose",
+        "description": "display extra information and metrics",
+        "inherit": false
+      },
+      {
+        "long": "vv",
+        "spellings": [
+          "-info"
+        ],
+        "description": "display extra/service information and metrics",
+        "inherit": false
+      },
+      {
+        "long": "debug",
+        "short": "d",
+        "spellings": [
+          "-vvv"
+        ],
+        "description": "display extra/service/debug information and metrics, save responses in debug.log",
+        "inherit": false
+      },
+      {
+        "long": "no-color",
+        "description": "don't color terminal output",
+        "inherit": false
+      },
+      {
+        "long": "no-progressbar",
+        "description": "don't show progressbar",
+        "inherit": false
+      },
+      {
+        "short": "T",
+        "long": "txt",
+        "description": "create a TXT report (one report per username)",
+        "inherit": false
+      },
+      {
+        "short": "C",
+        "long": "csv",
+        "description": "create a CSV report (one report per username)",
+        "inherit": false
+      },
+      {
+        "short": "H",
+        "long": "html",
+        "description": "create an HTML report (one report per username)",
+        "inherit": false
+      },
+      {
+        "short": "X",
+        "long": "xmind",
+        "description": "create a XMind 8 mindmap report (one report per username)",
+        "inherit": false
+      },
+      {
+        "short": "P",
+        "long": "pdf",
+        "description": "create a PDF report (one report per username)",
+        "inherit": false
+      },
+      {
+        "short": "G",
+        "long": "graph",
+        "description": "create a graph report (one report per username)",
+        "inherit": false
+      },
+      {
+        "short": "J",
+        "long": "json",
+        "description": "generate a JSON report of specific type: simple, ndjson (one report per username)",
+        "inherit": false,
+        "value": {
+          "name": "Type",
+          "provider": {
+            "values": [
+              "simple",
+              "ndjson"
+            ]
+          }
+        }
+      },
+      {
+        "long": "reports-sorting",
+        "description": "method of results sorting in reports (default: in order of getting the result)",
+        "inherit": false,
+        "value": {
+          "name": "Type",
+          "provider": {
+            "values": [
+              "default",
+              "data"
+            ]
+          }
+        }
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "user",
+          "description": "username to search",
+          "index": 0,
+          "repeatable": true
+        }
+      ]
+    },
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
