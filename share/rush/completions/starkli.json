@@ -1,0 +1,1642 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "starkli",
+    "description": "interact with Starknet from the command line",
+    "subcommands": [
+      {
+        "name": "account",
+        "description": "account management commands",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "print help",
+            "inherit": false
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "fetch",
+            "description": "fetch account config from an already deployed account contract",
+            "options": [
+              {
+                "long": "rpc",
+                "description": "starknet JSON-RPC endpoint",
+                "inherit": false,
+                "value": {
+                  "name": "RPC"
+                }
+              },
+              {
+                "long": "network",
+                "description": "starknet network",
+                "inherit": false,
+                "value": {
+                  "name": "NETWORK",
+                  "provider": {
+                    "values": [
+                      "mainnet",
+                      "goerli-1",
+                      "goerli-2",
+                      "integration"
+                    ]
+                  }
+                }
+              },
+              {
+                "long": "force",
+                "description": "overwrite the file if it already exists",
+                "inherit": false
+              },
+              {
+                "long": "output",
+                "description": "path to save the account config file",
+                "inherit": false,
+                "value": {
+                  "name": "OUTPUT",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "log-traffic",
+                "description": "log raw request/response traffic of providers",
+                "inherit": false
+              },
+              {
+                "short": "h",
+                "long": "help",
+                "description": "print help",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "ADDRESS",
+                  "description": "contract address",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "deploy",
+            "description": "deploy account contract with a DeployAccount transaction",
+            "options": [
+              {
+                "long": "rpc",
+                "description": "starknet JSON-RPC endpoint",
+                "inherit": false,
+                "value": {
+                  "name": "RPC"
+                }
+              },
+              {
+                "long": "network",
+                "description": "starknet network",
+                "inherit": false,
+                "value": {
+                  "name": "NETWORK",
+                  "provider": {
+                    "values": [
+                      "mainnet",
+                      "goerli-1",
+                      "goerli-2",
+                      "integration"
+                    ]
+                  }
+                }
+              },
+              {
+                "long": "keystore",
+                "description": "path to keystore JSON file",
+                "inherit": false,
+                "value": {
+                  "name": "KEYSTORE",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "keystore-password",
+                "description": "supply keystore password from command line option instead of prompt",
+                "inherit": false,
+                "value": {
+                  "name": "keystore-password",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "private-key",
+                "description": "private key in hex in plain text",
+                "inherit": false,
+                "value": {
+                  "name": "PRIVATE_KEY"
+                }
+              },
+              {
+                "long": "max-fee",
+                "description": "maximum transaction fee in Ether (18 decimals)",
+                "inherit": false,
+                "value": {
+                  "name": "MAX_FEE"
+                }
+              },
+              {
+                "long": "max-fee-raw",
+                "description": "maximum transaction fee in Wei",
+                "inherit": false,
+                "value": {
+                  "name": "MAX_FEE_RAW"
+                }
+              },
+              {
+                "long": "estimate-only",
+                "description": "only estimate transaction fee without sending transaction",
+                "inherit": false
+              },
+              {
+                "long": "log-traffic",
+                "description": "log raw request/response traffic of providers",
+                "inherit": false
+              },
+              {
+                "short": "h",
+                "long": "help",
+                "description": "print help",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "FILE",
+                  "description": "path to the account config file",
+                  "provider": "builtin.files",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "oz",
+            "description": "create and manage OpenZeppelin account contracts",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "print help",
+                "inherit": false
+              }
+            ],
+            "subcommands": [
+              {
+                "name": "init",
+                "description": "create a new account configuration without actually deploying"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "block",
+        "description": "get Starknet block",
+        "options": [
+          {
+            "long": "rpc",
+            "description": "starknet JSON-RPC endpoint",
+            "inherit": false,
+            "value": {
+              "name": "RPC"
+            }
+          },
+          {
+            "long": "network",
+            "description": "starknet network",
+            "inherit": false,
+            "value": {
+              "name": "NETWORK",
+              "provider": {
+                "values": [
+                  "mainnet",
+                  "goerli-1",
+                  "goerli-2",
+                  "integration"
+                ]
+              }
+            }
+          },
+          {
+            "long": "full",
+            "description": "fetch full transactions instead of hashes only",
+            "inherit": false
+          },
+          {
+            "long": "log-traffic",
+            "description": "log raw request/response traffic of providers",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "print help",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "BLOCK_ID",
+              "description": "block number, hash, or tag (latest/pending)",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "block-hash",
+        "description": "get latest block hash",
+        "options": [
+          {
+            "long": "rpc",
+            "description": "starknet JSON-RPC endpoint",
+            "inherit": false,
+            "value": {
+              "name": "RPC"
+            }
+          },
+          {
+            "long": "network",
+            "description": "starknet network",
+            "inherit": false,
+            "value": {
+              "name": "NETWORK",
+              "provider": {
+                "values": [
+                  "mainnet",
+                  "goerli-1",
+                  "goerli-2",
+                  "integration"
+                ]
+              }
+            }
+          },
+          {
+            "long": "log-traffic",
+            "description": "log raw request/response traffic of providers",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "print help",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "block-number",
+        "description": "get latest block number",
+        "options": [
+          {
+            "long": "rpc",
+            "description": "starknet JSON-RPC endpoint",
+            "inherit": false,
+            "value": {
+              "name": "RPC"
+            }
+          },
+          {
+            "long": "network",
+            "description": "starknet network",
+            "inherit": false,
+            "value": {
+              "name": "NETWORK",
+              "provider": {
+                "values": [
+                  "mainnet",
+                  "goerli-1",
+                  "goerli-2",
+                  "integration"
+                ]
+              }
+            }
+          },
+          {
+            "long": "log-traffic",
+            "description": "log raw request/response traffic of providers",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "print help",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "block-time",
+        "description": "get Starknet block timestamp only",
+        "options": [
+          {
+            "long": "rpc",
+            "description": "starknet JSON-RPC endpoint",
+            "inherit": false,
+            "value": {
+              "name": "RPC"
+            }
+          },
+          {
+            "long": "network",
+            "description": "starknet network",
+            "inherit": false,
+            "value": {
+              "name": "NETWORK",
+              "provider": {
+                "values": [
+                  "mainnet",
+                  "goerli-1",
+                  "goerli-2",
+                  "integration"
+                ]
+              }
+            }
+          },
+          {
+            "long": "unix",
+            "description": "show block time in Unix timestamp format",
+            "inherit": false
+          },
+          {
+            "long": "rfc2822",
+            "description": "show block time in RFC 2822 format",
+            "inherit": false
+          },
+          {
+            "long": "log-traffic",
+            "description": "log raw request/response traffic of providers",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "print help",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "BLOCK_ID",
+              "description": "block number, hash, or tag (latest/pending)",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "call",
+        "description": "call contract functions without sending transactions",
+        "options": [
+          {
+            "long": "rpc",
+            "description": "starknet JSON-RPC endpoint",
+            "inherit": false,
+            "value": {
+              "name": "RPC"
+            }
+          },
+          {
+            "long": "network",
+            "description": "starknet network",
+            "inherit": false,
+            "value": {
+              "name": "NETWORK",
+              "provider": {
+                "values": [
+                  "mainnet",
+                  "goerli-1",
+                  "goerli-2",
+                  "integration"
+                ]
+              }
+            }
+          },
+          {
+            "long": "log-traffic",
+            "description": "log raw request/response traffic of providers",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "print help",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "CONTRACT_ADDRESS",
+              "description": "contract address",
+              "index": 0
+            },
+            {
+              "name": "SELECTOR",
+              "description": "name of the function being called",
+              "index": 1
+            },
+            {
+              "name": "CALLDATA",
+              "description": "raw function call arguments",
+              "index": 2
+            }
+          ]
+        }
+      },
+      {
+        "name": "chain-id",
+        "description": "get Starknet network ID",
+        "options": [
+          {
+            "long": "rpc",
+            "description": "starknet JSON-RPC endpoint",
+            "inherit": false,
+            "value": {
+              "name": "RPC"
+            }
+          },
+          {
+            "long": "network",
+            "description": "starknet network",
+            "inherit": false,
+            "value": {
+              "name": "NETWORK",
+              "provider": {
+                "values": [
+                  "mainnet",
+                  "goerli-1",
+                  "goerli-2",
+                  "integration"
+                ]
+              }
+            }
+          },
+          {
+            "long": "no-decode",
+            "description": "do not show the decoded text",
+            "inherit": false
+          },
+          {
+            "long": "dec",
+            "description": "display the decimal instead of hexadecimal representation",
+            "inherit": false
+          },
+          {
+            "long": "log-traffic",
+            "description": "log raw request/response traffic of providers",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "print help",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "BLOCK_ID",
+              "description": "block number, hash, or tag (latest/pending)",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "class-at",
+        "description": "get contract class deployed at a certain address",
+        "options": [
+          {
+            "long": "rpc",
+            "description": "starknet JSON-RPC endpoint",
+            "inherit": false,
+            "value": {
+              "name": "RPC"
+            }
+          },
+          {
+            "long": "network",
+            "description": "starknet network",
+            "inherit": false,
+            "value": {
+              "name": "NETWORK",
+              "provider": {
+                "values": [
+                  "mainnet",
+                  "goerli-1",
+                  "goerli-2",
+                  "integration"
+                ]
+              }
+            }
+          },
+          {
+            "long": "log-traffic",
+            "description": "log raw request/response traffic of providers",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "print help",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "ADDRESS",
+              "description": "contract address",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "class-by-hash",
+        "description": "get contract class by hash",
+        "options": [
+          {
+            "long": "rpc",
+            "description": "starknet JSON-RPC endpoint",
+            "inherit": false,
+            "value": {
+              "name": "RPC"
+            }
+          },
+          {
+            "long": "network",
+            "description": "starknet network",
+            "inherit": false,
+            "value": {
+              "name": "NETWORK",
+              "provider": {
+                "values": [
+                  "mainnet",
+                  "goerli-1",
+                  "goerli-2",
+                  "integration"
+                ]
+              }
+            }
+          },
+          {
+            "long": "log-traffic",
+            "description": "log raw request/response traffic of providers",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "print help",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "HASH",
+              "description": "class hash",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "class-hash",
+        "description": "calculate class hash from any contract artifacts (Sierra, casm, legacy)",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "print help",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "FILE",
+              "description": "path to contract artifact file",
+              "provider": "builtin.files",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "class-hash-at",
+        "description": "get contract class hash deployed at a certain address",
+        "options": [
+          {
+            "long": "rpc",
+            "description": "starknet JSON-RPC endpoint",
+            "inherit": false,
+            "value": {
+              "name": "RPC"
+            }
+          },
+          {
+            "long": "network",
+            "description": "starknet network",
+            "inherit": false,
+            "value": {
+              "name": "NETWORK",
+              "provider": {
+                "values": [
+                  "mainnet",
+                  "goerli-1",
+                  "goerli-2",
+                  "integration"
+                ]
+              }
+            }
+          },
+          {
+            "long": "log-traffic",
+            "description": "log raw request/response traffic of providers",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "print help",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "ADDRESS",
+              "description": "contract address",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "completions",
+        "description": "generate shell completions script"
+      },
+      {
+        "name": "declare",
+        "description": "declare a contract class",
+        "options": [
+          {
+            "long": "rpc",
+            "description": "starknet JSON-RPC endpoint",
+            "inherit": false,
+            "value": {
+              "name": "RPC"
+            }
+          },
+          {
+            "long": "network",
+            "description": "starknet network",
+            "inherit": false,
+            "value": {
+              "name": "NETWORK",
+              "provider": {
+                "values": [
+                  "mainnet",
+                  "goerli-1",
+                  "goerli-2",
+                  "integration"
+                ]
+              }
+            }
+          },
+          {
+            "long": "keystore",
+            "description": "path to keystore JSON file",
+            "inherit": false,
+            "value": {
+              "name": "KEYSTORE",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "keystore-password",
+            "description": "supply keystore password from command line option instead of prompt",
+            "inherit": false,
+            "value": {
+              "name": "KEYSTORE_PASSWORD",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "private-key",
+            "description": "private key in hex in plain text",
+            "inherit": false,
+            "value": {
+              "name": "PRIVATE_KEY"
+            }
+          },
+          {
+            "long": "compiler-version",
+            "description": "statically-linked Sierra compiler version",
+            "inherit": false,
+            "value": {
+              "name": "COMPILER_VERSION",
+              "provider": {
+                "values": [
+                  "2.0.1"
+                ]
+              }
+            }
+          },
+          {
+            "long": "casm-hash",
+            "description": "override Sierra compilation and use CASM hash directly",
+            "inherit": false,
+            "value": {
+              "name": "CASM_HASH"
+            }
+          },
+          {
+            "long": "account",
+            "description": "path to account config JSON file",
+            "inherit": false,
+            "value": {
+              "name": "ACCOUNT",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "max-fee",
+            "description": "maximum transaction fee in Ether (18 decimals)",
+            "inherit": false,
+            "value": {
+              "name": "MAX_FEE"
+            }
+          },
+          {
+            "long": "max-fee-raw",
+            "description": "maximum transaction fee in Wei",
+            "inherit": false,
+            "value": {
+              "name": "MAX_FEE_RAW"
+            }
+          },
+          {
+            "long": "estimate-only",
+            "description": "only estimate transaction fee without sending transaction",
+            "inherit": false
+          },
+          {
+            "long": "watch",
+            "description": "wait for the transaction to confirm",
+            "inherit": false
+          },
+          {
+            "long": "log-traffic",
+            "description": "log raw request/response traffic of providers",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "print help",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "FILE",
+              "description": "path to contract artifact file",
+              "provider": "builtin.files",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "deploy",
+        "description": "deploy contract via the Universal Deployer Contract",
+        "options": [
+          {
+            "long": "rpc",
+            "description": "starknet JSON-RPC endpoint",
+            "inherit": false,
+            "value": {
+              "name": "RPC"
+            }
+          },
+          {
+            "long": "network",
+            "description": "starknet network",
+            "inherit": false,
+            "value": {
+              "name": "NETWORK",
+              "provider": {
+                "values": [
+                  "mainnet",
+                  "goerli-1",
+                  "goerli-2",
+                  "integration"
+                ]
+              }
+            }
+          },
+          {
+            "long": "keystore",
+            "description": "path to keystore JSON file",
+            "inherit": false,
+            "value": {
+              "name": "KEYSTORE",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "keystore-password",
+            "description": "supply keystore password from command line option instead of prompt",
+            "inherit": false,
+            "value": {
+              "name": "KEYSTORE_PASSWORD",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "private-key",
+            "description": "private key in hex in plain text",
+            "inherit": false,
+            "value": {
+              "name": "PRIVATE_KEY"
+            }
+          },
+          {
+            "long": "not-unique",
+            "description": "do not derive contract address from deployer address",
+            "inherit": false
+          },
+          {
+            "long": "account",
+            "description": "path to account config JSON file",
+            "inherit": false,
+            "value": {
+              "name": "ACCOUNT",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "max-fee",
+            "description": "maximum transaction fee in Ether (18 decimals)",
+            "inherit": false,
+            "value": {
+              "name": "MAX_FEE"
+            }
+          },
+          {
+            "long": "max-fee-raw",
+            "description": "maximum transaction fee in Wei",
+            "inherit": false,
+            "value": {
+              "name": "MAX_FEE_RAW"
+            }
+          },
+          {
+            "long": "estimate-only",
+            "description": "only estimate transaction fee without sending transaction",
+            "inherit": false
+          },
+          {
+            "long": "salt",
+            "description": "use the given salt to compute contract deploy address",
+            "inherit": false,
+            "value": {
+              "name": "SALT"
+            }
+          },
+          {
+            "long": "watch",
+            "description": "wait for the transaction to confirm",
+            "inherit": false
+          },
+          {
+            "long": "log-traffic",
+            "description": "log raw request/response traffic of providers",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "print help",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "CLASS_HASH",
+              "description": "class hash",
+              "index": 0
+            },
+            {
+              "name": "CTOR_ARGS",
+              "description": "raw constructor arguments",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "invoke",
+        "description": "send an invoke transaction from an account contract",
+        "options": [
+          {
+            "long": "rpc",
+            "description": "starknet JSON-RPC endpoint",
+            "inherit": false,
+            "value": {
+              "name": "RPC"
+            }
+          },
+          {
+            "long": "network",
+            "description": "starknet network",
+            "inherit": false,
+            "value": {
+              "name": "NETWORK",
+              "provider": {
+                "values": [
+                  "mainnet",
+                  "goerli-1",
+                  "goerli-2",
+                  "integration"
+                ]
+              }
+            }
+          },
+          {
+            "long": "keystore",
+            "description": "path to keystore JSON file",
+            "inherit": false,
+            "value": {
+              "name": "KEYSTORE",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "keystore-password",
+            "description": "supply keystore password from command line option instead of prompt",
+            "inherit": false,
+            "value": {
+              "name": "KEYSTORE_PASSWORD",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "private-key",
+            "description": "private key in hex in plain text",
+            "inherit": false,
+            "value": {
+              "name": "PRIVATE_KEY"
+            }
+          },
+          {
+            "long": "account",
+            "description": "path to account config JSON file",
+            "inherit": false,
+            "value": {
+              "name": "ACCOUNT",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "max-fee",
+            "description": "maximum transaction fee in Ether (18 decimals)",
+            "inherit": false,
+            "value": {
+              "name": "MAX_FEE"
+            }
+          },
+          {
+            "long": "max-fee-raw",
+            "description": "maximum transaction fee in Wei",
+            "inherit": false,
+            "value": {
+              "name": "MAX_FEE_RAW"
+            }
+          },
+          {
+            "long": "estimate-only",
+            "description": "only estimate transaction fee without sending transaction",
+            "inherit": false
+          },
+          {
+            "long": "watch",
+            "description": "wait for the transaction to confirm",
+            "inherit": false
+          },
+          {
+            "long": "log-traffic",
+            "description": "log raw request/response traffic of providers",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "print help",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "CALLS",
+              "description": "one or more contract calls. See documentation for more details",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "mont",
+        "description": "print the montgomery representation of a field element",
+        "options": [
+          {
+            "long": "hex",
+            "description": "emit array elements in hexadecimal format",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "print help",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "FELT",
+              "description": "encoded string value in felt, in decimal or hexadecimal representation",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "nonce",
+        "description": "get nonce for a certain contract",
+        "options": [
+          {
+            "long": "rpc",
+            "description": "starknet JSON-RPC endpoint",
+            "inherit": false,
+            "value": {
+              "name": "RPC"
+            }
+          },
+          {
+            "long": "network",
+            "description": "starknet network",
+            "inherit": false,
+            "value": {
+              "name": "NETWORK",
+              "provider": {
+                "values": [
+                  "mainnet",
+                  "goerli-1",
+                  "goerli-2",
+                  "integration"
+                ]
+              }
+            }
+          },
+          {
+            "long": "log-traffic",
+            "description": "log raw request/response traffic of providers",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "print help",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "ADDRESS",
+              "description": "contract address",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "parse-cairo-string",
+        "description": "decode string from felt with the Cairo short string representation",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "print help",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "FELT",
+              "description": "encoded string value in felt, in decimal or hexadecimal representation",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "selector",
+        "description": "calculate selector from name",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "print help",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "NAME",
+              "description": "selector name",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "signer",
+        "description": "signer management commands",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "print help",
+            "inherit": false
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "keystore",
+            "description": "keystore management commands",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "print help",
+                "inherit": false
+              }
+            ],
+            "subcommands": [
+              {
+                "name": "new",
+                "description": "randomly generate a new keystore",
+                "options": [
+                  {
+                    "long": "password",
+                    "description": "supply password from command line option instead of prompt",
+                    "inherit": false,
+                    "value": {
+                      "name": "PASSWORD"
+                    }
+                  },
+                  {
+                    "long": "force",
+                    "description": "overwrite the file if it already exists",
+                    "inherit": false
+                  },
+                  {
+                    "short": "h",
+                    "long": "help",
+                    "description": "print help",
+                    "inherit": false
+                  }
+                ],
+                "arguments": {
+                  "states": [
+                    {
+                      "name": "FILE",
+                      "description": "path to save the JSON keystore",
+                      "provider": "builtin.files",
+                      "index": 0
+                    }
+                  ]
+                }
+              },
+              {
+                "name": "from-key",
+                "description": "create a keystore file from an existing private key",
+                "options": [
+                  {
+                    "long": "force",
+                    "description": "overwrite the file if it already exists",
+                    "inherit": false
+                  },
+                  {
+                    "long": "private-key-stdin",
+                    "description": "take the private key from stdin instead of prompt",
+                    "inherit": false
+                  },
+                  {
+                    "long": "password",
+                    "description": "supply password from command line option instead of prompt",
+                    "inherit": false,
+                    "value": {
+                      "name": "PASSWORD"
+                    }
+                  },
+                  {
+                    "short": "h",
+                    "long": "help",
+                    "description": "print help",
+                    "inherit": false
+                  }
+                ],
+                "arguments": {
+                  "states": [
+                    {
+                      "name": "FILE",
+                      "description": "path to save the JSON keystore",
+                      "provider": "builtin.files",
+                      "index": 0
+                    }
+                  ]
+                }
+              },
+              {
+                "name": "inspect",
+                "description": "check the public key of an existing keystore file",
+                "options": [
+                  {
+                    "long": "password",
+                    "description": "supply password from command line option instead of prompt",
+                    "inherit": false,
+                    "value": {
+                      "name": "PASSWORD"
+                    }
+                  },
+                  {
+                    "long": "raw",
+                    "description": "print the public key only",
+                    "inherit": false
+                  },
+                  {
+                    "short": "h",
+                    "long": "help",
+                    "description": "print help",
+                    "inherit": false
+                  }
+                ],
+                "arguments": {
+                  "states": [
+                    {
+                      "name": "FILE",
+                      "description": "path to the JSON keystore",
+                      "provider": "builtin.files",
+                      "index": 0
+                    }
+                  ]
+                }
+              },
+              {
+                "name": "inspect-private",
+                "description": "check the private key of an existing keystore file",
+                "options": [
+                  {
+                    "long": "password",
+                    "description": "supply password from command line option instead of prompt",
+                    "inherit": false,
+                    "value": {
+                      "name": "PASSWORD"
+                    }
+                  },
+                  {
+                    "long": "raw",
+                    "description": "print the private key only",
+                    "inherit": false
+                  },
+                  {
+                    "short": "h",
+                    "long": "help",
+                    "description": "print help",
+                    "inherit": false
+                  }
+                ],
+                "arguments": {
+                  "states": [
+                    {
+                      "name": "FILE",
+                      "description": "path to the JSON keystore",
+                      "provider": "builtin.files",
+                      "index": 0
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "name": "gen-keypair",
+            "description": "randomly generate a new key pair"
+          }
+        ]
+      },
+      {
+        "name": "state-update",
+        "description": "get state update from a certain block",
+        "options": [
+          {
+            "long": "rpc",
+            "description": "starknet JSON-RPC endpoint",
+            "inherit": false,
+            "value": {
+              "name": "RPC"
+            }
+          },
+          {
+            "long": "network",
+            "description": "starknet network",
+            "inherit": false,
+            "value": {
+              "name": "NETWORK",
+              "provider": {
+                "values": [
+                  "mainnet",
+                  "goerli-1",
+                  "goerli-2",
+                  "integration"
+                ]
+              }
+            }
+          },
+          {
+            "long": "log-traffic",
+            "description": "log raw request/response traffic of providers",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "print help",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "BLOCK_ID",
+              "description": "block number, hash, or tag (latest/pending)",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "storage",
+        "description": "get storage value for a slot at a contract",
+        "options": [
+          {
+            "long": "rpc",
+            "description": "starknet JSON-RPC endpoint",
+            "inherit": false,
+            "value": {
+              "name": "RPC"
+            }
+          },
+          {
+            "long": "network",
+            "description": "starknet network",
+            "inherit": false,
+            "value": {
+              "name": "NETWORK",
+              "provider": {
+                "values": [
+                  "mainnet",
+                  "goerli-1",
+                  "goerli-2",
+                  "integration"
+                ]
+              }
+            }
+          },
+          {
+            "long": "log-traffic",
+            "description": "log raw request/response traffic of providers",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "print help",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "ADDRESS",
+              "description": "contract address",
+              "index": 0
+            },
+            {
+              "name": "KEY",
+              "description": "storage key",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "syncing",
+        "description": "get node syncing status",
+        "options": [
+          {
+            "long": "rpc",
+            "description": "starknet JSON-RPC endpoint",
+            "inherit": false,
+            "value": {
+              "name": "RPC"
+            }
+          },
+          {
+            "long": "network",
+            "description": "starknet network",
+            "inherit": false,
+            "value": {
+              "name": "NETWORK",
+              "provider": {
+                "values": [
+                  "mainnet",
+                  "goerli-1",
+                  "goerli-2",
+                  "integration"
+                ]
+              }
+            }
+          },
+          {
+            "long": "log-traffic",
+            "description": "log raw request/response traffic of providers",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "print help",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "to-cairo-string",
+        "description": "encode string into felt with the Cairo short string representation",
+        "options": [
+          {
+            "long": "dec",
+            "description": "display the encoded value in decimal representation",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "print help",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "TEXT",
+              "description": "text to be encoded in felt",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "transaction",
+        "description": "get Starknet transaction by hash",
+        "options": [
+          {
+            "long": "rpc",
+            "description": "starknet JSON-RPC endpoint",
+            "inherit": false,
+            "value": {
+              "name": "RPC"
+            }
+          },
+          {
+            "long": "network",
+            "description": "starknet network",
+            "inherit": false,
+            "value": {
+              "name": "NETWORK",
+              "provider": {
+                "values": [
+                  "mainnet",
+                  "goerli-1",
+                  "goerli-2",
+                  "integration"
+                ]
+              }
+            }
+          },
+          {
+            "long": "log-traffic",
+            "description": "log raw request/response traffic of providers",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "print help",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "HASH",
+              "description": "transaction hash",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "transaction-receipt",
+        "description": "get transaction receipt by hash",
+        "options": [
+          {
+            "long": "rpc",
+            "description": "starknet JSON-RPC endpoint",
+            "inherit": false,
+            "value": {
+              "name": "RPC"
+            }
+          },
+          {
+            "long": "network",
+            "description": "starknet network",
+            "inherit": false,
+            "value": {
+              "name": "NETWORK",
+              "provider": {
+                "values": [
+                  "mainnet",
+                  "goerli-1",
+                  "goerli-2",
+                  "integration"
+                ]
+              }
+            }
+          },
+          {
+            "long": "log-traffic",
+            "description": "log raw request/response traffic of providers",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "print help",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "HASH",
+              "description": "transaction hash",
+              "index": 0
+            }
+          ]
+        }
+      }
+    ],
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
