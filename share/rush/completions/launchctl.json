@@ -1,0 +1,935 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "launchctl",
+    "description": "interface with launchd",
+    "arguments": {
+      "states": [
+        {
+          "name": "value",
+          "index": 0
+        }
+      ]
+    },
+    "subcommands": [
+      {
+        "name": "bootstrap",
+        "description": "bootstraps a domain or a service into a domain",
+        "arguments": {
+          "states": [
+            {
+              "name": "service",
+              "index": 0,
+              "description": "service or domain target",
+              "provider": "builtin.files"
+            },
+            {
+              "name": "service-path",
+              "index": 1,
+              "description": "service path",
+              "provider": "builtin.files",
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "bootout",
+        "description": "tears down a domain or removes a service from a domain",
+        "arguments": {
+          "states": [
+            {
+              "name": "service",
+              "index": 0,
+              "description": "service or domain target",
+              "provider": "builtin.files"
+            },
+            {
+              "name": "service-path",
+              "index": 1,
+              "description": "service path",
+              "provider": "builtin.files",
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "enable",
+        "description": "enables an existing service",
+        "arguments": {
+          "states": [
+            {
+              "name": "service",
+              "index": 0,
+              "description": "service or domain target"
+            }
+          ]
+        }
+      },
+      {
+        "name": "disable",
+        "description": "disables an existing service",
+        "arguments": {
+          "states": [
+            {
+              "name": "service",
+              "index": 0,
+              "description": "service or domain target"
+            }
+          ]
+        }
+      },
+      {
+        "name": "kickstart",
+        "description": "forces an existing service to start",
+        "options": [
+          {
+            "short": "k",
+            "description": "kill instance before restarting",
+            "inherit": false
+          },
+          {
+            "short": "p",
+            "description": "print PID",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "service",
+              "index": 0,
+              "description": "service or domain target"
+            }
+          ]
+        }
+      },
+      {
+        "name": "attach",
+        "description": "attach the system's debugger to a service",
+        "options": [
+          {
+            "short": "k",
+            "description": "kill instance",
+            "inherit": false
+          },
+          {
+            "short": "s",
+            "description": "force the service to start",
+            "inherit": false
+          },
+          {
+            "short": "x",
+            "description": "attach xpcproxy",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "service",
+              "index": 0,
+              "description": "service or domain target"
+            }
+          ]
+        }
+      },
+      {
+        "name": "debug",
+        "description": "configures the next invocation of a service for debugging",
+        "options": [
+          {
+            "long": "program",
+            "description": "use program path as executable",
+            "inherit": false,
+            "value": {
+              "name": "program-path"
+            }
+          },
+          {
+            "long": "guard-malloc",
+            "description": "turn on libgmalloc",
+            "inherit": false
+          },
+          {
+            "long": "malloc-stack-logging",
+            "description": "turn on malloc(3) stack logging",
+            "inherit": false
+          },
+          {
+            "long": "malloc-nano-allocator",
+            "description": "turn on malloc(3) nano allocator",
+            "inherit": false
+          },
+          {
+            "long": "debug-libraries",
+            "description": "set the DYLD_IMAGE_SUFFIX",
+            "inherit": false
+          },
+          {
+            "long": "introspection-libraries",
+            "description": "add introspection libraries to the DYLD_IMAGE_PATH",
+            "inherit": false
+          },
+          {
+            "long": "NSZombie",
+            "description": "enables NSZombie",
+            "inherit": false
+          },
+          {
+            "long": "32",
+            "description": "runs service on appropriate 32-bit architecture",
+            "inherit": false
+          },
+          {
+            "long": "stdin",
+            "description": "sets the stdin path",
+            "inherit": false,
+            "value": {
+              "name": "stdin-path",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "stdout",
+            "description": "sets the stdout path",
+            "inherit": false,
+            "value": {
+              "name": "stdout-path",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "stderr",
+            "description": "sets the stderr path",
+            "inherit": false,
+            "value": {
+              "name": "stderr-path",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "environment",
+            "description": "sets environment variables",
+            "inherit": false,
+            "value": {
+              "name": "environment-variables"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "argv",
+              "description": "variable args: argv0 argv1",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "kill",
+        "description": "sends a signal to the service instance",
+        "arguments": {
+          "states": [
+            {
+              "name": "signal",
+              "description": "specify signal-name or signal-number",
+              "index": 0
+            },
+            {
+              "name": "service",
+              "index": 1,
+              "description": "service or domain target"
+            }
+          ]
+        }
+      },
+      {
+        "name": "blame",
+        "description": "prints the reason a service is running",
+        "arguments": {
+          "states": [
+            {
+              "name": "service",
+              "index": 0,
+              "description": "service or domain target"
+            }
+          ]
+        }
+      },
+      {
+        "name": "print",
+        "description": "prints a description of a domain or service",
+        "arguments": {
+          "states": [
+            {
+              "name": "service",
+              "index": 0,
+              "description": "service or domain target",
+              "provider": "builtin.files"
+            }
+          ]
+        }
+      },
+      {
+        "name": "print-cache",
+        "description": "prints information about the service cache"
+      },
+      {
+        "name": "print-disabled",
+        "description": "prints which services are disabled",
+        "arguments": {
+          "states": [
+            {
+              "name": "domain-target",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "plist",
+        "description": "prints a property list embedded in a binary (targets the Info.plist by default)",
+        "arguments": {
+          "states": [
+            {
+              "name": "segment",
+              "description": "segment or section",
+              "index": 0
+            },
+            {
+              "name": "Mach-O",
+              "provider": "builtin.files",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "procinfo",
+        "description": "prints port information about a process",
+        "arguments": {
+          "states": [
+            {
+              "name": "pid",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "hostinfo",
+        "description": "prints port information about the host"
+      },
+      {
+        "name": "resolveport",
+        "description": "resolves a port name from a process to an endpoint in launchd",
+        "arguments": {
+          "states": [
+            {
+              "name": "owner-pid",
+              "index": 0
+            },
+            {
+              "name": "port-name",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "limit",
+        "description": "reads or modifies launchd's resource limits",
+        "options": [
+          {
+            "spellings": [
+              "cpu"
+            ],
+            "inherit": false,
+            "value": {
+              "name": "limit",
+              "provider": {
+                "values": [
+                  "[both]",
+                  "[soft | hard]"
+                ]
+              },
+              "required": false,
+              "style": "optional"
+            }
+          },
+          {
+            "spellings": [
+              "filesize"
+            ],
+            "inherit": false,
+            "value": {
+              "name": "limit",
+              "provider": {
+                "values": [
+                  "[both]",
+                  "[soft | hard]"
+                ]
+              },
+              "required": false,
+              "style": "optional"
+            }
+          },
+          {
+            "spellings": [
+              "data"
+            ],
+            "inherit": false,
+            "value": {
+              "name": "limit",
+              "provider": {
+                "values": [
+                  "[both]",
+                  "[soft | hard]"
+                ]
+              },
+              "required": false,
+              "style": "optional"
+            }
+          },
+          {
+            "spellings": [
+              "stack"
+            ],
+            "inherit": false,
+            "value": {
+              "name": "limit",
+              "provider": {
+                "values": [
+                  "[both]",
+                  "[soft | hard]"
+                ]
+              },
+              "required": false,
+              "style": "optional"
+            }
+          },
+          {
+            "spellings": [
+              "core"
+            ],
+            "inherit": false,
+            "value": {
+              "name": "limit",
+              "provider": {
+                "values": [
+                  "[both]",
+                  "[soft | hard]"
+                ]
+              },
+              "required": false,
+              "style": "optional"
+            }
+          },
+          {
+            "spellings": [
+              "rss"
+            ],
+            "inherit": false,
+            "value": {
+              "name": "limit",
+              "provider": {
+                "values": [
+                  "[both]",
+                  "[soft | hard]"
+                ]
+              },
+              "required": false,
+              "style": "optional"
+            }
+          },
+          {
+            "spellings": [
+              "memlock"
+            ],
+            "inherit": false,
+            "value": {
+              "name": "limit",
+              "provider": {
+                "values": [
+                  "[both]",
+                  "[soft | hard]"
+                ]
+              },
+              "required": false,
+              "style": "optional"
+            }
+          },
+          {
+            "spellings": [
+              "maxproc"
+            ],
+            "inherit": false,
+            "value": {
+              "name": "limit",
+              "provider": {
+                "values": [
+                  "[both]",
+                  "[soft | hard]"
+                ]
+              },
+              "required": false,
+              "style": "optional"
+            }
+          },
+          {
+            "spellings": [
+              "maxfiles"
+            ],
+            "inherit": false,
+            "value": {
+              "name": "limit",
+              "provider": {
+                "values": [
+                  "[both]",
+                  "[soft | hard]"
+                ]
+              },
+              "required": false,
+              "style": "optional"
+            }
+          }
+        ]
+      },
+      {
+        "name": "runstats",
+        "description": "prints performance statistics for a service",
+        "arguments": {
+          "states": [
+            {
+              "name": "service",
+              "index": 0,
+              "description": "service or domain target"
+            }
+          ]
+        }
+      },
+      {
+        "name": "examine",
+        "description": "runs the specified analysis tool against launchd in a non-re-entrant manner",
+        "arguments": {
+          "states": [
+            {
+              "name": "tool",
+              "index": 0
+            },
+            {
+              "name": "[args-|-@PID]",
+              "index": 1,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "config",
+        "description": "modifies persistent configuration parameters for launchd domains",
+        "arguments": {
+          "states": [
+            {
+              "name": "[system-|-user]",
+              "provider": {
+                "values": [
+                  "system"
+                ]
+              },
+              "index": 0
+            },
+            {
+              "name": "param",
+              "description": "a key for a key/value pair",
+              "index": 1
+            },
+            {
+              "name": "value",
+              "description": "a value for a key/value pair",
+              "index": 2
+            }
+          ]
+        }
+      },
+      {
+        "name": "dumpstate",
+        "description": "dumps launchd state to stdout"
+      },
+      {
+        "name": "dumpjpcategory",
+        "description": "dumps the jetsam properties category for all services"
+      },
+      {
+        "name": "reboot",
+        "description": "initiates a system reboot of the specified type",
+        "options": [
+          {
+            "spellings": [
+              "system"
+            ],
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "userspace"
+            ],
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "halt"
+            ],
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "logout"
+            ],
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "apps"
+            ],
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "load",
+        "description": "recommended alternatives: bootstrap | enable. Bootstraps a service or directory of services",
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "provider": "builtin.files",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        },
+        "options": [
+          {
+            "short": "w",
+            "description": "enable if disabled",
+            "inherit": false
+          },
+          {
+            "short": "F",
+            "description": "force load",
+            "inherit": false
+          },
+          {
+            "short": "S",
+            "description": "session",
+            "inherit": false,
+            "value": {
+              "name": "session"
+            }
+          },
+          {
+            "short": "D",
+            "description": "load files from specified domain",
+            "inherit": false,
+            "value": {
+              "name": "domain"
+            }
+          }
+        ]
+      },
+      {
+        "name": "unload",
+        "description": "recommended alternatives: bootout | disable. Unloads a service or directory of services",
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "provider": "builtin.files",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        },
+        "options": [
+          {
+            "short": "w",
+            "description": "enable if disabled",
+            "inherit": false
+          },
+          {
+            "short": "F",
+            "description": "force load",
+            "inherit": false
+          },
+          {
+            "short": "S",
+            "description": "session",
+            "inherit": false,
+            "value": {
+              "name": "session"
+            }
+          },
+          {
+            "short": "D",
+            "description": "load files from specified domain",
+            "inherit": false,
+            "value": {
+              "name": "domain"
+            }
+          }
+        ]
+      },
+      {
+        "name": "remove",
+        "description": "unloads the specified service name",
+        "arguments": {
+          "states": [
+            {
+              "name": "label",
+              "index": 0,
+              "description": "service label"
+            }
+          ]
+        }
+      },
+      {
+        "name": "list",
+        "description": "lists information about services",
+        "arguments": {
+          "states": [
+            {
+              "name": "label",
+              "index": 0,
+              "description": "service label",
+              "required": false
+            }
+          ]
+        }
+      },
+      {
+        "name": "start",
+        "description": "starts the specified service",
+        "arguments": {
+          "states": [
+            {
+              "name": "service",
+              "index": 0,
+              "description": "service or domain target"
+            }
+          ]
+        }
+      },
+      {
+        "name": "stop",
+        "description": "stops the specified service if it is running",
+        "arguments": {
+          "states": [
+            {
+              "name": "service",
+              "index": 0,
+              "description": "service or domain target"
+            }
+          ]
+        }
+      },
+      {
+        "name": "setenv",
+        "description": "sets the specified environment variables for all services within the domain",
+        "arguments": {
+          "states": [
+            {
+              "name": "key",
+              "index": 0
+            },
+            {
+              "name": "value",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "unsetenv",
+        "description": "unsets the specified environment variables for all services within the domain",
+        "arguments": {
+          "states": [
+            {
+              "name": "key",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "getenv",
+        "description": "gets the value of an environment variable from within launchd",
+        "arguments": {
+          "states": [
+            {
+              "name": "key",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "bsexec",
+        "description": "execute a program in another process' bootstrap context",
+        "arguments": {
+          "states": [
+            {
+              "name": "PID",
+              "index": 0
+            },
+            {
+              "name": "command",
+              "index": 1
+            },
+            {
+              "name": "args",
+              "index": 2,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "asuser",
+        "description": "execute a program in the bootstrap context of a given user",
+        "arguments": {
+          "states": [
+            {
+              "name": "UID",
+              "index": 0
+            },
+            {
+              "name": "command",
+              "index": 1
+            },
+            {
+              "name": "args",
+              "index": 2,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "submit",
+        "description": "submit a basic job from the command line",
+        "options": [
+          {
+            "short": "p",
+            "description": "program to execute",
+            "inherit": false,
+            "value": {
+              "name": "executable"
+            }
+          },
+          {
+            "short": "o",
+            "description": "std out path",
+            "inherit": false,
+            "value": {
+              "name": "stdout-path",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "short": "e",
+            "description": "std err path",
+            "inherit": false,
+            "value": {
+              "name": "stderr-path",
+              "provider": "builtin.files"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "-l",
+              "description": "label flag",
+              "index": 0
+            },
+            {
+              "name": "label",
+              "description": "unique label to assign to launchd",
+              "index": 1
+            },
+            {
+              "name": "command",
+              "description": "command to run",
+              "index": 2
+            },
+            {
+              "name": "arg",
+              "index": 3,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "managerpid",
+        "description": "prints the PID of the launchd controlling the session"
+      },
+      {
+        "name": "manageruid",
+        "description": "prints the UID of the current launchd session"
+      },
+      {
+        "name": "managername",
+        "description": "prints the name of the current launchd session"
+      },
+      {
+        "name": "error",
+        "description": "prints a description of an error",
+        "arguments": {
+          "states": [
+            {
+              "name": "type",
+              "description": "error domain type",
+              "provider": {
+                "values": [
+                  "posix",
+                  "mach",
+                  "bootstrap"
+                ]
+              },
+              "index": 0
+            },
+            {
+              "name": "code",
+              "description": "numeric code",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "variant",
+        "description": "prints the launchd variant"
+      },
+      {
+        "name": "version",
+        "description": "prints the launchd version"
+      },
+      {
+        "name": "help",
+        "description": "prints the usage for a given subcommand"
+      }
+    ],
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
