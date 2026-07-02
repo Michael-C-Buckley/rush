@@ -1210,6 +1210,7 @@ fn resolveHistoryRequest(
             history,
             context,
             search.query,
+            search.filters,
             search.before,
         ) },
         .search_next => |search| .{ .entries = try resolveHistorySearchNext(
@@ -1217,6 +1218,7 @@ fn resolveHistoryRequest(
             history,
             context,
             search.query,
+            search.filters,
             search.after,
         ) },
         .suggest => |prefix| .{ .entry = if (history.suggest) |callback|
@@ -1242,6 +1244,7 @@ fn resolveHistorySearch(
     history: line_editor.HistoryView,
     context: *anyopaque,
     query: []const u8,
+    filters: line_editor.HistorySearchFilters,
     before: ?i64,
 ) ![]line_editor.HistoryView.HistoryEntry {
     const search = history.search orelse return &.{};
@@ -1250,9 +1253,9 @@ fn resolveHistorySearch(
         for (matches.items) |entry| entry.deinit(allocator);
         matches.deinit(allocator);
     }
-    try appendHistorySearchEntries(allocator, &matches, search, context, query, before);
+    try appendHistorySearchEntries(allocator, &matches, search, context, query, filters, before);
     if (matches.items.len == 0 and before != null) {
-        try appendHistorySearchEntries(allocator, &matches, search, context, query, null);
+        try appendHistorySearchEntries(allocator, &matches, search, context, query, filters, null);
     }
     return matches.toOwnedSlice(allocator);
 }
@@ -1262,18 +1265,19 @@ fn resolveHistorySearchNext(
     history: line_editor.HistoryView,
     context: *anyopaque,
     query: []const u8,
+    filters: line_editor.HistorySearchFilters,
     after: ?i64,
 ) ![]line_editor.HistoryView.HistoryEntry {
     const search_next = history.search_next orelse
-        return resolveHistorySearch(allocator, history, context, query, null);
+        return resolveHistorySearch(allocator, history, context, query, filters, null);
     var matches: std.ArrayList(line_editor.HistoryView.HistoryEntry) = .empty;
     errdefer {
         for (matches.items) |entry| entry.deinit(allocator);
         matches.deinit(allocator);
     }
-    try appendHistorySearchEntries(allocator, &matches, search_next, context, query, after);
+    try appendHistorySearchEntries(allocator, &matches, search_next, context, query, filters, after);
     if (matches.items.len == 0 and after != null) {
-        try appendHistorySearchEntries(allocator, &matches, search_next, context, query, null);
+        try appendHistorySearchEntries(allocator, &matches, search_next, context, query, filters, null);
     }
     return matches.toOwnedSlice(allocator);
 }
@@ -1282,6 +1286,7 @@ const HistorySearchCallback = *const fn (
     *anyopaque,
     std.mem.Allocator,
     []const u8,
+    line_editor.HistorySearchFilters,
     ?i64,
 ) anyerror!?line_editor.HistoryView.HistoryEntry;
 
@@ -1291,11 +1296,12 @@ fn appendHistorySearchEntries(
     callback: HistorySearchCallback,
     context: *anyopaque,
     query: []const u8,
+    filters: line_editor.HistorySearchFilters,
     start_cursor: ?i64,
 ) !void {
     var cursor = start_cursor;
     while (matches.items.len < 20) {
-        const entry = try callback(context, allocator, query, cursor) orelse break;
+        const entry = try callback(context, allocator, query, filters, cursor) orelse break;
         cursor = entry.id;
         try matches.append(allocator, entry);
     }

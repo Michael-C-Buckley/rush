@@ -109,6 +109,7 @@ const staticHistoryStart = vi.staticHistoryStart;
 const viHistoryBigword = vi.viHistoryBigword;
 
 pub const HistoryView = history_mod.View;
+pub const HistorySearchFilters = history_mod.SearchFilters;
 pub const ViAliasView = struct {
     context: ?*anyopaque = null,
     lookup: ?*const fn (*anyopaque, std.mem.Allocator, u21) anyerror!?[]const u8 = null,
@@ -185,6 +186,7 @@ pub const LineSession = struct {
     history_search_match: ?HistoryView.HistoryEntry = null,
     history_search_matches: std.ArrayList(HistoryView.HistoryEntry) = .empty,
     history_search_selected: usize = 0,
+    history_search_filters: HistorySearchFilters = .{},
     autosuggestion: ?HistoryView.HistoryEntry = null,
     vi_history_search_query: std.ArrayList(u8) = .empty,
     vi_last_history_search_pattern: std.ArrayList(u8) = .empty,
@@ -1270,8 +1272,8 @@ pub const LineSession = struct {
             ),
             .next => |next| try self.applyNextHistoryResult(next.prefix, next.after, historyResultEntry(result)),
             .by_number => |number| try self.applyHistoryByNumberResult(number, historyResultEntry(result)),
-            .search => |search| try self.applyHistorySearchResult(search.query, result),
-            .search_next => |search| try self.applyHistorySearchResult(search.query, result),
+            .search => |search| try self.applyHistorySearchResult(search.query, search.filters, result),
+            .search_next => |search| try self.applyHistorySearchResult(search.query, search.filters, result),
             .suggest => |prefix| try self.applyAutosuggestionResult(prefix, historyResultEntry(result)),
         }
     }
@@ -1996,6 +1998,7 @@ pub const LineSession = struct {
         render_options.completion_flash = self.completion_flash;
         self.completion_flash = null;
         if (self.state == .history_search) {
+            if (historySearchStatusLine(self.history_search_filters)) |line| render_options.status_line = line;
             var history_candidates: std.ArrayList(completion.Candidate) = .empty;
             defer history_candidates.deinit(allocator);
             var styled_labels: std.ArrayList([]const u8) = .empty;
@@ -2190,12 +2193,14 @@ pub const LineSession = struct {
         try self.history_search_original.appendSlice(self.allocator, self.editor.buffer.text());
         try self.history_search_query.appendSlice(self.allocator, self.editor.buffer.text());
         self.clearHistorySearchMatch();
+        self.history_search_filters = .{};
         self.state = .history_search;
         try self.refreshHistorySearch(null);
         self.completion_menu.clear(self.allocator);
     }
 
     fn handleHistorySearchKey(self: *LineSession, event: KeyEvent) !void {
+        if (try self.handleHistorySearchFilterKey(event)) return;
         switch (event.key) {
             .enter => {
                 if (self.selectedHistorySearchMatch()) |entry| try self.editor.buffer.replace(entry.text);
@@ -2273,6 +2278,19 @@ pub const LineSession = struct {
         }
     }
 
+    fn handleHistorySearchFilterKey(self: *LineSession, event: KeyEvent) !bool {
+        if (!event.modifiers.alt or event.key != .text or event.text.len == 0) return false;
+        const command = firstCodepoint(event.text) orelse return false;
+        switch (command) {
+            'c', 'C' => self.history_search_filters.cwd = !self.history_search_filters.cwd,
+            's', 'S' => self.history_search_filters.successful = !self.history_search_filters.successful,
+            't', 'T' => self.history_search_filters.session = !self.history_search_filters.session,
+            else => return false,
+        }
+        try self.refreshHistorySearch(null);
+        return true;
+    }
+
     fn syncHistorySearchQueryFromBuffer(self: *LineSession) !bool {
         if (std.mem.eql(u8, self.history_search_query.items, self.editor.buffer.text())) return false;
         self.history_search_query.clearRetainingCapacity();
@@ -2286,6 +2304,7 @@ pub const LineSession = struct {
         self.history_search_selected = 0;
         self.requests.put(self.allocator, .{ .history = .{ .search = .{
             .query = try self.allocator.dupe(u8, self.history_search_query.items),
+            .filters = self.history_search_filters,
             .before = before,
         } } });
     }
@@ -2296,12 +2315,18 @@ pub const LineSession = struct {
         self.history_search_selected = 0;
         self.requests.put(self.allocator, .{ .history = .{ .search_next = .{
             .query = try self.allocator.dupe(u8, self.history_search_query.items),
+            .filters = self.history_search_filters,
             .after = after,
         } } });
     }
 
-    fn applyHistorySearchResult(self: *LineSession, query: []const u8, result: HistoryResult) !void {
-        if (!std.mem.eql(u8, query, self.history_search_query.items)) {
+    fn applyHistorySearchResult(
+        self: *LineSession,
+        query: []const u8,
+        filters: HistorySearchFilters,
+        result: HistoryResult,
+    ) !void {
+        if (!std.mem.eql(u8, query, self.history_search_query.items) or filters != self.history_search_filters) {
             result.deinit(self.allocator);
             return;
         }
@@ -2711,6 +2736,19 @@ fn menuStartRow(frame: Frame, window: menu.Window, count: usize, presentation: M
     const summary_rows: usize = if (presentation.scroll_summary.visible and
         (window.start != 0 or window.end != count)) 1 else 0;
     return frame.lines.len -| (candidate_rows + summary_rows);
+}
+
+fn historySearchStatusLine(filters: HistorySearchFilters) ?[]const u8 {
+    const bits: u3 = @bitCast(filters);
+    if (bits == 0) return null;
+    if (filters.cwd and filters.successful and filters.session) return "history filters: cwd, successful, session";
+    if (filters.cwd and filters.successful) return "history filters: cwd, successful";
+    if (filters.cwd and filters.session) return "history filters: cwd, session";
+    if (filters.successful and filters.session) return "history filters: successful, session";
+    if (filters.cwd) return "history filters: cwd";
+    if (filters.successful) return "history filters: successful";
+    if (filters.session) return "history filters: session";
+    unreachable;
 }
 
 fn cursorByteForPromptCell(
@@ -4424,8 +4462,10 @@ fn testSearchHistoryEntry(
     // ziglint-ignore: Z023 parameter order is fixed by the HistoryView.search callback signature
     allocator: std.mem.Allocator,
     query: []const u8,
+    filters: HistorySearchFilters,
     before: ?i64,
 ) !?HistoryView.HistoryEntry {
+    _ = filters;
     const history: *TestHistorySearch = @ptrCast(@alignCast(context));
     var index = if (before) |id| @as(usize, @intCast(id)) else history.entries.len;
     while (index > 0) {
@@ -4443,8 +4483,10 @@ fn testSearchNextHistoryEntry(
     // ziglint-ignore: Z023 parameter order is fixed by the HistoryView.search_next callback signature
     allocator: std.mem.Allocator,
     query: []const u8,
+    filters: HistorySearchFilters,
     after: ?i64,
 ) !?HistoryView.HistoryEntry {
+    _ = filters;
     const history: *TestHistorySearch = @ptrCast(@alignCast(context));
     var index = if (after) |id| @as(usize, @intCast(id)) + 1 else 0;
     while (index < history.entries.len) : (index += 1) {
@@ -4486,11 +4528,18 @@ fn resolveTestHistoryRequest(history: HistoryView, request: HistoryRequest) !His
             try callback(context, std.testing.allocator, number)
         else
             null },
-        .search => |search| .{ .entries = try resolveTestHistorySearch(history, context, search.query, search.before) },
+        .search => |search| .{ .entries = try resolveTestHistorySearch(
+            history,
+            context,
+            search.query,
+            search.filters,
+            search.before,
+        ) },
         .search_next => |search| .{ .entries = try resolveTestHistorySearchNext(
             history,
             context,
             search.query,
+            search.filters,
             search.after,
         ) },
         .suggest => |prefix| .{ .entry = if (history.suggest) |callback|
@@ -4504,6 +4553,7 @@ fn resolveTestHistorySearch(
     history: HistoryView,
     context: *anyopaque,
     query: []const u8,
+    filters: HistorySearchFilters,
     before: ?i64,
 ) ![]HistoryView.HistoryEntry {
     const search = history.search orelse return std.testing.allocator.alloc(HistoryView.HistoryEntry, 0);
@@ -4512,9 +4562,9 @@ fn resolveTestHistorySearch(
         for (matches.items) |entry| entry.deinit(std.testing.allocator);
         matches.deinit(std.testing.allocator);
     }
-    try appendTestHistorySearchEntries(&matches, search, context, query, before);
+    try appendTestHistorySearchEntries(&matches, search, context, query, filters, before);
     if (matches.items.len == 0 and before != null) {
-        try appendTestHistorySearchEntries(&matches, search, context, query, null);
+        try appendTestHistorySearchEntries(&matches, search, context, query, filters, null);
     }
     return matches.toOwnedSlice(std.testing.allocator);
 }
@@ -4523,17 +4573,19 @@ fn resolveTestHistorySearchNext(
     history: HistoryView,
     context: *anyopaque,
     query: []const u8,
+    filters: HistorySearchFilters,
     after: ?i64,
 ) ![]HistoryView.HistoryEntry {
-    const search_next = history.search_next orelse return resolveTestHistorySearch(history, context, query, null);
+    const search_next = history.search_next orelse
+        return resolveTestHistorySearch(history, context, query, filters, null);
     var matches: std.ArrayList(HistoryView.HistoryEntry) = .empty;
     errdefer {
         for (matches.items) |entry| entry.deinit(std.testing.allocator);
         matches.deinit(std.testing.allocator);
     }
-    try appendTestHistorySearchEntries(&matches, search_next, context, query, after);
+    try appendTestHistorySearchEntries(&matches, search_next, context, query, filters, after);
     if (matches.items.len == 0 and after != null) {
-        try appendTestHistorySearchEntries(&matches, search_next, context, query, null);
+        try appendTestHistorySearchEntries(&matches, search_next, context, query, filters, null);
     }
     return matches.toOwnedSlice(std.testing.allocator);
 }
@@ -4542,6 +4594,7 @@ const TestHistorySearchCallback = *const fn (
     *anyopaque,
     std.mem.Allocator,
     []const u8,
+    HistorySearchFilters,
     ?i64,
 ) anyerror!?HistoryView.HistoryEntry;
 
@@ -4550,11 +4603,12 @@ fn appendTestHistorySearchEntries(
     callback: TestHistorySearchCallback,
     context: *anyopaque,
     query: []const u8,
+    filters: HistorySearchFilters,
     start_cursor: ?i64,
 ) !void {
     var cursor = start_cursor;
     while (matches.items.len < 20) {
-        const entry = try callback(context, std.testing.allocator, query, cursor) orelse break;
+        const entry = try callback(context, std.testing.allocator, query, filters, cursor) orelse break;
         cursor = entry.id;
         try matches.append(std.testing.allocator, entry);
     }
@@ -4612,6 +4666,47 @@ test "history search renders clean no-match menu state" {
     try std.testing.expect(std.mem.indexOf(u8, rendered, "No history matches") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[2mmissing") == null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "history `") == null);
+}
+
+test "history search filter toggles refresh the current query" {
+    var session = try LineSession.init(std.testing.allocator, "$ ");
+    defer session.deinit();
+    try session.handleKey(.{ .key = .text, .text = "git" });
+    try session.handleKey(.{ .key = .ctrl_r });
+
+    if (session.takeHistoryRequest()) |request| {
+        defer request.deinit(std.testing.allocator);
+        const expected_filters: HistorySearchFilters = .{};
+        try std.testing.expectEqual(expected_filters, request.search.filters);
+    } else return error.TestExpectedEqual;
+
+    try session.handleKey(.{ .key = .text, .text = "c", .modifiers = .{ .alt = true } });
+    try std.testing.expectEqualStrings("git", session.history_search_query.items);
+    if (session.takeHistoryRequest()) |request| {
+        defer request.deinit(std.testing.allocator);
+        try std.testing.expect(request.search.filters.cwd);
+        try std.testing.expect(!request.search.filters.successful);
+        try std.testing.expect(!request.search.filters.session);
+    } else return error.TestExpectedEqual;
+
+    try session.handleKey(.{ .key = .text, .text = "s", .modifiers = .{ .alt = true } });
+    try session.handleKey(.{ .key = .text, .text = "t", .modifiers = .{ .alt = true } });
+    if (session.takeHistoryRequest()) |request| {
+        defer request.deinit(std.testing.allocator);
+        try std.testing.expect(request.search.filters.cwd);
+        try std.testing.expect(request.search.filters.successful);
+        try std.testing.expect(request.search.filters.session);
+    } else return error.TestExpectedEqual;
+
+    var frame = try session.renderFrame(std.testing.allocator, .{ .width = 80, .height = 24 });
+    defer frame.deinit(std.testing.allocator);
+    var rendered_status = false;
+    for (frame.lines) |line| {
+        if (std.mem.indexOf(u8, line, "history filters: cwd, successful, session") != null) {
+            rendered_status = true;
+        }
+    }
+    try std.testing.expect(rendered_status);
 }
 
 test "history search cancel restores original and enter accepts match" {

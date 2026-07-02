@@ -28,17 +28,35 @@ pub const View = struct {
     previous: ?*const fn (*anyopaque, std.mem.Allocator, []const u8, ?i64) anyerror!?HistoryEntry = null,
     next: ?*const fn (*anyopaque, std.mem.Allocator, []const u8, i64) anyerror!?HistoryEntry = null,
     by_number: ?*const fn (*anyopaque, std.mem.Allocator, usize) anyerror!?HistoryEntry = null,
-    search: ?*const fn (*anyopaque, std.mem.Allocator, []const u8, ?i64) anyerror!?HistoryEntry = null,
-    search_next: ?*const fn (*anyopaque, std.mem.Allocator, []const u8, ?i64) anyerror!?HistoryEntry = null,
+    search: ?*const fn (
+        *anyopaque,
+        std.mem.Allocator,
+        []const u8,
+        SearchFilters,
+        ?i64,
+    ) anyerror!?HistoryEntry = null,
+    search_next: ?*const fn (
+        *anyopaque,
+        std.mem.Allocator,
+        []const u8,
+        SearchFilters,
+        ?i64,
+    ) anyerror!?HistoryEntry = null,
     suggest: ?*const fn (*anyopaque, std.mem.Allocator, []const u8) anyerror!?HistoryEntry = null,
+};
+
+pub const SearchFilters = packed struct(u3) {
+    cwd: bool = false,
+    successful: bool = false,
+    session: bool = false,
 };
 
 pub const Request = union(enum) {
     previous: struct { prefix: []const u8, before: ?i64 },
     next: struct { prefix: []const u8, after: i64 },
     by_number: usize,
-    search: struct { query: []const u8, before: ?i64 },
-    search_next: struct { query: []const u8, after: ?i64 },
+    search: struct { query: []const u8, filters: SearchFilters, before: ?i64 },
+    search_next: struct { query: []const u8, filters: SearchFilters, after: ?i64 },
     suggest: []const u8,
 
     pub fn deinit(self: Request, allocator: std.mem.Allocator) void {
