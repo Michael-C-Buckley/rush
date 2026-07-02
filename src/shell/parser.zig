@@ -646,7 +646,10 @@ const Parser = struct {
         return .{ .word = left };
     }
 
-    fn copyConditionalExpression(self: *Parser, expression: ast.ConditionalExpression) !*const ast.ConditionalExpression {
+    fn copyConditionalExpression(
+        self: *Parser,
+        expression: ast.ConditionalExpression,
+    ) !*const ast.ConditionalExpression {
         const copied = try self.allocator.create(ast.ConditionalExpression);
         copied.* = expression;
         return copied;
@@ -680,6 +683,18 @@ const Parser = struct {
             .equal
         else if (std.mem.eql(u8, tok.text, "!="))
             .not_equal
+        else if (std.mem.eql(u8, tok.text, "-eq"))
+            .integer_equal
+        else if (std.mem.eql(u8, tok.text, "-ne"))
+            .integer_not_equal
+        else if (std.mem.eql(u8, tok.text, "-gt"))
+            .integer_greater
+        else if (std.mem.eql(u8, tok.text, "-ge"))
+            .integer_greater_equal
+        else if (std.mem.eql(u8, tok.text, "-lt"))
+            .integer_less
+        else if (std.mem.eql(u8, tok.text, "-le"))
+            .integer_less_equal
         else
             return null;
         self.index += 1;
@@ -688,6 +703,22 @@ const Parser = struct {
 
     fn conditionalUnaryTestOperator(tok: token.Token) ?ast.ConditionalUnaryTestOperator {
         if (tok.quoted) return null;
+        if (std.mem.eql(u8, tok.text, "-b")) return .block_device;
+        if (std.mem.eql(u8, tok.text, "-c")) return .character_device;
+        if (std.mem.eql(u8, tok.text, "-d")) return .directory;
+        if (std.mem.eql(u8, tok.text, "-e")) return .exists;
+        if (std.mem.eql(u8, tok.text, "-f")) return .file;
+        if (std.mem.eql(u8, tok.text, "-g")) return .setgid;
+        if (std.mem.eql(u8, tok.text, "-h")) return .symlink;
+        if (std.mem.eql(u8, tok.text, "-L")) return .symlink;
+        if (std.mem.eql(u8, tok.text, "-p")) return .named_pipe;
+        if (std.mem.eql(u8, tok.text, "-S")) return .socket;
+        if (std.mem.eql(u8, tok.text, "-s")) return .nonempty_file;
+        if (std.mem.eql(u8, tok.text, "-u")) return .setuid;
+        if (std.mem.eql(u8, tok.text, "-t")) return .terminal;
+        if (std.mem.eql(u8, tok.text, "-r")) return .readable;
+        if (std.mem.eql(u8, tok.text, "-w")) return .writable;
+        if (std.mem.eql(u8, tok.text, "-x")) return .executable;
         if (std.mem.eql(u8, tok.text, "-n")) return .string_nonempty;
         if (std.mem.eql(u8, tok.text, "-z")) return .string_empty;
         return null;

@@ -915,6 +915,28 @@ fn evalConditionalUnaryTest(shell: anytype, test_expr: ast.ConditionalUnaryTest)
     return switch (test_expr.operator) {
         .string_empty => operand.len == 0,
         .string_nonempty => operand.len != 0,
+        else => (try evalFileUnaryTest(shell, conditionalUnaryTestOperatorText(test_expr.operator), operand)).?,
+    };
+}
+
+fn conditionalUnaryTestOperatorText(operator: ast.ConditionalUnaryTestOperator) []const u8 {
+    return switch (operator) {
+        .block_device => "-b",
+        .character_device => "-c",
+        .directory => "-d",
+        .exists => "-e",
+        .file => "-f",
+        .setgid => "-g",
+        .symlink => "-h",
+        .named_pipe => "-p",
+        .socket => "-S",
+        .nonempty_file => "-s",
+        .setuid => "-u",
+        .terminal => "-t",
+        .readable => "-r",
+        .writable => "-w",
+        .executable => "-x",
+        .string_empty, .string_nonempty => unreachable,
     };
 }
 
@@ -925,16 +947,53 @@ fn evalConditionalComparison(shell: anytype, comparison: ast.ConditionalComparis
             try expandWord(shell, comparison.right)
         else
             try expandPatternWord(shell, comparison.right),
-        .less, .greater => try expandWord(shell, comparison.right),
+        .less,
+        .greater,
+        .integer_equal,
+        .integer_not_equal,
+        .integer_greater,
+        .integer_greater_equal,
+        .integer_less,
+        .integer_less_equal,
+        => try expandWord(shell, comparison.right),
     };
+
+    if (conditionalIntegerComparisonOperatorText(comparison.operator)) |operator| {
+        return (evalIntegerComparison(shell, left, operator, right) catch |err| switch (err) {
+            error.Integer => {
+                try writeTestDiagnostic(shell, "[[", error.Integer);
+                return false;
+            },
+            error.Syntax => return false,
+        }).?;
+    }
 
     const matched = switch (comparison.operator) {
         .equal => if (comparison.right.quoted) std.mem.eql(u8, left, right) else patternMatches(right, left),
         .not_equal => if (comparison.right.quoted) !std.mem.eql(u8, left, right) else !patternMatches(right, left),
         .less => std.mem.order(u8, left, right) == .lt,
         .greater => std.mem.order(u8, left, right) == .gt,
+        .integer_equal,
+        .integer_not_equal,
+        .integer_greater,
+        .integer_greater_equal,
+        .integer_less,
+        .integer_less_equal,
+        => unreachable,
     };
     return matched;
+}
+
+fn conditionalIntegerComparisonOperatorText(operator: ast.ConditionalComparisonOperator) ?[]const u8 {
+    return switch (operator) {
+        .integer_equal => "-eq",
+        .integer_not_equal => "-ne",
+        .integer_greater => "-gt",
+        .integer_greater_equal => "-ge",
+        .integer_less => "-lt",
+        .integer_less_equal => "-le",
+        .equal, .not_equal, .less, .greater => null,
+    };
 }
 
 fn evalArithmeticForCommand(shell: anytype, text: []const u8) EvalError!bool {
@@ -7169,9 +7228,7 @@ fn expandParameterLength(shell: anytype, parameter: ast.ParameterExpansion) Eval
             else => {},
         },
         .array => |array| switch (array.subscript) {
-            .all => if (arrayElementCount(shell, array)) |count| {
-                return std.fmt.allocPrint(shell.scratchAllocator(), "{}", .{count});
-            },
+            .all => return expandArrayElementCount(shell, parameter, array),
             .index => {},
         },
         else => {},
@@ -7188,20 +7245,38 @@ fn expandParameterLength(shell: anytype, parameter: ast.ParameterExpansion) Eval
     return std.fmt.allocPrint(shell.scratchAllocator(), "{}", .{length});
 }
 
+fn expandArrayElementCount(
+    shell: anytype,
+    expansion: ast.ParameterExpansion,
+    parameter: ast.ArrayParameter,
+) EvalError![]const u8 {
+    const count = arrayElementCount(shell, parameter) orelse {
+        if (shell.state.options.nounset) {
+            try writeExpansionDiagnostic(
+                shell,
+                expansion,
+                parameterDiagnosticName(expansion.parameter),
+                "parameter not set",
+            );
+            return error.FatalExpansionError;
+        }
+        return "0";
+    };
+    return std.fmt.allocPrint(shell.scratchAllocator(), "{}", .{count});
+}
+
 fn arrayElementCount(shell: anytype, parameter: ast.ArrayParameter) ?usize {
     if (shell.state.options.mode == .bash and std.mem.eql(u8, parameter.name, "PIPESTATUS")) {
-        return if (shell.state.last_pipeline_statuses.len == 0) null else shell.state.last_pipeline_statuses.len;
+        return shell.state.last_pipeline_statuses.len;
     }
     if (shell.state.options.mode == .bash and std.mem.eql(u8, parameter.name, "FUNCNAME")) {
-        const count = shell.state.function_call_stack.items.len;
-        return if (count == 0) null else count;
+        return shell.state.function_call_stack.items.len;
     }
     if (shell.state.options.mode == .bash and std.mem.eql(u8, parameter.name, "BASH_SOURCE")) {
-        const count = shell.state.function_call_stack.items.len;
-        return if (count == 0) null else count;
+        return shell.state.function_call_stack.items.len;
     }
     const array = shell.state.getArray(parameter.name) orelse return null;
-    return if (array.elements.len == 0) null else array.elements.len;
+    return array.elements.len;
 }
 
 fn parameterSubjectToNounset(parameter: ast.Parameter) bool {

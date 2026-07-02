@@ -346,6 +346,27 @@
             .status = 0,
         },
         .{
+            .name = "indexed array length expansion counts elements",
+            .script =
+            \\printf '<%s>\n' "${#missing[@]}"
+            \\arr=()
+            \\printf '<%s>\n' "${#arr[@]}"
+            \\arr[2]=two
+            \\arr[5]=five
+            \\printf '<%s>\n' "${#arr[@]}" "${#arr[*]}" "${#arr[5]}"
+            ,
+            .stdout =
+            \\<0>
+            \\<0>
+            \\<2>
+            \\<2>
+            \\<4>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "quoted indexed array at expansion preserves fields",
             .script =
             \\arr=("a b" "" c)

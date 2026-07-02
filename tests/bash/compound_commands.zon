@@ -138,6 +138,38 @@
             .status = 0,
         },
         .{
+            .name = "conditional command evaluates file unary primaries",
+            .script =
+            \\: >package.json
+            \\mkdir .amp
+            \\if [[ -f "package.json" && -d ".amp" ]]; then printf 'present\n'; fi
+            \\if [[ ! -f missing.json ]]; then printf 'missing\n'; fi
+            ,
+            .stdout =
+            \\present
+            \\missing
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "conditional command evaluates integer comparisons",
+            .script =
+            \\pids=()
+            \\if [[ ${#pids[@]} -eq 0 ]]; then printf 'empty\n'; fi
+            \\pids+=(123)
+            \\if [[ ${#pids[@]} -gt 0 && 4 -le 4 ]]; then printf 'nonempty\n'; fi
+            ,
+            .stdout =
+            \\empty
+            \\nonempty
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "conditional command compares strings and matches patterns",
             .script =
             \\x=src/main.zig

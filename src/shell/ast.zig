@@ -451,6 +451,21 @@ pub const ConditionalExpression = union(enum) {
 };
 
 pub const ConditionalUnaryTestOperator = enum {
+    block_device,
+    character_device,
+    directory,
+    exists,
+    file,
+    setgid,
+    symlink,
+    named_pipe,
+    socket,
+    nonempty_file,
+    setuid,
+    terminal,
+    readable,
+    writable,
+    executable,
     string_empty,
     string_nonempty,
 };
@@ -485,6 +500,12 @@ pub const ConditionalComparisonOperator = enum {
     not_equal,
     less,
     greater,
+    integer_equal,
+    integer_not_equal,
+    integer_greater,
+    integer_greater_equal,
+    integer_less,
+    integer_less_equal,
 };
 
 pub const ConditionalComparison = struct {
