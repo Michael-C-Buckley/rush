@@ -1,0 +1,3221 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "nylas",
+    "description": "A command line interface for Nylas's API",
+    "options": [
+      {
+        "long": "access_token",
+        "description": "Nylas account access token",
+        "inherit": true,
+        "value": {
+          "name": "access_token"
+        }
+      },
+      {
+        "long": "config_dir",
+        "description": "Config directory",
+        "inherit": true,
+        "value": {
+          "name": "config_dir",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "config_file",
+        "description": "Config file (default is config.yaml)",
+        "inherit": true,
+        "value": {
+          "name": "config_file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "dashboard_api_url",
+        "description": "Dashboard API URL",
+        "inherit": true,
+        "value": {
+          "name": "dashboard_api_url"
+        }
+      },
+      {
+        "long": "debug",
+        "description": "Enable debugging output",
+        "inherit": true
+      },
+      {
+        "long": "disable_telemetry",
+        "description": "Disables sending telemetry data",
+        "inherit": true
+      },
+      {
+        "long": "nylas_api_url",
+        "description": "Nylas API URL",
+        "inherit": true,
+        "value": {
+          "name": "nylas_api_url"
+        }
+      },
+      {
+        "long": "output",
+        "short": "o",
+        "description": "Output format (e.g. json, table)",
+        "inherit": true,
+        "value": {
+          "name": "output",
+          "provider": {
+            "values": [
+              "json",
+              "table"
+            ]
+          }
+        }
+      },
+      {
+        "long": "region",
+        "description": "Nylas Region (values: us, ireland, canada, australia)",
+        "inherit": true,
+        "value": {
+          "name": "region",
+          "provider": {
+            "values": [
+              "us",
+              "ireland",
+              "canada",
+              "australia"
+            ]
+          }
+        }
+      },
+      {
+        "long": "silent",
+        "description": "Silences the output",
+        "inherit": true
+      },
+      {
+        "long": "help",
+        "short": "h",
+        "description": "Display help",
+        "inherit": true
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "api",
+        "description": "Access the Nylas API endpoints",
+        "subcommands": [
+          {
+            "name": "a",
+            "description": "A API commands",
+            "subcommands": [
+              {
+                "name": "accounts",
+                "description": "Accounts commands",
+                "subcommands": [
+                  {
+                    "name": "delete",
+                    "description": "Delete an Account",
+                    "options": [
+                      {
+                        "long": "display_columns",
+                        "description": "(optional) A comma separated list of column headers to display for the table output",
+                        "inherit": false,
+                        "value": {
+                          "name": "headers"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "name": "get",
+                    "description": "Return All Accounts",
+                    "options": [
+                      {
+                        "long": "display_columns",
+                        "description": "(optional) A comma separated list of column headers to display for the table output",
+                        "inherit": false,
+                        "value": {
+                          "name": "headers"
+                        }
+                      },
+                      {
+                        "long": "limit",
+                        "description": "The number of objects to return. Defaults to 100. If set too high, requests may fail to prevent excessively large response bodies",
+                        "inherit": false,
+                        "value": {
+                          "name": "limit"
+                        }
+                      },
+                      {
+                        "long": "metadata_key",
+                        "description": "Pass in your keys to search for metadata. `?metadata_key=goodmorning`. You can also combine this with `metadata_value`, `?metadata_key=goodmorning&metadata_valu",
+                        "inherit": false,
+                        "value": {
+                          "name": "metadata_key"
+                        }
+                      },
+                      {
+                        "long": "metadata_pair",
+                        "description": "Pass in your metadata key and value pair to search for metadata. `?metadata_pair=goodmorning:goodnight`. See [Metadata](/docs/developer-tools/api/metadata/)",
+                        "inherit": false,
+                        "value": {
+                          "name": "metadata_pair"
+                        }
+                      },
+                      {
+                        "long": "metadata_value",
+                        "description": "Pass in your value to search for metadata. `?metadata_value=goodnight`. You can also combine this with `metadata_key`, `?metadata_key=goodmorning&metadata_value",
+                        "inherit": false,
+                        "value": {
+                          "name": "metadata_value"
+                        }
+                      },
+                      {
+                        "long": "offset",
+                        "description": "Zero-based offset from default object sorting. See [pagination](/docs/api/#overview--pagintaion) for more information",
+                        "inherit": false,
+                        "value": {
+                          "name": "offset"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "accounts:downgrade",
+                "description": "Accounts:downgrade commands",
+                "subcommands": [
+                  {
+                    "name": "post",
+                    "description": "Cancel an Account",
+                    "options": [
+                      {
+                        "long": "body",
+                        "description": "Request body (or use < to redirect a JSON file)",
+                        "inherit": false,
+                        "value": {
+                          "name": "body"
+                        }
+                      },
+                      {
+                        "long": "display_columns",
+                        "description": "(optional) A comma separated list of column headers to display for the table output",
+                        "inherit": false,
+                        "value": {
+                          "name": "headers"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "accounts:revoke-all",
+                "description": "Accounts:revoke-all commands",
+                "subcommands": [
+                  {
+                    "name": "post",
+                    "description": "Revoke All Tokens",
+                    "options": [
+                      {
+                        "long": "body",
+                        "description": "Request body (or use < to redirect a JSON file)",
+                        "inherit": false,
+                        "value": {
+                          "name": "body"
+                        }
+                      },
+                      {
+                        "long": "display_columns",
+                        "description": "(optional) A comma separated list of column headers to display for the table output",
+                        "inherit": false,
+                        "value": {
+                          "name": "headers"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "accounts:token-info",
+                "description": "Accounts:token-info commands",
+                "subcommands": [
+                  {
+                    "name": "post",
+                    "description": "Return Token Information",
+                    "options": [
+                      {
+                        "long": "body",
+                        "description": "Request body (or use < to redirect a JSON file)",
+                        "inherit": false,
+                        "value": {
+                          "name": "body"
+                        }
+                      },
+                      {
+                        "long": "display_columns",
+                        "description": "(optional) A comma separated list of column headers to display for the table output",
+                        "inherit": false,
+                        "value": {
+                          "name": "headers"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "accounts:upgrade",
+                "description": "Accounts:upgrade commands",
+                "subcommands": [
+                  {
+                    "name": "post",
+                    "description": "Reactivate an Account",
+                    "options": [
+                      {
+                        "long": "body",
+                        "description": "Request body (or use < to redirect a JSON file)",
+                        "inherit": false,
+                        "value": {
+                          "name": "body"
+                        }
+                      },
+                      {
+                        "long": "display_columns",
+                        "description": "(optional) A comma separated list of column headers to display for the table output",
+                        "inherit": false,
+                        "value": {
+                          "name": "headers"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "accounts",
+            "description": "Gets a list of authed accounts",
+            "options": [
+              {
+                "long": "limit",
+                "short": "l",
+                "description": "This is usage",
+                "inherit": false,
+                "value": {
+                  "name": "limit"
+                }
+              }
+            ]
+          },
+          {
+            "name": "applications",
+            "description": "Gets your application info"
+          },
+          {
+            "name": "calendars",
+            "description": "Calendars API commands",
+            "subcommands": [
+              {
+                "name": "availability",
+                "description": "Availability commands",
+                "subcommands": [
+                  {
+                    "name": "post",
+                    "description": "Availability for a Single Meeting",
+                    "options": [
+                      {
+                        "long": "body",
+                        "description": "Request body (or use < to redirect a JSON file)",
+                        "inherit": false,
+                        "value": {
+                          "name": "body"
+                        }
+                      },
+                      {
+                        "long": "display_columns",
+                        "description": "(optional) A comma separated list of column headers to display for the table output",
+                        "inherit": false,
+                        "value": {
+                          "name": "headers"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "availability:consecutive",
+                "description": "Availability:consecutive commands",
+                "subcommands": [
+                  {
+                    "name": "post",
+                    "description": "Availability for Multiple Meetings",
+                    "options": [
+                      {
+                        "long": "body",
+                        "description": "Request body (or use < to redirect a JSON file)",
+                        "inherit": false,
+                        "value": {
+                          "name": "body"
+                        }
+                      },
+                      {
+                        "long": "display_columns",
+                        "description": "(optional) A comma separated list of column headers to display for the table output",
+                        "inherit": false,
+                        "value": {
+                          "name": "headers"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "delete",
+                "description": "Delete a Calendar",
+                "options": [
+                  {
+                    "long": "display_columns",
+                    "description": "(optional) A comma separated list of column headers to display for the table output",
+                    "inherit": false,
+                    "value": {
+                      "name": "headers"
+                    }
+                  }
+                ]
+              },
+              {
+                "name": "free-busy",
+                "description": "Free-busy commands",
+                "subcommands": [
+                  {
+                    "name": "post",
+                    "description": "Calendar Free or Busy",
+                    "options": [
+                      {
+                        "long": "body",
+                        "description": "Request body (or use < to redirect a JSON file)",
+                        "inherit": false,
+                        "value": {
+                          "name": "body"
+                        }
+                      },
+                      {
+                        "long": "display_columns",
+                        "description": "(optional) A comma separated list of column headers to display for the table output",
+                        "inherit": false,
+                        "value": {
+                          "name": "headers"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "get",
+                "description": "Return All Calendars",
+                "options": [
+                  {
+                    "long": "display_columns",
+                    "description": "(optional) A comma separated list of column headers to display for the table output",
+                    "inherit": false,
+                    "value": {
+                      "name": "headers"
+                    }
+                  },
+                  {
+                    "long": "limit",
+                    "description": "The number of objects to return. Defaults to 100. If set too high, requests may fail to prevent excessively large response bodies",
+                    "inherit": false,
+                    "value": {
+                      "name": "limit"
+                    }
+                  },
+                  {
+                    "long": "metadata_key",
+                    "description": "Pass in your keys to search for metadata. `?metadata_key=goodmorning`. You can also combine this with `metadata_value`, `?metadata_key=goodmorning&metadata_valu",
+                    "inherit": false,
+                    "value": {
+                      "name": "metadata_key"
+                    }
+                  },
+                  {
+                    "long": "metadata_pair",
+                    "description": "Pass in your metadata key and value pair to search for metadata. `?metadata_pair=goodmorning:goodnight`. See [Metadata](/docs/developer-tools/api/metadata/)",
+                    "inherit": false,
+                    "value": {
+                      "name": "metadata_pair"
+                    }
+                  },
+                  {
+                    "long": "metadata_value",
+                    "description": "Pass in your value to search for metadata. `?metadata_value=goodnight`. You can also combine this with `metadata_key`, `?metadata_key=goodmorning&metadata_value",
+                    "inherit": false,
+                    "value": {
+                      "name": "metadata_value"
+                    }
+                  },
+                  {
+                    "long": "offset",
+                    "description": "Zero-based offset from default object sorting. See [pagination](/docs/api/#overview--pagintaion) for more information",
+                    "inherit": false,
+                    "value": {
+                      "name": "offset"
+                    }
+                  },
+                  {
+                    "long": "view",
+                    "description": "If using Search, only `view=expanded` is supported. See [Views](/docs/api/#overview--views) for more information",
+                    "inherit": false,
+                    "value": {
+                      "name": "view"
+                    }
+                  }
+                ]
+              },
+              {
+                "name": "post",
+                "description": "Create a Calendar",
+                "options": [
+                  {
+                    "long": "body",
+                    "description": "Request body (or use < to redirect a JSON file)",
+                    "inherit": false,
+                    "value": {
+                      "name": "body"
+                    }
+                  },
+                  {
+                    "long": "display_columns",
+                    "description": "(optional) A comma separated list of column headers to display for the table output",
+                    "inherit": false,
+                    "value": {
+                      "name": "headers"
+                    }
+                  }
+                ]
+              },
+              {
+                "name": "put",
+                "description": "Update A Calendar",
+                "options": [
+                  {
+                    "long": "body",
+                    "description": "Request body (or use < to redirect a JSON file)",
+                    "inherit": false,
+                    "value": {
+                      "name": "body"
+                    }
+                  },
+                  {
+                    "long": "display_columns",
+                    "description": "(optional) A comma separated list of column headers to display for the table output",
+                    "inherit": false,
+                    "value": {
+                      "name": "headers"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "connect",
+            "description": "Connect API commands",
+            "subcommands": [
+              {
+                "name": "detect-provider",
+                "description": "Detect-provider commands",
+                "subcommands": [
+                  {
+                    "name": "post",
+                    "description": "Detect Provider",
+                    "options": [
+                      {
+                        "long": "body",
+                        "description": "Request body (or use < to redirect a JSON file)",
+                        "inherit": false,
+                        "value": {
+                          "name": "body"
+                        }
+                      },
+                      {
+                        "long": "display_columns",
+                        "description": "(optional) A comma separated list of column headers to display for the table output",
+                        "inherit": false,
+                        "value": {
+                          "name": "headers"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "contacts",
+            "description": "Contacts API commands",
+            "subcommands": [
+              {
+                "name": "delete",
+                "description": "Delete a Contact",
+                "options": [
+                  {
+                    "long": "display_columns",
+                    "description": "(optional) A comma separated list of column headers to display for the table output",
+                    "inherit": false,
+                    "value": {
+                      "name": "headers"
+                    }
+                  }
+                ]
+              },
+              {
+                "name": "get",
+                "description": "Return All Contacts",
+                "options": [
+                  {
+                    "long": "country",
+                    "description": "Returns the contacts matching the contact's exact physical addresses",
+                    "inherit": false,
+                    "value": {
+                      "name": "country"
+                    }
+                  },
+                  {
+                    "long": "display_columns",
+                    "description": "(optional) A comma separated list of column headers to display for the table output",
+                    "inherit": false,
+                    "value": {
+                      "name": "headers"
+                    }
+                  },
+                  {
+                    "long": "email",
+                    "description": "Returns the contacts matching the exact contact's email",
+                    "inherit": false,
+                    "value": {
+                      "name": "email"
+                    }
+                  },
+                  {
+                    "long": "group",
+                    "description": "Returns the contacts belonging to the Contact Group matching this ID",
+                    "inherit": false,
+                    "value": {
+                      "name": "group"
+                    }
+                  },
+                  {
+                    "long": "limit",
+                    "description": "The number of objects to return. Defaults to 100. If set too high, requests may fail to prevent excessively large response bodies",
+                    "inherit": false,
+                    "value": {
+                      "name": "limit"
+                    }
+                  },
+                  {
+                    "long": "offset",
+                    "description": "Zero-based offset from default object sorting. See [pagination](/docs/api/#overview--pagintaion) for more information",
+                    "inherit": false,
+                    "value": {
+                      "name": "offset"
+                    }
+                  },
+                  {
+                    "long": "phone_number",
+                    "description": "Returns the contacts matching the contact's exact phone number",
+                    "inherit": false,
+                    "value": {
+                      "name": "phone_number"
+                    }
+                  },
+                  {
+                    "long": "postal_code",
+                    "description": "Returns the contacts matching the contact's exact postal code of one of the contact's addresses",
+                    "inherit": false,
+                    "value": {
+                      "name": "postal_code"
+                    }
+                  },
+                  {
+                    "long": "source",
+                    "description": "Returns the contacts matching from the address book or auto-generated contacts from emails. For example of contacts only from the address book: `/`contacts?sour",
+                    "inherit": false,
+                    "value": {
+                      "name": "source"
+                    }
+                  },
+                  {
+                    "long": "state",
+                    "description": "Returns the contacts matching the contact's exact state for one of the contact's physical addresses",
+                    "inherit": false,
+                    "value": {
+                      "name": "state"
+                    }
+                  },
+                  {
+                    "long": "street_address",
+                    "description": "Returns the contacts matching the one of the contact's exact street address",
+                    "inherit": false,
+                    "value": {
+                      "name": "street_address"
+                    }
+                  }
+                ]
+              },
+              {
+                "name": "groups",
+                "description": "Groups commands",
+                "subcommands": [
+                  {
+                    "name": "get",
+                    "description": "Return Contact Groups",
+                    "options": [
+                      {
+                        "long": "display_columns",
+                        "description": "(optional) A comma separated list of column headers to display for the table output",
+                        "inherit": false,
+                        "value": {
+                          "name": "headers"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "picture",
+                "description": "Picture commands",
+                "subcommands": [
+                  {
+                    "name": "get",
+                    "description": "Returns a Contacts Picture",
+                    "options": [
+                      {
+                        "long": "display_columns",
+                        "description": "(optional) A comma separated list of column headers to display for the table output",
+                        "inherit": false,
+                        "value": {
+                          "name": "headers"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "post",
+                "description": "Create a Contact",
+                "options": [
+                  {
+                    "long": "body",
+                    "description": "Request body (or use < to redirect a JSON file)",
+                    "inherit": false,
+                    "value": {
+                      "name": "body"
+                    }
+                  },
+                  {
+                    "long": "display_columns",
+                    "description": "(optional) A comma separated list of column headers to display for the table output",
+                    "inherit": false,
+                    "value": {
+                      "name": "headers"
+                    }
+                  }
+                ]
+              },
+              {
+                "name": "put",
+                "description": "Update a Contact",
+                "options": [
+                  {
+                    "long": "body",
+                    "description": "Request body (or use < to redirect a JSON file)",
+                    "inherit": false,
+                    "value": {
+                      "name": "body"
+                    }
+                  },
+                  {
+                    "long": "display_columns",
+                    "description": "(optional) A comma separated list of column headers to display for the table output",
+                    "inherit": false,
+                    "value": {
+                      "name": "headers"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "delta",
+            "description": "Delta API commands",
+            "subcommands": [
+              {
+                "name": "get",
+                "description": "Request Delta Cursors",
+                "options": [
+                  {
+                    "long": "cursor",
+                    "description": "The data cursor from `/delta/latest_cursor`",
+                    "inherit": false,
+                    "value": {
+                      "name": "cursor"
+                    }
+                  },
+                  {
+                    "long": "display_columns",
+                    "description": "(optional) A comma separated list of column headers to display for the table output",
+                    "inherit": false,
+                    "value": {
+                      "name": "headers"
+                    }
+                  },
+                  {
+                    "long": "excluded_types",
+                    "description": "A comma-separated list of object types to exclude from the returned deltas. You can not use `included_types` and `excluded_types` together",
+                    "inherit": false,
+                    "value": {
+                      "name": "excluded_types"
+                    }
+                  },
+                  {
+                    "long": "include_types",
+                    "description": "A comma-separated list of the object types that will only be included in the returned deltas. You can not use `included_types` and `excluded_types` together",
+                    "inherit": false,
+                    "value": {
+                      "name": "include_types"
+                    }
+                  },
+                  {
+                    "long": "view",
+                    "description": "This value indicates if the data expands thread and message objects in the response to include additional information, when the value is set to expanded",
+                    "inherit": false,
+                    "value": {
+                      "name": "view"
+                    }
+                  }
+                ]
+              },
+              {
+                "name": "latest:cursor",
+                "description": "Latest:cursor commands",
+                "subcommands": [
+                  {
+                    "name": "post",
+                    "description": "Get a Delta Cursor",
+                    "options": [
+                      {
+                        "long": "body",
+                        "description": "Request body (or use < to redirect a JSON file)",
+                        "inherit": false,
+                        "value": {
+                          "name": "body"
+                        }
+                      },
+                      {
+                        "long": "display_columns",
+                        "description": "(optional) A comma separated list of column headers to display for the table output",
+                        "inherit": false,
+                        "value": {
+                          "name": "headers"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "longpoll",
+                "description": "Longpoll commands",
+                "subcommands": [
+                  {
+                    "name": "get",
+                    "description": "Return Long-Polling Deltas",
+                    "options": [
+                      {
+                        "long": "cursor",
+                        "description": "The data cursor from `/delta/latest_cursor`",
+                        "inherit": false,
+                        "value": {
+                          "name": "cursor"
+                        }
+                      },
+                      {
+                        "long": "display_columns",
+                        "description": "(optional) A comma separated list of column headers to display for the table output",
+                        "inherit": false,
+                        "value": {
+                          "name": "headers"
+                        }
+                      },
+                      {
+                        "long": "excluded_types",
+                        "description": "A comma-separated list of object types to exclude from the returned deltas. You can not use `included_types` and `excluded_types` together",
+                        "inherit": false,
+                        "value": {
+                          "name": "excluded_types"
+                        }
+                      },
+                      {
+                        "long": "include_types",
+                        "description": "A comma-separated list of the object types that will only be included in the returned deltas. You can not use `included_types` and `excluded_types` together",
+                        "inherit": false,
+                        "value": {
+                          "name": "include_types"
+                        }
+                      },
+                      {
+                        "long": "timeout",
+                        "description": "The time difference between the deltas retrieved",
+                        "inherit": false,
+                        "value": {
+                          "name": "timeout"
+                        }
+                      },
+                      {
+                        "long": "view",
+                        "description": "This value indicates if the data expands thread and message objects in the response to include additional information, when the value is set to expanded",
+                        "inherit": false,
+                        "value": {
+                          "name": "view"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "streaming",
+                "description": "Streaming commands",
+                "subcommands": [
+                  {
+                    "name": "get",
+                    "description": "Streaming Deltas",
+                    "options": [
+                      {
+                        "long": "cursor",
+                        "description": "The data cursor from `/delta/latest_cursor`",
+                        "inherit": false,
+                        "value": {
+                          "name": "cursor"
+                        }
+                      },
+                      {
+                        "long": "display_columns",
+                        "description": "(optional) A comma separated list of column headers to display for the table output",
+                        "inherit": false,
+                        "value": {
+                          "name": "headers"
+                        }
+                      },
+                      {
+                        "long": "excluded_types",
+                        "description": "A comma-separated list of object types to exclude from the returned deltas. You can not use `included_types` and `excluded_types` together",
+                        "inherit": false,
+                        "value": {
+                          "name": "excluded_types"
+                        }
+                      },
+                      {
+                        "long": "include_types",
+                        "description": "A comma-separated list of the object types that will only be included in the returned deltas. You can not use `included_types` and `excluded_types` together",
+                        "inherit": false,
+                        "value": {
+                          "name": "include_types"
+                        }
+                      },
+                      {
+                        "long": "view",
+                        "description": "This value indicates if the data expands thread and message objects in the response to include additional information, when the value is set to expanded",
+                        "inherit": false,
+                        "value": {
+                          "name": "view"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "drafts",
+            "description": "Drafts API commands",
+            "subcommands": [
+              {
+                "name": "delete",
+                "description": "Delete a Draft",
+                "options": [
+                  {
+                    "long": "display_columns",
+                    "description": "(optional) A comma separated list of column headers to display for the table output",
+                    "inherit": false,
+                    "value": {
+                      "name": "headers"
+                    }
+                  }
+                ]
+              },
+              {
+                "name": "get",
+                "description": "Return All Drafts",
+                "options": [
+                  {
+                    "long": "any_email",
+                    "description": "Return emails that have been sent or received from this comma-separated list of email addresses. For example: mail1@mail.com,mail2@mail.com. A maximum of 25 ema",
+                    "inherit": false,
+                    "value": {
+                      "name": "any_email"
+                    }
+                  },
+                  {
+                    "long": "bcc",
+                    "description": "Return threads containing messages that were BCC'd to this email address, likely sent from the parent account. (Most SMTP gateways remove BCC information.)",
+                    "inherit": false,
+                    "value": {
+                      "name": "bcc"
+                    }
+                  },
+                  {
+                    "long": "cc",
+                    "description": "Return threads containing messages that were CC'd to this email address",
+                    "inherit": false,
+                    "value": {
+                      "name": "cc"
+                    }
+                  },
+                  {
+                    "long": "display_columns",
+                    "description": "(optional) A comma separated list of column headers to display for the table output",
+                    "inherit": false,
+                    "value": {
+                      "name": "headers"
+                    }
+                  },
+                  {
+                    "long": "filename",
+                    "description": "Return object with the filename",
+                    "inherit": false,
+                    "value": {
+                      "name": "filename"
+                    }
+                  },
+                  {
+                    "long": "in",
+                    "description": "This parameter supports the name, display_name, or id of a folder or label. To return drafts, pass in `drafts`",
+                    "inherit": false,
+                    "value": {
+                      "name": "in"
+                    }
+                  },
+                  {
+                    "long": "last_message_after",
+                    "description": "Return threads whose most recent message was received after this Unix-based timestamp",
+                    "inherit": false,
+                    "value": {
+                      "name": "last_message_after"
+                    }
+                  },
+                  {
+                    "long": "last_message_before",
+                    "description": "Return threads whose most recent message was received before this Unix-based timestamp",
+                    "inherit": false,
+                    "value": {
+                      "name": "last_message_before"
+                    }
+                  },
+                  {
+                    "long": "not_in",
+                    "description": "Filter messages not in a given folder or label. The filter supports the name, display, or ID of a folder or label",
+                    "inherit": false,
+                    "value": {
+                      "name": "not_in"
+                    }
+                  },
+                  {
+                    "long": "started_after",
+                    "description": "Return threads whose first message was received after this Unix-based timestamp",
+                    "inherit": false,
+                    "value": {
+                      "name": "started_after"
+                    }
+                  },
+                  {
+                    "long": "started_before",
+                    "description": "Return threads whose first message was received before this Unix-based timestamp",
+                    "inherit": false,
+                    "value": {
+                      "name": "started_before"
+                    }
+                  },
+                  {
+                    "long": "subject",
+                    "description": "Return threads with a matching literal subject",
+                    "inherit": false,
+                    "value": {
+                      "name": "subject"
+                    }
+                  },
+                  {
+                    "long": "thread_id",
+                    "description": "Return messages belonging to a specific thread",
+                    "inherit": false,
+                    "value": {
+                      "name": "thread_id"
+                    }
+                  },
+                  {
+                    "long": "to",
+                    "description": "Return threads containing messages sent to this email address",
+                    "inherit": false,
+                    "value": {
+                      "name": "to"
+                    }
+                  },
+                  {
+                    "long": "view",
+                    "description": "If using Search, only `view=expanded` is supported. See [Views](/docs/api/#overview--views) for more information",
+                    "inherit": false,
+                    "value": {
+                      "name": "view"
+                    }
+                  }
+                ]
+              },
+              {
+                "name": "post",
+                "description": "Create a New Draft",
+                "options": [
+                  {
+                    "long": "body",
+                    "description": "Request body (or use < to redirect a JSON file)",
+                    "inherit": false,
+                    "value": {
+                      "name": "body"
+                    }
+                  },
+                  {
+                    "long": "display_columns",
+                    "description": "(optional) A comma separated list of column headers to display for the table output",
+                    "inherit": false,
+                    "value": {
+                      "name": "headers"
+                    }
+                  }
+                ]
+              },
+              {
+                "name": "put",
+                "description": "Update a Draft",
+                "options": [
+                  {
+                    "long": "body",
+                    "description": "Request body (or use < to redirect a JSON file)",
+                    "inherit": false,
+                    "value": {
+                      "name": "body"
+                    }
+                  },
+                  {
+                    "long": "display_columns",
+                    "description": "(optional) A comma separated list of column headers to display for the table output",
+                    "inherit": false,
+                    "value": {
+                      "name": "headers"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "events",
+            "description": "Events API commands",
+            "subcommands": [
+              {
+                "name": "delete",
+                "description": "Delete An Event",
+                "options": [
+                  {
+                    "long": "display_columns",
+                    "description": "(optional) A comma separated list of column headers to display for the table output",
+                    "inherit": false,
+                    "value": {
+                      "name": "headers"
+                    }
+                  }
+                ]
+              },
+              {
+                "name": "get",
+                "description": "Return All Events",
+                "options": [
+                  {
+                    "long": "calendar_id",
+                    "description": "Return events belonging to the specified calendar ID",
+                    "inherit": false,
+                    "value": {
+                      "name": "calendar_id"
+                    }
+                  },
+                  {
+                    "long": "count",
+                    "description": "See [Count](/docs/api/#overview--count-view) for more information",
+                    "inherit": false,
+                    "value": {
+                      "name": "count"
+                    }
+                  },
+                  {
+                    "long": "description",
+                    "description": "Return events matching the specified description",
+                    "inherit": false,
+                    "value": {
+                      "name": "description"
+                    }
+                  },
+                  {
+                    "long": "display_columns",
+                    "description": "(optional) A comma separated list of column headers to display for the table output",
+                    "inherit": false,
+                    "value": {
+                      "name": "headers"
+                    }
+                  },
+                  {
+                    "long": "ends_after",
+                    "description": "Return events ending after the specified unix timestamp",
+                    "inherit": false,
+                    "value": {
+                      "name": "ends_after"
+                    }
+                  },
+                  {
+                    "long": "ends_before",
+                    "description": "Return events ending before the specified unix timestamp",
+                    "inherit": false,
+                    "value": {
+                      "name": "ends_before"
+                    }
+                  },
+                  {
+                    "long": "event_id",
+                    "description": "Return the event matching the specified event ID",
+                    "inherit": false,
+                    "value": {
+                      "name": "event_id"
+                    }
+                  },
+                  {
+                    "long": "limit",
+                    "description": "The number of objects to return. Defaults to 100. If set too high, requests may fail to prevent excessively large response bodies",
+                    "inherit": false,
+                    "value": {
+                      "name": "limit"
+                    }
+                  },
+                  {
+                    "long": "location",
+                    "description": "Return events matching the specified location",
+                    "inherit": false,
+                    "value": {
+                      "name": "location"
+                    }
+                  },
+                  {
+                    "long": "metadata_key",
+                    "description": "Pass in your keys to search for metadata. `?metadata_key=goodmorning`. You can also combine this with `metadata_value`, `?metadata_key=goodmorning&metadata_valu",
+                    "inherit": false,
+                    "value": {
+                      "name": "metadata_key"
+                    }
+                  },
+                  {
+                    "long": "metadata_pair",
+                    "description": "Pass in your metadata key and value pair to search for metadata. `?metadata_pair=goodmorning:goodnight`. See [Metadata](/docs/developer-tools/api/metadata/)",
+                    "inherit": false,
+                    "value": {
+                      "name": "metadata_pair"
+                    }
+                  },
+                  {
+                    "long": "metadata_value",
+                    "description": "Pass in your value to search for metadata. `?metadata_value=goodnight`. You can also combine this with `metadata_key`, `?metadata_key=goodmorning&metadata_value",
+                    "inherit": false,
+                    "value": {
+                      "name": "metadata_value"
+                    }
+                  },
+                  {
+                    "long": "offset",
+                    "description": "Zero-based offset from default object sorting. See [pagination](/docs/api/#overview--pagintaion) for more information",
+                    "inherit": false,
+                    "value": {
+                      "name": "offset"
+                    }
+                  },
+                  {
+                    "long": "show_cancelled",
+                    "description": "Return events that have a status of `cancelled`. If an event is recurring, then it returns no matter the value of show_cancelled. Default false",
+                    "inherit": false,
+                    "value": {
+                      "name": "show_cancelled"
+                    }
+                  },
+                  {
+                    "long": "starts_after",
+                    "description": "Return events starting after the specified unix timestamp",
+                    "inherit": false,
+                    "value": {
+                      "name": "starts_after"
+                    }
+                  },
+                  {
+                    "long": "starts_before",
+                    "description": "Return events starting before the specified unix timestamp",
+                    "inherit": false,
+                    "value": {
+                      "name": "starts_before"
+                    }
+                  },
+                  {
+                    "long": "title",
+                    "description": "Return events matching the specified title",
+                    "inherit": false,
+                    "value": {
+                      "name": "title"
+                    }
+                  }
+                ]
+              },
+              {
+                "name": "post",
+                "description": "Create an Event",
+                "options": [
+                  {
+                    "long": "body",
+                    "description": "Request body (or use < to redirect a JSON file)",
+                    "inherit": false,
+                    "value": {
+                      "name": "body"
+                    }
+                  },
+                  {
+                    "long": "display_columns",
+                    "description": "(optional) A comma separated list of column headers to display for the table output",
+                    "inherit": false,
+                    "value": {
+                      "name": "headers"
+                    }
+                  }
+                ]
+              },
+              {
+                "name": "put",
+                "description": "Update An Event",
+                "options": [
+                  {
+                    "long": "body",
+                    "description": "Request body (or use < to redirect a JSON file)",
+                    "inherit": false,
+                    "value": {
+                      "name": "body"
+                    }
+                  },
+                  {
+                    "long": "display_columns",
+                    "description": "(optional) A comma separated list of column headers to display for the table output",
+                    "inherit": false,
+                    "value": {
+                      "name": "headers"
+                    }
+                  }
+                ]
+              },
+              {
+                "name": "to-ics",
+                "description": "To-ics commands",
+                "subcommands": [
+                  {
+                    "name": "post",
+                    "description": "Generate ICS File",
+                    "options": [
+                      {
+                        "long": "body",
+                        "description": "Request body (or use < to redirect a JSON file)",
+                        "inherit": false,
+                        "value": {
+                          "name": "body"
+                        }
+                      },
+                      {
+                        "long": "display_columns",
+                        "description": "(optional) A comma separated list of column headers to display for the table output",
+                        "inherit": false,
+                        "value": {
+                          "name": "headers"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "files",
+            "description": "Files API commands",
+            "subcommands": [
+              {
+                "name": "delete",
+                "description": "Delete a File",
+                "options": [
+                  {
+                    "long": "display_columns",
+                    "description": "(optional) A comma separated list of column headers to display for the table output",
+                    "inherit": false,
+                    "value": {
+                      "name": "headers"
+                    }
+                  }
+                ]
+              },
+              {
+                "name": "download",
+                "description": "Download commands",
+                "subcommands": [
+                  {
+                    "name": "get",
+                    "description": "Download a File",
+                    "options": [
+                      {
+                        "long": "display_columns",
+                        "description": "(optional) A comma separated list of column headers to display for the table output",
+                        "inherit": false,
+                        "value": {
+                          "name": "headers"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "get",
+                "description": "Return All Files",
+                "options": [
+                  {
+                    "long": "content_type",
+                    "description": "Return objects matching the specified content type",
+                    "inherit": false,
+                    "value": {
+                      "name": "content_type"
+                    }
+                  },
+                  {
+                    "long": "display_columns",
+                    "description": "(optional) A comma separated list of column headers to display for the table output",
+                    "inherit": false,
+                    "value": {
+                      "name": "headers"
+                    }
+                  },
+                  {
+                    "long": "filename",
+                    "description": "Return object with the filename",
+                    "inherit": false,
+                    "value": {
+                      "name": "filename"
+                    }
+                  },
+                  {
+                    "long": "message_id",
+                    "description": "Return objects matching the specified message ID",
+                    "inherit": false,
+                    "value": {
+                      "name": "message_id"
+                    }
+                  },
+                  {
+                    "long": "view",
+                    "description": "If using Search, only `view=expanded` is supported. See [Views](/docs/api/#overview--views) for more information",
+                    "inherit": false,
+                    "value": {
+                      "name": "view"
+                    }
+                  }
+                ]
+              },
+              {
+                "name": "post",
+                "description": "Upload a New File",
+                "options": [
+                  {
+                    "long": "body",
+                    "description": "Request body (or use < to redirect a JSON file)",
+                    "inherit": false,
+                    "value": {
+                      "name": "body"
+                    }
+                  },
+                  {
+                    "long": "display_columns",
+                    "description": "(optional) A comma separated list of column headers to display for the table output",
+                    "inherit": false,
+                    "value": {
+                      "name": "headers"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "folders",
+            "description": "Folders API commands",
+            "subcommands": [
+              {
+                "name": "delete",
+                "description": "Delete a Folder",
+                "options": [
+                  {
+                    "long": "display_columns",
+                    "description": "(optional) A comma separated list of column headers to display for the table output",
+                    "inherit": false,
+                    "value": {
+                      "name": "headers"
+                    }
+                  }
+                ]
+              },
+              {
+                "name": "get",
+                "description": "Return All Folders",
+                "options": [
+                  {
+                    "long": "display_columns",
+                    "description": "(optional) A comma separated list of column headers to display for the table output",
+                    "inherit": false,
+                    "value": {
+                      "name": "headers"
+                    }
+                  },
+                  {
+                    "long": "limit",
+                    "description": "The number of objects to return. Defaults to 100. If set too high, requests may fail to prevent excessively large response bodies",
+                    "inherit": false,
+                    "value": {
+                      "name": "limit"
+                    }
+                  },
+                  {
+                    "long": "offset",
+                    "description": "Zero-based offset from default object sorting. See [pagination](/docs/api/#overview--pagintaion) for more information",
+                    "inherit": false,
+                    "value": {
+                      "name": "offset"
+                    }
+                  }
+                ]
+              },
+              {
+                "name": "post",
+                "description": "Create a Folder",
+                "options": [
+                  {
+                    "long": "body",
+                    "description": "Request body (or use < to redirect a JSON file)",
+                    "inherit": false,
+                    "value": {
+                      "name": "body"
+                    }
+                  },
+                  {
+                    "long": "display_columns",
+                    "description": "(optional) A comma separated list of column headers to display for the table output",
+                    "inherit": false,
+                    "value": {
+                      "name": "headers"
+                    }
+                  }
+                ]
+              },
+              {
+                "name": "put",
+                "description": "Update a Folder",
+                "options": [
+                  {
+                    "long": "body",
+                    "description": "Request body (or use < to redirect a JSON file)",
+                    "inherit": false,
+                    "value": {
+                      "name": "body"
+                    }
+                  },
+                  {
+                    "long": "display_columns",
+                    "description": "(optional) A comma separated list of column headers to display for the table output",
+                    "inherit": false,
+                    "value": {
+                      "name": "headers"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "ip-addresses",
+            "description": "Gets a list of Nylas IP addresses (paid customers only)"
+          },
+          {
+            "name": "job-statuses",
+            "description": "Job-Statuses API commands",
+            "subcommands": [
+              {
+                "name": "get",
+                "description": "Return All Job Statuses",
+                "options": [
+                  {
+                    "long": "display_columns",
+                    "description": "(optional) A comma separated list of column headers to display for the table output",
+                    "inherit": false,
+                    "value": {
+                      "name": "headers"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "labels",
+            "description": "Labels API commands",
+            "subcommands": [
+              {
+                "name": "delete",
+                "description": "Delete a Label",
+                "options": [
+                  {
+                    "long": "display_columns",
+                    "description": "(optional) A comma separated list of column headers to display for the table output",
+                    "inherit": false,
+                    "value": {
+                      "name": "headers"
+                    }
+                  }
+                ]
+              },
+              {
+                "name": "get",
+                "description": "Return All Labels",
+                "options": [
+                  {
+                    "long": "display_columns",
+                    "description": "(optional) A comma separated list of column headers to display for the table output",
+                    "inherit": false,
+                    "value": {
+                      "name": "headers"
+                    }
+                  },
+                  {
+                    "long": "limit",
+                    "description": "The number of objects to return. Defaults to 100. If set too high, requests may fail to prevent excessively large response bodies",
+                    "inherit": false,
+                    "value": {
+                      "name": "limit"
+                    }
+                  },
+                  {
+                    "long": "offset",
+                    "description": "Zero-based offset from default object sorting. See [pagination](/docs/api/#overview--pagintaion) for more information",
+                    "inherit": false,
+                    "value": {
+                      "name": "offset"
+                    }
+                  }
+                ]
+              },
+              {
+                "name": "post",
+                "description": "Create a Label",
+                "options": [
+                  {
+                    "long": "body",
+                    "description": "Request body (or use < to redirect a JSON file)",
+                    "inherit": false,
+                    "value": {
+                      "name": "body"
+                    }
+                  },
+                  {
+                    "long": "display_columns",
+                    "description": "(optional) A comma separated list of column headers to display for the table output",
+                    "inherit": false,
+                    "value": {
+                      "name": "headers"
+                    }
+                  }
+                ]
+              },
+              {
+                "name": "put",
+                "description": "Update a Label",
+                "options": [
+                  {
+                    "long": "body",
+                    "description": "Request body (or use < to redirect a JSON file)",
+                    "inherit": false,
+                    "value": {
+                      "name": "body"
+                    }
+                  },
+                  {
+                    "long": "display_columns",
+                    "description": "(optional) A comma separated list of column headers to display for the table output",
+                    "inherit": false,
+                    "value": {
+                      "name": "headers"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "messages",
+            "description": "Messages API commands",
+            "subcommands": [
+              {
+                "name": "get",
+                "description": "Return All Messages",
+                "options": [
+                  {
+                    "long": "any_email",
+                    "description": "Return emails that have been sent or received from this comma-separated list of email addresses. For example: mail1@mail.com,mail2@mail.com. A maximum of 25 ema",
+                    "inherit": false,
+                    "value": {
+                      "name": "any_email"
+                    }
+                  },
+                  {
+                    "long": "bcc",
+                    "description": "Return threads containing messages that were BCC'd to this email address, likely sent from the parent account. (Most SMTP gateways remove BCC information.)",
+                    "inherit": false,
+                    "value": {
+                      "name": "bcc"
+                    }
+                  },
+                  {
+                    "long": "cc",
+                    "description": "Return threads containing messages that were CC'd to this email address",
+                    "inherit": false,
+                    "value": {
+                      "name": "cc"
+                    }
+                  },
+                  {
+                    "long": "display_columns",
+                    "description": "(optional) A comma separated list of column headers to display for the table output",
+                    "inherit": false,
+                    "value": {
+                      "name": "headers"
+                    }
+                  },
+                  {
+                    "long": "filename",
+                    "description": "Return object with the filename",
+                    "inherit": false,
+                    "value": {
+                      "name": "filename"
+                    }
+                  },
+                  {
+                    "long": "from",
+                    "description": "Return threads containing messages sent from this email address",
+                    "inherit": false,
+                    "value": {
+                      "name": "from"
+                    }
+                  },
+                  {
+                    "long": "in",
+                    "description": "This parameter supports the name, display_name, or id of a folder or label. To return drafts, pass in `drafts`",
+                    "inherit": false,
+                    "value": {
+                      "name": "in"
+                    }
+                  },
+                  {
+                    "long": "limit",
+                    "description": "The number of objects to return. Defaults to 100. If set too high, requests may fail to prevent excessively large response bodies",
+                    "inherit": false,
+                    "value": {
+                      "name": "limit"
+                    }
+                  },
+                  {
+                    "long": "not_in",
+                    "description": "Filter messages not in a given folder or label. The filter supports the name, display, or ID of a folder or label",
+                    "inherit": false,
+                    "value": {
+                      "name": "not_in"
+                    }
+                  },
+                  {
+                    "long": "offset",
+                    "description": "Zero-based offset from default object sorting. See [pagination](/docs/api/#overview--pagintaion) for more information",
+                    "inherit": false,
+                    "value": {
+                      "name": "offset"
+                    }
+                  },
+                  {
+                    "long": "received_after",
+                    "description": "Return messages received after this unix timestamp",
+                    "inherit": false,
+                    "value": {
+                      "name": "received_after"
+                    }
+                  },
+                  {
+                    "long": "received_before",
+                    "description": "Return messages received before this unix timestamp",
+                    "inherit": false,
+                    "value": {
+                      "name": "received_before"
+                    }
+                  },
+                  {
+                    "long": "subject",
+                    "description": "Return threads with a matching literal subject",
+                    "inherit": false,
+                    "value": {
+                      "name": "subject"
+                    }
+                  },
+                  {
+                    "long": "thread_id",
+                    "description": "Return messages belonging to a specific thread",
+                    "inherit": false,
+                    "value": {
+                      "name": "thread_id"
+                    }
+                  },
+                  {
+                    "long": "to",
+                    "description": "Return threads containing messages sent to this email address",
+                    "inherit": false,
+                    "value": {
+                      "name": "to"
+                    }
+                  },
+                  {
+                    "long": "view",
+                    "description": "If using Search, only `view=expanded` is supported. See [Views](/docs/api/#overview--views) for more information",
+                    "inherit": false,
+                    "value": {
+                      "name": "view"
+                    }
+                  }
+                ]
+              },
+              {
+                "name": "put",
+                "description": "Update a Message",
+                "options": [
+                  {
+                    "long": "body",
+                    "description": "Request body (or use < to redirect a JSON file)",
+                    "inherit": false,
+                    "value": {
+                      "name": "body"
+                    }
+                  },
+                  {
+                    "long": "display_columns",
+                    "description": "(optional) A comma separated list of column headers to display for the table output",
+                    "inherit": false,
+                    "value": {
+                      "name": "headers"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "neural",
+            "description": "Neural API commands",
+            "subcommands": [
+              {
+                "name": "categorize",
+                "description": "Categorize commands",
+                "subcommands": [
+                  {
+                    "name": "put",
+                    "description": "Categorize a Message",
+                    "options": [
+                      {
+                        "long": "body",
+                        "description": "Request body (or use < to redirect a JSON file)",
+                        "inherit": false,
+                        "value": {
+                          "name": "body"
+                        }
+                      },
+                      {
+                        "long": "display_columns",
+                        "description": "(optional) A comma separated list of column headers to display for the table output",
+                        "inherit": false,
+                        "value": {
+                          "name": "headers"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "categorize:feedback",
+                "description": "Categorize:feedback commands",
+                "subcommands": [
+                  {
+                    "name": "post",
+                    "description": "Categorize Message Feedback",
+                    "options": [
+                      {
+                        "long": "body",
+                        "description": "Request body (or use < to redirect a JSON file)",
+                        "inherit": false,
+                        "value": {
+                          "name": "body"
+                        }
+                      },
+                      {
+                        "long": "display_columns",
+                        "description": "(optional) A comma separated list of column headers to display for the table output",
+                        "inherit": false,
+                        "value": {
+                          "name": "headers"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "conversation",
+                "description": "Conversation commands",
+                "subcommands": [
+                  {
+                    "name": "put",
+                    "description": "Clean Conversation",
+                    "options": [
+                      {
+                        "long": "body",
+                        "description": "Request body (or use < to redirect a JSON file)",
+                        "inherit": false,
+                        "value": {
+                          "name": "body"
+                        }
+                      },
+                      {
+                        "long": "display_columns",
+                        "description": "(optional) A comma separated list of column headers to display for the table output",
+                        "inherit": false,
+                        "value": {
+                          "name": "headers"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "conversation:feedback",
+                "description": "Conversation:feedback commands",
+                "subcommands": [
+                  {
+                    "name": "post",
+                    "description": "Clean Conversations Feedback",
+                    "options": [
+                      {
+                        "long": "body",
+                        "description": "Request body (or use < to redirect a JSON file)",
+                        "inherit": false,
+                        "value": {
+                          "name": "body"
+                        }
+                      },
+                      {
+                        "long": "display_columns",
+                        "description": "(optional) A comma separated list of column headers to display for the table output",
+                        "inherit": false,
+                        "value": {
+                          "name": "headers"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "ocr",
+                "description": "Ocr commands",
+                "subcommands": [
+                  {
+                    "name": "put",
+                    "description": "Optical Character Recognition",
+                    "options": [
+                      {
+                        "long": "body",
+                        "description": "Request body (or use < to redirect a JSON file)",
+                        "inherit": false,
+                        "value": {
+                          "name": "body"
+                        }
+                      },
+                      {
+                        "long": "display_columns",
+                        "description": "(optional) A comma separated list of column headers to display for the table output",
+                        "inherit": false,
+                        "value": {
+                          "name": "headers"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "ocr:feedback",
+                "description": "Ocr:feedback commands",
+                "subcommands": [
+                  {
+                    "name": "post",
+                    "description": "Optical Character Recognition Feedback",
+                    "options": [
+                      {
+                        "long": "body",
+                        "description": "Request body (or use < to redirect a JSON file)",
+                        "inherit": false,
+                        "value": {
+                          "name": "body"
+                        }
+                      },
+                      {
+                        "long": "display_columns",
+                        "description": "(optional) A comma separated list of column headers to display for the table output",
+                        "inherit": false,
+                        "value": {
+                          "name": "headers"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "sentiment",
+                "description": "Sentiment commands",
+                "subcommands": [
+                  {
+                    "name": "put",
+                    "description": "Sentiment Analysis",
+                    "options": [
+                      {
+                        "long": "body",
+                        "description": "Request body (or use < to redirect a JSON file)",
+                        "inherit": false,
+                        "value": {
+                          "name": "body"
+                        }
+                      },
+                      {
+                        "long": "display_columns",
+                        "description": "(optional) A comma separated list of column headers to display for the table output",
+                        "inherit": false,
+                        "value": {
+                          "name": "headers"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "sentiment:feedback",
+                "description": "Sentiment:feedback commands",
+                "subcommands": [
+                  {
+                    "name": "post",
+                    "description": "Sentiment Analysis Feedback",
+                    "options": [
+                      {
+                        "long": "body",
+                        "description": "Request body (or use < to redirect a JSON file)",
+                        "inherit": false,
+                        "value": {
+                          "name": "body"
+                        }
+                      },
+                      {
+                        "long": "display_columns",
+                        "description": "(optional) A comma separated list of column headers to display for the table output",
+                        "inherit": false,
+                        "value": {
+                          "name": "headers"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "signature",
+                "description": "Signature commands",
+                "subcommands": [
+                  {
+                    "name": "put",
+                    "description": "Signature Extraction",
+                    "options": [
+                      {
+                        "long": "body",
+                        "description": "Request body (or use < to redirect a JSON file)",
+                        "inherit": false,
+                        "value": {
+                          "name": "body"
+                        }
+                      },
+                      {
+                        "long": "display_columns",
+                        "description": "(optional) A comma separated list of column headers to display for the table output",
+                        "inherit": false,
+                        "value": {
+                          "name": "headers"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "signature:feedback",
+                "description": "Signature:feedback commands",
+                "subcommands": [
+                  {
+                    "name": "post",
+                    "description": "Signature Extraction Feedback",
+                    "options": [
+                      {
+                        "long": "body",
+                        "description": "Request body (or use < to redirect a JSON file)",
+                        "inherit": false,
+                        "value": {
+                          "name": "body"
+                        }
+                      },
+                      {
+                        "long": "display_columns",
+                        "description": "(optional) A comma separated list of column headers to display for the table output",
+                        "inherit": false,
+                        "value": {
+                          "name": "headers"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "resources",
+            "description": "Resources API commands",
+            "subcommands": [
+              {
+                "name": "get",
+                "description": "Return Room Resource Information",
+                "options": [
+                  {
+                    "long": "display_columns",
+                    "description": "(optional) A comma separated list of column headers to display for the table output",
+                    "inherit": false,
+                    "value": {
+                      "name": "headers"
+                    }
+                  },
+                  {
+                    "long": "limit",
+                    "description": "The number of objects to return. Defaults to 100. If set too high, requests may fail to prevent excessively large response bodies",
+                    "inherit": false,
+                    "value": {
+                      "name": "limit"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "send",
+            "description": "Send API commands",
+            "subcommands": [
+              {
+                "name": "post",
+                "description": "Send a Message",
+                "options": [
+                  {
+                    "long": "body",
+                    "description": "Request body (or use < to redirect a JSON file)",
+                    "inherit": false,
+                    "value": {
+                      "name": "body"
+                    }
+                  },
+                  {
+                    "long": "display_columns",
+                    "description": "(optional) A comma separated list of column headers to display for the table output",
+                    "inherit": false,
+                    "value": {
+                      "name": "headers"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "send-rsvp",
+            "description": "Send-Rsvp API commands",
+            "subcommands": [
+              {
+                "name": "post",
+                "description": "Send RSVP",
+                "options": [
+                  {
+                    "long": "body",
+                    "description": "Request body (or use < to redirect a JSON file)",
+                    "inherit": false,
+                    "value": {
+                      "name": "body"
+                    }
+                  },
+                  {
+                    "long": "display_columns",
+                    "description": "(optional) A comma separated list of column headers to display for the table output",
+                    "inherit": false,
+                    "value": {
+                      "name": "headers"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "threads",
+            "description": "Threads API commands",
+            "subcommands": [
+              {
+                "name": "get",
+                "description": "Returns All Threads",
+                "options": [
+                  {
+                    "long": "any_email",
+                    "description": "Return emails that have been sent or received from this comma-separated list of email addresses. For example: mail1@mail.com,mail2@mail.com. A maximum of 25 ema",
+                    "inherit": false,
+                    "value": {
+                      "name": "any_email"
+                    }
+                  },
+                  {
+                    "long": "bcc",
+                    "description": "Return threads containing messages that were BCC'd to this email address, likely sent from the parent account. (Most SMTP gateways remove BCC information.)",
+                    "inherit": false,
+                    "value": {
+                      "name": "bcc"
+                    }
+                  },
+                  {
+                    "long": "cc",
+                    "description": "Return threads containing messages that were CC'd to this email address",
+                    "inherit": false,
+                    "value": {
+                      "name": "cc"
+                    }
+                  },
+                  {
+                    "long": "display_columns",
+                    "description": "(optional) A comma separated list of column headers to display for the table output",
+                    "inherit": false,
+                    "value": {
+                      "name": "headers"
+                    }
+                  },
+                  {
+                    "long": "filename",
+                    "description": "Return object with the filename",
+                    "inherit": false,
+                    "value": {
+                      "name": "filename"
+                    }
+                  },
+                  {
+                    "long": "from",
+                    "description": "Return threads containing messages sent from this email address",
+                    "inherit": false,
+                    "value": {
+                      "name": "from"
+                    }
+                  },
+                  {
+                    "long": "in",
+                    "description": "This parameter supports the name, display_name, or id of a folder or label. To return drafts, pass in `drafts`",
+                    "inherit": false,
+                    "value": {
+                      "name": "in"
+                    }
+                  },
+                  {
+                    "long": "last_message_after",
+                    "description": "Return threads whose most recent message was received after this Unix-based timestamp",
+                    "inherit": false,
+                    "value": {
+                      "name": "last_message_after"
+                    }
+                  },
+                  {
+                    "long": "last_message_before",
+                    "description": "Return threads whose most recent message was received before this Unix-based timestamp",
+                    "inherit": false,
+                    "value": {
+                      "name": "last_message_before"
+                    }
+                  },
+                  {
+                    "long": "last_updated_after",
+                    "description": "Return threads whose most recent last updated date is after this Unix-based timestamp",
+                    "inherit": false,
+                    "value": {
+                      "name": "last_updated_after"
+                    }
+                  },
+                  {
+                    "long": "last_updated_before",
+                    "description": "Return threads whose most recent last updated date is before this Unix-based timestamp",
+                    "inherit": false,
+                    "value": {
+                      "name": "last_updated_before"
+                    }
+                  },
+                  {
+                    "long": "last_updated_timestamp",
+                    "description": "Return threads that been updated or changed recently. UNIX timestamp",
+                    "inherit": false,
+                    "value": {
+                      "name": "last_updated_timestamp"
+                    }
+                  },
+                  {
+                    "long": "limit",
+                    "description": "The number of objects to return. Defaults to 100. If set too high, requests may fail to prevent excessively large response bodies",
+                    "inherit": false,
+                    "value": {
+                      "name": "limit"
+                    }
+                  },
+                  {
+                    "long": "not_in",
+                    "description": "Filter messages not in a given folder or label. The filter supports the name, display, or ID of a folder or label",
+                    "inherit": false,
+                    "value": {
+                      "name": "not_in"
+                    }
+                  },
+                  {
+                    "long": "offset",
+                    "description": "Zero-based offset from default object sorting. See [pagination](/docs/api/#overview--pagintaion) for more information",
+                    "inherit": false,
+                    "value": {
+                      "name": "offset"
+                    }
+                  },
+                  {
+                    "long": "started_after",
+                    "description": "Return threads whose first message was received after this Unix-based timestamp",
+                    "inherit": false,
+                    "value": {
+                      "name": "started_after"
+                    }
+                  },
+                  {
+                    "long": "started_before",
+                    "description": "Return threads whose first message was received before this Unix-based timestamp",
+                    "inherit": false,
+                    "value": {
+                      "name": "started_before"
+                    }
+                  },
+                  {
+                    "long": "subject",
+                    "description": "Return threads with a matching literal subject",
+                    "inherit": false,
+                    "value": {
+                      "name": "subject"
+                    }
+                  },
+                  {
+                    "long": "to",
+                    "description": "Return threads containing messages sent to this email address",
+                    "inherit": false,
+                    "value": {
+                      "name": "to"
+                    }
+                  },
+                  {
+                    "long": "view",
+                    "description": "If using Search, only `view=expanded` is supported. See [Views](/docs/api/#overview--views) for more information",
+                    "inherit": false,
+                    "value": {
+                      "name": "view"
+                    }
+                  }
+                ]
+              },
+              {
+                "name": "put",
+                "description": "Update a Thread",
+                "options": [
+                  {
+                    "long": "body",
+                    "description": "Request body (or use < to redirect a JSON file)",
+                    "inherit": false,
+                    "value": {
+                      "name": "body"
+                    }
+                  },
+                  {
+                    "long": "display_columns",
+                    "description": "(optional) A comma separated list of column headers to display for the table output",
+                    "inherit": false,
+                    "value": {
+                      "name": "headers"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "v2",
+            "description": "V2 API commands",
+            "subcommands": [
+              {
+                "name": "outbox",
+                "description": "Outbox commands",
+                "subcommands": [
+                  {
+                    "name": "delete",
+                    "description": "Delete Scheduled Message",
+                    "options": [
+                      {
+                        "long": "display_columns",
+                        "description": "(optional) A comma separated list of column headers to display for the table output",
+                        "inherit": false,
+                        "value": {
+                          "name": "headers"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "name": "get",
+                    "description": "Return All Messages to Be Sent",
+                    "options": [
+                      {
+                        "long": "display_columns",
+                        "description": "(optional) A comma separated list of column headers to display for the table output",
+                        "inherit": false,
+                        "value": {
+                          "name": "headers"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "name": "post",
+                    "description": "Send a Message",
+                    "options": [
+                      {
+                        "long": "body",
+                        "description": "Request body (or use < to redirect a JSON file)",
+                        "inherit": false,
+                        "value": {
+                          "name": "body"
+                        }
+                      },
+                      {
+                        "long": "display_columns",
+                        "description": "(optional) A comma separated list of column headers to display for the table output",
+                        "inherit": false,
+                        "value": {
+                          "name": "headers"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "name": "put",
+                    "description": "Update Send Time",
+                    "options": [
+                      {
+                        "long": "body",
+                        "description": "Request body (or use < to redirect a JSON file)",
+                        "inherit": false,
+                        "value": {
+                          "name": "body"
+                        }
+                      },
+                      {
+                        "long": "display_columns",
+                        "description": "(optional) A comma separated list of column headers to display for the table output",
+                        "inherit": false,
+                        "value": {
+                          "name": "headers"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "webhooks",
+            "description": "Gets a list of webhooks",
+            "options": [
+              {
+                "long": "limit",
+                "short": "l",
+                "description": "This is usage",
+                "inherit": false,
+                "value": {
+                  "name": "limit"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "auth",
+        "description": "Auth your email account"
+      },
+      {
+        "name": "docs",
+        "description": "Documentation lookup (preview)"
+      },
+      {
+        "name": "init",
+        "description": "Setup your dashboard application credentials"
+      },
+      {
+        "name": "version",
+        "description": "Gets the current CLI version"
+      },
+      {
+        "name": "webhook",
+        "description": "Create and test Nylas' Webhooks",
+        "subcommands": [
+          {
+            "name": "tunnel",
+            "description": "Starts listening for incoming Nylas webhook events",
+            "options": [
+              {
+                "long": "callback_domain",
+                "description": "The domain for the callback URL",
+                "inherit": false,
+                "value": {
+                  "name": "callback_domain"
+                }
+              },
+              {
+                "long": "forward",
+                "short": "f",
+                "description": "Address to forward requests to (e.g. http://localhost:3000)",
+                "inherit": false,
+                "value": {
+                  "name": "forward"
+                }
+              },
+              {
+                "long": "print",
+                "short": "p",
+                "description": "Prints the (json) payload to the console",
+                "inherit": false
+              },
+              {
+                "long": "triggers",
+                "short": "t",
+                "description": "The triggers to register for your webhooks",
+                "inherit": false,
+                "value": {
+                  "name": "triggers",
+                  "provider": {
+                    "values": [
+                      "account.connected",
+                      "account.running",
+                      "account.stopped",
+                      "account.invalid",
+                      "account.sync_error",
+                      "message.created",
+                      "message.opened",
+                      "message.updated",
+                      "message.link_clicked",
+                      "message.bounced",
+                      "thread.replied",
+                      "calendar.created",
+                      "calendar.updated",
+                      "calendar.deleted",
+                      "event.created",
+                      "event.updated",
+                      "event.deleted",
+                      "contact.created",
+                      "contact.updated",
+                      "contact.updated",
+                      "contact.deleted",
+                      "job.successful",
+                      "job.failed"
+                    ]
+                  }
+                }
+              },
+              {
+                "long": "websocket_domain",
+                "description": "The domain for the websocket server",
+                "inherit": false,
+                "value": {
+                  "name": "websocket_domain"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "help",
+        "description": "Help about any command",
+        "subcommands": [
+          {
+            "name": "api",
+            "description": "Access the Nylas API endpoints",
+            "subcommands": [
+              {
+                "name": "a",
+                "description": "A API commands",
+                "subcommands": [
+                  {
+                    "name": "accounts",
+                    "description": "Accounts commands",
+                    "subcommands": [
+                      {
+                        "name": "delete",
+                        "description": "Delete an Account"
+                      },
+                      {
+                        "name": "get",
+                        "description": "Return All Accounts"
+                      }
+                    ]
+                  },
+                  {
+                    "name": "accounts:downgrade",
+                    "description": "Accounts:downgrade commands",
+                    "subcommands": [
+                      {
+                        "name": "post",
+                        "description": "Cancel an Account"
+                      }
+                    ]
+                  },
+                  {
+                    "name": "accounts:revoke-all",
+                    "description": "Accounts:revoke-all commands",
+                    "subcommands": [
+                      {
+                        "name": "post",
+                        "description": "Revoke All Tokens"
+                      }
+                    ]
+                  },
+                  {
+                    "name": "accounts:token-info",
+                    "description": "Accounts:token-info commands",
+                    "subcommands": [
+                      {
+                        "name": "post",
+                        "description": "Return Token Information"
+                      }
+                    ]
+                  },
+                  {
+                    "name": "accounts:upgrade",
+                    "description": "Accounts:upgrade commands",
+                    "subcommands": [
+                      {
+                        "name": "post",
+                        "description": "Reactivate an Account"
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "accounts",
+                "description": "Gets a list of authed accounts"
+              },
+              {
+                "name": "applications",
+                "description": "Gets your application info"
+              },
+              {
+                "name": "calendars",
+                "description": "Calendars API commands",
+                "subcommands": [
+                  {
+                    "name": "availability",
+                    "description": "Availability commands",
+                    "subcommands": [
+                      {
+                        "name": "post",
+                        "description": "Availability for a Single Meeting"
+                      }
+                    ]
+                  },
+                  {
+                    "name": "availability:consecutive",
+                    "description": "Availability:consecutive commands",
+                    "subcommands": [
+                      {
+                        "name": "post",
+                        "description": "Availability for Multiple Meetings"
+                      }
+                    ]
+                  },
+                  {
+                    "name": "delete",
+                    "description": "Delete a Calendar"
+                  },
+                  {
+                    "name": "free-busy",
+                    "description": "Free-busy commands",
+                    "subcommands": [
+                      {
+                        "name": "post",
+                        "description": "Calendar Free or Busy"
+                      }
+                    ]
+                  },
+                  {
+                    "name": "get",
+                    "description": "Return All Calendars"
+                  },
+                  {
+                    "name": "post",
+                    "description": "Create a Calendar"
+                  },
+                  {
+                    "name": "put",
+                    "description": "Update A Calendar"
+                  }
+                ]
+              },
+              {
+                "name": "connect",
+                "description": "Connect API commands",
+                "subcommands": [
+                  {
+                    "name": "detect-provider",
+                    "description": "Detect-provider commands",
+                    "subcommands": [
+                      {
+                        "name": "post",
+                        "description": "Detect Provider"
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "contacts",
+                "description": "Contacts API commands",
+                "subcommands": [
+                  {
+                    "name": "delete",
+                    "description": "Delete a Contact"
+                  },
+                  {
+                    "name": "get",
+                    "description": "Return All Contacts"
+                  },
+                  {
+                    "name": "groups",
+                    "description": "Groups commands",
+                    "subcommands": [
+                      {
+                        "name": "get",
+                        "description": "Return Contact Groups"
+                      }
+                    ]
+                  },
+                  {
+                    "name": "picture",
+                    "description": "Picture commands",
+                    "subcommands": [
+                      {
+                        "name": "get",
+                        "description": "Returns a Contacts Picture"
+                      }
+                    ]
+                  },
+                  {
+                    "name": "post",
+                    "description": "Create a Contact"
+                  },
+                  {
+                    "name": "put",
+                    "description": "Update a Contact"
+                  }
+                ]
+              },
+              {
+                "name": "delta",
+                "description": "Delta API commands",
+                "subcommands": [
+                  {
+                    "name": "get",
+                    "description": "Request Delta Cursors"
+                  },
+                  {
+                    "name": "latest:cursor",
+                    "description": "Latest:cursor commands",
+                    "subcommands": [
+                      {
+                        "name": "post",
+                        "description": "Get a Delta Cursor"
+                      }
+                    ]
+                  },
+                  {
+                    "name": "longpoll",
+                    "description": "Longpoll commands",
+                    "subcommands": [
+                      {
+                        "name": "get",
+                        "description": "Return Long-Polling Deltas"
+                      }
+                    ]
+                  },
+                  {
+                    "name": "streaming",
+                    "description": "Streaming commands",
+                    "subcommands": [
+                      {
+                        "name": "get",
+                        "description": "Streaming Deltas"
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "drafts",
+                "description": "Drafts API commands",
+                "subcommands": [
+                  {
+                    "name": "delete",
+                    "description": "Delete a Draft"
+                  },
+                  {
+                    "name": "get",
+                    "description": "Return All Drafts"
+                  },
+                  {
+                    "name": "post",
+                    "description": "Create a New Draft"
+                  },
+                  {
+                    "name": "put",
+                    "description": "Update a Draft"
+                  }
+                ]
+              },
+              {
+                "name": "events",
+                "description": "Events API commands",
+                "subcommands": [
+                  {
+                    "name": "delete",
+                    "description": "Delete An Event"
+                  },
+                  {
+                    "name": "get",
+                    "description": "Return All Events"
+                  },
+                  {
+                    "name": "post",
+                    "description": "Create an Event"
+                  },
+                  {
+                    "name": "put",
+                    "description": "Update An Event"
+                  },
+                  {
+                    "name": "to-ics",
+                    "description": "To-ics commands",
+                    "subcommands": [
+                      {
+                        "name": "post",
+                        "description": "Generate ICS File"
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "files",
+                "description": "Files API commands",
+                "subcommands": [
+                  {
+                    "name": "delete",
+                    "description": "Delete a File"
+                  },
+                  {
+                    "name": "download",
+                    "description": "Download commands",
+                    "subcommands": [
+                      {
+                        "name": "get",
+                        "description": "Download a File"
+                      }
+                    ]
+                  },
+                  {
+                    "name": "get",
+                    "description": "Return All Files"
+                  },
+                  {
+                    "name": "post",
+                    "description": "Upload a New File"
+                  }
+                ]
+              },
+              {
+                "name": "folders",
+                "description": "Folders API commands",
+                "subcommands": [
+                  {
+                    "name": "delete",
+                    "description": "Delete a Folder"
+                  },
+                  {
+                    "name": "get",
+                    "description": "Return All Folders"
+                  },
+                  {
+                    "name": "post",
+                    "description": "Create a Folder"
+                  },
+                  {
+                    "name": "put",
+                    "description": "Update a Folder"
+                  }
+                ]
+              },
+              {
+                "name": "ip-addresses",
+                "description": "Gets a list of Nylas IP addresses (paid customers only)"
+              },
+              {
+                "name": "job-statuses",
+                "description": "Job-Statuses API commands",
+                "subcommands": [
+                  {
+                    "name": "get",
+                    "description": "Return All Job Statuses"
+                  }
+                ]
+              },
+              {
+                "name": "labels",
+                "description": "Labels API commands",
+                "subcommands": [
+                  {
+                    "name": "delete",
+                    "description": "Delete a Label"
+                  },
+                  {
+                    "name": "get",
+                    "description": "Return All Labels"
+                  },
+                  {
+                    "name": "post",
+                    "description": "Create a Label"
+                  },
+                  {
+                    "name": "put",
+                    "description": "Update a Label"
+                  }
+                ]
+              },
+              {
+                "name": "messages",
+                "description": "Messages API commands",
+                "subcommands": [
+                  {
+                    "name": "get",
+                    "description": "Return All Messages"
+                  },
+                  {
+                    "name": "put",
+                    "description": "Update a Message"
+                  }
+                ]
+              },
+              {
+                "name": "neural",
+                "description": "Neural API commands",
+                "subcommands": [
+                  {
+                    "name": "categorize",
+                    "description": "Categorize commands",
+                    "subcommands": [
+                      {
+                        "name": "put",
+                        "description": "Categorize a Message"
+                      }
+                    ]
+                  },
+                  {
+                    "name": "categorize:feedback",
+                    "description": "Categorize:feedback commands",
+                    "subcommands": [
+                      {
+                        "name": "post",
+                        "description": "Categorize Message Feedback"
+                      }
+                    ]
+                  },
+                  {
+                    "name": "conversation",
+                    "description": "Conversation commands",
+                    "subcommands": [
+                      {
+                        "name": "put",
+                        "description": "Clean Conversation"
+                      }
+                    ]
+                  },
+                  {
+                    "name": "conversation:feedback",
+                    "description": "Conversation:feedback commands",
+                    "subcommands": [
+                      {
+                        "name": "post",
+                        "description": "Clean Conversations Feedback"
+                      }
+                    ]
+                  },
+                  {
+                    "name": "ocr",
+                    "description": "Ocr commands",
+                    "subcommands": [
+                      {
+                        "name": "put",
+                        "description": "Optical Character Recognition"
+                      }
+                    ]
+                  },
+                  {
+                    "name": "ocr:feedback",
+                    "description": "Ocr:feedback commands",
+                    "subcommands": [
+                      {
+                        "name": "post",
+                        "description": "Optical Character Recognition Feedback"
+                      }
+                    ]
+                  },
+                  {
+                    "name": "sentiment",
+                    "description": "Sentiment commands",
+                    "subcommands": [
+                      {
+                        "name": "put",
+                        "description": "Sentiment Analysis"
+                      }
+                    ]
+                  },
+                  {
+                    "name": "sentiment:feedback",
+                    "description": "Sentiment:feedback commands",
+                    "subcommands": [
+                      {
+                        "name": "post",
+                        "description": "Sentiment Analysis Feedback"
+                      }
+                    ]
+                  },
+                  {
+                    "name": "signature",
+                    "description": "Signature commands",
+                    "subcommands": [
+                      {
+                        "name": "put",
+                        "description": "Signature Extraction"
+                      }
+                    ]
+                  },
+                  {
+                    "name": "signature:feedback",
+                    "description": "Signature:feedback commands",
+                    "subcommands": [
+                      {
+                        "name": "post",
+                        "description": "Signature Extraction Feedback"
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "resources",
+                "description": "Resources API commands",
+                "subcommands": [
+                  {
+                    "name": "get",
+                    "description": "Return Room Resource Information"
+                  }
+                ]
+              },
+              {
+                "name": "send",
+                "description": "Send API commands",
+                "subcommands": [
+                  {
+                    "name": "post",
+                    "description": "Send a Message"
+                  }
+                ]
+              },
+              {
+                "name": "send-rsvp",
+                "description": "Send-Rsvp API commands",
+                "subcommands": [
+                  {
+                    "name": "post",
+                    "description": "Send RSVP"
+                  }
+                ]
+              },
+              {
+                "name": "threads",
+                "description": "Threads API commands",
+                "subcommands": [
+                  {
+                    "name": "get",
+                    "description": "Returns All Threads"
+                  },
+                  {
+                    "name": "put",
+                    "description": "Update a Thread"
+                  }
+                ]
+              },
+              {
+                "name": "v2",
+                "description": "V2 API commands",
+                "subcommands": [
+                  {
+                    "name": "outbox",
+                    "description": "Outbox commands",
+                    "subcommands": [
+                      {
+                        "name": "delete",
+                        "description": "Delete Scheduled Message"
+                      },
+                      {
+                        "name": "get",
+                        "description": "Return All Messages to Be Sent"
+                      },
+                      {
+                        "name": "post",
+                        "description": "Send a Message"
+                      },
+                      {
+                        "name": "put",
+                        "description": "Update Send Time"
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "webhooks",
+                "description": "Gets a list of webhooks"
+              }
+            ]
+          },
+          {
+            "name": "auth",
+            "description": "Auth your email account"
+          },
+          {
+            "name": "docs",
+            "description": "Documentation lookup (preview)"
+          },
+          {
+            "name": "init",
+            "description": "Setup your dashboard application credentials"
+          },
+          {
+            "name": "version",
+            "description": "Gets the current CLI version"
+          },
+          {
+            "name": "webhook",
+            "description": "Create and test Nylas' Webhooks",
+            "subcommands": [
+              {
+                "name": "tunnel",
+                "description": "Starts listening for incoming Nylas webhook events"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
