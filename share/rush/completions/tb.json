@@ -1,0 +1,825 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "tb",
+    "description": "use the Tinybird CLI",
+    "options": [
+      {
+        "long": "debug",
+        "description": "print debug information",
+        "inherit": false
+      },
+      {
+        "long": "no-debug",
+        "description": "disable debug information",
+        "inherit": false
+      },
+      {
+        "long": "token",
+        "description": "use auth token, defaults to TB_TOKEN envvar, then to the .tinyb file",
+        "inherit": false,
+        "value": {
+          "name": "text"
+        }
+      },
+      {
+        "long": "host",
+        "description": "use custom host, defaults to TB_HOST envvar, then to https://api.tinybird.co",
+        "inherit": false,
+        "value": {
+          "name": "text"
+        }
+      },
+      {
+        "long": "gcp-project-id",
+        "description": "the Google Cloud project ID",
+        "inherit": false,
+        "value": {
+          "name": "text"
+        }
+      },
+      {
+        "long": "gcs-bucket",
+        "description": "the Google Cloud Storage bucket to write temp files when using the connectors",
+        "inherit": false,
+        "value": {
+          "name": "text"
+        }
+      },
+      {
+        "long": "google-application-credentials",
+        "description": "set GOOGLE_APPLICATION_CREDENTIALS",
+        "inherit": false,
+        "value": {
+          "name": "text",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "sf-account",
+        "description": "the Snowflake Account (e.g. your-domain.west-europe.azure)",
+        "inherit": false,
+        "value": {
+          "name": "text"
+        }
+      },
+      {
+        "long": "sf-warehouse",
+        "description": "the Snowflake warehouse name",
+        "inherit": false,
+        "value": {
+          "name": "text"
+        }
+      },
+      {
+        "long": "sf-database",
+        "description": "the Snowflake database name",
+        "inherit": false,
+        "value": {
+          "name": "text"
+        }
+      },
+      {
+        "long": "sf-schema",
+        "description": "the Snowflake schema name",
+        "inherit": false,
+        "value": {
+          "name": "text"
+        }
+      },
+      {
+        "long": "sf-role",
+        "description": "the Snowflake role name",
+        "inherit": false,
+        "value": {
+          "name": "text"
+        }
+      },
+      {
+        "long": "sf-user",
+        "description": "the Snowflake user name",
+        "inherit": false,
+        "value": {
+          "name": "text"
+        }
+      },
+      {
+        "long": "sf-password",
+        "description": "the Snowflake password",
+        "inherit": false,
+        "value": {
+          "name": "text"
+        }
+      },
+      {
+        "long": "sf-storage-integration",
+        "description": "the Snowflake GCS storage integration name (leave empty to auto-generate one)",
+        "inherit": false,
+        "value": {
+          "name": "text"
+        }
+      },
+      {
+        "long": "sf-stage",
+        "description": "the Snowflake GCS stage name (leave empty to auto-generate one)",
+        "inherit": false,
+        "value": {
+          "name": "text"
+        }
+      },
+      {
+        "long": "with-headers",
+        "description": "flag to enable connector to export with headers",
+        "inherit": false
+      },
+      {
+        "long": "version-warning",
+        "description": "show version warnings",
+        "inherit": false
+      },
+      {
+        "long": "no-version-warning",
+        "description": "hide version warnings",
+        "inherit": false
+      },
+      {
+        "long": "hide-tokens",
+        "description": "disable the output of tokens",
+        "inherit": false
+      },
+      {
+        "long": "version",
+        "description": "show version",
+        "inherit": false
+      },
+      {
+        "long": "help",
+        "description": "show help",
+        "inherit": false
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "check",
+        "description": "check file syntax",
+        "options": [
+          {
+            "long": "debug",
+            "description": "print internal representation",
+            "inherit": false
+          },
+          {
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "provider": [
+                "builtin.directories",
+                "builtin.files"
+              ],
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "dependencies",
+        "description": "print all data sources dependencies",
+        "options": [
+          {
+            "long": "no-deps",
+            "description": "print only data sources with no pipes using them",
+            "inherit": false
+          },
+          {
+            "long": "match",
+            "description": "retrieve any resource matching the pattern",
+            "inherit": false,
+            "value": {
+              "name": "text"
+            }
+          },
+          {
+            "long": "pipe",
+            "description": "retrieve any resource used by pipe",
+            "inherit": false,
+            "value": {
+              "name": "text"
+            }
+          },
+          {
+            "long": "datasource",
+            "description": "retrieve resources depending on this Data Source",
+            "inherit": false,
+            "value": {
+              "name": "text"
+            }
+          },
+          {
+            "long": "check-for-partial-replace",
+            "description": "retrieve dependant Data Sources that will have their data replaced if a partial replace is executed in the Data Source selected",
+            "inherit": false
+          },
+          {
+            "long": "recursive",
+            "description": "calculate recursive dependencies",
+            "inherit": false
+          },
+          {
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "diff",
+        "description": "diffs local datafiles to the corresponding remote files in the workspace",
+        "options": [
+          {
+            "long": "fmt",
+            "description": "format files before doing the diff, default is True so both files match the format",
+            "inherit": false
+          },
+          {
+            "long": "no-fmt",
+            "description": "format files before doing the diff, default is True so both files match the format",
+            "inherit": false
+          },
+          {
+            "long": "no-color",
+            "description": "don't colorize diff",
+            "inherit": false
+          },
+          {
+            "long": "main",
+            "description": "diffs local datafiles to the corresponding remote files in the main workspace. Only works when authenticated on a branch",
+            "inherit": false
+          },
+          {
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "provider": [
+                "builtin.directories",
+                "builtin.files"
+              ],
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "drop-prefix",
+        "description": "drop all the resources inside a project with prefix. This command is dangerous because it removes everything, use with care",
+        "options": [
+          {
+            "long": "yes",
+            "description": "do not ask for confirmation",
+            "inherit": false
+          },
+          {
+            "long": "dry-run",
+            "description": "run the command without removing anything",
+            "inherit": false
+          },
+          {
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "text",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "fmt",
+        "description": "formats a .datasource, .pipe or .incl file This command removes comments starting with # from the file, use DESCRIPTION instead. The format command tries to par",
+        "options": [
+          {
+            "long": "line-length",
+            "description": "a number indicating the maximum characters per line in the node SQL, lines will be splitted based on the SQL syntax and the number of characters passed as a par",
+            "inherit": false,
+            "value": {
+              "name": "integer"
+            }
+          },
+          {
+            "long": "dry-run",
+            "description": "don't ask to override the local file",
+            "inherit": false
+          },
+          {
+            "long": "yes",
+            "description": "do not ask for confirmation to overwrite the local file",
+            "inherit": false
+          },
+          {
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "provider": [
+                "builtin.directories",
+                "builtin.files"
+              ],
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "init",
+        "description": "initialize folder layout",
+        "options": [
+          {
+            "long": "generate-datasources",
+            "description": "generate datasources based on CSV, NDJSON and Parquet files in this folder",
+            "inherit": false
+          },
+          {
+            "long": "folder",
+            "description": "folder where files will be placed",
+            "inherit": false,
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "force",
+            "description": "overrides existing files",
+            "inherit": false
+          },
+          {
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "materialize",
+        "description": "[BETA] Given a local Pipe datafile path (FILENAME) and optionally a Materialized View name (TARGET_DATASOURCE), choose one of its nodes to materialize. This com",
+        "options": [
+          {
+            "long": "prefix",
+            "description": "use prefix for all the resources",
+            "inherit": false,
+            "value": {
+              "name": "text"
+            }
+          },
+          {
+            "long": "push-deps",
+            "description": "push dependencies, disabled by default",
+            "inherit": false
+          },
+          {
+            "long": "workspace_map",
+            "repeatable": true,
+            "inherit": false,
+            "value": [
+              {
+                "name": "text"
+              },
+              {
+                "name": "text"
+              }
+            ],
+            "description": ""
+          },
+          {
+            "long": "workspace",
+            "description": "add a workspace path to the list of external workspaces, usage: --workspace name path/to/folder",
+            "repeatable": true,
+            "inherit": false,
+            "value": [
+              {
+                "name": "text"
+              },
+              {
+                "name": "text"
+              }
+            ]
+          },
+          {
+            "long": "no-versions",
+            "description": "when set, resource dependency versions are not used, it pushes the dependencies as-is",
+            "inherit": false
+          },
+          {
+            "long": "verbose",
+            "description": "prints more log",
+            "inherit": false
+          },
+          {
+            "long": "force-populate",
+            "description": "subset or full",
+            "inherit": false,
+            "value": {
+              "name": "text"
+            }
+          },
+          {
+            "long": "unlink-on-populate-error",
+            "description": "if the populate job fails the Materialized View is unlinked and new data won't be ingested in the Materialized View. First time a populate job fails, the Materi",
+            "inherit": false
+          },
+          {
+            "long": "override-pipe",
+            "description": "override pipe if exists or prompt",
+            "inherit": false
+          },
+          {
+            "long": "override-datasource",
+            "description": "override data source if exists or prompt",
+            "inherit": false
+          },
+          {
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "provider": [
+                "builtin.directories",
+                "builtin.files"
+              ],
+              "index": 0
+            },
+            {
+              "name": "text",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "prompt",
+        "description": "learn how to include info about the CLI in your shell PROMPT",
+        "options": [
+          {
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "pull",
+        "description": "retrieve latest versions for project files from Tinybird",
+        "options": [
+          {
+            "long": "folder",
+            "description": "folder where files will be placed",
+            "inherit": false,
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "auto",
+            "description": "saves datafiles automatically into their default directories (/datasources or /pipes)",
+            "inherit": false
+          },
+          {
+            "long": "match",
+            "description": "retrieve any resourcing matching the pattern. eg --match _test",
+            "inherit": false,
+            "value": {
+              "name": "text"
+            }
+          },
+          {
+            "long": "prefix",
+            "description": "download only resources with this prefix",
+            "inherit": false,
+            "value": {
+              "name": "text"
+            }
+          },
+          {
+            "long": "force",
+            "description": "override existing files",
+            "inherit": false
+          },
+          {
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "push",
+        "description": "push files to Tinybird",
+        "options": [
+          {
+            "long": "prefix",
+            "description": "use prefix for all the resources",
+            "inherit": false,
+            "value": {
+              "name": "text"
+            }
+          },
+          {
+            "long": "dry-run",
+            "description": "run the command without creating resources on the Tinybird account or any side effect",
+            "inherit": false
+          },
+          {
+            "long": "check",
+            "description": "enable/Disable output checking, enabled by default",
+            "inherit": false
+          },
+          {
+            "long": "no-check",
+            "description": "enable/Disable output checking, enabled by default",
+            "inherit": false
+          },
+          {
+            "long": "push-deps",
+            "description": "push dependencies, disabled by default",
+            "inherit": false
+          },
+          {
+            "long": "debug",
+            "description": "prints internal representation, can be combined with any command to get more information",
+            "inherit": false
+          },
+          {
+            "short": "f",
+            "long": "force",
+            "description": "override pipes when they already exist",
+            "inherit": false
+          },
+          {
+            "long": "override-datasource",
+            "description": "when pushing a pipe with a Materialized node if the target Data Source exists it will try to override it",
+            "inherit": false
+          },
+          {
+            "long": "populate",
+            "description": "populate materialized nodes when pushing them",
+            "inherit": false
+          },
+          {
+            "long": "subset",
+            "description": "populate with a subset percent of the data (limited to a maximum of 2M rows), this is useful to quickly test a materialized node with some data. The subset must",
+            "inherit": false,
+            "value": {
+              "name": "float"
+            }
+          },
+          {
+            "long": "sql-condition",
+            "description": "populate with a SQL condition to be applied to the trigger Data Source of the Materialized View. For instance, `--sql-condition='date == toYYYYMM(now())'` it'll",
+            "inherit": false,
+            "value": {
+              "name": "text"
+            }
+          },
+          {
+            "long": "unlink-on-populate-error",
+            "description": "if the populate job fails the Materialized View is unlinked and new data won't be ingested in the Materialized View. First time a populate job fails, the Materi",
+            "inherit": false
+          },
+          {
+            "long": "fixtures",
+            "description": "append fixtures to data sources",
+            "inherit": false
+          },
+          {
+            "long": "wait",
+            "description": "to be used along with --populate command. Waits for populate jobs to finish, showing a progress bar. Disabled by default",
+            "inherit": false
+          },
+          {
+            "long": "yes",
+            "description": "do not ask for confirmation",
+            "inherit": false
+          },
+          {
+            "long": "only-response-times",
+            "description": "checks only response times, when --force push a pipe",
+            "inherit": false
+          },
+          {
+            "long": "workspace_map",
+            "repeatable": true,
+            "inherit": false,
+            "value": [
+              {
+                "name": "text"
+              },
+              {
+                "name": "text"
+              }
+            ],
+            "description": ""
+          },
+          {
+            "long": "workspace",
+            "description": "add a workspace path to the list of external workspaces, usage: --workspace name path/to/folder",
+            "repeatable": true,
+            "inherit": false,
+            "value": [
+              {
+                "name": "text"
+              },
+              {
+                "name": "text"
+              }
+            ]
+          },
+          {
+            "long": "no-versions",
+            "description": "when set, resource dependency versions are not used, it pushes the dependencies as-is",
+            "inherit": false
+          },
+          {
+            "long": "timeout",
+            "description": "timeout you want to use for the job populate",
+            "inherit": false,
+            "value": {
+              "name": "float"
+            }
+          },
+          {
+            "short": "l",
+            "long": "limit",
+            "description": "number of requests to validate",
+            "inherit": false,
+            "value": {
+              "name": "integer-range"
+            }
+          },
+          {
+            "long": "sample-by-params",
+            "description": "when set, we will aggregate the pipe_stats_rt requests by extractURLParameterNames(assumeNotNull(url)) and for each combination we will take a sample of N reque",
+            "inherit": false,
+            "value": {
+              "name": "integer-range"
+            }
+          },
+          {
+            "long": "failfast",
+            "spellings": [
+              "-ff"
+            ],
+            "description": "when set, the checker will exit as soon one test fails",
+            "inherit": false
+          },
+          {
+            "long": "ignore-order",
+            "description": "when set, the checker will ignore the order of list properties",
+            "inherit": false
+          },
+          {
+            "long": "validate-processed-bytes",
+            "description": "when set, the checker will validate that the new version doesn't process more than 25% than the current version",
+            "inherit": false
+          },
+          {
+            "long": "last-requests-from-main",
+            "description": "when set, the checker will get top requests requests from main",
+            "inherit": false
+          },
+          {
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "provider": [
+                "builtin.directories",
+                "builtin.files"
+              ],
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "sql",
+        "description": "run SQL query over data sources and pipes",
+        "options": [
+          {
+            "long": "rows_limit",
+            "description": "max number of rows retrieved",
+            "inherit": false,
+            "value": {
+              "name": "integer"
+            }
+          },
+          {
+            "long": "pipeline",
+            "description": "the name of the Pipe to run the SQL Query",
+            "inherit": false,
+            "value": {
+              "name": "text"
+            }
+          },
+          {
+            "long": "pipe",
+            "description": "the path to the .pipe file to run the SQL Query of a specific NODE",
+            "inherit": false,
+            "value": {
+              "name": "text"
+            }
+          },
+          {
+            "long": "node",
+            "description": "the NODE name",
+            "inherit": false,
+            "value": {
+              "name": "text"
+            }
+          },
+          {
+            "long": "format",
+            "description": "output format",
+            "inherit": false,
+            "value": {
+              "name": "choice",
+              "provider": {
+                "values": [
+                  "json",
+                  "csv",
+                  "human"
+                ]
+              }
+            }
+          },
+          {
+            "long": "stats",
+            "description": "show query stats",
+            "inherit": false
+          },
+          {
+            "long": "no-stats",
+            "description": "show query stats",
+            "inherit": false
+          },
+          {
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "text",
+              "index": 0
+            }
+          ]
+        }
+      }
+    ],
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "builtin.directories": {
+        "builtin": "directories"
+      }
+    }
+  }
+}
