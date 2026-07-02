@@ -1,0 +1,185 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "mas",
+    "description": "manage Mac App Store apps",
+    "subcommands": [
+      {
+        "name": "account",
+        "description": "prints the primary account Apple ID"
+      },
+      {
+        "name": "help",
+        "description": "display general or command-specific help",
+        "arguments": {
+          "states": [
+            {
+              "name": "command",
+              "index": 0,
+              "required": false,
+              "provider": {
+                "values": [
+                  "account",
+                  "help",
+                  "home",
+                  "info",
+                  "install",
+                  "list",
+                  "lucky",
+                  "open",
+                  "outdated",
+                  "purchase",
+                  "reset",
+                  "search",
+                  "signin",
+                  "signout",
+                  "uninstall",
+                  "upgrade",
+                  "vendor",
+                  "version"
+                ]
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "home",
+        "description": "opens MAS Preview app page in a browser"
+      },
+      {
+        "name": "info",
+        "description": "display app information from the Mac App Store",
+        "arguments": {
+          "states": [
+            {
+              "name": "application",
+              "description": "the application you want to show info",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "install",
+        "description": "install an application",
+        "arguments": {
+          "states": [
+            {
+              "name": "application",
+              "description": "the application you want to Install",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "list",
+        "description": "lists apps from the Mac App Store which are currently installed"
+      },
+      {
+        "name": "lucky",
+        "description": "install the first result from the Mac App Store",
+        "arguments": {
+          "states": [
+            {
+              "name": "application",
+              "description": "the application you want to Install",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "open",
+        "description": "opens app page in AppStore.app",
+        "arguments": {
+          "states": [
+            {
+              "name": "application",
+              "description": "the application you want to Open",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "outdated",
+        "description": "lists pending updates from the Mac App Store"
+      },
+      {
+        "name": "purchase",
+        "description": "purchase and download free apps from the Mac App Store",
+        "arguments": {
+          "states": [
+            {
+              "name": "application",
+              "description": "the application you want to purchase",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "reset",
+        "description": "resets the Mac App Store"
+      },
+      {
+        "name": "search",
+        "description": "search for apps from the Mac App Store",
+        "arguments": {
+          "states": [
+            {
+              "name": "application",
+              "description": "the application you want to Search",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "signin",
+        "description": "sign in to the Mac App Store"
+      },
+      {
+        "name": "signout",
+        "description": "sign out of the Mac App Store"
+      },
+      {
+        "name": "uninstall",
+        "description": "uninstall app installed from the Mac App Store",
+        "arguments": {
+          "states": [
+            {
+              "name": "application",
+              "description": "the application you want to uninstall",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "upgrade",
+        "description": "upgrade outdated apps from the Mac App Store"
+      },
+      {
+        "name": "vendor",
+        "description": "opens vendor's app page in a browser",
+        "arguments": {
+          "states": [
+            {
+              "name": "app-id",
+              "description": "the application you want to open vendor's app",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "version",
+        "description": "print version number"
+      }
+    ]
+  }
+}
