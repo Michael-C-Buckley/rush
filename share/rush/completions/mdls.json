@@ -1,0 +1,120 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "mdls",
+    "description": "list Spotlight metadata attributes for files",
+    "options": [
+      {
+        "long": "name",
+        "spellings": [
+          "-name"
+        ],
+        "description": "print only the matching metadata attribute value. Can be used multiple times",
+        "repeatable": true,
+        "inherit": false,
+        "value": {
+          "name": "attributeName",
+          "description": "Metadata attribute name",
+          "provider": {
+            "values": [
+              "_kMDItemDisplayNameWithExtensions",
+              "kMDItemContentCreationDate",
+              "kMDItemContentCreationDate_Ranking",
+              "kMDItemContentModificationDate",
+              "kMDItemContentModificationDate_Ranking",
+              "kMDItemContentType",
+              "kMDItemContentTypeTree",
+              "kMDItemDateAdded",
+              "kMDItemDateAdded_Ranking",
+              "kMDItemDisplayName",
+              "kMDItemDocumentIdentifier",
+              "kMDItemFSContentChangeDate",
+              "kMDItemFSCreationDate",
+              "kMDItemFSCreatorCode",
+              "kMDItemFSFinderFlags",
+              "kMDItemFSHasCustomIcon",
+              "kMDItemFSInvisible",
+              "kMDItemFSIsExtensionHidden",
+              "kMDItemFSIsStationery",
+              "kMDItemFSLabel",
+              "kMDItemFSName",
+              "kMDItemFSNodeCount",
+              "kMDItemFSOwnerGroupID",
+              "kMDItemFSOwnerUserID",
+              "kMDItemFSSize",
+              "kMDItemFSTypeCode",
+              "kMDItemInterestingDate_Ranking",
+              "kMDItemKind",
+              "kMDItemLogicalSize",
+              "kMDItemPhysicalSize"
+            ]
+          }
+        }
+      },
+      {
+        "long": "raw",
+        "spellings": [
+          "-raw"
+        ],
+        "description": "print raw attribute data in the order that was requested. Fields will be separated with a ASCII NUL character, suitable for piping to xargs(1) -0",
+        "inherit": false
+      },
+      {
+        "long": "nullMarker",
+        "spellings": [
+          "-nullMarker"
+        ],
+        "description": "sets a marker string to be used when a requested attribute is null. Only used in -raw mode. Default is '(null)'",
+        "inherit": false,
+        "value": {
+          "name": "marker"
+        }
+      },
+      {
+        "long": "plist",
+        "spellings": [
+          "-plist"
+        ],
+        "description": "output attributes in XML format to file. Use - to write to stdout option. Incompatible with options -raw, -nullMarker, and -name",
+        "inherit": false,
+        "value": [
+          {
+            "name": "stdout-or-file",
+            "description": "XML output location",
+            "provider": {
+              "values": [
+                {
+                  "value": "-",
+                  "description": "Writes to stdout",
+                  "priority": 77
+                }
+              ]
+            }
+          },
+          {
+            "name": "file",
+            "description": "File to read from",
+            "provider": "builtin.files"
+          }
+        ]
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "file",
+          "provider": "builtin.files",
+          "index": 0,
+          "repeatable": true,
+          "description": "file to inspect"
+        }
+      ]
+    },
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
