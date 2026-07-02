@@ -1,0 +1,301 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "firefox",
+    "description": "open URLs with Firefox",
+    "options": [
+      {
+        "long": "display",
+        "description": "specify an X display to use",
+        "inherit": false,
+        "value": {
+          "name": "display",
+          "description": "X display to use"
+        }
+      },
+      {
+        "long": "sync",
+        "description": "make X calls synchronous",
+        "inherit": false
+      },
+      {
+        "long": "g-fatal-warnings",
+        "description": "make all warnings fatal",
+        "inherit": false
+      },
+      {
+        "short": "h",
+        "long": "help",
+        "description": "print help message and exit",
+        "inherit": false
+      },
+      {
+        "short": "v",
+        "long": "version",
+        "description": "print version information and exit",
+        "inherit": false
+      },
+      {
+        "long": "full-version",
+        "description": "print full version information and exit",
+        "inherit": false
+      },
+      {
+        "short": "P",
+        "description": "specify profile to use",
+        "inherit": false,
+        "value": {
+          "name": "profile",
+          "description": "Profile to use"
+        }
+      },
+      {
+        "long": "profile",
+        "description": "specify profile to use by folder",
+        "inherit": false,
+        "value": {
+          "name": "profile",
+          "description": "Profile folder to use",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "migration",
+        "description": "start with migration wizard",
+        "inherit": false
+      },
+      {
+        "long": "ProfileManager",
+        "description": "start with ProfileManager",
+        "inherit": false
+      },
+      {
+        "long": "no-remote",
+        "description": "do not accept or send remote commands; implies --new-instance",
+        "inherit": false
+      },
+      {
+        "long": "new-instance",
+        "description": "open new instance, not a new window in running instance",
+        "inherit": false
+      },
+      {
+        "long": "safe-mode",
+        "description": "disables extensions and themes for this session",
+        "inherit": false
+      },
+      {
+        "long": "allow-downgrade",
+        "description": "allows downgrading a profile",
+        "inherit": false
+      },
+      {
+        "long": "MOZ_LOG",
+        "description": "treated as MOZ_LOG=<modules> environment variable, overrides it",
+        "inherit": false,
+        "value": {
+          "name": "modules"
+        }
+      },
+      {
+        "long": "MOZ_LOG_FILE",
+        "description": "override MOZ_LOG_FILE with a log file path",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "headless",
+        "description": "run without a GUI",
+        "inherit": false
+      },
+      {
+        "long": "jsdebugger",
+        "description": "open the Browser Toolbox. Defaults to the local build but can be overridden by a firefox path",
+        "inherit": false,
+        "value": {
+          "name": "folder",
+          "required": false,
+          "style": "optional",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "wait-for-jsdebugger",
+        "description": "spin event loop until JS debugger connects; enables debugging (some) application startup code paths",
+        "inherit": false
+      },
+      {
+        "long": "start-debugger-server",
+        "description": "start the devtools server on a TCP port or Unix domain socket path",
+        "inherit": false,
+        "value": {
+          "name": "port-or-path",
+          "provider": [
+            "builtin.files"
+          ]
+        }
+      },
+      {
+        "long": "browser",
+        "description": "open a browser window",
+        "inherit": false
+      },
+      {
+        "long": "new-window",
+        "description": "open a URL in a new window",
+        "repeatable": true,
+        "inherit": false,
+        "value": {
+          "name": "URL",
+          "description": "URL to open"
+        }
+      },
+      {
+        "long": "new-tab",
+        "description": "open a URL in a new tab",
+        "repeatable": true,
+        "inherit": false,
+        "value": {
+          "name": "URL",
+          "description": "URL to open"
+        }
+      },
+      {
+        "long": "private-window",
+        "description": "open a URL in a new private window",
+        "repeatable": true,
+        "inherit": false,
+        "value": {
+          "name": "URL",
+          "description": "URL to open"
+        }
+      },
+      {
+        "long": "preferences",
+        "description": "open the preferences dialog",
+        "inherit": false
+      },
+      {
+        "long": "screenshot",
+        "description": "take a screenshot",
+        "inherit": false,
+        "value": {
+          "name": "folder",
+          "description": "Folder to save screenshot to",
+          "required": false,
+          "style": "optional",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "window-size",
+        "description": "size of your screenshot",
+        "inherit": false,
+        "value": [
+          {
+            "name": "width",
+            "description": "Width of your screenshot"
+          },
+          {
+            "name": "height",
+            "description": "Height of your screenshot",
+            "required": false,
+            "style": "optional"
+          }
+        ]
+      },
+      {
+        "long": "search",
+        "description": "search for a term in your default search engine",
+        "inherit": false,
+        "value": {
+          "name": "term",
+          "description": "Term to search for"
+        }
+      },
+      {
+        "long": "setDefaultBrowser",
+        "description": "set Firefox as the default browser",
+        "inherit": false
+      },
+      {
+        "long": "first-startup",
+        "description": "run post-install actions before opening a new window",
+        "inherit": false
+      },
+      {
+        "long": "kiosk",
+        "description": "start the browser in kiosk mode",
+        "inherit": false
+      },
+      {
+        "long": "disable-pinch",
+        "description": "disable touch-screen and touch-pad pinch gestures",
+        "inherit": false
+      },
+      {
+        "long": "jsconsole",
+        "description": "open the Browser Console",
+        "inherit": false
+      },
+      {
+        "long": "devtools",
+        "description": "open DevTools on initial load",
+        "inherit": false
+      },
+      {
+        "long": "marionette",
+        "description": "enable remote debugging server",
+        "inherit": false
+      },
+      {
+        "long": "remote-debugging-port",
+        "description": "start the Firefox Remote Agent, which is a low-level remote debugging interface used for WebDriver",
+        "inherit": false,
+        "value": {
+          "name": "port",
+          "description": "Defaults to port 9222",
+          "required": false,
+          "style": "optional"
+        }
+      },
+      {
+        "long": "allow-remote-hosts",
+        "description": "values of the Host header to allow for incoming requests",
+        "inherit": false,
+        "value": {
+          "name": "hosts"
+        }
+      },
+      {
+        "long": "allow-remote-origins",
+        "description": "values of the Origin header to allow for incoming requests",
+        "inherit": false,
+        "value": {
+          "name": "origins"
+        }
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "url",
+          "description": "URL to open",
+          "index": 0
+        }
+      ]
+    },
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
