@@ -1,0 +1,71 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "tccutil",
+    "description": "manage macOS privacy permissions",
+    "arguments": {
+      "states": [
+        {
+          "name": "command",
+          "index": 0,
+          "provider": {
+            "values": [
+              {
+                "value": "reset",
+                "description": "reset permissions"
+              }
+            ]
+          }
+        },
+        {
+          "name": "service",
+          "index": 1,
+          "provider": {
+            "values": [
+              "AppleEvents",
+              "BluetoothAlways",
+              "Calendar",
+              "Camera",
+              "ContactsFull",
+              "ContactsLimited",
+              "FileProviderDomain",
+              "FileProviderPresence",
+              "Location",
+              "MediaLibrary",
+              "Microphone",
+              "Motion",
+              "Photos",
+              "PhotosAdd",
+              "Prototype3Rights",
+              "Prototype4Rights",
+              "Reminders",
+              "ScreenCapture",
+              "Siri",
+              "SpeechRecognition",
+              "SystemPolicyDesktopFolder",
+              "SystemPolicyDeveloperFiles",
+              "SystemPolicyDocumentsFolder",
+              "SystemPolicyDownloadsFolder",
+              "SystemPolicyNetworkVolumes",
+              "SystemPolicyRemovableVolumes",
+              "SystemPolicySysAdminFiles",
+              "Willow",
+              "SystemPolicyAllFiles",
+              "Accessibility",
+              "PostEvent",
+              "ListenEvent",
+              "DeveloperTool"
+            ]
+          }
+        },
+        {
+          "name": "bundle-id",
+          "index": 2,
+          "optional": true,
+          "description": "application bundle identifier"
+        }
+      ]
+    }
+  }
+}
