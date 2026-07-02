@@ -7040,6 +7040,12 @@ fn expandParameterLength(shell: anytype, parameter: ast.ParameterExpansion) Eval
             .at, .star => return std.fmt.allocPrint(shell.scratchAllocator(), "{}", .{shell.state.positionals.len}),
             else => {},
         },
+        .array => |array| switch (array.subscript) {
+            .all => if (arrayElementCount(shell, array)) |count| {
+                return std.fmt.allocPrint(shell.scratchAllocator(), "{}", .{count});
+            },
+            .index => {},
+        },
         else => {},
     };
     const value = (try parameterCurrentValue(shell, parameter.parameter)) orelse {
@@ -7052,6 +7058,22 @@ fn expandParameterLength(shell: anytype, parameter: ast.ParameterExpansion) Eval
     };
     const length = std.unicode.utf8CountCodepoints(value) catch value.len;
     return std.fmt.allocPrint(shell.scratchAllocator(), "{}", .{length});
+}
+
+fn arrayElementCount(shell: anytype, parameter: ast.ArrayParameter) ?usize {
+    if (shell.state.options.mode == .bash and std.mem.eql(u8, parameter.name, "PIPESTATUS")) {
+        return if (shell.state.last_pipeline_statuses.len == 0) null else shell.state.last_pipeline_statuses.len;
+    }
+    if (shell.state.options.mode == .bash and std.mem.eql(u8, parameter.name, "FUNCNAME")) {
+        const count = shell.state.function_call_stack.items.len;
+        return if (count == 0) null else count;
+    }
+    if (shell.state.options.mode == .bash and std.mem.eql(u8, parameter.name, "BASH_SOURCE")) {
+        const count = shell.state.function_call_stack.items.len;
+        return if (count == 0) null else count;
+    }
+    const array = shell.state.getArray(parameter.name) orelse return null;
+    return if (array.elements.len == 0) null else array.elements.len;
 }
 
 fn parameterSubjectToNounset(parameter: ast.Parameter) bool {

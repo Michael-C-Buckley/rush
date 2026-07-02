@@ -365,6 +365,24 @@
             .status = 0,
         },
         .{
+            .name = "indexed array length counts assigned elements",
+            .script =
+            \\arr[2]=é
+            \\arr[5]=xyz
+            \\printf 'count=<%s>:<%s> elem=<%s> unset=<%s>\n' \
+            \\    "${#arr[@]}" "${#arr[*]}" "${#arr[2]}" "${#missing[@]}"
+            \\f() { printf 'stack=<%s>:<%s>\n' "${#FUNCNAME[@]}" "${#BASH_SOURCE[@]}"; }
+            \\f
+            ,
+            .stdout =
+            \\count=<2>:<2> elem=<1> unset=<0>
+            \\stack=<1>:<1>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "parameter substring expansion supports offsets and lengths",
             .script =
             \\value=abcdef

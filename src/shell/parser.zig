@@ -1183,10 +1183,15 @@ const Parser = struct {
         if (parseBracedSimpleParameter(content)) |parameter| return .{ .parameter = parameter, .span = span };
         if (try self.parseBracedArrayParameter(content)) |parameter| return .{ .parameter = parameter, .span = span };
         if (content.len >= 2 and content[0] == '#') {
-            const length_prefix = parseBracedParameterPrefix(content[1..]) orelse return null;
-            if (length_prefix.end != content.len - 1) return null;
+            const length_parameter = if (try self.parseBracedArrayParameter(content[1..])) |array_parameter|
+                array_parameter
+            else parameter: {
+                const length_prefix = parseBracedParameterPrefix(content[1..]) orelse return null;
+                if (length_prefix.end != content.len - 1) return null;
+                break :parameter length_prefix.parameter;
+            };
             return .{
-                .parameter = length_prefix.parameter,
+                .parameter = length_parameter,
                 .length = true,
                 .span = span,
             };
