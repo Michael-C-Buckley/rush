@@ -1,0 +1,2406 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "npm",
+    "description": "node package manager",
+    "subcommands": [
+      {
+        "name": "install",
+        "aliases": [
+          "i",
+          "add"
+        ],
+        "description": "Install a package and its dependencies",
+        "options": [
+          {
+            "short": "P",
+            "long": "save-prod",
+            "description": "Package will appear in your `dependencies`. This is the default unless `-D` or `-O` are present",
+            "inherit": false
+          },
+          {
+            "short": "D",
+            "long": "save-dev",
+            "description": "Package will appear in your `devDependencies`",
+            "inherit": false
+          },
+          {
+            "short": "O",
+            "long": "save-optional",
+            "description": "Package will appear in your `optionalDependencies`",
+            "inherit": false
+          },
+          {
+            "long": "no-save",
+            "description": "Prevents saving to `dependencies`",
+            "inherit": false
+          },
+          {
+            "short": "E",
+            "long": "save-exact",
+            "description": "Saved dependencies will be configured with an exact version rather than using npm's default semver range operator",
+            "inherit": false
+          },
+          {
+            "short": "B",
+            "long": "save-bundle",
+            "description": "Saved dependencies will also be added to your bundleDependencies list",
+            "inherit": false
+          },
+          {
+            "long": "global-style",
+            "description": "Causes npm to install the package into your local node_modules folder with the same layout it uses with the global node_modules folder",
+            "inherit": false
+          },
+          {
+            "long": "legacy-bundling",
+            "description": "Causes npm to install the package such that versions of npm prior to 1.4, such as the one included with node 0.8, can install the package",
+            "inherit": false
+          },
+          {
+            "long": "legacy-peer-deps",
+            "description": "Bypass peerDependency auto-installation. Emulate install behavior of NPM v4 through v6",
+            "inherit": false
+          },
+          {
+            "long": "strict-peer-deps",
+            "description": "If set to true, and --legacy-peer-deps is not set, then any conflicting peerDependencies will be treated as an install failure",
+            "inherit": false
+          },
+          {
+            "long": "no-package-lock",
+            "description": "Ignores package-lock.json files when installing",
+            "inherit": false
+          },
+          {
+            "long": "no-audit",
+            "description": "Submit audit reports alongside the current npm command to the default registry and all registries configured for scopes",
+            "inherit": false
+          },
+          {
+            "long": "no-bin-links",
+            "description": "Tells npm to not create symlinks (or .cmd shims on Windows) for package executables",
+            "inherit": false
+          },
+          {
+            "long": "no-fund",
+            "description": "Hides the message at the end of each npm install acknowledging the number of dependencies looking for funding",
+            "inherit": false
+          },
+          {
+            "short": "w",
+            "long": "workspace",
+            "description": "run in a workspace",
+            "inherit": false,
+            "value": {
+              "name": "workspace"
+            }
+          },
+          {
+            "spellings": [
+              "-ws"
+            ],
+            "long": "workspaces",
+            "description": "run in all workspaces",
+            "inherit": false
+          },
+          {
+            "long": "include-workspace-root",
+            "description": "include the workspace root",
+            "inherit": false
+          },
+          {
+            "long": "registry",
+            "description": "use a registry",
+            "inherit": false,
+            "value": {
+              "name": "registry"
+            }
+          },
+          {
+            "long": "dry-run",
+            "description": "show what would be done without making changes",
+            "inherit": false
+          },
+          {
+            "long": "ignore-scripts",
+            "description": "do not run lifecycle scripts",
+            "inherit": false
+          },
+          {
+            "long": "omit",
+            "description": "omit dependency types",
+            "inherit": false,
+            "value": {
+              "name": "type",
+              "provider": "npm.omit-types"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "package",
+              "index": 0,
+              "repeatable": true,
+              "description": "package specifier"
+            }
+          ]
+        }
+      },
+      {
+        "name": "run",
+        "aliases": [
+          "run-script"
+        ],
+        "description": "Run arbitrary package scripts",
+        "options": [
+          {
+            "long": "if-present",
+            "description": "Npm will not exit with an error code when run-script is invoked for a script that isn't defined in the scripts section of package.json",
+            "inherit": false
+          },
+          {
+            "long": "silent",
+            "description": "",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "--"
+            ],
+            "inherit": false,
+            "value": {
+              "name": "args"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "script",
+              "description": "Script to run from your package.json",
+              "index": 0,
+              "provider": "npm.scripts"
+            },
+            {
+              "name": "argument",
+              "index": 1,
+              "repeatable": true,
+              "provider": "builtin.files",
+              "description": "script argument"
+            }
+          ],
+          "terminator": "--"
+        }
+      },
+      {
+        "name": "init",
+        "description": "Trigger the initialization",
+        "options": [
+          {
+            "short": "y",
+            "long": "yes",
+            "description": "Automatically answer 'yes' to any prompts that npm might print on the command line",
+            "inherit": false
+          },
+          {
+            "short": "w",
+            "description": "Create the folders and boilerplate expected while also adding a reference to your project workspaces property",
+            "inherit": false,
+            "value": {
+              "name": "dir"
+            }
+          }
+        ]
+      },
+      {
+        "name": "access",
+        "description": "Set access controls on private packages"
+      },
+      {
+        "name": "adduser",
+        "aliases": [
+          "login"
+        ],
+        "description": "Add a registry user account",
+        "options": [
+          {
+            "long": "scope",
+            "description": "Associate an operation with a scope for a scoped registry",
+            "inherit": false,
+            "value": {
+              "name": "scope",
+              "description": "Scope name"
+            }
+          },
+          {
+            "long": "registry",
+            "description": "use a registry",
+            "inherit": false,
+            "value": {
+              "name": "registry"
+            }
+          }
+        ]
+      },
+      {
+        "name": "audit",
+        "description": "Run a security audit",
+        "options": [
+          {
+            "long": "audit-level",
+            "description": "The minimum level of vulnerability for npm audit to exit with a non-zero exit code",
+            "inherit": false,
+            "value": {
+              "name": "audit",
+              "provider": {
+                "values": [
+                  "info",
+                  "low",
+                  "moderate",
+                  "high",
+                  "critical",
+                  "none"
+                ]
+              }
+            }
+          },
+          {
+            "long": "package-lock-only",
+            "description": "Current operation will only use the package-lock.json, ignoring node_modules",
+            "inherit": false
+          },
+          {
+            "short": "w",
+            "long": "workspace",
+            "description": "run in a workspace",
+            "inherit": false,
+            "value": {
+              "name": "workspace"
+            }
+          },
+          {
+            "spellings": [
+              "-ws"
+            ],
+            "long": "workspaces",
+            "description": "run in all workspaces",
+            "inherit": false
+          },
+          {
+            "long": "include-workspace-root",
+            "description": "include the workspace root",
+            "inherit": false
+          },
+          {
+            "long": "dry-run",
+            "description": "show what would be done without making changes",
+            "inherit": false
+          },
+          {
+            "long": "json",
+            "description": "output json",
+            "inherit": false
+          },
+          {
+            "long": "omit",
+            "description": "omit dependency types",
+            "inherit": false,
+            "value": {
+              "name": "type",
+              "provider": "npm.omit-types"
+            }
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "fix",
+            "description": "If the fix argument is provided, then remediations will be applied to the package tree",
+            "options": [
+              {
+                "short": "f",
+                "long": "force",
+                "description": "Removes various protections against unfortunate side effects, common mistakes, unnecessary performance degradation, and malicious input",
+                "priority": -10,
+                "inherit": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "bin",
+        "description": "Print the folder where npm will install executables"
+      },
+      {
+        "name": "bugs",
+        "aliases": [
+          "issues"
+        ],
+        "description": "Report bugs for a package in a web browser",
+        "options": [
+          {
+            "long": "no-browser",
+            "description": "Display in command line instead of browser",
+            "inherit": false
+          },
+          {
+            "long": "browser",
+            "description": "The browser that is called by the npm bugs command to open websites",
+            "inherit": false,
+            "value": {
+              "name": "browser"
+            }
+          },
+          {
+            "long": "registry",
+            "description": "use a registry",
+            "inherit": false,
+            "value": {
+              "name": "registry"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "package",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "cache",
+        "description": "Manipulates packages cache",
+        "options": [
+          {
+            "long": "cache",
+            "description": "The location of npm's cache directory",
+            "inherit": false,
+            "value": {
+              "name": "cache"
+            }
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "add",
+            "description": "Add the specified packages to the local cache"
+          },
+          {
+            "name": "clean",
+            "description": "Delete all data out of the cache folder"
+          },
+          {
+            "name": "verify",
+            "description": "Verify the contents of the cache folder, garbage collecting any unneeded data, and verifying the integrity of the cache index and all cached data"
+          }
+        ]
+      },
+      {
+        "name": "ci",
+        "aliases": [
+          "clean-install",
+          "install-clean"
+        ],
+        "description": "Install a project with a clean slate",
+        "options": [
+          {
+            "long": "audit",
+            "description": "When \"true\" submit audit reports alongside the current npm command to the default registry and all registries configured for scopes",
+            "inherit": false,
+            "value": {
+              "name": "audit",
+              "provider": {
+                "values": [
+                  "true",
+                  "false"
+                ]
+              }
+            }
+          },
+          {
+            "long": "no-audit",
+            "description": "Do not submit audit reports alongside the current npm command",
+            "inherit": false
+          },
+          {
+            "short": "w",
+            "long": "workspace",
+            "description": "run in a workspace",
+            "inherit": false,
+            "value": {
+              "name": "workspace"
+            }
+          },
+          {
+            "spellings": [
+              "-ws"
+            ],
+            "long": "workspaces",
+            "description": "run in all workspaces",
+            "inherit": false
+          },
+          {
+            "long": "include-workspace-root",
+            "description": "include the workspace root",
+            "inherit": false
+          },
+          {
+            "long": "registry",
+            "description": "use a registry",
+            "inherit": false,
+            "value": {
+              "name": "registry"
+            }
+          },
+          {
+            "long": "ignore-scripts",
+            "description": "do not run lifecycle scripts",
+            "inherit": false
+          },
+          {
+            "long": "script-shell",
+            "description": "shell to use for scripts",
+            "inherit": false,
+            "value": {
+              "name": "shell"
+            }
+          }
+        ]
+      },
+      {
+        "name": "cit",
+        "description": "Install a project with a clean slate and run tests"
+      },
+      {
+        "name": "clean-install-test",
+        "description": "Install a project with a clean slate and run tests"
+      },
+      {
+        "name": "completion",
+        "description": "Tab completion for npm"
+      },
+      {
+        "name": "config",
+        "aliases": [
+          "c"
+        ],
+        "description": "Manage the npm configuration files",
+        "subcommands": [
+          {
+            "name": "set",
+            "description": "Sets the config key to the value",
+            "options": [
+              {
+                "short": "g",
+                "long": "global",
+                "description": "Sets it globally",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "key",
+                  "index": 0
+                },
+                {
+                  "name": "value",
+                  "index": 1
+                }
+              ]
+            }
+          },
+          {
+            "name": "get",
+            "description": "Echo the config value to stdout",
+            "arguments": {
+              "states": [
+                {
+                  "name": "key",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "list",
+            "description": "Show all the config settings",
+            "options": [
+              {
+                "short": "g",
+                "description": "Lists globally installed packages",
+                "inherit": false
+              },
+              {
+                "short": "l",
+                "description": "Also shows defaults",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "delete",
+            "description": "Deletes the key from all configuration files",
+            "arguments": {
+              "states": [
+                {
+                  "name": "key",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "edit",
+            "description": "Opens the config file in an editor",
+            "options": [
+              {
+                "long": "global",
+                "description": "Edits the global config",
+                "inherit": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "create",
+        "description": "Create a package.json file"
+      },
+      {
+        "name": "dedupe",
+        "aliases": [
+          "ddp"
+        ],
+        "description": "Reduce duplication in the package tree"
+      },
+      {
+        "name": "deprecate",
+        "description": "Deprecate a version of a package",
+        "options": [
+          {
+            "long": "registry",
+            "description": "use a registry",
+            "inherit": false,
+            "value": {
+              "name": "registry"
+            }
+          }
+        ]
+      },
+      {
+        "name": "dist-tag",
+        "description": "Modify package distribution tags"
+      },
+      {
+        "name": "docs",
+        "aliases": [
+          "home"
+        ],
+        "description": "Open documentation for a package in a web browser",
+        "options": [
+          {
+            "long": "no-browser",
+            "description": "Display in command line instead of browser",
+            "inherit": false
+          },
+          {
+            "long": "browser",
+            "description": "The browser that is called by the npm docs command to open websites",
+            "inherit": false,
+            "value": {
+              "name": "browser"
+            }
+          },
+          {
+            "short": "w",
+            "long": "workspace",
+            "description": "run in a workspace",
+            "inherit": false,
+            "value": {
+              "name": "workspace"
+            }
+          },
+          {
+            "spellings": [
+              "-ws"
+            ],
+            "long": "workspaces",
+            "description": "run in all workspaces",
+            "inherit": false
+          },
+          {
+            "long": "include-workspace-root",
+            "description": "include the workspace root",
+            "inherit": false
+          },
+          {
+            "long": "registry",
+            "description": "use a registry",
+            "inherit": false,
+            "value": {
+              "name": "registry"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "package",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "doctor",
+        "description": "Check your npm environment",
+        "options": [
+          {
+            "long": "registry",
+            "description": "use a registry",
+            "inherit": false,
+            "value": {
+              "name": "registry"
+            }
+          }
+        ]
+      },
+      {
+        "name": "edit",
+        "description": "Edit an installed package",
+        "options": [
+          {
+            "long": "editor",
+            "description": "The command to run for npm edit or npm config edit",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "explore",
+        "description": "Browse an installed package",
+        "arguments": {
+          "states": [
+            {
+              "name": "package",
+              "index": 0,
+              "provider": "npm.dependencies",
+              "repeatable": false
+            }
+          ]
+        }
+      },
+      {
+        "name": "fund",
+        "description": "Retrieve funding information"
+      },
+      {
+        "name": "get",
+        "description": "Echo the config value to stdout"
+      },
+      {
+        "name": "help",
+        "description": "Get help on npm",
+        "options": [
+          {
+            "long": "viewer",
+            "description": "The program to use to view help content",
+            "inherit": false,
+            "value": {
+              "name": "viewer"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "term",
+              "description": "Terms to search for",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "help-search",
+        "description": "Search npm help documentation",
+        "arguments": {
+          "states": [
+            {
+              "name": "text",
+              "description": "Text to search for",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "hook",
+        "description": "Manage registry hooks"
+      },
+      {
+        "name": "install-ci-test",
+        "description": "Install a project with a clean slate and run tests"
+      },
+      {
+        "name": "install-test",
+        "description": "Install package(s) and run tests"
+      },
+      {
+        "name": "it",
+        "description": "Install package(s) and run tests"
+      },
+      {
+        "name": "link",
+        "description": "Symlink a package folder",
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "provider": "builtin.files",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "ln",
+        "description": "Symlink a package folder"
+      },
+      {
+        "name": "logout",
+        "description": "Log out of the registry",
+        "options": [
+          {
+            "long": "scope",
+            "description": "Associate an operation with a scope for a scoped registry",
+            "inherit": false,
+            "value": {
+              "name": "scope",
+              "description": "Scope name"
+            }
+          },
+          {
+            "long": "registry",
+            "description": "use a registry",
+            "inherit": false,
+            "value": {
+              "name": "registry"
+            }
+          }
+        ]
+      },
+      {
+        "name": "ls",
+        "aliases": [
+          "list"
+        ],
+        "description": "List installed packages",
+        "arguments": {
+          "states": [
+            {
+              "name": "[@scope]/pkg",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "org",
+        "description": "Manage orgs",
+        "subcommands": [
+          {
+            "name": "set",
+            "description": "Add a user to an org or manage roles",
+            "arguments": {
+              "states": [
+                {
+                  "name": "orgname",
+                  "description": "Organization name",
+                  "index": 0
+                },
+                {
+                  "name": "username",
+                  "description": "User name",
+                  "index": 1
+                },
+                {
+                  "name": "role",
+                  "provider": {
+                    "values": [
+                      "developer",
+                      "admin",
+                      "owner"
+                    ]
+                  },
+                  "index": 2
+                }
+              ]
+            }
+          },
+          {
+            "name": "rm",
+            "description": "Remove a user from an org",
+            "arguments": {
+              "states": [
+                {
+                  "name": "orgname",
+                  "description": "Organization name",
+                  "index": 0
+                },
+                {
+                  "name": "username",
+                  "description": "User name",
+                  "index": 1
+                }
+              ]
+            }
+          },
+          {
+            "name": "ls",
+            "description": "List users in an org or see what roles a particular user has in an org",
+            "arguments": {
+              "states": [
+                {
+                  "name": "orgname",
+                  "description": "Organization name",
+                  "index": 0
+                },
+                {
+                  "name": "username",
+                  "description": "User name",
+                  "index": 1
+                }
+              ]
+            }
+          }
+        ],
+        "options": [
+          {
+            "long": "json",
+            "description": "output json",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "outdated",
+        "description": "Check for outdated packages",
+        "options": [
+          {
+            "short": "a",
+            "spellings": [
+              "-all"
+            ],
+            "description": "Show all outdated or installed packages",
+            "inherit": false
+          },
+          {
+            "short": "g",
+            "description": "Checks globally",
+            "inherit": false
+          },
+          {
+            "long": "json",
+            "description": "output json",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "[<@scope>/]<pkg>",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "owner",
+        "aliases": [
+          "author"
+        ],
+        "description": "Manage package owners",
+        "subcommands": [
+          {
+            "name": "ls",
+            "description": "List all the users who have access to modify a package and push new versions. Handy when you need to know who to bug for help",
+            "arguments": {
+              "states": [
+                {
+                  "name": "[@scope/]pkg",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "add",
+            "description": "Add a new user as a maintainer of a package. This user is enabled to modify metadata, publish new versions, and add other owners",
+            "arguments": {
+              "states": [
+                {
+                  "name": "user",
+                  "index": 0
+                },
+                {
+                  "name": "[@scope/]pkg",
+                  "index": 1
+                }
+              ]
+            }
+          },
+          {
+            "name": "rm",
+            "description": "Remove a user from the package owner list. This immediately revokes their privileges",
+            "arguments": {
+              "states": [
+                {
+                  "name": "user",
+                  "index": 0
+                },
+                {
+                  "name": "[@scope/]pkg",
+                  "index": 1
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "pack",
+        "description": "Create a tarball from a package",
+        "options": [
+          {
+            "long": "pack-destination",
+            "description": "Directory in which npm pack will save tarballs",
+            "inherit": false,
+            "value": {
+              "name": "pack-destination",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "short": "w",
+            "long": "workspace",
+            "description": "run in a workspace",
+            "inherit": false,
+            "value": {
+              "name": "workspace"
+            }
+          },
+          {
+            "spellings": [
+              "-ws"
+            ],
+            "long": "workspaces",
+            "description": "run in all workspaces",
+            "inherit": false
+          },
+          {
+            "long": "include-workspace-root",
+            "description": "include the workspace root",
+            "inherit": false
+          },
+          {
+            "long": "json",
+            "description": "output json",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "[<@scope>/]<pkg>",
+              "index": 0,
+              "provider": "builtin.files"
+            }
+          ]
+        }
+      },
+      {
+        "name": "ping",
+        "description": "Ping npm registry",
+        "options": [
+          {
+            "long": "registry",
+            "description": "use a registry",
+            "inherit": false,
+            "value": {
+              "name": "registry"
+            }
+          }
+        ]
+      },
+      {
+        "name": "pkg",
+        "description": "Manages your package.json",
+        "subcommands": [
+          {
+            "name": "get",
+            "description": "Retrieves a value key, defined in your package.json file. It is possible to get multiple values and values for child fields",
+            "arguments": {
+              "states": [
+                {
+                  "name": "field",
+                  "description": "Name of the field to get. You can view child fields by separating them with a period",
+                  "index": 0,
+                  "repeatable": true
+                }
+              ]
+            }
+          },
+          {
+            "name": "set",
+            "description": "Sets a value in your package.json based on the field value. It is possible to set multiple values and values for child fields",
+            "options": [
+              {
+                "short": "f",
+                "long": "force",
+                "description": "Removes various protections against unfortunate side effects, common mistakes, unnecessary performance degradation, and malicious input. Allow clobbering existi",
+                "priority": -10,
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "field",
+                  "description": "Name of the field to set. You can set child fields by separating them with a period",
+                  "index": 0,
+                  "repeatable": true
+                }
+              ]
+            }
+          },
+          {
+            "name": "delete",
+            "description": "Deletes a key from your package.json",
+            "options": [
+              {
+                "short": "f",
+                "long": "force",
+                "description": "Removes various protections against unfortunate side effects, common mistakes, unnecessary performance degradation, and malicious input. Allow clobbering existi",
+                "priority": -10,
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "key",
+                  "description": "Name of the key to delete. You can delete child fields by separating them with a period",
+                  "index": 0,
+                  "repeatable": true
+                }
+              ]
+            }
+          }
+        ],
+        "options": [
+          {
+            "long": "json",
+            "description": "output json",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "prefix",
+        "description": "Display prefix",
+        "options": [
+          {
+            "short": "g",
+            "long": "global",
+            "description": "Print the global prefix to standard out",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "profile",
+        "description": "Change settings on your registry profile",
+        "subcommands": [
+          {
+            "name": "get",
+            "description": "Display all of the properties of your profile, or one or more specific properties",
+            "arguments": {
+              "states": [
+                {
+                  "name": "property",
+                  "description": "Property name",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "set",
+            "description": "Set the value of a profile property",
+            "arguments": {
+              "states": [
+                {
+                  "name": "property",
+                  "description": "Property name",
+                  "provider": {
+                    "values": [
+                      "email",
+                      "fullname",
+                      "homepage",
+                      "freenode",
+                      "twitter",
+                      "github"
+                    ]
+                  },
+                  "index": 0
+                },
+                {
+                  "name": "value",
+                  "description": "Property value",
+                  "index": 1
+                }
+              ]
+            },
+            "subcommands": [
+              {
+                "name": "password",
+                "description": "Change your password. This is interactive, you'll be prompted for your current password and a new password"
+              }
+            ]
+          },
+          {
+            "name": "enable-2fa",
+            "description": "Enables two-factor authentication",
+            "arguments": {
+              "states": [
+                {
+                  "name": "mode",
+                  "description": "Mode for two-factor authentication. Defaults to auth-and-writes mode",
+                  "provider": {
+                    "values": [
+                      {
+                        "value": "auth-only",
+                        "description": "Require an OTP when logging in or making changes to your account's authentication"
+                      },
+                      {
+                        "value": "auth-and-writes",
+                        "description": "Requires an OTP at all the times auth-only does, and also requires one when publishing a module, setting the latest dist-tag, or changing access via npm access "
+                      }
+                    ]
+                  },
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "disable-2fa",
+            "description": "Disables two-factor authentication"
+          }
+        ],
+        "options": [
+          {
+            "long": "json",
+            "description": "output json",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "prune",
+        "description": "Remove extraneous packages",
+        "options": [
+          {
+            "long": "production",
+            "description": "Remove the packages specified in your devDependencies",
+            "inherit": false
+          },
+          {
+            "short": "w",
+            "long": "workspace",
+            "description": "run in a workspace",
+            "inherit": false,
+            "value": {
+              "name": "workspace"
+            }
+          },
+          {
+            "spellings": [
+              "-ws"
+            ],
+            "long": "workspaces",
+            "description": "run in all workspaces",
+            "inherit": false
+          },
+          {
+            "long": "include-workspace-root",
+            "description": "include the workspace root",
+            "inherit": false
+          },
+          {
+            "long": "dry-run",
+            "description": "show what would be done without making changes",
+            "inherit": false
+          },
+          {
+            "long": "json",
+            "description": "output json",
+            "inherit": false
+          },
+          {
+            "long": "omit",
+            "description": "omit dependency types",
+            "inherit": false,
+            "value": {
+              "name": "type",
+              "provider": "npm.omit-types"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "[<@scope>/]<pkg>",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "publish",
+        "description": "Publish a package",
+        "options": [
+          {
+            "long": "tag",
+            "description": "Registers the published package with the given tag",
+            "inherit": false,
+            "value": {
+              "name": "tag"
+            }
+          },
+          {
+            "long": "access",
+            "description": "Sets scoped package to be publicly viewable if set to 'public'",
+            "inherit": false,
+            "value": {
+              "name": "value",
+              "provider": {
+                "values": [
+                  "restricted",
+                  "public"
+                ]
+              }
+            }
+          },
+          {
+            "short": "w",
+            "long": "workspace",
+            "description": "run in a workspace",
+            "inherit": false,
+            "value": {
+              "name": "workspace"
+            }
+          },
+          {
+            "spellings": [
+              "-ws"
+            ],
+            "long": "workspaces",
+            "description": "run in all workspaces",
+            "inherit": false
+          },
+          {
+            "long": "include-workspace-root",
+            "description": "include the workspace root",
+            "inherit": false
+          },
+          {
+            "long": "dry-run",
+            "description": "show what would be done without making changes",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "tarball|folder",
+              "description": "A url or file path to a gzipped tar archive containing a single folder with a package.json file inside | A folder containing a package.json file",
+              "provider": "builtin.files",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "rebuild",
+        "aliases": [
+          "rb"
+        ],
+        "description": "Rebuild a package",
+        "options": [
+          {
+            "long": "no-bin-links",
+            "description": "Tells npm to not create symlinks (or .cmd shims on Windows) for package executables",
+            "inherit": false
+          },
+          {
+            "short": "w",
+            "long": "workspace",
+            "description": "run in a workspace",
+            "inherit": false,
+            "value": {
+              "name": "workspace"
+            }
+          },
+          {
+            "spellings": [
+              "-ws"
+            ],
+            "long": "workspaces",
+            "description": "run in all workspaces",
+            "inherit": false
+          },
+          {
+            "long": "include-workspace-root",
+            "description": "include the workspace root",
+            "inherit": false
+          },
+          {
+            "long": "ignore-scripts",
+            "description": "do not run lifecycle scripts",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "[<@scope>/]<pkg>[@<version>]",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "repo",
+        "description": "Open package repository page in the browser",
+        "options": [
+          {
+            "long": "no-browser",
+            "description": "Display in command line instead of browser",
+            "inherit": false
+          },
+          {
+            "long": "browser",
+            "description": "The browser that is called by the npm repo command to open websites",
+            "inherit": false,
+            "value": {
+              "name": "browser"
+            }
+          },
+          {
+            "short": "w",
+            "long": "workspace",
+            "description": "run in a workspace",
+            "inherit": false,
+            "value": {
+              "name": "workspace"
+            }
+          },
+          {
+            "spellings": [
+              "-ws"
+            ],
+            "long": "workspaces",
+            "description": "run in all workspaces",
+            "inherit": false
+          },
+          {
+            "long": "include-workspace-root",
+            "description": "include the workspace root",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "package",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "restart",
+        "description": "Restart a package",
+        "options": [
+          {
+            "spellings": [
+              "--"
+            ],
+            "inherit": false,
+            "value": {
+              "name": "arg",
+              "description": "Arguments to be passed to the restart script"
+            }
+          },
+          {
+            "long": "ignore-scripts",
+            "description": "do not run lifecycle scripts",
+            "inherit": false
+          },
+          {
+            "long": "script-shell",
+            "description": "shell to use for scripts",
+            "inherit": false,
+            "value": {
+              "name": "shell"
+            }
+          }
+        ]
+      },
+      {
+        "name": "root",
+        "description": "Display npm root",
+        "options": [
+          {
+            "short": "g",
+            "long": "global",
+            "description": "Print the effective global node_modules folder to standard out",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "search",
+        "aliases": [
+          "s",
+          "se",
+          "find"
+        ],
+        "description": "Search for packages",
+        "options": [
+          {
+            "long": "color",
+            "description": "Show colors",
+            "inherit": false,
+            "value": {
+              "name": "always",
+              "description": "Always show colors",
+              "provider": {
+                "values": [
+                  "always"
+                ]
+              }
+            }
+          },
+          {
+            "long": "no-color",
+            "description": "Do not show colors",
+            "inherit": false
+          },
+          {
+            "long": "no-description",
+            "description": "Do not show descriptions",
+            "inherit": false
+          },
+          {
+            "long": "searchopts",
+            "description": "Space-separated options that are always passed to search",
+            "inherit": false,
+            "value": {
+              "name": "searchopts"
+            }
+          },
+          {
+            "long": "searchexclude",
+            "description": "Space-separated options that limit the results from search",
+            "inherit": false,
+            "value": {
+              "name": "searchexclude"
+            }
+          },
+          {
+            "long": "prefer-online",
+            "description": "If true, staleness checks for cached data will be forced, making the CLI look for updates immediately even for fresh package data",
+            "inherit": false
+          },
+          {
+            "long": "prefer-offline",
+            "description": "If true, staleness checks for cached data will be bypassed, but missing data will be requested from the server",
+            "inherit": false
+          },
+          {
+            "long": "offline",
+            "description": "Force offline mode: no network requests will be done during install",
+            "inherit": false
+          },
+          {
+            "long": "json",
+            "description": "output json",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "search-terms",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "set",
+        "description": "Sets the config key to the value"
+      },
+      {
+        "name": "set-script",
+        "description": "Set tasks in the scripts section of package.json",
+        "arguments": {
+          "states": [
+            {
+              "name": "script",
+              "description": "Name of the task to be added to the scripts section of package.json",
+              "index": 0
+            },
+            {
+              "name": "command",
+              "description": "Command to run when script is called",
+              "index": 1
+            }
+          ]
+        },
+        "options": [
+          {
+            "short": "w",
+            "long": "workspace",
+            "description": "run in a workspace",
+            "inherit": false,
+            "value": {
+              "name": "workspace"
+            }
+          },
+          {
+            "spellings": [
+              "-ws"
+            ],
+            "long": "workspaces",
+            "description": "run in all workspaces",
+            "inherit": false
+          },
+          {
+            "long": "include-workspace-root",
+            "description": "include the workspace root",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "shrinkwrap",
+        "description": "Lock down dependency versions for publication"
+      },
+      {
+        "name": "star",
+        "description": "Mark your favorite packages",
+        "options": [
+          {
+            "long": "no-unicode",
+            "description": "Do not use unicode characters in the tree output",
+            "inherit": false
+          },
+          {
+            "long": "registry",
+            "description": "use a registry",
+            "inherit": false,
+            "value": {
+              "name": "registry"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "pkg",
+              "description": "Package to mark as favorite",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "stars",
+        "description": "View packages marked as favorites",
+        "arguments": {
+          "states": [
+            {
+              "name": "user",
+              "description": "View packages marked as favorites by <user>",
+              "index": 0
+            }
+          ]
+        },
+        "options": [
+          {
+            "long": "registry",
+            "description": "use a registry",
+            "inherit": false,
+            "value": {
+              "name": "registry"
+            }
+          }
+        ]
+      },
+      {
+        "name": "start",
+        "description": "Start a package",
+        "options": [
+          {
+            "spellings": [
+              "--"
+            ],
+            "inherit": false,
+            "value": {
+              "name": "arg",
+              "description": "Arguments to be passed to the start script"
+            }
+          },
+          {
+            "long": "ignore-scripts",
+            "description": "do not run lifecycle scripts",
+            "inherit": false
+          },
+          {
+            "long": "script-shell",
+            "description": "shell to use for scripts",
+            "inherit": false,
+            "value": {
+              "name": "shell"
+            }
+          }
+        ]
+      },
+      {
+        "name": "stop",
+        "description": "Stop a package",
+        "options": [
+          {
+            "spellings": [
+              "--"
+            ],
+            "inherit": false,
+            "value": {
+              "name": "arg",
+              "description": "Arguments to be passed to the stop script"
+            }
+          },
+          {
+            "long": "ignore-scripts",
+            "description": "do not run lifecycle scripts",
+            "inherit": false
+          },
+          {
+            "long": "script-shell",
+            "description": "shell to use for scripts",
+            "inherit": false,
+            "value": {
+              "name": "shell"
+            }
+          }
+        ]
+      },
+      {
+        "name": "team",
+        "description": "Manage organization teams and team memberships",
+        "subcommands": [
+          {
+            "name": "create",
+            "arguments": {
+              "states": [
+                {
+                  "name": "scope:team",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "destroy",
+            "arguments": {
+              "states": [
+                {
+                  "name": "scope:team",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "add",
+            "arguments": {
+              "states": [
+                {
+                  "name": "scope:team",
+                  "index": 0
+                },
+                {
+                  "name": "user",
+                  "index": 1
+                }
+              ]
+            }
+          },
+          {
+            "name": "rm",
+            "arguments": {
+              "states": [
+                {
+                  "name": "scope:team",
+                  "index": 0
+                },
+                {
+                  "name": "user",
+                  "index": 1
+                }
+              ]
+            }
+          },
+          {
+            "name": "ls",
+            "arguments": {
+              "states": [
+                {
+                  "name": "scope|scope:team",
+                  "index": 0
+                }
+              ]
+            }
+          }
+        ],
+        "options": [
+          {
+            "long": "registry",
+            "description": "use a registry",
+            "inherit": false,
+            "value": {
+              "name": "registry"
+            }
+          },
+          {
+            "long": "json",
+            "description": "output json",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "test",
+        "aliases": [
+          "tst",
+          "t"
+        ],
+        "description": "Test a package",
+        "options": [
+          {
+            "long": "ignore-scripts",
+            "description": "do not run lifecycle scripts",
+            "inherit": false
+          },
+          {
+            "long": "script-shell",
+            "description": "shell to use for scripts",
+            "inherit": false,
+            "value": {
+              "name": "shell"
+            }
+          }
+        ]
+      },
+      {
+        "name": "token",
+        "description": "Manage your authentication tokens",
+        "subcommands": [
+          {
+            "name": "list",
+            "description": "Shows a table of all active authentication tokens"
+          },
+          {
+            "name": "create",
+            "description": "Create a new authentication token",
+            "options": [
+              {
+                "long": "read-only",
+                "description": "This is used to mark a token as unable to publish when configuring limited access tokens with the npm token create command",
+                "inherit": false
+              },
+              {
+                "long": "cidr",
+                "description": "This is a list of CIDR address to be used when configuring limited access tokens with the npm token create command",
+                "repeatable": true,
+                "inherit": false,
+                "value": {
+                  "name": "cidr"
+                }
+              }
+            ]
+          },
+          {
+            "name": "revoke",
+            "description": "Immediately removes an authentication token from the registry. You will no longer be able to use it",
+            "arguments": {
+              "states": [
+                {
+                  "name": "idtoken",
+                  "index": 0
+                }
+              ]
+            }
+          }
+        ],
+        "options": [
+          {
+            "long": "registry",
+            "description": "use a registry",
+            "inherit": false,
+            "value": {
+              "name": "registry"
+            }
+          }
+        ]
+      },
+      {
+        "name": "unpublish",
+        "description": "Remove a package from the registry",
+        "options": [
+          {
+            "short": "f",
+            "long": "force",
+            "description": "Allow unpublishing all versions of a published package. Removes various protections against unfortunate side effects, common mistakes, unnecessary performance d",
+            "priority": -10,
+            "inherit": false
+          },
+          {
+            "short": "w",
+            "long": "workspace",
+            "description": "run in a workspace",
+            "inherit": false,
+            "value": {
+              "name": "workspace"
+            }
+          },
+          {
+            "spellings": [
+              "-ws"
+            ],
+            "long": "workspaces",
+            "description": "run in all workspaces",
+            "inherit": false
+          },
+          {
+            "long": "include-workspace-root",
+            "description": "include the workspace root",
+            "inherit": false
+          },
+          {
+            "long": "dry-run",
+            "description": "show what would be done without making changes",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "[<@scope>/]<pkg>[@<version>]",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "unstar",
+        "description": "Remove an item from your favorite packages",
+        "options": [
+          {
+            "long": "no-unicode",
+            "description": "Do not use unicode characters in the tree output",
+            "inherit": false
+          },
+          {
+            "long": "registry",
+            "description": "use a registry",
+            "inherit": false,
+            "value": {
+              "name": "registry"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "pkg",
+              "description": "Package to unmark as favorite",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "update",
+        "aliases": [
+          "upgrade",
+          "up"
+        ],
+        "description": "Update a package",
+        "options": [
+          {
+            "short": "g",
+            "description": "Update global package",
+            "inherit": false
+          },
+          {
+            "long": "global-style",
+            "description": "Causes npm to install the package into your local node_modules folder with the same layout it uses with the global node_modules folder",
+            "inherit": false
+          },
+          {
+            "long": "legacy-bundling",
+            "description": "Causes npm to install the package such that versions of npm prior to 1.4, such as the one included with node 0.8, can install the package",
+            "inherit": false
+          },
+          {
+            "long": "strict-peer-deps",
+            "description": "If set to true, and --legacy-peer-deps is not set, then any conflicting peerDependencies will be treated as an install failure",
+            "inherit": false
+          },
+          {
+            "long": "no-package-lock",
+            "description": "Ignores package-lock.json files when installing",
+            "inherit": false
+          },
+          {
+            "long": "no-audit",
+            "description": "Submit audit reports alongside the current npm command to the default registry and all registries configured for scopes",
+            "inherit": false
+          },
+          {
+            "long": "no-bin-links",
+            "description": "Tells npm to not create symlinks (or .cmd shims on Windows) for package executables",
+            "inherit": false
+          },
+          {
+            "long": "no-fund",
+            "description": "Hides the message at the end of each npm install acknowledging the number of dependencies looking for funding",
+            "inherit": false
+          },
+          {
+            "long": "save",
+            "description": "Update the semver values of direct dependencies in your project package.json",
+            "inherit": false
+          },
+          {
+            "short": "w",
+            "long": "workspace",
+            "description": "run in a workspace",
+            "inherit": false,
+            "value": {
+              "name": "workspace"
+            }
+          },
+          {
+            "spellings": [
+              "-ws"
+            ],
+            "long": "workspaces",
+            "description": "run in all workspaces",
+            "inherit": false
+          },
+          {
+            "long": "include-workspace-root",
+            "description": "include the workspace root",
+            "inherit": false
+          },
+          {
+            "long": "dry-run",
+            "description": "show what would be done without making changes",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "version",
+        "description": "Bump a package version",
+        "options": [
+          {
+            "long": "allow-same-version",
+            "description": "Prevents throwing an error when npm version is used to set the new version to the same value as the current version",
+            "inherit": false
+          },
+          {
+            "long": "no-commit-hooks",
+            "description": "Do not run git commit hooks when using the npm version command",
+            "inherit": false
+          },
+          {
+            "long": "no-git-tag-version",
+            "description": "Do not tag the commit when using the npm version command",
+            "inherit": false
+          },
+          {
+            "long": "preid",
+            "description": "The \"prerelease identifier\" to use as a prefix for the \"prerelease\" part of a semver. Like the rc in 1.2.0-rc.8",
+            "inherit": false,
+            "value": {
+              "name": "prerelease-id"
+            }
+          },
+          {
+            "long": "sign-git-tag",
+            "description": "If set to true, then the npm version command will tag the version using -s to add a signature",
+            "inherit": false
+          },
+          {
+            "short": "w",
+            "long": "workspace",
+            "description": "run in a workspace",
+            "inherit": false,
+            "value": {
+              "name": "workspace"
+            }
+          },
+          {
+            "spellings": [
+              "-ws"
+            ],
+            "long": "workspaces",
+            "description": "run in all workspaces",
+            "inherit": false
+          },
+          {
+            "long": "include-workspace-root",
+            "description": "include the workspace root",
+            "inherit": false
+          },
+          {
+            "long": "json",
+            "description": "output json",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "view",
+        "aliases": [
+          "v",
+          "info",
+          "show"
+        ],
+        "description": "View registry info",
+        "options": [
+          {
+            "short": "w",
+            "long": "workspace",
+            "description": "run in a workspace",
+            "inherit": false,
+            "value": {
+              "name": "workspace"
+            }
+          },
+          {
+            "spellings": [
+              "-ws"
+            ],
+            "long": "workspaces",
+            "description": "run in all workspaces",
+            "inherit": false
+          },
+          {
+            "long": "include-workspace-root",
+            "description": "include the workspace root",
+            "inherit": false
+          },
+          {
+            "long": "json",
+            "description": "output json",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "whoami",
+        "description": "Display npm username",
+        "options": [
+          {
+            "long": "registry",
+            "description": "use a registry",
+            "inherit": false,
+            "value": {
+              "name": "registry"
+            }
+          }
+        ]
+      },
+      {
+        "name": "uninstall",
+        "aliases": [],
+        "description": "uninstall packages",
+        "options": [
+          {
+            "short": "S",
+            "long": "save",
+            "description": "remove from dependencies",
+            "inherit": false
+          },
+          {
+            "short": "D",
+            "long": "save-dev",
+            "description": "remove from devDependencies",
+            "inherit": false
+          },
+          {
+            "short": "O",
+            "long": "save-optional",
+            "description": "remove from optionalDependencies",
+            "inherit": false
+          },
+          {
+            "long": "no-save",
+            "description": "do not save changes to package.json",
+            "inherit": false
+          },
+          {
+            "short": "g",
+            "long": "global",
+            "description": "operate globally",
+            "inherit": false
+          },
+          {
+            "short": "w",
+            "long": "workspace",
+            "description": "run in a workspace",
+            "inherit": false,
+            "value": {
+              "name": "workspace"
+            }
+          },
+          {
+            "spellings": [
+              "-ws"
+            ],
+            "long": "workspaces",
+            "description": "run in all workspaces",
+            "inherit": false
+          },
+          {
+            "long": "include-workspace-root",
+            "description": "include the workspace root",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "package",
+              "index": 0,
+              "repeatable": true,
+              "provider": "npm.dependencies",
+              "description": "installed dependency"
+            }
+          ]
+        }
+      },
+      {
+        "name": "rm",
+        "aliases": [
+          "r"
+        ],
+        "description": "uninstall packages",
+        "options": [
+          {
+            "short": "S",
+            "long": "save",
+            "description": "remove from dependencies",
+            "inherit": false
+          },
+          {
+            "short": "D",
+            "long": "save-dev",
+            "description": "remove from devDependencies",
+            "inherit": false
+          },
+          {
+            "short": "O",
+            "long": "save-optional",
+            "description": "remove from optionalDependencies",
+            "inherit": false
+          },
+          {
+            "long": "no-save",
+            "description": "do not save changes to package.json",
+            "inherit": false
+          },
+          {
+            "short": "g",
+            "long": "global",
+            "description": "operate globally",
+            "inherit": false
+          },
+          {
+            "short": "w",
+            "long": "workspace",
+            "description": "run in a workspace",
+            "inherit": false,
+            "value": {
+              "name": "workspace"
+            }
+          },
+          {
+            "spellings": [
+              "-ws"
+            ],
+            "long": "workspaces",
+            "description": "run in all workspaces",
+            "inherit": false
+          },
+          {
+            "long": "include-workspace-root",
+            "description": "include the workspace root",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "package",
+              "index": 0,
+              "repeatable": true,
+              "provider": "npm.dependencies",
+              "description": "installed dependency"
+            }
+          ]
+        }
+      },
+      {
+        "name": "un",
+        "aliases": [
+          "remove",
+          "unlink"
+        ],
+        "description": "uninstall packages",
+        "options": [
+          {
+            "short": "S",
+            "long": "save",
+            "description": "remove from dependencies",
+            "inherit": false
+          },
+          {
+            "short": "D",
+            "long": "save-dev",
+            "description": "remove from devDependencies",
+            "inherit": false
+          },
+          {
+            "short": "O",
+            "long": "save-optional",
+            "description": "remove from optionalDependencies",
+            "inherit": false
+          },
+          {
+            "long": "no-save",
+            "description": "do not save changes to package.json",
+            "inherit": false
+          },
+          {
+            "short": "g",
+            "long": "global",
+            "description": "operate globally",
+            "inherit": false
+          },
+          {
+            "short": "w",
+            "long": "workspace",
+            "description": "run in a workspace",
+            "inherit": false,
+            "value": {
+              "name": "workspace"
+            }
+          },
+          {
+            "spellings": [
+              "-ws"
+            ],
+            "long": "workspaces",
+            "description": "run in all workspaces",
+            "inherit": false
+          },
+          {
+            "long": "include-workspace-root",
+            "description": "include the workspace root",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "package",
+              "index": 0,
+              "repeatable": true,
+              "provider": "npm.dependencies",
+              "description": "installed dependency"
+            }
+          ]
+        }
+      }
+    ],
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "npm.scripts": {
+        "function": "__rush_complete_npm_scripts"
+      },
+      "npm.dependencies": {
+        "function": "__rush_complete_npm_dependencies"
+      },
+      "npm.omit-types": {
+        "values": [
+          "dev",
+          "optional",
+          "peer"
+        ]
+      },
+      "npm.access": {
+        "values": [
+          "restricted",
+          "public"
+        ]
+      },
+      "npm.audit-levels": {
+        "values": [
+          "info",
+          "low",
+          "moderate",
+          "high",
+          "critical",
+          "none"
+        ]
+      }
+    }
+  }
+}
