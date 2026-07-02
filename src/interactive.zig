@@ -244,6 +244,7 @@ const InteractiveSession = struct {
             .run_activity_event = runInteractiveActivityEvent,
             .prompt_context = self,
             .refresh_prompt = refreshInteractivePrompt,
+            .refresh_transient_prompt = refreshInteractiveTransientPrompt,
         }) catch |err| {
             var message_buffer: [128]u8 = undefined;
             const message = std.fmt.bufPrint(
@@ -296,6 +297,18 @@ const InteractiveSession = struct {
             return prompt(self.allocator, self.sh);
         }
         return extensions.rush.renderPrompt(
+            self.allocator,
+            self.sh,
+            prompt_status,
+            self.last_command_duration_ms,
+        );
+    }
+
+    fn renderTransientPrompt(self: *InteractiveSession) !?[]const u8 {
+        const prompt_status = self.last_command_status;
+        defer self.sh.state.last_status = prompt_status;
+
+        return extensions.rush.renderTransientPrompt(
             self.allocator,
             self.sh,
             prompt_status,
@@ -564,6 +577,14 @@ fn refreshInteractivePrompt(context: *anyopaque, allocator: std.mem.Allocator, i
     const session: *InteractiveSession = @ptrCast(@alignCast(context));
     _ = try session.dispatchPromptAsyncLifecycleEvents(allocator);
     return session.renderPrompt() catch try prompt(allocator, session.sh);
+}
+
+// ziglint-ignore: Z023 parameter order follows method or callback shape; preserve API
+fn refreshInteractiveTransientPrompt(context: *anyopaque, allocator: std.mem.Allocator, io: std.Io) !?[]const u8 {
+    _ = allocator;
+    _ = io;
+    const session: *InteractiveSession = @ptrCast(@alignCast(context));
+    return try session.renderTransientPrompt();
 }
 
 fn diagnoseInteractiveInput(
@@ -1251,6 +1272,50 @@ test "interactive prompt render uses last command status when shell status drift
 
     sh.state.last_status = 0;
     const rendered = try session.renderPrompt();
+    defer std.testing.allocator.free(rendered);
+
+    try std.testing.expectEqualStrings("BAD", rendered);
+    try std.testing.expectEqual(@as(shell.result.ExitStatus, 1), sh.state.last_status);
+}
+
+test "interactive transient prompt uses prompt helpers and last command status" {
+    var sh = RushShell.init(std.testing.allocator, .{}, .{});
+    defer sh.deinit();
+
+    const src: shell.source.Source = .{
+        .id = 1,
+        .kind = .command_string,
+        .name = "test",
+        .text =
+        \\rush_prompt_transient(){
+        \\  if test "$?" = 0; then
+        \\    prompt text OK
+        \\  else
+        \\    prompt text BAD
+        \\  fi
+        \\}
+        ,
+    };
+    const defined = try sh.evalSource(src);
+    try std.testing.expectEqual(@as(shell.result.ExitStatus, 0), defined.status);
+
+    var command_history = history.History.init(std.testing.allocator);
+    defer command_history.deinit();
+    var history_service = history.InteractiveHistoryService.init(&command_history);
+    var source_id: shell.source.SourceId = 2;
+    var session: InteractiveSession = .{
+        .allocator = std.testing.allocator,
+        .io = std.testing.io,
+        .sh = &sh,
+        .source_id = &source_id,
+        .command_history = &command_history,
+        .history_service = &history_service,
+        .events = .{ .sh = &sh },
+        .last_command_status = 1,
+    };
+
+    sh.state.last_status = 0;
+    const rendered = (try session.renderTransientPrompt()) orelse return error.TestExpectedEqual;
     defer std.testing.allocator.free(rendered);
 
     try std.testing.expectEqualStrings("BAD", rendered);

@@ -5539,6 +5539,40 @@ test "submitted handoff moves to bottom of wrapped input without clearing it" {
     try std.testing.expect(std.mem.indexOf(u8, handoff, "\x1b[J") == null);
 }
 
+test "submitted prompt can be replaced before handoff" {
+    var renderer: FrameRenderer = .{};
+    defer renderer.deinit(std.testing.allocator);
+
+    var session = try LineSession.init(std.testing.allocator, "$ ");
+    defer session.deinit();
+    try session.editor.buffer.replace("echo ok");
+
+    var first_frame = try session.renderFrame(std.testing.allocator, .{
+        .width = 80,
+        .synchronized_output = false,
+    });
+    defer first_frame.deinit(std.testing.allocator);
+    const first_output = try renderer.render(std.testing.allocator, first_frame, .{ .synchronized_output = false });
+    defer std.testing.allocator.free(first_output);
+
+    try session.handleKey(.{ .key = .enter });
+    try session.replacePrompt(.{ .bytes = "● " });
+    var transient_frame = try session.renderFrame(std.testing.allocator, .{
+        .width = 80,
+        .synchronized_output = false,
+    });
+    defer transient_frame.deinit(std.testing.allocator);
+    const transient_output = try renderer.render(
+        std.testing.allocator,
+        transient_frame,
+        .{ .synchronized_output = false },
+    );
+    defer std.testing.allocator.free(transient_output);
+
+    try std.testing.expect(std.mem.indexOf(u8, transient_output, "\x1b[2K● echo ok") != null);
+    try std.testing.expect(std.mem.indexOf(u8, transient_output, "$ echo ok") == null);
+}
+
 test "submitted handoff clears completion rows but preserves wrapped input rows" {
     var renderer: FrameRenderer = .{};
     defer renderer.deinit(std.testing.allocator);

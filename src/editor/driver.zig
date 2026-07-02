@@ -78,6 +78,11 @@ pub const ReadLineOptions = struct {
         std.mem.Allocator,
         std.Io,
     ) anyerror![]const u8 = null,
+    refresh_transient_prompt: ?*const fn (
+        *anyopaque,
+        std.mem.Allocator,
+        std.Io,
+    ) anyerror!?[]const u8 = null,
     prompt_async_context: ?*anyopaque = null,
     pump_prompt_async: ?*const fn (*anyopaque) void = null,
     history: line_editor.HistoryView = .{},
@@ -739,6 +744,23 @@ pub const TerminalSession = struct {
                     // Accepting the line may have rewritten the buffer (e.g.
                     // abbreviation expansion on Enter); paint the final text so
                     // the scrollback shows the command that actually runs.
+                    if (read_options.refresh_transient_prompt != null and read_options.prompt_context != null) {
+                        const prompt = try read_options.refresh_transient_prompt.?(
+                            read_options.prompt_context.?,
+                            self.allocator,
+                            self.io,
+                        );
+                        if (prompt) |transient_prompt| {
+                            defer self.allocator.free(transient_prompt);
+                            try session.replacePrompt(.{
+                                .bytes = transient_prompt,
+                                .visible_width = line_editor.visibleWidth(
+                                    transient_prompt,
+                                    self.capabilities.widthMethod(),
+                                ),
+                            });
+                        }
+                    }
                     try renderSession(
                         self.allocator,
                         self.io,

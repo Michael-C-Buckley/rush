@@ -1419,7 +1419,46 @@ pub fn renderPrompt(
     previous_status: result.ExitStatus,
     previous_duration_ms: ?i64,
 ) ![]const u8 {
-    if (sh.state.getFunction("rush_prompt") == null) return staticPrompt(allocator, sh);
+    return (try renderPromptFunction(
+        allocator,
+        sh,
+        "rush_prompt",
+        previous_status,
+        previous_duration_ms,
+        .fallback_static,
+    )) orelse unreachable;
+}
+
+pub fn renderTransientPrompt(
+    allocator: std.mem.Allocator,
+    sh: anytype,
+    previous_status: result.ExitStatus,
+    previous_duration_ms: ?i64,
+) !?[]const u8 {
+    return renderPromptFunction(
+        allocator,
+        sh,
+        "rush_prompt_transient",
+        previous_status,
+        previous_duration_ms,
+        .skip,
+    );
+}
+
+const PromptFallback = enum { fallback_static, skip };
+
+fn renderPromptFunction(
+    allocator: std.mem.Allocator,
+    sh: anytype,
+    function_name: []const u8,
+    previous_status: result.ExitStatus,
+    previous_duration_ms: ?i64,
+    fallback: PromptFallback,
+) !?[]const u8 {
+    if (sh.state.getFunction(function_name) == null) return switch (fallback) {
+        .fallback_static => try staticPrompt(allocator, sh),
+        .skip => null,
+    };
     sh.extensions.clearPrompt();
     sh.extensions.building_prompt = true;
     sh.extensions.previous_duration_ms = previous_duration_ms;
@@ -1430,12 +1469,18 @@ pub fn renderPrompt(
     sh.state.last_status = previous_status;
     defer sh.state.last_status = saved_status;
 
-    const src: shell.source.Source = .{ .id = 0, .kind = .command_string, .name = "prompt", .text = "rush_prompt" };
-    const evaluated = sh.evalSourceNested(src) catch return staticPrompt(allocator, sh);
+    const src: shell.source.Source = .{ .id = 0, .kind = .command_string, .name = "prompt", .text = function_name };
+    const evaluated = sh.evalSourceNested(src) catch return switch (fallback) {
+        .fallback_static => try staticPrompt(allocator, sh),
+        .skip => null,
+    };
     if (evaluated.status != 0 or evaluated.flow != .normal or sh.extensions.prompt_buffer.items.len == 0) {
-        return staticPrompt(allocator, sh);
+        return switch (fallback) {
+            .fallback_static => try staticPrompt(allocator, sh),
+            .skip => null,
+        };
     }
-    return allocator.dupe(u8, sh.extensions.prompt_buffer.items);
+    return try allocator.dupe(u8, sh.extensions.prompt_buffer.items);
 }
 
 fn staticPrompt(allocator: std.mem.Allocator, sh: anytype) ![]const u8 {

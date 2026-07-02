@@ -179,6 +179,20 @@ each <span class="var">$XDG_DATA_DIRS</span> entry + /rush/functions
 
   <p>The <code>prompt</code> command is only available while Rush is rendering the prompt.</p>
 
+  <h2 id="transient-prompt"><a href="#transient-prompt">Transient prompt</a></h2>
+
+  <p>After you press Enter, Rush redraws the accepted command with <code>rush_prompt_transient</code> when that function exists. The next editable prompt still uses <code>rush_prompt</code>. Use this to keep scrollback compact while leaving the full prompt visible during editing.</p>
+
+  <pre><span class="cmd">rush_prompt_transient</span>() {
+  <span class="kw">if</span> test <span class="str">"$?"</span> = 0; <span class="kw">then</span>
+    <span class="cmd">prompt</span> text <span class="str">'● '</span>
+  <span class="kw">else</span>
+    <span class="cmd">prompt</span> segment <span class="opt">--fg</span> red <span class="str">'● '</span>
+  <span class="kw">fi</span>
+}</pre>
+
+  <p>Unset <code>rush_prompt_transient</code> to leave accepted prompts unchanged.</p>
+
   <h2 id="prompt-commands"><a href="#prompt-commands">Prompt commands</a></h2>
 
   <pre><span class="cmd">prompt</span> text TEXT...
