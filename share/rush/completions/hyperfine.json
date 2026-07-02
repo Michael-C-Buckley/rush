@@ -1,0 +1,284 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "hyperfine",
+    "description": "command-line benchmarking tool",
+    "options": [
+      {
+        "long": "warmup",
+        "short": "w",
+        "description": "perform warmup runs before benchmarking",
+        "inherit": false,
+        "value": {
+          "name": "num"
+        }
+      },
+      {
+        "long": "min-runs",
+        "short": "m",
+        "description": "set minimum runs for each command",
+        "inherit": false,
+        "value": {
+          "name": "num"
+        }
+      },
+      {
+        "long": "max-runs",
+        "short": "M",
+        "description": "set maximum runs for each command",
+        "inherit": false,
+        "value": {
+          "name": "num"
+        }
+      },
+      {
+        "long": "runs",
+        "short": "r",
+        "description": "set exact runs for each command",
+        "inherit": false,
+        "value": {
+          "name": "num"
+        }
+      },
+      {
+        "long": "setup",
+        "short": "s",
+        "description": "execute command before each benchmark",
+        "inherit": false,
+        "value": {
+          "name": "cmd",
+          "provider": "builtin.executables"
+        }
+      },
+      {
+        "long": "prepare",
+        "short": "p",
+        "description": "execute command before each timing run",
+        "inherit": false,
+        "value": {
+          "name": "cmd",
+          "provider": "builtin.executables"
+        }
+      },
+      {
+        "long": "cleanup",
+        "short": "c",
+        "description": "execute command after benchmark runs",
+        "inherit": false,
+        "value": {
+          "name": "cmd",
+          "provider": "builtin.executables"
+        }
+      },
+      {
+        "long": "parameter-scan",
+        "short": "P",
+        "description": "perform benchmark runs for each value in the range min..max",
+        "inherit": false,
+        "value": [
+          {
+            "name": "var"
+          },
+          {
+            "name": "min"
+          },
+          {
+            "name": "max"
+          }
+        ]
+      },
+      {
+        "long": "parameter-step-size",
+        "short": "D",
+        "description": "set parameter scan step size",
+        "inherit": false,
+        "value": {
+          "name": "delta"
+        }
+      },
+      {
+        "long": "parameter-list",
+        "short": "L",
+        "description": "perform benchmark runs for each value in the comma-separated list of values",
+        "inherit": false,
+        "value": [
+          {
+            "name": "var"
+          },
+          {
+            "name": "vals"
+          }
+        ]
+      },
+      {
+        "long": "style",
+        "description": "set output style type",
+        "inherit": false,
+        "value": {
+          "name": "style",
+          "provider": "hyperfine-styles"
+        }
+      },
+      {
+        "long": "shell",
+        "short": "S",
+        "description": "set the shell to use for executing benchmarked commands",
+        "inherit": false,
+        "value": {
+          "name": "shell",
+          "provider": "hyperfine-shells"
+        }
+      },
+      {
+        "long": "ignore-failure",
+        "short": "i",
+        "description": "ignore non-zero exit codes of the benchmarked commands",
+        "inherit": false
+      },
+      {
+        "long": "time-unit",
+        "short": "u",
+        "description": "set the time unit to use for the benchmark results",
+        "inherit": false,
+        "value": {
+          "name": "unit",
+          "provider": "hyperfine-time-units"
+        }
+      },
+      {
+        "long": "export-asciidoc",
+        "description": "export the timing summary statistics as an AsciiDoc table to the given file",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "export-csv",
+        "description": "export the timing summary statistics as CSV to the given file",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "export-json",
+        "description": "export the timing summary statistics and timings of individual runs as JSON to the given file",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "export-markdown",
+        "description": "export the timing summary statistics as a Markdown table to the given file",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "show-output",
+        "description": "print the stdout and stderr of the benchmark instead of suppressing it",
+        "inherit": false
+      },
+      {
+        "long": "command-name",
+        "description": "identify a command with the given name",
+        "inherit": false,
+        "value": {
+          "name": "name"
+        }
+      },
+      {
+        "long": "help",
+        "description": "print help message",
+        "inherit": false
+      },
+      {
+        "long": "version",
+        "description": "show version information",
+        "inherit": false
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "cmd",
+          "description": "command to benchmark",
+          "provider": "builtin.executables",
+          "index": 0
+        }
+      ]
+    },
+    "providers": {
+      "builtin.executables": {
+        "builtin": "executables"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "hyperfine-styles": {
+        "values": [
+          {
+            "value": "basic",
+            "description": "disable coloring and interactive elements"
+          },
+          {
+            "value": "full",
+            "description": "enable all effects"
+          },
+          {
+            "value": "nocolor",
+            "description": "interactive output without colors"
+          },
+          {
+            "value": "color",
+            "description": "colors without interactive output"
+          },
+          {
+            "value": "none",
+            "description": "disable tool output"
+          }
+        ]
+      },
+      "hyperfine-shells": {
+        "values": [
+          {
+            "value": "bash"
+          },
+          {
+            "value": "zsh"
+          },
+          {
+            "value": "sh"
+          },
+          {
+            "value": "fish"
+          },
+          {
+            "value": "pwsh"
+          },
+          {
+            "value": "powershell"
+          }
+        ]
+      },
+      "hyperfine-time-units": {
+        "values": [
+          {
+            "value": "millisecond"
+          },
+          {
+            "value": "second"
+          }
+        ]
+      }
+    }
+  }
+}
