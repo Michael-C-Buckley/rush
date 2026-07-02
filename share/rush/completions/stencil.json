@@ -1,0 +1,200 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "stencil",
+    "description": "build Stencil projects and generate components",
+    "options": [
+      {
+        "long": "help",
+        "description": "show help",
+        "inherit": false
+      },
+      {
+        "long": "version",
+        "description": "show version",
+        "inherit": false
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "build",
+        "description": "build components",
+        "options": [
+          {
+            "long": "ci",
+            "description": "use continuous integration settings",
+            "inherit": false
+          },
+          {
+            "long": "config",
+            "short": "c",
+            "description": "use a stencil config file",
+            "inherit": false,
+            "value": {
+              "name": "config-file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "debug",
+            "description": "set log level to debug",
+            "inherit": false
+          },
+          {
+            "long": "dev",
+            "description": "run a development build",
+            "inherit": false
+          },
+          {
+            "long": "docs-readme",
+            "description": "generate component readme docs",
+            "inherit": false
+          },
+          {
+            "long": "es5",
+            "description": "create an ES5-compatible build",
+            "inherit": false
+          },
+          {
+            "long": "log",
+            "description": "write stencil-build.log",
+            "inherit": false
+          },
+          {
+            "long": "prerender",
+            "description": "prerender the application",
+            "inherit": false
+          },
+          {
+            "long": "prod",
+            "description": "run a production build",
+            "inherit": false
+          },
+          {
+            "long": "max-workers",
+            "description": "set max compiler workers",
+            "inherit": false,
+            "value": {
+              "name": "workers",
+              "description": "worker count"
+            }
+          },
+          {
+            "long": "next",
+            "description": "enable next compiler features",
+            "inherit": false
+          },
+          {
+            "long": "no-cache",
+            "description": "disable the cache",
+            "inherit": false
+          },
+          {
+            "long": "no-open",
+            "description": "do not open the browser",
+            "inherit": false
+          },
+          {
+            "long": "port",
+            "aliases": [
+              "p"
+            ],
+            "description": "set dev server port",
+            "inherit": false,
+            "value": {
+              "name": "port"
+            }
+          },
+          {
+            "long": "serve",
+            "description": "start the dev server",
+            "inherit": false
+          },
+          {
+            "long": "stats",
+            "description": "write stencil-stats.json",
+            "inherit": false
+          },
+          {
+            "long": "verbose",
+            "description": "log additional build details",
+            "inherit": false
+          },
+          {
+            "long": "watch",
+            "description": "rebuild when files change",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "test",
+        "description": "run unit and end-to-end tests",
+        "options": [
+          {
+            "long": "spec",
+            "description": "run unit tests with jest",
+            "inherit": false
+          },
+          {
+            "long": "e2e",
+            "description": "run end-to-end tests with puppeteer",
+            "inherit": false
+          },
+          {
+            "long": "no-build",
+            "description": "skip building before tests",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "generate",
+        "aliases": [
+          "g"
+        ],
+        "description": "bootstrap components",
+        "arguments": {
+          "states": [
+            {
+              "name": "name",
+              "description": "component name",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "telemetry",
+        "description": "opt in or out of telemetry",
+        "arguments": {
+          "states": [
+            {
+              "name": "state",
+              "provider": {
+                "values": [
+                  {
+                    "value": "off",
+                    "description": "disable anonymous usage data"
+                  },
+                  {
+                    "value": "on",
+                    "description": "enable anonymous usage data"
+                  }
+                ]
+              },
+              "index": 0
+            }
+          ]
+        }
+      }
+    ],
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
