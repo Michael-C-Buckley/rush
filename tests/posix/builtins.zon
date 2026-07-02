@@ -459,6 +459,18 @@
             .status = 0,
         },
         .{
+            .name = "read timeout option is rejected in POSIX mode",
+            .script =
+            \\printf abc | { read -t 1 value; printf '<%s>:<%s>\n' "$value" "$?"; }
+            ,
+            .stdout =
+            \\<>:<2>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "pwd output can be redirected",
             .script =
             \\pwd >out

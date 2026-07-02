@@ -2688,6 +2688,19 @@ fn evalReadBuiltin(shell: anytype, args: []const []const u8, assignments: []cons
                 };
                 break;
             },
+            't' => {
+                if (shell.state.options.mode == .posix) return .{ .status = 2 };
+                const timeout_text = if (option_index + 1 < arg.len) timeout: {
+                    defer option_index = arg.len;
+                    break :timeout arg[option_index + 1 ..];
+                } else timeout: {
+                    index += 1;
+                    if (index >= args.len) return .{ .status = 2 };
+                    break :timeout args[index];
+                };
+                options.timeout_ms = parseReadTimeout(timeout_text) orelse return .{ .status = 2 };
+                break;
+            },
             else => return .{ .status = 2 },
         };
     }
@@ -2715,6 +2728,7 @@ fn evalReadBuiltin(shell: anytype, args: []const []const u8, assignments: []cons
     for (names, 0..) |name, name_index| {
         try shell.state.putVariable(.{ .name = name, .value = values[name_index] });
     }
+    if (line_result.timed_out) return .{ .status = 142 };
     return .{ .status = if (line_result.found_delimiter) 0 else 1 };
 }
 
@@ -2724,6 +2738,7 @@ const ReadOptions = struct {
     count: ?usize = null,
     exact_count: bool = false,
     prompt: ?[]const u8 = null,
+    timeout_ms: ?u64 = null,
 };
 
 fn parseReadCount(text: []const u8) ?usize {
@@ -2731,9 +2746,41 @@ fn parseReadCount(text: []const u8) ?usize {
     return std.fmt.parseUnsigned(usize, text, 10) catch null;
 }
 
+fn parseReadTimeout(text: []const u8) ?u64 {
+    if (text.len == 0) return null;
+    var index: usize = 0;
+    var seconds: u64 = 0;
+    while (index < text.len and std.ascii.isDigit(text[index])) : (index += 1) {
+        seconds = std.math.mul(u64, seconds, 10) catch return null;
+        seconds = std.math.add(u64, seconds, text[index] - '0') catch return null;
+    }
+
+    var millis: u64 = std.math.mul(u64, seconds, 1000) catch return null;
+    if (index < text.len) {
+        if (text[index] != '.') return null;
+        index += 1;
+        var scale: u64 = 100;
+        var saw_fraction = false;
+        var saw_nonzero_fraction = false;
+        while (index < text.len and std.ascii.isDigit(text[index])) : (index += 1) {
+            saw_fraction = true;
+            if (text[index] != '0') saw_nonzero_fraction = true;
+            if (scale != 0) {
+                millis = std.math.add(u64, millis, @as(u64, text[index] - '0') * scale) catch return null;
+                scale /= 10;
+            }
+        }
+        if (!saw_fraction) return null;
+        if (millis == 0 and saw_nonzero_fraction) millis = 1;
+    }
+    if (index != text.len) return null;
+    return millis;
+}
+
 const ReadLineResult = struct {
     line: []const u8,
     found_delimiter: bool,
+    timed_out: bool = false,
 };
 
 const read_escape_marker: u8 = 0;
@@ -2741,27 +2788,43 @@ const read_escape_marker: u8 = 0;
 fn readBuiltinLine(shell: anytype, options: ReadOptions) !ReadLineResult {
     var line: std.ArrayList(u8) = .empty;
     if (options.count == 0) return .{ .line = try line.toOwnedSlice(shell.scratchAllocator()), .found_delimiter = true };
+    if (options.timeout_ms == 0) return .{
+        .line = try line.toOwnedSlice(shell.scratchAllocator()),
+        .found_delimiter = shell.host.readReady(.stdin, 0),
+    };
 
     var characters_read: usize = 0;
-    var byte: [1]u8 = undefined;
     while (true) {
-        const read_len = try shell.host.read(.stdin, &byte);
+        const first = (try readBuiltinByte(shell, options.timeout_ms)) orelse return .{
+            .line = try line.toOwnedSlice(shell.scratchAllocator()),
+            .found_delimiter = false,
+        };
+        if (first == .timeout) return .{
+            .line = try line.toOwnedSlice(shell.scratchAllocator()),
+            .found_delimiter = false,
+            .timed_out = true,
+        };
+        const byte = first.byte;
         // ziglint-ignore: Z024 preserve existing readable expression shape; lint-only cleanup
-        if (read_len == 0) return .{ .line = try line.toOwnedSlice(shell.scratchAllocator()), .found_delimiter = false };
-        // ziglint-ignore: Z024 preserve existing readable expression shape; lint-only cleanup
-        if (!options.exact_count and byte[0] == options.delimiter) {
+        if (!options.exact_count and byte == options.delimiter) {
             return .{ .line = try line.toOwnedSlice(shell.scratchAllocator()), .found_delimiter = true };
         }
-        if (!options.raw and byte[0] == '\\') {
-            const escaped_len = try shell.host.read(.stdin, &byte);
-            if (escaped_len == 0) {
+        if (!options.raw and byte == '\\') {
+            const escaped = (try readBuiltinByte(shell, options.timeout_ms)) orelse {
                 try line.append(shell.scratchAllocator(), '\\');
                 return .{ .line = try line.toOwnedSlice(shell.scratchAllocator()), .found_delimiter = false };
-            }
-            if (!options.exact_count and byte[0] == options.delimiter and options.delimiter == '\n') continue;
+            };
+            if (escaped == .timeout) return .{
+                .line = try line.toOwnedSlice(shell.scratchAllocator()),
+                .found_delimiter = false,
+                .timed_out = true,
+            };
+            if (!options.exact_count and escaped.byte == options.delimiter and options.delimiter == '\n') continue;
             try line.append(shell.scratchAllocator(), read_escape_marker);
+            try appendReadCharacter(shell, &line, escaped.byte, options.timeout_ms);
+        } else {
+            try appendReadCharacter(shell, &line, byte, options.timeout_ms);
         }
-        try appendReadCharacter(shell, &line, byte[0]);
         if (options.count) |count| {
             characters_read += 1;
             if (characters_read >= count) return .{
@@ -2772,17 +2835,36 @@ fn readBuiltinLine(shell: anytype, options: ReadOptions) !ReadLineResult {
     }
 }
 
-fn appendReadCharacter(shell: anytype, line: *std.ArrayList(u8), first: u8) !void {
+const ReadByteResult = union(enum) {
+    byte: u8,
+    timeout,
+};
+
+fn readBuiltinByte(shell: anytype, timeout_ms: ?u64) !?ReadByteResult {
+    var byte: [1]u8 = undefined;
+    if (timeout_ms) |ms| {
+        return switch (try shell.host.readWithTimeout(.stdin, &byte, ms)) {
+            .read => |read_len| if (read_len == 0) null else .{ .byte = byte[0] },
+            .timeout => .timeout,
+        };
+    }
+
+    const read_len = try shell.host.read(.stdin, &byte);
+    return if (read_len == 0) null else .{ .byte = byte[0] };
+}
+
+fn appendReadCharacter(shell: anytype, line: *std.ArrayList(u8), first: u8, timeout_ms: ?u64) !void {
     const allocator = shell.scratchAllocator();
     try line.append(allocator, first);
     const sequence_len = std.unicode.utf8ByteSequenceLength(first) catch 1;
     if (sequence_len <= 1) return;
-    var byte: [1]u8 = undefined;
     var remaining = sequence_len - 1;
     while (remaining != 0) : (remaining -= 1) {
-        const read_len = try shell.host.read(.stdin, &byte);
-        if (read_len == 0) return;
-        try line.append(allocator, byte[0]);
+        const next = (try readBuiltinByte(shell, timeout_ms)) orelse return;
+        switch (next) {
+            .byte => |byte| try line.append(allocator, byte),
+            .timeout => return,
+        }
     }
 }
 

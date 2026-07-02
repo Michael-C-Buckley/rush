@@ -173,6 +173,49 @@
             .status = 0,
         },
         .{
+            .name = "read -t times out and preserves partial input",
+            .script =
+            \\{ sleep 0.1; printf x; } | {
+            \\    read -r -t 0.01 value
+            \\    printf 'timeout=<%s> value=<%s>\n' "$?" "$value"
+            \\}
+            \\{ printf a; sleep 0.1; printf b; } | {
+            \\    read -r -t 0.01 -n 2 value
+            \\    printf 'partial=<%s> value=<%s>\n' "$?" "$value"
+            \\}
+            ,
+            .stdout =
+            \\timeout=<142> value=<>
+            \\partial=<142> value=<a>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "read -t zero probes readiness without consuming input",
+            .script =
+            \\printf x | {
+            \\    read -r -t 0 -n 1 value
+            \\    printf 'probe=<%s> value=<%s>\n' "$?" "$value"
+            \\    read -r rest
+            \\    printf 'rest=<%s>\n' "$rest"
+            \\}
+            \\{ sleep 0.1; printf x; } | {
+            \\    read -r -t 0 value
+            \\    printf 'not-ready=<%s> value=<%s>\n' "$?" "$value"
+            \\}
+            ,
+            .stdout =
+            \\probe=<0> value=<>
+            \\rest=<x>
+            \\not-ready=<1> value=<>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "local variables restore function caller bindings",
             .script =
             \\x=global

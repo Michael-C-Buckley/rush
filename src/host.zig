@@ -240,6 +240,11 @@ pub const ReadError = error{
     Unexpected,
 };
 
+pub const TimedReadResult = union(enum) {
+    read: usize,
+    timeout,
+};
+
 pub const DuplicateError = error{
     BadFd,
     Interrupted,
@@ -276,6 +281,14 @@ pub const WaitStatus = union(enum) {
 pub const RealHost = struct {
     pub fn read(_: *RealHost, fd: Fd, buffer: []u8) platform.ReadError!usize {
         return platform.read(fd, buffer);
+    }
+
+    pub fn readWithTimeout(_: *RealHost, fd: Fd, buffer: []u8, timeout_ms: u64) platform.ReadError!TimedReadResult {
+        return platform.readWithTimeout(fd, buffer, timeout_ms);
+    }
+
+    pub fn readReady(_: *RealHost, fd: Fd, timeout_ms: u64) bool {
+        return platform.readReady(fd, timeout_ms);
     }
 
     pub fn readInteractiveKey(_: *RealHost, timeout_ms: u64) ?u8 {
