@@ -1,0 +1,70 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "whereis",
+    "description": "locate command binary, source, and manual files",
+    "options": [
+      {
+        "short": "b",
+        "description": "search only for binaries"
+      },
+      {
+        "short": "m",
+        "description": "search only for manual sections"
+      },
+      {
+        "short": "s",
+        "description": "search only for sources"
+      },
+      {
+        "short": "u",
+        "description": "search for unusual entries"
+      },
+      {
+        "short": "B",
+        "description": "search for binaries only in the specified directory",
+        "value": {
+          "name": "directory",
+          "description": "The directory to search in",
+          "provider": "directories"
+        }
+      },
+      {
+        "short": "M",
+        "description": "search for manual pages only in the specified directory",
+        "value": {
+          "name": "directory",
+          "description": "The directory to search in",
+          "provider": "directories"
+        }
+      },
+      {
+        "short": "S",
+        "description": "search for sources only in the specified directory",
+        "value": {
+          "name": "directory",
+          "description": "The directory to search in",
+          "provider": "directories"
+        }
+      },
+      {
+        "short": "f",
+        "description": "terminate the -B, -M, and -S options"
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "name",
+          "description": "The file to search for"
+        }
+      ]
+    },
+    "providers": {
+      "directories": {
+        "builtin": "directories"
+      }
+    }
+  }
+}
