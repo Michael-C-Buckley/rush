@@ -1,0 +1,1548 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "mamba",
+    "description": "manage conda packages and environments",
+    "options": [
+      {
+        "long": "help",
+        "short": "h",
+        "description": "show help for mamba and exit",
+        "inherit": false
+      },
+      {
+        "long": "version",
+        "short": "V",
+        "description": "show the conda version number and exit",
+        "inherit": false
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "activate",
+        "description": "activate an environment",
+        "options": [
+          {
+            "long": "stack",
+            "description": "stack the environment being activated on top of the previous active environment",
+            "inherit": false
+          },
+          {
+            "long": "no-stack",
+            "description": "do not stack the environment. Overrides 'auto_stack' setting",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "environment",
+              "index": 0,
+              "description": "environment"
+            }
+          ]
+        }
+      },
+      {
+        "name": "deactivate",
+        "description": "deactivate an environment"
+      },
+      {
+        "name": "clean",
+        "description": "remove unused packages and caches",
+        "options": [
+          {
+            "short": "a",
+            "long": "all",
+            "description": "remove index cache, lock files, unused cache packages, and tarballs",
+            "inherit": false
+          },
+          {
+            "short": "i",
+            "long": "index-cache",
+            "description": "remove index cache",
+            "inherit": false
+          },
+          {
+            "short": "p",
+            "long": "packages",
+            "description": "remove unused packages from writable package caches",
+            "inherit": false
+          },
+          {
+            "short": "t",
+            "long": "tarballs",
+            "description": "remove cached package tarballs",
+            "inherit": false
+          },
+          {
+            "short": "f",
+            "long": "force-pkgs-dirs",
+            "description": "remove all writable package caches",
+            "inherit": false
+          },
+          {
+            "short": "l",
+            "long": "logfiles",
+            "description": "remove log files",
+            "inherit": false
+          },
+          {
+            "long": "locks",
+            "description": "remove lock files",
+            "inherit": false
+          },
+          {
+            "short": "c",
+            "long": "tempfiles",
+            "description": "remove temporary files that could not be deleted earlier due to being in-use. Argument is path(s) to prefix(es) where files should be found and removed",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "short": "d",
+            "long": "dry-run",
+            "description": "only display what would have been done",
+            "inherit": false
+          },
+          {
+            "long": "json",
+            "description": "report all output as json. Suitable for using conda programmatically",
+            "inherit": false
+          },
+          {
+            "short": "q",
+            "long": "quiet",
+            "description": "do not display progress bar",
+            "inherit": false
+          },
+          {
+            "short": "v",
+            "long": "verbose",
+            "description": "can be used multiple times. Once for INFO, twice for DEBUG, three times for TRACE",
+            "repeatable": true,
+            "inherit": false
+          },
+          {
+            "short": "y",
+            "long": "yes",
+            "description": "do not ask for confirmation",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "compare",
+        "description": "compare packages between conda environments",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show this help message and exit",
+            "inherit": false
+          },
+          {
+            "long": "json",
+            "description": "report all output as json. Suitable for using conda programmatically",
+            "inherit": false
+          },
+          {
+            "short": "v",
+            "long": "verbose",
+            "description": "use once for info, twice for debug, three times for trace",
+            "inherit": false
+          },
+          {
+            "short": "q",
+            "long": "quiet",
+            "description": "do not display progress bar",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "file",
+              "description": "path to the environment file that is to be compared against",
+              "provider": "builtin.files",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "create",
+        "description": "create a new conda environment from a list of specified packages",
+        "options": [
+          {
+            "description": "environment name",
+            "inherit": false,
+            "long": "name",
+            "short": "n",
+            "value": {
+              "name": "environment"
+            }
+          },
+          {
+            "description": "full path to environment",
+            "inherit": false,
+            "long": "prefix",
+            "short": "p",
+            "value": {
+              "name": "path",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "clone",
+            "description": "path to (or name of) existing local environment",
+            "inherit": false,
+            "value": {
+              "name": "env"
+            }
+          },
+          {
+            "long": "file",
+            "description": "read package versions from the given file. Repeated file specifications can be passed (e.g. --file=file1 --file=file2)",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "dev",
+            "description": "use sys.executable -m conda in wrapper scripts instead of CONDA_EXE. This is mainly for use during tests where we test new conda source against old Python versi",
+            "inherit": false
+          },
+          {
+            "short": "c",
+            "long": "channel",
+            "description": "they are given (including local directories using the 'file://' syntax or simply a path like '/home/conda/mychan' or '../mychan'). Then, the defaults or channel",
+            "inherit": false,
+            "value": {
+              "name": "channel"
+            }
+          },
+          {
+            "long": "use-local",
+            "description": "use locally built packages. Identical to '-c local'",
+            "inherit": false
+          },
+          {
+            "long": "override-channels",
+            "description": "do not search default or .condarc channels. Requires --channel",
+            "inherit": false
+          },
+          {
+            "long": "repodata-fn",
+            "description": "specify name of repodata on remote server. Conda will try whatever you specify, but will ultimately fall back to repodata.json if your specs are not satisfiable",
+            "repeatable": true,
+            "inherit": false,
+            "value": {
+              "name": "repodata"
+            }
+          },
+          {
+            "long": "strict-channel-priority",
+            "description": "packages in lower priority channels are not considered if a package with the same name appears in a higher priority channel",
+            "inherit": false
+          },
+          {
+            "long": "no-channel-priority",
+            "description": "package version takes precedence over channel priority. Overrides the value given by conda config --show channel_priority",
+            "inherit": false
+          },
+          {
+            "long": "no-deps",
+            "description": "do not install, update, remove, or change dependencies. This WILL lead to broken environments and inconsistent behavior. Use at your own risk",
+            "priority": -10,
+            "inherit": false
+          },
+          {
+            "long": "only-deps",
+            "description": "only install dependencies",
+            "inherit": false
+          },
+          {
+            "long": "no-pin",
+            "description": "ignore pinned file",
+            "inherit": false
+          },
+          {
+            "long": "no-default-packages",
+            "description": "ignore create_default_packages in the .condarc file",
+            "inherit": false
+          },
+          {
+            "long": "copy",
+            "description": "install all packages using copies instead of hard- or soft-linking",
+            "inherit": false
+          },
+          {
+            "short": "C",
+            "long": "use-index-cache",
+            "description": "use cache of channel index files, even if it has expired",
+            "inherit": false
+          },
+          {
+            "short": "k",
+            "long": "insecure",
+            "description": "allow conda to perform insecure SSL connections and transfers. Equivalent to setting 'ssl_verify' to 'false'",
+            "inherit": false
+          },
+          {
+            "long": "offline",
+            "description": "offline mode. Don't connect to the Internet",
+            "inherit": false
+          },
+          {
+            "short": "d",
+            "long": "dry-run",
+            "description": "only display what would have been done",
+            "inherit": false
+          },
+          {
+            "long": "json",
+            "description": "report all output as json. Suitable for using conda programmatically",
+            "inherit": false
+          },
+          {
+            "short": "q",
+            "long": "quiet",
+            "description": "do not display progress bar",
+            "inherit": false
+          },
+          {
+            "short": "v",
+            "long": "verbose",
+            "description": "can be used multiple times. Once for INFO, twice for DEBUG, three times for TRACE",
+            "repeatable": true,
+            "inherit": false
+          },
+          {
+            "short": "y",
+            "long": "yes",
+            "description": "do not ask for confirmation",
+            "inherit": false
+          },
+          {
+            "long": "download-only",
+            "description": "solve an environment and ensure package caches are populated, but exit prior to unlinking and linking packages into the prefix",
+            "inherit": false
+          },
+          {
+            "long": "show-channel-urls",
+            "description": "show channel urls. Overrides the value given by conda config --show show_channel_urls",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "package_spec",
+              "description": "packages to install or update in the conda environment",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "info",
+        "description": "display information about current conda install",
+        "options": [
+          {
+            "short": "a",
+            "long": "all",
+            "description": "show all information",
+            "inherit": false
+          },
+          {
+            "long": "base",
+            "description": "display base environment path",
+            "inherit": false
+          },
+          {
+            "short": "e",
+            "long": "envs",
+            "description": "list all known conda environments",
+            "inherit": false
+          },
+          {
+            "short": "s",
+            "long": "system",
+            "description": "list environment variables",
+            "inherit": false
+          },
+          {
+            "long": "unsafe-channels",
+            "description": "display list of channels with tokens exposed",
+            "inherit": false
+          },
+          {
+            "long": "json",
+            "description": "report all output as json. Suitable for using conda programmatically",
+            "inherit": false
+          },
+          {
+            "short": "v",
+            "long": "verbose",
+            "description": "use once for info, twice for debug, three times for trace",
+            "inherit": false
+          },
+          {
+            "short": "q",
+            "long": "quiet",
+            "description": "do not display progress bar",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "init",
+        "description": "initialize conda for shell interaction. [Experimental]"
+      },
+      {
+        "name": "install",
+        "description": "installs a list of packages into a specified conda environment",
+        "options": [
+          {
+            "description": "environment name",
+            "inherit": false,
+            "long": "name",
+            "short": "n",
+            "value": {
+              "name": "environment"
+            }
+          },
+          {
+            "description": "full path to environment",
+            "inherit": false,
+            "long": "prefix",
+            "short": "p",
+            "value": {
+              "name": "path",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "revision",
+            "description": "revert to the specified REVISION",
+            "inherit": false,
+            "value": {
+              "name": "revision"
+            }
+          },
+          {
+            "long": "file",
+            "description": "read package versions from the given file. Repeated file specifications can be passed (e.g. --file=file1 --file=file2)",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "dev",
+            "description": "use sys.executable -m conda in wrapper scripts instead of CONDA_EXE. This is mainly for use during tests where we test new conda source against old Python versi",
+            "inherit": false
+          },
+          {
+            "short": "c",
+            "long": "channel",
+            "description": "they are given (including local directories using the 'file://' syntax or simply a path like '/home/conda/mychan' or '../mychan'). Then, the defaults or channel",
+            "inherit": false,
+            "value": {
+              "name": "channel"
+            }
+          },
+          {
+            "long": "use-local",
+            "description": "use locally built packages. Identical to '-c local'",
+            "inherit": false
+          },
+          {
+            "long": "override-channels",
+            "description": "do not search default or .condarc channels. Requires --channel",
+            "inherit": false
+          },
+          {
+            "long": "repodata-fn",
+            "description": "specify name of repodata on remote server. Conda will try whatever you specify, but will ultimately fall back to repodata.json if your specs are not satisfiable",
+            "inherit": false,
+            "value": {
+              "name": "repodata"
+            }
+          },
+          {
+            "long": "strict-channel-priority",
+            "description": "packages in lower priority channels are not considered if a package with the same name appears in a higher priority channel",
+            "inherit": false
+          },
+          {
+            "long": "no-channel-priority",
+            "description": "package version takes precedence over channel priority. Overrides the value given by conda config --show channel_priority",
+            "inherit": false
+          },
+          {
+            "long": "no-deps",
+            "description": "do not install, update, remove, or change dependencies. This WILL lead to broken environments and inconsistent behavior. Use at your own risk",
+            "inherit": false
+          },
+          {
+            "long": "only-deps",
+            "description": "only install dependencies",
+            "inherit": false
+          },
+          {
+            "long": "no-pin",
+            "description": "ignore pinned file",
+            "inherit": false
+          },
+          {
+            "long": "force-reinstall",
+            "description": "ensure that any user-requested package for the current operation is uninstalled and reinstalled, even if that package already exists in the environment",
+            "inherit": false
+          },
+          {
+            "long": "freeze-installed",
+            "aliases": [
+              "no-update-deps"
+            ],
+            "description": "do not update or change already-installed dependencies",
+            "inherit": false
+          },
+          {
+            "long": "update-deps",
+            "description": "update dependencies",
+            "inherit": false
+          },
+          {
+            "short": "S",
+            "long": "satisfied-skip-solve",
+            "description": "exit early and do not run the solver if the requested specs are satisfied. Also skips aggressive updates as configured by 'aggressive_update_packages'. Similar",
+            "inherit": false
+          },
+          {
+            "long": "update-all",
+            "aliases": [
+              "all"
+            ],
+            "description": "update all installed packages in the environment",
+            "inherit": false
+          },
+          {
+            "long": "update-specs",
+            "description": "update based on provided specifications",
+            "inherit": false
+          },
+          {
+            "long": "copy",
+            "description": "install all packages using copies instead of hard- or soft-linking",
+            "inherit": false
+          },
+          {
+            "short": "m",
+            "long": "mkdir",
+            "description": "create the environment directory if necessary",
+            "inherit": false
+          },
+          {
+            "long": "clobber",
+            "description": "allow clobbering of overlapping file paths within packages, and suppress related warnings",
+            "inherit": false
+          },
+          {
+            "short": "C",
+            "long": "use-index-cache",
+            "description": "use cache of channel index files, even if it has expired",
+            "inherit": false
+          },
+          {
+            "short": "k",
+            "long": "insecure",
+            "description": "allow conda to perform insecure SSL connections and transfers. Equivalent to setting 'ssl_verify' to 'false'",
+            "inherit": false
+          },
+          {
+            "long": "offline",
+            "description": "offline mode. Don't connect to the Internet",
+            "inherit": false
+          },
+          {
+            "short": "d",
+            "long": "dry-run",
+            "description": "only display what would have been done",
+            "inherit": false
+          },
+          {
+            "long": "json",
+            "description": "report all output as json. Suitable for using conda programmatically",
+            "inherit": false
+          },
+          {
+            "short": "q",
+            "long": "quiet",
+            "description": "do not display progress bar",
+            "inherit": false
+          },
+          {
+            "short": "v",
+            "long": "verbose",
+            "description": "can be used multiple times. Once for INFO, twice for DEBUG, three times for TRACE",
+            "repeatable": true,
+            "inherit": false
+          },
+          {
+            "short": "y",
+            "long": "yes",
+            "description": "do not ask for confirmation",
+            "inherit": false
+          },
+          {
+            "long": "download-only",
+            "description": "solve an environment and ensure package caches are populated, but exit prior to unlinking and linking packages into the prefix",
+            "inherit": false
+          },
+          {
+            "long": "show-channel-urls",
+            "description": "show channel urls. Overrides the value given by conda config --show show_channel_urls",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "package-spec",
+              "description": "packages to install or update in the conda environment",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "list",
+        "description": "list linked packages in a conda environment",
+        "options": [
+          {
+            "description": "environment name",
+            "inherit": false,
+            "long": "name",
+            "short": "n",
+            "value": {
+              "name": "environment"
+            }
+          },
+          {
+            "description": "full path to environment",
+            "inherit": false,
+            "long": "prefix",
+            "short": "p",
+            "value": {
+              "name": "path",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "show-channel-urls",
+            "description": "show channel urls. Overrides the value given by conda config --show show_channel_urls",
+            "inherit": false
+          },
+          {
+            "short": "c",
+            "long": "canonical",
+            "description": "output canonical names of packages only. Implies --no-pip",
+            "inherit": false
+          },
+          {
+            "short": "f",
+            "long": "full-name",
+            "description": "only search for full names, i.e., ^<regex>$",
+            "inherit": false
+          },
+          {
+            "long": "explicit",
+            "description": "list explicitly all installed conda packaged with URL (output may be used by conda create --file)",
+            "inherit": false
+          },
+          {
+            "long": "md5",
+            "description": "add MD5 hashsum when using --explicit",
+            "inherit": false
+          },
+          {
+            "short": "e",
+            "long": "export",
+            "description": "output requirement string only (output may be used by conda create --file)",
+            "inherit": false
+          },
+          {
+            "short": "r",
+            "long": "revisions",
+            "description": "list the revision history and exit",
+            "inherit": false
+          },
+          {
+            "long": "no-pip",
+            "description": "do not include pip-only installed packages",
+            "inherit": false
+          },
+          {
+            "long": "json",
+            "description": "report all output as json. Suitable for using conda programmatically",
+            "inherit": false
+          },
+          {
+            "short": "v",
+            "long": "verbose",
+            "description": "use once for info, twice for debug, three times for trace",
+            "inherit": false
+          },
+          {
+            "short": "q",
+            "long": "quiet",
+            "description": "do not display progress bar",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "regex",
+              "description": "list only packages matching this regular expression",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "package",
+        "description": "low-level conda package utility. (EXPERIMENTAL)",
+        "options": [
+          {
+            "short": "w",
+            "long": "which",
+            "description": "given some PATH print which conda package the file came from",
+            "inherit": false,
+            "value": {
+              "name": "Path"
+            }
+          },
+          {
+            "short": "r",
+            "long": "reset",
+            "description": "remove all untracked files and exit",
+            "inherit": false
+          },
+          {
+            "short": "u",
+            "long": "untracked",
+            "description": "display all untracked files and exit",
+            "inherit": false
+          },
+          {
+            "long": "pkg-name",
+            "description": "package name of the created package",
+            "inherit": false,
+            "value": {
+              "name": "package_name"
+            }
+          },
+          {
+            "long": "pkg-version",
+            "description": "package version of the created package",
+            "inherit": false,
+            "value": {
+              "name": "package_version"
+            }
+          },
+          {
+            "long": "pkg-build",
+            "description": "package build number of the created package",
+            "inherit": false,
+            "value": {
+              "name": "package_build"
+            }
+          }
+        ]
+      },
+      {
+        "name": "remove",
+        "description": "remove a list of packages from a specified conda environment",
+        "arguments": {
+          "states": [
+            {
+              "name": "package",
+              "index": 0,
+              "repeatable": true,
+              "description": "package"
+            }
+          ]
+        },
+        "options": [
+          {
+            "description": "use development wrapper scripts",
+            "inherit": false,
+            "long": "dev"
+          },
+          {
+            "description": "environment name",
+            "inherit": false,
+            "long": "name",
+            "short": "n",
+            "value": {
+              "name": "environment"
+            }
+          },
+          {
+            "description": "full path to environment",
+            "inherit": false,
+            "long": "prefix",
+            "short": "p",
+            "value": {
+              "name": "path",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "description": "additional channel to search",
+            "inherit": false,
+            "long": "channel",
+            "short": "c",
+            "value": {
+              "name": "channel"
+            },
+            "repeatable": true
+          },
+          {
+            "description": "do not search default channels",
+            "inherit": false,
+            "long": "override-channels"
+          },
+          {
+            "description": "remove all packages",
+            "inherit": false,
+            "long": "all"
+          },
+          {
+            "description": "do not ask for confirmation",
+            "inherit": false,
+            "long": "yes",
+            "short": "y"
+          },
+          {
+            "description": "increase verbosity",
+            "inherit": false,
+            "long": "verbose",
+            "short": "v",
+            "repeatable": true
+          },
+          {
+            "description": "do not display progress bar",
+            "inherit": false,
+            "long": "quiet",
+            "short": "q"
+          }
+        ]
+      },
+      {
+        "name": "uninstall",
+        "description": "alias for remove",
+        "arguments": {
+          "states": [
+            {
+              "name": "package",
+              "index": 0,
+              "repeatable": true,
+              "description": "package"
+            }
+          ]
+        },
+        "options": [
+          {
+            "description": "use development wrapper scripts",
+            "inherit": false,
+            "long": "dev"
+          },
+          {
+            "description": "environment name",
+            "inherit": false,
+            "long": "name",
+            "short": "n",
+            "value": {
+              "name": "environment"
+            }
+          },
+          {
+            "description": "full path to environment",
+            "inherit": false,
+            "long": "prefix",
+            "short": "p",
+            "value": {
+              "name": "path",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "description": "additional channel to search",
+            "inherit": false,
+            "long": "channel",
+            "short": "c",
+            "value": {
+              "name": "channel"
+            },
+            "repeatable": true
+          },
+          {
+            "description": "do not search default channels",
+            "inherit": false,
+            "long": "override-channels"
+          },
+          {
+            "description": "remove all packages",
+            "inherit": false,
+            "long": "all"
+          },
+          {
+            "description": "do not ask for confirmation",
+            "inherit": false,
+            "long": "yes",
+            "short": "y"
+          },
+          {
+            "description": "increase verbosity",
+            "inherit": false,
+            "long": "verbose",
+            "short": "v",
+            "repeatable": true
+          },
+          {
+            "description": "do not display progress bar",
+            "inherit": false,
+            "long": "quiet",
+            "short": "q"
+          }
+        ]
+      },
+      {
+        "name": "run",
+        "description": "run an executable in a conda environment",
+        "options": [
+          {
+            "description": "environment name",
+            "inherit": false,
+            "long": "name",
+            "short": "n",
+            "value": {
+              "name": "environment"
+            }
+          },
+          {
+            "description": "full path to environment",
+            "inherit": false,
+            "long": "prefix",
+            "short": "p",
+            "value": {
+              "name": "path",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "short": "v",
+            "long": "verbose",
+            "description": "use once for info, twice for debug, three times for trace",
+            "inherit": false
+          },
+          {
+            "long": "dev",
+            "description": "sets `CONDA_EXE` to `python -m conda`, assuming the CWD contains the root of conda development sources",
+            "inherit": false
+          },
+          {
+            "long": "debug-wrapper-scripts",
+            "description": "when this is set, where implemented, the shell wrapper scripts will echo to stderr a lot of debugging information",
+            "inherit": false
+          },
+          {
+            "long": "cwd",
+            "description": "current working directory for command to run in. Defaults to cwd",
+            "inherit": false,
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "no-capture-output",
+            "description": "don't capture stdout/stderr",
+            "inherit": false
+          },
+          {
+            "long": "live-stream",
+            "description": "display the output for the subprocess stdout and stderr on real time",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "executable",
+              "provider": "builtin.files",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "search",
+        "description": "search for packages and display associated information. The input is a MatchSpec, a query language for conda packages",
+        "options": [
+          {
+            "long": "envs",
+            "description": "search all of the current user's environments. If run as Administrator (on Windows) or UID 0 (on unix), search all known environments on the system",
+            "inherit": false
+          },
+          {
+            "short": "i",
+            "long": "info",
+            "description": "provide detailed information about each package",
+            "inherit": false
+          },
+          {
+            "long": "subdir",
+            "aliases": [
+              "platform"
+            ],
+            "description": "search the given subdir. Should be formatted like 'osx-64', 'linux-32', 'win-64', and so on. The default is to search the current platform",
+            "inherit": false,
+            "value": {
+              "name": "platform"
+            }
+          },
+          {
+            "short": "c",
+            "long": "channel",
+            "description": "they are given (including local directories using the 'file://' syntax or simply a path like '/home/conda/mychan' or '../mychan'). Then, the defaults or channel",
+            "inherit": false,
+            "value": {
+              "name": "channel"
+            }
+          },
+          {
+            "long": "use-local",
+            "description": "use locally built packages. Identical to '-c local'",
+            "inherit": false
+          },
+          {
+            "long": "override-channels",
+            "description": "do not search default or .condarc channels. Requires --channel",
+            "inherit": false
+          },
+          {
+            "long": "repodata-fn",
+            "description": "specify name of repodata on remote server. Conda will try whatever you specify, but will ultimately fall back to repodata.json if your specs are not satisfiable",
+            "inherit": false,
+            "value": {
+              "name": "repodata"
+            }
+          },
+          {
+            "short": "C",
+            "long": "use-index-cache",
+            "description": "use cache of channel index files, even if it has expired",
+            "inherit": false
+          },
+          {
+            "short": "k",
+            "long": "insecure",
+            "description": "allow conda to perform insecure SSL connections and transfers. Equivalent to setting 'ssl_verify' to 'false'",
+            "inherit": false
+          },
+          {
+            "long": "offline",
+            "description": "offline mode. Don't connect to the Internet",
+            "inherit": false
+          },
+          {
+            "long": "json",
+            "description": "report all output as json. Suitable for using conda programmatically",
+            "inherit": false
+          },
+          {
+            "short": "v",
+            "long": "verbose",
+            "description": "use once for info, twice for debug, three times for trace",
+            "inherit": false
+          },
+          {
+            "short": "q",
+            "long": "quiet",
+            "description": "do not display progress bar",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "query",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "update",
+        "description": "updates conda packages to the latest compatible version",
+        "arguments": {
+          "states": [
+            {
+              "name": "package",
+              "provider": {
+                "values": [
+                  {
+                    "value": "mamba",
+                    "description": "update mamba"
+                  }
+                ]
+              },
+              "index": 0,
+              "repeatable": true,
+              "description": "package"
+            }
+          ]
+        },
+        "options": [
+          {
+            "description": "read package versions from file",
+            "inherit": false,
+            "long": "file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "description": "environment name",
+            "inherit": false,
+            "long": "name",
+            "short": "n",
+            "value": {
+              "name": "environment"
+            }
+          },
+          {
+            "description": "full path to environment",
+            "inherit": false,
+            "long": "prefix",
+            "short": "p",
+            "value": {
+              "name": "path",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "description": "additional channel to search",
+            "inherit": false,
+            "long": "channel",
+            "short": "c",
+            "value": {
+              "name": "channel"
+            },
+            "repeatable": true
+          },
+          {
+            "description": "do not search default channels",
+            "inherit": false,
+            "long": "override-channels"
+          },
+          {
+            "description": "update all installed packages",
+            "inherit": false,
+            "long": "update-all"
+          },
+          {
+            "description": "update all installed packages",
+            "inherit": false,
+            "long": "all"
+          },
+          {
+            "description": "do not ask for confirmation",
+            "inherit": false,
+            "long": "yes",
+            "short": "y"
+          },
+          {
+            "description": "only display what would be done",
+            "inherit": false,
+            "long": "dry-run"
+          },
+          {
+            "description": "increase verbosity",
+            "inherit": false,
+            "long": "verbose",
+            "short": "v",
+            "repeatable": true
+          },
+          {
+            "description": "do not display progress bar",
+            "inherit": false,
+            "long": "quiet",
+            "short": "q"
+          }
+        ]
+      },
+      {
+        "name": "upgrade",
+        "description": "alias for update",
+        "arguments": {
+          "states": [
+            {
+              "name": "package",
+              "provider": {
+                "values": [
+                  {
+                    "value": "mamba",
+                    "description": "update mamba"
+                  }
+                ]
+              },
+              "index": 0,
+              "repeatable": true,
+              "description": "package"
+            }
+          ]
+        },
+        "options": [
+          {
+            "description": "read package versions from file",
+            "inherit": false,
+            "long": "file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "description": "environment name",
+            "inherit": false,
+            "long": "name",
+            "short": "n",
+            "value": {
+              "name": "environment"
+            }
+          },
+          {
+            "description": "full path to environment",
+            "inherit": false,
+            "long": "prefix",
+            "short": "p",
+            "value": {
+              "name": "path",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "description": "additional channel to search",
+            "inherit": false,
+            "long": "channel",
+            "short": "c",
+            "value": {
+              "name": "channel"
+            },
+            "repeatable": true
+          },
+          {
+            "description": "do not search default channels",
+            "inherit": false,
+            "long": "override-channels"
+          },
+          {
+            "description": "update all installed packages",
+            "inherit": false,
+            "long": "update-all"
+          },
+          {
+            "description": "update all installed packages",
+            "inherit": false,
+            "long": "all"
+          },
+          {
+            "description": "do not ask for confirmation",
+            "inherit": false,
+            "long": "yes",
+            "short": "y"
+          },
+          {
+            "description": "only display what would be done",
+            "inherit": false,
+            "long": "dry-run"
+          },
+          {
+            "description": "increase verbosity",
+            "inherit": false,
+            "long": "verbose",
+            "short": "v",
+            "repeatable": true
+          },
+          {
+            "description": "do not display progress bar",
+            "inherit": false,
+            "long": "quiet",
+            "short": "q"
+          }
+        ]
+      },
+      {
+        "name": "repoquery",
+        "description": "query repositories using mamba",
+        "subcommands": [
+          {
+            "name": "search",
+            "description": "search for packages and display associated information. The input is a MatchSpec, a query language for conda packages",
+            "arguments": {
+              "states": [
+                {
+                  "name": "package",
+                  "provider": {
+                    "values": [
+                      {
+                        "value": "xtensor>=0.18",
+                        "description": "search for xtensor version which is more than 0.18"
+                      }
+                    ]
+                  },
+                  "index": 0
+                }
+              ]
+            },
+            "options": [
+              {
+                "description": "additional channel to search",
+                "inherit": false,
+                "long": "channel",
+                "short": "c",
+                "value": {
+                  "name": "channel"
+                },
+                "repeatable": true
+              },
+              {
+                "description": "do not search default channels",
+                "inherit": false,
+                "long": "override-channels"
+              },
+              {
+                "description": "repodata filename",
+                "inherit": false,
+                "long": "repodata-fn",
+                "value": {
+                  "name": "filename"
+                }
+              },
+              {
+                "description": "platform subdir",
+                "inherit": false,
+                "long": "platform",
+                "value": {
+                  "name": "subdir"
+                }
+              },
+              {
+                "description": "show JSON output",
+                "inherit": false,
+                "long": "json"
+              },
+              {
+                "description": "increase verbosity",
+                "inherit": false,
+                "long": "verbose",
+                "short": "v",
+                "repeatable": true
+              },
+              {
+                "description": "do not display progress bar",
+                "inherit": false,
+                "long": "quiet",
+                "short": "q"
+              }
+            ]
+          },
+          {
+            "name": "depends",
+            "description": "list dependencies for a package",
+            "arguments": {
+              "states": [
+                {
+                  "name": "package",
+                  "provider": {
+                    "values": [
+                      {
+                        "value": "xtensor",
+                        "description": "list dependencies for xtensor package"
+                      }
+                    ]
+                  },
+                  "index": 0
+                }
+              ]
+            },
+            "options": [
+              {
+                "description": "additional channel to search",
+                "inherit": false,
+                "long": "channel",
+                "short": "c",
+                "value": {
+                  "name": "channel"
+                },
+                "repeatable": true
+              },
+              {
+                "description": "do not search default channels",
+                "inherit": false,
+                "long": "override-channels"
+              },
+              {
+                "description": "repodata filename",
+                "inherit": false,
+                "long": "repodata-fn",
+                "value": {
+                  "name": "filename"
+                }
+              },
+              {
+                "description": "platform subdir",
+                "inherit": false,
+                "long": "platform",
+                "value": {
+                  "name": "subdir"
+                }
+              },
+              {
+                "description": "show JSON output",
+                "inherit": false,
+                "long": "json"
+              },
+              {
+                "description": "increase verbosity",
+                "inherit": false,
+                "long": "verbose",
+                "short": "v",
+                "repeatable": true
+              },
+              {
+                "description": "do not display progress bar",
+                "inherit": false,
+                "long": "quiet",
+                "short": "q"
+              }
+            ]
+          },
+          {
+            "name": "whoneeds",
+            "description": "list packages that require a given package",
+            "arguments": {
+              "states": [
+                {
+                  "name": "package",
+                  "provider": {
+                    "values": [
+                      {
+                        "value": "xtl",
+                        "description": "list packages that require xtl package"
+                      }
+                    ]
+                  },
+                  "index": 0
+                }
+              ]
+            },
+            "options": [
+              {
+                "description": "additional channel to search",
+                "inherit": false,
+                "long": "channel",
+                "short": "c",
+                "value": {
+                  "name": "channel"
+                },
+                "repeatable": true
+              },
+              {
+                "description": "do not search default channels",
+                "inherit": false,
+                "long": "override-channels"
+              },
+              {
+                "description": "repodata filename",
+                "inherit": false,
+                "long": "repodata-fn",
+                "value": {
+                  "name": "filename"
+                }
+              },
+              {
+                "description": "platform subdir",
+                "inherit": false,
+                "long": "platform",
+                "value": {
+                  "name": "subdir"
+                }
+              },
+              {
+                "description": "show JSON output",
+                "inherit": false,
+                "long": "json"
+              },
+              {
+                "description": "increase verbosity",
+                "inherit": false,
+                "long": "verbose",
+                "short": "v",
+                "repeatable": true
+              },
+              {
+                "description": "do not display progress bar",
+                "inherit": false,
+                "long": "quiet",
+                "short": "q"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "env",
+        "description": "manage environments",
+        "subcommands": [
+          {
+            "name": "list",
+            "description": "list environments",
+            "arguments": {
+              "states": [
+                {
+                  "name": "environment",
+                  "index": 0
+                }
+              ]
+            }
+          }
+        ]
+      }
+    ],
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
