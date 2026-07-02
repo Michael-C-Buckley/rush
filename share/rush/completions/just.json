@@ -1,0 +1,330 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "just",
+    "description": "command runner",
+    "options": [
+      {
+        "long": "help",
+        "short": "h",
+        "description": "print help information",
+        "inherit": false
+      },
+      {
+        "long": "changelog",
+        "description": "print the changelog",
+        "inherit": false
+      },
+      {
+        "long": "check",
+        "description": "run --fmt in 'check' mode",
+        "inherit": false
+      },
+      {
+        "long": "choose",
+        "description": "select one or more recipes to run using another program",
+        "inherit": false
+      },
+      {
+        "long": "chooser",
+        "description": "override the binary invoked by --choose",
+        "inherit": false,
+        "value": {
+          "name": "program"
+        }
+      },
+      {
+        "long": "color",
+        "description": "print colorful output",
+        "inherit": false,
+        "value": {
+          "name": "value",
+          "provider": "just-color-modes"
+        }
+      },
+      {
+        "short": "c",
+        "long": "command",
+        "description": "run an arbitrary command with the working directory, .env, overrides, and exports",
+        "inherit": false,
+        "value": {
+          "name": "command",
+          "provider": "builtin.executables"
+        }
+      },
+      {
+        "long": "completions",
+        "description": "print shell completions",
+        "inherit": false,
+        "value": {
+          "name": "shell",
+          "provider": "just-shells"
+        }
+      },
+      {
+        "long": "clear-shell-args",
+        "description": "clear shell arguments",
+        "inherit": false
+      },
+      {
+        "long": "dry-run",
+        "description": "print what just would do, without doing it",
+        "inherit": false
+      },
+      {
+        "long": "dump",
+        "description": "print justfile",
+        "inherit": false
+      },
+      {
+        "long": "dotenv-filename",
+        "description": "use a file with this name instead of .env",
+        "inherit": false,
+        "value": {
+          "name": "name"
+        }
+      },
+      {
+        "long": "dotenv-path",
+        "description": "load the environment file from a path instead of searching for one",
+        "inherit": false
+      },
+      {
+        "long": "dump-format",
+        "description": "specify the format for dumping the justfile",
+        "inherit": false,
+        "value": {
+          "name": "format",
+          "provider": "just-dump-formats"
+        }
+      },
+      {
+        "short": "e",
+        "long": "edit",
+        "description": "edit the justfile with $VISUAL or $EDITOR, falling back to vim",
+        "inherit": false
+      },
+      {
+        "long": "evaluate",
+        "description": "evaluate and print all variables",
+        "inherit": false
+      },
+      {
+        "long": "fmt",
+        "description": "format and overwrite the justfile",
+        "inherit": false
+      },
+      {
+        "long": "highlight",
+        "description": "highlight echoed recipe lines in bold",
+        "inherit": false,
+        "exclusiveGroup": "just-highlight-mode"
+      },
+      {
+        "long": "init",
+        "description": "initialize a new justfile",
+        "inherit": false
+      },
+      {
+        "short": "f",
+        "long": "justfile",
+        "description": "use a specific justfile",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "short": "l",
+        "long": "list",
+        "description": "list available recipes and their arguments",
+        "inherit": false
+      },
+      {
+        "long": "list-heading",
+        "description": "print this text before the list",
+        "inherit": false,
+        "value": {
+          "name": "text"
+        }
+      },
+      {
+        "long": "list-prefix",
+        "description": "print this text before each list item",
+        "inherit": false,
+        "value": {
+          "name": "text"
+        }
+      },
+      {
+        "long": "no-dotenv",
+        "description": "don't load the environment file",
+        "inherit": false
+      },
+      {
+        "long": "no-highlight",
+        "description": "don't highlight echoed recipe lines",
+        "inherit": false,
+        "exclusiveGroup": "just-highlight-mode"
+      },
+      {
+        "short": "q",
+        "long": "quiet",
+        "description": "suppress all output",
+        "inherit": false
+      },
+      {
+        "long": "set",
+        "description": "override a variable with a value",
+        "inherit": false,
+        "value": [
+          {
+            "name": "variable"
+          },
+          {
+            "name": "value",
+            "description": "The string value the variable will be set to"
+          }
+        ]
+      },
+      {
+        "long": "shell",
+        "description": "invoke this shell to run recipes",
+        "inherit": false,
+        "value": {
+          "name": "shell"
+        }
+      },
+      {
+        "long": "shell-arg",
+        "description": "invoke the shell with this as an argument",
+        "inherit": false,
+        "value": {
+          "name": "argument"
+        }
+      },
+      {
+        "long": "shell-command",
+        "description": "invoke --command with the shell used to run recipe lines and backticks",
+        "inherit": false
+      },
+      {
+        "short": "s",
+        "long": "show",
+        "description": "show information about a recipe",
+        "inherit": false,
+        "value": {
+          "name": "recipe"
+        }
+      },
+      {
+        "long": "summary",
+        "description": "list names of available recipes",
+        "inherit": false
+      },
+      {
+        "short": "u",
+        "long": "unsorted",
+        "description": "return list and summary entries in source order",
+        "inherit": false
+      },
+      {
+        "long": "unstable",
+        "description": "enable unstable features",
+        "inherit": false
+      },
+      {
+        "long": "variables",
+        "description": "list names of variables",
+        "inherit": false
+      },
+      {
+        "short": "v",
+        "long": "verbose",
+        "description": "use verbose output",
+        "inherit": false
+      },
+      {
+        "short": "V",
+        "long": "version",
+        "description": "print version information",
+        "inherit": false
+      },
+      {
+        "short": "d",
+        "long": "working-directory",
+        "description": "use this as the working directory",
+        "inherit": false,
+        "value": {
+          "name": "value",
+          "provider": "builtin.directories"
+        }
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "recipe-or-argument",
+          "index": 0,
+          "repeatable": true
+        }
+      ]
+    },
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.executables": {
+        "builtin": "executables"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "just-color-modes": {
+        "values": [
+          {
+            "value": "auto"
+          },
+          {
+            "value": "always"
+          },
+          {
+            "value": "never"
+          }
+        ]
+      },
+      "just-shells": {
+        "values": [
+          {
+            "value": "zsh"
+          },
+          {
+            "value": "bash"
+          },
+          {
+            "value": "fish"
+          },
+          {
+            "value": "powershell"
+          },
+          {
+            "value": "elvish"
+          }
+        ]
+      },
+      "just-dump-formats": {
+        "values": [
+          {
+            "value": "just"
+          },
+          {
+            "value": "json",
+            "description": "requires --unstable"
+          }
+        ]
+      }
+    }
+  }
+}
