@@ -1,0 +1,692 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "herd",
+    "description": "Laravel and PHP development environment",
+    "options": [
+      {
+        "long": "help",
+        "short": "h",
+        "description": "display help for a command",
+        "inherit": true
+      },
+      {
+        "long": "version",
+        "short": "V",
+        "description": "display application version",
+        "inherit": true
+      },
+      {
+        "long": "quiet",
+        "short": "q",
+        "description": "suppress output",
+        "inherit": true
+      },
+      {
+        "long": "verbose",
+        "short": "v",
+        "description": "increase message verbosity",
+        "inherit": true
+      },
+      {
+        "long": "ansi",
+        "description": "force ANSI output",
+        "inherit": true
+      },
+      {
+        "long": "no-ansi",
+        "description": "disable ANSI output",
+        "inherit": true
+      },
+      {
+        "long": "no-interaction",
+        "short": "n",
+        "description": "do not ask interactive questions",
+        "inherit": true
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "completion",
+        "description": "dump shell completion script",
+        "arguments": {
+          "states": [
+            {
+              "name": "shell",
+              "index": 0,
+              "description": "shell type",
+              "provider": "herd-shells"
+            }
+          ]
+        },
+        "options": [
+          {
+            "long": "debug",
+            "description": "tail completion debug log"
+          }
+        ]
+      },
+      {
+        "name": "composer",
+        "description": "proxy Composer commands with isolated site's PHP executable"
+      },
+      {
+        "name": "coverage",
+        "description": "proxy PHP commands with isolated site's PHP executable and Xdebug coverage enabled"
+      },
+      {
+        "name": "debug",
+        "description": "proxy PHP commands with isolated site's PHP executable and debug.ini loaded"
+      },
+      {
+        "name": "directory-listing",
+        "description": "configure directory listing behavior",
+        "arguments": {
+          "states": [
+            {
+              "name": "status",
+              "index": 0,
+              "description": "directory listing status",
+              "provider": "herd-directory-listing-status"
+            }
+          ]
+        }
+      },
+      {
+        "name": "edit",
+        "description": "open site in your favorite IDE",
+        "options": [
+          {
+            "long": "path",
+            "value": {
+              "name": "path",
+              "provider": "builtin.files"
+            }
+          }
+        ]
+      },
+      {
+        "name": "fetch-share-url",
+        "description": "get current Expose share tunnel URL",
+        "arguments": {
+          "states": [
+            {
+              "name": "domain",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "forget",
+        "description": "remove a directory from Herd paths",
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "index": 0,
+              "provider": "builtin.directories"
+            }
+          ]
+        }
+      },
+      {
+        "name": "help",
+        "description": "display help for a command",
+        "arguments": {
+          "states": [
+            {
+              "name": "command",
+              "index": 0
+            }
+          ]
+        },
+        "options": [
+          {
+            "long": "format",
+            "description": "output format",
+            "value": {
+              "name": "format",
+              "provider": "herd-output-formats"
+            }
+          }
+        ]
+      },
+      {
+        "name": "init",
+        "description": "start services from Herd manifest",
+        "options": [
+          {
+            "long": "fresh",
+            "description": "recreate configuration"
+          }
+        ]
+      },
+      {
+        "name": "isolate",
+        "description": "change PHP version for current directory",
+        "arguments": {
+          "states": [
+            {
+              "name": "php-version",
+              "index": 0,
+              "description": "PHP version, for example 8.1"
+            }
+          ]
+        },
+        "options": [
+          {
+            "long": "site",
+            "description": "site to isolate",
+            "value": {
+              "name": "site"
+            }
+          },
+          {
+            "long": "silent",
+            "description": "suppress output"
+          }
+        ]
+      },
+      {
+        "name": "isolate-node",
+        "description": "change Node version for current directory",
+        "arguments": {
+          "states": [
+            {
+              "name": "node-version",
+              "index": 0,
+              "description": "Node version, for example 21"
+            }
+          ]
+        },
+        "options": [
+          {
+            "long": "site",
+            "description": "site to isolate",
+            "value": {
+              "name": "site"
+            }
+          }
+        ]
+      },
+      {
+        "name": "isolated",
+        "description": "list sites using isolated PHP versions"
+      },
+      {
+        "name": "isolated-node",
+        "description": "list sites using isolated Node versions"
+      },
+      {
+        "name": "link",
+        "description": "link current directory to Herd",
+        "arguments": {
+          "states": [
+            {
+              "name": "name",
+              "index": 0
+            }
+          ]
+        },
+        "options": [
+          {
+            "long": "secure",
+            "description": "link site with a trusted TLS certificate"
+          },
+          {
+            "long": "isolate",
+            "description": "isolate site to a PHP version",
+            "value": {
+              "name": "php-version"
+            }
+          }
+        ]
+      },
+      {
+        "name": "links",
+        "description": "display registered Herd links"
+      },
+      {
+        "name": "list",
+        "description": "list commands",
+        "arguments": {
+          "states": [
+            {
+              "name": "namespace",
+              "index": 0,
+              "description": "namespace name"
+            }
+          ]
+        },
+        "options": [
+          {
+            "long": "raw",
+            "description": "output raw command list"
+          },
+          {
+            "long": "format",
+            "description": "output format",
+            "value": {
+              "name": "format",
+              "provider": "herd-output-formats"
+            }
+          },
+          {
+            "long": "short",
+            "description": "omit command argument descriptions"
+          }
+        ]
+      },
+      {
+        "name": "log",
+        "description": "tail log file",
+        "arguments": {
+          "states": [
+            {
+              "name": "key",
+              "index": 0
+            }
+          ]
+        },
+        "options": [
+          {
+            "long": "lines",
+            "short": "n",
+            "value": {
+              "name": "lines"
+            }
+          },
+          {
+            "long": "follow",
+            "short": "f"
+          }
+        ]
+      },
+      {
+        "name": "logs",
+        "description": "show log viewer UI for a site",
+        "options": [
+          {
+            "long": "sites",
+            "description": "site to open",
+            "value": {
+              "name": "site"
+            }
+          }
+        ]
+      },
+      {
+        "name": "loopback",
+        "description": "get or set loopback address for Herd sites",
+        "arguments": {
+          "states": [
+            {
+              "name": "loopback",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "open",
+        "description": "open site in browser",
+        "arguments": {
+          "states": [
+            {
+              "name": "domain",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "park",
+        "description": "register a directory with Herd",
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "index": 0,
+              "provider": "builtin.directories"
+            }
+          ]
+        }
+      },
+      {
+        "name": "parked",
+        "description": "display sites within parked paths",
+        "options": [
+          {
+            "long": "json",
+            "description": "output JSON"
+          }
+        ]
+      },
+      {
+        "name": "paths",
+        "description": "get paths registered with Herd"
+      },
+      {
+        "name": "php",
+        "description": "proxy PHP commands with isolated site's PHP executable",
+        "arguments": {
+          "states": [
+            {
+              "name": "command",
+              "index": 0
+            }
+          ]
+        },
+        "options": [
+          {
+            "long": "site",
+            "description": "site used to get PHP version",
+            "value": {
+              "name": "site"
+            }
+          }
+        ]
+      },
+      {
+        "name": "proxies",
+        "description": "display proxy sites"
+      },
+      {
+        "name": "proxy",
+        "description": "create an Nginx proxy site",
+        "arguments": {
+          "states": [
+            {
+              "name": "domain",
+              "index": 0
+            },
+            {
+              "name": "host",
+              "index": 1
+            }
+          ]
+        },
+        "options": [
+          {
+            "long": "secure",
+            "description": "create proxy with a trusted TLS certificate"
+          }
+        ]
+      },
+      {
+        "name": "restart",
+        "description": "restart Herd services",
+        "arguments": {
+          "states": [
+            {
+              "name": "service",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "secure",
+        "description": "secure a domain with a trusted TLS certificate",
+        "arguments": {
+          "states": [
+            {
+              "name": "domain",
+              "index": 0
+            }
+          ]
+        },
+        "options": [
+          {
+            "long": "expireIn",
+            "description": "certificate validity in days",
+            "value": {
+              "name": "days"
+            }
+          }
+        ]
+      },
+      {
+        "name": "secured",
+        "description": "list secured sites",
+        "options": [
+          {
+            "long": "expiring",
+            "description": "show sites expiring soon"
+          },
+          {
+            "long": "days",
+            "description": "limit expiring results to days",
+            "value": {
+              "name": "days"
+            }
+          }
+        ]
+      },
+      {
+        "name": "share",
+        "description": "share current site via an Expose tunnel"
+      },
+      {
+        "name": "site-information",
+        "description": "display information about a site",
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "index": 0,
+              "provider": "builtin.files"
+            }
+          ]
+        }
+      },
+      {
+        "name": "start",
+        "description": "start Herd services",
+        "arguments": {
+          "states": [
+            {
+              "name": "service",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "stop",
+        "description": "stop Herd services",
+        "arguments": {
+          "states": [
+            {
+              "name": "service",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "tinker",
+        "description": "run tinker or Tinkerwell",
+        "options": [
+          {
+            "long": "site",
+            "description": "site to tinker with",
+            "value": {
+              "name": "site"
+            }
+          }
+        ]
+      },
+      {
+        "name": "tld",
+        "description": "get or set TLD for Herd sites",
+        "arguments": {
+          "states": [
+            {
+              "name": "tld",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "unisolate",
+        "description": "stop customizing PHP version for current directory",
+        "options": [
+          {
+            "long": "site",
+            "description": "site to un-isolate",
+            "value": {
+              "name": "site"
+            }
+          }
+        ]
+      },
+      {
+        "name": "unisolate-node",
+        "description": "stop customizing Node version for current directory",
+        "options": [
+          {
+            "long": "site",
+            "description": "site to un-isolate",
+            "value": {
+              "name": "site"
+            }
+          }
+        ]
+      },
+      {
+        "name": "unlink",
+        "description": "remove a Herd link",
+        "arguments": {
+          "states": [
+            {
+              "name": "name",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "unproxy",
+        "description": "delete an Nginx proxy config",
+        "arguments": {
+          "states": [
+            {
+              "name": "domain",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "unsecure",
+        "description": "stop serving a domain over HTTPS",
+        "arguments": {
+          "states": [
+            {
+              "name": "domain",
+              "index": 0
+            }
+          ]
+        },
+        "options": [
+          {
+            "long": "all",
+            "description": "unsecure all sites"
+          },
+          {
+            "long": "silent",
+            "description": "suppress output"
+          }
+        ]
+      },
+      {
+        "name": "use",
+        "description": "change PHP version used by Herd",
+        "arguments": {
+          "states": [
+            {
+              "name": "php-version",
+              "index": 0,
+              "description": "PHP version, for example 8.3"
+            }
+          ]
+        }
+      },
+      {
+        "name": "which",
+        "description": "display which Herd driver serves current directory"
+      },
+      {
+        "name": "which-php",
+        "description": "get PHP executable path for a site",
+        "arguments": {
+          "states": [
+            {
+              "name": "site",
+              "index": 0,
+              "description": "site to inspect"
+            }
+          ]
+        }
+      },
+      {
+        "name": "init:fresh",
+        "description": "initialize a Herd manifest file"
+      }
+    ],
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "herd-directory-listing-status": {
+        "values": [
+          {
+            "value": "on"
+          },
+          {
+            "value": "off"
+          }
+        ]
+      },
+      "herd-output-formats": {
+        "values": [
+          {
+            "value": "txt"
+          },
+          {
+            "value": "xml"
+          },
+          {
+            "value": "json"
+          },
+          {
+            "value": "md"
+          }
+        ]
+      },
+      "herd-shells": {
+        "values": [
+          {
+            "value": "bash"
+          },
+          {
+            "value": "fish"
+          },
+          {
+            "value": "powershell"
+          },
+          {
+            "value": "zsh"
+          }
+        ]
+      }
+    }
+  }
+}
