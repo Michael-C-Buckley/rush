@@ -1,0 +1,46 @@
+__rush_complete_nextflow_runs() {
+  test -r .nextflow/history || return 0
+  awk '{ print $4 }' .nextflow/history 2>/dev/null | while IFS= read -r run; do
+    run=${run#\*}
+    test -n "$run" || continue
+    rush_complete candidate "$run" --kind plain --description "run name"
+  done
+}
+
+__rush_complete_nextflow_sessions() {
+  test -r .nextflow/history || return 0
+  awk '{ print $7 }' .nextflow/history 2>/dev/null | while IFS= read -r session; do
+    session=${session#\*}
+    test -n "$session" || continue
+    rush_complete candidate "$session" --kind plain --description "session ID"
+  done
+}
+
+__rush_complete_nextflow_projects() {
+  for project in *.nf; do
+    test -e "$project" || continue
+    rush_complete candidate "$project" --kind file --description "Nextflow script"
+  done
+  for project in "$HOME"/.nextflow/assets/*/*; do
+    test -d "$project" || continue
+    project=${project#"$HOME"/.nextflow/assets/}
+    rush_complete candidate "$project" --kind plain --description "Nextflow project"
+  done
+}
+
+__rush_complete_nextflow_docker_images() {
+  docker images --format '{{.Repository}}' 2>/dev/null | while IFS= read -r image; do
+    test -n "$image" || continue
+    test "$image" = '<none>' && continue
+    rush_complete candidate "$image" --kind plain --description "Docker image"
+  done
+}
+
+__rush_complete_nextflow_secrets() {
+  store=$HOME/.nextflow/secrets/store.json
+  test -r "$store" || return 0
+  sed -n 's/.*"name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$store" | while IFS= read -r secret; do
+    test -n "$secret" || continue
+    rush_complete candidate "$secret" --kind plain --description "secret name"
+  done
+}

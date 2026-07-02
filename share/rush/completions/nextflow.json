@@ -1,0 +1,1530 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "nextflow",
+    "description": "run reproducible scientific workflows",
+    "options": [
+      {
+        "short": "C",
+        "description": "Use the specified configuration file(s) overriding any defaults",
+        "inherit": false,
+        "value": {
+          "name": "configuration-file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "short": "D",
+        "description": "Set JVM properties",
+        "inherit": false,
+        "value": {
+          "name": "custom-Java-system-property"
+        }
+      },
+      {
+        "spellings": [
+          "-bg"
+        ],
+        "description": "Execute nextflow in background",
+        "inherit": false
+      },
+      {
+        "short": "c",
+        "spellings": [
+          "-config"
+        ],
+        "description": "Add the specified file to configuration set",
+        "inherit": false,
+        "value": {
+          "name": "configuration-file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "short": "d",
+        "spellings": [
+          "-dockerize"
+        ],
+        "description": "Launch nextflow via Docker (experimental)",
+        "inherit": false
+      },
+      {
+        "short": "h",
+        "description": "Print this help",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-log"
+        ],
+        "description": "Set nextflow log file path",
+        "inherit": false
+      },
+      {
+        "short": "q",
+        "spellings": [
+          "-quiet"
+        ],
+        "description": "Do not print information messages",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-syslog"
+        ],
+        "description": "Send logs to syslog server (eg. localhost:514)",
+        "inherit": false
+      },
+      {
+        "short": "v",
+        "spellings": [
+          "-version"
+        ],
+        "description": "Print the program version",
+        "inherit": false
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "clean",
+        "description": "Clean up project cache and work directories (Default: last run)",
+        "options": [
+          {
+            "spellings": [
+              "-after"
+            ],
+            "description": "Clean up runs executed after the specified one",
+            "inherit": false,
+            "value": {
+              "name": "run-name",
+              "provider": "nextflow.runs"
+            }
+          },
+          {
+            "spellings": [
+              "-before"
+            ],
+            "description": "Clean up runs executed before the specified one",
+            "inherit": false,
+            "value": {
+              "name": "run-name",
+              "provider": "nextflow.runs"
+            }
+          },
+          {
+            "spellings": [
+              "-but"
+            ],
+            "description": "Clean up all runs except the specified one",
+            "inherit": false,
+            "value": {
+              "name": "run-name",
+              "provider": "nextflow.runs"
+            }
+          },
+          {
+            "short": "n",
+            "spellings": [
+              "-dry-run"
+            ],
+            "description": "Print names of file to be removed without deleting them (Default: false)",
+            "inherit": false
+          },
+          {
+            "short": "f",
+            "spellings": [
+              "-force"
+            ],
+            "description": "Force clean command (Default: false)",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "spellings": [
+              "-help"
+            ],
+            "description": "Print the command usage (Default: false)",
+            "inherit": false
+          },
+          {
+            "short": "k",
+            "spellings": [
+              "-keep-logs"
+            ],
+            "description": "Removes only temporary files but retains execution log entries and metadata (Default: false)",
+            "inherit": false
+          },
+          {
+            "short": "q",
+            "spellings": [
+              "-quiet"
+            ],
+            "description": "Do not print names of files removed (Default: false)",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "run_name|session_id",
+              "index": 0,
+              "provider": "nextflow.runs"
+            }
+          ]
+        }
+      },
+      {
+        "name": "clone",
+        "description": "Clone a project into a folder",
+        "options": [
+          {
+            "short": "h",
+            "spellings": [
+              "-help"
+            ],
+            "description": "Print the command usage (Default: false)",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-hub"
+            ],
+            "description": "Service hub where the project is hosted (Default: GitHub)",
+            "inherit": false,
+            "value": {
+              "name": "gitlab|github|bitbucket"
+            }
+          },
+          {
+            "short": "r",
+            "description": "Revision to clone - It can be a git branch, tag or revision number",
+            "inherit": false,
+            "value": {
+              "name": "revision"
+            }
+          },
+          {
+            "spellings": [
+              "-user"
+            ],
+            "description": "Private repository user name",
+            "inherit": false,
+            "value": {
+              "name": "username"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "namespace/repository_name",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "config",
+        "description": "Print a project configuration",
+        "options": [
+          {
+            "spellings": [
+              "-flat"
+            ],
+            "description": "Print config using flat notation (Default: false)",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "spellings": [
+              "-help"
+            ],
+            "description": "Print the command usage (Default: false)",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-profile"
+            ],
+            "description": "Choose a configuration profile",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-properties"
+            ],
+            "description": "Prints config using Java properties notatio (Default: false)",
+            "inherit": false
+          },
+          {
+            "short": "a",
+            "spellings": [
+              "-show-profiles"
+            ],
+            "description": "Show all configuration profiles",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-sort"
+            ],
+            "description": "Sort config attributes (Default: false)",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "project-name",
+              "index": 0,
+              "provider": "nextflow.projects"
+            }
+          ]
+        }
+      },
+      {
+        "name": "console",
+        "description": "Launch Nextflow interactive console",
+        "options": [
+          {
+            "short": "h",
+            "spellings": [
+              "-help"
+            ],
+            "description": "Print the command usage (Default: false)",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "drop",
+        "description": "Delete the local copy of a project",
+        "options": [
+          {
+            "short": "h",
+            "spellings": [
+              "-help"
+            ],
+            "description": "Print the command usage (Default: false)",
+            "inherit": false
+          },
+          {
+            "short": "f",
+            "description": "Delete the repository without taking care of local changes (Default: false)",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "name-of-the-project-to-drop",
+              "index": 0,
+              "provider": "nextflow.projects"
+            }
+          ]
+        }
+      },
+      {
+        "name": "help",
+        "description": "Print the usage help for a command",
+        "options": [
+          {
+            "short": "h",
+            "spellings": [
+              "-help"
+            ],
+            "description": "Print the command usage (Default: false)",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "info",
+        "description": "Print project and system runtime information",
+        "options": [
+          {
+            "short": "u",
+            "spellings": [
+              "-check-updates"
+            ],
+            "description": "Check for remote updates (Default: false)",
+            "inherit": false
+          },
+          {
+            "short": "d",
+            "description": "Show detailed information (Default: false)",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "spellings": [
+              "-help"
+            ],
+            "description": "Print the command usage (Default: false)",
+            "inherit": false
+          },
+          {
+            "short": "o",
+            "description": "Output format, either: text (default), json, yaml",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "project-name",
+              "index": 0,
+              "provider": "nextflow.projects"
+            }
+          ]
+        }
+      },
+      {
+        "name": "kuberun",
+        "description": "Execute a workflow in a Kubernetes cluster (experimental)",
+        "options": [
+          {
+            "short": "E",
+            "description": "Exports all current system environment (Default: false)",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-ansi-log"
+            ],
+            "description": "Enable/disable ANSI console logging",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-bucket-dir"
+            ],
+            "description": "Remote bucket where intermediate result files are stored",
+            "inherit": false,
+            "value": {
+              "name": "remote-bucket"
+            }
+          },
+          {
+            "spellings": [
+              "-cache"
+            ],
+            "description": "Enable/disable processes caching",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-disable-jobs-cancellation"
+            ],
+            "description": "Prevent the cancellation of child jobs on execution termination",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-dsl1"
+            ],
+            "description": "Execute the workflow using DSL1 syntax (Default: false)",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-dsl2"
+            ],
+            "description": "Execute the workflow using DSL2 syntax (Default: false)",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-dump-channels"
+            ],
+            "description": "Dump channels for debugging purpose",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-dump-hashes"
+            ],
+            "description": "Dump task hash keys for debugging purpose (Default: false)",
+            "inherit": false
+          },
+          {
+            "short": "e",
+            "description": "Add the specified variable to execution environment. Syntax: -e.key=value (Default: {})",
+            "inherit": false,
+            "value": {
+              "name": "key=value"
+            }
+          },
+          {
+            "spellings": [
+              "-entry"
+            ],
+            "description": "Entry workflow name to be executed",
+            "inherit": false,
+            "value": {
+              "name": "entry-workflow-name"
+            }
+          },
+          {
+            "spellings": [
+              "-head-cpus"
+            ],
+            "description": "Specify number of CPUs requested for the Nextflow pod (Default: 0)",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-head-memory"
+            ],
+            "description": "Specify amount of memory requested for the Nextflow pod",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "spellings": [
+              "-help"
+            ],
+            "description": "Print the command usage (Default: false)",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-hub"
+            ],
+            "description": "Service hub where the project is hosted (Default: github)",
+            "inherit": false,
+            "value": {
+              "name": "service-hub"
+            }
+          },
+          {
+            "spellings": [
+              "-latest"
+            ],
+            "description": "Pull latest changes before run (Default: false)",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-lib"
+            ],
+            "description": "Library extension path",
+            "inherit": false,
+            "value": {
+              "name": "library-extension-path"
+            }
+          },
+          {
+            "spellings": [
+              "-main-script"
+            ],
+            "description": "The script file to be executed when launching a project directory or repository",
+            "inherit": false,
+            "value": {
+              "name": "script-file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "spellings": [
+              "-name"
+            ],
+            "description": "Assign a mnemonic name to the a pipeline run",
+            "inherit": false,
+            "value": {
+              "name": "name"
+            }
+          },
+          {
+            "short": "n",
+            "spellings": [
+              "-namespace"
+            ],
+            "description": "Specify the K8s namespace to use",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-offline"
+            ],
+            "description": "Do not check for remote project updates (Default: false)",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-params-file"
+            ],
+            "description": "Load script parameters from a JSON/YAML file",
+            "inherit": false,
+            "value": {
+              "name": "JSON/YAML-file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "spellings": [
+              "-plugins"
+            ],
+            "description": "Specify the plugins to be applied for this run e.g. nf-amazon,nf-tower",
+            "inherit": false,
+            "value": {
+              "name": "plugins-ids-separated-by-comma"
+            }
+          },
+          {
+            "spellings": [
+              "-pod-image"
+            ],
+            "description": "Specify the container image for the Nextflow pod",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-process"
+            ],
+            "description": "Set process options. Syntax: -process.key=value (Default: {}",
+            "inherit": false,
+            "value": {
+              "name": "key=value"
+            }
+          },
+          {
+            "spellings": [
+              "-profile"
+            ],
+            "description": "Choose a configuration profile",
+            "inherit": false,
+            "value": {
+              "name": "profile",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "spellings": [
+              "-qs",
+              "-queue-size"
+            ],
+            "description": "Max number of processes that can be executed in parallel by each executor",
+            "inherit": false,
+            "value": {
+              "name": "number"
+            }
+          },
+          {
+            "spellings": [
+              "-remoteProfile"
+            ],
+            "description": "Choose a configuration profile in the remoteConfig",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-resume"
+            ],
+            "description": "Execute the script using the cached results, useful to continue executions that was stopped by an error",
+            "inherit": false
+          },
+          {
+            "short": "r",
+            "spellings": [
+              "-revision"
+            ],
+            "description": "Revision of the project to run (either a git branch, tag or commit SHA number)",
+            "inherit": false,
+            "value": {
+              "name": "project-revision-(tag/branch/hash"
+            }
+          },
+          {
+            "spellings": [
+              "-stub-run",
+              "-stub"
+            ],
+            "description": "Execute the workflow replacing process scripts with command stubs (Default: false)",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-test"
+            ],
+            "description": "Test a script function with the name specified",
+            "inherit": false,
+            "value": {
+              "name": "name"
+            }
+          },
+          {
+            "spellings": [
+              "-user"
+            ],
+            "description": "Private repository user name",
+            "inherit": false,
+            "value": {
+              "name": "username"
+            }
+          },
+          {
+            "short": "v",
+            "spellings": [
+              "-volume-mount"
+            ],
+            "description": "Volume claim mounts eg. my-pvc:/mnt/path",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-with-charliecloud"
+            ],
+            "description": "Enable process execution in a Charliecloud container runtime",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-with-conda"
+            ],
+            "description": "Use the specified Conda environment package or file (must end with .yml|.yaml suffix)",
+            "inherit": false,
+            "value": {
+              "name": "conda-.yml/.yaml-file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "spellings": [
+              "-with-dag"
+            ],
+            "description": "Create pipeline DAG file",
+            "inherit": false,
+            "value": {
+              "name": "filename,-e.g.-dag.dot",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "spellings": [
+              "-with-docker"
+            ],
+            "description": "Enable process execution in a Docker container",
+            "inherit": false,
+            "value": {
+              "name": "a-docker-container-image",
+              "required": false,
+              "style": "optional",
+              "provider": "nextflow.docker-images"
+            }
+          },
+          {
+            "short": "N",
+            "spellings": [
+              "-with-notification"
+            ],
+            "description": "Send a notification email on workflow completion to the specified recipients",
+            "inherit": false,
+            "value": {
+              "name": "email"
+            }
+          },
+          {
+            "spellings": [
+              "-with-podman"
+            ],
+            "description": "Enable process execution in a Podman container",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-with-report"
+            ],
+            "description": "Create processes execution html report",
+            "inherit": false,
+            "value": {
+              "name": "report-filename-e.g.-report.html",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "spellings": [
+              "-with-singularity"
+            ],
+            "description": "Enable process execution in a Singularity container",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-with-timeline"
+            ],
+            "description": "Create processes execution timeline file",
+            "inherit": false,
+            "value": {
+              "name": "timeline-filename-e.g.-timeline.html",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "spellings": [
+              "-with-tower"
+            ],
+            "description": "Monitor workflow execution with Seqera Tower service",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-with-trace"
+            ],
+            "description": "Create processes execution tracing file",
+            "inherit": false,
+            "value": {
+              "name": "trace-text-filename-e.g.-trace.txt",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "spellings": [
+              "-with-weblog"
+            ],
+            "description": "Send workflow status messages via HTTP to target URL",
+            "inherit": false,
+            "value": {
+              "name": "target-web-URL"
+            }
+          },
+          {
+            "spellings": [
+              "-without-docker"
+            ],
+            "description": "Disable process execution with Docker (Default: false)",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-without-podman"
+            ],
+            "description": "Disable process execution in a Podman container",
+            "inherit": false
+          },
+          {
+            "short": "w",
+            "spellings": [
+              "-work-dir"
+            ],
+            "description": "Directory where intermediate result files are stored",
+            "inherit": false,
+            "value": {
+              "name": "work-dir"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "project-name",
+              "index": 0,
+              "provider": "nextflow.projects"
+            }
+          ]
+        }
+      },
+      {
+        "name": "list",
+        "description": "List all downloaded projects",
+        "options": [
+          {
+            "short": "h",
+            "spellings": [
+              "-help"
+            ],
+            "description": "Print the command usage (Default: false)",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "log",
+        "description": "Print executions log and runtime info",
+        "options": [
+          {
+            "spellings": [
+              "-after"
+            ],
+            "description": "Show log entries for runs executed after the specified one",
+            "inherit": false,
+            "value": {
+              "name": "run-name",
+              "provider": "nextflow.runs"
+            }
+          },
+          {
+            "spellings": [
+              "-before"
+            ],
+            "description": "Show log entries for runs executed before the specified one",
+            "inherit": false,
+            "value": {
+              "name": "run-name",
+              "provider": "nextflow.runs"
+            }
+          },
+          {
+            "spellings": [
+              "-but"
+            ],
+            "description": "Show log entries of all runs except the specified one",
+            "inherit": false,
+            "value": {
+              "name": "run-name",
+              "provider": "nextflow.runs"
+            }
+          },
+          {
+            "short": "f",
+            "spellings": [
+              "-fields"
+            ],
+            "description": "Comma separated list of fields to include in the printed log -- Use the `-l` option to show the list of available fields",
+            "inherit": false,
+            "value": {
+              "name": "field1,field2,..."
+            }
+          },
+          {
+            "short": "F",
+            "spellings": [
+              "filter"
+            ],
+            "description": "Filter log entries by a custom expression e.g. process =~ /foo.*/ && status == 'COMPLETED'",
+            "inherit": false,
+            "value": {
+              "name": "expression"
+            }
+          },
+          {
+            "short": "h",
+            "spellings": [
+              "-help"
+            ],
+            "description": "Print the command usage (Default: false)",
+            "inherit": false
+          },
+          {
+            "short": "l",
+            "spellings": [
+              "-list-fields"
+            ],
+            "description": "Show all available fields (Default: false)",
+            "inherit": false
+          },
+          {
+            "short": "q",
+            "spellings": [
+              "-quiet"
+            ],
+            "description": "Show only run names (Default: false)",
+            "inherit": false
+          },
+          {
+            "short": "s",
+            "description": "Character used to separate column values (Default: )",
+            "inherit": false,
+            "value": {
+              "name": "character"
+            }
+          },
+          {
+            "short": "t",
+            "spellings": [
+              "-template"
+            ],
+            "description": "Text template used to each record in the log",
+            "inherit": false,
+            "value": {
+              "name": "template"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "run-name",
+              "index": 0,
+              "provider": "nextflow.runs"
+            }
+          ]
+        }
+      },
+      {
+        "name": "pull",
+        "description": "Download or update a project",
+        "options": [
+          {
+            "spellings": [
+              "-all"
+            ],
+            "description": "Update all downloaded projects (Default: false)",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "spellings": [
+              "-help"
+            ],
+            "description": "Print the command usage (Default: false)",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-hub"
+            ],
+            "description": "Service hub where the project is hosted",
+            "inherit": false
+          },
+          {
+            "short": "r",
+            "spellings": [
+              "-revision"
+            ],
+            "description": "Revision of the project to run (either a git branch, tag or commit SHA number)",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-user"
+            ],
+            "description": "Private repository user name",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "project-name-or-repository-url-to-pull",
+              "index": 0,
+              "provider": "nextflow.projects"
+            }
+          ]
+        }
+      },
+      {
+        "name": "run",
+        "description": "Execute a pipeline project",
+        "options": [
+          {
+            "short": "E",
+            "description": "Exports all current system environment (Default: false)",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-ansi-log"
+            ],
+            "description": "Enable/disable ANSI console logging",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-bucket-dir"
+            ],
+            "description": "Remote bucket where intermediate result files are stored",
+            "inherit": false,
+            "value": {
+              "name": "remote-bucket"
+            }
+          },
+          {
+            "spellings": [
+              "-cache"
+            ],
+            "description": "Enable/disable processes caching",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-disable-jobs-cancellation"
+            ],
+            "description": "Prevent the cancellation of child jobs on execution termination",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-dsl1"
+            ],
+            "description": "Execute the workflow using DSL1 syntax (Default: false)",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-dsl2"
+            ],
+            "description": "Execute the workflow using DSL2 syntax (Default: false)",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-dump-channels"
+            ],
+            "description": "Dump channels for debugging purpose",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-dump-hashes"
+            ],
+            "description": "Dump task hash keys for debugging purpose (Default: false)",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-e."
+            ],
+            "description": "Add the specified variable to execution environment. Syntax: -e.key=value (Default: {})",
+            "inherit": false,
+            "value": {
+              "name": "key=value"
+            }
+          },
+          {
+            "spellings": [
+              "-entry"
+            ],
+            "description": "Entry workflow name to be executed",
+            "inherit": false,
+            "value": {
+              "name": "entry-workflow-name"
+            }
+          },
+          {
+            "short": "h",
+            "spellings": [
+              "-help"
+            ],
+            "description": "Print the command usage (Default: false)",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-hub"
+            ],
+            "description": "Service hub where the project is hosted (Default: github)",
+            "inherit": false,
+            "value": {
+              "name": "service-hub"
+            }
+          },
+          {
+            "spellings": [
+              "-latest"
+            ],
+            "description": "Pull latest changes before run (Default: false)",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-lib"
+            ],
+            "description": "Library extension path",
+            "inherit": false,
+            "value": {
+              "name": "library-extension-path"
+            }
+          },
+          {
+            "spellings": [
+              "-main-script"
+            ],
+            "description": "The script file to be executed when launching a project directory or repository",
+            "inherit": false,
+            "value": {
+              "name": "script-file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "spellings": [
+              "-name"
+            ],
+            "description": "Assign a mnemonic name to the a pipeline run",
+            "inherit": false,
+            "value": {
+              "name": "name"
+            }
+          },
+          {
+            "spellings": [
+              "-offline"
+            ],
+            "description": "Do not check for remote project updates (Default: false)",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-params-file"
+            ],
+            "description": "Load script parameters from a JSON/YAML file",
+            "inherit": false,
+            "value": {
+              "name": "JSON/YAML-file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "spellings": [
+              "-plugins"
+            ],
+            "description": "Specify the plugins to be applied for this run e.g. nf-amazon,nf-tower",
+            "inherit": false,
+            "value": {
+              "name": "plugins-ids-separated-by-comma"
+            }
+          },
+          {
+            "spellings": [
+              "-process."
+            ],
+            "description": "Set process options. Syntax: -process.key=value (Default: {}",
+            "inherit": false,
+            "value": {
+              "name": "key=value"
+            }
+          },
+          {
+            "spellings": [
+              "-profile"
+            ],
+            "description": "Choose a configuration profile",
+            "inherit": false,
+            "value": {
+              "name": "profile",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "spellings": [
+              "-qs",
+              "-queue-size"
+            ],
+            "description": "Max number of processes that can be executed in parallel by each executor",
+            "inherit": false,
+            "value": {
+              "name": "number"
+            }
+          },
+          {
+            "spellings": [
+              "-resume"
+            ],
+            "description": "Execute the script using the cached results, useful to continue executions that was stopped by an error",
+            "inherit": false,
+            "value": {
+              "name": "session-ID",
+              "required": false,
+              "style": "optional",
+              "provider": "nextflow.sessions"
+            }
+          },
+          {
+            "short": "r",
+            "spellings": [
+              "-revision"
+            ],
+            "description": "Revision of the project to run (either a git branch, tag or commit SHA number)",
+            "inherit": false,
+            "value": {
+              "name": "project-revision-(tag/branch/hash"
+            }
+          },
+          {
+            "spellings": [
+              "-stub-ru",
+              "-stub"
+            ],
+            "description": "Execute the workflow replacing process scripts with command stubs (Default: false)",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-test"
+            ],
+            "description": "Test a script function with the name specified",
+            "inherit": false,
+            "value": {
+              "name": "name"
+            }
+          },
+          {
+            "spellings": [
+              "-user"
+            ],
+            "description": "Private repository user name",
+            "inherit": false,
+            "value": {
+              "name": "username"
+            }
+          },
+          {
+            "spellings": [
+              "-with-charliecloud"
+            ],
+            "description": "Enable process execution in a Charliecloud container runtime",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-with-conda"
+            ],
+            "description": "Use the specified Conda environment package or file (must end with .yml|.yaml suffix)",
+            "inherit": false,
+            "value": {
+              "name": "conda-.yml/.yaml-file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "spellings": [
+              "-with-dag"
+            ],
+            "description": "Create pipeline DAG file",
+            "inherit": false,
+            "value": {
+              "name": "filename,-e.g.-dag.dot",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "spellings": [
+              "-with-docker"
+            ],
+            "description": "Enable process execution in a Docker container",
+            "inherit": false,
+            "value": {
+              "name": "a-docker-container-image",
+              "required": false,
+              "style": "optional",
+              "provider": "nextflow.docker-images"
+            }
+          },
+          {
+            "short": "N",
+            "spellings": [
+              "-with-notification"
+            ],
+            "description": "Send a notification email on workflow completion to the specified recipients",
+            "inherit": false,
+            "value": {
+              "name": "email"
+            }
+          },
+          {
+            "spellings": [
+              "-with-podman"
+            ],
+            "description": "Enable process execution in a Podman container",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-with-report"
+            ],
+            "description": "Create processes execution html report",
+            "inherit": false,
+            "value": {
+              "name": "report-filename-e.g.-report.html",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "spellings": [
+              "-with-singularity"
+            ],
+            "description": "Enable process execution in a Singularity container",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-with-timeline"
+            ],
+            "description": "Create processes execution timeline file",
+            "inherit": false,
+            "value": {
+              "name": "timeline-filename-e.g.-timeline.html",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "spellings": [
+              "-with-tower"
+            ],
+            "description": "Monitor workflow execution with Seqera Tower service",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-with-trace"
+            ],
+            "description": "Create processes execution tracing file",
+            "inherit": false,
+            "value": {
+              "name": "trace-text-filename-e.g.-trace.txt",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "spellings": [
+              "-with-weblog"
+            ],
+            "description": "Send workflow status messages via HTTP to target URL",
+            "inherit": false,
+            "value": {
+              "name": "target-web-URL"
+            }
+          },
+          {
+            "spellings": [
+              "-without-docker"
+            ],
+            "description": "Disable process execution with Docker (Default: false)",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-without-podman"
+            ],
+            "description": "Disable process execution in a Podman container",
+            "inherit": false
+          },
+          {
+            "short": "w",
+            "spellings": [
+              "-work-dir"
+            ],
+            "description": "Directory where intermediate result files are stored",
+            "inherit": false,
+            "value": {
+              "name": "work-dir"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "project-name,-repository-url,-or-local-path",
+              "index": 0,
+              "provider": "nextflow.projects"
+            }
+          ]
+        }
+      },
+      {
+        "name": "secrets",
+        "description": "Handle and manage sensitive information for pipeline execution in a safe manner",
+        "options": [
+          {
+            "spellings": [
+              "list"
+            ],
+            "description": "List secrets available in the current store e.g. nextflow secrets list",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "get"
+            ],
+            "description": "Allows retrieving a secret value e.g. nextflow secrets get FOO",
+            "inherit": false,
+            "value": {
+              "name": "secret-name"
+            }
+          },
+          {
+            "spellings": [
+              "set"
+            ],
+            "description": "Allows creating creating a new secret or overriding an existing one e.g. nextflow secrets set FOO \"Hello world\"",
+            "priority": -10,
+            "inherit": false,
+            "value": {
+              "name": "secret-name-and-value"
+            }
+          },
+          {
+            "spellings": [
+              "delete"
+            ],
+            "description": "Allows deleting an existing secret e.g. nextflow secrets delete FOO",
+            "priority": -10,
+            "inherit": false,
+            "value": {
+              "name": "secret-name"
+            }
+          }
+        ]
+      },
+      {
+        "name": "self-update",
+        "description": "Update nextflow runtime to the latest available version",
+        "options": [
+          {
+            "short": "h",
+            "spellings": [
+              "-help"
+            ],
+            "description": "Print the command usage (Default: false)",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "view",
+        "description": "View project script file(s)",
+        "options": [
+          {
+            "short": "h",
+            "spellings": [
+              "-help"
+            ],
+            "description": "Print the command usage (Default: false)",
+            "inherit": false
+          },
+          {
+            "short": "l",
+            "description": "List repository content (Default: false)",
+            "inherit": false
+          },
+          {
+            "short": "q",
+            "description": "Hide header line (Default: false)",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "project-name",
+              "index": 0,
+              "provider": "nextflow.projects"
+            }
+          ]
+        }
+      }
+    ],
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "nextflow.runs": {
+        "function": "__rush_complete_nextflow_runs"
+      },
+      "nextflow.projects": {
+        "function": "__rush_complete_nextflow_projects"
+      },
+      "nextflow.sessions": {
+        "function": "__rush_complete_nextflow_sessions"
+      },
+      "nextflow.docker-images": {
+        "function": "__rush_complete_nextflow_docker_images"
+      },
+      "nextflow.secrets": {
+        "function": "__rush_complete_nextflow_secrets"
+      }
+    }
+  }
+}
