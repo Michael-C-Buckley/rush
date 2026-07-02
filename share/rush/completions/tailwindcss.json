@@ -1,0 +1,200 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "tailwindcss",
+    "description": "build Tailwind CSS",
+    "subcommands": [
+      {
+        "name": "init",
+        "description": "create Tailwind config file",
+        "options": [
+          {
+            "short": "p",
+            "long": "postcss",
+            "description": "create postcss.config.js",
+            "inherit": false
+          },
+          {
+            "short": "f",
+            "long": "full",
+            "description": "create full config file",
+            "inherit": false
+          },
+          {
+            "long": "help",
+            "description": "show help",
+            "inherit": false,
+            "short": "h"
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "filename",
+              "index": 0,
+              "optional": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "build",
+        "description": "build CSS file",
+        "options": [
+          {
+            "long": "input",
+            "description": "set input file",
+            "inherit": false,
+            "short": "i",
+            "value": {
+              "name": "input-file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "output",
+            "description": "set output file",
+            "inherit": false,
+            "short": "o",
+            "value": {
+              "name": "output-file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "config",
+            "description": "set config file",
+            "inherit": false,
+            "short": "c",
+            "value": {
+              "name": "config-file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "postcss",
+            "description": "set PostCSS config file",
+            "inherit": false,
+            "value": {
+              "name": "postcss-config-file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "purge",
+            "description": "set deprecated purge paths",
+            "inherit": false
+          },
+          {
+            "long": "content",
+            "description": "set content paths",
+            "inherit": false
+          },
+          {
+            "long": "watch",
+            "description": "watch and rebuild",
+            "inherit": false,
+            "short": "w"
+          },
+          {
+            "long": "minify",
+            "description": "minify output",
+            "inherit": false,
+            "short": "m"
+          },
+          {
+            "long": "no-autoprefixer",
+            "description": "disable autoprefixer",
+            "inherit": false
+          },
+          {
+            "long": "help",
+            "description": "show help",
+            "inherit": false,
+            "short": "h"
+          }
+        ]
+      }
+    ],
+    "options": [
+      {
+        "long": "input",
+        "description": "set input file",
+        "inherit": false,
+        "short": "i",
+        "value": {
+          "name": "input-file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "output",
+        "description": "set output file",
+        "inherit": false,
+        "short": "o",
+        "value": {
+          "name": "output-file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "config",
+        "description": "set config file",
+        "inherit": false,
+        "short": "c",
+        "value": {
+          "name": "config-file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "postcss",
+        "description": "set PostCSS config file",
+        "inherit": false,
+        "value": {
+          "name": "postcss-config-file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "purge",
+        "description": "set deprecated purge paths",
+        "inherit": false
+      },
+      {
+        "long": "content",
+        "description": "set content paths",
+        "inherit": false
+      },
+      {
+        "long": "watch",
+        "description": "watch and rebuild",
+        "inherit": false,
+        "short": "w"
+      },
+      {
+        "long": "minify",
+        "description": "minify output",
+        "inherit": false,
+        "short": "m"
+      },
+      {
+        "long": "no-autoprefixer",
+        "description": "disable autoprefixer",
+        "inherit": false
+      },
+      {
+        "long": "help",
+        "description": "show help",
+        "inherit": false,
+        "short": "h"
+      }
+    ],
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
