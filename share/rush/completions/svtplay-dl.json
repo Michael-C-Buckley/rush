@@ -1,0 +1,364 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "svtplay-dl",
+    "description": "download videos from play services",
+    "options": [
+      {
+        "long": "help",
+        "short": "h",
+        "description": "show help",
+        "inherit": false
+      },
+      {
+        "long": "version",
+        "description": "show version",
+        "inherit": false
+      },
+      {
+        "short": "o",
+        "long": "output",
+        "description": "set output file or folder",
+        "inherit": false
+      },
+      {
+        "long": "subfolder",
+        "description": "create show subfolders",
+        "inherit": false
+      },
+      {
+        "long": "config",
+        "description": "set config file",
+        "inherit": false,
+        "value": {
+          "name": "configfile",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "short": "f",
+        "long": "force",
+        "description": "overwrite existing files",
+        "inherit": false
+      },
+      {
+        "short": "r",
+        "long": "resume",
+        "description": "resume download",
+        "inherit": false
+      },
+      {
+        "short": "l",
+        "long": "live",
+        "description": "enable live streams",
+        "inherit": false
+      },
+      {
+        "short": "c",
+        "long": "capture_time",
+        "description": "set live capture time",
+        "inherit": false,
+        "value": {
+          "name": "capture_time"
+        }
+      },
+      {
+        "short": "s",
+        "long": "silent",
+        "description": "reduce output",
+        "inherit": false
+      },
+      {
+        "long": "silent-semi",
+        "description": "only show download completion",
+        "inherit": false
+      },
+      {
+        "short": "u",
+        "long": "username",
+        "description": "set username",
+        "inherit": false,
+        "value": {
+          "name": "username"
+        }
+      },
+      {
+        "short": "p",
+        "long": "password",
+        "description": "set password",
+        "inherit": false,
+        "value": {
+          "name": "password"
+        }
+      },
+      {
+        "short": "t",
+        "long": "thumbnail",
+        "description": "download thumbnail",
+        "inherit": false
+      },
+      {
+        "short": "g",
+        "long": "get-url",
+        "description": "print video URL only",
+        "inherit": false
+      },
+      {
+        "long": "get-only-episode-url",
+        "description": "print episode URL only",
+        "inherit": false
+      },
+      {
+        "long": "dont-verify-ssl-cert",
+        "description": "skip SSL certificate verification",
+        "inherit": false
+      },
+      {
+        "long": "http-header",
+        "description": "add HTTP headers",
+        "inherit": false,
+        "value": {
+          "name": "header1=value;header2=value2"
+        }
+      },
+      {
+        "long": "cookies",
+        "description": "add HTTP cookies",
+        "inherit": false,
+        "value": {
+          "name": "cookie1=value;cookie2=value2"
+        }
+      },
+      {
+        "long": "exclude",
+        "description": "exclude matching filenames",
+        "inherit": false,
+        "value": {
+          "name": "words"
+        }
+      },
+      {
+        "long": "after-date",
+        "description": "filter by publish date",
+        "inherit": false,
+        "value": {
+          "name": "date"
+        }
+      },
+      {
+        "long": "proxy",
+        "description": "set proxy URL",
+        "inherit": false,
+        "value": {
+          "name": "proxy"
+        }
+      },
+      {
+        "short": "v",
+        "long": "verbose",
+        "description": "show verbose output",
+        "inherit": false
+      },
+      {
+        "long": "nfo",
+        "description": "create NFO file",
+        "inherit": false
+      },
+      {
+        "long": "force-nfo",
+        "description": "download only NFO",
+        "inherit": false
+      },
+      {
+        "long": "only-audio",
+        "description": "download only audio",
+        "inherit": false
+      },
+      {
+        "long": "only-video",
+        "description": "download only video",
+        "inherit": false
+      },
+      {
+        "short": "q",
+        "long": "quality",
+        "description": "set download quality",
+        "inherit": false,
+        "value": {
+          "name": "quality"
+        }
+      },
+      {
+        "short": "Q",
+        "long": "flexible-quality",
+        "description": "allow quality variance",
+        "inherit": false,
+        "value": {
+          "name": "amount"
+        }
+      },
+      {
+        "short": "P",
+        "long": "preferred",
+        "description": "set preferred method",
+        "inherit": false,
+        "value": {
+          "name": "preferred"
+        }
+      },
+      {
+        "long": "list-quality",
+        "description": "list available qualities",
+        "inherit": false
+      },
+      {
+        "long": "stream-priority",
+        "description": "set stream priority",
+        "inherit": false,
+        "value": {
+          "name": "dash,hls,http"
+        }
+      },
+      {
+        "long": "format-preferred",
+        "description": "set preferred format",
+        "inherit": false,
+        "value": {
+          "name": "h264,h264-51"
+        }
+      },
+      {
+        "long": "audio-language",
+        "description": "set audio language",
+        "inherit": false,
+        "value": {
+          "name": "audio_language"
+        }
+      },
+      {
+        "long": "audio-role",
+        "description": "set audio role",
+        "inherit": false,
+        "value": {
+          "name": "audio_role"
+        }
+      },
+      {
+        "short": "S",
+        "long": "subtitle",
+        "description": "download subtitles",
+        "inherit": false
+      },
+      {
+        "short": "M",
+        "long": "merge-subtitle",
+        "description": "merge subtitles",
+        "inherit": false
+      },
+      {
+        "long": "force-subtitle",
+        "description": "download only subtitles",
+        "inherit": false
+      },
+      {
+        "long": "require-subtitle",
+        "description": "require subtitles",
+        "inherit": false
+      },
+      {
+        "long": "all-subtitles",
+        "description": "download all subtitles",
+        "inherit": false
+      },
+      {
+        "long": "raw-subtitles",
+        "description": "download native subtitles",
+        "inherit": false
+      },
+      {
+        "long": "convert-subtitle-colors",
+        "inherit": false,
+        "description": "convert subtitle colors to font tags"
+      },
+      {
+        "short": "A",
+        "long": "all-episodes",
+        "description": "download all episodes",
+        "inherit": false
+      },
+      {
+        "long": "all-last",
+        "description": "download last episodes",
+        "inherit": false,
+        "value": {
+          "name": "count"
+        }
+      },
+      {
+        "long": "include-clips",
+        "description": "include clips",
+        "inherit": false
+      },
+      {
+        "long": "cmore-operatorlist",
+        "description": "show cmore operators",
+        "inherit": false
+      },
+      {
+        "long": "cmore-operator",
+        "inherit": false,
+        "value": {
+          "name": "operator"
+        },
+        "description": "set cmore operator"
+      },
+      {
+        "long": "no-remux",
+        "description": "disable mp4 remux",
+        "inherit": false
+      },
+      {
+        "long": "no-merge",
+        "description": "disable media merging",
+        "inherit": false
+      },
+      {
+        "long": "no-postprocess",
+        "description": "disable postprocessing",
+        "inherit": false
+      },
+      {
+        "long": "keep-original",
+        "description": "keep original files",
+        "inherit": false
+      },
+      {
+        "long": "output-format",
+        "description": "set output format",
+        "inherit": false,
+        "value": {
+          "name": "mp4,mkv"
+        }
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "urls",
+          "description": "video URL",
+          "index": 0,
+          "repeatable": true
+        }
+      ]
+    },
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "builtin.directories": {
+        "builtin": "directories"
+      }
+    }
+  }
+}
